@@ -19,7 +19,7 @@ bash scripts/verify_definition_of_done.sh
 - `tests/integration/long_run_smoke.py` 为 30 分钟长时运行验证，不纳入默认一键脚本
 - `benchmarks/v0.1.0.md` 记录同机 Redis 基线与 `floor/target/stretch` 判定
 
-## 2. `v0.1-alpha`
+## 2. `v0.1.0-alpha`
 
 | DoD 项 | 证据 |
 |--------|------|
@@ -30,7 +30,7 @@ bash scripts/verify_definition_of_done.sh
 | 错误路径不会崩溃 | `tests/unit/*_test.uya` 中错误路径用例 |
 | 100ms server cron 可触发主动过期扫描 | `tests/unit/storage_engine_test.uya`、`tests/unit/server_test.uya` |
 
-## 3. `v0.1-beta`
+## 3. `v0.1.0-beta`
 
 | DoD 项 | 证据 |
 |--------|------|

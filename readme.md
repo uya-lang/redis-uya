@@ -10,7 +10,7 @@
 
 `redis-uya` 是一个使用 **Uya 编程语言** 从零实现的生产级高性能内存数据库系统。项目长期目标是兼容 Redis 6.2+ 协议，覆盖核心数据结构、持久化、复制、基础集群与性能工程，并在同条件核心场景上超过 Redis。
 
-当前项目已完成 `v0.1.0` 发布闭环：`v0.1-alpha` 的存储与协议主线、`v0.1-beta` 的可靠性闭环，以及 `v0.1.0` 的文档、长时运行 smoke 和同机 Redis 基线都已收口。下一步进入 `v0.2` 数据结构扩展阶段。
+当前项目已完成 `v0.1.0` 发布闭环：`v0.1.0-alpha` 的存储与协议主线、`v0.1.0-beta` 的可靠性闭环，以及 `v0.1.0` 的文档、长时运行 smoke 和同机 Redis 基线都已收口。下一步进入 `v0.2.0` 数据结构扩展阶段。
 
 ## 核心目标
 
@@ -43,7 +43,7 @@
 
 当前进行中：
 
-- `v0.2`：数据结构扩展与更完整控制面
+- `v0.2.0`：数据结构扩展与更完整控制面
 
 当前阶段尚未生产可用。
 
@@ -134,7 +134,7 @@ build/redis-uya 6380 1
 
 ## 当前能力边界
 
-`v0.1` 只承诺交付最小生产内核：
+`v0.1.0` 只承诺交付最小生产内核：
 
 - 单节点、单进程服务模型
 - RESP2 子集
@@ -144,7 +144,7 @@ build/redis-uya 6380 1
 - `redis-cli` smoke 与 Python 子集集成测试
 - 同机 Redis benchmark 基线
 
-`v0.1` 不包含：
+`v0.1.0` 不包含：
 
 - 完整 RESP3
 - 完整 RDB 兼容
@@ -158,16 +158,16 @@ build/redis-uya 6380 1
 
 | 版本 | 阶段定位 | 核心目标 |
 |------|---------|---------|
-| `v0.1-alpha` | 最小可运行内核 | 单节点、RESP2 子集、String/Key 子集 |
-| `v0.1-beta` | 基础可靠性 | TCP 服务、TTL、AOF append/replay、集成测试 |
+| `v0.1.0-alpha` | 最小可运行内核 | 单节点、RESP2 子集、String/Key 子集 |
+| `v0.1.0-beta` | 基础可靠性 | TCP 服务、TTL、AOF append/replay、集成测试 |
 | `v0.1.0` | 首版发布 | benchmark 基线、DoD、发布文档 |
-| `v0.2` | 数据结构扩展 | Hash/List/Set/ZSet、SCAN、RDB 子集 |
-| `v0.3` | 持久化增强 | RDB 完整化、AOF rewrite、后台保存 |
-| `v0.4` | 复制基础 | 主从复制、PSYNC、复制积压缓冲区 |
-| `v0.5` | 协议与控制面 | RESP3、事务、Pub/Sub、CONFIG/CLIENT |
-| `v0.6` | 内存与性能控制 | `maxmemory`、淘汰策略、主动过期、Slab |
-| `v0.7` | 集群基础 | Cluster 槽位、重定向、节点元数据 |
-| `v0.8+` | 性能冲刺 | 零拷贝、批量解析、SIMD、io_uring、极限优化 |
+| `v0.2.0` | 数据结构扩展 | Hash/List/Set/ZSet、SCAN、RDB 子集 |
+| `v0.3.0` | 持久化增强 | RDB 完整化、AOF rewrite、后台保存 |
+| `v0.4.0` | 复制基础 | 主从复制、PSYNC、复制积压缓冲区 |
+| `v0.5.0` | 协议与控制面 | RESP3、事务、Pub/Sub、CONFIG/CLIENT |
+| `v0.6.0` | 内存与性能控制 | `maxmemory`、淘汰策略、主动过期、Slab |
+| `v0.7.0` | 集群基础 | Cluster 槽位、重定向、节点元数据 |
+| `v0.8.0` 及以后 | 性能冲刺 | 零拷贝、批量解析、SIMD、io_uring、极限优化 |
 
 完整计划见 [开发 TODO](docs/redis-uya-todo.md)。
 
@@ -193,6 +193,7 @@ build/redis-uya 6380 1
 - [API](docs/redis-uya-api.md)
 - [ARCHITECTURE](docs/redis-uya-architecture.md)
 - [release-v0.1.0](docs/redis-uya-release-v0.1.0.md)
+- [test-report-v0.1.0](docs/redis-uya-test-report-v0.1.0.md)
 
 ## 目录结构
 

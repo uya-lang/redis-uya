@@ -78,6 +78,7 @@ python3 scripts/benchmark_v0_1_0.py
 - `redis-cli` smoke 通过
 - 30 分钟长时运行 smoke 通过
 - 同机 Redis 基线已生成到 `benchmarks/v0.1.0.md`
+- 独立测试报告见 [redis-uya-test-report-v0.1.0.md](./redis-uya-test-report-v0.1.0.md)
 
 ## 6. 发布物
 

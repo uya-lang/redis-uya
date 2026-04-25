@@ -16,6 +16,7 @@
 - [API](./redis-uya-api.md)
 - [ARCHITECTURE](./redis-uya-architecture.md)
 - [release-v0.1.0](./redis-uya-release-v0.1.0.md)
+- [test-report-v0.1.0](./redis-uya-test-report-v0.1.0.md)
 
 ## 文档关系
 
@@ -30,7 +31,8 @@
 9. `redis-uya-api.md` 记录当前命令与错误语义。
 10. `redis-uya-architecture.md` 记录当前实现架构与数据路径。
 11. `redis-uya-release-v0.1.0.md` 汇总当前预发布范围、验证入口与已知限制。
+12. `redis-uya-test-report-v0.1.0.md` 固化 `v0.1.0` 收口阶段实际执行的测试和基准结果。
 
 ## 当前阶段
 
-项目当前处于 `v0.1.0-dev`：已完成 `v0.1.0` 的发布闭环，包含单线程 epoll 多连接服务、AOF 最小恢复闭环、错误兼容、30 分钟长时运行 smoke 和同机 Redis 基线；下一步进入 `v0.2` 数据结构扩展阶段。
+项目当前处于 `v0.1.0-dev`：已完成 `v0.1.0` 的发布闭环，包含单线程 epoll 多连接服务、AOF 最小恢复闭环、错误兼容、30 分钟长时运行 smoke 和同机 Redis 基线；下一步进入 `v0.2.0` 数据结构扩展阶段。

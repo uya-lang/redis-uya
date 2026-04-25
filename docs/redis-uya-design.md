@@ -46,7 +46,7 @@
 
 ### 1.3 首版非目标
 
-`v0.1` 不包含以下内容：
+`v0.1.0` 不包含以下内容：
 
 - 完整 RESP3
 - RDB 完整兼容
@@ -57,9 +57,9 @@
 - 完整 Redis 模块系统
 - 所有复杂类型的首版完整交付
 
-### 1.4 `v0.1` 交付范围
+### 1.4 `v0.1.0` 交付范围
 
-`v0.1` 只承诺交付一个可运行、可测试、可 benchmark 的最小生产内核：
+`v0.1.0` 只承诺交付一个可运行、可测试、可 benchmark 的最小生产内核：
 
 - 单节点、单进程服务模型
 - RESP2 子集
@@ -1955,20 +1955,20 @@ fn internal_lookup(db: &RedisDb, key: Sds) ?&RedisObject { ... }
 
 | Redis 特性 | redis-uya 支持 | 版本目标 |
 |-----------|---------------|---------|
-| RESP2 | 首版子集 | v0.1 |
-| RESP3 | 后续版本 | v0.2+ |
-| String | 首版子集：`PING/GET/SET/DEL/EXISTS` 为主 | v0.1 |
-| Hash | 后续版本 | v0.2+ |
-| List | 后续版本 | v0.2+ |
-| Set | 后续版本 | v0.2+ |
-| ZSet | 后续版本 | v0.2+ |
-| Key | 首版子集：`DEL/EXPIRE/TTL/EXISTS/INFO` | v0.1 |
-| Transaction | 后续版本 | v0.2+ |
-| Pub/Sub | ⚠️ PUBLISH/SUBSCRIBE (基础) | v0.2 |
-| Persistence | ✅ RDB + AOF + BGSAVE + BGREWRITEAOF | v0.1 |
-| Replication | ⚠️ 主从同步 (PSYNC1) | v0.2 |
+| RESP2 | 首版子集 | v0.1.0 |
+| RESP3 | 后续版本 | v0.2.0 及后续 |
+| String | 首版子集：`PING/GET/SET/DEL/EXISTS` 为主 | v0.1.0 |
+| Hash | 后续版本 | v0.2.0 及后续 |
+| List | 后续版本 | v0.2.0 及后续 |
+| Set | 后续版本 | v0.2.0 及后续 |
+| ZSet | 后续版本 | v0.2.0 及后续 |
+| Key | 首版子集：`DEL/EXPIRE/TTL/EXISTS/INFO` | v0.1.0 |
+| Transaction | 后续版本 | v0.2.0 及后续 |
+| Pub/Sub | ⚠️ PUBLISH/SUBSCRIBE (基础) | v0.2.0 |
+| Persistence | ✅ RDB + AOF + BGSAVE + BGREWRITEAOF | v0.1.0 |
+| Replication | ⚠️ 主从同步 (PSYNC1) | v0.2.0 |
 | Sentinel | ❌ 不支持 | - |
-| Cluster | ❌ 不支持 | v0.3 |
+| Cluster | ❌ 不支持 | v0.3.0 |
 | Lua | ❌ 不支持 | - |
 | ACL | ❌ 不支持 | - |
 | Streams | ❌ 不支持 | - |

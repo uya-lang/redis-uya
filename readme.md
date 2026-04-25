@@ -10,7 +10,7 @@
 
 `redis-uya` 是一个使用 **Uya 编程语言** 从零实现的生产级高性能内存数据库系统。项目长期目标是兼容 Redis 6.2+ 协议，覆盖核心数据结构、持久化、复制、基础集群与性能工程，并在同条件核心场景上超过 Redis。
 
-当前项目处于 `v0.1-alpha` 主线，重点不是一次性实现所有 Redis 能力，而是先建立一个可编译、可测试、可交互、可恢复、可 benchmark 的单节点最小内核。
+当前项目已完成 `v0.1-alpha` 主线，正在进入 `v0.1-beta` 基础可靠性阶段。重点不是一次性实现所有 Redis 能力，而是先建立一个可编译、可测试、可交互、可恢复、可 benchmark 的单节点最小内核。
 
 ## 核心目标
 
@@ -29,16 +29,21 @@
 - 工具模块：`log`、`time`、`endian`、`crc64`
 - 内存分配器封装
 - 配置解析：文本解析与文件读取
-- SDS 基础能力：创建、追加、比较、扩缩容、复制、范围切片
-- 项目内专用 `Dict`：插入、查找、覆盖、删除、扩容、10k 键回归
+- SDS 基础能力：创建、追加、格式化追加、比较、扩缩容、复制、范围切片、1MB 压测
+- 项目内专用 `Dict`：插入、查找、覆盖、删除、扩容、渐进 rehash、10k 键回归
 - `RedisObject` 最小 String 包装：RAW/INT 编码、类型名、释放
 - `Engine` 最小实现：键读写删除、覆盖释放、TTL 字段、惰性过期
 - RESP2 最小子集解析：Simple String、Error、Integer、Bulk String、Array、Incomplete、非法输入
+- 命令路由：最小命令表、大小写匹配、参数数量校验、未知命令错误、RESP Array 转命令
+- String/Key 命令执行：`PING`、`GET`、`SET`、`DEL`、`EXISTS`、`EXPIRE`、`TTL`、`INFO` 最小段
+- TCP 服务闭环：loopback 监听、连接读写缓冲、请求解析执行写回、`QUIT`、`maxclients`、Python socket smoke
+- 服务运行循环：单线程 epoll 多连接、100ms cron 主动过期扫描、空闲连接不阻塞其他客户端
+- AOF 最小闭环：写命令追加、启动回放、截断损坏安全失败、SET/DEL 重启恢复 smoke
+- AOF TTL 语义：`EXPIRE` 追加时转换为 `PEXPIREAT`，回放保持绝对过期时间
 
 当前进行中：
 
-- 命令路由
-- String/Key 子集闭环
+- `v0.1-beta`：`redis-cli` smoke、长时运行 smoke、错误响应兼容检查
 
 当前阶段尚未生产可用。
 
@@ -68,6 +73,14 @@ make run
 make test
 ```
 
+TCP 集成 smoke：
+
+```bash
+make test-integration
+```
+
+`make test-integration` 当前覆盖基础 TCP smoke、空闲连接不阻塞其他客户端、AOF 写入、重启、恢复 smoke。
+
 清理构建产物：
 
 ```bash
@@ -84,6 +97,12 @@ make clean
 
 ```bash
 make build UYA=/path/to/uya
+```
+
+开发调试时可指定监听端口和最大连接数：
+
+```bash
+build/redis-uya 6380 1
 ```
 
 ## 工具链
@@ -151,6 +170,7 @@ make build UYA=/path/to/uya
 - [开发规范](docs/redis-uya-development.md)
 - [Definition of Done](docs/redis-uya-definition-of-done.md)
 - [Benchmark 输出格式](docs/redis-uya-benchmark-format.md)
+- [SDS 内存布局](docs/redis-uya-sds-layout.md)
 
 ## 目录结构
 
@@ -162,7 +182,9 @@ redis-uya/
 ├── src/
 │   ├── config.uya
 │   ├── main.uya
+│   ├── command/
 │   ├── memory/
+│   ├── network/
 │   ├── storage/
 │   └── util/
 ├── tests/

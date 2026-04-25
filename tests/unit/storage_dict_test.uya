@@ -1,0 +1,163 @@
+use tests.unit.assert.assert_eq_i32;
+use tests.unit.assert.assert_true;
+
+use src.storage.dict.Dict;
+use src.storage.dict.dict_new;
+use src.storage.dict.dict_free;
+use src.storage.dict.dict_len;
+use src.storage.dict.dict_capacity;
+use src.storage.dict.dict_insert;
+use src.storage.dict.dict_lookup;
+use src.storage.dict.dict_delete;
+use src.storage.dict.begin_rehash;
+use src.storage.dict.rehash_step;
+use src.storage.dict.dict_is_rehashing;
+use src.memory.allocator.used_memory;
+use src.memory.allocator.reset_memory_stats_for_test;
+
+fn write_test_key(out: &[byte], n: usize) &[byte] {
+    out.ptr[0] = 107 as byte;
+    out.ptr[1] = 101 as byte;
+    out.ptr[2] = 121 as byte;
+    out.ptr[3] = (((n / 10000) % 10) as byte) + 48 as byte;
+    out.ptr[4] = (((n / 1000) % 10) as byte) + 48 as byte;
+    out.ptr[5] = (((n / 100) % 10) as byte) + 48 as byte;
+    out.ptr[6] = (((n / 10) % 10) as byte) + 48 as byte;
+    out.ptr[7] = ((n % 10) as byte) + 48 as byte;
+    return out[0: 8];
+}
+
+export fn test_dict_create_free() !void {
+    reset_memory_stats_for_test();
+    var dict: Dict = dict_new();
+    try assert_eq_i32(dict_len(&dict) as i32, 0);
+    try assert_eq_i32(dict_capacity(&dict) as i32, 0);
+    dict_free(&dict);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_dict_insert_lookup_update() !void {
+    reset_memory_stats_for_test();
+    var dict: Dict = dict_new();
+    const inserted: bool = try dict_insert(&dict, &"alpha"[0: 5], 11);
+    try assert_true(inserted);
+    try assert_eq_i32(dict_len(&dict) as i32, 1);
+    try assert_eq_i32((try dict_lookup(&dict, &"alpha"[0: 5])) as i32, 11);
+
+    const updated: bool = try dict_insert(&dict, &"alpha"[0: 5], 22);
+    try assert_true(!updated);
+    try assert_eq_i32(dict_len(&dict) as i32, 1);
+    try assert_eq_i32((try dict_lookup(&dict, &"alpha"[0: 5])) as i32, 22);
+    dict_free(&dict);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_dict_delete_and_missing() !void {
+    reset_memory_stats_for_test();
+    var dict: Dict = dict_new();
+    try assert_true(try dict_insert(&dict, &"a"[0: 1], 1));
+    try assert_true(try dict_insert(&dict, &"b"[0: 1], 2));
+    try assert_true(dict_delete(&dict, &"a"[0: 1]));
+    try assert_true(!dict_delete(&dict, &"missing"[0: 7]));
+    try assert_eq_i32(dict_len(&dict) as i32, 1);
+    try assert_eq_i32((try dict_lookup(&dict, &"b"[0: 1])) as i32, 2);
+
+    var saw_missing: bool = false;
+    _ = dict_lookup(&dict, &"a"[0: 1]) catch |err| {
+        if err == error.DictKeyNotFound {
+            saw_missing = true;
+        }
+        return;
+    };
+    try assert_true(saw_missing);
+    dict_free(&dict);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_dict_resize_keeps_values() !void {
+    reset_memory_stats_for_test();
+    var dict: Dict = dict_new();
+    var i: usize = 0;
+    while i < 64 {
+        var key: [byte: 8] = [];
+        try assert_true(try dict_insert(&dict, write_test_key(key[0: 8], i), i + 100));
+        i = i + 1;
+    }
+    try assert_eq_i32(dict_len(&dict) as i32, 64);
+    try assert_true(dict_capacity(&dict) >= 128);
+
+    i = 0;
+    while i < 64 {
+        var key: [byte: 8] = [];
+        try assert_eq_i32((try dict_lookup(&dict, write_test_key(key[0: 8], i))) as i32, (i + 100) as i32);
+        i = i + 1;
+    }
+    dict_free(&dict);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_dict_10k_keys() !void {
+    reset_memory_stats_for_test();
+    var dict: Dict = dict_new();
+    var i: usize = 0;
+    while i < 10000 {
+        var key: [byte: 8] = [];
+        try assert_true(try dict_insert(&dict, write_test_key(key[0: 8], i), i));
+        i = i + 1;
+    }
+    try assert_eq_i32(dict_len(&dict) as i32, 10000);
+
+    i = 0;
+    while i < 10000 {
+        var key: [byte: 8] = [];
+        try assert_eq_i32((try dict_lookup(&dict, write_test_key(key[0: 8], i))) as i32, i as i32);
+        i = i + 997;
+    }
+    dict_free(&dict);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_dict_incremental_rehash_manual_steps() !void {
+    reset_memory_stats_for_test();
+    var dict: Dict = dict_new();
+    try assert_true(try dict_insert(&dict, &"key00001"[0: 8], 1));
+    try assert_true(try dict_insert(&dict, &"key00002"[0: 8], 2));
+    try assert_true(try dict_insert(&dict, &"key00003"[0: 8], 3));
+    try assert_true(try dict_insert(&dict, &"key00004"[0: 8], 4));
+
+    const old_capacity: usize = dict_capacity(&dict);
+    try begin_rehash(&dict, old_capacity * 2);
+    try assert_true(dict_is_rehashing(&dict));
+    try assert_true(dict_capacity(&dict) >= old_capacity * 3);
+
+    try assert_eq_i32((try dict_lookup(&dict, &"key00001"[0: 8])) as i32, 1);
+    try assert_true(try dict_insert(&dict, &"key00005"[0: 8], 5));
+    const updated: bool = try dict_insert(&dict, &"key00002"[0: 8], 22);
+    try assert_true(!updated);
+    try assert_true(dict_delete(&dict, &"key00003"[0: 8]));
+    try assert_eq_i32((try dict_lookup(&dict, &"key00002"[0: 8])) as i32, 22);
+    try assert_eq_i32((try dict_lookup(&dict, &"key00005"[0: 8])) as i32, 5);
+
+    var saw_missing: bool = false;
+    _ = dict_lookup(&dict, &"key00003"[0: 8]) catch |err| {
+        if err == error.DictKeyNotFound {
+            saw_missing = true;
+        }
+        return;
+    };
+    try assert_true(saw_missing);
+
+    var guard: i32 = 0;
+    while dict_is_rehashing(&dict) && guard < 64 {
+        _ = rehash_step(&dict);
+        guard = guard + 1;
+    }
+    try assert_true(!dict_is_rehashing(&dict));
+    try assert_eq_i32(dict_len(&dict) as i32, 4);
+    try assert_eq_i32((try dict_lookup(&dict, &"key00001"[0: 8])) as i32, 1);
+    try assert_eq_i32((try dict_lookup(&dict, &"key00002"[0: 8])) as i32, 22);
+    try assert_eq_i32((try dict_lookup(&dict, &"key00004"[0: 8])) as i32, 4);
+    try assert_eq_i32((try dict_lookup(&dict, &"key00005"[0: 8])) as i32, 5);
+    dict_free(&dict);
+    try assert_eq_i32(used_memory() as i32, 0);
+}

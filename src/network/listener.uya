@@ -1,0 +1,130 @@
+// network/listener.uya - minimal blocking TCP listener.
+
+use libc.AF_INET;
+use libc.SOCK_STREAM;
+use libc.IPPROTO_TCP;
+use libc.TCP_NODELAY;
+use libc.SOL_SOCKET;
+use libc.SO_REUSEADDR;
+use libc.sys_socket;
+use libc.sys_bind;
+use libc.sys_listen;
+use libc.sys_accept;
+use libc.sys_setsockopt;
+use libc.sys_getsockname;
+use libc.sys_close;
+use libc.sys_epoll_create1;
+use libc.sys_epoll_ctl;
+use libc.sys_epoll_wait;
+use libc.EpollEvent;
+use libc.EPOLL_CLOEXEC;
+use libc.EPOLLIN;
+use libc.EPOLL_CTL_ADD;
+
+export struct RedisListener {
+    listen_fd: i32,
+    poll_fd: i32,
+    port: u16,
+}
+
+fn listener_htons(port: u16) u16 {
+    return ((port & (0xFF as u16)) << 8) | ((port >> 8) & (0xFF as u16));
+}
+
+fn listener_fill_loopback_addr(port: u16, out: &byte) void {
+    var i: usize = 0;
+    while i < 16 {
+        out[i] = 0;
+        i = i + 1;
+    }
+    out[0] = AF_INET as byte;
+    out[1] = 0;
+    const net_port: u16 = listener_htons(port);
+    out[2] = (net_port & (0xFF as u16)) as byte;
+    out[3] = ((net_port >> 8) & (0xFF as u16)) as byte;
+    out[4] = 127;
+    out[5] = 0;
+    out[6] = 0;
+    out[7] = 1;
+}
+
+fn listener_read_port(addr: &byte) u16 {
+    const net_port: u16 = addr[2] as u16 | ((addr[3] as u16) << 8);
+    return listener_htons(net_port);
+}
+
+fn listener_backlog(maxclients: i32) i32 {
+    var backlog: i32 = maxclients;
+    if backlog < 16 {
+        backlog = 16;
+    }
+    if backlog > 1024 {
+        backlog = 1024;
+    }
+    return backlog;
+}
+
+export fn listener_open_loopback(port: u16, maxclients: i32) !RedisListener {
+    const fd: i32 = try sys_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    var one: i32 = 1;
+    _ = sys_setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one as &void, 4 as u32) catch {};
+
+    var addr: [byte: 16] = [];
+    listener_fill_loopback_addr(port, &addr[0]);
+    _ = sys_bind(fd, &addr[0] as &void, 16 as u32) catch |err| {
+        _ = sys_close(fd) catch {};
+        return err;
+    };
+    _ = sys_listen(fd, listener_backlog(maxclients)) catch |err| {
+        _ = sys_close(fd) catch {};
+        return err;
+    };
+
+    var actual_port: u16 = port;
+    if port == 0u16 {
+        var len: u32 = 16;
+        var out: [byte: 16] = [];
+        _ = sys_getsockname(fd, &out[0] as &void, &len) catch |err| {
+            _ = sys_close(fd) catch {};
+            return err;
+        };
+        actual_port = listener_read_port(&out[0]);
+    }
+
+    const poll_fd: i32 = sys_epoll_create1(EPOLL_CLOEXEC) catch |err| {
+        _ = sys_close(fd) catch {};
+        return err;
+    };
+    var event: EpollEvent = EpollEvent{ events: EPOLLIN as u32, _pad: 0, data: fd as u64 };
+    _ = sys_epoll_ctl(poll_fd, EPOLL_CTL_ADD, fd, &event) catch |err| {
+        _ = sys_close(poll_fd) catch {};
+        _ = sys_close(fd) catch {};
+        return err;
+    };
+
+    return RedisListener{ listen_fd: fd, poll_fd: poll_fd, port: actual_port };
+}
+
+export fn listener_accept(listener: &RedisListener) !i32 {
+    var len: u32 = 16;
+    var peer: [byte: 16] = [];
+    const fd: i32 = try sys_accept(listener.listen_fd, &peer[0] as &void, &len);
+    var one: i32 = 1;
+    _ = sys_setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one as &void, 4 as u32) catch {};
+    return fd;
+}
+
+export fn listener_close(listener: &RedisListener) void {
+    if listener.poll_fd >= 0 {
+        _ = sys_close(listener.poll_fd) catch {};
+    }
+    if listener.listen_fd >= 0 {
+        _ = sys_close(listener.listen_fd) catch {};
+    }
+}
+
+export fn listener_wait(listener: &RedisListener, timeout_ms: i32) !bool {
+    var events: [EpollEvent: 1] = [];
+    const n: i32 = try sys_epoll_wait(listener.poll_fd, &events[0], 1, timeout_ms);
+    return n > 0;
+}

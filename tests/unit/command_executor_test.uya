@@ -1,0 +1,192 @@
+use tests.unit.assert.assert_eq_i32;
+use tests.unit.assert.assert_true;
+
+use src.command.router.CommandRouter;
+use src.command.router.Command;
+use src.command.router.command_router_new;
+use src.command.router.command_from_resp;
+use src.command.executor.CommandReply;
+use src.command.executor.CommandReplyType;
+use src.command.executor.command_execute_at;
+use src.storage.engine.Engine;
+use src.storage.engine.engine_new;
+use src.storage.engine.engine_free;
+use src.network.protocol.RespParseResult;
+use src.network.protocol.parse_resp2;
+use src.network.protocol.resp_value_free;
+use src.memory.allocator.used_memory;
+use src.memory.allocator.reset_memory_stats_for_test;
+
+fn command_executor_test_slice_eq(a: &[byte], b: &[byte]) bool {
+    if a.len != b.len { return false; }
+    var i: usize = 0;
+    while i < a.len {
+        if a.ptr[i] != b.ptr[i] { return false; }
+        i = i + 1;
+    }
+    return true;
+}
+
+fn command_executor_test_command(router: &CommandRouter, parsed: &RespParseResult) !Command {
+    return command_from_resp(router, &parsed.value);
+}
+
+export fn test_command_ping_and_info() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+
+    var ping_parsed: RespParseResult = try parse_resp2(&"*1\r\n$4\r\nPING\r\n"[0: 14]);
+    const ping_command: Command = try command_executor_test_command(&router, &ping_parsed);
+    const ping_reply: CommandReply = command_execute_at(&engine, &ping_command, 1000u64);
+    try assert_eq_i32(ping_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(ping_reply.data, &"PONG"[0: 4]));
+    resp_value_free(&ping_parsed.value);
+
+    var ping_msg_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nPING\r\n$2\r\nhi\r\n"[0: 22]);
+    const ping_msg_command: Command = try command_executor_test_command(&router, &ping_msg_parsed);
+    const ping_msg_reply: CommandReply = command_execute_at(&engine, &ping_msg_command, 1000u64);
+    try assert_eq_i32(ping_msg_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(ping_msg_reply.data, &"hi"[0: 2]));
+    resp_value_free(&ping_msg_parsed.value);
+
+    var info_parsed: RespParseResult = try parse_resp2(&"*1\r\n$4\r\nINFO\r\n"[0: 14]);
+    const info_command: Command = try command_executor_test_command(&router, &info_parsed);
+    const info_reply: CommandReply = command_execute_at(&engine, &info_command, 1000u64);
+    try assert_eq_i32(info_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(info_reply.data.len > 0);
+    resp_value_free(&info_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_command_set_get_del_exists() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+
+    var set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 33]);
+    const set_command: Command = try command_executor_test_command(&router, &set_parsed);
+    const set_reply: CommandReply = command_execute_at(&engine, &set_command, 1000u64);
+    try assert_eq_i32(set_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(set_reply.data, &"OK"[0: 2]));
+    resp_value_free(&set_parsed.value);
+
+    var get_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n"[0: 22]);
+    const get_command: Command = try command_executor_test_command(&router, &get_parsed);
+    const get_reply: CommandReply = command_execute_at(&engine, &get_command, 1000u64);
+    try assert_eq_i32(get_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(get_reply.data, &"value"[0: 5]));
+    resp_value_free(&get_parsed.value);
+
+    var exists_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nEXISTS\r\n$3\r\nkey\r\n$7\r\nmissing\r\n"[0: 41]);
+    const exists_command: Command = try command_executor_test_command(&router, &exists_parsed);
+    const exists_reply: CommandReply = command_execute_at(&engine, &exists_command, 1000u64);
+    try assert_eq_i32(exists_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(exists_reply.integer as i32, 1);
+    resp_value_free(&exists_parsed.value);
+
+    var del_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nDEL\r\n$3\r\nkey\r\n$7\r\nmissing\r\n"[0: 38]);
+    const del_command: Command = try command_executor_test_command(&router, &del_parsed);
+    const del_reply: CommandReply = command_execute_at(&engine, &del_command, 1000u64);
+    try assert_eq_i32(del_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(del_reply.integer as i32, 1);
+    resp_value_free(&del_parsed.value);
+
+    var missing_get_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n"[0: 22]);
+    const missing_get_command: Command = try command_executor_test_command(&router, &missing_get_parsed);
+    const missing_get_reply: CommandReply = command_execute_at(&engine, &missing_get_command, 1000u64);
+    try assert_eq_i32(missing_get_reply.typ as i32, CommandReplyType.reply_null_bulk as i32);
+    resp_value_free(&missing_get_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_command_expire_and_ttl() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+
+    var set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 33]);
+    const set_command: Command = try command_executor_test_command(&router, &set_parsed);
+    _ = command_execute_at(&engine, &set_command, 1000u64);
+    resp_value_free(&set_parsed.value);
+
+    var expire_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nEXPIRE\r\n$3\r\nkey\r\n$1\r\n2\r\n"[0: 32]);
+    const expire_command: Command = try command_executor_test_command(&router, &expire_parsed);
+    const expire_reply: CommandReply = command_execute_at(&engine, &expire_command, 1000u64);
+    try assert_eq_i32(expire_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(expire_reply.integer as i32, 1);
+    resp_value_free(&expire_parsed.value);
+
+    var ttl_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nTTL\r\n$3\r\nkey\r\n"[0: 22]);
+    const ttl_command: Command = try command_executor_test_command(&router, &ttl_parsed);
+    const ttl_reply: CommandReply = command_execute_at(&engine, &ttl_command, 1000u64);
+    try assert_eq_i32(ttl_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(ttl_reply.integer as i32, 2);
+    resp_value_free(&ttl_parsed.value);
+
+    var expired_get_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n"[0: 22]);
+    const expired_get_command: Command = try command_executor_test_command(&router, &expired_get_parsed);
+    const expired_get_reply: CommandReply = command_execute_at(&engine, &expired_get_command, 4000u64);
+    try assert_eq_i32(expired_get_reply.typ as i32, CommandReplyType.reply_null_bulk as i32);
+    resp_value_free(&expired_get_parsed.value);
+
+    var missing_ttl_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nTTL\r\n$3\r\nkey\r\n"[0: 22]);
+    const missing_ttl_command: Command = try command_executor_test_command(&router, &missing_ttl_parsed);
+    const missing_ttl_reply: CommandReply = command_execute_at(&engine, &missing_ttl_command, 4000u64);
+    try assert_eq_i32(missing_ttl_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(missing_ttl_reply.integer as i32, -2);
+    resp_value_free(&missing_ttl_parsed.value);
+
+    var set_abs_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$3\r\nabs\r\n$5\r\nvalue\r\n"[0: 33]);
+    const set_abs_command: Command = try command_executor_test_command(&router, &set_abs_parsed);
+    _ = command_execute_at(&engine, &set_abs_command, 5000u64);
+    resp_value_free(&set_abs_parsed.value);
+
+    var pexpireat_parsed: RespParseResult = try parse_resp2(&"*3\r\n$9\r\nPEXPIREAT\r\n$3\r\nabs\r\n$4\r\n9000\r\n"[0: 38]);
+    const pexpireat_command: Command = try command_executor_test_command(&router, &pexpireat_parsed);
+    const pexpireat_reply: CommandReply = command_execute_at(&engine, &pexpireat_command, 5000u64);
+    try assert_eq_i32(pexpireat_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(pexpireat_reply.integer as i32, 1);
+    resp_value_free(&pexpireat_parsed.value);
+
+    var abs_ttl_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nTTL\r\n$3\r\nabs\r\n"[0: 22]);
+    const abs_ttl_command: Command = try command_executor_test_command(&router, &abs_ttl_parsed);
+    const abs_ttl_reply: CommandReply = command_execute_at(&engine, &abs_ttl_command, 5000u64);
+    try assert_eq_i32(abs_ttl_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(abs_ttl_reply.integer as i32, 4);
+    resp_value_free(&abs_ttl_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_command_error_paths() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+
+    var bad_ping_parsed: RespParseResult = try parse_resp2(&"*3\r\n$4\r\nPING\r\n$1\r\na\r\n$1\r\nb\r\n"[0: 30]);
+    const bad_ping_command: Command = try command_executor_test_command(&router, &bad_ping_parsed);
+    const bad_ping_reply: CommandReply = command_execute_at(&engine, &bad_ping_command, 1000u64);
+    try assert_eq_i32(bad_ping_reply.typ as i32, CommandReplyType.reply_error as i32);
+    resp_value_free(&bad_ping_parsed.value);
+
+    var set_option_parsed: RespParseResult = try parse_resp2(&"*4\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n$2\r\nNX\r\n"[0: 43]);
+    const set_option_command: Command = try command_executor_test_command(&router, &set_option_parsed);
+    const set_option_reply: CommandReply = command_execute_at(&engine, &set_option_command, 1000u64);
+    try assert_eq_i32(set_option_reply.typ as i32, CommandReplyType.reply_error as i32);
+    resp_value_free(&set_option_parsed.value);
+
+    var expire_bad_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nEXPIRE\r\n$3\r\nkey\r\n$3\r\nbad\r\n"[0: 36]);
+    const expire_bad_command: Command = try command_executor_test_command(&router, &expire_bad_parsed);
+    const expire_bad_reply: CommandReply = command_execute_at(&engine, &expire_bad_command, 1000u64);
+    try assert_eq_i32(expire_bad_reply.typ as i32, CommandReplyType.reply_error as i32);
+    resp_value_free(&expire_bad_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}

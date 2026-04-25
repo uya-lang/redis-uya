@@ -1,0 +1,70 @@
+use tests.unit.assert.assert_eq_i32;
+use tests.unit.assert.assert_true;
+
+use src.config.ServerConfig;
+use src.config.ConfigInvalidNumber;
+use src.config.default_config;
+use src.config.parse_config_file;
+use src.config.parse_config_text;
+
+fn cstr_eq(buf: &[byte], lit: &[byte]) bool {
+    var i: usize = 0;
+    while i < lit.len {
+        if buf.ptr[i] != lit.ptr[i] { return false; }
+        i = i + 1;
+    }
+    return buf.ptr[lit.len] == 0 as byte;
+}
+
+export fn test_config_defaults() !void {
+    const cfg: ServerConfig = default_config();
+    try assert_eq_i32(cfg.port, 6379);
+    try assert_eq_i32(cfg.maxmemory as i32, 0);
+    try assert_true(cstr_eq(cfg.bind[0: 64], &"0.0.0.0"[0: 7]));
+    try assert_true(cstr_eq(cfg.dbfilename[0: 128], &"dump.rdb"[0: 8]));
+}
+
+export fn test_config_parse_core_fields() !void {
+    const text: &[byte] = &"# sample\nport 6380\nbind 127.0.0.1\ndir /data\ndbfilename redis.rdb\nappendfilename redis.aof\nmaxmemory 64mb\nsave 60 1000\n"[0: 125];
+    const cfg: ServerConfig = try parse_config_text(text);
+    try assert_eq_i32(cfg.port, 6380);
+    try assert_true(cstr_eq(cfg.bind[0: 64], &"127.0.0.1"[0: 9]));
+    try assert_true(cstr_eq(cfg.dir[0: 256], &"/data"[0: 5]));
+    try assert_true(cstr_eq(cfg.dbfilename[0: 128], &"redis.rdb"[0: 9]));
+    try assert_true(cstr_eq(cfg.appendfilename[0: 128], &"redis.aof"[0: 9]));
+    try assert_eq_i32(cfg.maxmemory as i32, 64 * 1024 * 1024);
+    try assert_eq_i32(cfg.save_seconds, 60);
+    try assert_eq_i32(cfg.save_changes, 1000);
+}
+
+export fn test_config_parse_memory_units() !void {
+    const kb: &[byte] = &"maxmemory 2kb\n"[0: 14];
+    const mb: &[byte] = &"maxmemory 3m\n"[0: 13];
+    const cfg_kb: ServerConfig = try parse_config_text(kb);
+    const cfg_mb: ServerConfig = try parse_config_text(mb);
+    try assert_eq_i32(cfg_kb.maxmemory as i32, 2048);
+    try assert_eq_i32(cfg_mb.maxmemory as i32, 3 * 1024 * 1024);
+}
+
+export fn test_config_parse_invalid_number() !void {
+    var saw_error: bool = false;
+    _ = parse_config_text(&"port nope\n"[0: 10]) catch |err| {
+        if err == error.ConfigInvalidNumber {
+            saw_error = true;
+        }
+        return;
+    };
+    try assert_true(saw_error);
+}
+
+export fn test_config_parse_file() !void {
+    const cfg: ServerConfig = try parse_config_file("tests/unit/fixtures/sample_redis.conf");
+    try assert_eq_i32(cfg.port, 6391);
+    try assert_true(cstr_eq(cfg.bind[0: 64], &"127.0.0.1"[0: 9]));
+    try assert_true(cstr_eq(cfg.dir[0: 256], &"/var/lib/redis-uya"[0: 18]));
+    try assert_true(cstr_eq(cfg.dbfilename[0: 128], &"dump-test.rdb"[0: 13]));
+    try assert_true(cstr_eq(cfg.appendfilename[0: 128], &"append-test.aof"[0: 15]));
+    try assert_eq_i32(cfg.maxmemory as i32, 8 * 1024 * 1024);
+    try assert_eq_i32(cfg.save_seconds, 120);
+    try assert_eq_i32(cfg.save_changes, 42);
+}

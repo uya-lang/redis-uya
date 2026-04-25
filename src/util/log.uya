@@ -1,0 +1,42 @@
+// util/log.uya - minimal logging helpers.
+
+extern "libc" fn printf(fmt: *byte, ...) i32;
+
+export enum LogLevel {
+    log_debug,
+    log_info,
+    log_warn,
+    log_error,
+}
+
+export var current_level: i32 = LogLevel.log_info as i32;
+
+export fn set_level(level: LogLevel) void {
+    current_level = level as i32;
+}
+
+fn should_log(level: LogLevel) bool {
+    return (level as i32) >= current_level;
+}
+
+fn print_level(level: LogLevel) void {
+    match level {
+        LogLevel.log_debug => { printf("DEBUG" as *byte); },
+        LogLevel.log_info => { printf("INFO" as *byte); },
+        LogLevel.log_warn => { printf("WARN" as *byte); },
+        LogLevel.log_error => { printf("ERROR" as *byte); },
+        else => { printf("UNKNOWN" as *byte); }
+    }
+}
+
+export fn log_message(level: LogLevel, message: &const byte) void {
+    if !should_log(level) { return; }
+    printf("[" as *byte);
+    print_level(level);
+    printf("] %s\n" as *byte, message);
+}
+
+export fn debug(message: &const byte) void { log_message(LogLevel.log_debug, message); }
+export fn info(message: &const byte) void { log_message(LogLevel.log_info, message); }
+export fn warn(message: &const byte) void { log_message(LogLevel.log_warn, message); }
+export fn log_error(message: &const byte) void { log_message(LogLevel.log_error, message); }

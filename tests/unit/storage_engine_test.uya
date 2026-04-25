@@ -1,0 +1,131 @@
+use tests.unit.assert.assert_eq_i32;
+use tests.unit.assert.assert_true;
+
+use src.storage.engine.Engine;
+use src.storage.engine.engine_new;
+use src.storage.engine.engine_free;
+use src.storage.engine.engine_len;
+use src.storage.engine.set_key;
+use src.storage.engine.lookup_key_at;
+use src.storage.engine.delete_key;
+use src.storage.engine.set_key_expire_at;
+use src.storage.engine.clear_key_expire;
+use src.storage.engine.engine_expire_cycle_at;
+use src.storage.object.RedisObject;
+use src.storage.object.Encoding;
+use src.storage.object.create_string_object;
+use src.memory.allocator.used_memory;
+use src.memory.allocator.reset_memory_stats_for_test;
+
+fn engine_slice_eq(a: &[byte], b: &[byte]) bool {
+    if a.len != b.len { return false; }
+    var i: usize = 0;
+    while i < a.len {
+        if a.ptr[i] != b.ptr[i] { return false; }
+        i = i + 1;
+    }
+    return true;
+}
+
+fn engine_key_missing_at(engine: &Engine, key: &[byte], now_ms: u64) bool {
+    const found: &RedisObject = lookup_key_at(engine, key, now_ms) catch |err| {
+        if err == error.EngineKeyNotFound {
+            return true;
+        }
+        return false;
+    };
+    _ = found;
+    return false;
+}
+
+export fn test_engine_set_lookup_delete() !void {
+    reset_memory_stats_for_test();
+    var engine: Engine = engine_new();
+    const obj: &RedisObject = try create_string_object(&"value"[0: 5]);
+    try set_key(&engine, &"key"[0: 3], obj);
+
+    const found: &RedisObject = try lookup_key_at(&engine, &"key"[0: 3], 100);
+    try assert_true(engine_slice_eq(found.value.buf[0: found.value.len], &"value"[0: 5]));
+    try assert_eq_i32(engine_len(&engine) as i32, 1);
+    try assert_true(delete_key(&engine, &"key"[0: 3]));
+    try assert_eq_i32(engine_len(&engine) as i32, 0);
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_engine_overwrite_releases_old_object() !void {
+    reset_memory_stats_for_test();
+    var engine: Engine = engine_new();
+    const old_obj: &RedisObject = try create_string_object(&"old"[0: 3]);
+    const new_obj: &RedisObject = try create_string_object(&"123"[0: 3]);
+    try set_key(&engine, &"key"[0: 3], old_obj);
+    try set_key(&engine, &"key"[0: 3], new_obj);
+
+    const found: &RedisObject = try lookup_key_at(&engine, &"key"[0: 3], 100);
+    try assert_eq_i32(found.encoding as i32, Encoding.encoding_int as i32);
+    try assert_eq_i32(found.int_value as i32, 123);
+    try assert_eq_i32(engine_len(&engine) as i32, 1);
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_engine_lazy_expire() !void {
+    reset_memory_stats_for_test();
+    var engine: Engine = engine_new();
+    const obj: &RedisObject = try create_string_object(&"ttl"[0: 3]);
+    try set_key(&engine, &"volatile"[0: 8], obj);
+    try set_key_expire_at(&engine, &"volatile"[0: 8], 200);
+
+    const before: &RedisObject = try lookup_key_at(&engine, &"volatile"[0: 8], 199);
+    try assert_true(engine_slice_eq(before.value.buf[0: before.value.len], &"ttl"[0: 3]));
+    try assert_true(engine_key_missing_at(&engine, &"volatile"[0: 8], 200));
+    try assert_eq_i32(engine_len(&engine) as i32, 0);
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_engine_clear_expire() !void {
+    reset_memory_stats_for_test();
+    var engine: Engine = engine_new();
+    const obj: &RedisObject = try create_string_object(&"persistent"[0: 10]);
+    try set_key(&engine, &"key"[0: 3], obj);
+    try set_key_expire_at(&engine, &"key"[0: 3], 10);
+    try assert_true(clear_key_expire(&engine, &"key"[0: 3]));
+
+    const found: &RedisObject = try lookup_key_at(&engine, &"key"[0: 3], 100);
+    try assert_true(engine_slice_eq(found.value.buf[0: found.value.len], &"persistent"[0: 10]));
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_engine_active_expire_cycle() !void {
+    reset_memory_stats_for_test();
+    var engine: Engine = engine_new();
+
+    const old_obj: &RedisObject = try create_string_object(&"old"[0: 3]);
+    const live_obj: &RedisObject = try create_string_object(&"live"[0: 4]);
+    const persistent_obj: &RedisObject = try create_string_object(&"persistent"[0: 10]);
+    try set_key(&engine, &"old"[0: 3], old_obj);
+    try set_key(&engine, &"live"[0: 4], live_obj);
+    try set_key(&engine, &"persist"[0: 7], persistent_obj);
+    try set_key_expire_at(&engine, &"old"[0: 3], 900u64);
+    try set_key_expire_at(&engine, &"live"[0: 4], 2000u64);
+
+    const zero_deleted: usize = engine_expire_cycle_at(&engine, 1000u64, 0);
+    try assert_eq_i32(zero_deleted as i32, 0);
+    try assert_eq_i32(engine_len(&engine) as i32, 3);
+
+    const deleted: usize = engine_expire_cycle_at(&engine, 1000u64, 16);
+    try assert_eq_i32(deleted as i32, 1);
+    try assert_eq_i32(engine_len(&engine) as i32, 2);
+
+    try assert_true(engine_key_missing_at(&engine, &"old"[0: 3], 1000u64));
+
+    const live_found: &RedisObject = try lookup_key_at(&engine, &"live"[0: 4], 1000u64);
+    try assert_true(engine_slice_eq(live_found.value.buf[0: live_found.value.len], &"live"[0: 4]));
+    const persistent_found: &RedisObject = try lookup_key_at(&engine, &"persist"[0: 7], 1000u64);
+    try assert_true(engine_slice_eq(persistent_found.value.buf[0: persistent_found.value.len], &"persistent"[0: 10]));
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}

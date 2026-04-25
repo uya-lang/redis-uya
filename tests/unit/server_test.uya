@@ -1,0 +1,47 @@
+use tests.unit.assert.assert_eq_i32;
+
+use src.command.router.command_router_new;
+use src.network.listener.RedisListener;
+use src.persistence.aof.aof_disabled;
+use src.server.RedisServer;
+use src.server.server_cron_at;
+use src.storage.engine.Engine;
+use src.storage.engine.engine_new;
+use src.storage.engine.engine_free;
+use src.storage.engine.engine_len;
+use src.storage.engine.set_key;
+use src.storage.engine.set_key_expire_at;
+use src.storage.object.RedisObject;
+use src.storage.object.create_string_object;
+use src.memory.allocator.used_memory;
+use src.memory.allocator.reset_memory_stats_for_test;
+
+export fn test_server_cron_expires_keys() !void {
+    reset_memory_stats_for_test();
+    var engine: Engine = engine_new();
+    var server: RedisServer = RedisServer{
+        engine: engine,
+        router: command_router_new(),
+        listener: RedisListener{ listen_fd: -1, poll_fd: -1, port: 0u16 },
+        aof: aof_disabled(),
+        clients: [],
+        active_clients: 0,
+        maxclients: 0,
+        served_clients: 0,
+        last_cron_ms: 0u64,
+        cron_ticks: 0u64,
+    };
+
+    const obj: &RedisObject = try create_string_object(&"value"[0: 5]);
+    try set_key(&server.engine, &"key"[0: 3], obj);
+    try set_key_expire_at(&server.engine, &"key"[0: 3], 900u64);
+
+    server_cron_at(&server, 1000u64);
+
+    try assert_eq_i32(engine_len(&server.engine) as i32, 0);
+    try assert_eq_i32(server.last_cron_ms as i32, 1000);
+    try assert_eq_i32(server.cron_ticks as i32, 1);
+
+    engine_free(&server.engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}

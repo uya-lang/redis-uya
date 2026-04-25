@@ -1,0 +1,410 @@
+// network/connection.uya - connection-level request processing and RESP replies.
+
+use src.command.executor.CommandReply;
+use src.command.executor.CommandReplyType;
+use src.command.executor.command_execute_at;
+use src.command.router.Command;
+use src.command.router.CommandRouter;
+use src.command.router.CommandType;
+use src.command.router.COMMAND_FLAG_WRITE;
+use src.command.router.command_from_resp;
+use src.network.protocol.RespParseResult;
+use src.network.protocol.parse_resp2;
+use src.network.protocol.resp_value_free;
+use src.persistence.aof.AofWriter;
+use src.persistence.aof.aof_append_command_at;
+use src.storage.engine.Engine;
+use src.util.time.now_ms_safe;
+use libc.errno;
+use libc.sys_send;
+use libc.sys_recv;
+
+export error ConnectionIncomplete;
+export error ConnectionOutputTooSmall;
+export error ConnectionInputTooLarge;
+export error ConnectionIoFailed;
+export error ConnectionWouldBlock;
+
+export struct ConnectionProcessResult {
+    response_len: usize,
+    consumed: usize,
+    close_after: bool,
+}
+
+fn connection_reply_empty_slice() &[byte] {
+    return (null as &byte)[0: 0];
+}
+
+fn connection_make_reply(typ: CommandReplyType, data: &[byte], integer: i64) CommandReply {
+    return CommandReply{
+        typ: typ,
+        data: data,
+        integer: integer,
+    };
+}
+
+fn connection_error_reply(data: &[byte]) CommandReply {
+    return connection_make_reply(CommandReplyType.reply_error, data, 0);
+}
+
+fn connection_should_append_aof(command: &Command, reply: &CommandReply) bool {
+    if reply.typ == CommandReplyType.reply_error {
+        return false;
+    }
+    return (command.info.flags & COMMAND_FLAG_WRITE) != 0u64;
+}
+
+fn connection_append_byte(out: &byte, out_cap: usize, pos: &usize, ch: byte) !void {
+    if *pos >= out_cap {
+        return error.ConnectionOutputTooSmall;
+    }
+    out[*pos] = ch;
+    *pos = *pos + 1;
+}
+
+fn connection_append_bytes(out: &byte, out_cap: usize, pos: &usize, data: &[byte]) !void {
+    var i: usize = 0;
+    while i < data.len {
+        try connection_append_byte(out, out_cap, pos, data.ptr[i]);
+        i = i + 1;
+    }
+}
+
+fn connection_append_crlf(out: &byte, out_cap: usize, pos: &usize) !void {
+    try connection_append_byte(out, out_cap, pos, 13 as byte);
+    try connection_append_byte(out, out_cap, pos, 10 as byte);
+}
+
+fn connection_append_u64(out: &byte, out_cap: usize, pos: &usize, value: u64) !void {
+    if value == 0u64 {
+        try connection_append_byte(out, out_cap, pos, 48 as byte);
+        return;
+    }
+
+    var tmp: [byte: 20] = [];
+    var count: usize = 0;
+    var v: u64 = value;
+    while v > 0u64 {
+        const digit: u64 = v % 10u64;
+        tmp[count] = (48u64 + digit) as byte;
+        count = count + 1;
+        v = v / 10u64;
+    }
+
+    while count > 0 {
+        count = count - 1;
+        try connection_append_byte(out, out_cap, pos, tmp[count]);
+    }
+}
+
+fn connection_append_i64(out: &byte, out_cap: usize, pos: &usize, value: i64) !void {
+    if value < 0 {
+        try connection_append_byte(out, out_cap, pos, 45 as byte);
+        const positive: i64 = 0 - value;
+        try connection_append_u64(out, out_cap, pos, positive as u64);
+        return;
+    }
+    try connection_append_u64(out, out_cap, pos, value as u64);
+}
+
+export fn connection_encode_reply(reply: &CommandReply, out: &byte, out_cap: usize) !usize {
+    var pos: usize = 0;
+
+    if reply.typ == CommandReplyType.reply_simple_string {
+        try connection_append_byte(out, out_cap, &pos, 43 as byte);
+        try connection_append_bytes(out, out_cap, &pos, reply.data);
+        try connection_append_crlf(out, out_cap, &pos);
+        return pos;
+    }
+    if reply.typ == CommandReplyType.reply_error {
+        try connection_append_byte(out, out_cap, &pos, 45 as byte);
+        try connection_append_bytes(out, out_cap, &pos, reply.data);
+        try connection_append_crlf(out, out_cap, &pos);
+        return pos;
+    }
+    if reply.typ == CommandReplyType.reply_integer {
+        try connection_append_byte(out, out_cap, &pos, 58 as byte);
+        try connection_append_i64(out, out_cap, &pos, reply.integer);
+        try connection_append_crlf(out, out_cap, &pos);
+        return pos;
+    }
+    if reply.typ == CommandReplyType.reply_bulk_string {
+        try connection_append_byte(out, out_cap, &pos, 36 as byte);
+        try connection_append_u64(out, out_cap, &pos, reply.data.len as u64);
+        try connection_append_crlf(out, out_cap, &pos);
+        try connection_append_bytes(out, out_cap, &pos, reply.data);
+        try connection_append_crlf(out, out_cap, &pos);
+        return pos;
+    }
+    if reply.typ == CommandReplyType.reply_null_bulk {
+        try connection_append_bytes(out, out_cap, &pos, &"$-1\r\n"[0: 5]);
+        return pos;
+    }
+
+    try connection_append_bytes(out, out_cap, &pos, &"-ERR unsupported reply\r\n"[0: 24]);
+    return pos;
+}
+
+export fn connection_process_input_at(
+    engine: &Engine,
+    router: &CommandRouter,
+    input: &[byte],
+    out: &byte,
+    out_cap: usize,
+    now_ms: u64,
+) !ConnectionProcessResult {
+    return connection_process_input_with_aof_at(engine, router, null as &AofWriter, input, out, out_cap, now_ms);
+}
+
+export fn connection_process_input_with_aof_at(
+    engine: &Engine,
+    router: &CommandRouter,
+    aof: &AofWriter,
+    input: &[byte],
+    out: &byte,
+    out_cap: usize,
+    now_ms: u64,
+) !ConnectionProcessResult {
+    const parsed_result: !RespParseResult = parse_resp2(input);
+    const parsed: RespParseResult = parsed_result catch |err| {
+        if err == error.RespIncomplete {
+            return error.ConnectionIncomplete;
+        }
+        const reply: CommandReply = connection_error_reply(&"ERR protocol error"[0: 18]);
+        const n: usize = try connection_encode_reply(&reply, out, out_cap);
+        return ConnectionProcessResult{ response_len: n, consumed: input.len, close_after: true };
+    };
+
+    const command_result: !Command = command_from_resp(router, &parsed.value);
+    const command: Command = command_result catch |err| {
+        var reply: CommandReply = connection_error_reply(&"ERR invalid request"[0: 19]);
+        if err == error.CommandUnknown {
+            reply = connection_error_reply(&"ERR unknown command"[0: 19]);
+        }
+        if err == error.CommandWrongArity {
+            reply = connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        }
+        const n: usize = try connection_encode_reply(&reply, out, out_cap);
+        resp_value_free(&parsed.value);
+        return ConnectionProcessResult{ response_len: n, consumed: parsed.consumed, close_after: false };
+    };
+
+    const reply: CommandReply = command_execute_at(engine, &command, now_ms);
+    if aof != null && connection_should_append_aof(&command, &reply) {
+        _ = aof_append_command_at(aof, &command, input[0: parsed.consumed], now_ms) catch {
+            const aof_reply: CommandReply = connection_error_reply(&"ERR AOF append failed"[0: 21]);
+            const aof_n: usize = try connection_encode_reply(&aof_reply, out, out_cap);
+            resp_value_free(&parsed.value);
+            return ConnectionProcessResult{ response_len: aof_n, consumed: parsed.consumed, close_after: false };
+        };
+    }
+    const n: usize = try connection_encode_reply(&reply, out, out_cap);
+    const should_close: bool = command.info.cmd_type == CommandType.command_quit;
+    resp_value_free(&parsed.value);
+    return ConnectionProcessResult{ response_len: n, consumed: parsed.consumed, close_after: should_close };
+}
+
+export fn connection_empty_reply() CommandReply {
+    return connection_make_reply(CommandReplyType.reply_bulk_string, connection_reply_empty_slice(), 0);
+}
+
+export fn connection_shift_buffer(base: &byte, filled: &usize, consumed: usize) void {
+    if consumed >= *filled {
+        *filled = 0;
+        return;
+    }
+
+    const remaining: usize = *filled - consumed;
+    var i: usize = 0;
+    while i < remaining {
+        base[i] = base[consumed + i];
+        i = i + 1;
+    }
+    *filled = remaining;
+}
+
+fn connection_send_all(fd: i32, base: &byte, total: usize) !void {
+    var written: usize = 0;
+    while written < total {
+        const ptr: *const byte = @ptr_from_usize(@usize_from_ptr(base as &void) + written) as *const byte;
+        const n: isize = sys_send(fd, ptr, total - written, 0) catch {
+            return error.ConnectionIoFailed;
+        };
+        if n <= 0 {
+            return error.ConnectionIoFailed;
+        }
+        written = written + (n as usize);
+    }
+}
+
+fn connection_send_all_nonblocking(fd: i32, base: &byte, total: usize) !void {
+    var written: usize = 0;
+    while written < total {
+        const ptr: *const byte = @ptr_from_usize(@usize_from_ptr(base as &void) + written) as *const byte;
+        const n_result: !isize = sys_send(fd, ptr, total - written, 0);
+        const n: isize = n_result catch |err| {
+            const eid: i32 = @error_id(err) as i32;
+            if eid == EAGAIN || eid == EWOULDBLOCK {
+                return error.ConnectionWouldBlock;
+            }
+            if eid == EINTR {
+                continue;
+            }
+            return error.ConnectionIoFailed;
+        };
+        if n <= 0 {
+            return error.ConnectionIoFailed;
+        }
+        written = written + (n as usize);
+    }
+}
+
+fn connection_recv_available(fd: i32, base: &byte, cap: usize, filled: &usize) !bool {
+    while true {
+        if *filled >= cap {
+            return error.ConnectionInputTooLarge;
+        }
+
+        const dst: *byte = @ptr_from_usize(@usize_from_ptr(base as &void) + *filled) as *byte;
+        const n_result: !isize = sys_recv(fd, dst, cap - *filled, 0);
+        const n: isize = n_result catch |err| {
+            const eid: i32 = @error_id(err) as i32;
+            if eid == EAGAIN || eid == EWOULDBLOCK {
+                return true;
+            }
+            if eid == EINTR {
+                continue;
+            }
+            return error.ConnectionIoFailed;
+        };
+        if n == 0 {
+            return false;
+        }
+        if n < 0 {
+            return error.ConnectionIoFailed;
+        }
+        *filled = *filled + (n as usize);
+    }
+}
+
+export fn connection_handle_fd_nonblocking_with_aof(
+    engine: &Engine,
+    router: &CommandRouter,
+    aof: &AofWriter,
+    fd: i32,
+    input: &byte,
+    input_cap: usize,
+    filled: &usize,
+    output: &byte,
+    output_cap: usize,
+) !bool {
+    const open: bool = try connection_recv_available(fd, input, input_cap, filled);
+    if !open {
+        return false;
+    }
+
+    var close_after: bool = false;
+    var can_continue: bool = true;
+    while can_continue && *filled > 0 {
+        var incomplete: bool = false;
+        const result_value: !ConnectionProcessResult = connection_process_input_with_aof_at(
+            engine,
+            router,
+            aof,
+            input[0: *filled],
+            output,
+            output_cap,
+            now_ms_safe(),
+        );
+        const result: ConnectionProcessResult = result_value catch |err| {
+            if err == error.ConnectionIncomplete {
+                incomplete = true;
+                can_continue = false;
+            } else {
+                return err;
+            }
+            ConnectionProcessResult{ response_len: 0, consumed: 0, close_after: false };
+        };
+
+        if !incomplete {
+            try connection_send_all_nonblocking(fd, output, result.response_len);
+            connection_shift_buffer(input, filled, result.consumed);
+            close_after = result.close_after;
+            if close_after {
+                can_continue = false;
+            }
+        }
+    }
+
+    return !close_after;
+}
+
+export fn connection_handle_fd_nonblocking(
+    engine: &Engine,
+    router: &CommandRouter,
+    fd: i32,
+    input: &byte,
+    input_cap: usize,
+    filled: &usize,
+    output: &byte,
+    output_cap: usize,
+) !bool {
+    return connection_handle_fd_nonblocking_with_aof(engine, router, null as &AofWriter, fd, input, input_cap, filled, output, output_cap);
+}
+
+export fn connection_handle_fd(engine: &Engine, router: &CommandRouter, fd: i32) !void {
+    try connection_handle_fd_with_aof(engine, router, null as &AofWriter, fd);
+}
+
+export fn connection_handle_fd_with_aof(engine: &Engine, router: &CommandRouter, aof: &AofWriter, fd: i32) !void {
+    var input: [byte: 8192] = [];
+    var output: [byte: 8192] = [];
+    var filled: usize = 0;
+    var close_after: bool = false;
+
+    while !close_after {
+        if filled >= 8192 {
+            return error.ConnectionInputTooLarge;
+        }
+
+        const n: isize = sys_recv(fd, &input[filled] as *byte, 8192 - filled, 0) catch {
+            return error.ConnectionIoFailed;
+        };
+        if n <= 0 {
+            return;
+        }
+        filled = filled + (n as usize);
+
+        var can_continue: bool = true;
+        while can_continue && filled > 0 {
+            var incomplete: bool = false;
+            const result_aof_value: !ConnectionProcessResult = connection_process_input_with_aof_at(
+                engine,
+                router,
+                aof,
+                input[0: filled],
+                &output[0],
+                8192,
+                now_ms_safe(),
+            );
+            const result: ConnectionProcessResult = result_aof_value catch |err| {
+                if err == error.ConnectionIncomplete {
+                    incomplete = true;
+                    can_continue = false;
+                } else {
+                    return error.ConnectionIoFailed;
+                }
+                ConnectionProcessResult{ response_len: 0, consumed: 0, close_after: false };
+            };
+
+            if !incomplete {
+                try connection_send_all(fd, &output[0], result.response_len);
+                connection_shift_buffer(&input[0], &filled, result.consumed);
+                close_after = result.close_after;
+                if close_after {
+                    can_continue = false;
+                }
+            }
+        }
+    }
+}

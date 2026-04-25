@@ -1,0 +1,104 @@
+use tests.unit.assert.assert_eq_i32;
+use tests.unit.assert.assert_true;
+
+use src.command.executor.CommandReply;
+use src.command.executor.CommandReplyType;
+use src.command.router.CommandRouter;
+use src.command.router.command_router_new;
+use src.network.connection.ConnectionProcessResult;
+use src.network.connection.connection_encode_reply;
+use src.network.connection.connection_process_input_at;
+use src.storage.engine.Engine;
+use src.storage.engine.engine_new;
+use src.storage.engine.engine_free;
+use src.memory.allocator.used_memory;
+use src.memory.allocator.reset_memory_stats_for_test;
+
+fn network_connection_slice_eq(a: &[byte], b: &[byte]) bool {
+    if a.len != b.len { return false; }
+    var i: usize = 0;
+    while i < a.len {
+        if a.ptr[i] != b.ptr[i] { return false; }
+        i = i + 1;
+    }
+    return true;
+}
+
+fn network_connection_reply(typ: CommandReplyType, data: &[byte], integer: i64) CommandReply {
+    return CommandReply{
+        typ: typ,
+        data: data,
+        integer: integer,
+    };
+}
+
+export fn test_connection_encode_resp_replies() !void {
+    var out: [byte: 128] = [];
+
+    const simple: CommandReply = network_connection_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+    const simple_len: usize = try connection_encode_reply(&simple, &out[0], 128);
+    try assert_true(network_connection_slice_eq(out[0: simple_len], &"+OK\r\n"[0: 5]));
+
+    const integer: CommandReply = network_connection_reply(CommandReplyType.reply_integer, (null as &byte)[0: 0], -2);
+    const integer_len: usize = try connection_encode_reply(&integer, &out[0], 128);
+    try assert_true(network_connection_slice_eq(out[0: integer_len], &":-2\r\n"[0: 5]));
+
+    const bulk: CommandReply = network_connection_reply(CommandReplyType.reply_bulk_string, &"value"[0: 5], 0);
+    const bulk_len: usize = try connection_encode_reply(&bulk, &out[0], 128);
+    try assert_true(network_connection_slice_eq(out[0: bulk_len], &"$5\r\nvalue\r\n"[0: 11]));
+
+    const null_bulk: CommandReply = network_connection_reply(CommandReplyType.reply_null_bulk, (null as &byte)[0: 0], 0);
+    const null_len: usize = try connection_encode_reply(&null_bulk, &out[0], 128);
+    try assert_true(network_connection_slice_eq(out[0: null_len], &"$-1\r\n"[0: 5]));
+}
+
+export fn test_connection_process_ping_set_get_quit() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var out: [byte: 256] = [];
+
+    const ping: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*1\r\n$4\r\nPING\r\n"[0: 14], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: ping.response_len], &"+PONG\r\n"[0: 7]));
+    try assert_eq_i32(ping.close_after as i32, 0);
+
+    const set_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 33], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: set_result.response_len], &"+OK\r\n"[0: 5]));
+
+    const get_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n"[0: 22], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: get_result.response_len], &"$5\r\nvalue\r\n"[0: 11]));
+
+    const quit: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*1\r\n$4\r\nQUIT\r\n"[0: 14], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: quit.response_len], &"+OK\r\n"[0: 5]));
+    try assert_eq_i32(quit.close_after as i32, 1);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_connection_process_error_paths() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var out: [byte: 256] = [];
+
+    const unknown: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*1\r\n$7\r\nMISSING\r\n"[0: 17], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: 1], &"-"[0: 1]));
+    try assert_eq_i32(unknown.close_after as i32, 0);
+
+    const bad_proto: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"?bad\r\n"[0: 6], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: bad_proto.response_len], &"-ERR protocol error\r\n"[0: 21]));
+    try assert_eq_i32(bad_proto.close_after as i32, 1);
+
+    var saw_incomplete: bool = false;
+    _ = connection_process_input_at(&engine, &router, &"$6\r\nfoo"[0: 7], &out[0], 256, 1000u64) catch |err| {
+        if err == error.ConnectionIncomplete {
+            saw_incomplete = true;
+        }
+        return;
+    };
+    try assert_true(saw_incomplete);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}

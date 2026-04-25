@@ -1,0 +1,427 @@
+// storage/dict.uya - project-specific hash table for Redis key space.
+
+use src.memory.allocator.redis_malloc;
+use src.memory.allocator.redis_free;
+use src.storage.sds.Sds;
+use src.storage.sds.sds_new;
+use src.storage.sds.sds_free;
+use src.util.crc64.crc64;
+
+export error DictKeyNotFound;
+export error DictInvalidSize;
+export error DictRehashInProgress;
+
+const DICT_INITIAL_SIZE: usize = 8;
+
+export struct DictEntry {
+    key: Sds,
+    value: usize,
+    hash: u64,
+    next: &DictEntry,
+}
+
+struct DictBucket {
+    head: &DictEntry,
+}
+
+export struct DictTable {
+    buckets: &byte,
+    size: usize,
+    used: usize,
+}
+
+export struct Dict {
+    table: DictTable,
+    rehash_table: DictTable,
+    rehash_index: usize,
+    rehashing: bool,
+}
+
+export struct DictIterator {
+    table_index: usize,
+    bucket_index: usize,
+    entry: &DictEntry,
+}
+
+fn dict_entry_stride() usize {
+    var sample: [DictEntry: 1] = [];
+    return @size_of(sample[0]) as usize;
+}
+
+fn dict_bucket_stride() usize {
+    var sample: [DictBucket: 1] = [];
+    return @size_of(sample[0]) as usize;
+}
+
+fn dict_bucket_at(base: &byte, index: usize) &DictBucket {
+    const addr: usize = @usize_from_ptr(base as &void) + index * dict_bucket_stride();
+    return @ptr_from_usize(addr) as &DictBucket;
+}
+
+fn dict_bucket_index(hash: u64, size: usize) usize {
+    return (hash as usize) & (size - 1);
+}
+
+fn dict_hash_key(key: &[byte]) u64 {
+    return crc64(key);
+}
+
+fn dict_key_eq(entry: &DictEntry, key: &[byte]) bool {
+    if entry.key.len != key.len { return false; }
+    var i: usize = 0;
+    while i < key.len {
+        if entry.key.buf.ptr[i] != key.ptr[i] { return false; }
+        i = i + 1;
+    }
+    return true;
+}
+
+fn dict_init_buckets(base: &byte, size: usize) void {
+    var i: usize = 0;
+    while i < size {
+        const bucket: &DictBucket = dict_bucket_at(base, i);
+        bucket.head = null as &DictEntry;
+        i = i + 1;
+    }
+}
+
+fn dict_empty_table() DictTable {
+    return DictTable{
+        buckets: null,
+        size: 0,
+        used: 0,
+    };
+}
+
+fn dict_next_power_of_two(size: usize) usize {
+    var value: usize = DICT_INITIAL_SIZE;
+    while value < size {
+        value = value * 2;
+    }
+    return value;
+}
+
+fn dict_alloc_buckets(size: usize) !&byte {
+    if size == 0 { return error.DictInvalidSize; }
+    const raw: &byte = try redis_malloc(size * dict_bucket_stride());
+    dict_init_buckets(raw, size);
+    return raw;
+}
+
+fn dict_entry_new(key: &[byte], value: usize, hash: u64, next: &DictEntry) !&DictEntry {
+    var key_copy: Sds = try sds_new(key);
+    const raw_result: !&byte = redis_malloc(dict_entry_stride());
+    const raw: &byte = raw_result catch {
+        sds_free(&key_copy);
+        return error.AllocOutOfMemory;
+    };
+    const entry: &DictEntry = raw as &DictEntry;
+    entry.key = key_copy;
+    entry.value = value;
+    entry.hash = hash;
+    entry.next = next;
+    return entry;
+}
+
+fn dict_entry_free(entry: &DictEntry) void {
+    sds_free(&entry.key);
+    redis_free(entry as &byte);
+}
+
+fn dict_table_find_entry(table: &DictTable, key: &[byte], hash: u64) &DictEntry {
+    if table.size == 0 || table.buckets == null {
+        return null as &DictEntry;
+    }
+    const index: usize = dict_bucket_index(hash, table.size);
+    const bucket: &DictBucket = dict_bucket_at(table.buckets, index);
+    var entry: &DictEntry = bucket.head;
+    while entry != null {
+        if entry.hash == hash && dict_key_eq(entry, key) {
+            return entry;
+        }
+        entry = entry.next;
+    }
+    return null as &DictEntry;
+}
+
+fn dict_find_entry(dict: &Dict, key: &[byte], hash: u64) &DictEntry {
+    const active: &DictEntry = dict_table_find_entry(&dict.table, key, hash);
+    if active != null {
+        return active;
+    }
+    if dict.rehashing {
+        return dict_table_find_entry(&dict.rehash_table, key, hash);
+    }
+    return null as &DictEntry;
+}
+
+fn dict_table_insert_entry(table: &DictTable, entry: &DictEntry) void {
+    const index: usize = dict_bucket_index(entry.hash, table.size);
+    const bucket: &DictBucket = dict_bucket_at(table.buckets, index);
+    entry.next = bucket.head;
+    bucket.head = entry;
+    table.used = table.used + 1;
+}
+
+fn dict_table_insert_new(table: &DictTable, key: &[byte], value: usize, hash: u64) !void {
+    const index: usize = dict_bucket_index(hash, table.size);
+    const bucket: &DictBucket = dict_bucket_at(table.buckets, index);
+    const entry: &DictEntry = try dict_entry_new(key, value, hash, bucket.head);
+    bucket.head = entry;
+    table.used = table.used + 1;
+}
+
+fn dict_table_delete(table: &DictTable, key: &[byte], hash: u64) bool {
+    if table.size == 0 || table.buckets == null {
+        return false;
+    }
+
+    const index: usize = dict_bucket_index(hash, table.size);
+    const bucket: &DictBucket = dict_bucket_at(table.buckets, index);
+    var prev: &DictEntry = null as &DictEntry;
+    var entry: &DictEntry = bucket.head;
+
+    while entry != null {
+        if entry.hash == hash && dict_key_eq(entry, key) {
+            const next: &DictEntry = entry.next;
+            if prev == null {
+                bucket.head = next;
+            } else {
+                prev.next = next;
+            }
+            table.used = table.used - 1;
+            dict_entry_free(entry);
+            return true;
+        }
+        prev = entry;
+        entry = entry.next;
+    }
+
+    return false;
+}
+
+fn dict_table_free_entries(table: &DictTable) void {
+    if table.buckets == null {
+        table.size = 0;
+        table.used = 0;
+        return;
+    }
+
+    var bucket_index: usize = 0;
+    while bucket_index < table.size {
+        const bucket: &DictBucket = dict_bucket_at(table.buckets, bucket_index);
+        var entry: &DictEntry = bucket.head;
+        while entry != null {
+            const next: &DictEntry = entry.next;
+            dict_entry_free(entry);
+            entry = next;
+        }
+        bucket.head = null as &DictEntry;
+        bucket_index = bucket_index + 1;
+    }
+
+    redis_free(table.buckets);
+    table.buckets = null;
+    table.size = 0;
+    table.used = 0;
+}
+
+fn dict_table_alloc(table: &DictTable, size: usize) !void {
+    if size < DICT_INITIAL_SIZE { return error.DictInvalidSize; }
+    table.buckets = try dict_alloc_buckets(dict_next_power_of_two(size));
+    table.size = dict_next_power_of_two(size);
+    table.used = 0;
+}
+
+fn dict_ensure_table(dict: &Dict) !void {
+    if dict.table.size != 0 { return; }
+    try dict_table_alloc(&dict.table, DICT_INITIAL_SIZE);
+}
+
+fn dict_finish_rehash(dict: &Dict) void {
+    if dict.table.buckets != null {
+        redis_free(dict.table.buckets);
+    }
+    dict.table = dict.rehash_table;
+    dict.rehash_table = dict_empty_table();
+    dict.rehash_index = 0;
+    dict.rehashing = false;
+}
+
+fn dict_rehash_one_bucket(dict: &Dict) bool {
+    if !dict.rehashing {
+        return false;
+    }
+
+    while dict.rehash_index < dict.table.size {
+        const bucket: &DictBucket = dict_bucket_at(dict.table.buckets, dict.rehash_index);
+        if bucket.head == null {
+            dict.rehash_index = dict.rehash_index + 1;
+            continue;
+        }
+
+        var entry: &DictEntry = bucket.head;
+        bucket.head = null as &DictEntry;
+        while entry != null {
+            const next: &DictEntry = entry.next;
+            dict_table_insert_entry(&dict.rehash_table, entry);
+            dict.table.used = dict.table.used - 1;
+            entry = next;
+        }
+        dict.rehash_index = dict.rehash_index + 1;
+        if dict.table.used == 0 {
+            dict_finish_rehash(dict);
+            return false;
+        }
+        return true;
+    }
+
+    dict_finish_rehash(dict);
+    return false;
+}
+
+export fn dict_new() Dict {
+    return Dict{
+        table: dict_empty_table(),
+        rehash_table: dict_empty_table(),
+        rehash_index: 0,
+        rehashing: false,
+    };
+}
+
+export fn dict_free(dict: &Dict) void {
+    dict_table_free_entries(&dict.table);
+    dict_table_free_entries(&dict.rehash_table);
+    dict.rehash_index = 0;
+    dict.rehashing = false;
+}
+
+export fn dict_len(dict: &Dict) usize {
+    return dict.table.used + dict.rehash_table.used;
+}
+
+export fn dict_capacity(dict: &Dict) usize {
+    return dict.table.size + dict.rehash_table.size;
+}
+
+export fn dict_is_rehashing(dict: &Dict) bool {
+    return dict.rehashing;
+}
+
+export fn dict_iter_new() DictIterator {
+    return DictIterator{
+        table_index: 0,
+        bucket_index: 0,
+        entry: null as &DictEntry,
+    };
+}
+
+fn dict_iter_table(dict: &Dict, table_index: usize) &DictTable {
+    if table_index == 0 {
+        return &dict.table;
+    }
+    if table_index == 1 {
+        return &dict.rehash_table;
+    }
+    return null as &DictTable;
+}
+
+export fn dict_iter_next(dict: &Dict, iter: &DictIterator) &DictEntry {
+    if iter.entry != null {
+        const current: &DictEntry = iter.entry;
+        iter.entry = current.next;
+        return current;
+    }
+
+    while iter.table_index < 2 {
+        const table: &DictTable = dict_iter_table(dict, iter.table_index);
+        if table == null || table.buckets == null {
+            iter.table_index = iter.table_index + 1;
+            iter.bucket_index = 0;
+            continue;
+        }
+
+        while iter.bucket_index < table.size {
+            const bucket: &DictBucket = dict_bucket_at(table.buckets, iter.bucket_index);
+            iter.bucket_index = iter.bucket_index + 1;
+            if bucket.head != null {
+                const current: &DictEntry = bucket.head;
+                iter.entry = current.next;
+                return current;
+            }
+        }
+        iter.table_index = iter.table_index + 1;
+        iter.bucket_index = 0;
+    }
+
+    return null as &DictEntry;
+}
+
+export fn begin_rehash(dict: &Dict, new_size: usize) !void {
+    try dict_ensure_table(dict);
+    if dict.rehashing {
+        return error.DictRehashInProgress;
+    }
+    var target_size: usize = dict_next_power_of_two(new_size);
+    if target_size < dict.table.size * 2 {
+        target_size = dict.table.size * 2;
+    }
+    try dict_table_alloc(&dict.rehash_table, target_size);
+    dict.rehash_index = 0;
+    dict.rehashing = true;
+}
+
+export fn rehash_step(dict: &Dict) bool {
+    return dict_rehash_one_bucket(dict);
+}
+
+export fn dict_insert(dict: &Dict, key: &[byte], value: usize) !bool {
+    try dict_ensure_table(dict);
+
+    const hash: u64 = dict_hash_key(key);
+    const existing: &DictEntry = dict_find_entry(dict, key, hash);
+    if existing != null {
+        existing.value = value;
+        return false;
+    }
+
+    if !dict.rehashing && (dict_len(dict) + 1) * 4 > dict.table.size * 3 {
+        try begin_rehash(dict, dict.table.size * 2);
+    }
+
+    if dict.rehashing {
+        try dict_table_insert_new(&dict.rehash_table, key, value, hash);
+        _ = dict_rehash_one_bucket(dict);
+    } else {
+        try dict_table_insert_new(&dict.table, key, value, hash);
+    }
+    return true;
+}
+
+export fn dict_lookup(dict: &Dict, key: &[byte]) !usize {
+    const hash: u64 = dict_hash_key(key);
+    const entry: &DictEntry = dict_find_entry(dict, key, hash);
+    if entry == null {
+        return error.DictKeyNotFound;
+    }
+    return entry.value;
+}
+
+export fn dict_delete(dict: &Dict, key: &[byte]) bool {
+    if dict.table.size == 0 || dict.table.buckets == null {
+        return false;
+    }
+
+    const hash: u64 = dict_hash_key(key);
+    if dict_table_delete(&dict.table, key, hash) {
+        if dict.rehashing {
+            _ = dict_rehash_one_bucket(dict);
+        }
+        return true;
+    }
+    if dict.rehashing && dict_table_delete(&dict.rehash_table, key, hash) {
+        _ = dict_rehash_one_bucket(dict);
+        return true;
+    }
+    return false;
+}

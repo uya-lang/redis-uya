@@ -1,0 +1,118 @@
+// storage/object.uya - minimal Redis object wrapper.
+
+use src.memory.allocator.redis_malloc;
+use src.memory.allocator.redis_free;
+use src.storage.sds.Sds;
+use src.storage.sds.sds_new;
+use src.storage.sds.sds_free;
+
+export enum ObjectType {
+    object_string,
+}
+
+export enum Encoding {
+    encoding_raw,
+    encoding_int,
+}
+
+export struct RedisObject {
+    obj_type: ObjectType,
+    encoding: Encoding,
+    value: Sds,
+    int_value: i64,
+}
+
+struct ParseIntResult {
+    ok: bool,
+    value: i64,
+}
+
+fn object_stride() usize {
+    var sample: [RedisObject: 1] = [];
+    return @size_of(sample[0]) as usize;
+}
+
+fn parse_i64(data: &[byte]) ParseIntResult {
+    if data.len == 0 {
+        return ParseIntResult{ ok: false, value: 0 };
+    }
+
+    var negative: bool = false;
+    var index: usize = 0;
+    if data.ptr[0] == 45 as byte {
+        negative = true;
+        index = 1;
+        if data.len == 1 {
+            return ParseIntResult{ ok: false, value: 0 };
+        }
+    }
+
+    if data.len - index > 18 {
+        return ParseIntResult{ ok: false, value: 0 };
+    }
+
+    if data.len - index > 1 && data.ptr[index] == 48 as byte {
+        return ParseIntResult{ ok: false, value: 0 };
+    }
+
+    var value: i64 = 0;
+    while index < data.len {
+        const ch: byte = data.ptr[index];
+        if ch < 48 as byte || ch > 57 as byte {
+            return ParseIntResult{ ok: false, value: 0 };
+        }
+        value = value * 10 + ((ch - 48 as byte) as i64);
+        index = index + 1;
+    }
+
+    if negative {
+        value = 0 - value;
+    }
+    return ParseIntResult{ ok: true, value: value };
+}
+
+export fn create_string_object(data: &[byte]) !&RedisObject {
+    const raw: &byte = try redis_malloc(object_stride());
+    const obj: &RedisObject = raw as &RedisObject;
+    const value_result: !Sds = sds_new(data);
+    const value: Sds = value_result catch {
+        redis_free(raw);
+        return error.AllocOutOfMemory;
+    };
+
+    const parsed: ParseIntResult = parse_i64(data);
+    obj.obj_type = ObjectType.object_string;
+    if parsed.ok {
+        obj.encoding = Encoding.encoding_int;
+        obj.int_value = parsed.value;
+    } else {
+        obj.encoding = Encoding.encoding_raw;
+        obj.int_value = 0;
+    }
+    obj.value = value;
+    return obj;
+}
+
+export fn object_free(obj: &RedisObject) void {
+    if obj == null {
+        return;
+    }
+    sds_free(&obj.value);
+    redis_free(obj as &byte);
+}
+
+export fn object_type_name(obj_type: ObjectType) &[byte] {
+    match obj_type {
+        ObjectType.object_string => { return &"string"[0: 6]; },
+        else => { return &"unknown"[0: 7]; }
+    }
+}
+
+export fn object_encoding_name(encoding: Encoding) &[byte] {
+    match encoding {
+        Encoding.encoding_raw => { return &"raw"[0: 3]; },
+        Encoding.encoding_int => { return &"int"[0: 3]; },
+        else => { return &"unknown"[0: 7]; }
+    }
+}
+

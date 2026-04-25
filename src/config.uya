@@ -1,0 +1,183 @@
+// config.uya - minimal redis.conf parser.
+
+export error ConfigInvalidNumber;
+export error ConfigOpenFailed;
+export error ConfigReadFailed;
+export error ConfigFileTooLarge;
+
+use std.io.file.File;
+use std.io.file.file_open;
+use std.io.file.file_close;
+use std.io.file.file_read;
+use libc.O_RDONLY;
+
+export struct ServerConfig {
+    port: i32,
+    bind: [byte: 64],
+    dir: [byte: 256],
+    dbfilename: [byte: 128],
+    appendfilename: [byte: 128],
+    maxmemory: usize,
+    save_seconds: i32,
+    save_changes: i32,
+}
+
+fn copy_literal(dst: &[byte], src: &[byte]) void {
+    var i: usize = 0;
+    while i < dst.len && i < src.len {
+        dst.ptr[i] = src.ptr[i];
+        i = i + 1;
+    }
+    if i < dst.len { dst.ptr[i] = 0; }
+}
+
+export fn default_config() ServerConfig {
+    var cfg: ServerConfig = ServerConfig{
+        port: 6379,
+        maxmemory: 0,
+        save_seconds: 900,
+        save_changes: 1,
+    };
+    copy_literal(cfg.bind[0: 64], &"0.0.0.0"[0: 7]);
+    copy_literal(cfg.dir[0: 256], &"./"[0: 2]);
+    copy_literal(cfg.dbfilename[0: 128], &"dump.rdb"[0: 8]);
+    copy_literal(cfg.appendfilename[0: 128], &"appendonly.aof"[0: 14]);
+    return cfg;
+}
+
+fn is_space(ch: byte) bool {
+    return ch == 32 as byte || ch == 9 as byte || ch == 13 as byte || ch == 10 as byte;
+}
+
+fn token_eq(token: &[byte], lit: &[byte]) bool {
+    if token.len != lit.len { return false; }
+    var i: usize = 0;
+    while i < token.len {
+        var a: byte = token.ptr[i];
+        var b: byte = lit.ptr[i];
+        if a >= 65 as byte && a <= 90 as byte { a = a + 32 as byte; }
+        if b >= 65 as byte && b <= 90 as byte { b = b + 32 as byte; }
+        if a != b { return false; }
+        i = i + 1;
+    }
+    return true;
+}
+
+fn parse_i32_token(token: &[byte]) !i32 {
+    if token.len == 0 { return error.ConfigInvalidNumber; }
+    var value: i32 = 0;
+    var i: usize = 0;
+    while i < token.len {
+        const ch: byte = token.ptr[i];
+        if ch < 48 as byte || ch > 57 as byte { return error.ConfigInvalidNumber; }
+        value = value * 10 + ((ch - 48 as byte) as i32);
+        i = i + 1;
+    }
+    return value;
+}
+
+fn parse_memory_token(token: &[byte]) !usize {
+    if token.len == 0 { return error.ConfigInvalidNumber; }
+    var value: usize = 0;
+    var i: usize = 0;
+    while i < token.len {
+        const ch: byte = token.ptr[i];
+        if ch >= 48 as byte && ch <= 57 as byte {
+            value = value * 10 + ((ch - 48 as byte) as usize);
+            i = i + 1;
+        } else {
+            break;
+        }
+    }
+    if i == 0 { return error.ConfigInvalidNumber; }
+    const suffix: &[byte] = token[i: token.len - i];
+    if suffix.len == 0 { return value; }
+    if token_eq(suffix, &"k"[0: 1]) || token_eq(suffix, &"kb"[0: 2]) { return value * 1024; }
+    if token_eq(suffix, &"m"[0: 1]) || token_eq(suffix, &"mb"[0: 2]) { return value * 1024 * 1024; }
+    if token_eq(suffix, &"g"[0: 1]) || token_eq(suffix, &"gb"[0: 2]) { return value * 1024 * 1024 * 1024; }
+    return error.ConfigInvalidNumber;
+}
+
+fn next_token(line: &[byte], pos: &usize) &[byte] {
+    while *pos < line.len && is_space(line.ptr[*pos]) {
+        *pos = *pos + 1;
+    }
+    const start: usize = *pos;
+    while *pos < line.len && !is_space(line.ptr[*pos]) && line.ptr[*pos] != 35 as byte {
+        *pos = *pos + 1;
+    }
+    return line[start: *pos - start];
+}
+
+fn parse_line(cfg: &ServerConfig, line: &[byte]) !void {
+    var pos: usize = 0;
+    const key: &[byte] = next_token(line, &pos);
+    if key.len == 0 { return; }
+    if key.ptr[0] == 35 as byte { return; }
+    const value: &[byte] = next_token(line, &pos);
+
+    if token_eq(key, &"port"[0: 4]) {
+        cfg.port = try parse_i32_token(value);
+    } else if token_eq(key, &"bind"[0: 4]) {
+        copy_literal(cfg.bind[0: 64], value);
+    } else if token_eq(key, &"dir"[0: 3]) {
+        copy_literal(cfg.dir[0: 256], value);
+    } else if token_eq(key, &"dbfilename"[0: 10]) {
+        copy_literal(cfg.dbfilename[0: 128], value);
+    } else if token_eq(key, &"appendfilename"[0: 14]) {
+        copy_literal(cfg.appendfilename[0: 128], value);
+    } else if token_eq(key, &"maxmemory"[0: 9]) {
+        cfg.maxmemory = try parse_memory_token(value);
+    } else if token_eq(key, &"save"[0: 4]) {
+        cfg.save_seconds = try parse_i32_token(value);
+        const changes: &[byte] = next_token(line, &pos);
+        cfg.save_changes = try parse_i32_token(changes);
+    }
+}
+
+export fn parse_config_text(text: &[byte]) !ServerConfig {
+    var cfg: ServerConfig = default_config();
+    var start: usize = 0;
+    var i: usize = 0;
+    while i <= text.len {
+        if i == text.len || text.ptr[i] == 10 as byte {
+            try parse_line(&cfg, text[start: i - start]);
+            start = i + 1;
+        }
+        i = i + 1;
+    }
+    return cfg;
+}
+
+export fn parse_config_file(path: &const byte) !ServerConfig {
+    const max_size: usize = 8192;
+    var file: File = file_open(path, O_RDONLY as i32, 0u32) catch {
+        return error.ConfigOpenFailed;
+    };
+    defer {
+        _ = file_close(&file) catch {};
+    }
+
+    var buf: [byte: 8192] = [];
+    var total: usize = 0;
+    while total < max_size {
+        const n: isize = file_read(&file, &buf[total], max_size - total);
+        if n < 0 {
+            return error.ConfigReadFailed;
+        }
+        if n == 0 {
+            break;
+        }
+        total = total + (n as usize);
+    }
+    if total == max_size {
+        const extra: isize = file_read(&file, &buf[0], 1);
+        if extra > 0 {
+            return error.ConfigFileTooLarge;
+        }
+        if extra < 0 {
+            return error.ConfigReadFailed;
+        }
+    }
+    return parse_config_text(buf[0: total]);
+}

@@ -1,0 +1,198 @@
+use tests.unit.assert.assert_eq_i32;
+use tests.unit.assert.assert_true;
+
+use src.storage.sds.Sds;
+use src.storage.sds.SdsFmtArg;
+use src.storage.sds.sds_new;
+use src.storage.sds.sds_new_len;
+use src.storage.sds.sds_empty;
+use src.storage.sds.sds_free;
+use src.storage.sds.sds_len;
+use src.storage.sds.sds_avail;
+use src.storage.sds.sds_cat;
+use src.storage.sds.sds_cmp;
+use src.storage.sds.sds_casecmp;
+use src.storage.sds.sds_grow;
+use src.storage.sds.sds_shrink;
+use src.storage.sds.sds_dup;
+use src.storage.sds.sds_range;
+use src.storage.sds.sds_cat_fmt;
+use src.storage.sds.sds_fmt_bytes;
+use src.storage.sds.sds_fmt_i64;
+use src.storage.sds.sds_fmt_u64;
+use src.memory.allocator.used_memory;
+use src.memory.allocator.reset_memory_stats_for_test;
+
+fn slice_eq(buf: &[byte], lit: &[byte]) bool {
+    if buf.len != lit.len { return false; }
+    var i: usize = 0;
+    while i < lit.len {
+        if buf.ptr[i] != lit.ptr[i] { return false; }
+        i = i + 1;
+    }
+    return true;
+}
+
+export fn test_sds_create_and_free() !void {
+    reset_memory_stats_for_test();
+    var s: Sds = try sds_new(&"hello"[0: 5]);
+    try assert_eq_i32(sds_len(&s) as i32, 5);
+    try assert_true(slice_eq(s.buf[0: s.len], &"hello"[0: 5]));
+    sds_free(&s);
+    try assert_eq_i32(sds_len(&s) as i32, 0);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_sds_cat_and_grow() !void {
+    reset_memory_stats_for_test();
+    var s: Sds = try sds_empty();
+    try sds_cat(&s, &"foo"[0: 3]);
+    try sds_cat(&s, &"bar"[0: 3]);
+    try assert_eq_i32(sds_len(&s) as i32, 6);
+    try assert_true(slice_eq(s.buf[0: s.len], &"foobar"[0: 6]));
+    try assert_true(s.alloc >= 6);
+    sds_free(&s);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_sds_compare() !void {
+    var a: Sds = try sds_new(&"abc"[0: 3]);
+    var b: Sds = try sds_new(&"abd"[0: 3]);
+    var c: Sds = try sds_new(&"ABC"[0: 3]);
+    try assert_true(sds_cmp(&a, &b) < 0);
+    try assert_true(sds_cmp(&b, &a) > 0);
+    try assert_eq_i32(sds_casecmp(&a, &c), 0);
+    sds_free(&a);
+    sds_free(&b);
+    sds_free(&c);
+}
+
+export fn test_sds_grow_and_shrink() !void {
+    reset_memory_stats_for_test();
+    var s: Sds = try sds_new_len(4);
+    try assert_eq_i32(sds_len(&s) as i32, 4);
+    try assert_true(s.alloc >= 4);
+    try sds_grow(&s, 128);
+    try assert_true(s.alloc >= 128);
+    try assert_eq_i32(sds_len(&s) as i32, 4);
+    sds_shrink(&s);
+    try assert_eq_i32(s.alloc as i32, 4);
+    try assert_eq_i32(sds_avail(&s) as i32, 0);
+    sds_free(&s);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_sds_binary_safe() !void {
+    reset_memory_stats_for_test();
+    var data: [byte: 5] = [97, 0, 98, 0, 99];
+    var tail: [byte: 2] = [0, 100];
+    var s: Sds = try sds_new(data[0: 5]);
+    try sds_cat(&s, tail[0: 2]);
+    try assert_eq_i32(sds_len(&s) as i32, 7);
+    try assert_eq_i32(s.buf.ptr[0] as i32, 97);
+    try assert_eq_i32(s.buf.ptr[1] as i32, 0);
+    try assert_eq_i32(s.buf.ptr[4] as i32, 99);
+    try assert_eq_i32(s.buf.ptr[5] as i32, 0);
+    try assert_eq_i32(s.buf.ptr[6] as i32, 100);
+    sds_free(&s);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_sds_dup_independent_copy() !void {
+    reset_memory_stats_for_test();
+    var original: Sds = try sds_new(&"hello"[0: 5]);
+    var clone: Sds = try sds_dup(&original);
+    clone.buf.ptr[0] = 72 as byte;
+    try assert_eq_i32(original.buf.ptr[0] as i32, 104);
+    try assert_eq_i32(clone.buf.ptr[0] as i32, 72);
+    try assert_eq_i32(sds_len(&clone) as i32, 5);
+    sds_free(&original);
+    sds_free(&clone);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_sds_range_substring() !void {
+    reset_memory_stats_for_test();
+    var source: Sds = try sds_new(&"abcdef"[0: 6]);
+    var middle: Sds = try sds_range(&source, 1, 3);
+    var tail: Sds = try sds_range(&source, 4, 2);
+    try assert_eq_i32(sds_len(&middle) as i32, 3);
+    try assert_eq_i32(middle.buf.ptr[0] as i32, 98);
+    try assert_eq_i32(middle.buf.ptr[2] as i32, 100);
+    try assert_eq_i32(sds_len(&tail) as i32, 2);
+    try assert_eq_i32(tail.buf.ptr[0] as i32, 101);
+    try assert_eq_i32(tail.buf.ptr[1] as i32, 102);
+    sds_free(&source);
+    sds_free(&middle);
+    sds_free(&tail);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_sds_cat_fmt_minimal() !void {
+    reset_memory_stats_for_test();
+    var s: Sds = try sds_empty();
+    var args: [SdsFmtArg: 3] = [
+        sds_fmt_bytes(&"key"[0: 3]),
+        sds_fmt_i64(-42),
+        sds_fmt_u64(99u64),
+    ];
+    try sds_cat_fmt(&s, &"name=%s signed=%i unsigned=%u %% done"[0: 37], args[0: 3]);
+    try assert_eq_i32(sds_len(&s) as i32, 38);
+    try assert_true(slice_eq(s.buf[0: s.len], &"name=key signed=-42 unsigned=99 % done"[0: 38]));
+    sds_free(&s);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_sds_cat_fmt_error_paths() !void {
+    reset_memory_stats_for_test();
+    var s: Sds = try sds_new(&"prefix"[0: 6]);
+    var args: [SdsFmtArg: 1] = [sds_fmt_i64(1)];
+
+    var saw_mismatch: bool = false;
+    _ = sds_cat_fmt(&s, &"%s"[0: 2], args[0: 1]) catch |err| {
+        if err == error.SdsFormatArgMismatch {
+            saw_mismatch = true;
+        }
+        return;
+    };
+    try assert_true(saw_mismatch);
+    try assert_eq_i32(sds_len(&s) as i32, 6);
+    try assert_true(slice_eq(s.buf[0: s.len], &"prefix"[0: 6]));
+
+    var saw_invalid: bool = false;
+    _ = sds_cat_fmt(&s, &"bad %x"[0: 6], (null as &SdsFmtArg)[0: 0]) catch |err| {
+        if err == error.SdsInvalidFormat {
+            saw_invalid = true;
+        }
+        return;
+    };
+    try assert_true(saw_invalid);
+    try assert_eq_i32(sds_len(&s) as i32, 6);
+    sds_free(&s);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_sds_1mb_append_stress() !void {
+    reset_memory_stats_for_test();
+    var chunk: [byte: 1024] = [];
+    var i: usize = 0;
+    while i < 1024 {
+        chunk[i] = ((i % 251) as byte) + 1 as byte;
+        i = i + 1;
+    }
+
+    var s: Sds = try sds_empty();
+    i = 0;
+    while i < 1024 {
+        try sds_cat(&s, chunk[0: 1024]);
+        i = i + 1;
+    }
+
+    try assert_eq_i32(sds_len(&s) as i32, 1048576);
+    try assert_true(s.alloc >= 1048576);
+    try assert_eq_i32(s.buf.ptr[0] as i32, 1);
+    try assert_eq_i32(s.buf.ptr[1023] as i32, ((1023 % 251) + 1) as i32);
+    try assert_eq_i32(s.buf.ptr[1048575] as i32, ((1023 % 251) + 1) as i32);
+    sds_free(&s);
+    try assert_eq_i32(used_memory() as i32, 0);
+}

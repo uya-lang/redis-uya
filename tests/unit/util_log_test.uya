@@ -1,0 +1,12 @@
+use tests.unit.assert.assert_eq_i32;
+
+use src.util.log.LogLevel;
+use src.util.log.current_level;
+use src.util.log.set_level;
+
+export fn test_log_level_state() !void {
+    set_level(LogLevel.log_debug);
+    try assert_eq_i32(current_level, LogLevel.log_debug as i32);
+    set_level(LogLevel.log_warn);
+    try assert_eq_i32(current_level, LogLevel.log_warn as i32);
+}

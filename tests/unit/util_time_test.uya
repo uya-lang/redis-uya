@@ -1,0 +1,14 @@
+use tests.unit.assert.assert_true;
+
+use src.util.time.now_ms_safe;
+use src.util.time.now_s;
+use src.util.time.now_us;
+
+export fn test_time_monotonic_shape() !void {
+    const ms: u64 = now_ms_safe();
+    const us: u64 = now_us();
+    const s: u64 = now_s();
+    try assert_true(ms > 0u64);
+    try assert_true(us >= ms);
+    try assert_true(s <= ms);
+}

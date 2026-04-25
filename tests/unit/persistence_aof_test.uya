@@ -1,0 +1,168 @@
+use tests.unit.assert.assert_eq_i32;
+use tests.unit.assert.assert_true;
+
+use src.command.router.CommandRouter;
+use src.command.router.command_router_new;
+use src.network.connection.ConnectionProcessResult;
+use src.network.connection.connection_process_input_with_aof_at;
+use src.persistence.aof.AofWriter;
+use src.persistence.aof.aof_open_truncate;
+use src.persistence.aof.aof_close;
+use src.persistence.aof.aof_append_raw;
+use src.persistence.aof.aof_replay_file_at;
+use src.storage.engine.Engine;
+use src.storage.engine.engine_new;
+use src.storage.engine.engine_free;
+use src.storage.engine.lookup_key_at;
+use src.storage.object.RedisObject;
+use src.memory.allocator.used_memory;
+use src.memory.allocator.reset_memory_stats_for_test;
+use libc.unlink;
+
+fn aof_test_slice_eq(a: &[byte], b: &[byte]) bool {
+    if a.len != b.len { return false; }
+    var i: usize = 0;
+    while i < a.len {
+        if a.ptr[i] != b.ptr[i] { return false; }
+        i = i + 1;
+    }
+    return true;
+}
+
+fn aof_replay_fails(path: &const byte) bool {
+    var engine: Engine = engine_new();
+    const router: CommandRouter = command_router_new();
+    _ = aof_replay_file_at(path, &engine, &router, 1000u64) catch |err| {
+        engine_free(&engine);
+        if err == error.AofTruncated {
+            return true;
+        }
+        if err == error.AofInvalidFormat {
+            return true;
+        }
+        if err == error.AofInvalidCommand {
+            return true;
+        }
+        if err == error.AofReplayCommandFailed {
+            return true;
+        }
+        return false;
+    };
+    engine_free(&engine);
+    return false;
+}
+
+fn aof_key_missing_at(engine: &Engine, key: &[byte], now_ms: u64) bool {
+    const found: &RedisObject = lookup_key_at(engine, key, now_ms) catch |err| {
+        if err == error.EngineKeyNotFound {
+            return true;
+        }
+        return false;
+    };
+    _ = found;
+    return false;
+}
+
+export fn test_aof_connection_append_and_replay_set() !void {
+    reset_memory_stats_for_test();
+    const path: &const byte = "build/test-aof-set.aof";
+    _ = unlink(path);
+
+    var writer: AofWriter = try aof_open_truncate(path);
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var out: [byte: 256] = [];
+
+    const result: ConnectionProcessResult = try connection_process_input_with_aof_at(
+        &engine,
+        &router,
+        &writer,
+        &"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 33],
+        &out[0],
+        256,
+        1000u64,
+    );
+    try assert_true(aof_test_slice_eq(out[0: result.response_len], &"+OK\r\n"[0: 5]));
+    aof_close(&writer);
+    engine_free(&engine);
+
+    var replay_engine: Engine = engine_new();
+    try aof_replay_file_at(path, &replay_engine, &router, 2000u64);
+    const found: &RedisObject = try lookup_key_at(&replay_engine, &"key"[0: 3], 2000u64);
+    try assert_true(aof_test_slice_eq(found.value.buf[0: found.value.len], &"value"[0: 5]));
+    engine_free(&replay_engine);
+    _ = unlink(path);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_aof_replay_set_then_del() !void {
+    reset_memory_stats_for_test();
+    const path: &const byte = "build/test-aof-del.aof";
+    _ = unlink(path);
+
+    var writer: AofWriter = try aof_open_truncate(path);
+    try aof_append_raw(&writer, &"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 33]);
+    try aof_append_raw(&writer, &"*2\r\n$3\r\nDEL\r\n$3\r\nkey\r\n"[0: 22]);
+    aof_close(&writer);
+
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    try aof_replay_file_at(path, &engine, &router, 1000u64);
+    try assert_true(aof_key_missing_at(&engine, &"key"[0: 3], 1000u64));
+    engine_free(&engine);
+    _ = unlink(path);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_aof_replay_truncated_file_fails() !void {
+    reset_memory_stats_for_test();
+    const path: &const byte = "build/test-aof-bad.aof";
+    _ = unlink(path);
+
+    var writer: AofWriter = try aof_open_truncate(path);
+    try aof_append_raw(&writer, &"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n"[0: 22]);
+    aof_close(&writer);
+
+    try assert_true(aof_replay_fails(path));
+    _ = unlink(path);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_aof_expire_replays_absolute_deadline() !void {
+    reset_memory_stats_for_test();
+    const path: &const byte = "build/test-aof-expire.aof";
+    _ = unlink(path);
+
+    var writer: AofWriter = try aof_open_truncate(path);
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var out: [byte: 256] = [];
+
+    _ = try connection_process_input_with_aof_at(
+        &engine,
+        &router,
+        &writer,
+        &"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 33],
+        &out[0],
+        256,
+        1000u64,
+    );
+    _ = try connection_process_input_with_aof_at(
+        &engine,
+        &router,
+        &writer,
+        &"*3\r\n$6\r\nEXPIRE\r\n$3\r\nkey\r\n$1\r\n2\r\n"[0: 32],
+        &out[0],
+        256,
+        1000u64,
+    );
+    aof_close(&writer);
+    engine_free(&engine);
+
+    var replay_engine: Engine = engine_new();
+    try aof_replay_file_at(path, &replay_engine, &router, 5000u64);
+    try assert_true(aof_key_missing_at(&replay_engine, &"key"[0: 3], 5000u64));
+    engine_free(&replay_engine);
+    _ = unlink(path);
+    try assert_eq_i32(used_memory() as i32, 0);
+}

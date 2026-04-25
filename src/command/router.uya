@@ -1,0 +1,198 @@
+// command/router.uya - minimal Redis command router.
+
+use src.network.protocol.RespType;
+use src.network.protocol.RespValue;
+use src.network.protocol.resp_array_element;
+
+export error CommandUnknown;
+export error CommandWrongArity;
+export error CommandInvalidRequest;
+export error CommandInvalidIndex;
+
+export enum CommandType {
+    command_ping,
+    command_get,
+    command_set,
+    command_del,
+    command_exists,
+    command_expire,
+    command_pexpireat,
+    command_ttl,
+    command_info,
+    command_quit,
+}
+
+export struct CommandInfo {
+    cmd_type: CommandType,
+    name: &[byte],
+    arity: i32,
+    flags: u64,
+    first_key: i32,
+    last_key: i32,
+    key_step: i32,
+}
+
+export struct CommandRouter {
+    command_count: usize,
+}
+
+export struct Command {
+    info: CommandInfo,
+    argc: usize,
+    request: &RespValue,
+}
+
+export const COMMAND_FLAG_READONLY: u64 = 1u64;
+export const COMMAND_FLAG_WRITE: u64 = 2u64;
+export const COMMAND_FLAG_FAST: u64 = 4u64;
+
+const MIN_COMMAND_COUNT: usize = 10;
+
+fn command_router_lower(ch: byte) byte {
+    if ch >= 65 as byte && ch <= 90 as byte {
+        return ch + 32 as byte;
+    }
+    return ch;
+}
+
+fn command_router_name_eq(a: &[byte], b: &[byte]) bool {
+    if a.len != b.len {
+        return false;
+    }
+
+    var i: usize = 0;
+    while i < a.len {
+        if command_router_lower(a.ptr[i]) != command_router_lower(b.ptr[i]) {
+            return false;
+        }
+        i = i + 1;
+    }
+    return true;
+}
+
+fn command_router_info(
+    cmd_type: CommandType,
+    name: &[byte],
+    arity: i32,
+    flags: u64,
+    first_key: i32,
+    last_key: i32,
+    key_step: i32,
+) CommandInfo {
+    return CommandInfo{
+        cmd_type: cmd_type,
+        name: name,
+        arity: arity,
+        flags: flags,
+        first_key: first_key,
+        last_key: last_key,
+        key_step: key_step,
+    };
+}
+
+fn command_router_info_by_index(index: usize) !CommandInfo {
+    if index == 0 {
+        return command_router_info(CommandType.command_ping, &"PING"[0: 4], -1, COMMAND_FLAG_FAST, 0, 0, 0);
+    }
+    if index == 1 {
+        return command_router_info(CommandType.command_get, &"GET"[0: 3], 2, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 2 {
+        return command_router_info(CommandType.command_set, &"SET"[0: 3], -3, COMMAND_FLAG_WRITE, 1, 1, 1);
+    }
+    if index == 3 {
+        return command_router_info(CommandType.command_del, &"DEL"[0: 3], -2, COMMAND_FLAG_WRITE, 1, -1, 1);
+    }
+    if index == 4 {
+        return command_router_info(CommandType.command_exists, &"EXISTS"[0: 6], -2, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, -1, 1);
+    }
+    if index == 5 {
+        return command_router_info(CommandType.command_expire, &"EXPIRE"[0: 6], 3, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 6 {
+        return command_router_info(CommandType.command_pexpireat, &"PEXPIREAT"[0: 9], 3, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 7 {
+        return command_router_info(CommandType.command_ttl, &"TTL"[0: 3], 2, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 8 {
+        return command_router_info(CommandType.command_info, &"INFO"[0: 4], -1, COMMAND_FLAG_READONLY, 0, 0, 0);
+    }
+    if index == 9 {
+        return command_router_info(CommandType.command_quit, &"QUIT"[0: 4], 1, COMMAND_FLAG_FAST, 0, 0, 0);
+    }
+    return error.CommandUnknown;
+}
+
+fn command_router_resp_arg_data(value: &RespValue) !&[byte] {
+    if value == null {
+        return error.CommandInvalidRequest;
+    }
+    if value.typ == RespType.resp_bulk_string || value.typ == RespType.resp_simple_string {
+        return value.data;
+    }
+    return error.CommandInvalidRequest;
+}
+
+export fn command_router_new() CommandRouter {
+    return CommandRouter{
+        command_count: MIN_COMMAND_COUNT,
+    };
+}
+
+export fn command_router_count(router: &CommandRouter) usize {
+    return router.command_count;
+}
+
+export fn command_router_lookup(router: &CommandRouter, name: &[byte]) !CommandInfo {
+    var index: usize = 0;
+    while index < router.command_count {
+        const info: CommandInfo = try command_router_info_by_index(index);
+        if command_router_name_eq(name, info.name) {
+            return info;
+        }
+        index = index + 1;
+    }
+    return error.CommandUnknown;
+}
+
+export fn command_validate_arity(info: &CommandInfo, argc: usize) !void {
+    if info.arity >= 0 {
+        if argc != info.arity as usize {
+            return error.CommandWrongArity;
+        }
+        return;
+    }
+
+    const min_argc: usize = (0 - info.arity) as usize;
+    if argc < min_argc {
+        return error.CommandWrongArity;
+    }
+}
+
+export fn command_from_resp(router: &CommandRouter, value: &RespValue) !Command {
+    if value == null || value.typ != RespType.resp_array {
+        return error.CommandInvalidRequest;
+    }
+    if value.element_count == 0 {
+        return error.CommandInvalidRequest;
+    }
+
+    const first: &RespValue = resp_array_element(value, 0);
+    const name: &[byte] = try command_router_resp_arg_data(first);
+    const info: CommandInfo = try command_router_lookup(router, name);
+    try command_validate_arity(&info, value.element_count);
+    return Command{
+        info: info,
+        argc: value.element_count,
+        request: value,
+    };
+}
+
+export fn command_arg_data(command: &Command, index: usize) !&[byte] {
+    if index >= command.argc {
+        return error.CommandInvalidIndex;
+    }
+    const item: &RespValue = resp_array_element(command.request, index);
+    return command_router_resp_arg_data(item);
+}

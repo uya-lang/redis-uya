@@ -1,0 +1,77 @@
+// memory/allocator.uya - Redis allocator wrapper.
+
+extern fn malloc(size: usize) &void;
+extern fn free(ptr: &void) void;
+extern fn realloc(ptr: &void, new_size: usize) &void;
+
+export error AllocOutOfMemory;
+export error AllocInvalidSize;
+
+export var used_memory_bytes: usize = 0;
+
+export struct RedisAllocator {
+}
+
+export var global_allocator: RedisAllocator = RedisAllocator{};
+
+export fn used_memory() usize {
+    return used_memory_bytes;
+}
+
+export fn reset_memory_stats_for_test() void {
+    used_memory_bytes = 0;
+}
+
+export fn redis_malloc(size: usize) !&byte {
+    if size == 0 { return error.AllocInvalidSize; }
+    const total: usize = size + @size_of(usize);
+    const raw: &void = malloc(total);
+    if raw == null { return error.AllocOutOfMemory; }
+    const header: &usize = raw as &usize;
+    *header = size;
+    used_memory_bytes += size;
+    return ((raw as &byte) + @size_of(usize)) as &byte;
+}
+
+export fn redis_free(ptr: &byte) void {
+    if ptr == null { return; }
+    const raw: &byte = ptr - @size_of(usize);
+    const header: &usize = raw as &usize;
+    const size: usize = *header;
+    used_memory_bytes -= size;
+    free(raw as &void);
+}
+
+export fn redis_realloc(ptr: &byte, new_size: usize) !&byte {
+    if new_size == 0 { return error.AllocInvalidSize; }
+    if ptr == null { return redis_malloc(new_size); }
+
+    const raw: &byte = ptr - @size_of(usize);
+    const header: &usize = raw as &usize;
+    const old_size: usize = *header;
+    const total: usize = new_size + @size_of(usize);
+    const new_raw_void: &void = realloc(raw as &void, total);
+    if new_raw_void == null { return error.AllocOutOfMemory; }
+    const new_header: &usize = new_raw_void as &usize;
+    *new_header = new_size;
+    if new_size >= old_size {
+        used_memory_bytes += new_size - old_size;
+    } else {
+        used_memory_bytes -= old_size - new_size;
+    }
+    return ((new_raw_void as &byte) + @size_of(usize)) as &byte;
+}
+
+RedisAllocator {
+    fn alloc(self: &Self, size: usize) !&byte {
+        return redis_malloc(size);
+    }
+
+    fn dealloc(self: &Self, ptr: &byte) void {
+        redis_free(ptr);
+    }
+
+    fn resize(self: &Self, ptr: &byte, new_size: usize) !&byte {
+        return redis_realloc(ptr, new_size);
+    }
+}

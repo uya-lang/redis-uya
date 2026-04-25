@@ -1,0 +1,327 @@
+// storage/sds.uya - Simple Dynamic String.
+
+use src.memory.allocator.redis_malloc;
+use src.memory.allocator.redis_free;
+use src.memory.allocator.redis_realloc;
+
+export error SdsInvalidSize;
+export error SdsInvalidFormat;
+export error SdsFormatArgMismatch;
+
+export struct Sds {
+    buf: &[byte],
+    len: usize,
+    alloc: usize,
+}
+
+export enum SdsFmtArgType {
+    sds_fmt_bytes,
+    sds_fmt_i64,
+    sds_fmt_u64,
+}
+
+export struct SdsFmtArg {
+    typ: SdsFmtArgType,
+    bytes: &[byte],
+    signed_value: i64,
+    unsigned_value: u64,
+}
+
+fn min_capacity(size: usize) usize {
+    if size < 16 { return 16; }
+    return size;
+}
+
+fn copy_bytes(dst: &byte, src: &[byte]) void {
+    var i: usize = 0;
+    while i < src.len {
+        dst[i] = src.ptr[i];
+        i = i + 1;
+    }
+}
+
+export fn sds_new_len(len: usize) !Sds {
+    const capacity: usize = min_capacity(len);
+    const ptr: &byte = try redis_malloc(capacity + 1);
+    var i: usize = 0;
+    while i <= len {
+        ptr[i] = 0 as byte;
+        i = i + 1;
+    }
+    return Sds{ buf: ptr[0: capacity + 1], len: len, alloc: capacity };
+}
+
+export fn sds_empty() !Sds {
+    return sds_new_len(0);
+}
+
+export fn sds_new(data: &[byte]) !Sds {
+    var s: Sds = try sds_new_len(data.len);
+    copy_bytes(s.buf.ptr, data);
+    s.buf.ptr[s.len] = 0 as byte;
+    return s;
+}
+
+export fn sds_dup(s: &Sds) !Sds {
+    return sds_new(s.buf[0: s.len]);
+}
+
+export fn sds_free(s: &Sds) void {
+    if s.buf.ptr != null {
+        redis_free(s.buf.ptr);
+    }
+    s.buf = (null as &byte)[0: 0];
+    s.len = 0;
+    s.alloc = 0;
+}
+
+export fn sds_len(s: &Sds) usize {
+    return s.len;
+}
+
+export fn sds_avail(s: &Sds) usize {
+    if s.alloc < s.len { return 0; }
+    return s.alloc - s.len;
+}
+
+export fn sds_grow(s: &Sds, min_capacity: usize) !void {
+    if min_capacity <= s.alloc { return; }
+    var new_capacity: usize = s.alloc * 2;
+    if new_capacity < min_capacity { new_capacity = min_capacity; }
+    if new_capacity < 16 { new_capacity = 16; }
+    const new_ptr: &byte = try redis_realloc(s.buf.ptr, new_capacity + 1);
+    s.buf = new_ptr[0: new_capacity + 1];
+    s.alloc = new_capacity;
+    s.buf.ptr[s.len] = 0 as byte;
+}
+
+export fn sds_cat(s: &Sds, data: &[byte]) !void {
+    const new_len: usize = s.len + data.len;
+    try sds_grow(s, new_len);
+    var i: usize = 0;
+    while i < data.len {
+        s.buf.ptr[s.len + i] = data.ptr[i];
+        i = i + 1;
+    }
+    s.len = new_len;
+    s.buf.ptr[s.len] = 0 as byte;
+}
+
+export fn sds_fmt_bytes(data: &[byte]) SdsFmtArg {
+    return SdsFmtArg{
+        typ: SdsFmtArgType.sds_fmt_bytes,
+        bytes: data,
+        signed_value: 0,
+        unsigned_value: 0u64,
+    };
+}
+
+export fn sds_fmt_i64(value: i64) SdsFmtArg {
+    return SdsFmtArg{
+        typ: SdsFmtArgType.sds_fmt_i64,
+        bytes: (null as &byte)[0: 0],
+        signed_value: value,
+        unsigned_value: 0u64,
+    };
+}
+
+export fn sds_fmt_u64(value: u64) SdsFmtArg {
+    return SdsFmtArg{
+        typ: SdsFmtArgType.sds_fmt_u64,
+        bytes: (null as &byte)[0: 0],
+        signed_value: 0,
+        unsigned_value: value,
+    };
+}
+
+fn sds_append_u64(s: &Sds, value: u64) !void {
+    if value == 0u64 {
+        try sds_cat(s, &"0"[0: 1]);
+        return;
+    }
+
+    var tmp: [byte: 20] = [];
+    var count: usize = 0;
+    var v: u64 = value;
+    while v > 0u64 {
+        const digit: u64 = v % 10u64;
+        tmp[count] = (48u64 + digit) as byte;
+        count = count + 1;
+        v = v / 10u64;
+    }
+
+    while count > 0 {
+        count = count - 1;
+        try sds_cat(s, tmp[count: 1]);
+    }
+}
+
+fn sds_append_i64(s: &Sds, value: i64) !void {
+    if value == 0 {
+        try sds_cat(s, &"0"[0: 1]);
+        return;
+    }
+
+    var tmp: [byte: 20] = [];
+    var count: usize = 0;
+    var v: i64 = value;
+    if v < 0 {
+        try sds_cat(s, &"-"[0: 1]);
+        while v < 0 {
+            const digit: i64 = 0 - (v % (10 as i64));
+            tmp[count] = (48 + digit) as byte;
+            count = count + 1;
+            v = v / (10 as i64);
+        }
+    } else {
+        while v > 0 {
+            const digit: i64 = v % (10 as i64);
+            tmp[count] = (48 + digit) as byte;
+            count = count + 1;
+            v = v / (10 as i64);
+        }
+    }
+
+    while count > 0 {
+        count = count - 1;
+        try sds_cat(s, tmp[count: 1]);
+    }
+}
+
+fn sds_fmt_validate(fmt: &[byte], args: &[SdsFmtArg]) !void {
+    var i: usize = 0;
+    var arg_index: usize = 0;
+    while i < fmt.len {
+        const ch: byte = fmt.ptr[i];
+        if ch != 37 as byte {
+            i = i + 1;
+            continue;
+        }
+
+        if i + 1 >= fmt.len {
+            return error.SdsInvalidFormat;
+        }
+        const spec: byte = fmt.ptr[i + 1];
+        if spec == 37 as byte {
+            i = i + 2;
+            continue;
+        }
+
+        if spec == 115 as byte {
+            if arg_index >= args.len {
+                return error.SdsFormatArgMismatch;
+            }
+            if args.ptr[arg_index].typ != SdsFmtArgType.sds_fmt_bytes {
+                return error.SdsFormatArgMismatch;
+            }
+        } else if spec == 105 as byte {
+            if arg_index >= args.len {
+                return error.SdsFormatArgMismatch;
+            }
+            if args.ptr[arg_index].typ != SdsFmtArgType.sds_fmt_i64 {
+                return error.SdsFormatArgMismatch;
+            }
+        } else if spec == 117 as byte {
+            if arg_index >= args.len {
+                return error.SdsFormatArgMismatch;
+            }
+            if args.ptr[arg_index].typ != SdsFmtArgType.sds_fmt_u64 {
+                return error.SdsFormatArgMismatch;
+            }
+        } else {
+            return error.SdsInvalidFormat;
+        }
+
+        arg_index = arg_index + 1;
+        i = i + 2;
+    }
+
+    if arg_index != args.len {
+        return error.SdsFormatArgMismatch;
+    }
+}
+
+export fn sds_cat_fmt(s: &Sds, fmt: &[byte], args: &[SdsFmtArg]) !void {
+    try sds_fmt_validate(fmt, args);
+
+    var i: usize = 0;
+    var arg_index: usize = 0;
+    while i < fmt.len {
+        const ch: byte = fmt.ptr[i];
+        if ch != 37 as byte {
+            try sds_cat(s, fmt[i: 1]);
+            i = i + 1;
+            continue;
+        }
+
+        const spec: byte = fmt.ptr[i + 1];
+        if spec == 37 as byte {
+            try sds_cat(s, &"%"[0: 1]);
+        } else if spec == 115 as byte {
+            try sds_cat(s, args.ptr[arg_index].bytes);
+            arg_index = arg_index + 1;
+        } else if spec == 105 as byte {
+            try sds_append_i64(s, args.ptr[arg_index].signed_value);
+            arg_index = arg_index + 1;
+        } else {
+            try sds_append_u64(s, args.ptr[arg_index].unsigned_value);
+            arg_index = arg_index + 1;
+        }
+        i = i + 2;
+    }
+}
+
+export fn sds_range(s: &Sds, start: usize, len: usize) !Sds {
+    if start >= s.len {
+        return sds_empty();
+    }
+    var actual_len: usize = len;
+    if start + actual_len > s.len {
+        actual_len = s.len - start;
+    }
+    return sds_new(s.buf[start: actual_len]);
+}
+
+export fn sds_shrink(s: &Sds) void {
+    if s.alloc == s.len { return; }
+    const new_ptr_result: !&byte = redis_realloc(s.buf.ptr, s.len + 1);
+    const new_ptr: &byte = new_ptr_result catch {
+        return;
+    };
+    s.buf = new_ptr[0: s.len + 1];
+    s.alloc = s.len;
+    s.buf.ptr[s.len] = 0 as byte;
+}
+
+export fn sds_cmp(a: &Sds, b: &Sds) i32 {
+    var i: usize = 0;
+    while i < a.len && i < b.len {
+        const av: byte = a.buf.ptr[i];
+        const bv: byte = b.buf.ptr[i];
+        if av < bv { return -1; }
+        if av > bv { return 1; }
+        i = i + 1;
+    }
+    if a.len < b.len { return -1; }
+    if a.len > b.len { return 1; }
+    return 0;
+}
+
+fn lower(ch: byte) byte {
+    if ch >= 65 as byte && ch <= 90 as byte { return ch + 32 as byte; }
+    return ch;
+}
+
+export fn sds_casecmp(a: &Sds, b: &Sds) i32 {
+    var i: usize = 0;
+    while i < a.len && i < b.len {
+        const av: byte = lower(a.buf.ptr[i]);
+        const bv: byte = lower(b.buf.ptr[i]);
+        if av < bv { return -1; }
+        if av > bv { return 1; }
+        i = i + 1;
+    }
+    if a.len < b.len { return -1; }
+    if a.len > b.len { return 1; }
+    return 0;
+}

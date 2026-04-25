@@ -1,0 +1,55 @@
+use tests.unit.assert.assert_eq_i32;
+use tests.unit.assert.assert_true;
+
+use src.memory.allocator.redis_malloc;
+use src.memory.allocator.redis_free;
+use src.memory.allocator.redis_realloc;
+use src.memory.allocator.used_memory;
+use src.memory.allocator.reset_memory_stats_for_test;
+
+export fn test_allocator_alloc_free() !void {
+    reset_memory_stats_for_test();
+    const ptr: &byte = try redis_malloc(64);
+    try assert_true(ptr != null);
+    ptr[0] = 42;
+    ptr[63] = 24;
+    try assert_eq_i32(ptr[0] as i32, 42);
+    try assert_eq_i32(ptr[63] as i32, 24);
+    try assert_eq_i32(used_memory() as i32, 64);
+    redis_free(ptr);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_allocator_realloc() !void {
+    reset_memory_stats_for_test();
+    var ptr: &byte = try redis_malloc(16);
+    ptr[0] = 7;
+    ptr = try redis_realloc(ptr, 128);
+    try assert_true(ptr != null);
+    try assert_eq_i32(ptr[0] as i32, 7);
+    try assert_eq_i32(used_memory() as i32, 128);
+    ptr = try redis_realloc(ptr, 32);
+    try assert_eq_i32(ptr[0] as i32, 7);
+    try assert_eq_i32(used_memory() as i32, 32);
+    redis_free(ptr);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_allocator_many_allocations() !void {
+    reset_memory_stats_for_test();
+    var ptrs: [&byte: 32] = [];
+    var i: usize = 0;
+    while i < 32 {
+        ptrs[i] = try redis_malloc(8);
+        ptrs[i][0] = i as byte;
+        i = i + 1;
+    }
+    try assert_eq_i32(used_memory() as i32, 256);
+    i = 0;
+    while i < 32 {
+        try assert_eq_i32(ptrs[i][0] as i32, i as i32);
+        redis_free(ptrs[i]);
+        i = i + 1;
+    }
+    try assert_eq_i32(used_memory() as i32, 0);
+}

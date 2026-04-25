@@ -1,0 +1,150 @@
+use tests.unit.assert.assert_eq_i32;
+use tests.unit.assert.assert_true;
+
+use src.command.router.CommandType;
+use src.command.router.CommandInfo;
+use src.command.router.CommandRouter;
+use src.command.router.Command;
+use src.command.router.command_router_new;
+use src.command.router.command_router_count;
+use src.command.router.command_router_lookup;
+use src.command.router.command_validate_arity;
+use src.command.router.command_from_resp;
+use src.command.router.command_arg_data;
+use src.network.protocol.RespParseResult;
+use src.network.protocol.parse_resp2;
+use src.network.protocol.resp_value_free;
+use src.memory.allocator.used_memory;
+use src.memory.allocator.reset_memory_stats_for_test;
+
+fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
+    if a.len != b.len { return false; }
+    var i: usize = 0;
+    while i < a.len {
+        if a.ptr[i] != b.ptr[i] { return false; }
+        i = i + 1;
+    }
+    return true;
+}
+
+export fn test_command_router_lookup_and_case() !void {
+    const router: CommandRouter = command_router_new();
+    try assert_eq_i32(command_router_count(&router) as i32, 10);
+
+    const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
+    try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
+    try assert_eq_i32(ping.arity, -1);
+
+    const get: CommandInfo = try command_router_lookup(&router, &"get"[0: 3]);
+    try assert_eq_i32(get.cmd_type as i32, CommandType.command_get as i32);
+    try assert_eq_i32(get.arity, 2);
+
+    const exists: CommandInfo = try command_router_lookup(&router, &"ExIsTs"[0: 6]);
+    try assert_eq_i32(exists.cmd_type as i32, CommandType.command_exists as i32);
+    try assert_eq_i32(exists.arity, -2);
+
+    const pexpireat: CommandInfo = try command_router_lookup(&router, &"pexpireat"[0: 9]);
+    try assert_eq_i32(pexpireat.cmd_type as i32, CommandType.command_pexpireat as i32);
+    try assert_eq_i32(pexpireat.arity, 3);
+
+    const quit: CommandInfo = try command_router_lookup(&router, &"quit"[0: 4]);
+    try assert_eq_i32(quit.cmd_type as i32, CommandType.command_quit as i32);
+    try assert_eq_i32(quit.arity, 1);
+}
+
+export fn test_command_router_arity_validation() !void {
+    const router: CommandRouter = command_router_new();
+    const get: CommandInfo = try command_router_lookup(&router, &"GET"[0: 3]);
+    const set: CommandInfo = try command_router_lookup(&router, &"SET"[0: 3]);
+    const del: CommandInfo = try command_router_lookup(&router, &"DEL"[0: 3]);
+
+    try command_validate_arity(&get, 2);
+    try command_validate_arity(&set, 3);
+    try command_validate_arity(&set, 5);
+    try command_validate_arity(&del, 2);
+    try command_validate_arity(&del, 4);
+
+    var saw_get_wrong: bool = false;
+    _ = command_validate_arity(&get, 1) catch |err| {
+        if err == error.CommandWrongArity {
+            saw_get_wrong = true;
+        }
+        return;
+    };
+    try assert_true(saw_get_wrong);
+
+    var saw_set_wrong: bool = false;
+    _ = command_validate_arity(&set, 2) catch |err| {
+        if err == error.CommandWrongArity {
+            saw_set_wrong = true;
+        }
+        return;
+    };
+    try assert_true(saw_set_wrong);
+}
+
+export fn test_command_router_unknown_command() !void {
+    const router: CommandRouter = command_router_new();
+    var saw_unknown: bool = false;
+    _ = command_router_lookup(&router, &"MISSING"[0: 7]) catch |err| {
+        if err == error.CommandUnknown {
+            saw_unknown = true;
+        }
+        return;
+    };
+    try assert_true(saw_unknown);
+}
+
+export fn test_command_from_resp_array() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n"[0: 22]);
+    const command: Command = try command_from_resp(&router, &parsed.value);
+
+    try assert_eq_i32(command.info.cmd_type as i32, CommandType.command_get as i32);
+    try assert_eq_i32(command.argc as i32, 2);
+    try assert_true(command_router_slice_eq(try command_arg_data(&command, 0), &"GET"[0: 3]));
+    try assert_true(command_router_slice_eq(try command_arg_data(&command, 1), &"key"[0: 3]));
+
+    resp_value_free(&parsed.value);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_command_from_resp_error_paths() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+
+    var inline_ping: RespParseResult = try parse_resp2(&"+PING\r\n"[0: 7]);
+    var saw_invalid_request: bool = false;
+    _ = command_from_resp(&router, &inline_ping.value) catch |err| {
+        if err == error.CommandInvalidRequest {
+            saw_invalid_request = true;
+        }
+        return;
+    };
+    try assert_true(saw_invalid_request);
+
+    var unknown: RespParseResult = try parse_resp2(&"*1\r\n$7\r\nMISSING\r\n"[0: 17]);
+    var saw_unknown: bool = false;
+    _ = command_from_resp(&router, &unknown.value) catch |err| {
+        if err == error.CommandUnknown {
+            saw_unknown = true;
+        }
+        return;
+    };
+    try assert_true(saw_unknown);
+    resp_value_free(&unknown.value);
+
+    var wrong_arity: RespParseResult = try parse_resp2(&"*1\r\n$3\r\nGET\r\n"[0: 13]);
+    var saw_wrong_arity: bool = false;
+    _ = command_from_resp(&router, &wrong_arity.value) catch |err| {
+        if err == error.CommandWrongArity {
+            saw_wrong_arity = true;
+        }
+        return;
+    };
+    try assert_true(saw_wrong_arity);
+    resp_value_free(&wrong_arity.value);
+
+    try assert_eq_i32(used_memory() as i32, 0);
+}

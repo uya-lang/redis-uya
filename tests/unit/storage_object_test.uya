@@ -1,0 +1,62 @@
+use tests.unit.assert.assert_eq_i32;
+use tests.unit.assert.assert_true;
+
+use src.storage.object.RedisObject;
+use src.storage.object.ObjectType;
+use src.storage.object.Encoding;
+use src.storage.object.create_string_object;
+use src.storage.object.object_free;
+use src.storage.object.object_type_name;
+use src.storage.object.object_encoding_name;
+use src.memory.allocator.used_memory;
+use src.memory.allocator.reset_memory_stats_for_test;
+
+fn object_slice_eq(a: &[byte], b: &[byte]) bool {
+    if a.len != b.len { return false; }
+    var i: usize = 0;
+    while i < a.len {
+        if a.ptr[i] != b.ptr[i] { return false; }
+        i = i + 1;
+    }
+    return true;
+}
+
+export fn test_object_string_create_free() !void {
+    reset_memory_stats_for_test();
+    const obj: &RedisObject = try create_string_object(&"hello"[0: 5]);
+    try assert_eq_i32(obj.obj_type as i32, ObjectType.object_string as i32);
+    try assert_eq_i32(obj.encoding as i32, Encoding.encoding_raw as i32);
+    try assert_true(object_slice_eq(obj.value.buf[0: obj.value.len], &"hello"[0: 5]));
+    try assert_true(object_slice_eq(object_type_name(obj.obj_type), &"string"[0: 6]));
+    try assert_true(object_slice_eq(object_encoding_name(obj.encoding), &"raw"[0: 3]));
+    object_free(obj);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_object_string_integer_encoding() !void {
+    reset_memory_stats_for_test();
+    const positive: &RedisObject = try create_string_object(&"12345"[0: 5]);
+    const negative: &RedisObject = try create_string_object(&"-42"[0: 3]);
+    try assert_eq_i32(positive.encoding as i32, Encoding.encoding_int as i32);
+    try assert_eq_i32(positive.int_value as i32, 12345);
+    try assert_true(object_slice_eq(object_encoding_name(positive.encoding), &"int"[0: 3]));
+    try assert_eq_i32(negative.encoding as i32, Encoding.encoding_int as i32);
+    try assert_eq_i32(negative.int_value as i32, -42);
+    object_free(positive);
+    object_free(negative);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_object_string_raw_encoding_edges() !void {
+    reset_memory_stats_for_test();
+    const leading_zero: &RedisObject = try create_string_object(&"001"[0: 3]);
+    const mixed: &RedisObject = try create_string_object(&"12x"[0: 3]);
+    const empty: &RedisObject = try create_string_object(&""[0: 0]);
+    try assert_eq_i32(leading_zero.encoding as i32, Encoding.encoding_raw as i32);
+    try assert_eq_i32(mixed.encoding as i32, Encoding.encoding_raw as i32);
+    try assert_eq_i32(empty.encoding as i32, Encoding.encoding_raw as i32);
+    object_free(leading_zero);
+    object_free(mixed);
+    object_free(empty);
+    try assert_eq_i32(used_memory() as i32, 0);
+}

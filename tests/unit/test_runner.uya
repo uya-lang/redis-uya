@@ -1,0 +1,309 @@
+extern "libc" fn printf(fmt: *byte, ...) i32;
+
+use tests.unit.util_endian_test.test_read_big_endian;
+use tests.unit.util_endian_test.test_write_big_endian;
+use tests.unit.util_crc64_test.test_crc64_known_values;
+use tests.unit.util_time_test.test_time_monotonic_shape;
+use tests.unit.util_log_test.test_log_level_state;
+use tests.unit.memory_allocator_test.test_allocator_alloc_free;
+use tests.unit.memory_allocator_test.test_allocator_realloc;
+use tests.unit.memory_allocator_test.test_allocator_many_allocations;
+use tests.unit.config_test.test_config_defaults;
+use tests.unit.config_test.test_config_parse_core_fields;
+use tests.unit.config_test.test_config_parse_memory_units;
+use tests.unit.config_test.test_config_parse_invalid_number;
+use tests.unit.config_test.test_config_parse_file;
+use tests.unit.storage_sds_test.test_sds_create_and_free;
+use tests.unit.storage_sds_test.test_sds_cat_and_grow;
+use tests.unit.storage_sds_test.test_sds_compare;
+use tests.unit.storage_sds_test.test_sds_grow_and_shrink;
+use tests.unit.storage_sds_test.test_sds_binary_safe;
+use tests.unit.storage_sds_test.test_sds_dup_independent_copy;
+use tests.unit.storage_sds_test.test_sds_range_substring;
+use tests.unit.storage_sds_test.test_sds_cat_fmt_minimal;
+use tests.unit.storage_sds_test.test_sds_cat_fmt_error_paths;
+use tests.unit.storage_sds_test.test_sds_1mb_append_stress;
+use tests.unit.storage_dict_test.test_dict_create_free;
+use tests.unit.storage_dict_test.test_dict_insert_lookup_update;
+use tests.unit.storage_dict_test.test_dict_delete_and_missing;
+use tests.unit.storage_dict_test.test_dict_resize_keeps_values;
+use tests.unit.storage_dict_test.test_dict_10k_keys;
+use tests.unit.storage_dict_test.test_dict_incremental_rehash_manual_steps;
+use tests.unit.storage_object_test.test_object_string_create_free;
+use tests.unit.storage_object_test.test_object_string_integer_encoding;
+use tests.unit.storage_object_test.test_object_string_raw_encoding_edges;
+use tests.unit.storage_engine_test.test_engine_set_lookup_delete;
+use tests.unit.storage_engine_test.test_engine_overwrite_releases_old_object;
+use tests.unit.storage_engine_test.test_engine_lazy_expire;
+use tests.unit.storage_engine_test.test_engine_clear_expire;
+use tests.unit.storage_engine_test.test_engine_active_expire_cycle;
+use tests.unit.network_protocol_test.test_resp2_simple_string_error_integer;
+use tests.unit.network_protocol_test.test_resp2_bulk_string_and_nulls;
+use tests.unit.network_protocol_test.test_resp2_array_of_bulk_strings;
+use tests.unit.network_protocol_test.test_resp2_incomplete_inputs;
+use tests.unit.network_protocol_test.test_resp2_invalid_inputs;
+use tests.unit.command_router_test.test_command_router_lookup_and_case;
+use tests.unit.command_router_test.test_command_router_arity_validation;
+use tests.unit.command_router_test.test_command_router_unknown_command;
+use tests.unit.command_router_test.test_command_from_resp_array;
+use tests.unit.command_router_test.test_command_from_resp_error_paths;
+use tests.unit.command_executor_test.test_command_ping_and_info;
+use tests.unit.command_executor_test.test_command_set_get_del_exists;
+use tests.unit.command_executor_test.test_command_expire_and_ttl;
+use tests.unit.command_executor_test.test_command_error_paths;
+use tests.unit.network_connection_test.test_connection_encode_resp_replies;
+use tests.unit.network_connection_test.test_connection_process_ping_set_get_quit;
+use tests.unit.network_connection_test.test_connection_process_error_paths;
+use tests.unit.persistence_aof_test.test_aof_connection_append_and_replay_set;
+use tests.unit.persistence_aof_test.test_aof_replay_set_then_del;
+use tests.unit.persistence_aof_test.test_aof_replay_truncated_file_fails;
+use tests.unit.persistence_aof_test.test_aof_expire_replays_absolute_deadline;
+use tests.unit.server_test.test_server_cron_expires_keys;
+
+export fn main() i32 {
+    printf("=== redis-uya unit tests ===\n" as *byte);
+    var failed: i32 = 0;
+
+    _ = test_read_big_endian() catch { printf("[FAIL] util_endian/read\n" as *byte); failed = failed + 1; };
+    if failed == 0 { printf("[PASS] util_endian/read\n" as *byte); }
+
+    const before_write: i32 = failed;
+    _ = test_write_big_endian() catch { printf("[FAIL] util_endian/write\n" as *byte); failed = failed + 1; };
+    if failed == before_write { printf("[PASS] util_endian/write\n" as *byte); }
+
+    const before_crc: i32 = failed;
+    _ = test_crc64_known_values() catch { printf("[FAIL] util_crc64/known\n" as *byte); failed = failed + 1; };
+    if failed == before_crc { printf("[PASS] util_crc64/known\n" as *byte); }
+
+    const before_time: i32 = failed;
+    _ = test_time_monotonic_shape() catch { printf("[FAIL] util_time/shape\n" as *byte); failed = failed + 1; };
+    if failed == before_time { printf("[PASS] util_time/shape\n" as *byte); }
+
+    const before_log: i32 = failed;
+    _ = test_log_level_state() catch { printf("[FAIL] util_log/level\n" as *byte); failed = failed + 1; };
+    if failed == before_log { printf("[PASS] util_log/level\n" as *byte); }
+
+    const before_alloc: i32 = failed;
+    _ = test_allocator_alloc_free() catch { printf("[FAIL] memory_allocator/alloc_free\n" as *byte); failed = failed + 1; };
+    if failed == before_alloc { printf("[PASS] memory_allocator/alloc_free\n" as *byte); }
+
+    const before_realloc: i32 = failed;
+    _ = test_allocator_realloc() catch { printf("[FAIL] memory_allocator/realloc\n" as *byte); failed = failed + 1; };
+    if failed == before_realloc { printf("[PASS] memory_allocator/realloc\n" as *byte); }
+
+    const before_many_alloc: i32 = failed;
+    _ = test_allocator_many_allocations() catch { printf("[FAIL] memory_allocator/many\n" as *byte); failed = failed + 1; };
+    if failed == before_many_alloc { printf("[PASS] memory_allocator/many\n" as *byte); }
+
+    const before_config_defaults: i32 = failed;
+    _ = test_config_defaults() catch { printf("[FAIL] config/defaults\n" as *byte); failed = failed + 1; };
+    if failed == before_config_defaults { printf("[PASS] config/defaults\n" as *byte); }
+
+    const before_config_core: i32 = failed;
+    _ = test_config_parse_core_fields() catch { printf("[FAIL] config/core_fields\n" as *byte); failed = failed + 1; };
+    if failed == before_config_core { printf("[PASS] config/core_fields\n" as *byte); }
+
+    const before_config_units: i32 = failed;
+    _ = test_config_parse_memory_units() catch { printf("[FAIL] config/memory_units\n" as *byte); failed = failed + 1; };
+    if failed == before_config_units { printf("[PASS] config/memory_units\n" as *byte); }
+
+    const before_config_invalid: i32 = failed;
+    _ = test_config_parse_invalid_number() catch { printf("[FAIL] config/invalid_number\n" as *byte); failed = failed + 1; };
+    if failed == before_config_invalid { printf("[PASS] config/invalid_number\n" as *byte); }
+
+    const before_config_file: i32 = failed;
+    _ = test_config_parse_file() catch { printf("[FAIL] config/file\n" as *byte); failed = failed + 1; };
+    if failed == before_config_file { printf("[PASS] config/file\n" as *byte); }
+
+    const before_sds_create: i32 = failed;
+    _ = test_sds_create_and_free() catch { printf("[FAIL] storage_sds/create_free\n" as *byte); failed = failed + 1; };
+    if failed == before_sds_create { printf("[PASS] storage_sds/create_free\n" as *byte); }
+
+    const before_sds_cat: i32 = failed;
+    _ = test_sds_cat_and_grow() catch { printf("[FAIL] storage_sds/cat_grow\n" as *byte); failed = failed + 1; };
+    if failed == before_sds_cat { printf("[PASS] storage_sds/cat_grow\n" as *byte); }
+
+    const before_sds_compare: i32 = failed;
+    _ = test_sds_compare() catch { printf("[FAIL] storage_sds/compare\n" as *byte); failed = failed + 1; };
+    if failed == before_sds_compare { printf("[PASS] storage_sds/compare\n" as *byte); }
+
+    const before_sds_resize: i32 = failed;
+    _ = test_sds_grow_and_shrink() catch { printf("[FAIL] storage_sds/grow_shrink\n" as *byte); failed = failed + 1; };
+    if failed == before_sds_resize { printf("[PASS] storage_sds/grow_shrink\n" as *byte); }
+
+    const before_sds_binary: i32 = failed;
+    _ = test_sds_binary_safe() catch { printf("[FAIL] storage_sds/binary_safe\n" as *byte); failed = failed + 1; };
+    if failed == before_sds_binary { printf("[PASS] storage_sds/binary_safe\n" as *byte); }
+
+    const before_sds_dup: i32 = failed;
+    _ = test_sds_dup_independent_copy() catch { printf("[FAIL] storage_sds/dup\n" as *byte); failed = failed + 1; };
+    if failed == before_sds_dup { printf("[PASS] storage_sds/dup\n" as *byte); }
+
+    const before_sds_range: i32 = failed;
+    _ = test_sds_range_substring() catch { printf("[FAIL] storage_sds/range\n" as *byte); failed = failed + 1; };
+    if failed == before_sds_range { printf("[PASS] storage_sds/range\n" as *byte); }
+
+    const before_sds_fmt: i32 = failed;
+    _ = test_sds_cat_fmt_minimal() catch { printf("[FAIL] storage_sds/cat_fmt\n" as *byte); failed = failed + 1; };
+    if failed == before_sds_fmt { printf("[PASS] storage_sds/cat_fmt\n" as *byte); }
+
+    const before_sds_fmt_errors: i32 = failed;
+    _ = test_sds_cat_fmt_error_paths() catch { printf("[FAIL] storage_sds/cat_fmt_errors\n" as *byte); failed = failed + 1; };
+    if failed == before_sds_fmt_errors { printf("[PASS] storage_sds/cat_fmt_errors\n" as *byte); }
+
+    const before_sds_1mb: i32 = failed;
+    _ = test_sds_1mb_append_stress() catch { printf("[FAIL] storage_sds/1mb_append\n" as *byte); failed = failed + 1; };
+    if failed == before_sds_1mb { printf("[PASS] storage_sds/1mb_append\n" as *byte); }
+
+    const before_dict_create: i32 = failed;
+    _ = test_dict_create_free() catch { printf("[FAIL] storage_dict/create_free\n" as *byte); failed = failed + 1; };
+    if failed == before_dict_create { printf("[PASS] storage_dict/create_free\n" as *byte); }
+
+    const before_dict_insert: i32 = failed;
+    _ = test_dict_insert_lookup_update() catch { printf("[FAIL] storage_dict/insert_lookup_update\n" as *byte); failed = failed + 1; };
+    if failed == before_dict_insert { printf("[PASS] storage_dict/insert_lookup_update\n" as *byte); }
+
+    const before_dict_delete: i32 = failed;
+    _ = test_dict_delete_and_missing() catch { printf("[FAIL] storage_dict/delete_missing\n" as *byte); failed = failed + 1; };
+    if failed == before_dict_delete { printf("[PASS] storage_dict/delete_missing\n" as *byte); }
+
+    const before_dict_resize: i32 = failed;
+    _ = test_dict_resize_keeps_values() catch { printf("[FAIL] storage_dict/resize\n" as *byte); failed = failed + 1; };
+    if failed == before_dict_resize { printf("[PASS] storage_dict/resize\n" as *byte); }
+
+    const before_dict_10k: i32 = failed;
+    _ = test_dict_10k_keys() catch { printf("[FAIL] storage_dict/10k\n" as *byte); failed = failed + 1; };
+    if failed == before_dict_10k { printf("[PASS] storage_dict/10k\n" as *byte); }
+
+    const before_dict_rehash: i32 = failed;
+    _ = test_dict_incremental_rehash_manual_steps() catch { printf("[FAIL] storage_dict/incremental_rehash\n" as *byte); failed = failed + 1; };
+    if failed == before_dict_rehash { printf("[PASS] storage_dict/incremental_rehash\n" as *byte); }
+
+    const before_object_create: i32 = failed;
+    _ = test_object_string_create_free() catch { printf("[FAIL] storage_object/string_create_free\n" as *byte); failed = failed + 1; };
+    if failed == before_object_create { printf("[PASS] storage_object/string_create_free\n" as *byte); }
+
+    const before_object_int: i32 = failed;
+    _ = test_object_string_integer_encoding() catch { printf("[FAIL] storage_object/string_integer_encoding\n" as *byte); failed = failed + 1; };
+    if failed == before_object_int { printf("[PASS] storage_object/string_integer_encoding\n" as *byte); }
+
+    const before_object_raw: i32 = failed;
+    _ = test_object_string_raw_encoding_edges() catch { printf("[FAIL] storage_object/string_raw_edges\n" as *byte); failed = failed + 1; };
+    if failed == before_object_raw { printf("[PASS] storage_object/string_raw_edges\n" as *byte); }
+
+    const before_engine_set: i32 = failed;
+    _ = test_engine_set_lookup_delete() catch { printf("[FAIL] storage_engine/set_lookup_delete\n" as *byte); failed = failed + 1; };
+    if failed == before_engine_set { printf("[PASS] storage_engine/set_lookup_delete\n" as *byte); }
+
+    const before_engine_overwrite: i32 = failed;
+    _ = test_engine_overwrite_releases_old_object() catch { printf("[FAIL] storage_engine/overwrite\n" as *byte); failed = failed + 1; };
+    if failed == before_engine_overwrite { printf("[PASS] storage_engine/overwrite\n" as *byte); }
+
+    const before_engine_expire: i32 = failed;
+    _ = test_engine_lazy_expire() catch { printf("[FAIL] storage_engine/lazy_expire\n" as *byte); failed = failed + 1; };
+    if failed == before_engine_expire { printf("[PASS] storage_engine/lazy_expire\n" as *byte); }
+
+    const before_engine_clear_expire: i32 = failed;
+    _ = test_engine_clear_expire() catch { printf("[FAIL] storage_engine/clear_expire\n" as *byte); failed = failed + 1; };
+    if failed == before_engine_clear_expire { printf("[PASS] storage_engine/clear_expire\n" as *byte); }
+
+    const before_engine_active_expire: i32 = failed;
+    _ = test_engine_active_expire_cycle() catch { printf("[FAIL] storage_engine/active_expire\n" as *byte); failed = failed + 1; };
+    if failed == before_engine_active_expire { printf("[PASS] storage_engine/active_expire\n" as *byte); }
+
+    const before_resp_line: i32 = failed;
+    _ = test_resp2_simple_string_error_integer() catch { printf("[FAIL] network_protocol/simple_error_integer\n" as *byte); failed = failed + 1; };
+    if failed == before_resp_line { printf("[PASS] network_protocol/simple_error_integer\n" as *byte); }
+
+    const before_resp_bulk: i32 = failed;
+    _ = test_resp2_bulk_string_and_nulls() catch { printf("[FAIL] network_protocol/bulk_nulls\n" as *byte); failed = failed + 1; };
+    if failed == before_resp_bulk { printf("[PASS] network_protocol/bulk_nulls\n" as *byte); }
+
+    const before_resp_array: i32 = failed;
+    _ = test_resp2_array_of_bulk_strings() catch { printf("[FAIL] network_protocol/array_bulk\n" as *byte); failed = failed + 1; };
+    if failed == before_resp_array { printf("[PASS] network_protocol/array_bulk\n" as *byte); }
+
+    const before_resp_incomplete: i32 = failed;
+    _ = test_resp2_incomplete_inputs() catch { printf("[FAIL] network_protocol/incomplete\n" as *byte); failed = failed + 1; };
+    if failed == before_resp_incomplete { printf("[PASS] network_protocol/incomplete\n" as *byte); }
+
+    const before_resp_invalid: i32 = failed;
+    _ = test_resp2_invalid_inputs() catch { printf("[FAIL] network_protocol/invalid\n" as *byte); failed = failed + 1; };
+    if failed == before_resp_invalid { printf("[PASS] network_protocol/invalid\n" as *byte); }
+
+    const before_cmd_lookup: i32 = failed;
+    _ = test_command_router_lookup_and_case() catch { printf("[FAIL] command_router/lookup_case\n" as *byte); failed = failed + 1; };
+    if failed == before_cmd_lookup { printf("[PASS] command_router/lookup_case\n" as *byte); }
+
+    const before_cmd_arity: i32 = failed;
+    _ = test_command_router_arity_validation() catch { printf("[FAIL] command_router/arity\n" as *byte); failed = failed + 1; };
+    if failed == before_cmd_arity { printf("[PASS] command_router/arity\n" as *byte); }
+
+    const before_cmd_unknown: i32 = failed;
+    _ = test_command_router_unknown_command() catch { printf("[FAIL] command_router/unknown\n" as *byte); failed = failed + 1; };
+    if failed == before_cmd_unknown { printf("[PASS] command_router/unknown\n" as *byte); }
+
+    const before_cmd_resp: i32 = failed;
+    _ = test_command_from_resp_array() catch { printf("[FAIL] command_router/from_resp\n" as *byte); failed = failed + 1; };
+    if failed == before_cmd_resp { printf("[PASS] command_router/from_resp\n" as *byte); }
+
+    const before_cmd_resp_errors: i32 = failed;
+    _ = test_command_from_resp_error_paths() catch { printf("[FAIL] command_router/from_resp_errors\n" as *byte); failed = failed + 1; };
+    if failed == before_cmd_resp_errors { printf("[PASS] command_router/from_resp_errors\n" as *byte); }
+
+    const before_exec_ping: i32 = failed;
+    _ = test_command_ping_and_info() catch { printf("[FAIL] command_executor/ping_info\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_ping { printf("[PASS] command_executor/ping_info\n" as *byte); }
+
+    const before_exec_string: i32 = failed;
+    _ = test_command_set_get_del_exists() catch { printf("[FAIL] command_executor/string_key\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_string { printf("[PASS] command_executor/string_key\n" as *byte); }
+
+    const before_exec_expire: i32 = failed;
+    _ = test_command_expire_and_ttl() catch { printf("[FAIL] command_executor/expire_ttl\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_expire { printf("[PASS] command_executor/expire_ttl\n" as *byte); }
+
+    const before_exec_errors: i32 = failed;
+    _ = test_command_error_paths() catch { printf("[FAIL] command_executor/errors\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_errors { printf("[PASS] command_executor/errors\n" as *byte); }
+
+    const before_conn_encode: i32 = failed;
+    _ = test_connection_encode_resp_replies() catch { printf("[FAIL] network_connection/encode\n" as *byte); failed = failed + 1; };
+    if failed == before_conn_encode { printf("[PASS] network_connection/encode\n" as *byte); }
+
+    const before_conn_process: i32 = failed;
+    _ = test_connection_process_ping_set_get_quit() catch { printf("[FAIL] network_connection/process\n" as *byte); failed = failed + 1; };
+    if failed == before_conn_process { printf("[PASS] network_connection/process\n" as *byte); }
+
+    const before_conn_errors: i32 = failed;
+    _ = test_connection_process_error_paths() catch { printf("[FAIL] network_connection/errors\n" as *byte); failed = failed + 1; };
+    if failed == before_conn_errors { printf("[PASS] network_connection/errors\n" as *byte); }
+
+    const before_aof_append: i32 = failed;
+    _ = test_aof_connection_append_and_replay_set() catch { printf("[FAIL] persistence_aof/append_replay_set\n" as *byte); failed = failed + 1; };
+    if failed == before_aof_append { printf("[PASS] persistence_aof/append_replay_set\n" as *byte); }
+
+    const before_aof_del: i32 = failed;
+    _ = test_aof_replay_set_then_del() catch { printf("[FAIL] persistence_aof/replay_del\n" as *byte); failed = failed + 1; };
+    if failed == before_aof_del { printf("[PASS] persistence_aof/replay_del\n" as *byte); }
+
+    const before_aof_bad: i32 = failed;
+    _ = test_aof_replay_truncated_file_fails() catch { printf("[FAIL] persistence_aof/truncated\n" as *byte); failed = failed + 1; };
+    if failed == before_aof_bad { printf("[PASS] persistence_aof/truncated\n" as *byte); }
+
+    const before_aof_expire: i32 = failed;
+    _ = test_aof_expire_replays_absolute_deadline() catch { printf("[FAIL] persistence_aof/expire_absolute\n" as *byte); failed = failed + 1; };
+    if failed == before_aof_expire { printf("[PASS] persistence_aof/expire_absolute\n" as *byte); }
+
+    const before_server_cron: i32 = failed;
+    _ = test_server_cron_expires_keys() catch { printf("[FAIL] server/cron_expires\n" as *byte); failed = failed + 1; };
+    if failed == before_server_cron { printf("[PASS] server/cron_expires\n" as *byte); }
+
+
+    if failed == 0 {
+        printf("=== summary: all passed ===\n" as *byte);
+    } else {
+        printf("=== summary: %d failed ===\n" as *byte, failed);
+    }
+    return failed;
+}

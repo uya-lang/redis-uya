@@ -1,0 +1,157 @@
+// storage/engine.uya - minimal key-space engine.
+
+use src.storage.dict.Dict;
+use src.storage.dict.DictEntry;
+use src.storage.dict.DictIterator;
+use src.storage.dict.dict_new;
+use src.storage.dict.dict_free;
+use src.storage.dict.dict_len;
+use src.storage.dict.dict_insert;
+use src.storage.dict.dict_lookup;
+use src.storage.dict.dict_delete;
+use src.storage.dict.dict_iter_new;
+use src.storage.dict.dict_iter_next;
+use src.storage.object.RedisObject;
+use src.storage.object.object_free;
+use src.util.time.now_ms_safe;
+
+export error EngineKeyNotFound;
+
+export struct RedisDb {
+    dict: Dict,
+    expires: Dict,
+}
+
+export struct Engine {
+    db: RedisDb,
+}
+
+fn ptr_to_usize(ptr: &RedisObject) usize {
+    return @usize_from_ptr(ptr as &void);
+}
+
+fn usize_to_object(value: usize) &RedisObject {
+    return @ptr_from_usize(value) as &RedisObject;
+}
+
+export fn engine_new() Engine {
+    return Engine{
+        db: RedisDb{
+            dict: dict_new(),
+            expires: dict_new(),
+        },
+    };
+}
+
+export fn engine_free(engine: &Engine) void {
+    var iter: DictIterator = dict_iter_new();
+    var entry: &DictEntry = dict_iter_next(&engine.db.dict, &iter);
+    while entry != null {
+        object_free(usize_to_object(entry.value));
+        entry = dict_iter_next(&engine.db.dict, &iter);
+    }
+    dict_free(&engine.db.dict);
+    dict_free(&engine.db.expires);
+}
+
+export fn engine_len(engine: &Engine) usize {
+    return dict_len(&engine.db.dict);
+}
+
+export fn set_key(engine: &Engine, key: &[byte], obj: &RedisObject) !void {
+    const old_value_result: !usize = dict_lookup(&engine.db.dict, key);
+    const old_value: usize = old_value_result catch {
+        const inserted: bool = try dict_insert(&engine.db.dict, key, ptr_to_usize(obj));
+        _ = inserted;
+        return;
+    };
+    object_free(usize_to_object(old_value));
+    const updated: bool = try dict_insert(&engine.db.dict, key, ptr_to_usize(obj));
+    _ = updated;
+}
+
+export fn delete_key(engine: &Engine, key: &[byte]) bool {
+    const value_result: !usize = dict_lookup(&engine.db.dict, key);
+    const value: usize = value_result catch {
+        _ = dict_delete(&engine.db.expires, key);
+        return false;
+    };
+    object_free(usize_to_object(value));
+    _ = dict_delete(&engine.db.expires, key);
+    return dict_delete(&engine.db.dict, key);
+}
+
+export fn set_key_expire_at(engine: &Engine, key: &[byte], expire_at_ms: u64) !void {
+    _ = try dict_insert(&engine.db.expires, key, expire_at_ms as usize);
+}
+
+export fn clear_key_expire(engine: &Engine, key: &[byte]) bool {
+    return dict_delete(&engine.db.expires, key);
+}
+
+export fn get_key_expire_at(engine: &Engine, key: &[byte]) !u64 {
+    const expire_result: !usize = dict_lookup(&engine.db.expires, key);
+    const expire_at: usize = expire_result catch {
+        return error.EngineKeyNotFound;
+    };
+    return expire_at as u64;
+}
+
+export fn key_is_expired(engine: &Engine, key: &[byte], now_ms: u64) bool {
+    const expire_result: !usize = dict_lookup(&engine.db.expires, key);
+    const expire_at: usize = expire_result catch {
+        return false;
+    };
+    return now_ms >= expire_at as u64;
+}
+
+export fn lookup_key_at(engine: &Engine, key: &[byte], now_ms: u64) !&RedisObject {
+    if key_is_expired(engine, key, now_ms) {
+        _ = delete_key(engine, key);
+        return error.EngineKeyNotFound;
+    }
+
+    const value_result: !usize = dict_lookup(&engine.db.dict, key);
+    const value: usize = value_result catch {
+        return error.EngineKeyNotFound;
+    };
+    return usize_to_object(value);
+}
+
+export fn lookup_key(engine: &Engine, key: &[byte]) !&RedisObject {
+    return lookup_key_at(engine, key, now_ms_safe());
+}
+
+fn delete_expired_key_from_expire_entry(engine: &Engine, key: &[byte]) bool {
+    const value_result: !usize = dict_lookup(&engine.db.dict, key);
+    const value: usize = value_result catch {
+        _ = dict_delete(&engine.db.expires, key);
+        return false;
+    };
+    object_free(usize_to_object(value));
+    const deleted: bool = dict_delete(&engine.db.dict, key);
+    _ = dict_delete(&engine.db.expires, key);
+    return deleted;
+}
+
+export fn engine_expire_cycle_at(engine: &Engine, now_ms: u64, max_keys: usize) usize {
+    if max_keys == 0 {
+        return 0;
+    }
+
+    var expired: usize = 0;
+    var scanned: usize = 0;
+    var iter: DictIterator = dict_iter_new();
+    var entry: &DictEntry = dict_iter_next(&engine.db.expires, &iter);
+    while entry != null && scanned < max_keys {
+        scanned = scanned + 1;
+        const expire_at_ms: u64 = entry.value as u64;
+        if now_ms >= expire_at_ms {
+            if delete_expired_key_from_expire_entry(engine, entry.key.buf[0: entry.key.len]) {
+                expired = expired + 1;
+            }
+        }
+        entry = dict_iter_next(&engine.db.expires, &iter);
+    }
+    return expired;
+}

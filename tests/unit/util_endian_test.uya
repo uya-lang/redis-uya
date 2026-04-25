@@ -1,0 +1,31 @@
+use tests.unit.assert.assert_eq_i32;
+use tests.unit.assert.assert_eq_u64;
+use tests.unit.assert.assert_true;
+
+use src.util.endian.read_u16_be;
+use src.util.endian.read_u32_be;
+use src.util.endian.read_u64_be;
+use src.util.endian.write_u16_be;
+use src.util.endian.write_u32_be;
+use src.util.endian.write_u64_be;
+
+export fn test_read_big_endian() !void {
+    var data: [byte: 8] = [0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0];
+    try assert_eq_i32(read_u16_be(data[0: 8]) as i32, 0x1234);
+    try assert_eq_i32(read_u32_be(data[0: 8]) as i32, 0x12345678);
+    try assert_eq_u64(read_u64_be(data[0: 8]), 0x123456789abcdef0u64);
+}
+
+export fn test_write_big_endian() !void {
+    var data: [byte: 8] = [];
+    try assert_true(write_u16_be(data[0: 2], 0x1234 as u16));
+    try assert_eq_i32(data[0] as i32, 0x12);
+    try assert_eq_i32(data[1] as i32, 0x34);
+
+    try assert_true(write_u32_be(data[0: 4], 0x89abcdefu32));
+    try assert_eq_i32(data[0] as i32, 0x89);
+    try assert_eq_i32(data[3] as i32, 0xef);
+
+    try assert_true(write_u64_be(data[0: 8], 0x0123456789abcdefu64));
+    try assert_eq_u64(read_u64_be(data[0: 8]), 0x0123456789abcdefu64);
+}

@@ -30,16 +30,20 @@
 - [x] 最小单元测试框架与 `make test`
 - [x] 内存分配器封装
 - [x] 配置解析：文本 + 文件读取
-- [x] SDS 基础能力：创建、追加、比较、扩缩容、复制、范围切片
-- [x] 项目内专用 `Dict`：插入、查找、覆盖、删除、扩容、10k 键回归
+- [x] SDS 基础能力：创建、追加、格式化追加、比较、扩缩容、复制、范围切片、1MB 压测
+- [x] 项目内专用 `Dict`：插入、查找、覆盖、删除、扩容、渐进 rehash、10k 键回归
 - [x] `RedisObject` 最小 String 包装：RAW/INT 编码、类型名、释放
 - [x] `Engine` 最小实现：键读写删除、覆盖释放、TTL 字段、惰性过期
 - [x] RESP2 最小子集解析：Simple String、Error、Integer、Bulk String、Array、Incomplete、非法输入
+- [x] 命令路由：最小命令表、参数校验、未知命令错误
+- [x] String/Key 命令执行：`PING/GET/SET/DEL/EXISTS/EXPIRE/TTL/INFO`
+- [x] 服务闭环：TCP 监听、连接处理、Python socket smoke
+- [x] 服务运行循环：单线程 epoll 多连接、100ms cron 主动过期扫描、空闲连接不阻塞其他客户端
+- [x] AOF 最小闭环：写命令追加、启动回放、截断损坏安全失败、重启恢复 smoke
 
 当前进行中：
 
-- [ ] 命令路由
-- [ ] String/Key 子集闭环
+- [ ] `v0.1-beta`：`redis-cli` smoke、长时运行 smoke、错误响应兼容检查
 
 ## 3. 全版本路线图
 
@@ -74,9 +78,9 @@
 - [x] `sds_avail()`
 - [x] `sds_grow()`
 - [x] `sds_shrink()`
-- [ ] `sds_cat_fmt()` 最小实现
-- [ ] 1MB 追加压力测试
-- [ ] 内存布局与头部方案文档化
+- [x] `sds_cat_fmt()` 最小实现
+- [x] 1MB 追加压力测试
+- [x] 内存布局与头部方案文档化
 
 #### A2. 专用 `Dict`
 
@@ -90,7 +94,7 @@
 - [x] 单元测试：插入、覆盖、删除、缺失键
 - [x] 单元测试：扩容后查找
 - [x] 单元测试：10k 键规模回归
-- [ ] 第二阶段：`begin_rehash()` / `rehash_step()`
+- [x] 第二阶段：`begin_rehash()` / `rehash_step()`
 
 #### A3. `RedisObject` 最小实现
 
@@ -131,56 +135,61 @@
 
 #### B2. 命令路由
 
-- [ ] 定义 `Command`
-- [ ] 定义 `CommandInfo`
-- [ ] 注册最小命令表
-- [ ] 参数数量校验
-- [ ] 未知命令错误
-- [ ] 单元测试：查找、校验、错误路径
+- [x] 定义 `Command`
+- [x] 定义 `CommandInfo`
+- [x] 注册最小命令表
+- [x] 参数数量校验
+- [x] 未知命令错误
+- [x] 单元测试：查找、校验、错误路径
 
 #### B3. String / Key 命令子集
 
-- [ ] `PING`
-- [ ] `GET`
-- [ ] `SET`
-- [ ] `DEL`
-- [ ] `EXISTS`
-- [ ] `EXPIRE`
-- [ ] `TTL`
-- [ ] `INFO` 最小段
-- [ ] 单元测试：每个命令正常路径
-- [ ] 单元测试：每个命令错误路径
+- [x] `PING`
+- [x] `GET`
+- [x] `SET`
+- [x] `DEL`
+- [x] `EXISTS`
+- [x] `EXPIRE`
+- [x] `TTL`
+- [x] `INFO` 最小段
+- [x] 单元测试：每个命令正常路径
+- [x] 单元测试：每个命令错误路径
 
 ### C. 服务闭环
 
 #### C1. TCP 与连接
 
-- [ ] `listener` 最小 TCP 监听
-- [ ] `connection` 读写缓冲
-- [ ] 读取 -> 解析 -> 执行 -> 写回 闭环
-- [ ] `QUIT`
-- [ ] `maxclients` 最小限制
+- [x] `listener` 最小 TCP 监听
+- [x] `connection` 读写缓冲
+- [x] 读取 -> 解析 -> 执行 -> 写回 闭环
+- [x] `QUIT`
+- [x] `maxclients` 最小限制
 
 #### C2. 运行循环
 
-- [ ] Server 主循环
-- [ ] 100ms `cron`
-- [ ] 过期键惰性检查入口
-- [ ] 启动/监听/响应 `PING` smoke
+- [x] Server 主循环
+- [x] 100ms `cron`
+- [x] 过期键惰性检查入口
+- [x] 过期键主动扫描入口
+- [x] 多连接 epoll 调度，空闲客户端不阻塞其他客户端
+- [x] 启动/监听/响应 `PING` smoke
 
 ## 5. `v0.1-beta` 主线
 
 ### D. AOF 最小闭环
 
-- [ ] 写命令追加 AOF
-- [ ] 启动回放 AOF
-- [ ] 损坏 AOF 安全失败
-- [ ] 集成测试：写入 -> 重启 -> 恢复
+- [x] 写命令追加 AOF
+- [x] 启动回放 AOF
+- [x] `EXPIRE` AOF 转换为绝对 `PEXPIREAT`
+- [x] 损坏 AOF 安全失败
+- [x] 集成测试：写入 -> 重启 -> 恢复
 
 ### E. 稳定性与集成
 
 - [ ] `redis-cli` smoke 脚本
-- [ ] Python 子集集成测试
+- [x] Python 子集集成测试：`tests/integration/smoke_tcp.py`
+- [x] Python 空闲连接回归测试：`tests/integration/idle_client.py`
+- [x] Python AOF 重启恢复集成测试：`tests/integration/persistence_aof.py`
 - [ ] 长时运行 smoke（至少 30 分钟）
 - [ ] 错误响应与 Redis 基础兼容检查
 

@@ -1,0 +1,127 @@
+use tests.unit.assert.assert_eq_i32;
+use tests.unit.assert.assert_true;
+
+use src.network.protocol.RespType;
+use src.network.protocol.RespParseResult;
+use src.network.protocol.RespValue;
+use src.network.protocol.parse_resp2;
+use src.network.protocol.resp_array_element;
+use src.network.protocol.resp_value_free;
+use src.memory.allocator.used_memory;
+use src.memory.allocator.reset_memory_stats_for_test;
+
+fn protocol_slice_eq(a: &[byte], b: &[byte]) bool {
+    if a.len != b.len { return false; }
+    var i: usize = 0;
+    while i < a.len {
+        if a.ptr[i] != b.ptr[i] { return false; }
+        i = i + 1;
+    }
+    return true;
+}
+
+export fn test_resp2_simple_string_error_integer() !void {
+    reset_memory_stats_for_test();
+    var simple: RespParseResult = try parse_resp2(&"+OK\r\n"[0: 5]);
+    try assert_eq_i32(simple.value.typ as i32, RespType.resp_simple_string as i32);
+    try assert_true(protocol_slice_eq(simple.value.data, &"OK"[0: 2]));
+    try assert_eq_i32(simple.consumed as i32, 5);
+
+    var err: RespParseResult = try parse_resp2(&"-ERR bad\r\n"[0: 10]);
+    try assert_eq_i32(err.value.typ as i32, RespType.resp_error as i32);
+    try assert_true(protocol_slice_eq(err.value.data, &"ERR bad"[0: 7]));
+
+    var integer: RespParseResult = try parse_resp2(&":1000\r\n"[0: 7]);
+    try assert_eq_i32(integer.value.typ as i32, RespType.resp_integer as i32);
+    try assert_eq_i32(integer.value.integer as i32, 1000);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_resp2_bulk_string_and_nulls() !void {
+    reset_memory_stats_for_test();
+    var bulk: RespParseResult = try parse_resp2(&"$6\r\nfoobar\r\n"[0: 12]);
+    try assert_eq_i32(bulk.value.typ as i32, RespType.resp_bulk_string as i32);
+    try assert_true(protocol_slice_eq(bulk.value.data, &"foobar"[0: 6]));
+    try assert_eq_i32(bulk.consumed as i32, 12);
+
+    var null_bulk: RespParseResult = try parse_resp2(&"$-1\r\n"[0: 5]);
+    try assert_eq_i32(null_bulk.value.typ as i32, RespType.resp_null_bulk as i32);
+
+    var null_array: RespParseResult = try parse_resp2(&"*-1\r\n"[0: 5]);
+    try assert_eq_i32(null_array.value.typ as i32, RespType.resp_null_array as i32);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_resp2_array_of_bulk_strings() !void {
+    reset_memory_stats_for_test();
+    var result: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n"[0: 22]);
+    try assert_eq_i32(result.value.typ as i32, RespType.resp_array as i32);
+    try assert_eq_i32(result.value.element_count as i32, 2);
+    try assert_eq_i32(result.consumed as i32, 22);
+
+    const first: &RespValue = resp_array_element(&result.value, 0);
+    const second: &RespValue = resp_array_element(&result.value, 1);
+    try assert_true(first != null);
+    try assert_true(second != null);
+    try assert_eq_i32(first.typ as i32, RespType.resp_bulk_string as i32);
+    try assert_eq_i32(second.typ as i32, RespType.resp_bulk_string as i32);
+    try assert_true(protocol_slice_eq(first.data, &"foo"[0: 3]));
+    try assert_true(protocol_slice_eq(second.data, &"bar"[0: 3]));
+
+    resp_value_free(&result.value);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_resp2_incomplete_inputs() !void {
+    reset_memory_stats_for_test();
+    var saw_bulk_incomplete: bool = false;
+    _ = parse_resp2(&"$6\r\nfoo"[0: 7]) catch |err| {
+        if err == error.RespIncomplete {
+            saw_bulk_incomplete = true;
+        }
+        return;
+    };
+    try assert_true(saw_bulk_incomplete);
+
+    var saw_array_incomplete: bool = false;
+    _ = parse_resp2(&"*2\r\n$3\r\nfoo\r\n"[0: 13]) catch |err| {
+        if err == error.RespIncomplete {
+            saw_array_incomplete = true;
+        }
+        return;
+    };
+    try assert_true(saw_array_incomplete);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_resp2_invalid_inputs() !void {
+    reset_memory_stats_for_test();
+    var saw_invalid_type: bool = false;
+    _ = parse_resp2(&"?bad\r\n"[0: 6]) catch |err| {
+        if err == error.RespInvalidType {
+            saw_invalid_type = true;
+        }
+        return;
+    };
+    try assert_true(saw_invalid_type);
+
+    var saw_invalid_length: bool = false;
+    _ = parse_resp2(&"$-2\r\n"[0: 5]) catch |err| {
+        if err == error.RespInvalidLength {
+            saw_invalid_length = true;
+        }
+        return;
+    };
+    try assert_true(saw_invalid_length);
+
+    var saw_invalid_crlf: bool = false;
+    _ = parse_resp2(&"$3\r\nfooXX"[0: 9]) catch |err| {
+        if err == error.RespInvalidCrlf {
+            saw_invalid_crlf = true;
+        }
+        return;
+    };
+    try assert_true(saw_invalid_crlf);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+

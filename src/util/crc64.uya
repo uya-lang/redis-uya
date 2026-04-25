@@ -1,0 +1,31 @@
+// util/crc64.uya - Redis CRC64 implementation.
+
+const CRC64_POLY: u64 = 0x95ac9329ac4bc9b5u64;
+
+fn crc64_byte(crc: u64, value: byte) u64 {
+    var c: u64 = crc ^ (value as u64);
+    var bit: i32 = 0;
+    while bit < 8 {
+        if (c & 1u64) != 0u64 {
+            c = (c >> 1) ^ CRC64_POLY;
+        } else {
+            c = c >> 1;
+        }
+        bit = bit + 1;
+    }
+    return c;
+}
+
+export fn crc64_update(crc: u64, data: &[byte]) u64 {
+    var c: u64 = crc;
+    var i: usize = 0;
+    while i < data.len {
+        c = crc64_byte(c, data.ptr[i]);
+        i = i + 1;
+    }
+    return c;
+}
+
+export fn crc64(data: &[byte]) u64 {
+    return crc64_update(0u64, data);
+}

@@ -1,0 +1,55 @@
+// util/endian.uya - byte order helpers.
+
+export fn read_u16_be(buf: &[byte]) u16 {
+    if buf.len < 2 { return 0 as u16; }
+    return ((buf.ptr[0] as u16) << 8) | (buf.ptr[1] as u16);
+}
+
+export fn read_u32_be(buf: &[byte]) u32 {
+    if buf.len < 4 { return 0 as u32; }
+    return ((buf.ptr[0] as u32) << 24) |
+        ((buf.ptr[1] as u32) << 16) |
+        ((buf.ptr[2] as u32) << 8) |
+        (buf.ptr[3] as u32);
+}
+
+export fn read_u64_be(buf: &[byte]) u64 {
+    if buf.len < 8 { return 0 as u64; }
+    return ((buf.ptr[0] as u64) << 56) |
+        ((buf.ptr[1] as u64) << 48) |
+        ((buf.ptr[2] as u64) << 40) |
+        ((buf.ptr[3] as u64) << 32) |
+        ((buf.ptr[4] as u64) << 24) |
+        ((buf.ptr[5] as u64) << 16) |
+        ((buf.ptr[6] as u64) << 8) |
+        (buf.ptr[7] as u64);
+}
+
+export fn write_u16_be(buf: &[byte], value: u16) bool {
+    if buf.len < 2 { return false; }
+    buf.ptr[0] = ((value >> 8) & 0xff) as byte;
+    buf.ptr[1] = (value & 0xff) as byte;
+    return true;
+}
+
+export fn write_u32_be(buf: &[byte], value: u32) bool {
+    if buf.len < 4 { return false; }
+    buf.ptr[0] = ((value >> 24) & 0xffu32) as byte;
+    buf.ptr[1] = ((value >> 16) & 0xffu32) as byte;
+    buf.ptr[2] = ((value >> 8) & 0xffu32) as byte;
+    buf.ptr[3] = (value & 0xffu32) as byte;
+    return true;
+}
+
+export fn write_u64_be(buf: &[byte], value: u64) bool {
+    if buf.len < 8 { return false; }
+    buf.ptr[0] = ((value >> 56) & 0xffu64) as byte;
+    buf.ptr[1] = ((value >> 48) & 0xffu64) as byte;
+    buf.ptr[2] = ((value >> 40) & 0xffu64) as byte;
+    buf.ptr[3] = ((value >> 32) & 0xffu64) as byte;
+    buf.ptr[4] = ((value >> 24) & 0xffu64) as byte;
+    buf.ptr[5] = ((value >> 16) & 0xffu64) as byte;
+    buf.ptr[6] = ((value >> 8) & 0xffu64) as byte;
+    buf.ptr[7] = (value & 0xffu64) as byte;
+    return true;
+}

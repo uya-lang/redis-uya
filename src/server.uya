@@ -1,0 +1,321 @@
+// server.uya - minimal single-threaded Redis server loop.
+
+use src.command.router.CommandRouter;
+use src.command.router.command_router_new;
+use src.network.listener.RedisListener;
+use src.network.listener.listener_open_loopback;
+use src.network.listener.listener_accept;
+use src.network.listener.listener_close;
+use src.network.connection.connection_handle_fd_nonblocking_with_aof;
+use src.persistence.aof.AofWriter;
+use src.persistence.aof.aof_open_append;
+use src.persistence.aof.aof_close;
+use src.persistence.aof.aof_replay_file_at;
+use src.storage.engine.Engine;
+use src.storage.engine.engine_new;
+use src.storage.engine.engine_free;
+use src.storage.engine.engine_expire_cycle_at;
+use src.util.time.now_ms_safe;
+use libc.errno;
+use libc.sys_close;
+use libc.sys_fcntl;
+use libc.sys_epoll_ctl;
+use libc.sys_epoll_wait;
+use libc.sys_shutdown;
+use libc.F_GETFL;
+use libc.F_SETFL;
+use libc.O_NONBLOCK;
+use libc.EpollEvent;
+use libc.EPOLLIN;
+use libc.EPOLL_CTL_ADD;
+use libc.EPOLL_CTL_DEL;
+use libc.SHUT_WR;
+
+const SERVER_CRON_INTERVAL_MS: u64 = 100;
+const SERVER_CRON_EXPIRE_LIMIT: usize = 20;
+const SERVER_MAX_CLIENTS: usize = 64;
+const SERVER_IO_CAP: usize = 8192;
+const SERVER_EVENT_CAP: usize = 16;
+
+export error ServerAofOpenFailed;
+export error ServerAofReplayFailed;
+
+export struct RedisClient {
+    fd: i32,
+    input: [byte: SERVER_IO_CAP],
+    input_len: usize,
+}
+
+export struct RedisServer {
+    engine: Engine,
+    router: CommandRouter,
+    listener: RedisListener,
+    aof: AofWriter,
+    clients: [RedisClient: SERVER_MAX_CLIENTS],
+    active_clients: i32,
+    maxclients: i32,
+    served_clients: i32,
+    last_cron_ms: u64,
+    cron_ticks: u64,
+}
+
+export fn server_default_aof_path() &const byte {
+    return "build/appendonly.aof" as &const byte;
+}
+
+fn server_init_clients(server: &RedisServer) void {
+    var i: usize = 0;
+    while i < SERVER_MAX_CLIENTS {
+        server.clients[i].fd = -1;
+        server.clients[i].input_len = 0;
+        i = i + 1;
+    }
+    server.active_clients = 0;
+}
+
+fn server_set_nonblocking(fd: i32) !void {
+    const flags: i32 = try sys_fcntl(fd, F_GETFL, 0);
+    _ = try sys_fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+}
+
+fn server_find_free_client_slot(server: &RedisServer) i32 {
+    var i: usize = 0;
+    while i < SERVER_MAX_CLIENTS {
+        if server.clients[i].fd < 0 {
+            return i as i32;
+        }
+        i = i + 1;
+    }
+    return -1;
+}
+
+fn server_find_client_slot_by_fd(server: &RedisServer, fd: i32) i32 {
+    var i: usize = 0;
+    while i < SERVER_MAX_CLIENTS {
+        if server.clients[i].fd == fd {
+            return i as i32;
+        }
+        i = i + 1;
+    }
+    return -1;
+}
+
+fn server_close_client_slot(server: &RedisServer, slot: usize) void {
+    if slot >= SERVER_MAX_CLIENTS {
+        return;
+    }
+    const fd: i32 = server.clients[slot].fd;
+    if fd < 0 {
+        return;
+    }
+    _ = sys_epoll_ctl(server.listener.poll_fd, EPOLL_CTL_DEL, fd, null as &EpollEvent) catch {};
+    _ = sys_shutdown(fd, SHUT_WR) catch {};
+    _ = sys_close(fd) catch {};
+    server.clients[slot].fd = -1;
+    server.clients[slot].input_len = 0;
+    if server.active_clients > 0 {
+        server.active_clients = server.active_clients - 1;
+    }
+}
+
+fn server_close_all_clients(server: &RedisServer) void {
+    var i: usize = 0;
+    while i < SERVER_MAX_CLIENTS {
+        server_close_client_slot(server, i);
+        i = i + 1;
+    }
+}
+
+fn server_can_accept_client(server: &RedisServer) bool {
+    if server.active_clients >= SERVER_MAX_CLIENTS as i32 {
+        return false;
+    }
+    if server.maxclients > 0 && server.active_clients >= server.maxclients {
+        return false;
+    }
+    return true;
+}
+
+export fn server_open_with_aof(port: u16, maxclients: i32, aof_path: &const byte) !RedisServer {
+    const listener: RedisListener = try listener_open_loopback(port, maxclients);
+    var engine: Engine = engine_new();
+    const router: CommandRouter = command_router_new();
+    var aof: AofWriter = aof_open_append(aof_path) catch {
+        listener_close(&listener);
+        engine_free(&engine);
+        return error.ServerAofOpenFailed;
+    };
+    _ = aof_replay_file_at(aof_path, &engine, &router, now_ms_safe()) catch {
+        aof_close(&aof);
+        listener_close(&listener);
+        engine_free(&engine);
+        return error.ServerAofReplayFailed;
+    };
+    _ = server_set_nonblocking(listener.listen_fd) catch {
+        aof_close(&aof);
+        listener_close(&listener);
+        engine_free(&engine);
+        return error.ServerAofOpenFailed;
+    };
+    var server: RedisServer = RedisServer{
+        engine: engine,
+        router: router,
+        listener: listener,
+        aof: aof,
+        clients: [],
+        active_clients: 0,
+        maxclients: maxclients,
+        served_clients: 0,
+        last_cron_ms: 0u64,
+        cron_ticks: 0u64,
+    };
+    server_init_clients(&server);
+    return server;
+}
+
+export fn server_open(port: u16, maxclients: i32) !RedisServer {
+    return server_open_with_aof(port, maxclients, server_default_aof_path());
+}
+
+export fn server_close(server: &RedisServer) void {
+    server_close_all_clients(server);
+    aof_close(&server.aof);
+    listener_close(&server.listener);
+    engine_free(&server.engine);
+}
+
+export fn server_cron_at(server: &RedisServer, now_ms: u64) void {
+    _ = engine_expire_cycle_at(&server.engine, now_ms, SERVER_CRON_EXPIRE_LIMIT);
+    server.last_cron_ms = now_ms;
+    server.cron_ticks = server.cron_ticks + 1u64;
+}
+
+export fn server_cron(server: &RedisServer) void {
+    server_cron_at(server, now_ms_safe());
+}
+
+fn server_run_cron_due_at(server: &RedisServer, now_ms: u64) void {
+    if server.last_cron_ms == 0u64 || now_ms >= server.last_cron_ms + SERVER_CRON_INTERVAL_MS {
+        server_cron_at(server, now_ms);
+    }
+}
+
+fn server_ms_until_next_cron(server: &RedisServer, now_ms: u64) i32 {
+    if server.last_cron_ms == 0u64 {
+        return 0;
+    }
+    const next_ms: u64 = server.last_cron_ms + SERVER_CRON_INTERVAL_MS;
+    if now_ms >= next_ms {
+        return 0;
+    }
+    const remaining: u64 = next_ms - now_ms;
+    if remaining > 100u64 {
+        return 100;
+    }
+    return remaining as i32;
+}
+
+export fn server_accept_once(server: &RedisServer) !void {
+    const fd_result: !i32 = listener_accept(&server.listener);
+    const fd: i32 = fd_result catch |err| {
+        const eid: i32 = @error_id(err) as i32;
+        if eid == EAGAIN || eid == EWOULDBLOCK || eid == EINTR {
+            return;
+        }
+        return err;
+    };
+
+    if !server_can_accept_client(server) {
+        _ = sys_close(fd) catch {};
+        return;
+    }
+
+    const slot_i32: i32 = server_find_free_client_slot(server);
+    if slot_i32 < 0 {
+        _ = sys_close(fd) catch {};
+        return;
+    }
+
+    _ = server_set_nonblocking(fd) catch {
+        _ = sys_close(fd) catch {};
+        return;
+    };
+
+    var event: EpollEvent = EpollEvent{ events: EPOLLIN as u32, _pad: 0, data: fd as u64 };
+    _ = sys_epoll_ctl(server.listener.poll_fd, EPOLL_CTL_ADD, fd, &event) catch {
+        _ = sys_close(fd) catch {};
+        return;
+    };
+
+    const slot: usize = slot_i32 as usize;
+    if slot >= SERVER_MAX_CLIENTS {
+        _ = sys_close(fd) catch {};
+        return;
+    }
+    server.clients[slot].fd = fd;
+    server.clients[slot].input_len = 0;
+    server.active_clients = server.active_clients + 1;
+    server.served_clients = server.served_clients + 1;
+}
+
+fn server_handle_client_fd(server: &RedisServer, fd: i32) void {
+    const slot_i32: i32 = server_find_client_slot_by_fd(server, fd);
+    if slot_i32 < 0 {
+        _ = sys_close(fd) catch {};
+        return;
+    }
+
+    const slot: usize = slot_i32 as usize;
+    if slot >= SERVER_MAX_CLIENTS {
+        _ = sys_close(fd) catch {};
+        return;
+    }
+    var output: [byte: SERVER_IO_CAP] = [];
+    const keep_result: !bool = connection_handle_fd_nonblocking_with_aof(
+        &server.engine,
+        &server.router,
+        &server.aof,
+        fd,
+        &server.clients[slot].input[0],
+        SERVER_IO_CAP,
+        &server.clients[slot].input_len,
+        &output[0],
+        SERVER_IO_CAP,
+    );
+    const keep_open: bool = keep_result catch {
+        server_close_client_slot(server, slot);
+        return;
+    };
+    if !keep_open {
+        server_close_client_slot(server, slot);
+    }
+}
+
+export fn server_run(server: &RedisServer) !void {
+    var events: [EpollEvent: SERVER_EVENT_CAP] = [];
+    while true {
+        const now_ms: u64 = now_ms_safe();
+        server_run_cron_due_at(server, now_ms);
+
+        const timeout_ms: i32 = server_ms_until_next_cron(server, now_ms_safe());
+        const wait_result: !i32 = sys_epoll_wait(server.listener.poll_fd, &events[0], SERVER_EVENT_CAP as i32, timeout_ms);
+        const n: i32 = wait_result catch |err| {
+            const eid: i32 = @error_id(err) as i32;
+            if eid == EINTR {
+                continue;
+            }
+            return err;
+        };
+
+        var i: usize = 0;
+        while i < n as usize {
+            const fd: i32 = events[i].data as i32;
+            if fd == server.listener.listen_fd {
+                _ = server_accept_once(server) catch {};
+            } else {
+                server_handle_client_fd(server, fd);
+            }
+            i = i + 1;
+        }
+    }
+}

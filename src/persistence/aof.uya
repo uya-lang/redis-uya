@@ -1,0 +1,247 @@
+// persistence/aof.uya - minimal RESP2 AOF append and replay.
+
+use std.io.file.File;
+use std.io.file.file_open;
+use std.io.file.file_close;
+use std.io.file.file_read;
+use std.io.file.file_write;
+use libc.O_RDONLY;
+use libc.O_WRONLY;
+use libc.O_CREAT;
+use libc.O_APPEND;
+use libc.O_TRUNC;
+use libc.S_IRUSR;
+use libc.S_IWUSR;
+use src.command.executor.CommandReply;
+use src.command.executor.CommandReplyType;
+use src.command.executor.command_execute_at;
+use src.command.router.Command;
+use src.command.router.CommandRouter;
+use src.command.router.CommandType;
+use src.command.router.command_arg_data;
+use src.command.router.command_from_resp;
+use src.network.protocol.RespParseResult;
+use src.network.protocol.parse_resp2;
+use src.network.protocol.resp_value_free;
+use src.storage.engine.Engine;
+
+export error AofOpenFailed;
+export error AofReadFailed;
+export error AofWriteFailed;
+export error AofFileTooLarge;
+export error AofInvalidFormat;
+export error AofTruncated;
+export error AofInvalidCommand;
+export error AofReplayCommandFailed;
+
+const AOF_REPLAY_MAX_BYTES: usize = 1024 * 1024;
+
+export struct AofWriter {
+    file: File,
+    enabled: bool,
+}
+
+export fn aof_disabled() AofWriter {
+    return AofWriter{
+        file: File{ fd: -1, owns_fd: false },
+        enabled: false,
+    };
+}
+
+fn aof_open_with_flags(path: &const byte, flags: i32) !AofWriter {
+    const mode: u32 = (S_IRUSR | S_IWUSR) as u32;
+    const file: File = file_open(path, flags, mode) catch {
+        return error.AofOpenFailed;
+    };
+    return AofWriter{ file: file, enabled: true };
+}
+
+export fn aof_open_append(path: &const byte) !AofWriter {
+    return aof_open_with_flags(path, (O_WRONLY | O_CREAT | O_APPEND) as i32);
+}
+
+export fn aof_open_truncate(path: &const byte) !AofWriter {
+    return aof_open_with_flags(path, (O_WRONLY | O_CREAT | O_TRUNC) as i32);
+}
+
+export fn aof_close(aof: &AofWriter) void {
+    if aof == null || !aof.enabled {
+        return;
+    }
+    _ = file_close(&aof.file) catch {};
+    aof.enabled = false;
+}
+
+export fn aof_append_raw(aof: &AofWriter, data: &[byte]) !void {
+    if aof == null || !aof.enabled {
+        return;
+    }
+
+    var written: usize = 0;
+    while written < data.len {
+        const chunk: &[byte] = data[written: data.len - written];
+        const n: usize = file_write(&aof.file, chunk.ptr as &const byte, chunk.len) catch {
+            return error.AofWriteFailed;
+        };
+        if n == 0 {
+            return error.AofWriteFailed;
+        }
+        written = written + n;
+    }
+}
+
+fn aof_parse_u64(data: &[byte]) !u64 {
+    if data.len == 0 {
+        return error.AofInvalidCommand;
+    }
+    var value: u64 = 0u64;
+    var i: usize = 0;
+    while i < data.len {
+        const ch: byte = data.ptr[i];
+        if ch < 48 as byte || ch > 57 as byte {
+            return error.AofInvalidCommand;
+        }
+        value = value * 10u64 + ((ch - 48 as byte) as u64);
+        i = i + 1;
+    }
+    return value;
+}
+
+fn aof_append_u64(aof: &AofWriter, value: u64) !void {
+    if value == 0u64 {
+        try aof_append_raw(aof, &"0"[0: 1]);
+        return;
+    }
+
+    var tmp: [byte: 20] = [];
+    var count: usize = 0;
+    var v: u64 = value;
+    while v > 0u64 {
+        const digit: u64 = v % 10u64;
+        tmp[count] = (48u64 + digit) as byte;
+        count = count + 1;
+        v = v / 10u64;
+    }
+
+    while count > 0 {
+        count = count - 1;
+        try aof_append_raw(aof, tmp[count: 1]);
+    }
+}
+
+fn aof_u64_len(value: u64) u64 {
+    if value == 0u64 {
+        return 1u64;
+    }
+    var count: u64 = 0u64;
+    var v: u64 = value;
+    while v > 0u64 {
+        count = count + 1u64;
+        v = v / 10u64;
+    }
+    return count;
+}
+
+fn aof_append_bulk(aof: &AofWriter, data: &[byte]) !void {
+    try aof_append_raw(aof, &"$"[0: 1]);
+    try aof_append_u64(aof, data.len as u64);
+    try aof_append_raw(aof, &"\r\n"[0: 2]);
+    try aof_append_raw(aof, data);
+    try aof_append_raw(aof, &"\r\n"[0: 2]);
+}
+
+fn aof_append_bulk_u64(aof: &AofWriter, value: u64) !void {
+    try aof_append_raw(aof, &"$"[0: 1]);
+    try aof_append_u64(aof, aof_u64_len(value));
+    try aof_append_raw(aof, &"\r\n"[0: 2]);
+    try aof_append_u64(aof, value);
+    try aof_append_raw(aof, &"\r\n"[0: 2]);
+}
+
+fn aof_append_pexpireat(aof: &AofWriter, command: &Command, now_ms: u64) !void {
+    const key: &[byte] = command_arg_data(command, 1) catch {
+        return error.AofInvalidCommand;
+    };
+    const seconds_data: &[byte] = command_arg_data(command, 2) catch {
+        return error.AofInvalidCommand;
+    };
+    const seconds: u64 = try aof_parse_u64(seconds_data);
+    const expire_at_ms: u64 = now_ms + seconds * 1000u64;
+
+    try aof_append_raw(aof, &"*3\r\n"[0: 4]);
+    try aof_append_bulk(aof, &"PEXPIREAT"[0: 9]);
+    try aof_append_bulk(aof, key);
+    try aof_append_bulk_u64(aof, expire_at_ms);
+}
+
+export fn aof_append_command_at(aof: &AofWriter, command: &Command, raw: &[byte], now_ms: u64) !void {
+    if command.info.cmd_type == CommandType.command_expire {
+        try aof_append_pexpireat(aof, command, now_ms);
+        return;
+    }
+    try aof_append_raw(aof, raw);
+}
+
+fn aof_read_file(path: &const byte, out: &byte, cap: usize) !usize {
+    var file: File = file_open(path, O_RDONLY as i32, 0u32) catch {
+        return error.AofOpenFailed;
+    };
+    defer {
+        _ = file_close(&file) catch {};
+    }
+
+    var total: usize = 0;
+    while total < cap {
+        const n: isize = file_read(&file, &out[total], cap - total);
+        if n < 0 {
+            return error.AofReadFailed;
+        }
+        if n == 0 {
+            return total;
+        }
+        total = total + (n as usize);
+    }
+
+    var extra: [byte: 1] = [];
+    const extra_n: isize = file_read(&file, &extra[0], 1);
+    if extra_n < 0 {
+        return error.AofReadFailed;
+    }
+    if extra_n > 0 {
+        return error.AofFileTooLarge;
+    }
+    return total;
+}
+
+export fn aof_replay_buffer_at(engine: &Engine, router: &CommandRouter, data: &[byte], now_ms: u64) !void {
+    var offset: usize = 0;
+    while offset < data.len {
+        const parsed_result: !RespParseResult = parse_resp2(data[offset: data.len - offset]);
+        var parsed: RespParseResult = parsed_result catch |err| {
+            if err == error.RespIncomplete {
+                return error.AofTruncated;
+            }
+            return error.AofInvalidFormat;
+        };
+
+        const command_result: !Command = command_from_resp(router, &parsed.value);
+        const command: Command = command_result catch {
+            resp_value_free(&parsed.value);
+            return error.AofInvalidCommand;
+        };
+
+        const reply: CommandReply = command_execute_at(engine, &command, now_ms);
+        resp_value_free(&parsed.value);
+        if reply.typ == CommandReplyType.reply_error {
+            return error.AofReplayCommandFailed;
+        }
+
+        offset = offset + parsed.consumed;
+    }
+}
+
+export fn aof_replay_file_at(path: &const byte, engine: &Engine, router: &CommandRouter, now_ms: u64) !void {
+    var buf: [byte: AOF_REPLAY_MAX_BYTES] = [];
+    const total: usize = try aof_read_file(path, &buf[0], AOF_REPLAY_MAX_BYTES);
+    try aof_replay_buffer_at(engine, router, buf[0: total], now_ms);
+}

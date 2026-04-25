@@ -1,0 +1,68 @@
+// redis-uya server entry point.
+
+use src.server.RedisServer;
+use src.server.server_open_with_aof;
+use src.server.server_default_aof_path;
+use src.server.server_run;
+use src.server.server_close;
+use std.runtime.get_argc;
+use std.runtime.get_argv;
+use libc.atoi;
+
+fn main_arg_i32(index: i32, fallback: i32) i32 {
+    if get_argc() <= index {
+        return fallback;
+    }
+    const arg: &byte = get_argv(index);
+    if arg == null {
+        return fallback;
+    }
+    return atoi(arg as &const byte);
+}
+
+fn main_port_arg() u16 {
+    const value: i32 = main_arg_i32(1, 6379);
+    if value <= 0 || value > 65535 {
+        return 6379u16;
+    }
+    return value as u16;
+}
+
+fn main_maxclients_arg() i32 {
+    const value: i32 = main_arg_i32(2, 0);
+    if value < 0 {
+        return 0;
+    }
+    return value;
+}
+
+fn main_aof_path_arg() &const byte {
+    if get_argc() <= 3 {
+        return server_default_aof_path();
+    }
+    const arg: &byte = get_argv(3);
+    if arg == null {
+        return server_default_aof_path();
+    }
+    return arg as &const byte;
+}
+
+export fn main() i32 {
+    const port: u16 = main_port_arg();
+    const maxclients: i32 = main_maxclients_arg();
+    const aof_path: &const byte = main_aof_path_arg();
+    var server: RedisServer = server_open_with_aof(port, maxclients, aof_path) catch |err| {
+        @println("redis-uya failed to listen: ${@error_id(err)}");
+        return 1;
+    };
+    defer {
+        server_close(&server);
+    }
+
+    @println("redis-uya v0.1.0-dev listening on 127.0.0.1:${server.listener.port}");
+    _ = server_run(&server) catch |err| {
+        @println("redis-uya server error: ${@error_id(err)}");
+        return 1;
+    };
+    return 0;
+}

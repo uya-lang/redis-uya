@@ -10,7 +10,7 @@
 
 `redis-uya` 是一个使用 **Uya 编程语言** 从零实现的生产级高性能内存数据库系统。项目长期目标是兼容 Redis 6.2+ 协议，覆盖核心数据结构、持久化、复制、基础集群与性能工程，并在同条件核心场景上超过 Redis。
 
-当前项目已完成 `v0.1-alpha` 主线，正在进入 `v0.1-beta` 基础可靠性阶段。重点不是一次性实现所有 Redis 能力，而是先建立一个可编译、可测试、可交互、可恢复、可 benchmark 的单节点最小内核。
+当前项目已完成 `v0.1.0` 发布闭环：`v0.1-alpha` 的存储与协议主线、`v0.1-beta` 的可靠性闭环，以及 `v0.1.0` 的文档、长时运行 smoke 和同机 Redis 基线都已收口。下一步进入 `v0.2` 数据结构扩展阶段。
 
 ## 核心目标
 
@@ -43,7 +43,7 @@
 
 当前进行中：
 
-- `v0.1-beta`：`redis-cli` smoke、长时运行 smoke、错误响应兼容检查
+- `v0.2`：数据结构扩展与更完整控制面
 
 当前阶段尚未生产可用。
 
@@ -79,7 +79,25 @@ TCP 集成 smoke：
 make test-integration
 ```
 
-`make test-integration` 当前覆盖基础 TCP smoke、空闲连接不阻塞其他客户端、AOF 写入、重启、恢复 smoke。
+`make test-integration` 当前覆盖基础 TCP smoke、空闲连接不阻塞其他客户端、AOF 写入、重启、恢复 smoke，以及基础错误响应兼容检查。
+
+如本机已安装 `redis-cli`，可额外运行：
+
+```bash
+make test-redis-cli
+```
+
+如需长时运行 smoke：
+
+```bash
+REDIS_UYA_LONG_RUN_SECONDS=1800 python3 tests/integration/long_run_smoke.py
+```
+
+如需生成当前机器的 `v0.1.0` benchmark 报告：
+
+```bash
+make benchmark-v0.1.0
+```
 
 清理构建产物：
 
@@ -171,6 +189,10 @@ build/redis-uya 6380 1
 - [Definition of Done](docs/redis-uya-definition-of-done.md)
 - [Benchmark 输出格式](docs/redis-uya-benchmark-format.md)
 - [SDS 内存布局](docs/redis-uya-sds-layout.md)
+- [QUICKSTART](docs/redis-uya-quickstart.md)
+- [API](docs/redis-uya-api.md)
+- [ARCHITECTURE](docs/redis-uya-architecture.md)
+- [release-v0.1.0](docs/redis-uya-release-v0.1.0.md)
 
 ## 目录结构
 

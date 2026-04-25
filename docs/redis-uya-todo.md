@@ -43,7 +43,7 @@
 
 当前进行中：
 
-- [ ] `v0.1-beta`：`redis-cli` smoke、长时运行 smoke、错误响应兼容检查
+- [ ] `v0.2`：数据结构扩展与更完整控制面
 
 ## 3. 全版本路线图
 
@@ -186,30 +186,31 @@
 
 ### E. 稳定性与集成
 
-- [ ] `redis-cli` smoke 脚本
+- [x] `redis-cli` smoke：`tests/integration/redis_cli_smoke.sh`
 - [x] Python 子集集成测试：`tests/integration/smoke_tcp.py`
 - [x] Python 空闲连接回归测试：`tests/integration/idle_client.py`
+- [x] Python 慢读客户端回归测试：`tests/integration/slow_reader.py`
 - [x] Python AOF 重启恢复集成测试：`tests/integration/persistence_aof.py`
-- [ ] 长时运行 smoke（至少 30 分钟）
-- [ ] 错误响应与 Redis 基础兼容检查
+- [x] 错误响应与 Redis 基础兼容检查：`tests/integration/error_compat.py`
+- [x] 长时运行 smoke（至少 30 分钟）
 
 ## 6. `v0.1.0` 发布闭环
 
 ### F. Benchmark 与基线
 
-- [ ] 同机 Redis 基线记录
-- [ ] `PING/SET/GET` benchmark
-- [ ] `floor/target/stretch` 判定
-- [ ] 输出到 `benchmarks/v0.1.0.md`
+- [x] 同机 Redis 基线记录
+- [x] `PING/SET/GET` benchmark
+- [x] `floor/target/stretch` 判定
+- [x] 输出到 `benchmarks/v0.1.0.md`
 
 ### G. 文档与验收
 
-- [ ] 完善 DoD 文档
-- [ ] 更新 `readme.md`
-- [ ] 新增 `QUICKSTART`
-- [ ] 新增 `API`
-- [ ] 新增 `ARCHITECTURE`
-- [ ] 新增 `release-v0.1.0`
+- [x] 完善 DoD 文档
+- [x] 更新 `readme.md`
+- [x] 新增 `QUICKSTART`
+- [x] 新增 `API`
+- [x] 新增 `ARCHITECTURE`
+- [x] 新增 `release-v0.1.0`
 
 ## 7. `v0.2` 详细规划
 

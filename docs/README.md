@@ -12,6 +12,10 @@
 - [Definition of Done](./redis-uya-definition-of-done.md)
 - [Benchmark 输出格式](./redis-uya-benchmark-format.md)
 - [SDS 内存布局](./redis-uya-sds-layout.md)
+- [QUICKSTART](./redis-uya-quickstart.md)
+- [API](./redis-uya-api.md)
+- [ARCHITECTURE](./redis-uya-architecture.md)
+- [release-v0.1.0](./redis-uya-release-v0.1.0.md)
 
 ## 文档关系
 
@@ -22,7 +26,11 @@
 5. `redis-uya-definition-of-done.md` 维护验收矩阵。
 6. `redis-uya-benchmark-format.md` 固定 benchmark 和 Redis 对照输出口径。
 7. `redis-uya-sds-layout.md` 记录当前 SDS 字段语义、分配布局和格式化追加边界。
+8. `redis-uya-quickstart.md` 提供从构建、运行到验证的最短路径。
+9. `redis-uya-api.md` 记录当前命令与错误语义。
+10. `redis-uya-architecture.md` 记录当前实现架构与数据路径。
+11. `redis-uya-release-v0.1.0.md` 汇总当前预发布范围、验证入口与已知限制。
 
 ## 当前阶段
 
-项目当前处于 `v0.1.0-dev`：已完成 `v0.1-alpha` 的存储、协议与单线程 epoll 多连接服务闭环，并已完成 `v0.1-beta` 的 AOF 最小恢复闭环；下一步推进 `redis-cli` smoke、长时运行和错误响应兼容检查。
+项目当前处于 `v0.1.0-dev`：已完成 `v0.1.0` 的发布闭环，包含单线程 epoll 多连接服务、AOF 最小恢复闭环、错误兼容、30 分钟长时运行 smoke 和同机 Redis 基线；下一步进入 `v0.2` 数据结构扩展阶段。

@@ -58,6 +58,7 @@ use tests.unit.persistence_aof_test.test_aof_connection_append_and_replay_set;
 use tests.unit.persistence_aof_test.test_aof_replay_set_then_del;
 use tests.unit.persistence_aof_test.test_aof_replay_truncated_file_fails;
 use tests.unit.persistence_aof_test.test_aof_expire_replays_absolute_deadline;
+use tests.unit.persistence_aof_test.test_aof_replay_large_file_over_1mb;
 use tests.unit.server_test.test_server_cron_expires_keys;
 
 export fn main() i32 {
@@ -294,6 +295,10 @@ export fn main() i32 {
     const before_aof_expire: i32 = failed;
     _ = test_aof_expire_replays_absolute_deadline() catch { printf("[FAIL] persistence_aof/expire_absolute\n" as *byte); failed = failed + 1; };
     if failed == before_aof_expire { printf("[PASS] persistence_aof/expire_absolute\n" as *byte); }
+
+    const before_aof_large: i32 = failed;
+    _ = test_aof_replay_large_file_over_1mb() catch { printf("[FAIL] persistence_aof/large_file\n" as *byte); failed = failed + 1; };
+    if failed == before_aof_large { printf("[PASS] persistence_aof/large_file\n" as *byte); }
 
     const before_server_cron: i32 = failed;
     _ = test_server_cron_expires_keys() catch { printf("[FAIL] server/cron_expires\n" as *byte); failed = failed + 1; };

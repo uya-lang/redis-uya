@@ -2,17 +2,22 @@
 
 > 版本: v0.1.0-dev
 > 日期: 2026-04-25
-> 状态: 执行中
+> 状态: `v0.1.0` 收口完成
 
 ## 1. 目标
 
 本页用于把 `redis-uya` 的阶段能力映射到明确测试、验证脚本或 benchmark 证据。
 
-一键验证入口：
+基础一键验证入口：
 
 ```bash
 bash scripts/verify_definition_of_done.sh
 ```
+
+补充说明：
+
+- `tests/integration/long_run_smoke.py` 为 30 分钟长时运行验证，不纳入默认一键脚本
+- `benchmarks/v0.1.0.md` 记录同机 Redis 基线与 `floor/target/stretch` 判定
 
 ## 2. `v0.1-alpha`
 
@@ -33,12 +38,18 @@ bash scripts/verify_definition_of_done.sh
 | AOF 追加、回放、损坏文件失败路径有单元证据 | `tests/unit/persistence_aof_test.uya` |
 | 连接状态机与服务循环稳定 | `tests/integration/smoke_tcp.py`、`tests/integration/idle_client.py` |
 | 空闲客户端不会阻塞其他客户端 | `tests/integration/idle_client.py` |
+| `redis-cli` 可完成基础交互 smoke | `tests/integration/redis_cli_smoke.sh` |
+| 慢读客户端不会因写回背压导致其他客户端停顿 | `tests/integration/slow_reader.py` |
+| 错误响应与协议错误基础兼容 | `tests/integration/error_compat.py` |
 | Python 子集集成测试通过 | `make test-integration` |
+| 长时运行 smoke 完成 | `tests/integration/long_run_smoke.py`、`docs/redis-uya-release-v0.1.0.md` |
 
 ## 4. `v0.1.0`
 
 | DoD 项 | 证据 |
 |--------|------|
+| 同机 Redis 基线可复现 | `scripts/benchmark_v0_1_0.py`、`benchmarks/v0.1.0.md` |
+| `PING/SET/GET` benchmark 可生成 | `scripts/benchmark_v0_1_0.py`、`benchmarks/v0.1.0.md` |
 | benchmark 基线可复现 | `benchmarks/v0.1.0.md` |
 | Redis 对照口径明确 | `docs/redis-uya-benchmark-format.md` |
-| 发布文档齐全 | `docs/redis-uya-release-v0.1.0.md` |
+| 发布文档齐全 | `docs/redis-uya-release-v0.1.0.md`、`docs/redis-uya-quickstart.md`、`docs/redis-uya-api.md`、`docs/redis-uya-architecture.md` |

@@ -33,8 +33,9 @@ export error AofInvalidFormat;
 export error AofTruncated;
 export error AofInvalidCommand;
 export error AofReplayCommandFailed;
+export error AofEntryTooLarge;
 
-const AOF_REPLAY_MAX_BYTES: usize = 1024 * 1024;
+const AOF_REPLAY_BUFFER_BYTES: usize = 16384;
 
 export struct AofWriter {
     file: File,
@@ -182,35 +183,19 @@ export fn aof_append_command_at(aof: &AofWriter, command: &Command, raw: &[byte]
     try aof_append_raw(aof, raw);
 }
 
-fn aof_read_file(path: &const byte, out: &byte, cap: usize) !usize {
-    var file: File = file_open(path, O_RDONLY as i32, 0u32) catch {
-        return error.AofOpenFailed;
-    };
-    defer {
-        _ = file_close(&file) catch {};
+fn aof_shift_buffer(base: &byte, filled: &usize, consumed: usize) void {
+    if consumed >= *filled {
+        *filled = 0;
+        return;
     }
 
-    var total: usize = 0;
-    while total < cap {
-        const n: isize = file_read(&file, &out[total], cap - total);
-        if n < 0 {
-            return error.AofReadFailed;
-        }
-        if n == 0 {
-            return total;
-        }
-        total = total + (n as usize);
+    const remaining: usize = *filled - consumed;
+    var i: usize = 0;
+    while i < remaining {
+        base[i] = base[consumed + i];
+        i = i + 1;
     }
-
-    var extra: [byte: 1] = [];
-    const extra_n: isize = file_read(&file, &extra[0], 1);
-    if extra_n < 0 {
-        return error.AofReadFailed;
-    }
-    if extra_n > 0 {
-        return error.AofFileTooLarge;
-    }
-    return total;
+    *filled = remaining;
 }
 
 export fn aof_replay_buffer_at(engine: &Engine, router: &CommandRouter, data: &[byte], now_ms: u64) !void {
@@ -241,7 +226,69 @@ export fn aof_replay_buffer_at(engine: &Engine, router: &CommandRouter, data: &[
 }
 
 export fn aof_replay_file_at(path: &const byte, engine: &Engine, router: &CommandRouter, now_ms: u64) !void {
-    var buf: [byte: AOF_REPLAY_MAX_BYTES] = [];
-    const total: usize = try aof_read_file(path, &buf[0], AOF_REPLAY_MAX_BYTES);
-    try aof_replay_buffer_at(engine, router, buf[0: total], now_ms);
+    var file: File = file_open(path, O_RDONLY as i32, 0u32) catch {
+        return error.AofOpenFailed;
+    };
+    defer {
+        _ = file_close(&file) catch {};
+    }
+
+    var buf: [byte: AOF_REPLAY_BUFFER_BYTES] = [];
+    var filled: usize = 0;
+    var reached_eof: bool = false;
+
+    while true {
+        if !reached_eof && filled < AOF_REPLAY_BUFFER_BYTES {
+            const n: isize = file_read(&file, &buf[filled], AOF_REPLAY_BUFFER_BYTES - filled);
+            if n < 0 {
+                return error.AofReadFailed;
+            }
+            if n == 0 {
+                reached_eof = true;
+            } else {
+                filled = filled + (n as usize);
+            }
+        }
+
+        var progressed: bool = false;
+        while filled > 0 {
+            const parsed_result: !RespParseResult = parse_resp2(buf[0: filled]);
+            var parsed: RespParseResult = parsed_result catch |err| {
+                if err == error.RespIncomplete {
+                    if reached_eof {
+                        return error.AofTruncated;
+                    }
+                    if filled == AOF_REPLAY_BUFFER_BYTES {
+                        return error.AofEntryTooLarge;
+                    }
+                    break;
+                }
+                return error.AofInvalidFormat;
+            };
+
+            const command_result: !Command = command_from_resp(router, &parsed.value);
+            const command: Command = command_result catch {
+                resp_value_free(&parsed.value);
+                return error.AofInvalidCommand;
+            };
+
+            const reply: CommandReply = command_execute_at(engine, &command, now_ms);
+            resp_value_free(&parsed.value);
+            if reply.typ == CommandReplyType.reply_error {
+                return error.AofReplayCommandFailed;
+            }
+
+            aof_shift_buffer(&buf[0], &filled, parsed.consumed);
+            progressed = true;
+        }
+
+        if reached_eof {
+            if filled == 0 {
+                return;
+            }
+            if !progressed {
+                return error.AofTruncated;
+            }
+        }
+    }
 }

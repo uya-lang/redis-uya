@@ -128,6 +128,27 @@ export fn test_aof_replay_truncated_file_fails() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_aof_replay_large_file_over_1mb() !void {
+    reset_memory_stats_for_test();
+    const path: &const byte = "build/test-aof-large.aof";
+    _ = unlink(path);
+
+    var writer: AofWriter = try aof_open_truncate(path);
+    var i: i32 = 0;
+    while i < 50000 {
+        try aof_append_raw(&writer, &"*2\r\n$3\r\nDEL\r\n$3\r\nkey\r\n"[0: 22]);
+        i = i + 1;
+    }
+    aof_close(&writer);
+
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    try aof_replay_file_at(path, &engine, &router, 1000u64);
+    engine_free(&engine);
+    _ = unlink(path);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_aof_expire_replays_absolute_deadline() !void {
     reset_memory_stats_for_test();
     const path: &const byte = "build/test-aof-expire.aof";

@@ -27,8 +27,10 @@ use libc.F_SETFL;
 use libc.O_NONBLOCK;
 use libc.EpollEvent;
 use libc.EPOLLIN;
+use libc.EPOLLOUT;
 use libc.EPOLL_CTL_ADD;
 use libc.EPOLL_CTL_DEL;
+use libc.EPOLL_CTL_MOD;
 use libc.SHUT_WR;
 
 const SERVER_CRON_INTERVAL_MS: u64 = 100;
@@ -44,6 +46,10 @@ export struct RedisClient {
     fd: i32,
     input: [byte: SERVER_IO_CAP],
     input_len: usize,
+    output: [byte: SERVER_IO_CAP],
+    output_len: usize,
+    output_sent: usize,
+    close_after_write: bool,
 }
 
 export struct RedisServer {
@@ -68,6 +74,9 @@ fn server_init_clients(server: &RedisServer) void {
     while i < SERVER_MAX_CLIENTS {
         server.clients[i].fd = -1;
         server.clients[i].input_len = 0;
+        server.clients[i].output_len = 0;
+        server.clients[i].output_sent = 0;
+        server.clients[i].close_after_write = false;
         i = i + 1;
     }
     server.active_clients = 0;
@@ -113,6 +122,9 @@ fn server_close_client_slot(server: &RedisServer, slot: usize) void {
     _ = sys_close(fd) catch {};
     server.clients[slot].fd = -1;
     server.clients[slot].input_len = 0;
+    server.clients[slot].output_len = 0;
+    server.clients[slot].output_sent = 0;
+    server.clients[slot].close_after_write = false;
     if server.active_clients > 0 {
         server.active_clients = server.active_clients - 1;
     }
@@ -134,6 +146,30 @@ fn server_can_accept_client(server: &RedisServer) bool {
         return false;
     }
     return true;
+}
+
+fn server_client_pending_write(server: &RedisServer, slot: usize) bool {
+    if slot >= SERVER_MAX_CLIENTS {
+        return false;
+    }
+    return server.clients[slot].output_sent < server.clients[slot].output_len;
+}
+
+fn server_update_client_events(server: &RedisServer, slot: usize) !void {
+    if slot >= SERVER_MAX_CLIENTS {
+        return;
+    }
+    const fd: i32 = server.clients[slot].fd;
+    if fd < 0 {
+        return;
+    }
+
+    var events: u32 = EPOLLIN as u32;
+    if server_client_pending_write(server, slot) {
+        events = EPOLLOUT as u32;
+    }
+    var event: EpollEvent = EpollEvent{ events: events, _pad: 0, data: fd as u64 };
+    _ = try sys_epoll_ctl(server.listener.poll_fd, EPOLL_CTL_MOD, fd, &event);
 }
 
 export fn server_open_with_aof(port: u16, maxclients: i32, aof_path: &const byte) !RedisServer {
@@ -254,6 +290,9 @@ export fn server_accept_once(server: &RedisServer) !void {
     }
     server.clients[slot].fd = fd;
     server.clients[slot].input_len = 0;
+    server.clients[slot].output_len = 0;
+    server.clients[slot].output_sent = 0;
+    server.clients[slot].close_after_write = false;
     server.active_clients = server.active_clients + 1;
     server.served_clients = server.served_clients + 1;
 }
@@ -279,6 +318,11 @@ fn server_handle_client_fd(server: &RedisServer, fd: i32) void {
         &server.clients[slot].input[0],
         SERVER_IO_CAP,
         &server.clients[slot].input_len,
+        &server.clients[slot].output[0],
+        SERVER_IO_CAP,
+        &server.clients[slot].output_len,
+        &server.clients[slot].output_sent,
+        &server.clients[slot].close_after_write,
         &output[0],
         SERVER_IO_CAP,
     );
@@ -288,7 +332,11 @@ fn server_handle_client_fd(server: &RedisServer, fd: i32) void {
     };
     if !keep_open {
         server_close_client_slot(server, slot);
+        return;
     }
+    _ = server_update_client_events(server, slot) catch {
+        server_close_client_slot(server, slot);
+    };
 }
 
 export fn server_run(server: &RedisServer) !void {

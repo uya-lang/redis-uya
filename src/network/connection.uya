@@ -31,6 +31,11 @@ export struct ConnectionProcessResult {
     close_after: bool,
 }
 
+struct ConnectionSendProgress {
+    next_offset: usize,
+    blocked: bool,
+}
+
 fn connection_reply_empty_slice() &[byte] {
     return (null as &byte)[0: 0];
 }
@@ -237,15 +242,15 @@ fn connection_send_all(fd: i32, base: &byte, total: usize) !void {
     }
 }
 
-fn connection_send_all_nonblocking(fd: i32, base: &byte, total: usize) !void {
-    var written: usize = 0;
+fn connection_send_progress_nonblocking(fd: i32, base: &byte, total: usize, start: usize) !ConnectionSendProgress {
+    var written: usize = start;
     while written < total {
         const ptr: *const byte = @ptr_from_usize(@usize_from_ptr(base as &void) + written) as *const byte;
         const n_result: !isize = sys_send(fd, ptr, total - written, 0);
         const n: isize = n_result catch |err| {
             const eid: i32 = @error_id(err) as i32;
             if eid == EAGAIN || eid == EWOULDBLOCK {
-                return error.ConnectionWouldBlock;
+                return ConnectionSendProgress{ next_offset: written, blocked: true };
             }
             if eid == EINTR {
                 continue;
@@ -256,6 +261,65 @@ fn connection_send_all_nonblocking(fd: i32, base: &byte, total: usize) !void {
             return error.ConnectionIoFailed;
         }
         written = written + (n as usize);
+    }
+    return ConnectionSendProgress{ next_offset: written, blocked: false };
+}
+
+fn connection_store_pending_output(
+    pending: &byte,
+    pending_cap: usize,
+    pending_len: &usize,
+    pending_sent: &usize,
+    data: &byte,
+    total: usize,
+    sent: usize,
+) !void {
+    if sent >= total {
+        *pending_len = 0;
+        *pending_sent = 0;
+        return;
+    }
+
+    const remaining: usize = total - sent;
+    if remaining > pending_cap {
+        return error.ConnectionOutputTooSmall;
+    }
+
+    var i: usize = 0;
+    while i < remaining {
+        pending[i] = data[sent + i];
+        i = i + 1;
+    }
+    *pending_len = remaining;
+    *pending_sent = 0;
+}
+
+fn connection_flush_pending_output(
+    fd: i32,
+    pending: &byte,
+    pending_len: &usize,
+    pending_sent: &usize,
+) !bool {
+    if *pending_sent >= *pending_len {
+        *pending_len = 0;
+        *pending_sent = 0;
+        return true;
+    }
+
+    const progress: ConnectionSendProgress = try connection_send_progress_nonblocking(fd, pending, *pending_len, *pending_sent);
+    *pending_sent = progress.next_offset;
+    if progress.blocked {
+        return false;
+    }
+    *pending_len = 0;
+    *pending_sent = 0;
+    return true;
+}
+
+fn connection_send_all_nonblocking(fd: i32, base: &byte, total: usize) !void {
+    const progress: ConnectionSendProgress = try connection_send_progress_nonblocking(fd, base, total, 0);
+    if progress.blocked {
+        return error.ConnectionWouldBlock;
     }
 }
 
@@ -295,9 +359,23 @@ export fn connection_handle_fd_nonblocking_with_aof(
     input: &byte,
     input_cap: usize,
     filled: &usize,
+    pending: &byte,
+    pending_cap: usize,
+    pending_len: &usize,
+    pending_sent: &usize,
+    close_after_write: &bool,
     output: &byte,
     output_cap: usize,
 ) !bool {
+    const pending_flushed: bool = try connection_flush_pending_output(fd, pending, pending_len, pending_sent);
+    if !pending_flushed {
+        return true;
+    }
+    if *close_after_write {
+        *close_after_write = false;
+        return false;
+    }
+
     const open: bool = try connection_recv_available(fd, input, input_cap, filled);
     if !open {
         return false;
@@ -305,7 +383,7 @@ export fn connection_handle_fd_nonblocking_with_aof(
 
     var close_after: bool = false;
     var can_continue: bool = true;
-    while can_continue && *filled > 0 {
+    while can_continue && *filled > 0 && *pending_len == 0 {
         var incomplete: bool = false;
         const result_value: !ConnectionProcessResult = connection_process_input_with_aof_at(
             engine,
@@ -327,11 +405,17 @@ export fn connection_handle_fd_nonblocking_with_aof(
         };
 
         if !incomplete {
-            try connection_send_all_nonblocking(fd, output, result.response_len);
+            const progress: ConnectionSendProgress = try connection_send_progress_nonblocking(fd, output, result.response_len, 0);
             connection_shift_buffer(input, filled, result.consumed);
-            close_after = result.close_after;
-            if close_after {
+            if progress.blocked {
+                try connection_store_pending_output(pending, pending_cap, pending_len, pending_sent, output, result.response_len, progress.next_offset);
+                *close_after_write = result.close_after;
                 can_continue = false;
+            } else {
+                close_after = result.close_after;
+                if close_after {
+                    can_continue = false;
+                }
             }
         }
     }
@@ -346,10 +430,15 @@ export fn connection_handle_fd_nonblocking(
     input: &byte,
     input_cap: usize,
     filled: &usize,
+    pending: &byte,
+    pending_cap: usize,
+    pending_len: &usize,
+    pending_sent: &usize,
+    close_after_write: &bool,
     output: &byte,
     output_cap: usize,
 ) !bool {
-    return connection_handle_fd_nonblocking_with_aof(engine, router, null as &AofWriter, fd, input, input_cap, filled, output, output_cap);
+    return connection_handle_fd_nonblocking_with_aof(engine, router, null as &AofWriter, fd, input, input_cap, filled, pending, pending_cap, pending_len, pending_sent, close_after_write, output, output_cap);
 }
 
 export fn connection_handle_fd(engine: &Engine, router: &CommandRouter, fd: i32) !void {

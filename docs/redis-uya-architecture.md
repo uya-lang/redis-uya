@@ -1,0 +1,109 @@
+# redis-uya ARCHITECTURE
+
+> 版本: v0.1.0-dev
+> 日期: 2026-04-25
+
+## 1. 总体结构
+
+`redis-uya` 当前是单进程、单线程、单节点的最小 Redis 内核。
+
+主数据路径：
+
+```text
+TCP listener
+-> epoll event loop
+-> per-client input buffer
+-> RESP2 parser
+-> command router
+-> command executor
+-> storage engine
+-> reply encode
+-> nonblocking socket write
+```
+
+写命令旁路：
+
+```text
+command executor
+-> AOF append
+```
+
+启动恢复路径：
+
+```text
+server open
+-> open AOF
+-> replay AOF
+-> start listener
+```
+
+## 2. 模块分工
+
+### `src/network/`
+
+- `listener.uya`：loopback TCP 监听、accept、listener 级 epoll fd
+- `connection.uya`：RESP 请求处理、回复编码、非阻塞读写、待发送缓冲
+- `protocol.uya`：RESP2 解析
+
+### `src/command/`
+
+- `router.uya`：命令表、命令名匹配、参数数量校验
+- `executor.uya`：String/Key 命令执行
+
+### `src/storage/`
+
+- `sds.uya`：动态字符串
+- `dict.uya`：项目内专用字典，支持渐进 rehash
+- `object.uya`：最小 `RedisObject`
+- `engine.uya`：键空间、TTL、主动/惰性过期
+
+### `src/persistence/`
+
+- `aof.uya`：写命令追加、流式回放、损坏安全失败
+
+### `src/server.uya`
+
+- 维护全局 `RedisServer`
+- 驱动单线程 epoll 事件循环
+- 维护客户端槽位、输入缓冲、待发送输出
+- 驱动 100ms `cron`
+
+## 3. 当前事件循环
+
+每个客户端槽位维护：
+
+- `input`：读缓冲
+- `input_len`：当前已读字节数
+- `output`：待发送响应
+- `output_len` / `output_sent`：发送进度
+- `close_after_write`：`QUIT` 等命令的延迟关闭标志
+
+调度规则：
+
+- 默认关注 `EPOLLIN`
+- 当写回遇到 `EAGAIN` 时，保留剩余输出并切换到 `EPOLLOUT`
+- 输出全部发完后恢复到 `EPOLLIN`
+- 空闲客户端不再阻塞活跃客户端
+
+## 4. 过期策略
+
+当前同时有两条路径：
+
+- 惰性过期：访问键时检查 TTL
+- 主动过期：100ms `cron` 内做受限扫描
+
+## 5. AOF 语义
+
+- 写命令直接追加 RESP2 原始请求
+- `EXPIRE` 追加时重写成绝对时间 `PEXPIREAT`
+- 回放按流式解析逐条执行
+- 截断、非法协议、非法命令、执行错误都会安全失败
+
+## 6. 当前限制
+
+- 单线程
+- 无后台 rewrite
+- 无 RDB
+- 无复制
+- 无集群
+- 无事务

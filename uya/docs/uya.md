@@ -1,4 +1,4 @@
-# Uya 语言规范 0.49.47（完整版 · 2026-04-21）
+# Uya 语言规范 0.49.48（完整版 · 2026-04-26）
 
 > 零GC · 默认高级安全 · 单页纸可读完  
 > 无lifetime符号 · 无隐式控制 · 编译期证明（本函数内）
@@ -53,6 +53,16 @@
 ---
 
 ## 规范变更
+
+### 0.49.48（2026-04-26）
+
+- **对象方法无限制链式调用**：统一后缀表达式链后，成员访问、下标、切片与调用可在同一对象表达式后无限继续组合。以下形式都合法并可继续接下一段链：
+  - `Point{ x: 1, y: 2 }.normalize().length()`
+  - `(factory.build()).start().poll(&w)`
+  - `arr[i].decode().value`
+  - `obj.method<T>(arg).next()`
+- **类型检查补全**：实例方法返回类型现在会基于真实 receiver 持续替换 `Self`、owner 泛型实参和方法泛型实参，因此“匿名表达式上的方法返回值继续调方法”与“泛型方法后继续链式调用”都能稳定通过 checker 与 C99 codegen。
+- **回归测试**：新增 `tests/test_struct_method_chain.uya`，覆盖结构体字面量链、泛型方法链、括号表达式链、数组下标结果链。
 
 ### 0.49.47（2026-04-21）
 
@@ -302,6 +312,7 @@
 - **泛型方法支持**（新增）：
   - 结构体/联合体方法支持泛型参数：`fn method<T>(self: &Self) ReturnType`
   - 方法调用支持显式类型参数：`obj.method<ConcreteType>()`
+  - 泛型方法返回值可继续参与后续成员访问 / 方法调用链，如 `obj.method<T>().next()`
   - 单态化生成专门函数，零运行时开销
   - **用途**：简化 Union 类型安全访问，实现类型转换方法
 
@@ -6822,9 +6833,9 @@ mc hash_string(s) expr {
   - **编译期展开**：编译期展开，无额外开销
   - **示例**：
 [examples/example_142.uya](./examples/example_142.uya)
-- **结构体方法语法糖**：`obj.method()` 语法糖
-  - 允许使用 `obj.method()` 语法调用结构体相关的静态函数
-  - 编译期展开为 `method(obj, ...)` 静态函数调用
+- **结构体方法语法糖**：`obj.method()` 与统一的 `Type.method(...)`
+  - `Type.method(...)` 是所有结构体/联合体方法的统一命名空间调用写法
+  - 当首参为实例 receiver 时，额外允许 `obj.method(...)` 语法糖
   - 所有方法都是静态绑定，编译期确定，不涉及动态派发
   - **定义方式**：支持两种方式定义方法
     - **方式1：结构体内部定义**：方法定义在结构体花括号内，与字段定义并列
@@ -6837,6 +6848,12 @@ mc hash_string(s) expr {
       - 联合体：`&Self` 或 `&UnionName`
     - 参数名不限；`self` 只是惯例，不是方法语义的判定条件
     - 所有方法都允许以 `Type.method(...)` 形式调用；当首参为实例 receiver 时，额外允许 `obj.method(...)`
+    - **链式调用不设层数上限**：后缀链可持续组合，支持：
+      - `obj.method().next().finish()`
+      - `StructName.make().next().field`
+      - `(expr).method().next()`
+      - `arr[i].method().next()`
+      - `obj.method<T>().next()`
     - **推荐使用 `Self` 占位符**：`self: &Self` 更简洁、与接口实现语法一致，符合 Uya 的"显式控制"设计原则
       - `self: &Self`：使用 `Self` 占位符，编译期替换为具体类型（如 `self: *Point`），与接口实现语法一致（推荐）
       - `self: &StructName`：使用具体类型，语义清晰一致（也可用）
@@ -6844,8 +6861,9 @@ mc hash_string(s) expr {
       - 方法签名必须是 `fn method(self: &Self)` 或 `fn method(self: &StructName)`，调用时传递指针（`&obj`），不触发移动
       - 方法调用后，原对象仍然可以使用，符合常见的方法调用语义
     - 编译期将方法展开为普通函数：`Self` 占位符会被替换为具体类型，如 `fn StructName_method(self: &StructName) ReturnType { ... }`
-    - 调用 `obj.method()` 展开为 `StructName_method(&obj)`（传递指针，不移动）
+    - 调用 `obj.method()` 展开为 `StructName_method(&obj, ...)`（传递指针，不移动）
     - `Type.method(args)` 是统一写法；若首参是实例 receiver，则 `obj.method(args)` 只是 `Type.method(obj, args)` 的语法糖
+    - 链式调用逐段按上述规则展开，因此 `obj.make().next().done()` 等价于对每段结果继续做同样的命名空间降级
   - **接口方法作为结构体方法**：
     - 结构体在定义时声明接口：`struct StructName : InterfaceName { ... }`
     - 接口方法作为结构体方法定义，可以在结构体内部或外部方法块中定义
@@ -6862,6 +6880,7 @@ mc hash_string(s) expr {
     - `A { fn method(self: &Self) void { ... } }` → `fn A_method(self: *A) void { ... }`（`Self` 替换为 `A`）
     - `obj.method()` → `A_method(&obj)`（传递指针，不移动 `obj`）
     - `obj.method(arg)` → `A_method(&obj, arg)`（传递指针，不移动 `obj`）
+    - `Factory.new().method()`：对中间结果继续应用同样的 receiver 处理规则，语义上等价于“先得到返回值，再以该值作为下一段实例方法的 receiver”
     - **推荐使用指针和 Self**：`self: &Self` 更简洁，符合 Uya 的"显式控制"原则
     - `Self` 是编译期占位符，会被替换为具体的结构体类型（如 `Point`）
     - 方法仍然是普通函数，可以像普通函数一样调用：`A_method(&obj)` 或 `A_method(obj)`（如果明确需要移动）

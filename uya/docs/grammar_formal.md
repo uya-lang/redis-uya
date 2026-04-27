@@ -1,6 +1,6 @@
 # Uya 语言正式语法规范（Formal BNF）
 
-> **版本**：与 [uya.md](./uya.md) 0.49.45 同步（2026-04-16）
+> **版本**：与 [uya.md](./uya.md) 0.49.48 同步（2026-04-26）
 
 本文档包含 Uya 语言的完整、无歧义的 BNF 语法定义，用于：
 - 编译器/解析器实现
@@ -80,6 +80,7 @@ constraint_list = ID { '+' ID }
   - 联合体：`&Self` 或 `&UnionName`
 - 参数名不限；`self` 只是惯例，不是语义判定条件
 - 所有方法都允许以 `Type.method(...)` 形式调用；当首参为实例 receiver 时，额外允许 `obj.method(...)` 语法糖
+- 方法调用可继续参与任意深度的后缀链；例如 `obj.method().next().field`、`obj.method<T>().next()`
 - 推荐使用 `Self` 占位符：`self: &Self` 更简洁
 - 详细语法说明见 [uya.md](./uya.md#29-扩展特性) 结构体方法部分
 
@@ -234,6 +235,8 @@ unary_expr     = ('!' | '-' | '~' | '&' | '*' | 'try') unary_expr | cast_expr
 cast_expr      = postfix_expr [ ('as' | 'as!') type ]
 postfix_expr   = primary_expr { '.' (ID | NUM) | '[' expr ']' | '(' arg_list ')' | slice_op | catch_op }
                 # '.' NUM 用于元组字段访问，如 tuple.0, tuple.1
+                # 花括号字面量、括号表达式、下标结果、方法调用结果都可继续重复接同一套后缀，因此链式调用深度不受限制
+                # 泛型方法调用在解析歧义消解后同样归入这条后缀链，如 obj.method<T>().next()
                 # 0.49.41：STRING 为 primary_expr 时，可接 '[' expr ']'（下标）或 slice_op（与数组字面量、标识符一致），如 "hello"[0:3]、&"hello"[0:3]
 catch_op       = 'catch' [ '|' ID '|' ] '{' statements '}'
 primary_expr   = ID | NUM | STRING | CHAR | 'true' | 'false' | 'null'

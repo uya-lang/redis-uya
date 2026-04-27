@@ -6832,16 +6832,20 @@ mc hash_string(s) expr {
     - **方式2：结构体外部定义**：使用块语法在结构体定义后添加方法
       - 语法：`StructName { fn method(self: &Self) ReturnType { ... } }`
       - 可以在结构体定义之后的任何位置添加方法
-    - `self` 参数必须显式声明，使用指针：`self: &Self` 或 `self: &StructName`
+    - 实例方法按第一个参数的类型判定：
+      - 结构体：`&Self` 或 `&StructName`
+      - 联合体：`&Self` 或 `&UnionName`
+    - 参数名不限；`self` 只是惯例，不是方法语义的判定条件
+    - 所有方法都允许以 `Type.method(...)` 形式调用；当首参为实例 receiver 时，额外允许 `obj.method(...)`
     - **推荐使用 `Self` 占位符**：`self: &Self` 更简洁、与接口实现语法一致，符合 Uya 的"显式控制"设计原则
       - `self: &Self`：使用 `Self` 占位符，编译期替换为具体类型（如 `self: *Point`），与接口实现语法一致（推荐）
       - `self: &StructName`：使用具体类型，语义清晰一致（也可用）
-      - **不允许按值传递**：不支持 `self: StructName`，避免语义歧义（签名说按值但调用时用引用）
     - **方法调用与移动语义**：
       - 方法签名必须是 `fn method(self: &Self)` 或 `fn method(self: &StructName)`，调用时传递指针（`&obj`），不触发移动
       - 方法调用后，原对象仍然可以使用，符合常见的方法调用语义
     - 编译期将方法展开为普通函数：`Self` 占位符会被替换为具体类型，如 `fn StructName_method(self: &StructName) ReturnType { ... }`
     - 调用 `obj.method()` 展开为 `StructName_method(&obj)`（传递指针，不移动）
+    - `Type.method(args)` 是统一写法；若首参是实例 receiver，则 `obj.method(args)` 只是 `Type.method(obj, args)` 的语法糖
   - **接口方法作为结构体方法**：
     - 结构体在定义时声明接口：`struct StructName : InterfaceName { ... }`
     - 接口方法作为结构体方法定义，可以在结构体内部或外部方法块中定义

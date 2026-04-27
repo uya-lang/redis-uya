@@ -57,7 +57,7 @@ struct_body    = ( field_list | method_list | field_list method_list )
 field_list     = field { ',' field }
 field          = ID ':' type
 method_list    = method_decl { method_decl }
-method_decl    = [ async_fn_attr ] 'fn' ID [ '<' type_param_list '>' ] '(' [ param_list ] ')' type '{' statements '}'  # self 参数必须为 &Self 或 &StructName
+method_decl    = [ async_fn_attr ] 'fn' ID [ '<' type_param_list '>' ] '(' [ param_list ] ')' type '{' statements '}'  # 若首参类型为 &Self / &StructName（联合体为 &UnionName），则视为实例方法；否则为静态方法
 
 # 结构体外部方法定义（方式2）
 struct_method_block = ID '{' method_list '}'
@@ -75,7 +75,11 @@ constraint_list = ID { '+' ID }
 - **方式2：结构体外部定义**：使用块语法在结构体定义后添加方法
   - 语法：`StructName { fn method(self: &Self) ReturnType { ... } }`
 - 方法实现允许使用可选前缀 `@async_fn`
-- `self` 参数必须显式声明，使用指针：`self: &Self` 或 `self: *StructName`
+- 实例方法按**第一个参数的类型**判定：
+  - 结构体：`&Self` 或 `&StructName`
+  - 联合体：`&Self` 或 `&UnionName`
+- 参数名不限；`self` 只是惯例，不是语义判定条件
+- 所有方法都允许以 `Type.method(...)` 形式调用；当首参为实例 receiver 时，额外允许 `obj.method(...)` 语法糖
 - 推荐使用 `Self` 占位符：`self: &Self` 更简洁
 - 详细语法说明见 [uya.md](./uya.md#29-扩展特性) 结构体方法部分
 

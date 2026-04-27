@@ -23,6 +23,7 @@ std.cfg(std.target_os == .tos_macos, {
 std.cfg(std.target_os == .tos_macos, {
     export const SYS_read: i64 = 3;
     export const SYS_write: i64 = 4;
+    export const SYS_writev: i64 = 121;
     export const SYS_open: i64 = 5;
     export const SYS_close: i64 = 6;
     export const SYS_stat: i64 = 188;
@@ -105,6 +106,7 @@ std.cfg(std.target_os == .tos_linux, {
     std.cfg(std.target_arch == .ta_x86_64, {
         export const SYS_read: i64 = 0;
         export const SYS_write: i64 = 1;
+        export const SYS_writev: i64 = 20;
         export const SYS_open: i64 = 2;
         export const SYS_close: i64 = 3;
         export const SYS_stat: i64 = 4;
@@ -186,6 +188,7 @@ std.cfg(std.target_os == .tos_linux, {
         std.cfg(std.target_arch == .ta_arm, {
             export const SYS_read: i64 = 3;
             export const SYS_write: i64 = 4;
+            export const SYS_writev: i64 = 146;
             export const SYS_open: i64 = 5;
             export const SYS_close: i64 = 6;
             export const SYS_stat: i64 = 106;
@@ -267,6 +270,7 @@ std.cfg(std.target_os == .tos_linux, {
             std.cfg(std.target_arch == .ta_arm64, {
                 export const SYS_read: i64 = 63;
                 export const SYS_write: i64 = 64;
+                export const SYS_writev: i64 = 66;
                 export const SYS_open: i64 = 56;
                 export const SYS_close: i64 = 57;
                 export const SYS_stat: i64 = 79;
@@ -348,6 +352,7 @@ std.cfg(std.target_os == .tos_linux, {
                 std.cfg(std.target_arch == .ta_riscv64, {
                     export const SYS_read: i64 = 63;
                     export const SYS_write: i64 = 64;
+                    export const SYS_writev: i64 = 66;
                     export const SYS_open: i64 = 56;
                     export const SYS_close: i64 = 57;
                     export const SYS_stat: i64 = 79;
@@ -428,6 +433,7 @@ std.cfg(std.target_os == .tos_linux, {
                 }, {
                     export const SYS_read: i64 = 0;
                     export const SYS_write: i64 = 1;
+                    export const SYS_writev: i64 = 20;
                     export const SYS_open: i64 = 2;
                     export const SYS_close: i64 = 3;
                     export const SYS_stat: i64 = 4;
@@ -511,6 +517,7 @@ std.cfg(std.target_os == .tos_linux, {
 }, {
     export const SYS_read: i64 = 0;
     export const SYS_write: i64 = 1;
+    export const SYS_writev: i64 = 20;
     export const SYS_open: i64 = 2;
     export const SYS_close: i64 = 3;
     export const SYS_stat: i64 = 4;
@@ -813,6 +820,11 @@ export struct Dirent {
     d_name: [byte: 256],
 }
 
+export struct IOVec {
+    iov_base: *const byte,
+    iov_len: usize,
+}
+
 extern "libc" fn uya_macos_stat(pathname: *const byte, statbuf: &Stat) !i32;
 extern "libc" fn uya_macos_fstat(fd: i32, statbuf: &Stat) !i32;
 extern "libc" fn uya_macos_lstat(pathname: &const byte, statbuf: &Stat) !i32;
@@ -849,6 +861,10 @@ export extern "libc" fn sys_read(fd: i32, buf: *byte, count: usize) !isize {
     }, {
         return @syscall(SYS_read, fd as i64, buf as i64, count as i64) as! isize;
     })
+}
+
+export extern "libc" fn sys_writev(fd: i32, iov: &const IOVec, iovcnt: i32) !isize {
+    return @syscall(SYS_writev, fd as i64, iov as i64, iovcnt as i64) as! isize;
 }
 
 // sys_open - 打开文件（AArch64/RISC-V 使用 openat(AT_FDCWD, …)）

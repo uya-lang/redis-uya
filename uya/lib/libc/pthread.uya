@@ -40,7 +40,8 @@ const PTHREAD_STACK_SIZE: usize = 8 * 1024 * 1024;
 // 参考：man 2 clone
 const CLONE_FLAGS: i64 = 0x00150F00;  // CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SYSVSEM | CLONE_SIGHAND | CLONE_THREAD | CLONE_PARENT_SETTID
 
-// 用于从 clone 子线程到父线程传递 descriptor 的临时指针（仍受 _pthread_create_mutex 保护）
+// 用于在极早期 child 路径为 pthread_exit/pthread_self 提供 descriptor 回退。
+// 正常 bootstrap 现在直接通过寄存器实参拿到 desc，不再依赖这个全局槽传参。
 var _pthread_child_desc: &pthread_desc = null;
 var _pthread_start_fn_tmp: &void = null;
 var _pthread_start_arg_tmp: &void = null;
@@ -326,7 +327,9 @@ export extern "libc" fn _pthread_child_bootstrap(desc: &pthread_desc) void {
         sys_exit(0);
         return;
     }
-    desc.started = 1;
+    while desc.started == 0 {
+        _ = pthread_yield();
+    }
     _pthread_thread_exit(desc, _pthread_call_start(desc.start_routine, desc.arg));
 }
 
@@ -487,7 +490,7 @@ export extern "libc" fn pthread_create(thread: &pthread_t, attr: &const pthread_
     desc.cancel_pending = 0;
     desc.tsd_values = null;
 
-    // 多线程安全：同一时刻只有一个 pthread_create 能写 trampoline 全局并 clone
+    // 多线程安全：同一时刻只有一个 pthread_create 能进入 clone 窗口并发布 early-child fallback。
     _ = pthread_mutex_lock(&_pthread_create_mutex);
     _pthread_child_desc = desc;
 
@@ -503,31 +506,31 @@ export extern "libc" fn pthread_create(thread: &pthread_t, attr: &const pthread_
             _pthread_start_arg_tmp = arg;
             const stack_top: i64 = top as i64;
             const ptid_ptr: i64 = (&child_ptid) as i64;
-            const child_desc_slot: i64 = (&_pthread_child_desc) as i64;
+            const child_desc_ptr: i64 = desc as i64;
             const child_bootstrap_fn: i64 = (&_pthread_child_bootstrap as &void) as i64;
             @asm {
-                "mov $56, %%rax\n\tmov $0x150f00, %%rdi\n\tmov %1, %%rsi\n\tmov %2, %%rdx\n\txor %%r10, %%r10\n\txor %%r8, %%r8\n\tsyscall\n\ttest %%rax, %%rax\n\tjnz 1f\n\tmov %3, %%r11\n\tmov (%%r11), %%rdi\n\tmov %4, %%r11\n\tcall *%%r11\n1:\n\tmov %%rax, %0"
-                (stack_top, ptid_ptr, child_desc_slot, child_bootstrap_fn, -> tid);
+                "mov $56, %%rax\n\tmov $0x150f00, %%rdi\n\tmov %1, %%rsi\n\tmov %2, %%rdx\n\txor %%r10, %%r10\n\txor %%r8, %%r8\n\tsyscall\n\ttest %%rax, %%rax\n\tjnz 1f\n\tmov %3, %%rdi\n\tmov %4, %%r11\n\tcall *%%r11\n1:\n\tmov %%rax, %0"
+                (stack_top, ptid_ptr, child_desc_ptr, child_bootstrap_fn, -> tid);
             } clobbers = ["rax", "rdi", "rsi", "rdx", "r10", "r8", "rcx", "r11", "memory"];
         }, {
             std.cfg(std.target_arch == .ta_arm64, {
                 const stack_top: i64 = top as i64;
                 const ptid_ptr: i64 = (&child_ptid) as i64;
-                const child_desc_slot: i64 = (&_pthread_child_desc) as i64;
+                const child_desc_ptr: i64 = desc as i64;
                 const child_bootstrap_fn: i64 = (&_pthread_child_bootstrap as &void) as i64;
                 @asm {
-                    "mov x8, #220\n\tmov x0, %1\n\tmov x1, %2\n\tmov x2, %3\n\tmov x3, xzr\n\tmov x4, xzr\n\tsvc #0\n\tcbnz x0, 1f\n\tmov x9, %4\n\tldr x0, [x9]\n\tmov x16, %5\n\tblr x16\n1:\n\tmov %0, x0"
-                    (flags, stack_top, ptid_ptr, child_desc_slot, child_bootstrap_fn, -> tid);
+                    "mov x8, #220\n\tmov x0, %1\n\tmov x1, %2\n\tmov x2, %3\n\tmov x3, xzr\n\tmov x4, xzr\n\tsvc #0\n\tcbnz x0, 1f\n\tmov x0, %4\n\tmov x16, %5\n\tblr x16\n1:\n\tmov %0, x0"
+                    (flags, stack_top, ptid_ptr, child_desc_ptr, child_bootstrap_fn, -> tid);
                 } clobbers = ["x0", "x1", "x2", "x3", "x4", "x8", "x9", "x16", "x17", "memory"];
             }, {
                 std.cfg(std.target_arch == .ta_arm, {
                     const stack_top: i64 = top as i64;
                     const ptid_ptr: i64 = (&child_ptid) as i64;
-                    const child_desc_slot: i64 = (&_pthread_child_desc) as i64;
+                    const child_desc_ptr: i64 = desc as i64;
                     const child_bootstrap_fn: i64 = (&_pthread_child_bootstrap as &void) as i64;
                     @asm {
-                        "mov r7, #120\n\tmov r0, %1\n\tmov r1, %2\n\tmov r2, %3\n\tmov r3, #0\n\tmov r4, #0\n\tsvc #0\n\tcmp r0, #0\n\tbne 1f\n\tmov r4, %4\n\tldr r0, [r4]\n\tmov r12, %5\n\tblx r12\n1:\n\tmov %0, r0"
-                        (flags, stack_top, ptid_ptr, child_desc_slot, child_bootstrap_fn, -> tid);
+                        "mov r7, #120\n\tmov r0, %1\n\tmov r1, %2\n\tmov r2, %3\n\tmov r3, #0\n\tmov r4, #0\n\tsvc #0\n\tcmp r0, #0\n\tbne 1f\n\tmov r0, %4\n\tmov r12, %5\n\tblx r12\n1:\n\tmov %0, r0"
+                        (flags, stack_top, ptid_ptr, child_desc_ptr, child_bootstrap_fn, -> tid);
                     } clobbers = ["r0", "r1", "r2", "r3", "r4", "r7", "r12", "lr", "memory"];
                 }, {
                     const cl: !i64 = sys_clone(flags, top, &child_ptid, null, null);
@@ -548,8 +551,7 @@ export extern "libc" fn pthread_create(thread: &pthread_t, attr: &const pthread_
         };
         if tid == 0 {
             _ = sys_set_tid_address(null);
-            desc.started = 1;
-            _pthread_thread_exit(desc, _pthread_call_start(desc.start_routine, desc.arg));
+            _pthread_child_bootstrap(desc);
         }
     })
 
@@ -558,10 +560,6 @@ export extern "libc" fn pthread_create(thread: &pthread_t, attr: &const pthread_
         free(stack_mem);
         free(desc as &void);
         return 1;
-    }
-
-    while desc.started == 0 {
-        _ = pthread_yield();
     }
 
     // 父线程路径
@@ -578,6 +576,7 @@ export extern "libc" fn pthread_create(thread: &pthread_t, attr: &const pthread_
     thread.arg = arg;
 
     _pthread_registry_insert(tid, desc);
+    desc.started = 1;
     _ = pthread_mutex_unlock(&_pthread_create_mutex);
     return 0;
 }

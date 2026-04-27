@@ -2,17 +2,46 @@
 
 use src.memory.allocator.redis_malloc;
 use src.memory.allocator.redis_free;
+use src.storage.dict.Dict;
+use src.storage.dict.DictEntry;
+use src.storage.dict.DictIterator;
+use src.storage.dict.dict_new;
+use src.storage.dict.dict_free;
+use src.storage.dict.dict_lookup;
+use src.storage.dict.dict_insert;
+use src.storage.dict.dict_iter_new;
+use src.storage.dict.dict_iter_next;
 use src.storage.sds.Sds;
+use src.storage.sds.sds_empty;
 use src.storage.sds.sds_new;
 use src.storage.sds.sds_free;
 
 export enum ObjectType {
     object_string,
+    object_hash,
+    object_list,
+    object_set,
+    object_zset,
 }
 
 export enum Encoding {
     encoding_raw,
     encoding_int,
+    encoding_hash_table,
+    encoding_linked_list,
+    encoding_set_table,
+    encoding_zset_table,
+}
+
+export struct ListNode {
+    value: &RedisObject,
+    next: &ListNode,
+    prev: &ListNode,
+}
+
+export struct ListRangeView {
+    head: &ListNode,
+    count: usize,
 }
 
 export struct RedisObject {
@@ -20,12 +49,20 @@ export struct RedisObject {
     encoding: Encoding,
     value: Sds,
     int_value: i64,
+    hash_dict: Dict,
+    list_head: &ListNode,
+    list_tail: &ListNode,
+    list_len: usize,
 }
 
 struct ParseIntResult {
     ok: bool,
     value: i64,
 }
+
+export error ObjectWrongType;
+export error ObjectFieldNotFound;
+export error ObjectListEmpty;
 
 fn object_stride() usize {
     var sample: [RedisObject: 1] = [];
@@ -71,6 +108,26 @@ fn parse_i64(data: &[byte]) ParseIntResult {
     return ParseIntResult{ ok: true, value: value };
 }
 
+fn object_slice_cmp(a: &[byte], b: &[byte]) i32 {
+    var i: usize = 0;
+    while i < a.len && i < b.len {
+        if a.ptr[i] < b.ptr[i] {
+            return -1;
+        }
+        if a.ptr[i] > b.ptr[i] {
+            return 1;
+        }
+        i = i + 1;
+    }
+    if a.len < b.len {
+        return -1;
+    }
+    if a.len > b.len {
+        return 1;
+    }
+    return 0;
+}
+
 export fn create_string_object(data: &[byte]) !&RedisObject {
     const raw: &byte = try redis_malloc(object_stride());
     const obj: &RedisObject = raw as &RedisObject;
@@ -90,13 +147,544 @@ export fn create_string_object(data: &[byte]) !&RedisObject {
         obj.int_value = 0;
     }
     obj.value = value;
+    obj.hash_dict = dict_new();
+    obj.list_head = null as &ListNode;
+    obj.list_tail = null as &ListNode;
+    obj.list_len = 0;
     return obj;
+}
+
+fn object_ptr_to_usize(ptr: &RedisObject) usize {
+    return @usize_from_ptr(ptr as &void);
+}
+
+fn object_usize_to_object(value: usize) &RedisObject {
+    return @ptr_from_usize(value) as &RedisObject;
+}
+
+export fn create_hash_object() !&RedisObject {
+    const raw: &byte = try redis_malloc(object_stride());
+    const obj: &RedisObject = raw as &RedisObject;
+    const value_result: !Sds = sds_empty();
+    const value: Sds = value_result catch {
+        redis_free(raw);
+        return error.AllocOutOfMemory;
+    };
+
+    obj.obj_type = ObjectType.object_hash;
+    obj.encoding = Encoding.encoding_hash_table;
+    obj.value = value;
+    obj.int_value = 0;
+    obj.hash_dict = dict_new();
+    obj.list_head = null as &ListNode;
+    obj.list_tail = null as &ListNode;
+    obj.list_len = 0;
+    return obj;
+}
+
+fn list_node_stride() usize {
+    var sample: [ListNode: 1] = [];
+    return @size_of(sample[0]) as usize;
+}
+
+fn list_node_new(value: &RedisObject) !&ListNode {
+    const raw: &byte = try redis_malloc(list_node_stride());
+    const node: &ListNode = raw as &ListNode;
+    node.value = value;
+    node.next = null as &ListNode;
+    node.prev = null as &ListNode;
+    return node;
+}
+
+fn list_node_free(node: &ListNode) void {
+    if node == null {
+        return;
+    }
+    redis_free(node as &byte);
+}
+
+export fn create_list_object() !&RedisObject {
+    const raw: &byte = try redis_malloc(object_stride());
+    const obj: &RedisObject = raw as &RedisObject;
+    const value_result: !Sds = sds_empty();
+    const value: Sds = value_result catch {
+        redis_free(raw);
+        return error.AllocOutOfMemory;
+    };
+
+    obj.obj_type = ObjectType.object_list;
+    obj.encoding = Encoding.encoding_linked_list;
+    obj.value = value;
+    obj.int_value = 0;
+    obj.hash_dict = dict_new();
+    obj.list_head = null as &ListNode;
+    obj.list_tail = null as &ListNode;
+    obj.list_len = 0;
+    return obj;
+}
+
+export fn create_set_object() !&RedisObject {
+    const raw: &byte = try redis_malloc(object_stride());
+    const obj: &RedisObject = raw as &RedisObject;
+    const value_result: !Sds = sds_empty();
+    const value: Sds = value_result catch {
+        redis_free(raw);
+        return error.AllocOutOfMemory;
+    };
+
+    obj.obj_type = ObjectType.object_set;
+    obj.encoding = Encoding.encoding_set_table;
+    obj.value = value;
+    obj.int_value = 0;
+    obj.hash_dict = dict_new();
+    obj.list_head = null as &ListNode;
+    obj.list_tail = null as &ListNode;
+    obj.list_len = 0;
+    return obj;
+}
+
+export fn create_zset_object() !&RedisObject {
+    const raw: &byte = try redis_malloc(object_stride());
+    const obj: &RedisObject = raw as &RedisObject;
+    const value_result: !Sds = sds_empty();
+    const value: Sds = value_result catch {
+        redis_free(raw);
+        return error.AllocOutOfMemory;
+    };
+
+    obj.obj_type = ObjectType.object_zset;
+    obj.encoding = Encoding.encoding_zset_table;
+    obj.value = value;
+    obj.int_value = 0;
+    obj.hash_dict = dict_new();
+    obj.list_head = null as &ListNode;
+    obj.list_tail = null as &ListNode;
+    obj.list_len = 0;
+    return obj;
+}
+
+export fn hash_object_set_field(obj: &RedisObject, field: &[byte], data: &[byte]) !bool {
+    if obj == null || obj.obj_type != ObjectType.object_hash {
+        return error.ObjectWrongType;
+    }
+
+    const old_value_result: !usize = dict_lookup(&obj.hash_dict, field);
+    const old_value: usize = old_value_result catch {
+        const field_obj: &RedisObject = try create_string_object(data);
+        const inserted: bool = dict_insert(&obj.hash_dict, field, object_ptr_to_usize(field_obj)) catch |err| {
+            object_free(field_obj);
+            return err;
+        };
+        _ = inserted;
+        return true;
+    };
+
+    const field_obj: &RedisObject = try create_string_object(data);
+    object_free(object_usize_to_object(old_value));
+    const updated: bool = try dict_insert(&obj.hash_dict, field, object_ptr_to_usize(field_obj));
+    _ = updated;
+    return false;
+}
+
+export fn hash_object_get_field(obj: &RedisObject, field: &[byte]) !&RedisObject {
+    if obj == null || obj.obj_type != ObjectType.object_hash {
+        return error.ObjectWrongType;
+    }
+    const value_result: !usize = dict_lookup(&obj.hash_dict, field);
+    const value: usize = value_result catch {
+        return error.ObjectFieldNotFound;
+    };
+    return object_usize_to_object(value);
+}
+
+export fn list_object_push_head(obj: &RedisObject, data: &[byte]) !usize {
+    if obj == null || obj.obj_type != ObjectType.object_list {
+        return error.ObjectWrongType;
+    }
+
+    const value: &RedisObject = try create_string_object(data);
+    const node_result: !&ListNode = list_node_new(value);
+    const node: &ListNode = node_result catch {
+        object_free(value);
+        return error.AllocOutOfMemory;
+    };
+
+    node.next = obj.list_head;
+    if obj.list_head != null {
+        obj.list_head.prev = node;
+    } else {
+        obj.list_tail = node;
+    }
+    obj.list_head = node;
+    obj.list_len = obj.list_len + 1;
+    return obj.list_len;
+}
+
+export fn list_object_pop_head(obj: &RedisObject) !&RedisObject {
+    if obj == null || obj.obj_type != ObjectType.object_list {
+        return error.ObjectWrongType;
+    }
+    const node: &ListNode = obj.list_head;
+    if node == null {
+        return error.ObjectListEmpty;
+    }
+
+    const next: &ListNode = node.next;
+    obj.list_head = next;
+    if next != null {
+        next.prev = null as &ListNode;
+    } else {
+        obj.list_tail = null as &ListNode;
+    }
+    obj.list_len = obj.list_len - 1;
+
+    const value: &RedisObject = node.value;
+    list_node_free(node);
+    return value;
+}
+
+export fn list_object_len(obj: &RedisObject) !usize {
+    if obj == null || obj.obj_type != ObjectType.object_list {
+        return error.ObjectWrongType;
+    }
+    return obj.list_len;
+}
+
+export fn list_object_range(obj: &RedisObject, start: i64, stop: i64) !ListRangeView {
+    if obj == null || obj.obj_type != ObjectType.object_list {
+        return error.ObjectWrongType;
+    }
+    if obj.list_len == 0 {
+        return ListRangeView{ head: null as &ListNode, count: 0 };
+    }
+
+    const len_i64: i64 = obj.list_len as i64;
+    var start_index: i64 = start;
+    var stop_index: i64 = stop;
+    if start_index < 0 {
+        start_index = len_i64 + start_index;
+    }
+    if stop_index < 0 {
+        stop_index = len_i64 + stop_index;
+    }
+    if start_index < 0 {
+        start_index = 0;
+    }
+    if stop_index < 0 {
+        return ListRangeView{ head: null as &ListNode, count: 0 };
+    }
+    if start_index >= len_i64 {
+        return ListRangeView{ head: null as &ListNode, count: 0 };
+    }
+    if stop_index >= len_i64 {
+        stop_index = len_i64 - 1;
+    }
+    if start_index > stop_index {
+        return ListRangeView{ head: null as &ListNode, count: 0 };
+    }
+
+    var node: &ListNode = obj.list_head;
+    var i: i64 = 0;
+    while node != null && i < start_index {
+        node = node.next;
+        i = i + 1;
+    }
+    return ListRangeView{
+        head: node,
+        count: (stop_index - start_index + 1) as usize,
+    };
+}
+
+export fn set_object_add_member(obj: &RedisObject, data: &[byte]) !bool {
+    if obj == null || obj.obj_type != ObjectType.object_set {
+        return error.ObjectWrongType;
+    }
+
+    const old_value_result: !usize = dict_lookup(&obj.hash_dict, data);
+    const old_value: usize = old_value_result catch {
+        const value: &RedisObject = try create_string_object(data);
+        const inserted: bool = dict_insert(&obj.hash_dict, data, object_ptr_to_usize(value)) catch |err| {
+            object_free(value);
+            return err;
+        };
+        _ = inserted;
+        return true;
+    };
+    _ = old_value;
+    return false;
+}
+
+export fn set_object_remove_member(obj: &RedisObject, data: &[byte]) !bool {
+    if obj == null || obj.obj_type != ObjectType.object_set {
+        return error.ObjectWrongType;
+    }
+
+    const value_result: !usize = dict_lookup(&obj.hash_dict, data);
+    const value: usize = value_result catch {
+        return false;
+    };
+    object_free(object_usize_to_object(value));
+    return dict_delete(&obj.hash_dict, data);
+}
+
+export fn set_object_len(obj: &RedisObject) !usize {
+    if obj == null || obj.obj_type != ObjectType.object_set {
+        return error.ObjectWrongType;
+    }
+    return dict_len(&obj.hash_dict);
+}
+
+export fn set_object_members_reply(obj: &RedisObject) !&RedisObject {
+    if obj == null || obj.obj_type != ObjectType.object_set {
+        return error.ObjectWrongType;
+    }
+
+    const reply_list: &RedisObject = try create_list_object();
+    var iter: DictIterator = dict_iter_new();
+    var entry: &DictEntry = dict_iter_next(&obj.hash_dict, &iter);
+    while entry != null {
+        const member_obj: &RedisObject = object_usize_to_object(entry.value);
+        const data: &[byte] = member_obj.value.buf[0: member_obj.value.len];
+        _ = list_object_push_head(reply_list, data) catch {
+            object_free(reply_list);
+            return error.AllocOutOfMemory;
+        };
+        entry = dict_iter_next(&obj.hash_dict, &iter);
+    }
+    return reply_list;
+}
+
+export fn list_object_push_tail(obj: &RedisObject, data: &[byte]) !usize {
+    if obj == null || obj.obj_type != ObjectType.object_list {
+        return error.ObjectWrongType;
+    }
+
+    const value: &RedisObject = try create_string_object(data);
+    const node_result: !&ListNode = list_node_new(value);
+    const node: &ListNode = node_result catch {
+        object_free(value);
+        return error.AllocOutOfMemory;
+    };
+
+    node.prev = obj.list_tail;
+    if obj.list_tail != null {
+        obj.list_tail.next = node;
+    } else {
+        obj.list_head = node;
+    }
+    obj.list_tail = node;
+    obj.list_len = obj.list_len + 1;
+    return obj.list_len;
+}
+
+export fn list_object_insert_sorted_lex(obj: &RedisObject, data: &[byte]) !usize {
+    if obj == null || obj.obj_type != ObjectType.object_list {
+        return error.ObjectWrongType;
+    }
+    if obj.list_head == null {
+        return list_object_push_head(obj, data);
+    }
+
+    var current: &ListNode = obj.list_head;
+    while current != null {
+        const current_data: &[byte] = current.value.value.buf[0: current.value.value.len];
+        if object_slice_cmp(data, current_data) < 0 {
+            const value: &RedisObject = try create_string_object(data);
+            const node_result: !&ListNode = list_node_new(value);
+            const node: &ListNode = node_result catch {
+                object_free(value);
+                return error.AllocOutOfMemory;
+            };
+            node.next = current;
+            node.prev = current.prev;
+            if current.prev != null {
+                current.prev.next = node;
+            } else {
+                obj.list_head = node;
+            }
+            current.prev = node;
+            obj.list_len = obj.list_len + 1;
+            return obj.list_len;
+        }
+        current = current.next;
+    }
+
+    return list_object_push_tail(obj, data);
+}
+
+fn zset_score_lookup(obj: &RedisObject, member: &[byte]) !i64 {
+    if obj == null || obj.obj_type != ObjectType.object_zset {
+        return error.ObjectWrongType;
+    }
+    const value_result: !usize = dict_lookup(&obj.hash_dict, member);
+    const value: usize = value_result catch {
+        return error.ObjectFieldNotFound;
+    };
+    const score_obj: &RedisObject = object_usize_to_object(value);
+    if score_obj.encoding != Encoding.encoding_int {
+        return error.ObjectWrongType;
+    }
+    return score_obj.int_value;
+}
+
+export fn zset_object_add_member(obj: &RedisObject, score: i64, member: &[byte]) !bool {
+    if obj == null || obj.obj_type != ObjectType.object_zset {
+        return error.ObjectWrongType;
+    }
+
+    const old_value_result: !usize = dict_lookup(&obj.hash_dict, member);
+    const old_value: usize = old_value_result catch {
+        const score_obj: &RedisObject = try create_string_object(&"0"[0: 1]);
+        score_obj.encoding = Encoding.encoding_int;
+        score_obj.int_value = score;
+        const inserted: bool = dict_insert(&obj.hash_dict, member, object_ptr_to_usize(score_obj)) catch |err| {
+            object_free(score_obj);
+            return err;
+        };
+        _ = inserted;
+        return true;
+    };
+
+    const score_obj_update: &RedisObject = try create_string_object(&"0"[0: 1]);
+    score_obj_update.encoding = Encoding.encoding_int;
+    score_obj_update.int_value = score;
+    object_free(object_usize_to_object(old_value));
+    const updated: bool = try dict_insert(&obj.hash_dict, member, object_ptr_to_usize(score_obj_update));
+    _ = updated;
+    return false;
+}
+
+export fn zset_object_remove_member(obj: &RedisObject, member: &[byte]) !bool {
+    if obj == null || obj.obj_type != ObjectType.object_zset {
+        return error.ObjectWrongType;
+    }
+
+    const value_result: !usize = dict_lookup(&obj.hash_dict, member);
+    const value: usize = value_result catch {
+        return false;
+    };
+    object_free(object_usize_to_object(value));
+    return dict_delete(&obj.hash_dict, member);
+}
+
+export fn zset_object_len(obj: &RedisObject) !usize {
+    if obj == null || obj.obj_type != ObjectType.object_zset {
+        return error.ObjectWrongType;
+    }
+    return dict_len(&obj.hash_dict);
+}
+
+export fn zset_object_get_score(obj: &RedisObject, member: &[byte]) !i64 {
+    return zset_score_lookup(obj, member);
+}
+
+export fn zset_object_range_reply(obj: &RedisObject, start: i64, stop: i64) !&RedisObject {
+    if obj == null || obj.obj_type != ObjectType.object_zset {
+        return error.ObjectWrongType;
+    }
+
+    const sorted_members: &RedisObject = try create_list_object();
+    var iter: DictIterator = dict_iter_new();
+    var entry: &DictEntry = dict_iter_next(&obj.hash_dict, &iter);
+    while entry != null {
+        const member_data: &[byte] = entry.key.buf[0: entry.key.len];
+        const score_obj: &RedisObject = object_usize_to_object(entry.value);
+        const score: i64 = score_obj.int_value;
+
+        if sorted_members.list_head == null {
+            _ = list_object_push_head(sorted_members, member_data) catch {
+                object_free(sorted_members);
+                return error.AllocOutOfMemory;
+            };
+        } else {
+            var current: &ListNode = sorted_members.list_head;
+            var inserted_before: bool = false;
+            while current != null {
+                const current_member: &[byte] = current.value.value.buf[0: current.value.value.len];
+                const current_score: i64 = zset_score_lookup(obj, current_member) catch {
+                    object_free(sorted_members);
+                    return error.ObjectWrongType;
+                };
+                if score < current_score || (score == current_score && object_slice_cmp(member_data, current_member) < 0) {
+                    const value: &RedisObject = try create_string_object(member_data);
+                    const node_new_result: !&ListNode = list_node_new(value);
+                    const node_new: &ListNode = node_new_result catch {
+                        object_free(value);
+                        object_free(sorted_members);
+                        return error.AllocOutOfMemory;
+                    };
+                    node_new.next = current;
+                    node_new.prev = current.prev;
+                    if current.prev != null {
+                        current.prev.next = node_new;
+                    } else {
+                        sorted_members.list_head = node_new;
+                    }
+                    current.prev = node_new;
+                    sorted_members.list_len = sorted_members.list_len + 1;
+                    inserted_before = true;
+                    break;
+                }
+                current = current.next;
+            }
+            if !inserted_before {
+                _ = list_object_push_tail(sorted_members, member_data) catch {
+                    object_free(sorted_members);
+                    return error.AllocOutOfMemory;
+                };
+            }
+        }
+
+        entry = dict_iter_next(&obj.hash_dict, &iter);
+    }
+
+    const view: ListRangeView = list_object_range(sorted_members, start, stop) catch {
+        object_free(sorted_members);
+        return error.ObjectWrongType;
+    };
+    if view.count == sorted_members.list_len {
+        return sorted_members;
+    }
+
+    const ranged: &RedisObject = try create_list_object();
+    var node: &ListNode = view.head;
+    var count: usize = 0;
+    while node != null && count < view.count {
+        const member_data: &[byte] = node.value.value.buf[0: node.value.value.len];
+        _ = list_object_push_tail(ranged, member_data) catch {
+            object_free(sorted_members);
+            object_free(ranged);
+            return error.AllocOutOfMemory;
+        };
+        node = node.next;
+        count = count + 1;
+    }
+    object_free(sorted_members);
+    return ranged;
 }
 
 export fn object_free(obj: &RedisObject) void {
     if obj == null {
         return;
     }
+    if obj.obj_type == ObjectType.object_hash || obj.obj_type == ObjectType.object_set || obj.obj_type == ObjectType.object_zset {
+        var iter: DictIterator = dict_iter_new();
+        var entry: &DictEntry = dict_iter_next(&obj.hash_dict, &iter);
+        while entry != null {
+            object_free(object_usize_to_object(entry.value));
+            entry = dict_iter_next(&obj.hash_dict, &iter);
+        }
+    }
+    if obj.obj_type == ObjectType.object_list {
+        var node: &ListNode = obj.list_head;
+        while node != null {
+            const next: &ListNode = node.next;
+            object_free(node.value);
+            list_node_free(node);
+            node = next;
+        }
+    }
+    dict_free(&obj.hash_dict);
     sds_free(&obj.value);
     redis_free(obj as &byte);
 }
@@ -104,6 +692,10 @@ export fn object_free(obj: &RedisObject) void {
 export fn object_type_name(obj_type: ObjectType) &[byte] {
     match obj_type {
         ObjectType.object_string => { return &"string"[0: 6]; },
+        ObjectType.object_hash => { return &"hash"[0: 4]; },
+        ObjectType.object_list => { return &"list"[0: 4]; },
+        ObjectType.object_set => { return &"set"[0: 3]; },
+        ObjectType.object_zset => { return &"zset"[0: 4]; },
         else => { return &"unknown"[0: 7]; }
     }
 }
@@ -112,7 +704,10 @@ export fn object_encoding_name(encoding: Encoding) &[byte] {
     match encoding {
         Encoding.encoding_raw => { return &"raw"[0: 3]; },
         Encoding.encoding_int => { return &"int"[0: 3]; },
+        Encoding.encoding_hash_table => { return &"hashtable"[0: 9]; },
+        Encoding.encoding_linked_list => { return &"linkedlist"[0: 10]; },
+        Encoding.encoding_set_table => { return &"settable"[0: 8]; },
+        Encoding.encoding_zset_table => { return &"zsettable"[0: 9]; },
         else => { return &"unknown"[0: 7]; }
     }
 }
-

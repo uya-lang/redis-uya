@@ -12,10 +12,17 @@ use src.storage.dict.dict_delete;
 use src.storage.dict.dict_iter_new;
 use src.storage.dict.dict_iter_next;
 use src.storage.object.RedisObject;
+use src.storage.object.create_list_object;
+use src.storage.object.list_object_insert_sorted_lex;
 use src.storage.object.object_free;
 use src.util.time.now_ms_safe;
 
 export error EngineKeyNotFound;
+
+export struct ExpireCycleStats {
+    expired: usize,
+    scanned: usize,
+}
 
 export struct RedisDb {
     dict: Dict,
@@ -56,6 +63,10 @@ export fn engine_free(engine: &Engine) void {
 
 export fn engine_len(engine: &Engine) usize {
     return dict_len(&engine.db.dict);
+}
+
+export fn engine_expire_len(engine: &Engine) usize {
+    return dict_len(&engine.db.expires);
 }
 
 export fn set_key(engine: &Engine, key: &[byte], obj: &RedisObject) !void {
@@ -134,24 +145,79 @@ fn delete_expired_key_from_expire_entry(engine: &Engine, key: &[byte]) bool {
     return deleted;
 }
 
-export fn engine_expire_cycle_at(engine: &Engine, now_ms: u64, max_keys: usize) usize {
+export fn engine_expire_sample_at(engine: &Engine, now_ms: u64, max_keys: usize) ExpireCycleStats {
     if max_keys == 0 {
-        return 0;
+        return ExpireCycleStats{ expired: 0, scanned: 0 };
     }
 
     var expired: usize = 0;
     var scanned: usize = 0;
-    var iter: DictIterator = dict_iter_new();
-    var entry: &DictEntry = dict_iter_next(&engine.db.expires, &iter);
-    while entry != null && scanned < max_keys {
-        scanned = scanned + 1;
-        const expire_at_ms: u64 = entry.value as u64;
-        if now_ms >= expire_at_ms {
-            if delete_expired_key_from_expire_entry(engine, entry.key.buf[0: entry.key.len]) {
-                expired = expired + 1;
+    while scanned < max_keys {
+        var deleted_in_pass: bool = false;
+        var iter: DictIterator = dict_iter_new();
+        var entry: &DictEntry = dict_iter_next(&engine.db.expires, &iter);
+        while entry != null && scanned < max_keys {
+            scanned = scanned + 1;
+            const expire_at_ms: u64 = entry.value as u64;
+            if now_ms >= expire_at_ms {
+                if delete_expired_key_from_expire_entry(engine, entry.key.buf[0: entry.key.len]) {
+                    expired = expired + 1;
+                }
+                deleted_in_pass = true;
+                break;
             }
+            entry = dict_iter_next(&engine.db.expires, &iter);
         }
-        entry = dict_iter_next(&engine.db.expires, &iter);
+        if !deleted_in_pass {
+            break;
+        }
     }
-    return expired;
+    return ExpireCycleStats{
+        expired: expired,
+        scanned: scanned,
+    };
+}
+
+export fn engine_expire_cycle_at(engine: &Engine, now_ms: u64, max_keys: usize) usize {
+    return engine_expire_sample_at(engine, now_ms, max_keys).expired;
+}
+
+export fn engine_active_expire_cycle_at(engine: &Engine, now_ms: u64, sample_keys: usize, max_rounds: usize) usize {
+    if sample_keys == 0 || max_rounds == 0 {
+        return 0;
+    }
+
+    var total_expired: usize = 0;
+    var rounds: usize = 0;
+    while rounds < max_rounds {
+        const stats: ExpireCycleStats = engine_expire_sample_at(engine, now_ms, sample_keys);
+        total_expired = total_expired + stats.expired;
+
+        if stats.scanned == 0 || stats.scanned < sample_keys {
+            break;
+        }
+        if stats.expired == 0 || stats.expired * 4 < stats.scanned {
+            break;
+        }
+
+        rounds = rounds + 1;
+    }
+    return total_expired;
+}
+
+export fn engine_scan_keys_at(engine: &Engine, now_ms: u64) !&RedisObject {
+    const keys: &RedisObject = try create_list_object();
+    var iter: DictIterator = dict_iter_new();
+    var entry: &DictEntry = dict_iter_next(&engine.db.dict, &iter);
+    while entry != null {
+        const key: &[byte] = entry.key.buf[0: entry.key.len];
+        if !key_is_expired(engine, key, now_ms) {
+            _ = list_object_insert_sorted_lex(keys, key) catch {
+                object_free(keys);
+                return error.AllocOutOfMemory;
+            };
+        }
+        entry = dict_iter_next(&engine.db.dict, &iter);
+    }
+    return keys;
 }

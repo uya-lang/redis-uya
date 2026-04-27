@@ -1,20 +1,28 @@
 // server.uya - minimal single-threaded Redis server loop.
 
+use src.command.executor.CommandRuntimeInfo;
 use src.command.router.CommandRouter;
 use src.command.router.command_router_new;
+use src.config.ServerConfig;
+use src.config.default_config;
+use src.config.config_copy_bytes;
 use src.network.listener.RedisListener;
 use src.network.listener.listener_open_loopback;
 use src.network.listener.listener_accept;
 use src.network.listener.listener_close;
-use src.network.connection.connection_handle_fd_nonblocking_with_aof;
+use src.network.connection.connection_handle_fd_nonblocking_with_runtime_with_aof;
 use src.persistence.aof.AofWriter;
 use src.persistence.aof.aof_open_append;
 use src.persistence.aof.aof_close;
 use src.persistence.aof.aof_replay_file_at;
+use src.persistence.rewrite.aof_rewrite_file_at;
+use src.persistence.rdb.rdb_build_path;
+use src.persistence.rdb.rdb_file_exists;
+use src.persistence.rdb.rdb_load_file_at;
 use src.storage.engine.Engine;
 use src.storage.engine.engine_new;
 use src.storage.engine.engine_free;
-use src.storage.engine.engine_expire_cycle_at;
+use src.storage.engine.engine_active_expire_cycle_at;
 use src.util.time.now_ms_safe;
 use libc.errno;
 use libc.sys_close;
@@ -35,12 +43,14 @@ use libc.SHUT_WR;
 
 const SERVER_CRON_INTERVAL_MS: u64 = 100;
 const SERVER_CRON_EXPIRE_LIMIT: usize = 20;
+const SERVER_CRON_EXPIRE_MAX_ROUNDS: usize = 4;
 const SERVER_MAX_CLIENTS: usize = 64;
 const SERVER_IO_CAP: usize = 8192;
 const SERVER_EVENT_CAP: usize = 16;
 
 export error ServerAofOpenFailed;
 export error ServerAofReplayFailed;
+export error ServerAofRewriteFailed;
 
 export struct RedisClient {
     fd: i32,
@@ -61,8 +71,13 @@ export struct RedisServer {
     active_clients: i32,
     maxclients: i32,
     served_clients: i32,
+    config: ServerConfig,
+    start_ms: u64,
     last_cron_ms: u64,
     cron_ticks: u64,
+    aof_rewrite_requested: bool,
+    aof_rewrite_in_progress: bool,
+    aof_rewrite_count: u64,
 }
 
 export fn server_default_aof_path() &const byte {
@@ -80,6 +95,58 @@ fn server_init_clients(server: &RedisServer) void {
         i = i + 1;
     }
     server.active_clients = 0;
+}
+
+fn server_cstring_len(data: &const byte) usize {
+    var len: usize = 0;
+    while data[len] != 0 as byte {
+        len = len + 1;
+    }
+    return len;
+}
+
+fn server_runtime_info(server: &RedisServer) CommandRuntimeInfo {
+    return CommandRuntimeInfo{
+        config: server.config,
+        active_clients: server.active_clients,
+        maxclients: server.maxclients,
+        served_clients: server.served_clients,
+        cron_ticks: server.cron_ticks,
+        start_ms: server.start_ms,
+        aof_rewrite_requested: server.aof_rewrite_requested,
+        aof_rewrite_in_progress: server.aof_rewrite_in_progress,
+    };
+}
+
+fn server_rdb_path(config: &ServerConfig, out: &[byte]) !void {
+    const dir: &[byte] = config.dir[0: server_cstring_len(&config.dir[0] as &const byte)];
+    const filename: &[byte] = config.dbfilename[0: server_cstring_len(&config.dbfilename[0] as &const byte)];
+    try rdb_build_path(out, dir, filename);
+}
+
+export fn server_load_persistence_at(engine: &Engine, router: &CommandRouter, config: &ServerConfig, aof_path: &const byte, now_ms: u64) !void {
+    var rdb_path_buf: [byte: 512] = [];
+    var have_rdb_path: bool = true;
+    _ = server_rdb_path(config, rdb_path_buf[0: 512]) catch {
+        have_rdb_path = false;
+    };
+    const rdb_path: &const byte = &rdb_path_buf[0] as &const byte;
+
+    if have_rdb_path && rdb_file_exists(rdb_path) {
+        var snapshot_engine: Engine = engine_new();
+        var loaded: bool = true;
+        _ = rdb_load_file_at(rdb_path, &snapshot_engine, now_ms) catch {
+            loaded = false;
+        };
+        if loaded {
+            engine_free(engine);
+            engine.db = snapshot_engine.db;
+        } else {
+            engine_free(&snapshot_engine);
+        }
+    }
+
+    try aof_replay_file_at(aof_path, engine, router, now_ms);
 }
 
 fn server_set_nonblocking(fd: i32) !void {
@@ -148,6 +215,17 @@ fn server_can_accept_client(server: &RedisServer) bool {
     return true;
 }
 
+fn server_has_pending_client_output(server: &RedisServer) bool {
+    var i: usize = 0;
+    while i < SERVER_MAX_CLIENTS {
+        if server.clients[i].fd >= 0 && server.clients[i].output_sent < server.clients[i].output_len {
+            return true;
+        }
+        i = i + 1;
+    }
+    return false;
+}
+
 fn server_client_pending_write(server: &RedisServer, slot: usize) bool {
     if slot >= SERVER_MAX_CLIENTS {
         return false;
@@ -176,12 +254,17 @@ export fn server_open_with_aof(port: u16, maxclients: i32, aof_path: &const byte
     const listener: RedisListener = try listener_open_loopback(port, maxclients);
     var engine: Engine = engine_new();
     const router: CommandRouter = command_router_new();
+    var config: ServerConfig = default_config();
+    config.port = port as i32;
+    config_copy_bytes(config.bind[0: 64], &"127.0.0.1"[0: 9]);
+    config_copy_bytes(config.dir[0: 256], &"build/"[0: 6]);
+    config_copy_bytes(config.appendfilename[0: 128], (aof_path as &byte)[0: server_cstring_len(aof_path)]);
     var aof: AofWriter = aof_open_append(aof_path) catch {
         listener_close(&listener);
         engine_free(&engine);
         return error.ServerAofOpenFailed;
     };
-    _ = aof_replay_file_at(aof_path, &engine, &router, now_ms_safe()) catch {
+    _ = server_load_persistence_at(&engine, &router, &config, aof_path, now_ms_safe()) catch {
         aof_close(&aof);
         listener_close(&listener);
         engine_free(&engine);
@@ -202,8 +285,13 @@ export fn server_open_with_aof(port: u16, maxclients: i32, aof_path: &const byte
         active_clients: 0,
         maxclients: maxclients,
         served_clients: 0,
+        config: config,
+        start_ms: now_ms_safe(),
         last_cron_ms: 0u64,
         cron_ticks: 0u64,
+        aof_rewrite_requested: false,
+        aof_rewrite_in_progress: false,
+        aof_rewrite_count: 0u64,
     };
     server_init_clients(&server);
     return server;
@@ -221,13 +309,38 @@ export fn server_close(server: &RedisServer) void {
 }
 
 export fn server_cron_at(server: &RedisServer, now_ms: u64) void {
-    _ = engine_expire_cycle_at(&server.engine, now_ms, SERVER_CRON_EXPIRE_LIMIT);
+    _ = engine_active_expire_cycle_at(&server.engine, now_ms, SERVER_CRON_EXPIRE_LIMIT, SERVER_CRON_EXPIRE_MAX_ROUNDS);
     server.last_cron_ms = now_ms;
     server.cron_ticks = server.cron_ticks + 1u64;
 }
 
 export fn server_cron(server: &RedisServer) void {
     server_cron_at(server, now_ms_safe());
+}
+
+export fn server_run_pending_aof_rewrite_at(server: &RedisServer, now_ms: u64) !bool {
+    if !server.aof_rewrite_requested || server.aof_rewrite_in_progress {
+        return false;
+    }
+    if server_has_pending_client_output(server) {
+        return false;
+    }
+
+    const aof_path: &const byte = &server.config.appendfilename[0] as &const byte;
+    server.aof_rewrite_requested = false;
+    server.aof_rewrite_in_progress = true;
+    defer {
+        server.aof_rewrite_in_progress = false;
+    }
+
+    try aof_rewrite_file_at(aof_path, &server.engine, now_ms);
+    var new_aof: AofWriter = aof_open_append(aof_path) catch {
+        return error.ServerAofRewriteFailed;
+    };
+    aof_close(&server.aof);
+    server.aof = new_aof;
+    server.aof_rewrite_count = server.aof_rewrite_count + 1u64;
+    return true;
 }
 
 fn server_run_cron_due_at(server: &RedisServer, now_ms: u64) void {
@@ -310,8 +423,11 @@ fn server_handle_client_fd(server: &RedisServer, fd: i32) void {
         return;
     }
     var output: [byte: SERVER_IO_CAP] = [];
-    const keep_result: !bool = connection_handle_fd_nonblocking_with_aof(
+    const runtime: CommandRuntimeInfo = server_runtime_info(server);
+    var rewrite_requested: bool = false;
+    const keep_result: !bool = connection_handle_fd_nonblocking_with_runtime_with_aof(
         &server.engine,
+        &runtime,
         &server.router,
         &server.aof,
         fd,
@@ -323,6 +439,7 @@ fn server_handle_client_fd(server: &RedisServer, fd: i32) void {
         &server.clients[slot].output_len,
         &server.clients[slot].output_sent,
         &server.clients[slot].close_after_write,
+        &rewrite_requested,
         &output[0],
         SERVER_IO_CAP,
     );
@@ -334,6 +451,9 @@ fn server_handle_client_fd(server: &RedisServer, fd: i32) void {
         server_close_client_slot(server, slot);
         return;
     }
+    if rewrite_requested {
+        server.aof_rewrite_requested = true;
+    }
     _ = server_update_client_events(server, slot) catch {
         server_close_client_slot(server, slot);
     };
@@ -344,6 +464,7 @@ export fn server_run(server: &RedisServer) !void {
     while true {
         const now_ms: u64 = now_ms_safe();
         server_run_cron_due_at(server, now_ms);
+        _ = server_run_pending_aof_rewrite_at(server, now_ms) catch {};
 
         const timeout_ms: i32 = server_ms_until_next_cron(server, now_ms_safe());
         const wait_result: !i32 = sys_epoll_wait(server.listener.poll_fd, &events[0], SERVER_EVENT_CAP as i32, timeout_ms);

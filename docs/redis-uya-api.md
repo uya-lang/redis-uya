@@ -143,11 +143,57 @@ TTL key
 ```text
 INFO
 INFO server
+INFO memory
+INFO stats
+INFO keyspace
 ```
 
 返回：
 
-- 当前固定返回最小 `# Server` 段
+- 支持 `server`、`clients`、`memory`、`stats`、`keyspace`
+- 未带 section 时返回上述 section 组合段
+
+### `CONFIG GET`
+
+格式：
+
+```text
+CONFIG GET pattern
+```
+
+返回：
+
+- 返回 RESP Array，按 `name`、`value` 成对展开
+- 当前支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`maxmemory`、`save`
+- 支持最小 `*` 通配模式
+
+### `SAVE`
+
+格式：
+
+```text
+SAVE
+```
+
+返回：
+
+- 成功：`+OK`
+- 当前仅支持把 String 键值对和绝对过期时间写入项目内最小 RDB 子集格式
+- 若当前数据集中存在 Hash/List/Set/ZSet，会返回错误
+
+### `BGREWRITEAOF`
+
+格式：
+
+```text
+BGREWRITEAOF
+```
+
+返回：
+
+- 成功：`+Background AOF rewrite scheduled`
+- 当前是最小 skeleton：请求会被主循环调度后执行，不是独立子进程后台 rewrite
+- rewrite 产物会把当前内存态规范化写成可回放 AOF
 
 ### `QUIT`
 

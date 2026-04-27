@@ -86,33 +86,41 @@ def run_smoke() -> None:
         raise RuntimeError("build/redis-uya is missing; run `make build` first")
 
     port = find_free_port()
-    aof_path = ROOT / "build" / f"persistence-{port}.aof"
+    aof_path = ROOT / "build" / f"mixed-{port}.aof"
+    rdb_path = ROOT / "build" / "dump.rdb"
     aof_path.unlink(missing_ok=True)
+    rdb_path.unlink(missing_ok=True)
     try:
         run_one_client(
             port,
             aof_path,
             [
-                (b"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n", b"+OK\r\n"),
-                (b"*1\r\n$12\r\nBGREWRITEAOF\r\n", b"+Background AOF rewrite scheduled\r\n"),
+                (b"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$4\r\nbase\r\n", b"+OK\r\n"),
+                (b"*1\r\n$4\r\nSAVE\r\n", b"+OK\r\n"),
+                (b"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nnewer\r\n", b"+OK\r\n"),
+                (b"*3\r\n$3\r\nSET\r\n$5\r\nextra\r\n$5\r\nvalue\r\n", b"+OK\r\n"),
             ],
         )
         run_one_client(
             port,
             aof_path,
-            [(b"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n", b"$5\r\nvalue\r\n")],
+            [
+                (b"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n", b"$5\r\nnewer\r\n"),
+                (b"*2\r\n$3\r\nGET\r\n$5\r\nextra\r\n", b"$5\r\nvalue\r\n"),
+            ],
         )
     finally:
         aof_path.unlink(missing_ok=True)
+        rdb_path.unlink(missing_ok=True)
 
 
 def main() -> int:
     try:
         run_smoke()
     except Exception as exc:
-        print(f"[FAIL] integration/persistence_aof: {exc}", file=sys.stderr)
+        print(f"[FAIL] integration/persistence_rdb_aof: {exc}", file=sys.stderr)
         return 1
-    print("[PASS] integration/persistence_aof")
+    print("[PASS] integration/persistence_rdb_aof")
     return 0
 
 

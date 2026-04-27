@@ -32,11 +32,17 @@ use tests.unit.storage_dict_test.test_dict_incremental_rehash_manual_steps;
 use tests.unit.storage_object_test.test_object_string_create_free;
 use tests.unit.storage_object_test.test_object_string_integer_encoding;
 use tests.unit.storage_object_test.test_object_string_raw_encoding_edges;
+use tests.unit.storage_object_test.test_object_hash_create_set_get_free;
+use tests.unit.storage_object_test.test_object_list_create_push_pop_range_free;
+use tests.unit.storage_object_test.test_object_set_create_add_remove_members_free;
+use tests.unit.storage_object_test.test_object_zset_create_add_remove_range_free;
 use tests.unit.storage_engine_test.test_engine_set_lookup_delete;
 use tests.unit.storage_engine_test.test_engine_overwrite_releases_old_object;
 use tests.unit.storage_engine_test.test_engine_lazy_expire;
 use tests.unit.storage_engine_test.test_engine_clear_expire;
 use tests.unit.storage_engine_test.test_engine_active_expire_cycle;
+use tests.unit.storage_engine_test.test_engine_active_expire_loop_continues;
+use tests.unit.storage_engine_test.test_engine_scan_keys_sorted_skips_expired;
 use tests.unit.network_protocol_test.test_resp2_simple_string_error_integer;
 use tests.unit.network_protocol_test.test_resp2_bulk_string_and_nulls;
 use tests.unit.network_protocol_test.test_resp2_array_of_bulk_strings;
@@ -48,7 +54,15 @@ use tests.unit.command_router_test.test_command_router_unknown_command;
 use tests.unit.command_router_test.test_command_from_resp_array;
 use tests.unit.command_router_test.test_command_from_resp_error_paths;
 use tests.unit.command_executor_test.test_command_ping_and_info;
+use tests.unit.command_executor_test.test_command_info_and_config;
+use tests.unit.command_executor_test.test_command_bgrewriteaof;
+use tests.unit.command_executor_test.test_command_save_rdb;
 use tests.unit.command_executor_test.test_command_set_get_del_exists;
+use tests.unit.command_executor_test.test_command_hset_hget;
+use tests.unit.command_executor_test.test_command_lpush_lpop_lrange;
+use tests.unit.command_executor_test.test_command_sadd_srem_smembers;
+use tests.unit.command_executor_test.test_command_zadd_zrem_zrange;
+use tests.unit.command_executor_test.test_command_scan;
 use tests.unit.command_executor_test.test_command_expire_and_ttl;
 use tests.unit.command_executor_test.test_command_error_paths;
 use tests.unit.network_connection_test.test_connection_encode_resp_replies;
@@ -59,7 +73,14 @@ use tests.unit.persistence_aof_test.test_aof_replay_set_then_del;
 use tests.unit.persistence_aof_test.test_aof_replay_truncated_file_fails;
 use tests.unit.persistence_aof_test.test_aof_expire_replays_absolute_deadline;
 use tests.unit.persistence_aof_test.test_aof_replay_large_file_over_1mb;
+use tests.unit.persistence_rdb_test.test_rdb_save_and_load_string_subset;
+use tests.unit.persistence_rdb_test.test_rdb_load_invalid_header_fails;
+use tests.unit.persistence_rdb_test.test_rdb_save_rejects_non_string_keys;
+use tests.unit.persistence_rewrite_test.test_aof_rewrite_roundtrip_current_types;
 use tests.unit.server_test.test_server_cron_expires_keys;
+use tests.unit.server_test.test_server_cron_active_expire_loop;
+use tests.unit.server_test.test_server_loads_rdb_then_replays_aof;
+use tests.unit.server_test.test_server_runs_pending_aof_rewrite;
 
 export fn main() i32 {
     printf("=== redis-uya unit tests ===\n" as *byte);
@@ -192,6 +213,22 @@ export fn main() i32 {
     _ = test_object_string_raw_encoding_edges() catch { printf("[FAIL] storage_object/string_raw_edges\n" as *byte); failed = failed + 1; };
     if failed == before_object_raw { printf("[PASS] storage_object/string_raw_edges\n" as *byte); }
 
+    const before_object_hash: i32 = failed;
+    _ = test_object_hash_create_set_get_free() catch { printf("[FAIL] storage_object/hash_create_set_get_free\n" as *byte); failed = failed + 1; };
+    if failed == before_object_hash { printf("[PASS] storage_object/hash_create_set_get_free\n" as *byte); }
+
+    const before_object_list: i32 = failed;
+    _ = test_object_list_create_push_pop_range_free() catch { printf("[FAIL] storage_object/list_create_push_pop_range_free\n" as *byte); failed = failed + 1; };
+    if failed == before_object_list { printf("[PASS] storage_object/list_create_push_pop_range_free\n" as *byte); }
+
+    const before_object_set: i32 = failed;
+    _ = test_object_set_create_add_remove_members_free() catch { printf("[FAIL] storage_object/set_create_add_remove_members_free\n" as *byte); failed = failed + 1; };
+    if failed == before_object_set { printf("[PASS] storage_object/set_create_add_remove_members_free\n" as *byte); }
+
+    const before_object_zset: i32 = failed;
+    _ = test_object_zset_create_add_remove_range_free() catch { printf("[FAIL] storage_object/zset_create_add_remove_range_free\n" as *byte); failed = failed + 1; };
+    if failed == before_object_zset { printf("[PASS] storage_object/zset_create_add_remove_range_free\n" as *byte); }
+
     const before_engine_set: i32 = failed;
     _ = test_engine_set_lookup_delete() catch { printf("[FAIL] storage_engine/set_lookup_delete\n" as *byte); failed = failed + 1; };
     if failed == before_engine_set { printf("[PASS] storage_engine/set_lookup_delete\n" as *byte); }
@@ -211,6 +248,14 @@ export fn main() i32 {
     const before_engine_active_expire: i32 = failed;
     _ = test_engine_active_expire_cycle() catch { printf("[FAIL] storage_engine/active_expire\n" as *byte); failed = failed + 1; };
     if failed == before_engine_active_expire { printf("[PASS] storage_engine/active_expire\n" as *byte); }
+
+    const before_engine_active_loop: i32 = failed;
+    _ = test_engine_active_expire_loop_continues() catch { printf("[FAIL] storage_engine/active_expire_loop\n" as *byte); failed = failed + 1; };
+    if failed == before_engine_active_loop { printf("[PASS] storage_engine/active_expire_loop\n" as *byte); }
+
+    const before_engine_scan: i32 = failed;
+    _ = test_engine_scan_keys_sorted_skips_expired() catch { printf("[FAIL] storage_engine/scan\n" as *byte); failed = failed + 1; };
+    if failed == before_engine_scan { printf("[PASS] storage_engine/scan\n" as *byte); }
 
     const before_resp_line: i32 = failed;
     _ = test_resp2_simple_string_error_integer() catch { printf("[FAIL] network_protocol/simple_error_integer\n" as *byte); failed = failed + 1; };
@@ -256,9 +301,41 @@ export fn main() i32 {
     _ = test_command_ping_and_info() catch { printf("[FAIL] command_executor/ping_info\n" as *byte); failed = failed + 1; };
     if failed == before_exec_ping { printf("[PASS] command_executor/ping_info\n" as *byte); }
 
+    const before_exec_info_config: i32 = failed;
+    _ = test_command_info_and_config() catch { printf("[FAIL] command_executor/info_config\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_info_config { printf("[PASS] command_executor/info_config\n" as *byte); }
+
+    const before_exec_bgrewriteaof: i32 = failed;
+    _ = test_command_bgrewriteaof() catch { printf("[FAIL] command_executor/bgrewriteaof\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_bgrewriteaof { printf("[PASS] command_executor/bgrewriteaof\n" as *byte); }
+
+    const before_exec_save: i32 = failed;
+    _ = test_command_save_rdb() catch { printf("[FAIL] command_executor/save_rdb\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_save { printf("[PASS] command_executor/save_rdb\n" as *byte); }
+
     const before_exec_string: i32 = failed;
     _ = test_command_set_get_del_exists() catch { printf("[FAIL] command_executor/string_key\n" as *byte); failed = failed + 1; };
     if failed == before_exec_string { printf("[PASS] command_executor/string_key\n" as *byte); }
+
+    const before_exec_hash: i32 = failed;
+    _ = test_command_hset_hget() catch { printf("[FAIL] command_executor/hash\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_hash { printf("[PASS] command_executor/hash\n" as *byte); }
+
+    const before_exec_list: i32 = failed;
+    _ = test_command_lpush_lpop_lrange() catch { printf("[FAIL] command_executor/list\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_list { printf("[PASS] command_executor/list\n" as *byte); }
+
+    const before_exec_set: i32 = failed;
+    _ = test_command_sadd_srem_smembers() catch { printf("[FAIL] command_executor/set\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_set { printf("[PASS] command_executor/set\n" as *byte); }
+
+    const before_exec_zset: i32 = failed;
+    _ = test_command_zadd_zrem_zrange() catch { printf("[FAIL] command_executor/zset\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_zset { printf("[PASS] command_executor/zset\n" as *byte); }
+
+    const before_exec_scan: i32 = failed;
+    _ = test_command_scan() catch { printf("[FAIL] command_executor/scan\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_scan { printf("[PASS] command_executor/scan\n" as *byte); }
 
     const before_exec_expire: i32 = failed;
     _ = test_command_expire_and_ttl() catch { printf("[FAIL] command_executor/expire_ttl\n" as *byte); failed = failed + 1; };
@@ -300,9 +377,37 @@ export fn main() i32 {
     _ = test_aof_replay_large_file_over_1mb() catch { printf("[FAIL] persistence_aof/large_file\n" as *byte); failed = failed + 1; };
     if failed == before_aof_large { printf("[PASS] persistence_aof/large_file\n" as *byte); }
 
+    const before_rdb_save_load: i32 = failed;
+    _ = test_rdb_save_and_load_string_subset() catch { printf("[FAIL] persistence_rdb/save_load\n" as *byte); failed = failed + 1; };
+    if failed == before_rdb_save_load { printf("[PASS] persistence_rdb/save_load\n" as *byte); }
+
+    const before_rdb_invalid: i32 = failed;
+    _ = test_rdb_load_invalid_header_fails() catch { printf("[FAIL] persistence_rdb/invalid_header\n" as *byte); failed = failed + 1; };
+    if failed == before_rdb_invalid { printf("[PASS] persistence_rdb/invalid_header\n" as *byte); }
+
+    const before_rdb_unsupported: i32 = failed;
+    _ = test_rdb_save_rejects_non_string_keys() catch { printf("[FAIL] persistence_rdb/unsupported_type\n" as *byte); failed = failed + 1; };
+    if failed == before_rdb_unsupported { printf("[PASS] persistence_rdb/unsupported_type\n" as *byte); }
+
+    const before_rewrite_roundtrip: i32 = failed;
+    _ = test_aof_rewrite_roundtrip_current_types() catch { printf("[FAIL] persistence_rewrite/roundtrip\n" as *byte); failed = failed + 1; };
+    if failed == before_rewrite_roundtrip { printf("[PASS] persistence_rewrite/roundtrip\n" as *byte); }
+
     const before_server_cron: i32 = failed;
     _ = test_server_cron_expires_keys() catch { printf("[FAIL] server/cron_expires\n" as *byte); failed = failed + 1; };
     if failed == before_server_cron { printf("[PASS] server/cron_expires\n" as *byte); }
+
+    const before_server_cron_loop: i32 = failed;
+    _ = test_server_cron_active_expire_loop() catch { printf("[FAIL] server/cron_active_expire_loop\n" as *byte); failed = failed + 1; };
+    if failed == before_server_cron_loop { printf("[PASS] server/cron_active_expire_loop\n" as *byte); }
+
+    const before_server_mixed_restore: i32 = failed;
+    _ = test_server_loads_rdb_then_replays_aof() catch { printf("[FAIL] server/rdb_aof_restore\n" as *byte); failed = failed + 1; };
+    if failed == before_server_mixed_restore { printf("[PASS] server/rdb_aof_restore\n" as *byte); }
+
+    const before_server_rewrite: i32 = failed;
+    _ = test_server_runs_pending_aof_rewrite() catch { printf("[FAIL] server/aof_rewrite\n" as *byte); failed = failed + 1; };
+    if failed == before_server_rewrite { printf("[PASS] server/aof_rewrite\n" as *byte); }
 
 
     if failed == 0 {

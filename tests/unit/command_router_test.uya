@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 10);
+    try assert_eq_i32(command_router_count(&router) as i32, 25);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -38,6 +38,66 @@ export fn test_command_router_lookup_and_case() !void {
     const get: CommandInfo = try command_router_lookup(&router, &"get"[0: 3]);
     try assert_eq_i32(get.cmd_type as i32, CommandType.command_get as i32);
     try assert_eq_i32(get.arity, 2);
+
+    const lpop: CommandInfo = try command_router_lookup(&router, &"lpop"[0: 4]);
+    try assert_eq_i32(lpop.cmd_type as i32, CommandType.command_lpop as i32);
+    try assert_eq_i32(lpop.arity, 2);
+
+    const lpush: CommandInfo = try command_router_lookup(&router, &"LPUSH"[0: 5]);
+    try assert_eq_i32(lpush.cmd_type as i32, CommandType.command_lpush as i32);
+    try assert_eq_i32(lpush.arity, -3);
+
+    const lrange: CommandInfo = try command_router_lookup(&router, &"LRANGE"[0: 6]);
+    try assert_eq_i32(lrange.cmd_type as i32, CommandType.command_lrange as i32);
+    try assert_eq_i32(lrange.arity, 4);
+
+    const sadd: CommandInfo = try command_router_lookup(&router, &"SADD"[0: 4]);
+    try assert_eq_i32(sadd.cmd_type as i32, CommandType.command_sadd as i32);
+    try assert_eq_i32(sadd.arity, -3);
+
+    const smembers: CommandInfo = try command_router_lookup(&router, &"SMEMBERS"[0: 8]);
+    try assert_eq_i32(smembers.cmd_type as i32, CommandType.command_smembers as i32);
+    try assert_eq_i32(smembers.arity, 2);
+
+    const srem: CommandInfo = try command_router_lookup(&router, &"srem"[0: 4]);
+    try assert_eq_i32(srem.cmd_type as i32, CommandType.command_srem as i32);
+    try assert_eq_i32(srem.arity, -3);
+
+    const zadd: CommandInfo = try command_router_lookup(&router, &"ZADD"[0: 4]);
+    try assert_eq_i32(zadd.cmd_type as i32, CommandType.command_zadd as i32);
+    try assert_eq_i32(zadd.arity, -4);
+
+    const zrange: CommandInfo = try command_router_lookup(&router, &"zrange"[0: 6]);
+    try assert_eq_i32(zrange.cmd_type as i32, CommandType.command_zrange as i32);
+    try assert_eq_i32(zrange.arity, 4);
+
+    const zrem: CommandInfo = try command_router_lookup(&router, &"ZREM"[0: 4]);
+    try assert_eq_i32(zrem.cmd_type as i32, CommandType.command_zrem as i32);
+    try assert_eq_i32(zrem.arity, -3);
+
+    const scan: CommandInfo = try command_router_lookup(&router, &"scan"[0: 4]);
+    try assert_eq_i32(scan.cmd_type as i32, CommandType.command_scan as i32);
+    try assert_eq_i32(scan.arity, -2);
+
+    const save: CommandInfo = try command_router_lookup(&router, &"SAVE"[0: 4]);
+    try assert_eq_i32(save.cmd_type as i32, CommandType.command_save as i32);
+    try assert_eq_i32(save.arity, 1);
+
+    const bgrewriteaof: CommandInfo = try command_router_lookup(&router, &"BGREWRITEAOF"[0: 12]);
+    try assert_eq_i32(bgrewriteaof.cmd_type as i32, CommandType.command_bgrewriteaof as i32);
+    try assert_eq_i32(bgrewriteaof.arity, 1);
+
+    const config: CommandInfo = try command_router_lookup(&router, &"CONFIG"[0: 6]);
+    try assert_eq_i32(config.cmd_type as i32, CommandType.command_config as i32);
+    try assert_eq_i32(config.arity, 3);
+
+    const hget: CommandInfo = try command_router_lookup(&router, &"hget"[0: 4]);
+    try assert_eq_i32(hget.cmd_type as i32, CommandType.command_hget as i32);
+    try assert_eq_i32(hget.arity, 3);
+
+    const hset: CommandInfo = try command_router_lookup(&router, &"HSET"[0: 4]);
+    try assert_eq_i32(hset.cmd_type as i32, CommandType.command_hset as i32);
+    try assert_eq_i32(hset.arity, 4);
 
     const exists: CommandInfo = try command_router_lookup(&router, &"ExIsTs"[0: 6]);
     try assert_eq_i32(exists.cmd_type as i32, CommandType.command_exists as i32);
@@ -55,10 +115,44 @@ export fn test_command_router_lookup_and_case() !void {
 export fn test_command_router_arity_validation() !void {
     const router: CommandRouter = command_router_new();
     const get: CommandInfo = try command_router_lookup(&router, &"GET"[0: 3]);
+    const lpop: CommandInfo = try command_router_lookup(&router, &"LPOP"[0: 4]);
+    const lpush: CommandInfo = try command_router_lookup(&router, &"LPUSH"[0: 5]);
+    const lrange: CommandInfo = try command_router_lookup(&router, &"LRANGE"[0: 6]);
+    const sadd: CommandInfo = try command_router_lookup(&router, &"SADD"[0: 4]);
+    const smembers: CommandInfo = try command_router_lookup(&router, &"SMEMBERS"[0: 8]);
+    const srem: CommandInfo = try command_router_lookup(&router, &"SREM"[0: 4]);
+    const zadd: CommandInfo = try command_router_lookup(&router, &"ZADD"[0: 4]);
+    const zrange: CommandInfo = try command_router_lookup(&router, &"ZRANGE"[0: 6]);
+    const zrem: CommandInfo = try command_router_lookup(&router, &"ZREM"[0: 4]);
+    const scan: CommandInfo = try command_router_lookup(&router, &"SCAN"[0: 4]);
+    const save: CommandInfo = try command_router_lookup(&router, &"SAVE"[0: 4]);
+    const bgrewriteaof: CommandInfo = try command_router_lookup(&router, &"BGREWRITEAOF"[0: 12]);
+    const config: CommandInfo = try command_router_lookup(&router, &"CONFIG"[0: 6]);
+    const hget: CommandInfo = try command_router_lookup(&router, &"HGET"[0: 4]);
+    const hset: CommandInfo = try command_router_lookup(&router, &"HSET"[0: 4]);
     const set: CommandInfo = try command_router_lookup(&router, &"SET"[0: 3]);
     const del: CommandInfo = try command_router_lookup(&router, &"DEL"[0: 3]);
 
     try command_validate_arity(&get, 2);
+    try command_validate_arity(&lpop, 2);
+    try command_validate_arity(&lpush, 3);
+    try command_validate_arity(&lpush, 5);
+    try command_validate_arity(&lrange, 4);
+    try command_validate_arity(&sadd, 3);
+    try command_validate_arity(&sadd, 6);
+    try command_validate_arity(&smembers, 2);
+    try command_validate_arity(&srem, 3);
+    try command_validate_arity(&zadd, 4);
+    try command_validate_arity(&zadd, 6);
+    try command_validate_arity(&zrange, 4);
+    try command_validate_arity(&zrem, 3);
+    try command_validate_arity(&scan, 2);
+    try command_validate_arity(&scan, 4);
+    try command_validate_arity(&save, 1);
+    try command_validate_arity(&bgrewriteaof, 1);
+    try command_validate_arity(&config, 3);
+    try command_validate_arity(&hget, 3);
+    try command_validate_arity(&hset, 4);
     try command_validate_arity(&set, 3);
     try command_validate_arity(&set, 5);
     try command_validate_arity(&del, 2);
@@ -98,13 +192,15 @@ export fn test_command_router_unknown_command() !void {
 export fn test_command_from_resp_array() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();
-    var parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n"[0: 22]);
+    var parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nZRANGE\r\n$4\r\nzset\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 41]);
     const command: Command = try command_from_resp(&router, &parsed.value);
 
-    try assert_eq_i32(command.info.cmd_type as i32, CommandType.command_get as i32);
-    try assert_eq_i32(command.argc as i32, 2);
-    try assert_true(command_router_slice_eq(try command_arg_data(&command, 0), &"GET"[0: 3]));
-    try assert_true(command_router_slice_eq(try command_arg_data(&command, 1), &"key"[0: 3]));
+    try assert_eq_i32(command.info.cmd_type as i32, CommandType.command_zrange as i32);
+    try assert_eq_i32(command.argc as i32, 4);
+    try assert_true(command_router_slice_eq(try command_arg_data(&command, 0), &"ZRANGE"[0: 6]));
+    try assert_true(command_router_slice_eq(try command_arg_data(&command, 1), &"zset"[0: 4]));
+    try assert_true(command_router_slice_eq(try command_arg_data(&command, 2), &"0"[0: 1]));
+    try assert_true(command_router_slice_eq(try command_arg_data(&command, 3), &"-1"[0: 2]));
 
     resp_value_free(&parsed.value);
     try assert_eq_i32(used_memory() as i32, 0);

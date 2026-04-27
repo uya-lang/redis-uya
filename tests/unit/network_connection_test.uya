@@ -68,6 +68,57 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const get_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n"[0: 22], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: get_result.response_len], &"$5\r\nvalue\r\n"[0: 11]));
 
+    const hset_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$4\r\nHSET\r\n$4\r\nhash\r\n$5\r\nfield\r\n$5\r\nvalue\r\n"[0: 46], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: hset_result.response_len], &":1\r\n"[0: 4]));
+
+    const hget_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$4\r\nHGET\r\n$4\r\nhash\r\n$5\r\nfield\r\n"[0: 35], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: hget_result.response_len], &"$5\r\nvalue\r\n"[0: 11]));
+
+    const lpush_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$5\r\nLPUSH\r\n$4\r\nlist\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\nc\r\n"[0: 47], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: lpush_result.response_len], &":3\r\n"[0: 4]));
+
+    const lrange_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$6\r\nLRANGE\r\n$4\r\nlist\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 41], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: lrange_result.response_len], &"*3\r\n$1\r\nc\r\n$1\r\nb\r\n$1\r\na\r\n"[0: 25]));
+
+    const lpop_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$4\r\nLPOP\r\n$4\r\nlist\r\n"[0: 24], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: lpop_result.response_len], &"$1\r\nc\r\n"[0: 7]));
+
+    const sadd_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$4\r\nSADD\r\n$3\r\nset\r\n$1\r\na\r\n$1\r\nb\r\n"[0: 37], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: sadd_result.response_len], &":2\r\n"[0: 4]));
+
+    const smembers_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$8\r\nSMEMBERS\r\n$3\r\nset\r\n"[0: 27], &out[0], 256, 1000u64);
+    try assert_true(out[0] == 42 as byte);
+
+    const zadd_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*6\r\n$4\r\nZADD\r\n$4\r\nzset\r\n$1\r\n2\r\n$1\r\nb\r\n$1\r\n1\r\n$1\r\na\r\n"[0: 52], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: zadd_result.response_len], &":2\r\n"[0: 4]));
+
+    const zrange_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$6\r\nZRANGE\r\n$4\r\nzset\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 41], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: zrange_result.response_len], &"*2\r\n$1\r\na\r\n$1\r\nb\r\n"[0: 18]));
+
+    const zrem_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$4\r\nZREM\r\n$4\r\nzset\r\n$1\r\na\r\n"[0: 31], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: zrem_result.response_len], &":1\r\n"[0: 4]));
+
+    const zrange_tail_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$6\r\nZRANGE\r\n$4\r\nzset\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 41], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: zrange_tail_result.response_len], &"*1\r\n$1\r\nb\r\n"[0: 11]));
+
+    const scan_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$4\r\nSCAN\r\n$1\r\n0\r\n$5\r\nCOUNT\r\n$1\r\n3\r\n"[0: 39], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: scan_result.response_len], &"*2\r\n$1\r\n3\r\n*3\r\n$4\r\nhash\r\n$3\r\nkey\r\n$4\r\nlist\r\n"[0: 44]));
+
+    const scan_tail_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$4\r\nSCAN\r\n$1\r\n3\r\n$5\r\nCOUNT\r\n$1\r\n3\r\n"[0: 39], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: scan_tail_result.response_len], &"*2\r\n$1\r\n0\r\n*2\r\n$3\r\nset\r\n$4\r\nzset\r\n"[0: 34]));
+
+    const info_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$4\r\nINFO\r\n$6\r\nserver\r\n"[0: 26], &out[0], 256, 1000u64);
+    try assert_eq_i32(info_result.response_len as i32, 108);
+    try assert_true(network_connection_slice_eq(out[0: info_result.response_len], &"$100\r\n# Server\r\nredis_uya_version:0.1.0-dev\r\nredis_mode:standalone\r\ntcp_port:6379\r\nuptime_in_seconds:0\r\n\r\n\r\n"[0: 108]));
+
+    const config_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$6\r\nCONFIG\r\n$3\r\nGET\r\n$4\r\nport\r\n"[0: 35], &out[0], 256, 1000u64);
+    try assert_eq_i32(config_result.response_len as i32, 24);
+    try assert_true(network_connection_slice_eq(out[0: config_result.response_len], &"*2\r\n$4\r\nport\r\n$4\r\n6379\r\n"[0: 24]));
+
+    const rewrite_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*1\r\n$12\r\nBGREWRITEAOF\r\n"[0: 23], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: rewrite_result.response_len], &"+Background AOF rewrite scheduled\r\n"[0: 35]));
+    try assert_eq_i32(rewrite_result.request_aof_rewrite as i32, 1);
+
     const quit: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*1\r\n$4\r\nQUIT\r\n"[0: 14], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: quit.response_len], &"+OK\r\n"[0: 5]));
     try assert_eq_i32(quit.close_after as i32, 1);

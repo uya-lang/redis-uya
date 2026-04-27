@@ -1,0 +1,317 @@
+// persistence/rewrite.uya - minimal offline AOF rewrite prototype.
+
+use libc.rename;
+use libc.unlink;
+use src.persistence.aof.AofWriter;
+use src.persistence.aof.aof_open_truncate;
+use src.persistence.aof.aof_close;
+use src.persistence.aof.aof_append_raw;
+use src.storage.dict.DictEntry;
+use src.storage.dict.DictIterator;
+use src.storage.dict.dict_iter_new;
+use src.storage.dict.dict_iter_next;
+use src.storage.engine.Engine;
+use src.storage.engine.engine_scan_keys_at;
+use src.storage.engine.lookup_key_at;
+use src.storage.engine.get_key_expire_at;
+use src.storage.object.RedisObject;
+use src.storage.object.ListNode;
+use src.storage.object.ObjectType;
+use src.storage.object.create_list_object;
+use src.storage.object.list_object_insert_sorted_lex;
+use src.storage.object.list_object_len;
+use src.storage.object.zset_object_range_reply;
+use src.storage.object.zset_object_get_score;
+use src.storage.object.hash_object_get_field;
+use src.storage.object.object_free;
+
+export error RewritePathTooLong;
+export error RewriteUnsupportedType;
+
+fn rewrite_build_tmp_path(out: &[byte], path: &const byte) !void {
+    if out.len < 5 {
+        return error.RewritePathTooLong;
+    }
+
+    var pos: usize = 0;
+    while path[pos] != 0 as byte {
+        if pos + 5 >= out.len {
+            return error.RewritePathTooLong;
+        }
+        out.ptr[pos] = path[pos];
+        pos = pos + 1;
+    }
+    out.ptr[pos] = 46 as byte;
+    out.ptr[pos + 1] = 116 as byte;
+    out.ptr[pos + 2] = 109 as byte;
+    out.ptr[pos + 3] = 112 as byte;
+    out.ptr[pos + 4] = 0 as byte;
+}
+
+fn rewrite_append_u64(aof: &AofWriter, value: u64) !void {
+    if value == 0u64 {
+        try aof_append_raw(aof, &"0"[0: 1]);
+        return;
+    }
+
+    var tmp: [byte: 20] = [];
+    var count: usize = 0;
+    var v: u64 = value;
+    while v > 0u64 {
+        const digit: u64 = v % 10u64;
+        tmp[count] = (48u64 + digit) as byte;
+        count = count + 1;
+        v = v / 10u64;
+    }
+
+    while count > 0 {
+        count = count - 1;
+        try aof_append_raw(aof, tmp[count: 1]);
+    }
+}
+
+fn rewrite_append_i64(aof: &AofWriter, value: i64) !void {
+    if value < 0 {
+        try aof_append_raw(aof, &"-"[0: 1]);
+        try rewrite_append_u64(aof, (0 - value) as u64);
+        return;
+    }
+    try rewrite_append_u64(aof, value as u64);
+}
+
+fn rewrite_bulk_len_u64(value: u64) u64 {
+    if value == 0u64 {
+        return 1u64;
+    }
+    var digits: u64 = 0u64;
+    var v: u64 = value;
+    while v > 0u64 {
+        digits = digits + 1u64;
+        v = v / 10u64;
+    }
+    return digits;
+}
+
+fn rewrite_bulk_len_i64(value: i64) u64 {
+    if value < 0 {
+        return 1u64 + rewrite_bulk_len_u64((0 - value) as u64);
+    }
+    return rewrite_bulk_len_u64(value as u64);
+}
+
+fn rewrite_append_bulk(aof: &AofWriter, data: &[byte]) !void {
+    try aof_append_raw(aof, &"$"[0: 1]);
+    try rewrite_append_u64(aof, data.len as u64);
+    try aof_append_raw(aof, &"\r\n"[0: 2]);
+    try aof_append_raw(aof, data);
+    try aof_append_raw(aof, &"\r\n"[0: 2]);
+}
+
+fn rewrite_append_bulk_i64(aof: &AofWriter, value: i64) !void {
+    try aof_append_raw(aof, &"$"[0: 1]);
+    try rewrite_append_u64(aof, rewrite_bulk_len_i64(value));
+    try aof_append_raw(aof, &"\r\n"[0: 2]);
+    try rewrite_append_i64(aof, value);
+    try aof_append_raw(aof, &"\r\n"[0: 2]);
+}
+
+fn rewrite_append_bulk_u64(aof: &AofWriter, value: u64) !void {
+    try aof_append_raw(aof, &"$"[0: 1]);
+    try rewrite_append_u64(aof, rewrite_bulk_len_u64(value));
+    try aof_append_raw(aof, &"\r\n"[0: 2]);
+    try rewrite_append_u64(aof, value);
+    try aof_append_raw(aof, &"\r\n"[0: 2]);
+}
+
+fn rewrite_append_array_header(aof: &AofWriter, argc: u64) !void {
+    try aof_append_raw(aof, &"*"[0: 1]);
+    try rewrite_append_u64(aof, argc);
+    try aof_append_raw(aof, &"\r\n"[0: 2]);
+}
+
+fn rewrite_append_expire(aof: &AofWriter, key: &[byte], expire_at_ms: u64) !void {
+    try rewrite_append_array_header(aof, 3u64);
+    try rewrite_append_bulk(aof, &"PEXPIREAT"[0: 9]);
+    try rewrite_append_bulk(aof, key);
+    try rewrite_append_bulk_u64(aof, expire_at_ms);
+}
+
+fn rewrite_get_expire_at_or_zero(engine: &Engine, key: &[byte]) u64 {
+    const expire_result: !u64 = get_key_expire_at(engine, key);
+    const expire_at: u64 = expire_result catch {
+        return 0u64;
+    };
+    return expire_at;
+}
+
+fn rewrite_sorted_dict_keys(dict_obj: &RedisObject) !&RedisObject {
+    const fields: &RedisObject = try create_list_object();
+    var iter: DictIterator = dict_iter_new();
+    var entry: &DictEntry = dict_iter_next(&dict_obj.hash_dict, &iter);
+    while entry != null {
+        _ = list_object_insert_sorted_lex(fields, entry.key.buf[0: entry.key.len]) catch {
+            object_free(fields);
+            return error.AllocOutOfMemory;
+        };
+        entry = dict_iter_next(&dict_obj.hash_dict, &iter);
+    }
+    return fields;
+}
+
+fn rewrite_emit_string(aof: &AofWriter, key: &[byte], obj: &RedisObject) !void {
+    try rewrite_append_array_header(aof, 3u64);
+    try rewrite_append_bulk(aof, &"SET"[0: 3]);
+    try rewrite_append_bulk(aof, key);
+    try rewrite_append_bulk(aof, obj.value.buf[0: obj.value.len]);
+}
+
+fn rewrite_emit_hash(aof: &AofWriter, key: &[byte], obj: &RedisObject) !void {
+    const fields: &RedisObject = try rewrite_sorted_dict_keys(obj);
+    defer {
+        object_free(fields);
+    }
+
+    var node: &ListNode = fields.list_head;
+    while node != null {
+        const field: &[byte] = node.value.value.buf[0: node.value.value.len];
+        const value_obj: &RedisObject = try hash_object_get_field(obj, field);
+        if value_obj.obj_type != ObjectType.object_string {
+            return error.RewriteUnsupportedType;
+        }
+        try rewrite_append_array_header(aof, 4u64);
+        try rewrite_append_bulk(aof, &"HSET"[0: 4]);
+        try rewrite_append_bulk(aof, key);
+        try rewrite_append_bulk(aof, field);
+        try rewrite_append_bulk(aof, value_obj.value.buf[0: value_obj.value.len]);
+        node = node.next;
+    }
+}
+
+fn rewrite_emit_list(aof: &AofWriter, key: &[byte], obj: &RedisObject) !void {
+    const count: usize = list_object_len(obj) catch {
+        return error.RewriteUnsupportedType;
+    };
+    if count == 0 {
+        return error.RewriteUnsupportedType;
+    }
+
+    try rewrite_append_array_header(aof, 2u64 + (count as u64));
+    try rewrite_append_bulk(aof, &"LPUSH"[0: 5]);
+    try rewrite_append_bulk(aof, key);
+
+    var node: &ListNode = obj.list_tail;
+    while node != null {
+        try rewrite_append_bulk(aof, node.value.value.buf[0: node.value.value.len]);
+        node = node.prev;
+    }
+}
+
+fn rewrite_emit_set(aof: &AofWriter, key: &[byte], obj: &RedisObject) !void {
+    const members: &RedisObject = try rewrite_sorted_dict_keys(obj);
+    defer {
+        object_free(members);
+    }
+    const count: usize = list_object_len(members) catch {
+        return error.RewriteUnsupportedType;
+    };
+    if count == 0 {
+        return error.RewriteUnsupportedType;
+    }
+
+    try rewrite_append_array_header(aof, 2u64 + (count as u64));
+    try rewrite_append_bulk(aof, &"SADD"[0: 4]);
+    try rewrite_append_bulk(aof, key);
+
+    var node: &ListNode = members.list_head;
+    while node != null {
+        try rewrite_append_bulk(aof, node.value.value.buf[0: node.value.value.len]);
+        node = node.next;
+    }
+}
+
+fn rewrite_emit_zset(aof: &AofWriter, key: &[byte], obj: &RedisObject) !void {
+    const members: &RedisObject = try zset_object_range_reply(obj, 0, -1);
+    defer {
+        object_free(members);
+    }
+    const count: usize = list_object_len(members) catch {
+        return error.RewriteUnsupportedType;
+    };
+    if count == 0 {
+        return error.RewriteUnsupportedType;
+    }
+
+    try rewrite_append_array_header(aof, 2u64 + ((count as u64) * 2u64));
+    try rewrite_append_bulk(aof, &"ZADD"[0: 4]);
+    try rewrite_append_bulk(aof, key);
+
+    var node: &ListNode = members.list_head;
+    while node != null {
+        const member: &[byte] = node.value.value.buf[0: node.value.value.len];
+        const score: i64 = try zset_object_get_score(obj, member);
+        try rewrite_append_bulk_i64(aof, score);
+        try rewrite_append_bulk(aof, member);
+        node = node.next;
+    }
+}
+
+export fn aof_rewrite_file_at(path: &const byte, engine: &Engine, now_ms: u64) !void {
+    var tmp_path_buf: [byte: 512] = [];
+    try rewrite_build_tmp_path(tmp_path_buf[0: 512], path);
+    const tmp_path: &const byte = &tmp_path_buf[0] as &const byte;
+    _ = unlink(tmp_path);
+
+    var writer: AofWriter = try aof_open_truncate(tmp_path);
+    defer {
+        aof_close(&writer);
+    }
+    var success: bool = false;
+    defer {
+        if !success {
+            _ = unlink(tmp_path);
+        }
+    }
+
+    const keys_obj: &RedisObject = try engine_scan_keys_at(engine, now_ms);
+    defer {
+        object_free(keys_obj);
+    }
+
+    var node: &ListNode = keys_obj.list_head;
+    while node != null {
+        const key: &[byte] = node.value.value.buf[0: node.value.value.len];
+        const obj: &RedisObject = try lookup_key_at(engine, key, now_ms);
+        match obj.obj_type {
+            ObjectType.object_string => {
+                try rewrite_emit_string(&writer, key, obj);
+            },
+            ObjectType.object_hash => {
+                try rewrite_emit_hash(&writer, key, obj);
+            },
+            ObjectType.object_list => {
+                try rewrite_emit_list(&writer, key, obj);
+            },
+            ObjectType.object_set => {
+                try rewrite_emit_set(&writer, key, obj);
+            },
+            ObjectType.object_zset => {
+                try rewrite_emit_zset(&writer, key, obj);
+            },
+            else => {
+                return error.RewriteUnsupportedType;
+            }
+        }
+
+        const expire_at: u64 = rewrite_get_expire_at_or_zero(engine, key);
+        if expire_at > now_ms {
+            try rewrite_append_expire(&writer, key, expire_at);
+        }
+        node = node.next;
+    }
+
+    aof_close(&writer);
+    if rename(tmp_path, path) != 0 {
+        return error.AofWriteFailed;
+    }
+    success = true;
+}

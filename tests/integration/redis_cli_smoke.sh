@@ -23,7 +23,9 @@ PY
 )"
 
 AOF_PATH="$ROOT/build/redis-cli-smoke-${PORT}.aof"
+RDB_PATH="$ROOT/build/dump.rdb"
 rm -f "$AOF_PATH"
+rm -f "$RDB_PATH"
 
 cleanup() {
     if [[ -n "${SERVER_PID:-}" ]]; then
@@ -31,6 +33,7 @@ cleanup() {
         wait "$SERVER_PID" >/dev/null 2>&1 || true
     fi
     rm -f "$AOF_PATH"
+    rm -f "$RDB_PATH"
 }
 trap cleanup EXIT
 
@@ -64,6 +67,12 @@ if [[ "$GET_RESULT" != "value" ]]; then
     exit 1
 fi
 
+SAVE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" save)"
+if [[ "$SAVE_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected OK on SAVE, got '$SAVE_RESULT'" >&2
+    exit 1
+fi
+
 DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del key)"
 if [[ "$DEL_RESULT" != "1" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected 1, got '$DEL_RESULT'" >&2
@@ -73,6 +82,18 @@ fi
 INFO_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" info server)"
 if [[ "$INFO_RESULT" != *"redis_uya_version:0.1.0-dev"* ]]; then
     echo "[FAIL] integration/redis_cli_smoke: INFO output missing redis_uya_version" >&2
+    exit 1
+fi
+
+CONFIG_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" config get port)"
+if [[ "$CONFIG_RESULT" != $'port\n'"$PORT" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: CONFIG GET port unexpected output: '$CONFIG_RESULT'" >&2
+    exit 1
+fi
+
+REWRITE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" BGREWRITEAOF)"
+if [[ "$REWRITE_RESULT" != "Background AOF rewrite scheduled" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: BGREWRITEAOF unexpected output: '$REWRITE_RESULT'" >&2
     exit 1
 fi
 

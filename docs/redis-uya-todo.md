@@ -216,26 +216,29 @@
 
 ### H. 数据结构扩展
 
-- [ ] Hash 最小对象实现
-- [ ] List 最小对象实现
-- [ ] Set 最小对象实现
-- [ ] ZSet 最小对象实现
-- [ ] 对应命令子集：`HSET/HGET`、`LPUSH/LPOP/LRANGE`、`SADD/SREM/SMEMBERS`、`ZADD/ZRANGE/ZREM`
-- [ ] `SCAN`
-- [ ] 更完整 `INFO` / `CONFIG`
-- [ ] 过期主动采样循环
+- [x] Hash 最小对象实现
+- [x] List 最小对象实现
+- [x] Set 最小对象实现
+- [x] ZSet 最小对象实现
+- [x] 对应命令子集：`HSET/HGET`
+- [x] 对应命令子集：`LPUSH/LPOP/LRANGE`
+- [x] 对应命令子集：`SADD/SREM/SMEMBERS`
+- [x] 对应命令子集：`ZADD/ZRANGE/ZREM`
+- [x] `SCAN`
+- [x] 更完整 `INFO` / `CONFIG`
+- [x] 过期主动采样循环
 
 ### I. 持久化扩展
 
-- [ ] RDB 文件头/键值对子集
-- [ ] RDB 加载子集
-- [ ] AOF rewrite 预研
+- [x] RDB 文件头/键值对子集
+- [x] RDB 加载子集
+- [x] AOF rewrite 预研
 
 ### J. 测试扩展
 
-- [ ] 五大类型单元测试
+- [x] 五大类型单元测试
 - [ ] redis-py 子集覆盖更多命令
-- [ ] RDB/AOF 混合恢复测试
+- [x] RDB/AOF 混合恢复测试
 
 ## 8. `v0.3.0` 详细规划
 

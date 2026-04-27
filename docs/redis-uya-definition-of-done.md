@@ -53,3 +53,23 @@ bash scripts/verify_definition_of_done.sh
 | benchmark 基线可复现 | `benchmarks/v0.1.0.md` |
 | Redis 对照口径明确 | `docs/redis-uya-benchmark-format.md` |
 | 发布文档齐全 | `docs/redis-uya-release-v0.1.0.md`、`docs/redis-uya-quickstart.md`、`docs/redis-uya-api.md`、`docs/redis-uya-architecture.md` |
+
+## 5. `v0.2.0`
+
+| DoD 项 | 证据 |
+|--------|------|
+| Hash 最小对象可创建、写字段、读字段、覆盖字段并正确释放 | `tests/unit/storage_object_test.uya` |
+| `HSET/HGET` 命令子集在单元与基础 TCP smoke 中可用 | `tests/unit/command_executor_test.uya`、`tests/unit/network_connection_test.uya`、`tests/integration/smoke_tcp.py` |
+| List 最小对象可创建、头插、头弹出、范围读取并正确释放 | `tests/unit/storage_object_test.uya` |
+| `LPUSH/LPOP/LRANGE` 命令子集在单元与基础 TCP smoke 中可用 | `tests/unit/command_executor_test.uya`、`tests/unit/network_connection_test.uya`、`tests/integration/smoke_tcp.py` |
+| Set 最小对象可创建、去重插入、删除成员、枚举成员并正确释放 | `tests/unit/storage_object_test.uya` |
+| `SADD/SREM/SMEMBERS` 命令子集在单元与基础 TCP smoke 中可用 | `tests/unit/command_executor_test.uya`、`tests/unit/network_connection_test.uya`、`tests/integration/smoke_tcp.py` |
+| ZSet 最小对象可创建、按 score 排序读取、更新成员 score、删除成员并正确释放 | `tests/unit/storage_object_test.uya` |
+| `ZADD/ZRANGE/ZREM` 命令子集在单元与基础 TCP smoke 中可用 | `tests/unit/command_executor_test.uya`、`tests/unit/network_connection_test.uya`、`tests/integration/smoke_tcp.py` |
+| `SCAN` 最小语义可用：cursor 返回、`COUNT` 子集、按稳定顺序迭代非过期 key | `tests/unit/storage_engine_test.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/network_connection_test.uya`、`tests/integration/smoke_tcp.py` |
+| `INFO` 支持 `server/clients/memory/stats/keyspace` section 子集，`CONFIG GET` 支持最小配置查询 | `tests/unit/command_executor_test.uya`、`tests/unit/network_connection_test.uya`、`tests/integration/smoke_tcp.py`、`tests/integration/redis_cli_smoke.sh` |
+| 100ms cron 使用主动过期采样循环，过期比例高时会继续多轮清理 | `tests/unit/storage_engine_test.uya`、`tests/unit/server_test.uya` |
+| 项目内最小 RDB 子集支持 String 键值对与绝对过期时间 save/load | `tests/unit/persistence_rdb_test.uya` |
+| `SAVE` 命令可写出最小 RDB 快照 | `tests/unit/command_executor_test.uya`、`tests/integration/smoke_tcp.py`、`tests/integration/redis_cli_smoke.sh` |
+| 服务启动时先加载最小 RDB，再回放 AOF 完成混合恢复 | `tests/unit/server_test.uya`、`tests/integration/persistence_rdb_aof.py` |
+| 离线 AOF rewrite 原型可将当前内存态规范化重写为可回放 AOF | `tests/unit/persistence_rewrite_test.uya` |

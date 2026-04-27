@@ -79,12 +79,16 @@ REDIS_UYA_LONG_RUN_SECONDS=1800 python3 tests/integration/long_run_smoke.py
 - `PEXPIREAT key unix_ms`
 - `TTL key`
 - `INFO [section]`
+- `CONFIG GET pattern`
+- `SAVE`
+- `BGREWRITEAOF`
 - `QUIT`
 
 ## 5. 当前边界
 
 - 单节点、单进程
 - RESP2 子集
-- 仅 String/Key 子集
+- 核心数据结构子集 + String/Key/Control 子集
 - AOF append + replay
-- 不支持 RDB、复制、集群、事务、Pub/Sub
+- 项目内最小 RDB 子集 + `SAVE`
+- 不支持复制、集群、事务、Pub/Sub

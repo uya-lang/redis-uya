@@ -35,15 +35,27 @@
 - `Engine` 最小实现：键读写删除、覆盖释放、TTL 字段、惰性过期
 - RESP2 最小子集解析：Simple String、Error、Integer、Bulk String、Array、Incomplete、非法输入
 - 命令路由：最小命令表、大小写匹配、参数数量校验、未知命令错误、RESP Array 转命令
-- String/Key 命令执行：`PING`、`GET`、`SET`、`DEL`、`EXISTS`、`EXPIRE`、`TTL`、`INFO` 最小段
+- String/Key/Control 命令执行：`PING`、`GET`、`SET`、`DEL`、`EXISTS`、`EXPIRE`、`TTL`、`INFO` 多 section、`CONFIG GET`、`SAVE`
+- Hash 最小对象：基于项目内 `Dict` 的最小 hash value 容器
+- Hash 命令子集：`HSET`、`HGET`
+- List 最小对象：基于双向链表的最小 list value 容器
+- List 命令子集：`LPUSH`、`LPOP`、`LRANGE`
+- Set 最小对象：基于项目内 `Dict` 的最小 set value 容器
+- Set 命令子集：`SADD`、`SREM`、`SMEMBERS`
+- ZSet 最小对象：基于项目内 `Dict` 的最小 zset value 容器，支持按 score 排序范围读取
+- ZSet 命令子集：`ZADD`、`ZRANGE`、`ZREM`
+- Key 迭代子集：`SCAN`，支持 cursor 返回与 `COUNT` 最小参数
 - TCP 服务闭环：loopback 监听、连接读写缓冲、请求解析执行写回、`QUIT`、`maxclients`、Python socket smoke
-- 服务运行循环：单线程 epoll 多连接、100ms cron 主动过期扫描、空闲连接不阻塞其他客户端
+- 服务运行循环：单线程 epoll 多连接、100ms cron 主动过期采样循环、空闲连接不阻塞其他客户端
+- RDB 最小闭环：项目内最小 RDB 子集格式、String 键值对 + 绝对过期时间 save/load、`SAVE`
 - AOF 最小闭环：写命令追加、启动回放、截断损坏安全失败、SET/DEL 重启恢复 smoke
+- 启动恢复顺序：先加载最小 RDB，再回放 AOF
 - AOF TTL 语义：`EXPIRE` 追加时转换为 `PEXPIREAT`，回放保持绝对过期时间
+- AOF rewrite 预研：离线 rewrite 原型 + `BGREWRITEAOF` 最小 skeleton，可把当前内存态规范化重写为可回放 AOF
 
 当前进行中：
 
-- `v0.2.0`：数据结构扩展与更完整控制面
+- `v0.2.0`：更完整测试覆盖
 
 当前阶段尚未生产可用。
 
@@ -153,6 +165,8 @@ build/redis-uya 6380 1
 - 基础集群
 - Lua 脚本
 - Redis 模块系统
+
+说明：当前代码主线已进入 `v0.2.0`，因此仓库工作树可能包含超出 `v0.1.0` 发布范围的增量能力；`v0.1.0` 发布文档仍以当时交付边界为准。
 
 ## 路线图
 

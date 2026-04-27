@@ -44,6 +44,7 @@ test-integration: build
 	python3 tests/integration/idle_client.py
 	python3 tests/integration/slow_reader.py
 	python3 tests/integration/persistence_aof.py
+	python3 tests/integration/persistence_rdb_aof.py
 	python3 tests/integration/error_compat.py
 
 test-redis-cli: build

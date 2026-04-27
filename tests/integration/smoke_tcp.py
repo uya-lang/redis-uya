@@ -62,7 +62,9 @@ def run_smoke() -> None:
 
     port = find_free_port()
     aof_path = ROOT / "build" / f"smoke-{port}.aof"
+    rdb_path = ROOT / "build" / "dump.rdb"
     aof_path.unlink(missing_ok=True)
+    rdb_path.unlink(missing_ok=True)
     proc = subprocess.Popen(
         [str(BIN), str(port), "8", str(aof_path)],
         cwd=ROOT,
@@ -76,6 +78,29 @@ def run_smoke() -> None:
             roundtrip(sock, b"*1\r\n$4\r\nPING\r\n", b"+PONG\r\n")
             roundtrip(sock, b"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n", b"+OK\r\n")
             roundtrip(sock, b"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n", b"$5\r\nvalue\r\n")
+            roundtrip(sock, b"*1\r\n$4\r\nSAVE\r\n", b"+OK\r\n")
+            roundtrip(sock, b"*4\r\n$4\r\nHSET\r\n$4\r\nhash\r\n$5\r\nfield\r\n$5\r\nvalue\r\n", b":1\r\n")
+            roundtrip(sock, b"*3\r\n$4\r\nHGET\r\n$4\r\nhash\r\n$5\r\nfield\r\n", b"$5\r\nvalue\r\n")
+            roundtrip(sock, b"*5\r\n$5\r\nLPUSH\r\n$4\r\nlist\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\nc\r\n", b":3\r\n")
+            roundtrip(sock, b"*4\r\n$6\r\nLRANGE\r\n$4\r\nlist\r\n$1\r\n0\r\n$2\r\n-1\r\n", b"*3\r\n$1\r\nc\r\n$1\r\nb\r\n$1\r\na\r\n")
+            roundtrip(sock, b"*2\r\n$4\r\nLPOP\r\n$4\r\nlist\r\n", b"$1\r\nc\r\n")
+            roundtrip(sock, b"*4\r\n$4\r\nSADD\r\n$3\r\nset\r\n$1\r\na\r\n$1\r\nb\r\n", b":2\r\n")
+            sock.sendall(b"*2\r\n$8\r\nSMEMBERS\r\n$3\r\nset\r\n")
+            actual = recv_exact(sock, len(b"*2\r\n$1\r\nb\r\n$1\r\na\r\n"))
+            if actual not in (b"*2\r\n$1\r\na\r\n$1\r\nb\r\n", b"*2\r\n$1\r\nb\r\n$1\r\na\r\n"):
+                raise AssertionError(f"unexpected SMEMBERS reply: {actual!r}")
+            roundtrip(sock, b"*6\r\n$4\r\nZADD\r\n$4\r\nzset\r\n$1\r\n2\r\n$1\r\nb\r\n$1\r\n1\r\n$1\r\na\r\n", b":2\r\n")
+            roundtrip(sock, b"*4\r\n$6\r\nZRANGE\r\n$4\r\nzset\r\n$1\r\n0\r\n$2\r\n-1\r\n", b"*2\r\n$1\r\na\r\n$1\r\nb\r\n")
+            roundtrip(sock, b"*3\r\n$4\r\nZREM\r\n$4\r\nzset\r\n$1\r\na\r\n", b":1\r\n")
+            roundtrip(sock, b"*4\r\n$6\r\nZRANGE\r\n$4\r\nzset\r\n$1\r\n0\r\n$2\r\n-1\r\n", b"*1\r\n$1\r\nb\r\n")
+            roundtrip(
+                sock,
+                b"*4\r\n$4\r\nSCAN\r\n$1\r\n0\r\n$5\r\nCOUNT\r\n$2\r\n10\r\n",
+                b"*2\r\n$1\r\n0\r\n*5\r\n$4\r\nhash\r\n$3\r\nkey\r\n$4\r\nlist\r\n$3\r\nset\r\n$4\r\nzset\r\n",
+            )
+            roundtrip(sock, b"*1\r\n$12\r\nBGREWRITEAOF\r\n", b"+Background AOF rewrite scheduled\r\n")
+            config_port_expected = f"*2\r\n$4\r\nport\r\n${len(str(port))}\r\n{port}\r\n".encode()
+            roundtrip(sock, b"*3\r\n$6\r\nCONFIG\r\n$3\r\nGET\r\n$4\r\nport\r\n", config_port_expected)
             roundtrip(sock, b"*2\r\n$6\r\nEXISTS\r\n$3\r\nkey\r\n", b":1\r\n")
             roundtrip(sock, b"*2\r\n$3\r\nDEL\r\n$3\r\nkey\r\n", b":1\r\n")
             roundtrip(sock, b"*2\r\n$6\r\nEXISTS\r\n$3\r\nkey\r\n", b":0\r\n")
@@ -90,6 +115,7 @@ def run_smoke() -> None:
     finally:
         stop_process(proc)
         aof_path.unlink(missing_ok=True)
+        rdb_path.unlink(missing_ok=True)
 
 
 def main() -> int:

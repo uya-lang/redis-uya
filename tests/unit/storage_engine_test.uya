@@ -11,9 +11,13 @@ use src.storage.engine.delete_key;
 use src.storage.engine.set_key_expire_at;
 use src.storage.engine.clear_key_expire;
 use src.storage.engine.engine_expire_cycle_at;
+use src.storage.engine.engine_active_expire_cycle_at;
+use src.storage.engine.engine_scan_keys_at;
 use src.storage.object.RedisObject;
 use src.storage.object.Encoding;
 use src.storage.object.create_string_object;
+use src.storage.object.list_object_len;
+use src.storage.object.object_free;
 use src.memory.allocator.used_memory;
 use src.memory.allocator.reset_memory_stats_for_test;
 
@@ -126,6 +130,50 @@ export fn test_engine_active_expire_cycle() !void {
     const persistent_found: &RedisObject = try lookup_key_at(&engine, &"persist"[0: 7], 1000u64);
     try assert_true(engine_slice_eq(persistent_found.value.buf[0: persistent_found.value.len], &"persistent"[0: 10]));
 
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_engine_active_expire_loop_continues() !void {
+    reset_memory_stats_for_test();
+    var engine: Engine = engine_new();
+
+    var i: i32 = 0;
+    while i < 5 {
+        const name: byte = (97 + i) as byte;
+        var key: [byte: 1] = [name];
+        const obj: &RedisObject = try create_string_object(&"expired"[0: 7]);
+        try set_key(&engine, key[0: 1], obj);
+        try set_key_expire_at(&engine, key[0: 1], 900u64);
+        i = i + 1;
+    }
+
+    const deleted: usize = engine_active_expire_cycle_at(&engine, 1000u64, 2, 4);
+    try assert_eq_i32(deleted as i32, 5);
+    try assert_eq_i32(engine_len(&engine) as i32, 0);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_engine_scan_keys_sorted_skips_expired() !void {
+    reset_memory_stats_for_test();
+    var engine: Engine = engine_new();
+
+    const key_b: &RedisObject = try create_string_object(&"1"[0: 1]);
+    const key_a: &RedisObject = try create_string_object(&"2"[0: 1]);
+    const key_c: &RedisObject = try create_string_object(&"3"[0: 1]);
+    try set_key(&engine, &"b"[0: 1], key_b);
+    try set_key(&engine, &"a"[0: 1], key_a);
+    try set_key(&engine, &"c"[0: 1], key_c);
+    try set_key_expire_at(&engine, &"b"[0: 1], 900u64);
+
+    const keys_obj: &RedisObject = try engine_scan_keys_at(&engine, 1000u64);
+    try assert_eq_i32((try list_object_len(keys_obj)) as i32, 2);
+    try assert_true(engine_slice_eq(keys_obj.list_head.value.value.buf[0: keys_obj.list_head.value.value.len], &"a"[0: 1]));
+    try assert_true(engine_slice_eq(keys_obj.list_head.next.value.value.buf[0: keys_obj.list_head.next.value.value.len], &"c"[0: 1]));
+
+    object_free(keys_obj);
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);
 }

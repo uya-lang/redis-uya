@@ -2,7 +2,11 @@
 
 use src.command.executor.CommandReply;
 use src.command.executor.CommandReplyType;
+use src.command.executor.CommandRuntimeInfo;
+use src.command.executor.command_runtime_default;
 use src.command.executor.command_execute_at;
+use src.command.executor.command_execute_with_runtime_at;
+use src.command.executor.command_reply_cleanup;
 use src.command.router.Command;
 use src.command.router.CommandRouter;
 use src.command.router.CommandType;
@@ -14,6 +18,7 @@ use src.network.protocol.resp_value_free;
 use src.persistence.aof.AofWriter;
 use src.persistence.aof.aof_append_command_at;
 use src.storage.engine.Engine;
+use src.storage.object.ListNode;
 use src.util.time.now_ms_safe;
 use libc.errno;
 use libc.sys_send;
@@ -29,6 +34,7 @@ export struct ConnectionProcessResult {
     response_len: usize,
     consumed: usize,
     close_after: bool,
+    request_aof_rewrite: bool,
 }
 
 struct ConnectionSendProgress {
@@ -45,6 +51,10 @@ fn connection_make_reply(typ: CommandReplyType, data: &[byte], integer: i64) Com
         typ: typ,
         data: data,
         integer: integer,
+        scan_cursor: 0u64,
+        array_head: null,
+        array_count: 0,
+        owned_object: null,
     };
 }
 
@@ -112,6 +122,20 @@ fn connection_append_i64(out: &byte, out_cap: usize, pos: &usize, value: i64) !v
     try connection_append_u64(out, out_cap, pos, value as u64);
 }
 
+fn connection_u64_decimal_len(value: u64) usize {
+    if value == 0u64 {
+        return 1;
+    }
+
+    var digits: usize = 0;
+    var v: u64 = value;
+    while v > 0u64 {
+        digits = digits + 1;
+        v = v / 10u64;
+    }
+    return digits;
+}
+
 export fn connection_encode_reply(reply: &CommandReply, out: &byte, out_cap: usize) !usize {
     var pos: usize = 0;
 
@@ -145,6 +169,54 @@ export fn connection_encode_reply(reply: &CommandReply, out: &byte, out_cap: usi
         try connection_append_bytes(out, out_cap, &pos, &"$-1\r\n"[0: 5]);
         return pos;
     }
+    if reply.typ == CommandReplyType.reply_array_bulk {
+        try connection_append_byte(out, out_cap, &pos, 42 as byte);
+        try connection_append_u64(out, out_cap, &pos, reply.array_count as u64);
+        try connection_append_crlf(out, out_cap, &pos);
+
+        var node: &ListNode = reply.array_head;
+        var count: usize = 0;
+        while node != null && count < reply.array_count {
+            const data: &[byte] = node.value.value.buf[0: node.value.value.len];
+            try connection_append_byte(out, out_cap, &pos, 36 as byte);
+            try connection_append_u64(out, out_cap, &pos, data.len as u64);
+            try connection_append_crlf(out, out_cap, &pos);
+            try connection_append_bytes(out, out_cap, &pos, data);
+            try connection_append_crlf(out, out_cap, &pos);
+            node = node.next;
+            count = count + 1;
+        }
+        return pos;
+    }
+    if reply.typ == CommandReplyType.reply_scan {
+        try connection_append_byte(out, out_cap, &pos, 42 as byte);
+        try connection_append_u64(out, out_cap, &pos, 2u64);
+        try connection_append_crlf(out, out_cap, &pos);
+
+        try connection_append_byte(out, out_cap, &pos, 36 as byte);
+        try connection_append_u64(out, out_cap, &pos, connection_u64_decimal_len(reply.scan_cursor) as u64);
+        try connection_append_crlf(out, out_cap, &pos);
+        try connection_append_u64(out, out_cap, &pos, reply.scan_cursor);
+        try connection_append_crlf(out, out_cap, &pos);
+
+        try connection_append_byte(out, out_cap, &pos, 42 as byte);
+        try connection_append_u64(out, out_cap, &pos, reply.array_count as u64);
+        try connection_append_crlf(out, out_cap, &pos);
+
+        var node_scan: &ListNode = reply.array_head;
+        var count_scan: usize = 0;
+        while node_scan != null && count_scan < reply.array_count {
+            const data_scan: &[byte] = node_scan.value.value.buf[0: node_scan.value.value.len];
+            try connection_append_byte(out, out_cap, &pos, 36 as byte);
+            try connection_append_u64(out, out_cap, &pos, data_scan.len as u64);
+            try connection_append_crlf(out, out_cap, &pos);
+            try connection_append_bytes(out, out_cap, &pos, data_scan);
+            try connection_append_crlf(out, out_cap, &pos);
+            node_scan = node_scan.next;
+            count_scan = count_scan + 1;
+        }
+        return pos;
+    }
 
     try connection_append_bytes(out, out_cap, &pos, &"-ERR unsupported reply\r\n"[0: 24]);
     return pos;
@@ -158,11 +230,38 @@ export fn connection_process_input_at(
     out_cap: usize,
     now_ms: u64,
 ) !ConnectionProcessResult {
-    return connection_process_input_with_aof_at(engine, router, null as &AofWriter, input, out, out_cap, now_ms);
+    var runtime: CommandRuntimeInfo = command_runtime_default();
+    return connection_process_input_with_runtime_with_aof_at(engine, &runtime, router, null as &AofWriter, input, out, out_cap, now_ms);
+}
+
+export fn connection_process_input_with_runtime_at(
+    engine: &Engine,
+    runtime: &CommandRuntimeInfo,
+    router: &CommandRouter,
+    input: &[byte],
+    out: &byte,
+    out_cap: usize,
+    now_ms: u64,
+) !ConnectionProcessResult {
+    return connection_process_input_with_runtime_with_aof_at(engine, runtime, router, null as &AofWriter, input, out, out_cap, now_ms);
 }
 
 export fn connection_process_input_with_aof_at(
     engine: &Engine,
+    router: &CommandRouter,
+    aof: &AofWriter,
+    input: &[byte],
+    out: &byte,
+    out_cap: usize,
+    now_ms: u64,
+) !ConnectionProcessResult {
+    var runtime: CommandRuntimeInfo = command_runtime_default();
+    return connection_process_input_with_runtime_with_aof_at(engine, &runtime, router, aof, input, out, out_cap, now_ms);
+}
+
+export fn connection_process_input_with_runtime_with_aof_at(
+    engine: &Engine,
+    runtime: &CommandRuntimeInfo,
     router: &CommandRouter,
     aof: &AofWriter,
     input: &[byte],
@@ -177,7 +276,7 @@ export fn connection_process_input_with_aof_at(
         }
         const reply: CommandReply = connection_error_reply(&"ERR protocol error"[0: 18]);
         const n: usize = try connection_encode_reply(&reply, out, out_cap);
-        return ConnectionProcessResult{ response_len: n, consumed: input.len, close_after: true };
+        return ConnectionProcessResult{ response_len: n, consumed: input.len, close_after: true, request_aof_rewrite: false };
     };
 
     const command_result: !Command = command_from_resp(router, &parsed.value);
@@ -191,22 +290,25 @@ export fn connection_process_input_with_aof_at(
         }
         const n: usize = try connection_encode_reply(&reply, out, out_cap);
         resp_value_free(&parsed.value);
-        return ConnectionProcessResult{ response_len: n, consumed: parsed.consumed, close_after: false };
+        return ConnectionProcessResult{ response_len: n, consumed: parsed.consumed, close_after: false, request_aof_rewrite: false };
     };
 
-    const reply: CommandReply = command_execute_at(engine, &command, now_ms);
+    const reply: CommandReply = command_execute_with_runtime_at(engine, runtime, &command, now_ms);
     if aof != null && connection_should_append_aof(&command, &reply) {
         _ = aof_append_command_at(aof, &command, input[0: parsed.consumed], now_ms) catch {
             const aof_reply: CommandReply = connection_error_reply(&"ERR AOF append failed"[0: 21]);
             const aof_n: usize = try connection_encode_reply(&aof_reply, out, out_cap);
+            command_reply_cleanup(&reply);
             resp_value_free(&parsed.value);
-            return ConnectionProcessResult{ response_len: aof_n, consumed: parsed.consumed, close_after: false };
+            return ConnectionProcessResult{ response_len: aof_n, consumed: parsed.consumed, close_after: false, request_aof_rewrite: false };
         };
     }
     const n: usize = try connection_encode_reply(&reply, out, out_cap);
+    const request_aof_rewrite: bool = reply.request_aof_rewrite;
+    command_reply_cleanup(&reply);
     const should_close: bool = command.info.cmd_type == CommandType.command_quit;
     resp_value_free(&parsed.value);
-    return ConnectionProcessResult{ response_len: n, consumed: parsed.consumed, close_after: should_close };
+    return ConnectionProcessResult{ response_len: n, consumed: parsed.consumed, close_after: should_close, request_aof_rewrite: request_aof_rewrite };
 }
 
 export fn connection_empty_reply() CommandReply {
@@ -364,6 +466,29 @@ export fn connection_handle_fd_nonblocking_with_aof(
     pending_len: &usize,
     pending_sent: &usize,
     close_after_write: &bool,
+    rewrite_requested: &bool,
+    output: &byte,
+    output_cap: usize,
+) !bool {
+    var runtime: CommandRuntimeInfo = command_runtime_default();
+    return connection_handle_fd_nonblocking_with_runtime_with_aof(engine, &runtime, router, aof, fd, input, input_cap, filled, pending, pending_cap, pending_len, pending_sent, close_after_write, rewrite_requested, output, output_cap);
+}
+
+export fn connection_handle_fd_nonblocking_with_runtime_with_aof(
+    engine: &Engine,
+    runtime: &CommandRuntimeInfo,
+    router: &CommandRouter,
+    aof: &AofWriter,
+    fd: i32,
+    input: &byte,
+    input_cap: usize,
+    filled: &usize,
+    pending: &byte,
+    pending_cap: usize,
+    pending_len: &usize,
+    pending_sent: &usize,
+    close_after_write: &bool,
+    rewrite_requested: &bool,
     output: &byte,
     output_cap: usize,
 ) !bool {
@@ -385,8 +510,9 @@ export fn connection_handle_fd_nonblocking_with_aof(
     var can_continue: bool = true;
     while can_continue && *filled > 0 && *pending_len == 0 {
         var incomplete: bool = false;
-        const result_value: !ConnectionProcessResult = connection_process_input_with_aof_at(
+        const result_value: !ConnectionProcessResult = connection_process_input_with_runtime_with_aof_at(
             engine,
+            runtime,
             router,
             aof,
             input[0: *filled],
@@ -401,10 +527,13 @@ export fn connection_handle_fd_nonblocking_with_aof(
             } else {
                 return err;
             }
-            ConnectionProcessResult{ response_len: 0, consumed: 0, close_after: false };
+                ConnectionProcessResult{ response_len: 0, consumed: 0, close_after: false, request_aof_rewrite: false };
         };
 
         if !incomplete {
+            if result.request_aof_rewrite {
+                *rewrite_requested = true;
+            }
             const progress: ConnectionSendProgress = try connection_send_progress_nonblocking(fd, output, result.response_len, 0);
             connection_shift_buffer(input, filled, result.consumed);
             if progress.blocked {
@@ -438,7 +567,8 @@ export fn connection_handle_fd_nonblocking(
     output: &byte,
     output_cap: usize,
 ) !bool {
-    return connection_handle_fd_nonblocking_with_aof(engine, router, null as &AofWriter, fd, input, input_cap, filled, pending, pending_cap, pending_len, pending_sent, close_after_write, output, output_cap);
+    var rewrite_requested: bool = false;
+    return connection_handle_fd_nonblocking_with_aof(engine, router, null as &AofWriter, fd, input, input_cap, filled, pending, pending_cap, pending_len, pending_sent, close_after_write, &rewrite_requested, output, output_cap);
 }
 
 export fn connection_handle_fd(engine: &Engine, router: &CommandRouter, fd: i32) !void {
@@ -483,7 +613,7 @@ export fn connection_handle_fd_with_aof(engine: &Engine, router: &CommandRouter,
                 } else {
                     return error.ConnectionIoFailed;
                 }
-                ConnectionProcessResult{ response_len: 0, consumed: 0, close_after: false };
+                ConnectionProcessResult{ response_len: 0, consumed: 0, close_after: false, request_aof_rewrite: false };
             };
 
             if !incomplete {

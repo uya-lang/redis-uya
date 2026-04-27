@@ -1,0 +1,130 @@
+use tests.unit.assert.assert_eq_i32;
+use tests.unit.assert.assert_true;
+
+use src.persistence.aof.AofWriter;
+use src.persistence.aof.aof_open_truncate;
+use src.persistence.aof.aof_close;
+use src.persistence.aof.aof_append_raw;
+use src.persistence.rdb.rdb_save_file_at;
+use src.persistence.rdb.rdb_load_file_at;
+use src.storage.engine.Engine;
+use src.storage.engine.engine_new;
+use src.storage.engine.engine_free;
+use src.storage.engine.set_key;
+use src.storage.engine.set_key_expire_at;
+use src.storage.engine.lookup_key_at;
+use src.storage.object.RedisObject;
+use src.storage.object.create_string_object;
+use src.storage.object.create_hash_object;
+use src.storage.object.hash_object_set_field;
+use src.memory.allocator.used_memory;
+use src.memory.allocator.reset_memory_stats_for_test;
+use libc.unlink;
+
+fn rdb_test_slice_eq(a: &[byte], b: &[byte]) bool {
+    if a.len != b.len { return false; }
+    var i: usize = 0;
+    while i < a.len {
+        if a.ptr[i] != b.ptr[i] { return false; }
+        i = i + 1;
+    }
+    return true;
+}
+
+fn rdb_key_missing_at(engine: &Engine, key: &[byte], now_ms: u64) bool {
+    const found: &RedisObject = lookup_key_at(engine, key, now_ms) catch |err| {
+        if err == error.EngineKeyNotFound {
+            return true;
+        }
+        return false;
+    };
+    _ = found;
+    return false;
+}
+
+export fn test_rdb_save_and_load_string_subset() !void {
+    reset_memory_stats_for_test();
+    const path: &const byte = "build/test-rdb-basic.rdb";
+    _ = unlink(path);
+
+    var engine: Engine = engine_new();
+    const persistent: &RedisObject = try create_string_object(&"value"[0: 5]);
+    const volatile: &RedisObject = try create_string_object(&"ttl"[0: 3]);
+    try set_key(&engine, &"key"[0: 3], persistent);
+    try set_key(&engine, &"volatile"[0: 8], volatile);
+    try set_key_expire_at(&engine, &"volatile"[0: 8], 2000u64);
+    try rdb_save_file_at(path, &engine, 1000u64);
+    engine_free(&engine);
+
+    var load_engine: Engine = engine_new();
+    try rdb_load_file_at(path, &load_engine, 1500u64);
+    const found: &RedisObject = try lookup_key_at(&load_engine, &"key"[0: 3], 1500u64);
+    try assert_true(rdb_test_slice_eq(found.value.buf[0: found.value.len], &"value"[0: 5]));
+    const found_volatile: &RedisObject = try lookup_key_at(&load_engine, &"volatile"[0: 8], 1500u64);
+    try assert_true(rdb_test_slice_eq(found_volatile.value.buf[0: found_volatile.value.len], &"ttl"[0: 3]));
+    engine_free(&load_engine);
+
+    var expired_engine: Engine = engine_new();
+    try rdb_load_file_at(path, &expired_engine, 3000u64);
+    try assert_true(rdb_key_missing_at(&expired_engine, &"volatile"[0: 8], 3000u64));
+    const found_persistent: &RedisObject = try lookup_key_at(&expired_engine, &"key"[0: 3], 3000u64);
+    try assert_true(rdb_test_slice_eq(found_persistent.value.buf[0: found_persistent.value.len], &"value"[0: 5]));
+    engine_free(&expired_engine);
+
+    _ = unlink(path);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_rdb_load_invalid_header_fails() !void {
+    reset_memory_stats_for_test();
+    const path: &const byte = "build/test-rdb-invalid.rdb";
+    _ = unlink(path);
+
+    var writer: AofWriter = try aof_open_truncate(path);
+    try aof_append_raw(&writer, &"NOTRDB!!"[0: 8]);
+    aof_close(&writer);
+
+    var engine: Engine = engine_new();
+    var failed: bool = false;
+    _ = rdb_load_file_at(path, &engine, 1000u64) catch |err| {
+        if err == error.RdbInvalidFormat {
+            failed = true;
+        }
+        engine_free(&engine);
+        _ = unlink(path);
+        try assert_true(failed);
+        try assert_eq_i32(used_memory() as i32, 0);
+        return;
+    };
+
+    engine_free(&engine);
+    _ = unlink(path);
+    try assert_true(false);
+}
+
+export fn test_rdb_save_rejects_non_string_keys() !void {
+    reset_memory_stats_for_test();
+    const path: &const byte = "build/test-rdb-unsupported.rdb";
+    _ = unlink(path);
+
+    var engine: Engine = engine_new();
+    const hash_obj: &RedisObject = try create_hash_object();
+    _ = try hash_object_set_field(hash_obj, &"field"[0: 5], &"value"[0: 5]);
+    try set_key(&engine, &"hash"[0: 4], hash_obj);
+
+    var failed: bool = false;
+    _ = rdb_save_file_at(path, &engine, 1000u64) catch |err| {
+        if err == error.RdbUnsupportedType {
+            failed = true;
+        }
+        engine_free(&engine);
+        _ = unlink(path);
+        try assert_true(failed);
+        try assert_eq_i32(used_memory() as i32, 0);
+        return;
+    };
+
+    engine_free(&engine);
+    _ = unlink(path);
+    try assert_true(false);
+}

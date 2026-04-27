@@ -5,6 +5,26 @@ use src.storage.object.RedisObject;
 use src.storage.object.ObjectType;
 use src.storage.object.Encoding;
 use src.storage.object.create_string_object;
+use src.storage.object.create_hash_object;
+use src.storage.object.create_list_object;
+use src.storage.object.create_set_object;
+use src.storage.object.create_zset_object;
+use src.storage.object.hash_object_set_field;
+use src.storage.object.hash_object_get_field;
+use src.storage.object.list_object_push_head;
+use src.storage.object.list_object_pop_head;
+use src.storage.object.list_object_len;
+use src.storage.object.list_object_range;
+use src.storage.object.set_object_add_member;
+use src.storage.object.set_object_remove_member;
+use src.storage.object.set_object_len;
+use src.storage.object.set_object_members_reply;
+use src.storage.object.zset_object_add_member;
+use src.storage.object.zset_object_remove_member;
+use src.storage.object.zset_object_len;
+use src.storage.object.zset_object_range_reply;
+use src.storage.object.ListRangeView;
+use src.storage.object.ListNode;
 use src.storage.object.object_free;
 use src.storage.object.object_type_name;
 use src.storage.object.object_encoding_name;
@@ -58,5 +78,109 @@ export fn test_object_string_raw_encoding_edges() !void {
     object_free(leading_zero);
     object_free(mixed);
     object_free(empty);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_object_hash_create_set_get_free() !void {
+    reset_memory_stats_for_test();
+    const obj: &RedisObject = try create_hash_object();
+    try assert_eq_i32(obj.obj_type as i32, ObjectType.object_hash as i32);
+    try assert_eq_i32(obj.encoding as i32, Encoding.encoding_hash_table as i32);
+    try assert_true(object_slice_eq(object_type_name(obj.obj_type), &"hash"[0: 4]));
+    try assert_true(object_slice_eq(object_encoding_name(obj.encoding), &"hashtable"[0: 9]));
+
+    const inserted: bool = try hash_object_set_field(obj, &"field"[0: 5], &"value"[0: 5]);
+    try assert_eq_i32(inserted as i32, 1);
+    const field_obj: &RedisObject = try hash_object_get_field(obj, &"field"[0: 5]);
+    try assert_eq_i32(field_obj.obj_type as i32, ObjectType.object_string as i32);
+    try assert_true(object_slice_eq(field_obj.value.buf[0: field_obj.value.len], &"value"[0: 5]));
+
+    const updated: bool = try hash_object_set_field(obj, &"field"[0: 5], &"next"[0: 4]);
+    try assert_eq_i32(updated as i32, 0);
+    const field_obj_next: &RedisObject = try hash_object_get_field(obj, &"field"[0: 5]);
+    try assert_true(object_slice_eq(field_obj_next.value.buf[0: field_obj_next.value.len], &"next"[0: 4]));
+
+    object_free(obj);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_object_list_create_push_pop_range_free() !void {
+    reset_memory_stats_for_test();
+    const obj: &RedisObject = try create_list_object();
+    try assert_eq_i32(obj.obj_type as i32, ObjectType.object_list as i32);
+    try assert_eq_i32(obj.encoding as i32, Encoding.encoding_linked_list as i32);
+    try assert_true(object_slice_eq(object_type_name(obj.obj_type), &"list"[0: 4]));
+    try assert_true(object_slice_eq(object_encoding_name(obj.encoding), &"linkedlist"[0: 10]));
+
+    try assert_eq_i32((try list_object_push_head(obj, &"a"[0: 1])) as i32, 1);
+    try assert_eq_i32((try list_object_push_head(obj, &"b"[0: 1])) as i32, 2);
+    try assert_eq_i32((try list_object_push_head(obj, &"c"[0: 1])) as i32, 3);
+    try assert_eq_i32((try list_object_len(obj)) as i32, 3);
+
+    const view: ListRangeView = try list_object_range(obj, 0, 1);
+    try assert_eq_i32(view.count as i32, 2);
+    const head: &ListNode = view.head;
+    try assert_true(object_slice_eq(head.value.value.buf[0: head.value.value.len], &"c"[0: 1]));
+    try assert_true(object_slice_eq(head.next.value.value.buf[0: head.next.value.value.len], &"b"[0: 1]));
+
+    const popped: &RedisObject = try list_object_pop_head(obj);
+    try assert_true(object_slice_eq(popped.value.buf[0: popped.value.len], &"c"[0: 1]));
+    object_free(popped);
+    try assert_eq_i32((try list_object_len(obj)) as i32, 2);
+
+    object_free(obj);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_object_set_create_add_remove_members_free() !void {
+    reset_memory_stats_for_test();
+    const obj: &RedisObject = try create_set_object();
+    try assert_eq_i32(obj.obj_type as i32, ObjectType.object_set as i32);
+    try assert_eq_i32(obj.encoding as i32, Encoding.encoding_set_table as i32);
+    try assert_true(object_slice_eq(object_type_name(obj.obj_type), &"set"[0: 3]));
+    try assert_true(object_slice_eq(object_encoding_name(obj.encoding), &"settable"[0: 8]));
+
+    try assert_eq_i32((try set_object_add_member(obj, &"a"[0: 1])) as i32, 1);
+    try assert_eq_i32((try set_object_add_member(obj, &"b"[0: 1])) as i32, 1);
+    try assert_eq_i32((try set_object_add_member(obj, &"a"[0: 1])) as i32, 0);
+    try assert_eq_i32((try set_object_len(obj)) as i32, 2);
+
+    const members_obj: &RedisObject = try set_object_members_reply(obj);
+    try assert_eq_i32((try list_object_len(members_obj)) as i32, 2);
+    object_free(members_obj);
+
+    try assert_eq_i32((try set_object_remove_member(obj, &"a"[0: 1])) as i32, 1);
+    try assert_eq_i32((try set_object_remove_member(obj, &"missing"[0: 7])) as i32, 0);
+    try assert_eq_i32((try set_object_len(obj)) as i32, 1);
+
+    object_free(obj);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_object_zset_create_add_remove_range_free() !void {
+    reset_memory_stats_for_test();
+    const obj: &RedisObject = try create_zset_object();
+    try assert_eq_i32(obj.obj_type as i32, ObjectType.object_zset as i32);
+    try assert_eq_i32(obj.encoding as i32, Encoding.encoding_zset_table as i32);
+    try assert_true(object_slice_eq(object_type_name(obj.obj_type), &"zset"[0: 4]));
+    try assert_true(object_slice_eq(object_encoding_name(obj.encoding), &"zsettable"[0: 9]));
+
+    try assert_eq_i32((try zset_object_add_member(obj, 2, &"b"[0: 1])) as i32, 1);
+    try assert_eq_i32((try zset_object_add_member(obj, 1, &"a"[0: 1])) as i32, 1);
+    try assert_eq_i32((try zset_object_add_member(obj, 3, &"c"[0: 1])) as i32, 1);
+    try assert_eq_i32((try zset_object_add_member(obj, 5, &"a"[0: 1])) as i32, 0);
+    try assert_eq_i32((try zset_object_len(obj)) as i32, 3);
+
+    const ranged: &RedisObject = try zset_object_range_reply(obj, 0, 1);
+    try assert_eq_i32((try list_object_len(ranged)) as i32, 2);
+    try assert_true(object_slice_eq(ranged.list_head.value.value.buf[0: ranged.list_head.value.value.len], &"b"[0: 1]));
+    try assert_true(object_slice_eq(ranged.list_head.next.value.value.buf[0: ranged.list_head.next.value.value.len], &"c"[0: 1]));
+    object_free(ranged);
+
+    try assert_eq_i32((try zset_object_remove_member(obj, &"b"[0: 1])) as i32, 1);
+    try assert_eq_i32((try zset_object_remove_member(obj, &"missing"[0: 7])) as i32, 0);
+    try assert_eq_i32((try zset_object_len(obj)) as i32, 2);
+
+    object_free(obj);
     try assert_eq_i32(used_memory() as i32, 0);
 }

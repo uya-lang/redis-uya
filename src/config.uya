@@ -31,6 +31,10 @@ fn copy_literal(dst: &[byte], src: &[byte]) void {
     if i < dst.len { dst.ptr[i] = 0; }
 }
 
+export fn config_copy_bytes(dst: &[byte], src: &[byte]) void {
+    copy_literal(dst, src);
+}
+
 export fn default_config() ServerConfig {
     var cfg: ServerConfig = ServerConfig{
         port: 6379,

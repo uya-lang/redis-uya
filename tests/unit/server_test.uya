@@ -1,20 +1,45 @@
 use tests.unit.assert.assert_eq_i32;
+use tests.unit.assert.assert_true;
 
+use src.command.router.CommandRouter;
 use src.command.router.command_router_new;
+use src.config.ServerConfig;
+use src.config.default_config;
 use src.network.listener.RedisListener;
+use src.persistence.aof.AofWriter;
 use src.persistence.aof.aof_disabled;
+use src.persistence.aof.aof_open_truncate;
+use src.persistence.aof.aof_open_append;
+use src.persistence.aof.aof_close;
+use src.persistence.aof.aof_append_raw;
+use src.persistence.aof.aof_replay_file_at;
+use src.persistence.rdb.rdb_save_file_at;
+use src.server.server_run_pending_aof_rewrite_at;
 use src.server.RedisServer;
 use src.server.server_cron_at;
+use src.server.server_load_persistence_at;
 use src.storage.engine.Engine;
 use src.storage.engine.engine_new;
 use src.storage.engine.engine_free;
 use src.storage.engine.engine_len;
 use src.storage.engine.set_key;
 use src.storage.engine.set_key_expire_at;
+use src.storage.engine.lookup_key_at;
 use src.storage.object.RedisObject;
 use src.storage.object.create_string_object;
 use src.memory.allocator.used_memory;
 use src.memory.allocator.reset_memory_stats_for_test;
+use libc.unlink;
+
+fn server_test_slice_eq(a: &[byte], b: &[byte]) bool {
+    if a.len != b.len { return false; }
+    var i: usize = 0;
+    while i < a.len {
+        if a.ptr[i] != b.ptr[i] { return false; }
+        i = i + 1;
+    }
+    return true;
+}
 
 export fn test_server_cron_expires_keys() !void {
     reset_memory_stats_for_test();
@@ -28,8 +53,13 @@ export fn test_server_cron_expires_keys() !void {
         active_clients: 0,
         maxclients: 0,
         served_clients: 0,
+        config: default_config(),
+        start_ms: 0u64,
         last_cron_ms: 0u64,
         cron_ticks: 0u64,
+        aof_rewrite_requested: false,
+        aof_rewrite_in_progress: false,
+        aof_rewrite_count: 0u64,
     };
 
     const obj: &RedisObject = try create_string_object(&"value"[0: 5]);
@@ -43,5 +73,190 @@ export fn test_server_cron_expires_keys() !void {
     try assert_eq_i32(server.cron_ticks as i32, 1);
 
     engine_free(&server.engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_server_cron_active_expire_loop() !void {
+    reset_memory_stats_for_test();
+    var engine: Engine = engine_new();
+    var server: RedisServer = RedisServer{
+        engine: engine,
+        router: command_router_new(),
+        listener: RedisListener{ listen_fd: -1, poll_fd: -1, port: 0u16 },
+        aof: aof_disabled(),
+        clients: [],
+        active_clients: 0,
+        maxclients: 0,
+        served_clients: 0,
+        config: default_config(),
+        start_ms: 0u64,
+        last_cron_ms: 0u64,
+        cron_ticks: 0u64,
+        aof_rewrite_requested: false,
+        aof_rewrite_in_progress: false,
+        aof_rewrite_count: 0u64,
+    };
+
+    var i: i32 = 0;
+    while i < 25 {
+        const name: byte = (65 + i) as byte;
+        var key: [byte: 1] = [name];
+        const obj: &RedisObject = try create_string_object(&"value"[0: 5]);
+        try set_key(&server.engine, key[0: 1], obj);
+        try set_key_expire_at(&server.engine, key[0: 1], 900u64);
+        i = i + 1;
+    }
+
+    server_cron_at(&server, 1000u64);
+
+    try assert_eq_i32(engine_len(&server.engine) as i32, 0);
+    try assert_eq_i32(server.last_cron_ms as i32, 1000);
+    try assert_eq_i32(server.cron_ticks as i32, 1);
+
+    engine_free(&server.engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_server_loads_rdb_then_replays_aof() !void {
+    reset_memory_stats_for_test();
+    const rdb_path: &const byte = "build/test-server-mixed.rdb";
+    const aof_path: &const byte = "build/test-server-mixed.aof";
+    _ = unlink(rdb_path);
+    _ = unlink(aof_path);
+
+    var seed_engine: Engine = engine_new();
+    const snap_obj: &RedisObject = try create_string_object(&"base"[0: 4]);
+    try set_key(&seed_engine, &"key"[0: 3], snap_obj);
+    try rdb_save_file_at(rdb_path, &seed_engine, 1000u64);
+    engine_free(&seed_engine);
+
+    var writer: AofWriter = try aof_open_truncate(aof_path);
+    try aof_append_raw(&writer, &"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nnewer\r\n"[0: 33]);
+    try aof_append_raw(&writer, &"*3\r\n$3\r\nSET\r\n$5\r\nextra\r\n$5\r\nvalue\r\n"[0: 35]);
+    aof_close(&writer);
+
+    const router: CommandRouter = command_router_new();
+    var config: ServerConfig = default_config();
+    config.dir[0] = 98 as byte;   // b
+    config.dir[1] = 117 as byte;  // u
+    config.dir[2] = 105 as byte;  // i
+    config.dir[3] = 108 as byte;  // l
+    config.dir[4] = 100 as byte;  // d
+    config.dir[5] = 47 as byte;   // /
+    config.dir[6] = 0 as byte;
+    config.dbfilename[0] = 116 as byte;  // t
+    config.dbfilename[1] = 101 as byte;  // e
+    config.dbfilename[2] = 115 as byte;  // s
+    config.dbfilename[3] = 116 as byte;  // t
+    config.dbfilename[4] = 45 as byte;   // -
+    config.dbfilename[5] = 115 as byte;  // s
+    config.dbfilename[6] = 101 as byte;  // e
+    config.dbfilename[7] = 114 as byte;  // r
+    config.dbfilename[8] = 118 as byte;  // v
+    config.dbfilename[9] = 101 as byte;  // e
+    config.dbfilename[10] = 114 as byte; // r
+    config.dbfilename[11] = 45 as byte;  // -
+    config.dbfilename[12] = 109 as byte; // m
+    config.dbfilename[13] = 105 as byte; // i
+    config.dbfilename[14] = 120 as byte; // x
+    config.dbfilename[15] = 101 as byte; // e
+    config.dbfilename[16] = 100 as byte; // d
+    config.dbfilename[17] = 46 as byte;  // .
+    config.dbfilename[18] = 114 as byte; // r
+    config.dbfilename[19] = 100 as byte; // d
+    config.dbfilename[20] = 98 as byte;  // b
+    config.dbfilename[21] = 0 as byte;
+
+    var engine: Engine = engine_new();
+    try server_load_persistence_at(&engine, &router, &config, aof_path, 2000u64);
+
+    const key_found: &RedisObject = try lookup_key_at(&engine, &"key"[0: 3], 2000u64);
+    try assert_true(server_test_slice_eq(key_found.value.buf[0: key_found.value.len], &"newer"[0: 5]));
+    const extra_found: &RedisObject = try lookup_key_at(&engine, &"extra"[0: 5], 2000u64);
+    try assert_true(server_test_slice_eq(extra_found.value.buf[0: extra_found.value.len], &"value"[0: 5]));
+
+    engine_free(&engine);
+    _ = unlink(rdb_path);
+    _ = unlink(aof_path);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_server_runs_pending_aof_rewrite() !void {
+    reset_memory_stats_for_test();
+    const aof_path: &const byte = "build/test-server-rewrite.aof";
+    _ = unlink(aof_path);
+
+    var seed_writer: AofWriter = try aof_open_truncate(aof_path);
+    try aof_append_raw(&seed_writer, &"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$4\r\nbase\r\n"[0: 32]);
+    aof_close(&seed_writer);
+
+    var engine: Engine = engine_new();
+    const obj: &RedisObject = try create_string_object(&"newer"[0: 5]);
+    try set_key(&engine, &"key"[0: 3], obj);
+
+    var server: RedisServer = RedisServer{
+        engine: engine,
+        router: command_router_new(),
+        listener: RedisListener{ listen_fd: -1, poll_fd: -1, port: 0u16 },
+        aof: try aof_open_append(aof_path),
+        clients: [],
+        active_clients: 0,
+        maxclients: 0,
+        served_clients: 0,
+        config: default_config(),
+        start_ms: 0u64,
+        last_cron_ms: 0u64,
+        cron_ticks: 0u64,
+        aof_rewrite_requested: true,
+        aof_rewrite_in_progress: false,
+        aof_rewrite_count: 0u64,
+    };
+    server.config.appendfilename[0] = 98 as byte;   // b
+    server.config.appendfilename[1] = 117 as byte;  // u
+    server.config.appendfilename[2] = 105 as byte;  // i
+    server.config.appendfilename[3] = 108 as byte;  // l
+    server.config.appendfilename[4] = 100 as byte;  // d
+    server.config.appendfilename[5] = 47 as byte;   // /
+    server.config.appendfilename[6] = 116 as byte;  // t
+    server.config.appendfilename[7] = 101 as byte;  // e
+    server.config.appendfilename[8] = 115 as byte;  // s
+    server.config.appendfilename[9] = 116 as byte;  // t
+    server.config.appendfilename[10] = 45 as byte;  // -
+    server.config.appendfilename[11] = 115 as byte; // s
+    server.config.appendfilename[12] = 101 as byte; // e
+    server.config.appendfilename[13] = 114 as byte; // r
+    server.config.appendfilename[14] = 118 as byte; // v
+    server.config.appendfilename[15] = 101 as byte; // e
+    server.config.appendfilename[16] = 114 as byte; // r
+    server.config.appendfilename[17] = 45 as byte;  // -
+    server.config.appendfilename[18] = 114 as byte; // r
+    server.config.appendfilename[19] = 101 as byte; // e
+    server.config.appendfilename[20] = 119 as byte; // w
+    server.config.appendfilename[21] = 114 as byte; // r
+    server.config.appendfilename[22] = 105 as byte; // i
+    server.config.appendfilename[23] = 116 as byte; // t
+    server.config.appendfilename[24] = 101 as byte; // e
+    server.config.appendfilename[25] = 46 as byte;  // .
+    server.config.appendfilename[26] = 97 as byte;  // a
+    server.config.appendfilename[27] = 111 as byte; // o
+    server.config.appendfilename[28] = 102 as byte; // f
+    server.config.appendfilename[29] = 0 as byte;
+
+    const ran: bool = try server_run_pending_aof_rewrite_at(&server, 2000u64);
+    try assert_eq_i32(ran as i32, 1);
+    try assert_eq_i32(server.aof_rewrite_requested as i32, 0);
+    try assert_eq_i32(server.aof_rewrite_in_progress as i32, 0);
+    try assert_eq_i32(server.aof_rewrite_count as i32, 1);
+
+    aof_close(&server.aof);
+    engine_free(&server.engine);
+
+    var replay_engine: Engine = engine_new();
+    const router: CommandRouter = command_router_new();
+    try aof_replay_file_at(aof_path, &replay_engine, &router, 3000u64);
+    const found: &RedisObject = try lookup_key_at(&replay_engine, &"key"[0: 3], 3000u64);
+    try assert_true(server_test_slice_eq(found.value.buf[0: found.value.len], &"newer"[0: 5]));
+    engine_free(&replay_engine);
+    _ = unlink(aof_path);
     try assert_eq_i32(used_memory() as i32, 0);
 }

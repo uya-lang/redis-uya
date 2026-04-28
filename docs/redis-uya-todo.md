@@ -292,7 +292,7 @@
 - [x] `allkeys-lfu`
 - [x] `volatile-*`
 - [x] 内存统计完善
-- [ ] Slab allocator
+- [x] Slab allocator
 - [ ] 内存压力与淘汰测试
 
 ## 12. `v0.7.0` 详细规划

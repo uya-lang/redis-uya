@@ -8,6 +8,7 @@ use tests.unit.util_log_test.test_log_level_state;
 use tests.unit.memory_allocator_test.test_allocator_alloc_free;
 use tests.unit.memory_allocator_test.test_allocator_realloc;
 use tests.unit.memory_allocator_test.test_allocator_many_allocations;
+use tests.unit.memory_allocator_test.test_allocator_slab_reuse;
 use tests.unit.config_test.test_config_defaults;
 use tests.unit.config_test.test_config_parse_core_fields;
 use tests.unit.config_test.test_config_parse_memory_units;
@@ -144,6 +145,10 @@ export fn main() i32 {
     const before_many_alloc: i32 = failed;
     _ = test_allocator_many_allocations() catch { printf("[FAIL] memory_allocator/many\n" as *byte); failed = failed + 1; };
     if failed == before_many_alloc { printf("[PASS] memory_allocator/many\n" as *byte); }
+
+    const before_slab_reuse: i32 = failed;
+    _ = test_allocator_slab_reuse() catch { printf("[FAIL] memory_allocator/slab_reuse\n" as *byte); failed = failed + 1; };
+    if failed == before_slab_reuse { printf("[PASS] memory_allocator/slab_reuse\n" as *byte); }
 
     const before_config_defaults: i32 = failed;
     _ = test_config_defaults() catch { printf("[FAIL] config/defaults\n" as *byte); failed = failed + 1; };

@@ -147,6 +147,9 @@ def run_smoke() -> None:
             require_field(initial, "total_freed")
             require_field(initial, "allocator_total_allocations")
             require_field(initial, "allocator_active_allocations")
+            require_field(initial, "allocator_slab_cached_blocks")
+            require_field(initial, "allocator_slab_cached_bytes")
+            require_field(initial, "allocator_slab_reuse_count")
 
             if send_command(sock, b"SET", b"payload", b"x" * 256) != "OK":
                 raise AssertionError("SET payload failed")
@@ -156,6 +159,9 @@ def run_smoke() -> None:
             total_allocated = require_field(after_set, "total_allocated")
             total_allocations = require_field(after_set, "allocator_total_allocations")
             active_allocations = require_field(after_set, "allocator_active_allocations")
+            require_field(after_set, "allocator_slab_cached_blocks")
+            require_field(after_set, "allocator_slab_cached_bytes")
+            require_field(after_set, "allocator_slab_reuse_count")
             if used_after_set <= 0:
                 raise AssertionError(f"used_memory should grow after SET: {after_set!r}")
             if peak_after_set < used_after_set:

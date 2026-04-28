@@ -7,12 +7,27 @@ extern fn realloc(ptr: &void, new_size: usize) &void;
 export error AllocOutOfMemory;
 export error AllocInvalidSize;
 
+const SLAB_CLASS_COUNT: usize = 7;
+const SLAB_CLASS_NONE: usize = SLAB_CLASS_COUNT;
+const SLAB_MAX_CACHED_PER_CLASS: usize = 64;
+
+struct AllocationHeader {
+    requested_size: usize,
+    usable_size: usize,
+    class_index: usize,
+}
+
 export var used_memory_bytes: usize = 0;
 export var used_memory_peak_bytes: usize = 0;
 export var total_allocated_bytes: usize = 0;
 export var total_freed_bytes: usize = 0;
 export var total_allocation_count: usize = 0;
 export var active_allocation_count: usize = 0;
+var slab_free_lists: [&byte: SLAB_CLASS_COUNT] = [];
+var slab_free_counts: [usize: SLAB_CLASS_COUNT] = [];
+export var slab_cached_block_count: usize = 0;
+export var slab_cached_byte_count: usize = 0;
+export var slab_reuse_counter: usize = 0;
 
 export struct RedisAllocator {
 }
@@ -43,13 +58,170 @@ export fn allocator_active_allocations() usize {
     return active_allocation_count;
 }
 
+export fn allocator_slab_cached_blocks() usize {
+    return slab_cached_block_count;
+}
+
+export fn allocator_slab_cached_bytes() usize {
+    return slab_cached_byte_count;
+}
+
+export fn allocator_slab_reuse_count() usize {
+    return slab_reuse_counter;
+}
+
 export fn reset_memory_stats_for_test() void {
+    allocator_slab_flush_cache();
     used_memory_bytes = 0;
     used_memory_peak_bytes = 0;
     total_allocated_bytes = 0;
     total_freed_bytes = 0;
     total_allocation_count = 0;
     active_allocation_count = 0;
+    slab_reuse_counter = 0;
+}
+
+fn allocator_slab_class_size(index: usize) usize {
+    if index == 0 { return 16; }
+    if index == 1 { return 32; }
+    if index == 2 { return 64; }
+    if index == 3 { return 128; }
+    if index == 4 { return 256; }
+    if index == 5 { return 512; }
+    return 1024;
+}
+
+fn allocator_slab_class_for_size(size: usize, class_size: &usize) usize {
+    if size <= 16 {
+        *class_size = 16;
+        return 0;
+    }
+    if size <= 32 {
+        *class_size = 32;
+        return 1;
+    }
+    if size <= 64 {
+        *class_size = 64;
+        return 2;
+    }
+    if size <= 128 {
+        *class_size = 128;
+        return 3;
+    }
+    if size <= 256 {
+        *class_size = 256;
+        return 4;
+    }
+    if size <= 512 {
+        *class_size = 512;
+        return 5;
+    }
+    if size <= 1024 {
+        *class_size = 1024;
+        return 6;
+    }
+    *class_size = size;
+    return SLAB_CLASS_NONE;
+}
+
+fn allocator_raw_from_payload(ptr: &byte) &byte {
+    return (ptr - @size_of(AllocationHeader)) as &byte;
+}
+
+fn allocator_payload_from_raw(raw: &byte) &byte {
+    return (raw + @size_of(AllocationHeader)) as &byte;
+}
+
+fn allocator_slab_pop(class_index: usize, class_size: usize) &byte {
+    if class_index >= SLAB_CLASS_COUNT {
+        return null;
+    }
+    const payload: &byte = slab_free_lists[class_index];
+    if payload == null {
+        return null;
+    }
+    const next_slot: &&byte = payload as &&byte;
+    slab_free_lists[class_index] = *next_slot;
+    slab_free_counts[class_index] -= 1;
+    slab_cached_block_count -= 1;
+    slab_cached_byte_count -= class_size;
+    slab_reuse_counter += 1;
+    return payload;
+}
+
+fn allocator_slab_push(class_index: usize, class_size: usize, payload: &byte) bool {
+    if class_index >= SLAB_CLASS_COUNT {
+        return false;
+    }
+    if slab_free_counts[class_index] >= SLAB_MAX_CACHED_PER_CLASS {
+        return false;
+    }
+    const next_slot: &&byte = payload as &&byte;
+    *next_slot = slab_free_lists[class_index];
+    slab_free_lists[class_index] = payload;
+    slab_free_counts[class_index] += 1;
+    slab_cached_block_count += 1;
+    slab_cached_byte_count += class_size;
+    return true;
+}
+
+fn allocator_slab_flush_cache() void {
+    var class_index: usize = 0;
+    while class_index < SLAB_CLASS_COUNT {
+        var payload: &byte = slab_free_lists[class_index];
+        while payload != null {
+            const next_slot: &&byte = payload as &&byte;
+            const next: &byte = *next_slot;
+            const raw: &byte = allocator_raw_from_payload(payload);
+            free(raw as &void);
+            payload = next;
+        }
+        slab_free_lists[class_index] = null;
+        slab_free_counts[class_index] = 0;
+        class_index = class_index + 1;
+    }
+    slab_cached_block_count = 0;
+    slab_cached_byte_count = 0;
+}
+
+fn allocator_payload_alloc_no_stats(size: usize) !&byte {
+    var usable_size: usize = size;
+    const class_index: usize = allocator_slab_class_for_size(size, &usable_size);
+    var payload: &byte = null;
+    if class_index != SLAB_CLASS_NONE {
+        payload = allocator_slab_pop(class_index, usable_size);
+    }
+    if payload == null {
+        const total: usize = usable_size + @size_of(AllocationHeader);
+        const raw_void: &void = malloc(total);
+        if raw_void == null { return error.AllocOutOfMemory; }
+        payload = allocator_payload_from_raw(raw_void as &byte);
+    }
+    const raw: &byte = allocator_raw_from_payload(payload);
+    const header: &AllocationHeader = raw as &AllocationHeader;
+    header.requested_size = size;
+    header.usable_size = usable_size;
+    header.class_index = class_index;
+    return payload;
+}
+
+fn allocator_payload_free_no_stats(ptr: &byte) void {
+    const raw: &byte = allocator_raw_from_payload(ptr);
+    const header: &AllocationHeader = raw as &AllocationHeader;
+    if header.class_index != SLAB_CLASS_NONE {
+        if allocator_slab_push(header.class_index, header.usable_size, ptr) {
+            return;
+        }
+    }
+    free(raw as &void);
+}
+
+fn allocator_copy_bytes(dst: &byte, src: &byte, len: usize) void {
+    var i: usize = 0;
+    while i < len {
+        dst[i] = src[i];
+        i = i + 1;
+    }
 }
 
 fn allocator_update_peak() void {
@@ -87,38 +259,55 @@ fn allocator_note_resize(old_size: usize, new_size: usize) void {
 
 export fn redis_malloc(size: usize) !&byte {
     if size == 0 { return error.AllocInvalidSize; }
-    const total: usize = size + @size_of(usize);
-    const raw: &void = malloc(total);
-    if raw == null { return error.AllocOutOfMemory; }
-    const header: &usize = raw as &usize;
-    *header = size;
+    const payload: &byte = try allocator_payload_alloc_no_stats(size);
     allocator_note_alloc(size);
-    return ((raw as &byte) + @size_of(usize)) as &byte;
+    return payload;
 }
 
 export fn redis_free(ptr: &byte) void {
     if ptr == null { return; }
-    const raw: &byte = ptr - @size_of(usize);
-    const header: &usize = raw as &usize;
-    const size: usize = *header;
+    const raw: &byte = allocator_raw_from_payload(ptr);
+    const header: &AllocationHeader = raw as &AllocationHeader;
+    const size: usize = header.requested_size;
     allocator_note_free(size);
-    free(raw as &void);
+    allocator_payload_free_no_stats(ptr);
 }
 
 export fn redis_realloc(ptr: &byte, new_size: usize) !&byte {
     if new_size == 0 { return error.AllocInvalidSize; }
     if ptr == null { return redis_malloc(new_size); }
 
-    const raw: &byte = ptr - @size_of(usize);
-    const header: &usize = raw as &usize;
-    const old_size: usize = *header;
-    const total: usize = new_size + @size_of(usize);
-    const new_raw_void: &void = realloc(raw as &void, total);
-    if new_raw_void == null { return error.AllocOutOfMemory; }
-    const new_header: &usize = new_raw_void as &usize;
-    *new_header = new_size;
+    const raw: &byte = allocator_raw_from_payload(ptr);
+    const header: &AllocationHeader = raw as &AllocationHeader;
+    const old_size: usize = header.requested_size;
+    var new_usable_size: usize = new_size;
+    const new_class_index: usize = allocator_slab_class_for_size(new_size, &new_usable_size);
+    if header.class_index != SLAB_CLASS_NONE && header.class_index == new_class_index && new_size <= header.usable_size {
+        header.requested_size = new_size;
+        allocator_note_resize(old_size, new_size);
+        return ptr;
+    }
+    if header.class_index == SLAB_CLASS_NONE && new_class_index == SLAB_CLASS_NONE {
+        const total: usize = new_usable_size + @size_of(AllocationHeader);
+        const new_raw_void: &void = realloc(raw as &void, total);
+        if new_raw_void == null { return error.AllocOutOfMemory; }
+        const new_header: &AllocationHeader = new_raw_void as &AllocationHeader;
+        new_header.requested_size = new_size;
+        new_header.usable_size = new_usable_size;
+        new_header.class_index = new_class_index;
+        allocator_note_resize(old_size, new_size);
+        return allocator_payload_from_raw(new_raw_void as &byte);
+    }
+
+    const new_ptr: &byte = try allocator_payload_alloc_no_stats(new_size);
+    var copy_len: usize = old_size;
+    if new_size < copy_len {
+        copy_len = new_size;
+    }
+    allocator_copy_bytes(new_ptr, ptr, copy_len);
+    allocator_payload_free_no_stats(ptr);
     allocator_note_resize(old_size, new_size);
-    return ((new_raw_void as &byte) + @size_of(usize)) as &byte;
+    return new_ptr;
 }
 
 RedisAllocator {

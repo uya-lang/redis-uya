@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 38);
+    try assert_eq_i32(command_router_count(&router) as i32, 39);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -50,6 +50,10 @@ export fn test_command_router_lookup_and_case() !void {
     const publish: CommandInfo = try command_router_lookup(&router, &"PUBLISH"[0: 7]);
     try assert_eq_i32(publish.cmd_type as i32, CommandType.command_publish as i32);
     try assert_eq_i32(publish.arity, 3);
+
+    const cluster: CommandInfo = try command_router_lookup(&router, &"CLUSTER"[0: 7]);
+    try assert_eq_i32(cluster.cmd_type as i32, CommandType.command_cluster as i32);
+    try assert_eq_i32(cluster.arity, -2);
 
     const multi: CommandInfo = try command_router_lookup(&router, &"MULTI"[0: 5]);
     try assert_eq_i32(multi.cmd_type as i32, CommandType.command_multi as i32);
@@ -193,6 +197,7 @@ export fn test_command_router_arity_validation() !void {
     const psync: CommandInfo = try command_router_lookup(&router, &"PSYNC"[0: 5]);
     const config: CommandInfo = try command_router_lookup(&router, &"CONFIG"[0: 6]);
     const client: CommandInfo = try command_router_lookup(&router, &"CLIENT"[0: 6]);
+    const cluster: CommandInfo = try command_router_lookup(&router, &"CLUSTER"[0: 7]);
     const hget: CommandInfo = try command_router_lookup(&router, &"HGET"[0: 4]);
     const hset: CommandInfo = try command_router_lookup(&router, &"HSET"[0: 4]);
     const set: CommandInfo = try command_router_lookup(&router, &"SET"[0: 3]);
@@ -235,6 +240,8 @@ export fn test_command_router_arity_validation() !void {
     try command_validate_arity(&config, 3);
     try command_validate_arity(&client, 2);
     try command_validate_arity(&client, 4);
+    try command_validate_arity(&cluster, 2);
+    try command_validate_arity(&cluster, 3);
     try command_validate_arity(&hget, 3);
     try command_validate_arity(&hset, 4);
     try command_validate_arity(&set, 3);

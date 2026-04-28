@@ -75,6 +75,7 @@ use tests.unit.command_router_test.test_command_from_resp_array;
 use tests.unit.command_router_test.test_command_from_resp_error_paths;
 use tests.unit.command_executor_test.test_command_ping_and_info;
 use tests.unit.command_executor_test.test_command_info_and_config;
+use tests.unit.command_executor_test.test_command_cluster;
 use tests.unit.command_executor_test.test_command_replicaof;
 use tests.unit.command_executor_test.test_command_psync;
 use tests.unit.command_executor_test.test_command_bgsave;
@@ -424,6 +425,10 @@ export fn main() i32 {
     const before_exec_info_config: i32 = failed;
     _ = test_command_info_and_config() catch { printf("[FAIL] command_executor/info_config\n" as *byte); failed = failed + 1; };
     if failed == before_exec_info_config { printf("[PASS] command_executor/info_config\n" as *byte); }
+
+    const before_exec_cluster: i32 = failed;
+    _ = test_command_cluster() catch { printf("[FAIL] command_executor/cluster\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_cluster { printf("[PASS] command_executor/cluster\n" as *byte); }
 
     const before_exec_replicaof: i32 = failed;
     _ = test_command_replicaof() catch { printf("[FAIL] command_executor/replicaof\n" as *byte); failed = failed + 1; };

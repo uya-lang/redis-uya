@@ -1,6 +1,6 @@
 # redis-uya API
 
-> 版本: v0.6.0
+> 版本: v0.7.0-dev
 > 日期: 2026-04-29
 
 ## 1. 协议
@@ -237,6 +237,32 @@ CLIENT HELP
 
 - 客户端名和 `SETINFO` 元数据存放在连接级 `ConnectionTransaction`
 - 当前不支持 `CLIENT KILL`、`PAUSE`、`TRACKING` 等全局控制命令
+
+### `CLUSTER`
+
+格式：
+
+```text
+CLUSTER KEYSLOT key
+CLUSTER INFO
+CLUSTER NODES
+CLUSTER SLOTS
+CLUSTER HELP
+```
+
+返回：
+
+- `CLUSTER KEYSLOT key`：按 Redis Cluster CRC16/hash tag 规则返回 `0..16383` 槽位
+- `CLUSTER INFO`：Bulk String，包含 `cluster_enabled:1`、`cluster_state:ok`、`cluster_slots_assigned`、`cluster_known_nodes` 与 `cluster_size`
+- `CLUSTER NODES`：Bulk String，当前返回本地 master 节点、`myself,master`、`connected` 和 `0-16383` 槽位范围
+- `CLUSTER SLOTS`：RESP Array，当前返回单个 `0..16383` 槽位范围及本地节点地址、端口和 node id
+- `CLUSTER HELP`：返回当前支持的 CLUSTER 子命令列表
+
+说明：
+
+- 当前 `CLUSTER` 命令使用单节点最小拓扑，默认本节点拥有全部 16384 个槽
+- 当前不支持 `CLUSTER MEET`、`ADDSLOTS`、`SETSLOT`、`REPLICATE`、`FAILOVER` 等拓扑变更命令
+- `MOVED` / `ASK` 重定向仍在 v0.7.0 后续子项中实现
 
 ### `MULTI`
 

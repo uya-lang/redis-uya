@@ -286,6 +286,68 @@ export fn test_command_info_and_config() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_command_cluster() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var runtime: CommandRuntimeInfo = command_runtime_default();
+    runtime.config.port = 6380;
+    config_copy_bytes(runtime.config.bind[0: 64], &"127.0.0.1"[0: 9]);
+
+    var keyslot_parsed: RespParseResult = try parse_resp2(&"*3\r\n$7\r\nCLUSTER\r\n$7\r\nKEYSLOT\r\n$9\r\n123456789\r\n"[0: 45]);
+    const keyslot_command: Command = try command_executor_test_command(&router, &keyslot_parsed);
+    const keyslot_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &keyslot_command, 5000u64);
+    try assert_eq_i32(keyslot_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(keyslot_reply.integer as i32, 12739);
+    resp_value_free(&keyslot_parsed.value);
+
+    var info_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nCLUSTER\r\n$4\r\nINFO\r\n"[0: 27]);
+    const info_command: Command = try command_executor_test_command(&router, &info_parsed);
+    var info_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &info_command, 5000u64);
+    try assert_eq_i32(info_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_contains(info_reply.data, &"cluster_enabled:1\r\n"[0: 19]));
+    try assert_true(command_executor_test_contains(info_reply.data, &"cluster_slots_assigned:16384\r\n"[0: 30]));
+    command_reply_cleanup(&info_reply);
+    resp_value_free(&info_parsed.value);
+
+    var nodes_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nCLUSTER\r\n$5\r\nNODES\r\n"[0: 28]);
+    const nodes_command: Command = try command_executor_test_command(&router, &nodes_parsed);
+    var nodes_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &nodes_command, 5000u64);
+    try assert_eq_i32(nodes_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_contains(nodes_reply.data, &"127.0.0.1:6380@16380"[0: 20]));
+    try assert_true(command_executor_test_contains(nodes_reply.data, &"myself,master"[0: 13]));
+    try assert_true(command_executor_test_contains(nodes_reply.data, &"0-16383\r\n"[0: 9]));
+    command_reply_cleanup(&nodes_reply);
+    resp_value_free(&nodes_parsed.value);
+
+    var slots_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nCLUSTER\r\n$5\r\nSLOTS\r\n"[0: 28]);
+    const slots_command: Command = try command_executor_test_command(&router, &slots_parsed);
+    var slots_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &slots_command, 5000u64);
+    try assert_eq_i32(slots_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    try assert_true(command_executor_test_contains(slots_reply.data, &"*1\r\n*3\r\n:0\r\n:16383\r\n*3\r\n$9\r\n127.0.0.1\r\n:6380\r\n$40\r\n"[0: 51]));
+    command_reply_cleanup(&slots_reply);
+    resp_value_free(&slots_parsed.value);
+
+    var help_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nCLUSTER\r\n$4\r\nHELP\r\n"[0: 27]);
+    const help_command: Command = try command_executor_test_command(&router, &help_parsed);
+    var help_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &help_command, 5000u64);
+    var out: [byte: 512] = [];
+    const help_len: usize = try connection_encode_reply(&help_reply, &out[0], 512);
+    try assert_true(command_executor_test_contains(out[0: help_len], &"$21\r\nCLUSTER KEYSLOT <key>\r\n"[0: 28]));
+    command_reply_cleanup(&help_reply);
+    resp_value_free(&help_parsed.value);
+
+    var missing_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nCLUSTER\r\n$7\r\nMISSING\r\n"[0: 30]);
+    const missing_command: Command = try command_executor_test_command(&router, &missing_parsed);
+    const missing_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &missing_command, 5000u64);
+    try assert_eq_i32(missing_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(missing_reply.data, &"ERR unknown CLUSTER subcommand"[0: 30]));
+    resp_value_free(&missing_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_command_replicaof() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();

@@ -48,6 +48,7 @@ export enum CommandType {
     command_subscribe,
     command_unsubscribe,
     command_publish,
+    command_cluster,
 }
 
 export struct CommandInfo {
@@ -74,7 +75,7 @@ export const COMMAND_FLAG_READONLY: u64 = 1u64;
 export const COMMAND_FLAG_WRITE: u64 = 2u64;
 export const COMMAND_FLAG_FAST: u64 = 4u64;
 
-const MIN_COMMAND_COUNT: usize = 38;
+const MIN_COMMAND_COUNT: usize = 39;
 
 fn command_router_lower(ch: byte) byte {
     if ch >= 65 as byte && ch <= 90 as byte {
@@ -232,6 +233,9 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
     }
     if index == 37 {
         return command_router_info(CommandType.command_publish, &"PUBLISH"[0: 7], 3, COMMAND_FLAG_FAST, 0, 0, 0);
+    }
+    if index == 38 {
+        return command_router_info(CommandType.command_cluster, &"CLUSTER"[0: 7], -2, COMMAND_FLAG_READONLY, 0, 0, 0);
     }
     return error.CommandUnknown;
 }

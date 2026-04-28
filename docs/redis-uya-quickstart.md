@@ -91,6 +91,11 @@ REDIS_UYA_LONG_RUN_SECONDS=1800 python3 tests/integration/long_run_smoke.py
 - `CLIENT LIST`
 - `CLIENT SETINFO LIB-NAME value`
 - `CLIENT SETINFO LIB-VER value`
+- `CLUSTER KEYSLOT key`
+- `CLUSTER INFO`
+- `CLUSTER NODES`
+- `CLUSTER SLOTS`
+- `CLUSTER HELP`
 - `HELLO 2|3 [SETNAME name]`
 - `MULTI`
 - `EXEC`
@@ -112,7 +117,7 @@ REDIS_UYA_LONG_RUN_SECONDS=1800 python3 tests/integration/long_run_smoke.py
 ## 5. 当前边界
 
 - 单节点、单进程
-- 集群当前提供内部 Cluster 槽位计算、节点元数据和最小拓扑模型，尚未提供 `CLUSTER` 命令和重定向
+- 集群当前提供 Cluster 槽位计算、节点元数据、最小拓扑模型和 `CLUSTER KEYSLOT/INFO/NODES/SLOTS/HELP`，尚未提供重定向
 - RESP2 子集
 - 核心数据结构子集 + String/Key/Control 子集
 - AOF append + replay
@@ -124,4 +129,4 @@ REDIS_UYA_LONG_RUN_SECONDS=1800 python3 tests/integration/long_run_smoke.py
 - `maxmemory` 当前已支持 noeviction、allkeys-lru、allkeys-lfu、volatile-lru、volatile-lfu、volatile-ttl 基线
 - `INFO memory` 当前可观测 allocator 与 Slab 统计
 - 事务、Pub/Sub、CLIENT / CONFIG 仍是最小兼容子集
-- 不支持 master 主动流式推送复制、集群、Lua、Redis 模块
+- 不支持 master 主动流式推送复制、完整集群、Lua、Redis 模块

@@ -54,6 +54,7 @@ export struct RedisObject {
     list_tail: &ListNode,
     list_len: usize,
     lru_at_ms: u64,
+    lfu_counter: u64,
 }
 
 struct ParseIntResult {
@@ -153,6 +154,7 @@ export fn create_string_object(data: &[byte]) !&RedisObject {
     obj.list_tail = null as &ListNode;
     obj.list_len = 0;
     obj.lru_at_ms = 0u64;
+    obj.lfu_counter = 0u64;
     return obj;
 }
 
@@ -182,6 +184,7 @@ export fn create_hash_object() !&RedisObject {
     obj.list_tail = null as &ListNode;
     obj.list_len = 0;
     obj.lru_at_ms = 0u64;
+    obj.lfu_counter = 0u64;
     return obj;
 }
 
@@ -224,6 +227,7 @@ export fn create_list_object() !&RedisObject {
     obj.list_tail = null as &ListNode;
     obj.list_len = 0;
     obj.lru_at_ms = 0u64;
+    obj.lfu_counter = 0u64;
     return obj;
 }
 
@@ -245,6 +249,7 @@ export fn create_set_object() !&RedisObject {
     obj.list_tail = null as &ListNode;
     obj.list_len = 0;
     obj.lru_at_ms = 0u64;
+    obj.lfu_counter = 0u64;
     return obj;
 }
 
@@ -266,6 +271,7 @@ export fn create_zset_object() !&RedisObject {
     obj.list_tail = null as &ListNode;
     obj.list_len = 0;
     obj.lru_at_ms = 0u64;
+    obj.lfu_counter = 0u64;
     return obj;
 }
 

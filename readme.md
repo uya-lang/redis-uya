@@ -10,7 +10,7 @@
 
 `redis-uya` 是一个使用 **Uya 编程语言** 从零实现的生产级高性能内存数据库系统。项目长期目标是兼容 Redis 6.2+ 协议，覆盖核心数据结构、持久化、复制、基础集群与性能工程，并在同条件核心场景上超过 Redis。
 
-当前项目已完成 `v0.5.0` 规划任务，并已进入 `v0.6.0` 内存与性能控制：在 `v0.1.0` 发布闭环、`v0.2.0` 数据结构扩展和 `v0.3.0` 持久化增强基础上，补齐了复制角色与状态机、`PSYNC / backlog`、replica 侧全量同步、定时拉取式增量同步、复制心跳、主从一致性 smoke、连接级最小 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`、`HELLO 2/3` 驱动的 RESP3 最小协议闭环、`PUBLISH/SUBSCRIBE/UNSUBSCRIBE` 最小 Pub/Sub 闭环、`CLIENT` / `CONFIG` 控制面兼容子集、v0.5 兼容性回归，以及 `maxmemory` noeviction 和 `allkeys-lru` 基线。
+当前项目已完成 `v0.5.0` 规划任务，并已进入 `v0.6.0` 内存与性能控制：在 `v0.1.0` 发布闭环、`v0.2.0` 数据结构扩展和 `v0.3.0` 持久化增强基础上，补齐了复制角色与状态机、`PSYNC / backlog`、replica 侧全量同步、定时拉取式增量同步、复制心跳、主从一致性 smoke、连接级最小 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`、`HELLO 2/3` 驱动的 RESP3 最小协议闭环、`PUBLISH/SUBSCRIBE/UNSUBSCRIBE` 最小 Pub/Sub 闭环、`CLIENT` / `CONFIG` 控制面兼容子集、v0.5 兼容性回归，以及 `maxmemory` noeviction、`allkeys-lru` 和 `allkeys-lfu` 基线。
 
 ## 核心目标
 
@@ -66,6 +66,7 @@
 - v0.5 兼容性回归：覆盖 RESP3 Null、WATCH 中止、事务内控制命令错误、RESP3 Pub/Sub Push、CLIENT/CONFIG 组合路径
 - `maxmemory` noeviction 基线：启动参数可设置最大内存，超预算增量写命令返回 OOM 且不落库
 - `allkeys-lru` 淘汰基线：对象记录最近访问时间，超预算写入可淘汰最久未访问 key 后继续执行
+- `allkeys-lfu` 淘汰基线：对象记录访问计数，超预算写入可淘汰访问次数最低 key 后继续执行
 - Python 客户端风格集成：覆盖更多命令与控制面交互
 
 当前进行中：
@@ -209,7 +210,7 @@ build/redis-uya 6380 1
 - Pub/Sub 最小子集：`PUBLISH/SUBSCRIBE/UNSUBSCRIBE`
 - `CLIENT` / `CONFIG` 控制面兼容子集
 - v0.5 协议与控制面兼容性回归
-- `maxmemory` noeviction 与 `allkeys-lru` 基线
+- `maxmemory` noeviction、`allkeys-lru` 与 `allkeys-lfu` 基线
 - `redis-cli` smoke、Python 集成 smoke、持久化与复制 benchmark
 
 当前主线仍未包含：
@@ -219,7 +220,7 @@ build/redis-uya 6380 1
 - Redis 风格长连接流式复制
 - Pub/Sub 模式下的完整命令限制、pattern 订阅与背压处理
 - 完整 `CONFIG SET/REWRITE` 与全局 `CLIENT LIST/KILL/PAUSE/TRACKING`
-- LFU/volatile 淘汰策略、Slab allocator 与内存压力 benchmark
+- volatile 淘汰策略、LFU 衰减、Slab allocator 与内存压力 benchmark
 - 基础集群
 - Lua 脚本
 - Redis 模块系统

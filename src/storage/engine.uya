@@ -44,6 +44,14 @@ fn usize_to_object(value: usize) &RedisObject {
     return @ptr_from_usize(value) as &RedisObject;
 }
 
+fn object_touch_for_memory_policy(obj: &RedisObject, now_ms: u64) void {
+    if obj == null {
+        return;
+    }
+    obj.lru_at_ms = now_ms;
+    obj.lfu_counter = obj.lfu_counter + 1u64;
+}
+
 export fn engine_new() Engine {
     return Engine{
         db: RedisDb{
@@ -76,9 +84,7 @@ export fn engine_expire_len(engine: &Engine) usize {
 }
 
 export fn set_key_at(engine: &Engine, key: &[byte], obj: &RedisObject, now_ms: u64) !void {
-    if obj != null {
-        obj.lru_at_ms = now_ms;
-    }
+    object_touch_for_memory_policy(obj, now_ms);
 
     const old_value_result: !usize = dict_lookup(&engine.db.dict, key);
     const old_value: usize = old_value_result catch {
@@ -160,9 +166,7 @@ export fn lookup_key_at(engine: &Engine, key: &[byte], now_ms: u64) !&RedisObjec
         return error.EngineKeyNotFound;
     };
     const obj: &RedisObject = usize_to_object(value);
-    if obj != null {
-        obj.lru_at_ms = now_ms;
-    }
+    object_touch_for_memory_policy(obj, now_ms);
     return obj;
 }
 
@@ -211,6 +215,45 @@ export fn engine_evict_allkeys_lru(engine: &Engine, maxmemory: usize, needed: us
             if obj != null {
                 if candidate == null || obj.lru_at_ms < oldest_ms {
                     candidate = entry;
+                    oldest_ms = obj.lru_at_ms;
+                }
+            }
+            entry = dict_iter_next(&engine.db.dict, &iter);
+        }
+
+        if candidate == null {
+            break;
+        }
+        const candidate_key: &[byte] = candidate.key.buf[0: candidate.key.len];
+        if !delete_key(engine, candidate_key) {
+            break;
+        }
+        evicted = evicted + 1;
+    }
+    return evicted;
+}
+
+export fn engine_evict_allkeys_lfu(engine: &Engine, maxmemory: usize, needed: usize, now_ms: u64) usize {
+    var evicted: usize = 0;
+    while engine_memory_over_limit(maxmemory, needed) {
+        if engine_delete_one_expired_for_eviction(engine, now_ms) {
+            evicted = evicted + 1;
+            continue;
+        }
+
+        var candidate: &DictEntry = null as &DictEntry;
+        var lowest_freq: u64 = 0u64;
+        var oldest_ms: u64 = 0u64;
+        var iter: DictIterator = dict_iter_new();
+        var entry: &DictEntry = dict_iter_next(&engine.db.dict, &iter);
+        while entry != null {
+            const obj: &RedisObject = usize_to_object(entry.value);
+            if obj != null {
+                if candidate == null ||
+                    obj.lfu_counter < lowest_freq ||
+                    (obj.lfu_counter == lowest_freq && obj.lru_at_ms < oldest_ms) {
+                    candidate = entry;
+                    lowest_freq = obj.lfu_counter;
                     oldest_ms = obj.lru_at_ms;
                 }
             }

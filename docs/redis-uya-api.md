@@ -94,6 +94,7 @@ SET key value
 
 - `noeviction` 策略不主动淘汰，超预算增量写命令直接失败
 - `allkeys-lru` 策略会按 top-level key 的最近访问时间淘汰最久未访问 key，再执行当前写命令
+- `allkeys-lfu` 策略会按 top-level key 的访问计数淘汰最低频 key，同频次用 LRU 打破平局
 
 ### `DEL`
 

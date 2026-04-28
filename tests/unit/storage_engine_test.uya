@@ -15,6 +15,7 @@ use src.storage.engine.engine_expire_cycle_at;
 use src.storage.engine.engine_active_expire_cycle_at;
 use src.storage.engine.engine_scan_keys_at;
 use src.storage.engine.engine_evict_allkeys_lru;
+use src.storage.engine.engine_evict_allkeys_lfu;
 use src.storage.object.RedisObject;
 use src.storage.object.Encoding;
 use src.storage.object.create_string_object;
@@ -87,6 +88,34 @@ export fn test_engine_allkeys_lru_evicts_oldest() !void {
 
     try assert_eq_i32(evicted as i32, 1);
     try assert_true(engine_key_missing_at(&engine, &"old"[0: 3], 4000u64));
+    const live_hot: &RedisObject = try lookup_key_at(&engine, &"hot"[0: 3], 4000u64);
+    try assert_true(engine_slice_eq(live_hot.value.buf[0: live_hot.value.len], hot_value[0: 1024]));
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_engine_allkeys_lfu_evicts_least_frequent() !void {
+    reset_memory_stats_for_test();
+    var engine: Engine = engine_new();
+    var cold_value: [byte: 1024] = [];
+    var hot_value: [byte: 1024] = [];
+    engine_fill_bytes(cold_value[0: 1024], 99 as byte);
+    engine_fill_bytes(hot_value[0: 1024], 104 as byte);
+
+    const cold_obj: &RedisObject = try create_string_object(cold_value[0: 1024]);
+    const hot_obj: &RedisObject = try create_string_object(hot_value[0: 1024]);
+    try set_key_at(&engine, &"cold"[0: 4], cold_obj, 1000u64);
+    try set_key_at(&engine, &"hot"[0: 3], hot_obj, 1000u64);
+    _ = try lookup_key_at(&engine, &"hot"[0: 3], 2000u64);
+    const hot_found: &RedisObject = try lookup_key_at(&engine, &"hot"[0: 3], 3000u64);
+    try assert_eq_i32(hot_found.lfu_counter as i32, 3);
+
+    const limit: usize = used_memory() - 1;
+    const evicted: usize = engine_evict_allkeys_lfu(&engine, limit, 0, 4000u64);
+
+    try assert_eq_i32(evicted as i32, 1);
+    try assert_true(engine_key_missing_at(&engine, &"cold"[0: 4], 4000u64));
     const live_hot: &RedisObject = try lookup_key_at(&engine, &"hot"[0: 3], 4000u64);
     try assert_true(engine_slice_eq(live_hot.value.buf[0: live_hot.value.len], hot_value[0: 1024]));
 

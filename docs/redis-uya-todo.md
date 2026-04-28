@@ -43,7 +43,7 @@
 - [x] `v0.3.0`：持久化增强与可靠性矩阵
 - [x] `v0.4.0`：复制与高可用基础
 - [x] `v0.5.0`：协议与控制面增强
-- [x] `v0.6.0`：`maxmemory` noeviction 基线与 `allkeys-lru`
+- [x] `v0.6.0`：`maxmemory` noeviction、`allkeys-lru` 与 `allkeys-lfu`
 
 当前进行中：
 
@@ -289,7 +289,7 @@
 
 - [x] `maxmemory`
 - [x] `allkeys-lru`
-- [ ] `allkeys-lfu`
+- [x] `allkeys-lfu`
 - [ ] `volatile-*`
 - [ ] 内存统计完善
 - [ ] Slab allocator

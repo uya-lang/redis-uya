@@ -45,6 +45,7 @@ use tests.unit.storage_engine_test.test_engine_active_expire_cycle;
 use tests.unit.storage_engine_test.test_engine_active_expire_loop_continues;
 use tests.unit.storage_engine_test.test_engine_scan_keys_sorted_skips_expired;
 use tests.unit.storage_engine_test.test_engine_allkeys_lru_evicts_oldest;
+use tests.unit.storage_engine_test.test_engine_allkeys_lfu_evicts_least_frequent;
 use tests.unit.network_protocol_test.test_resp2_simple_string_error_integer;
 use tests.unit.network_protocol_test.test_resp2_bulk_string_and_nulls;
 use tests.unit.network_protocol_test.test_resp2_array_of_bulk_strings;
@@ -67,6 +68,7 @@ use tests.unit.command_executor_test.test_command_save_rdb;
 use tests.unit.command_executor_test.test_command_set_get_del_exists;
 use tests.unit.command_executor_test.test_command_maxmemory_noeviction;
 use tests.unit.command_executor_test.test_command_maxmemory_allkeys_lru;
+use tests.unit.command_executor_test.test_command_maxmemory_allkeys_lfu;
 use tests.unit.command_executor_test.test_command_hset_hget;
 use tests.unit.command_executor_test.test_command_lpush_lpop_lrange;
 use tests.unit.command_executor_test.test_command_sadd_srem_smembers;
@@ -288,6 +290,10 @@ export fn main() i32 {
     _ = test_engine_allkeys_lru_evicts_oldest() catch { printf("[FAIL] storage_engine/allkeys_lru\n" as *byte); failed = failed + 1; };
     if failed == before_engine_lru { printf("[PASS] storage_engine/allkeys_lru\n" as *byte); }
 
+    const before_engine_lfu: i32 = failed;
+    _ = test_engine_allkeys_lfu_evicts_least_frequent() catch { printf("[FAIL] storage_engine/allkeys_lfu\n" as *byte); failed = failed + 1; };
+    if failed == before_engine_lfu { printf("[PASS] storage_engine/allkeys_lfu\n" as *byte); }
+
     const before_resp_line: i32 = failed;
     _ = test_resp2_simple_string_error_integer() catch { printf("[FAIL] network_protocol/simple_error_integer\n" as *byte); failed = failed + 1; };
     if failed == before_resp_line { printf("[PASS] network_protocol/simple_error_integer\n" as *byte); }
@@ -375,6 +381,10 @@ export fn main() i32 {
     const before_exec_lru: i32 = failed;
     _ = test_command_maxmemory_allkeys_lru() catch { printf("[FAIL] command_executor/allkeys_lru\n" as *byte); failed = failed + 1; };
     if failed == before_exec_lru { printf("[PASS] command_executor/allkeys_lru\n" as *byte); }
+
+    const before_exec_lfu: i32 = failed;
+    _ = test_command_maxmemory_allkeys_lfu() catch { printf("[FAIL] command_executor/allkeys_lfu\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_lfu { printf("[PASS] command_executor/allkeys_lfu\n" as *byte); }
 
     const before_exec_hash: i32 = failed;
     _ = test_command_hset_hget() catch { printf("[FAIL] command_executor/hash\n" as *byte); failed = failed + 1; };

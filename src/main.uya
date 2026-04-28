@@ -88,6 +88,9 @@ fn main_maxmemory_policy_arg() MaxmemoryPolicy {
     if main_cstring_eq(arg, &"allkeys-lru"[0: 11]) {
         return MaxmemoryPolicy.maxmemory_allkeys_lru;
     }
+    if main_cstring_eq(arg, &"allkeys-lfu"[0: 11]) {
+        return MaxmemoryPolicy.maxmemory_allkeys_lfu;
+    }
     return MaxmemoryPolicy.maxmemory_noeviction;
 }
 

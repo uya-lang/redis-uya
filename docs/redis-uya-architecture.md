@@ -116,13 +116,13 @@ server open
 ## 7. 内存限制与淘汰基线
 
 - `main.uya` 支持第四个可选启动参数 `maxmemory`，单位为字节，`0` 表示不限制
-- `main.uya` 支持第五个可选启动参数 `maxmemory-policy`，当前可选 `noeviction` 与 `allkeys-lru`
+- `main.uya` 支持第五个可选启动参数 `maxmemory-policy`，当前可选 `noeviction`、`allkeys-lru` 与 `allkeys-lfu`
 - `server_runtime_info()` 将 `ServerConfig.maxmemory` / `maxmemory_policy` 暴露给命令执行器、`INFO memory` 与 `CONFIG GET`
-- `RedisObject.lru_at_ms` 记录 top-level key 最近访问时间，`set_key_at()` 写入时初始化，`lookup_key_at()` 读取时刷新
-- `command/executor.uya` 在可能增量分配的写命令执行前做预算检查；`noeviction` 直接 OOM，`allkeys-lru` 调用 `engine_evict_allkeys_lru()` 后重试预算判断
+- `RedisObject.lru_at_ms` 记录 top-level key 最近访问时间，`RedisObject.lfu_counter` 记录访问计数，`set_key_at()` 写入时初始化，`lookup_key_at()` 读取时刷新
+- `command/executor.uya` 在可能增量分配的写命令执行前做预算检查；`noeviction` 直接 OOM，`allkeys-lru` / `allkeys-lfu` 分别调用 `engine_evict_allkeys_lru()` / `engine_evict_allkeys_lfu()` 后重试预算判断
 - 超出预算且策略无法腾挪时返回 `OOM command not allowed when used memory > 'maxmemory'`，失败命令不落 Engine、AOF 或 replication backlog
 
-当前 `allkeys-lru` 是全量扫描基线，尚未包含 Redis 风格采样池、LFU、volatile 策略和淘汰事件持久化优化。
+当前 `allkeys-lru` / `allkeys-lfu` 是全量扫描基线，尚未包含 Redis 风格采样池、LFU 衰减、volatile 策略和淘汰事件持久化优化。
 
 ## 8. AOF 语义
 
@@ -143,4 +143,4 @@ server open
 - RESP3 当前是 `HELLO 2/3` 驱动的最小闭环，仍不是完整 RESP3 类型输出与客户端兼容矩阵
 - Pub/Sub 当前是固定容量最小闭环，仍没有 pattern 订阅、完整 subscribed-mode 命令限制和背压缓冲
 - 控制面当前覆盖 `CLIENT` / `CONFIG` 的兼容子集，仍没有 `CONFIG SET/REWRITE`、全局 `CLIENT LIST`、`CLIENT KILL/PAUSE/TRACKING`
-- `maxmemory` 当前已覆盖 noeviction 与 allkeys-lru 基线，仍没有 LFU/volatile 淘汰策略、淘汰事件持久化优化和压力 benchmark
+- `maxmemory` 当前已覆盖 noeviction、allkeys-lru 与 allkeys-lfu 基线，仍没有 LFU 衰减、volatile 淘汰策略、淘汰事件持久化优化和压力 benchmark

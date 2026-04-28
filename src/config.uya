@@ -15,6 +15,7 @@ use libc.O_RDONLY;
 export enum MaxmemoryPolicy {
     maxmemory_noeviction,
     maxmemory_allkeys_lru,
+    maxmemory_allkeys_lfu,
 }
 
 export struct ServerConfig {
@@ -123,10 +124,16 @@ fn parse_maxmemory_policy(token: &[byte]) !MaxmemoryPolicy {
     if token_eq(token, &"allkeys-lru"[0: 11]) {
         return MaxmemoryPolicy.maxmemory_allkeys_lru;
     }
+    if token_eq(token, &"allkeys-lfu"[0: 11]) {
+        return MaxmemoryPolicy.maxmemory_allkeys_lfu;
+    }
     return error.ConfigInvalidValue;
 }
 
 export fn maxmemory_policy_name(policy: MaxmemoryPolicy) &[byte] {
+    if policy == MaxmemoryPolicy.maxmemory_allkeys_lfu {
+        return &"allkeys-lfu"[0: 11];
+    }
     if policy == MaxmemoryPolicy.maxmemory_allkeys_lru {
         return &"allkeys-lru"[0: 11];
     }

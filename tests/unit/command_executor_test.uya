@@ -597,6 +597,43 @@ export fn test_command_maxmemory_allkeys_lru() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_command_maxmemory_allkeys_lfu() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var runtime: CommandRuntimeInfo = command_runtime_default();
+    runtime.config.maxmemory_policy = MaxmemoryPolicy.maxmemory_allkeys_lfu;
+
+    var cold_value: [byte: 1024] = [];
+    var hot_value: [byte: 1024] = [];
+    command_executor_test_fill_bytes(cold_value[0: 1024], 99 as byte);
+    command_executor_test_fill_bytes(hot_value[0: 1024], 104 as byte);
+    const cold_obj: &RedisObject = try create_string_object(cold_value[0: 1024]);
+    const hot_obj: &RedisObject = try create_string_object(hot_value[0: 1024]);
+    try set_key_at(&engine, &"cold"[0: 4], cold_obj, 1000u64);
+    try set_key_at(&engine, &"hot"[0: 3], hot_obj, 1000u64);
+    _ = try lookup_key_at(&engine, &"hot"[0: 3], 2000u64);
+    _ = try lookup_key_at(&engine, &"hot"[0: 3], 3000u64);
+
+    var set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$3\r\nnew\r\n$1\r\nx\r\n"[0: 29]);
+    const set_command: Command = try command_executor_test_command(&router, &set_parsed);
+    runtime.config.maxmemory = used_memory() + 1;
+    const set_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &set_command, 4000u64);
+    try assert_eq_i32(set_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(set_reply.data, &"OK"[0: 2]));
+    resp_value_free(&set_parsed.value);
+
+    runtime.config.maxmemory = 0;
+    try assert_true(command_executor_test_key_missing_at(&engine, &"cold"[0: 4], 5000u64));
+    const hot_found: &RedisObject = try lookup_key_at(&engine, &"hot"[0: 3], 5000u64);
+    try assert_true(command_executor_test_slice_eq(hot_found.value.buf[0: hot_found.value.len], hot_value[0: 1024]));
+    const new_found: &RedisObject = try lookup_key_at(&engine, &"new"[0: 3], 5000u64);
+    try assert_true(command_executor_test_slice_eq(new_found.value.buf[0: new_found.value.len], &"x"[0: 1]));
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_command_hset_hget() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();

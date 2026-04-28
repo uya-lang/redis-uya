@@ -42,7 +42,7 @@ build/redis-uya 6380 8 build/dev.aof 1048576 allkeys-lru
 2. 最大客户端数，`0` 表示不限制
 3. AOF 文件路径，可省略，默认 `build/appendonly.aof`
 4. `maxmemory` 字节数，可省略，`0` 表示不限制
-5. `maxmemory-policy`，可省略，当前支持 `noeviction` 与 `allkeys-lru`，默认 `noeviction`
+5. `maxmemory-policy`，可省略，当前支持 `noeviction`、`allkeys-lru` 与 `allkeys-lfu`，默认 `noeviction`
 
 ## 3. 基础验证
 

@@ -1,10 +1,11 @@
 // redis-uya server entry point.
 
 use src.server.RedisServer;
-use src.server.server_open_with_aof_and_maxmemory;
+use src.server.server_open_with_aof_and_memory_policy;
 use src.server.server_default_aof_path;
 use src.server.server_run;
 use src.server.server_close;
+use src.config.MaxmemoryPolicy;
 use std.runtime.get_argc;
 use std.runtime.get_argv;
 use libc.atoi;
@@ -62,12 +63,41 @@ fn main_maxmemory_arg() usize {
     return value as usize;
 }
 
+fn main_cstring_eq(data: &byte, lit: &[byte]) bool {
+    if data == null {
+        return false;
+    }
+    var i: usize = 0;
+    while i < lit.len {
+        if data[i] == 0 as byte {
+            return false;
+        }
+        if data[i] != lit.ptr[i] {
+            return false;
+        }
+        i = i + 1;
+    }
+    return data[i] == 0 as byte;
+}
+
+fn main_maxmemory_policy_arg() MaxmemoryPolicy {
+    if get_argc() <= 5 {
+        return MaxmemoryPolicy.maxmemory_noeviction;
+    }
+    const arg: &byte = get_argv(5);
+    if main_cstring_eq(arg, &"allkeys-lru"[0: 11]) {
+        return MaxmemoryPolicy.maxmemory_allkeys_lru;
+    }
+    return MaxmemoryPolicy.maxmemory_noeviction;
+}
+
 export fn main() i32 {
     const port: u16 = main_port_arg();
     const maxclients: i32 = main_maxclients_arg();
     const aof_path: &const byte = main_aof_path_arg();
     const maxmemory: usize = main_maxmemory_arg();
-    var server: RedisServer = server_open_with_aof_and_maxmemory(port, maxclients, aof_path, maxmemory) catch |err| {
+    const maxmemory_policy: MaxmemoryPolicy = main_maxmemory_policy_arg();
+    var server: RedisServer = server_open_with_aof_and_memory_policy(port, maxclients, aof_path, maxmemory, maxmemory_policy) catch |err| {
         @println("redis-uya failed to listen: ${@error_id(err)}");
         return 1;
     };

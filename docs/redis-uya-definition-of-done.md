@@ -113,3 +113,4 @@ bash scripts/verify_definition_of_done.sh
 | DoD 项 | 证据 |
 |--------|------|
 | `maxmemory` noeviction 基线可用：启动参数可设置最大内存，`CONFIG GET/INFO memory` 可观测，超预算增量写命令返回 OOM 且不落库 | `tests/unit/command_executor_test.uya`、`tests/unit/network_connection_test.uya`、`tests/integration/maxmemory_noeviction.py` |
+| `allkeys-lru` 运行时淘汰基线可用：对象记录访问时间，读写触碰更新 LRU，超预算写入可淘汰最久未访问 key 后继续执行，`CONFIG GET/INFO memory` 可观测策略 | `tests/unit/storage_engine_test.uya`、`tests/unit/command_executor_test.uya`、`tests/integration/maxmemory_allkeys_lru.py` |

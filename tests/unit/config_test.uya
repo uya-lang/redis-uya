@@ -2,8 +2,11 @@ use tests.unit.assert.assert_eq_i32;
 use tests.unit.assert.assert_true;
 
 use src.config.ServerConfig;
+use src.config.MaxmemoryPolicy;
 use src.config.ConfigInvalidNumber;
+use src.config.ConfigInvalidValue;
 use src.config.default_config;
+use src.config.maxmemory_policy_name;
 use src.config.parse_config_file;
 use src.config.parse_config_text;
 
@@ -16,17 +19,28 @@ fn cstr_eq(buf: &[byte], lit: &[byte]) bool {
     return buf.ptr[lit.len] == 0 as byte;
 }
 
+fn config_test_slice_eq(a: &[byte], b: &[byte]) bool {
+    if a.len != b.len { return false; }
+    var i: usize = 0;
+    while i < a.len {
+        if a.ptr[i] != b.ptr[i] { return false; }
+        i = i + 1;
+    }
+    return true;
+}
+
 export fn test_config_defaults() !void {
     const cfg: ServerConfig = default_config();
     try assert_eq_i32(cfg.port, 6379);
     try assert_eq_i32(cfg.maxmemory as i32, 0);
+    try assert_eq_i32(cfg.maxmemory_policy as i32, MaxmemoryPolicy.maxmemory_noeviction as i32);
     try assert_eq_i32(cfg.replicaof_port, 0);
     try assert_true(cstr_eq(cfg.bind[0: 64], &"0.0.0.0"[0: 7]));
     try assert_true(cstr_eq(cfg.dbfilename[0: 128], &"dump.rdb"[0: 8]));
 }
 
 export fn test_config_parse_core_fields() !void {
-    const text: &[byte] = &"# sample\nport 6380\nbind 127.0.0.1\ndir /data\ndbfilename redis.rdb\nappendfilename redis.aof\nreplicaof 10.0.0.8 6381\nmasterauth secret\nmaxmemory 64mb\nsave 60 1000\n"[0: 170];
+    const text: &[byte] = &"# sample\nport 6380\nbind 127.0.0.1\ndir /data\ndbfilename redis.rdb\nappendfilename redis.aof\nreplicaof 10.0.0.8 6381\nmasterauth secret\nmaxmemory 64mb\nmaxmemory-policy allkeys-lru\nsave 60 1000\n"[0: 189];
     const cfg: ServerConfig = try parse_config_text(text);
     try assert_eq_i32(cfg.port, 6380);
     try assert_true(cstr_eq(cfg.bind[0: 64], &"127.0.0.1"[0: 9]));
@@ -37,6 +51,8 @@ export fn test_config_parse_core_fields() !void {
     try assert_eq_i32(cfg.replicaof_port, 6381);
     try assert_true(cstr_eq(cfg.masterauth[0: 128], &"secret"[0: 6]));
     try assert_eq_i32(cfg.maxmemory as i32, 64 * 1024 * 1024);
+    try assert_eq_i32(cfg.maxmemory_policy as i32, MaxmemoryPolicy.maxmemory_allkeys_lru as i32);
+    try assert_true(config_test_slice_eq(maxmemory_policy_name(cfg.maxmemory_policy), &"allkeys-lru"[0: 11]));
     try assert_eq_i32(cfg.save_seconds, 60);
     try assert_eq_i32(cfg.save_changes, 1000);
 }
@@ -61,6 +77,17 @@ export fn test_config_parse_invalid_number() !void {
     try assert_true(saw_error);
 }
 
+export fn test_config_parse_invalid_policy() !void {
+    var saw_error: bool = false;
+    _ = parse_config_text(&"maxmemory-policy nope\n"[0: 22]) catch |err| {
+        if err == error.ConfigInvalidValue {
+            saw_error = true;
+        }
+        return;
+    };
+    try assert_true(saw_error);
+}
+
 export fn test_config_parse_file() !void {
     const cfg: ServerConfig = try parse_config_file("tests/unit/fixtures/sample_redis.conf");
     try assert_eq_i32(cfg.port, 6391);
@@ -69,6 +96,7 @@ export fn test_config_parse_file() !void {
     try assert_true(cstr_eq(cfg.dbfilename[0: 128], &"dump-test.rdb"[0: 13]));
     try assert_true(cstr_eq(cfg.appendfilename[0: 128], &"append-test.aof"[0: 15]));
     try assert_eq_i32(cfg.maxmemory as i32, 8 * 1024 * 1024);
+    try assert_eq_i32(cfg.maxmemory_policy as i32, MaxmemoryPolicy.maxmemory_allkeys_lru as i32);
     try assert_eq_i32(cfg.save_seconds, 120);
     try assert_eq_i32(cfg.save_changes, 42);
 }

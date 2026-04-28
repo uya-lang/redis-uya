@@ -4,6 +4,7 @@ use src.command.executor.CommandRuntimeInfo;
 use src.command.router.CommandRouter;
 use src.command.router.command_router_new;
 use src.config.ServerConfig;
+use src.config.MaxmemoryPolicy;
 use src.config.default_config;
 use src.config.config_copy_bytes;
 use src.network.listener.RedisListener;
@@ -927,13 +928,20 @@ fn server_update_client_events(server: &RedisServer, slot: usize) !void {
     _ = try sys_epoll_ctl(server.listener.poll_fd, EPOLL_CTL_MOD, fd, &event);
 }
 
-export fn server_open_with_aof_and_maxmemory(port: u16, maxclients: i32, aof_path: &const byte, maxmemory: usize) !RedisServer {
+export fn server_open_with_aof_and_memory_policy(
+    port: u16,
+    maxclients: i32,
+    aof_path: &const byte,
+    maxmemory: usize,
+    maxmemory_policy: MaxmemoryPolicy,
+) !RedisServer {
     const listener: RedisListener = try listener_open_loopback(port, maxclients);
     var engine: Engine = engine_new();
     const router: CommandRouter = command_router_new();
     var config: ServerConfig = default_config();
     config.port = port as i32;
     config.maxmemory = maxmemory;
+    config.maxmemory_policy = maxmemory_policy;
     config_copy_bytes(config.bind[0: 64], &"127.0.0.1"[0: 9]);
     config_copy_bytes(config.dir[0: 256], &"build/"[0: 6]);
     config_copy_bytes(config.appendfilename[0: 128], (aof_path as &byte)[0: server_cstring_len(aof_path)]);
@@ -1010,6 +1018,10 @@ export fn server_open_with_aof_and_maxmemory(port: u16, maxclients: i32, aof_pat
     }
     server_init_clients(&server);
     return server;
+}
+
+export fn server_open_with_aof_and_maxmemory(port: u16, maxclients: i32, aof_path: &const byte, maxmemory: usize) !RedisServer {
+    return server_open_with_aof_and_memory_policy(port, maxclients, aof_path, maxmemory, MaxmemoryPolicy.maxmemory_noeviction);
 }
 
 export fn server_open_with_aof(port: u16, maxclients: i32, aof_path: &const byte) !RedisServer {

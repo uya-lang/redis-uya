@@ -1,6 +1,7 @@
 // config.uya - minimal redis.conf parser.
 
 export error ConfigInvalidNumber;
+export error ConfigInvalidValue;
 export error ConfigOpenFailed;
 export error ConfigReadFailed;
 export error ConfigFileTooLarge;
@@ -10,6 +11,11 @@ use std.io.file.file_open;
 use std.io.file.file_close;
 use std.io.file.file_read;
 use libc.O_RDONLY;
+
+export enum MaxmemoryPolicy {
+    maxmemory_noeviction,
+    maxmemory_allkeys_lru,
+}
 
 export struct ServerConfig {
     port: i32,
@@ -21,6 +27,7 @@ export struct ServerConfig {
     replicaof_port: i32,
     masterauth: [byte: 128],
     maxmemory: usize,
+    maxmemory_policy: MaxmemoryPolicy,
     save_seconds: i32,
     save_changes: i32,
 }
@@ -42,6 +49,7 @@ export fn default_config() ServerConfig {
     var cfg: ServerConfig = ServerConfig{
         port: 6379,
         maxmemory: 0,
+        maxmemory_policy: MaxmemoryPolicy.maxmemory_noeviction,
         save_seconds: 900,
         save_changes: 1,
     };
@@ -108,6 +116,23 @@ fn parse_memory_token(token: &[byte]) !usize {
     return error.ConfigInvalidNumber;
 }
 
+fn parse_maxmemory_policy(token: &[byte]) !MaxmemoryPolicy {
+    if token_eq(token, &"noeviction"[0: 10]) {
+        return MaxmemoryPolicy.maxmemory_noeviction;
+    }
+    if token_eq(token, &"allkeys-lru"[0: 11]) {
+        return MaxmemoryPolicy.maxmemory_allkeys_lru;
+    }
+    return error.ConfigInvalidValue;
+}
+
+export fn maxmemory_policy_name(policy: MaxmemoryPolicy) &[byte] {
+    if policy == MaxmemoryPolicy.maxmemory_allkeys_lru {
+        return &"allkeys-lru"[0: 11];
+    }
+    return &"noeviction"[0: 10];
+}
+
 fn next_token(line: &[byte], pos: &usize) &[byte] {
     while *pos < line.len && is_space(line.ptr[*pos]) {
         *pos = *pos + 1;
@@ -144,6 +169,8 @@ fn parse_line(cfg: &ServerConfig, line: &[byte]) !void {
         copy_literal(cfg.masterauth[0: 128], value);
     } else if token_eq(key, &"maxmemory"[0: 9]) {
         cfg.maxmemory = try parse_memory_token(value);
+    } else if token_eq(key, &"maxmemory-policy"[0: 16]) {
+        cfg.maxmemory_policy = try parse_maxmemory_policy(value);
     } else if token_eq(key, &"save"[0: 4]) {
         cfg.save_seconds = try parse_i32_token(value);
         const changes: &[byte] = next_token(line, &pos);

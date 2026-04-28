@@ -15,6 +15,7 @@ use src.storage.object.RedisObject;
 use src.storage.object.create_list_object;
 use src.storage.object.list_object_insert_sorted_lex;
 use src.storage.object.object_free;
+use src.memory.allocator.used_memory;
 use src.util.time.now_ms_safe;
 
 export error EngineKeyNotFound;
@@ -74,7 +75,11 @@ export fn engine_expire_len(engine: &Engine) usize {
     return dict_len(&engine.db.expires);
 }
 
-export fn set_key(engine: &Engine, key: &[byte], obj: &RedisObject) !void {
+export fn set_key_at(engine: &Engine, key: &[byte], obj: &RedisObject, now_ms: u64) !void {
+    if obj != null {
+        obj.lru_at_ms = now_ms;
+    }
+
     const old_value_result: !usize = dict_lookup(&engine.db.dict, key);
     const old_value: usize = old_value_result catch {
         const inserted: bool = try dict_insert(&engine.db.dict, key, ptr_to_usize(obj));
@@ -88,6 +93,10 @@ export fn set_key(engine: &Engine, key: &[byte], obj: &RedisObject) !void {
     _ = updated;
     engine.watch_seq = engine.watch_seq + 1u64;
     _ = try dict_insert(&engine.db.watch_versions, key, engine.watch_seq as usize);
+}
+
+export fn set_key(engine: &Engine, key: &[byte], obj: &RedisObject) !void {
+    try set_key_at(engine, key, obj, now_ms_safe());
 }
 
 export fn delete_key(engine: &Engine, key: &[byte]) bool {
@@ -150,11 +159,74 @@ export fn lookup_key_at(engine: &Engine, key: &[byte], now_ms: u64) !&RedisObjec
     const value: usize = value_result catch {
         return error.EngineKeyNotFound;
     };
-    return usize_to_object(value);
+    const obj: &RedisObject = usize_to_object(value);
+    if obj != null {
+        obj.lru_at_ms = now_ms;
+    }
+    return obj;
 }
 
 export fn lookup_key(engine: &Engine, key: &[byte]) !&RedisObject {
     return lookup_key_at(engine, key, now_ms_safe());
+}
+
+fn engine_memory_over_limit(maxmemory: usize, needed: usize) bool {
+    if maxmemory == 0 {
+        return false;
+    }
+    const current: usize = used_memory();
+    if current >= maxmemory {
+        return true;
+    }
+    return needed > maxmemory - current;
+}
+
+fn engine_delete_one_expired_for_eviction(engine: &Engine, now_ms: u64) bool {
+    var iter: DictIterator = dict_iter_new();
+    var entry: &DictEntry = dict_iter_next(&engine.db.dict, &iter);
+    while entry != null {
+        const key: &[byte] = entry.key.buf[0: entry.key.len];
+        if key_is_expired(engine, key, now_ms) {
+            return delete_key(engine, key);
+        }
+        entry = dict_iter_next(&engine.db.dict, &iter);
+    }
+    return false;
+}
+
+export fn engine_evict_allkeys_lru(engine: &Engine, maxmemory: usize, needed: usize, now_ms: u64) usize {
+    var evicted: usize = 0;
+    while engine_memory_over_limit(maxmemory, needed) {
+        if engine_delete_one_expired_for_eviction(engine, now_ms) {
+            evicted = evicted + 1;
+            continue;
+        }
+
+        var candidate: &DictEntry = null as &DictEntry;
+        var oldest_ms: u64 = 0u64;
+        var iter: DictIterator = dict_iter_new();
+        var entry: &DictEntry = dict_iter_next(&engine.db.dict, &iter);
+        while entry != null {
+            const obj: &RedisObject = usize_to_object(entry.value);
+            if obj != null {
+                if candidate == null || obj.lru_at_ms < oldest_ms {
+                    candidate = entry;
+                    oldest_ms = obj.lru_at_ms;
+                }
+            }
+            entry = dict_iter_next(&engine.db.dict, &iter);
+        }
+
+        if candidate == null {
+            break;
+        }
+        const candidate_key: &[byte] = candidate.key.buf[0: candidate.key.len];
+        if !delete_key(engine, candidate_key) {
+            break;
+        }
+        evicted = evicted + 1;
+    }
+    return evicted;
 }
 
 fn delete_expired_key_from_expire_entry(engine: &Engine, key: &[byte]) bool {

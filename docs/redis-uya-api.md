@@ -88,11 +88,12 @@ SET key value
 
 - 成功：`+OK`
 - 额外选项当前返回 `-ERR syntax error`
-- 当配置了 `maxmemory` 且增量写入预计超过限制：`-OOM command not allowed when used memory > 'maxmemory'`
+- 当配置了 `maxmemory` 且当前策略无法腾出预算：`-OOM command not allowed when used memory > 'maxmemory'`
 
 说明：
 
-- 当前 `maxmemory` 策略为 noeviction 基线：不主动淘汰，超预算增量写命令直接失败
+- `noeviction` 策略不主动淘汰，超预算增量写命令直接失败
+- `allkeys-lru` 策略会按 top-level key 的最近访问时间淘汰最久未访问 key，再执行当前写命令
 
 ### `DEL`
 
@@ -184,6 +185,7 @@ INFO keyspace
 
 - 支持 `server`、`clients`、`memory`、`stats`、`replication`、`keyspace`
 - 未带 section 时返回上述 section 组合段
+- `memory` section 当前包含 `used_memory`、`maxmemory`、`maxmemory_policy`
 
 ### `CONFIG`
 
@@ -198,7 +200,7 @@ CONFIG RESETSTAT
 返回：
 
 - 返回 RESP Array，按 `name`、`value` 成对展开
-- 当前支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`replicaof`、`masterauth`、`maxmemory`、`maxclients`、`databases`、`save`
+- 当前支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`replicaof`、`masterauth`、`maxmemory`、`maxmemory-policy`、`maxclients`、`databases`、`save`
 - 支持最小 `*` 通配模式
 - `CONFIG HELP` 返回当前支持的 CONFIG 子命令列表
 - `CONFIG RESETSTAT` 当前返回 `+OK`，用于客户端兼容；统计重置仍是最小占位语义

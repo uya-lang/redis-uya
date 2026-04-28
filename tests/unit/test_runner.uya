@@ -12,6 +12,7 @@ use tests.unit.config_test.test_config_defaults;
 use tests.unit.config_test.test_config_parse_core_fields;
 use tests.unit.config_test.test_config_parse_memory_units;
 use tests.unit.config_test.test_config_parse_invalid_number;
+use tests.unit.config_test.test_config_parse_invalid_policy;
 use tests.unit.config_test.test_config_parse_file;
 use tests.unit.storage_sds_test.test_sds_create_and_free;
 use tests.unit.storage_sds_test.test_sds_cat_and_grow;
@@ -43,6 +44,7 @@ use tests.unit.storage_engine_test.test_engine_clear_expire;
 use tests.unit.storage_engine_test.test_engine_active_expire_cycle;
 use tests.unit.storage_engine_test.test_engine_active_expire_loop_continues;
 use tests.unit.storage_engine_test.test_engine_scan_keys_sorted_skips_expired;
+use tests.unit.storage_engine_test.test_engine_allkeys_lru_evicts_oldest;
 use tests.unit.network_protocol_test.test_resp2_simple_string_error_integer;
 use tests.unit.network_protocol_test.test_resp2_bulk_string_and_nulls;
 use tests.unit.network_protocol_test.test_resp2_array_of_bulk_strings;
@@ -64,6 +66,7 @@ use tests.unit.command_executor_test.test_command_bgrewriteaof;
 use tests.unit.command_executor_test.test_command_save_rdb;
 use tests.unit.command_executor_test.test_command_set_get_del_exists;
 use tests.unit.command_executor_test.test_command_maxmemory_noeviction;
+use tests.unit.command_executor_test.test_command_maxmemory_allkeys_lru;
 use tests.unit.command_executor_test.test_command_hset_hget;
 use tests.unit.command_executor_test.test_command_lpush_lpop_lrange;
 use tests.unit.command_executor_test.test_command_sadd_srem_smembers;
@@ -152,6 +155,10 @@ export fn main() i32 {
     const before_config_invalid: i32 = failed;
     _ = test_config_parse_invalid_number() catch { printf("[FAIL] config/invalid_number\n" as *byte); failed = failed + 1; };
     if failed == before_config_invalid { printf("[PASS] config/invalid_number\n" as *byte); }
+
+    const before_config_invalid_policy: i32 = failed;
+    _ = test_config_parse_invalid_policy() catch { printf("[FAIL] config/invalid_policy\n" as *byte); failed = failed + 1; };
+    if failed == before_config_invalid_policy { printf("[PASS] config/invalid_policy\n" as *byte); }
 
     const before_config_file: i32 = failed;
     _ = test_config_parse_file() catch { printf("[FAIL] config/file\n" as *byte); failed = failed + 1; };
@@ -277,6 +284,10 @@ export fn main() i32 {
     _ = test_engine_scan_keys_sorted_skips_expired() catch { printf("[FAIL] storage_engine/scan\n" as *byte); failed = failed + 1; };
     if failed == before_engine_scan { printf("[PASS] storage_engine/scan\n" as *byte); }
 
+    const before_engine_lru: i32 = failed;
+    _ = test_engine_allkeys_lru_evicts_oldest() catch { printf("[FAIL] storage_engine/allkeys_lru\n" as *byte); failed = failed + 1; };
+    if failed == before_engine_lru { printf("[PASS] storage_engine/allkeys_lru\n" as *byte); }
+
     const before_resp_line: i32 = failed;
     _ = test_resp2_simple_string_error_integer() catch { printf("[FAIL] network_protocol/simple_error_integer\n" as *byte); failed = failed + 1; };
     if failed == before_resp_line { printf("[PASS] network_protocol/simple_error_integer\n" as *byte); }
@@ -360,6 +371,10 @@ export fn main() i32 {
     const before_exec_maxmemory: i32 = failed;
     _ = test_command_maxmemory_noeviction() catch { printf("[FAIL] command_executor/maxmemory\n" as *byte); failed = failed + 1; };
     if failed == before_exec_maxmemory { printf("[PASS] command_executor/maxmemory\n" as *byte); }
+
+    const before_exec_lru: i32 = failed;
+    _ = test_command_maxmemory_allkeys_lru() catch { printf("[FAIL] command_executor/allkeys_lru\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_lru { printf("[PASS] command_executor/allkeys_lru\n" as *byte); }
 
     const before_exec_hash: i32 = failed;
     _ = test_command_hset_hget() catch { printf("[FAIL] command_executor/hash\n" as *byte); failed = failed + 1; };

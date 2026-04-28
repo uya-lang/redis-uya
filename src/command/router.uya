@@ -43,6 +43,7 @@ export enum CommandType {
     command_config,
     command_info,
     command_quit,
+    command_hello,
 }
 
 export struct CommandInfo {
@@ -69,7 +70,7 @@ export const COMMAND_FLAG_READONLY: u64 = 1u64;
 export const COMMAND_FLAG_WRITE: u64 = 2u64;
 export const COMMAND_FLAG_FAST: u64 = 4u64;
 
-const MIN_COMMAND_COUNT: usize = 33;
+const MIN_COMMAND_COUNT: usize = 34;
 
 fn command_router_lower(ch: byte) byte {
     if ch >= 65 as byte && ch <= 90 as byte {
@@ -212,6 +213,9 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
     }
     if index == 32 {
         return command_router_info(CommandType.command_quit, &"QUIT"[0: 4], 1, COMMAND_FLAG_FAST, 0, 0, 0);
+    }
+    if index == 33 {
+        return command_router_info(CommandType.command_hello, &"HELLO"[0: 5], -1, COMMAND_FLAG_FAST, 0, 0, 0);
     }
     return error.CommandUnknown;
 }

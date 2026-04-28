@@ -19,6 +19,7 @@ use src.network.protocol.RespParseResult;
 use src.network.protocol.RespType;
 use src.network.protocol.RespValue;
 use src.network.protocol.parse_resp2;
+use src.network.protocol.parse_resp3;
 use src.network.protocol.resp_value_free;
 use src.persistence.aof.AofWriter;
 use src.persistence.aof.aof_append_command_at;
@@ -73,6 +74,7 @@ export struct ConnectionTransaction {
     queue: &RedisObject,
     queue_count: usize,
     watched: &RedisObject,
+    protocol_version: i32,
 }
 
 struct ConnectionSendProgress {
@@ -86,6 +88,7 @@ fn connection_transaction_empty() ConnectionTransaction {
         queue: null as &RedisObject,
         queue_count: 0,
         watched: null as &RedisObject,
+        protocol_version: 2,
     };
 }
 
@@ -245,7 +248,7 @@ fn connection_append_bulk_node_sds(buf: &Sds, node: &ListNode, count: usize) !vo
     }
 }
 
-fn connection_append_reply_sds(buf: &Sds, reply: &CommandReply) !void {
+fn connection_append_reply_sds(buf: &Sds, reply: &CommandReply, protocol_version: i32) !void {
     if reply.typ == CommandReplyType.reply_simple_string {
         try sds_cat(buf, &"+"[0: 1]);
         try sds_cat(buf, reply.data);
@@ -273,7 +276,11 @@ fn connection_append_reply_sds(buf: &Sds, reply: &CommandReply) !void {
         return;
     }
     if reply.typ == CommandReplyType.reply_null_bulk {
-        try sds_cat(buf, &"$-1\r\n"[0: 5]);
+        if protocol_version == 3 {
+            try sds_cat(buf, &"_\r\n"[0: 3]);
+        } else {
+            try sds_cat(buf, &"$-1\r\n"[0: 5]);
+        }
         return;
     }
     if reply.typ == CommandReplyType.reply_array_bulk {
@@ -466,7 +473,7 @@ fn connection_u64_decimal_len(value: u64) usize {
     return digits;
 }
 
-export fn connection_encode_reply(reply: &CommandReply, out: &byte, out_cap: usize) !usize {
+export fn connection_encode_reply_with_protocol(reply: &CommandReply, out: &byte, out_cap: usize, protocol_version: i32) !usize {
     var pos: usize = 0;
 
     if reply.typ == CommandReplyType.reply_simple_string {
@@ -496,7 +503,11 @@ export fn connection_encode_reply(reply: &CommandReply, out: &byte, out_cap: usi
         return pos;
     }
     if reply.typ == CommandReplyType.reply_null_bulk {
-        try connection_append_bytes(out, out_cap, &pos, &"$-1\r\n"[0: 5]);
+        if protocol_version == 3 {
+            try connection_append_bytes(out, out_cap, &pos, &"_\r\n"[0: 3]);
+        } else {
+            try connection_append_bytes(out, out_cap, &pos, &"$-1\r\n"[0: 5]);
+        }
         return pos;
     }
     if reply.typ == CommandReplyType.reply_array_bulk {
@@ -556,6 +567,10 @@ export fn connection_encode_reply(reply: &CommandReply, out: &byte, out_cap: usi
     return pos;
 }
 
+export fn connection_encode_reply(reply: &CommandReply, out: &byte, out_cap: usize) !usize {
+    return connection_encode_reply_with_protocol(reply, out, out_cap, 2);
+}
+
 fn connection_transaction_execute_at(
     engine: &Engine,
     runtime: &CommandRuntimeInfo,
@@ -573,6 +588,7 @@ fn connection_transaction_execute_at(
     bgsave_requested: &bool,
     rewrite_requested: &bool,
     rewrite_failed: &bool,
+    protocol_version: i32,
 ) CommandReply {
     var raw: Sds = sds_empty() catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
@@ -597,7 +613,7 @@ fn connection_transaction_execute_at(
         var parsed_ok: bool = true;
         const parsed: RespParseResult = parsed_result catch |err| {
             var err_reply: CommandReply = connection_error_reply(&"ERR transaction replay failed"[0: 29]);
-            _ = connection_append_reply_sds(&raw, &err_reply) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+            _ = connection_append_reply_sds(&raw, &err_reply, protocol_version) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
             parsed_ok = false;
             node = node.next;
             processed = processed + 1;
@@ -611,7 +627,7 @@ fn connection_transaction_execute_at(
         var command_ok: bool = true;
         const command: Command = command_result catch |err| {
             var err_reply_2: CommandReply = connection_error_reply(&"ERR transaction replay failed"[0: 29]);
-            _ = connection_append_reply_sds(&raw, &err_reply_2) catch { resp_value_free(&parsed.value); return connection_error_reply(&"ERR out of memory"[0: 17]); };
+            _ = connection_append_reply_sds(&raw, &err_reply_2, protocol_version) catch { resp_value_free(&parsed.value); return connection_error_reply(&"ERR out of memory"[0: 17]); };
             resp_value_free(&parsed.value);
             command_ok = false;
             node = node.next;
@@ -656,7 +672,7 @@ fn connection_transaction_execute_at(
             *close_after = true;
         }
 
-        _ = connection_append_reply_sds(&raw, &reply) catch {
+        _ = connection_append_reply_sds(&raw, &reply, protocol_version) catch {
             command_reply_cleanup(&reply);
             resp_value_free(&parsed.value);
             return connection_error_reply(&"ERR out of memory"[0: 17]);
@@ -715,6 +731,48 @@ fn connection_build_continue_reply(backlog: &ReplicationBacklog, offset: u64) Co
     _ = sds_cat(&raw, delta) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
     _ = sds_cat(&raw, &"\r\n"[0: 2]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
     return connection_raw_reply_owned(raw.buf[0: raw.len]);
+}
+
+fn connection_hello_reply(protocol_version: i32) CommandReply {
+    if protocol_version == 3 {
+        return connection_make_reply(
+            CommandReplyType.reply_raw_bytes,
+            &"%7\r\n$6\r\nserver\r\n$9\r\nredis-uya\r\n$7\r\nversion\r\n$9\r\n0.1.0-dev\r\n$5\r\nproto\r\n:3\r\n$2\r\nid\r\n:0\r\n$4\r\nmode\r\n$10\r\nstandalone\r\n$4\r\nrole\r\n$6\r\nmaster\r\n$7\r\nmodules\r\n*0\r\n"[0: 152],
+            0,
+        );
+    }
+    return connection_make_reply(
+        CommandReplyType.reply_raw_bytes,
+        &"*14\r\n$6\r\nserver\r\n$9\r\nredis-uya\r\n$7\r\nversion\r\n$9\r\n0.1.0-dev\r\n$5\r\nproto\r\n:2\r\n$2\r\nid\r\n:0\r\n$4\r\nmode\r\n$10\r\nstandalone\r\n$4\r\nrole\r\n$6\r\nmaster\r\n$7\r\nmodules\r\n*0\r\n"[0: 153],
+        0,
+    );
+}
+
+fn connection_handle_hello(tx: &ConnectionTransaction, command: &Command) CommandReply {
+    if command.argc == 1 {
+        return connection_hello_reply(tx.protocol_version);
+    }
+    if command.argc != 2 {
+        return connection_error_reply(&"ERR syntax error"[0: 16]);
+    }
+    const version_arg: &[byte] = command_arg_data(command, 1) catch {
+        return connection_error_reply(&"ERR invalid protocol version"[0: 28]);
+    };
+    const version: u64 = connection_parse_u64(version_arg) catch {
+        return connection_error_reply(&"ERR invalid protocol version"[0: 28]);
+    };
+    if version != 2u64 && version != 3u64 {
+        return connection_error_reply(&"NOPROTO unsupported protocol version"[0: 36]);
+    }
+    tx.protocol_version = version as i32;
+    return connection_hello_reply(tx.protocol_version);
+}
+
+fn connection_parse_input_for_protocol(tx: &ConnectionTransaction, input: &[byte]) !RespParseResult {
+    if tx != null && tx.protocol_version == 3 {
+        return parse_resp3(input);
+    }
+    return parse_resp2(input);
 }
 
 export fn connection_process_input_at(
@@ -884,13 +942,13 @@ export fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transac
     rewrite_requested: &bool,
     rewrite_failed: &bool,
 ) !ConnectionProcessResult {
-    const parsed_result: !RespParseResult = parse_resp2(input);
+    const parsed_result: !RespParseResult = connection_parse_input_for_protocol(tx, input);
     const parsed: RespParseResult = parsed_result catch |err| {
         if err == error.RespIncomplete {
             return error.ConnectionIncomplete;
         }
         const reply: CommandReply = connection_error_reply(&"ERR protocol error"[0: 18]);
-        const n: usize = try connection_encode_reply(&reply, out, out_cap);
+        const n: usize = try connection_encode_reply_with_protocol(&reply, out, out_cap, tx.protocol_version);
         return ConnectionProcessResult{ response_len: n, consumed: input.len, close_after: true, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
     };
 
@@ -903,7 +961,7 @@ export fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transac
         if err == error.CommandWrongArity {
             reply = connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
         }
-        const n: usize = try connection_encode_reply(&reply, out, out_cap);
+        const n: usize = try connection_encode_reply_with_protocol(&reply, out, out_cap, tx.protocol_version);
         resp_value_free(&parsed.value);
         return ConnectionProcessResult{ response_len: n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
     };
@@ -911,26 +969,32 @@ export fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transac
     if tx.active {
         if command.info.cmd_type == CommandType.command_multi {
             const nested_reply: CommandReply = connection_error_reply(&"ERR MULTI calls can not be nested"[0: 33]);
-            const nested_n: usize = try connection_encode_reply(&nested_reply, out, out_cap);
+            const nested_n: usize = try connection_encode_reply_with_protocol(&nested_reply, out, out_cap, tx.protocol_version);
             resp_value_free(&parsed.value);
             return ConnectionProcessResult{ response_len: nested_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
         }
         if command.info.cmd_type == CommandType.command_watch {
             const watch_reply: CommandReply = connection_error_reply(&"ERR WATCH inside MULTI is not allowed"[0: 37]);
-            const watch_n: usize = try connection_encode_reply(&watch_reply, out, out_cap);
+            const watch_n: usize = try connection_encode_reply_with_protocol(&watch_reply, out, out_cap, tx.protocol_version);
             resp_value_free(&parsed.value);
             return ConnectionProcessResult{ response_len: watch_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
         }
         if command.info.cmd_type == CommandType.command_unwatch {
             const unwatch_reply: CommandReply = connection_error_reply(&"ERR UNWATCH inside MULTI is not allowed"[0: 39]);
-            const unwatch_n: usize = try connection_encode_reply(&unwatch_reply, out, out_cap);
+            const unwatch_n: usize = try connection_encode_reply_with_protocol(&unwatch_reply, out, out_cap, tx.protocol_version);
             resp_value_free(&parsed.value);
             return ConnectionProcessResult{ response_len: unwatch_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+        }
+        if command.info.cmd_type == CommandType.command_hello {
+            const hello_reply: CommandReply = connection_error_reply(&"ERR HELLO inside MULTI is not allowed"[0: 37]);
+            const hello_n: usize = try connection_encode_reply_with_protocol(&hello_reply, out, out_cap, tx.protocol_version);
+            resp_value_free(&parsed.value);
+            return ConnectionProcessResult{ response_len: hello_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
         }
         if command.info.cmd_type == CommandType.command_discard {
             connection_transaction_reset(tx);
             const discard_reply: CommandReply = connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
-            const discard_n: usize = try connection_encode_reply(&discard_reply, out, out_cap);
+            const discard_n: usize = try connection_encode_reply_with_protocol(&discard_reply, out, out_cap, tx.protocol_version);
             resp_value_free(&parsed.value);
             return ConnectionProcessResult{ response_len: discard_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
         }
@@ -938,7 +1002,7 @@ export fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transac
             if !connection_transaction_watches_match(tx, engine) {
                 var aborted_reply: CommandReply = connection_raw_reply_owned(&"*-1\r\n"[0: 5]);
                 connection_transaction_reset(tx);
-                const aborted_n: usize = try connection_encode_reply(&aborted_reply, out, out_cap);
+                const aborted_n: usize = try connection_encode_reply_with_protocol(&aborted_reply, out, out_cap, tx.protocol_version);
                 command_reply_cleanup(&aborted_reply);
                 resp_value_free(&parsed.value);
                 return ConnectionProcessResult{ response_len: aborted_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
@@ -967,9 +1031,10 @@ export fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transac
                 &exec_bgsave_requested,
                 &exec_rewrite_requested,
                 rewrite_failed,
+                tx.protocol_version,
             );
             connection_transaction_reset(tx);
-            const exec_n: usize = try connection_encode_reply(&exec_reply, out, out_cap);
+            const exec_n: usize = try connection_encode_reply_with_protocol(&exec_reply, out, out_cap, tx.protocol_version);
             command_reply_cleanup(&exec_reply);
             resp_value_free(&parsed.value);
             return ConnectionProcessResult{
@@ -985,21 +1050,27 @@ export fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transac
 
         _ = connection_transaction_queue_command(tx, input[0: parsed.consumed]) catch {
             const oom_reply: CommandReply = connection_error_reply(&"ERR out of memory"[0: 17]);
-            const oom_n: usize = try connection_encode_reply(&oom_reply, out, out_cap);
+            const oom_n: usize = try connection_encode_reply_with_protocol(&oom_reply, out, out_cap, tx.protocol_version);
             resp_value_free(&parsed.value);
             return ConnectionProcessResult{ response_len: oom_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
         };
         const queued_reply: CommandReply = connection_make_reply(CommandReplyType.reply_simple_string, &"QUEUED"[0: 6], 0);
-        const queued_n: usize = try connection_encode_reply(&queued_reply, out, out_cap);
+        const queued_n: usize = try connection_encode_reply_with_protocol(&queued_reply, out, out_cap, tx.protocol_version);
         resp_value_free(&parsed.value);
         return ConnectionProcessResult{ response_len: queued_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
     }
 
+    if command.info.cmd_type == CommandType.command_hello {
+        const hello_reply: CommandReply = connection_handle_hello(tx, &command);
+        const hello_n: usize = try connection_encode_reply_with_protocol(&hello_reply, out, out_cap, tx.protocol_version);
+        resp_value_free(&parsed.value);
+        return ConnectionProcessResult{ response_len: hello_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+    }
     if command.info.cmd_type == CommandType.command_multi {
         connection_transaction_clear_queue(tx);
         tx.active = true;
         const multi_reply: CommandReply = connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
-        const multi_n: usize = try connection_encode_reply(&multi_reply, out, out_cap);
+        const multi_n: usize = try connection_encode_reply_with_protocol(&multi_reply, out, out_cap, tx.protocol_version);
         resp_value_free(&parsed.value);
         return ConnectionProcessResult{ response_len: multi_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
     }
@@ -1008,39 +1079,39 @@ export fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transac
         while watch_index < command.argc {
             const key: &[byte] = command_arg_data(&command, watch_index) catch {
                 const watch_wrong_arity: CommandReply = connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
-                const watch_wrong_n: usize = try connection_encode_reply(&watch_wrong_arity, out, out_cap);
+                const watch_wrong_n: usize = try connection_encode_reply_with_protocol(&watch_wrong_arity, out, out_cap, tx.protocol_version);
                 resp_value_free(&parsed.value);
                 return ConnectionProcessResult{ response_len: watch_wrong_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
             };
             _ = connection_transaction_watch_key(tx, engine, key) catch {
                 const watch_oom: CommandReply = connection_error_reply(&"ERR out of memory"[0: 17]);
-                const watch_oom_n: usize = try connection_encode_reply(&watch_oom, out, out_cap);
+                const watch_oom_n: usize = try connection_encode_reply_with_protocol(&watch_oom, out, out_cap, tx.protocol_version);
                 resp_value_free(&parsed.value);
                 return ConnectionProcessResult{ response_len: watch_oom_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
             };
             watch_index = watch_index + 1;
         }
         const watch_ok: CommandReply = connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
-        const watch_ok_n: usize = try connection_encode_reply(&watch_ok, out, out_cap);
+        const watch_ok_n: usize = try connection_encode_reply_with_protocol(&watch_ok, out, out_cap, tx.protocol_version);
         resp_value_free(&parsed.value);
         return ConnectionProcessResult{ response_len: watch_ok_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
     }
     if command.info.cmd_type == CommandType.command_unwatch {
         connection_transaction_clear_watches(tx);
         const unwatch_ok: CommandReply = connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
-        const unwatch_ok_n: usize = try connection_encode_reply(&unwatch_ok, out, out_cap);
+        const unwatch_ok_n: usize = try connection_encode_reply_with_protocol(&unwatch_ok, out, out_cap, tx.protocol_version);
         resp_value_free(&parsed.value);
         return ConnectionProcessResult{ response_len: unwatch_ok_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
     }
     if command.info.cmd_type == CommandType.command_exec {
         const exec_without_multi: CommandReply = connection_error_reply(&"ERR EXEC without MULTI"[0: 22]);
-        const exec_without_multi_n: usize = try connection_encode_reply(&exec_without_multi, out, out_cap);
+        const exec_without_multi_n: usize = try connection_encode_reply_with_protocol(&exec_without_multi, out, out_cap, tx.protocol_version);
         resp_value_free(&parsed.value);
         return ConnectionProcessResult{ response_len: exec_without_multi_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
     }
     if command.info.cmd_type == CommandType.command_discard {
         const discard_without_multi: CommandReply = connection_error_reply(&"ERR DISCARD without MULTI"[0: 25]);
-        const discard_without_multi_n: usize = try connection_encode_reply(&discard_without_multi, out, out_cap);
+        const discard_without_multi_n: usize = try connection_encode_reply_with_protocol(&discard_without_multi, out, out_cap, tx.protocol_version);
         resp_value_free(&parsed.value);
         return ConnectionProcessResult{ response_len: discard_without_multi_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
     }
@@ -1049,7 +1120,7 @@ export fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transac
     if aof != null && connection_should_append_aof(&command, &reply) {
         _ = aof_append_command_at(aof, &command, input[0: parsed.consumed], now_ms) catch {
             const aof_reply: CommandReply = connection_error_reply(&"ERR AOF append failed"[0: 21]);
-            const aof_n: usize = try connection_encode_reply(&aof_reply, out, out_cap);
+            const aof_n: usize = try connection_encode_reply_with_protocol(&aof_reply, out, out_cap, tx.protocol_version);
             command_reply_cleanup(&reply);
             resp_value_free(&parsed.value);
             return ConnectionProcessResult{ response_len: aof_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
@@ -1094,9 +1165,9 @@ export fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transac
         }
     }
     if use_psync_reply {
-        n = try connection_encode_reply(&psync_reply, out, out_cap);
+        n = try connection_encode_reply_with_protocol(&psync_reply, out, out_cap, tx.protocol_version);
     } else {
-        n = try connection_encode_reply(&reply, out, out_cap);
+        n = try connection_encode_reply_with_protocol(&reply, out, out_cap, tx.protocol_version);
     }
     command_reply_cleanup(&reply);
     if use_psync_reply {

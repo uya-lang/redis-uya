@@ -5,6 +5,7 @@ use src.network.protocol.RespType;
 use src.network.protocol.RespParseResult;
 use src.network.protocol.RespValue;
 use src.network.protocol.parse_resp2;
+use src.network.protocol.parse_resp3;
 use src.network.protocol.resp_array_element;
 use src.network.protocol.resp_value_free;
 use src.memory.allocator.used_memory;
@@ -125,3 +126,36 @@ export fn test_resp2_invalid_inputs() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_resp3_null_boolean_and_map() !void {
+    reset_memory_stats_for_test();
+    var null_value: RespParseResult = try parse_resp3(&"_\r\n"[0: 3]);
+    try assert_eq_i32(null_value.value.typ as i32, RespType.resp_null as i32);
+    try assert_eq_i32(null_value.consumed as i32, 3);
+
+    var boolean_value: RespParseResult = try parse_resp3(&"#t\r\n"[0: 4]);
+    try assert_eq_i32(boolean_value.value.typ as i32, RespType.resp_boolean as i32);
+    try assert_eq_i32(boolean_value.value.integer as i32, 1);
+
+    var map_value: RespParseResult = try parse_resp3(&"%2\r\n+server\r\n$9\r\nredis-uya\r\n+proto\r\n:3\r\n"[0: 40]);
+    try assert_eq_i32(map_value.value.typ as i32, RespType.resp_map as i32);
+    try assert_eq_i32(map_value.value.element_count as i32, 4);
+    const key0: &RespValue = resp_array_element(&map_value.value, 0);
+    const value0: &RespValue = resp_array_element(&map_value.value, 1);
+    const key1: &RespValue = resp_array_element(&map_value.value, 2);
+    const value1: &RespValue = resp_array_element(&map_value.value, 3);
+    try assert_true(protocol_slice_eq(key0.data, &"server"[0: 6]));
+    try assert_true(protocol_slice_eq(value0.data, &"redis-uya"[0: 9]));
+    try assert_true(protocol_slice_eq(key1.data, &"proto"[0: 5]));
+    try assert_eq_i32(value1.integer as i32, 3);
+    resp_value_free(&map_value.value);
+
+    var saw_resp2_invalid: bool = false;
+    _ = parse_resp2(&"_\r\n"[0: 3]) catch |err| {
+        if err == error.RespInvalidType {
+            saw_resp2_invalid = true;
+        }
+        return;
+    };
+    try assert_true(saw_resp2_invalid);
+    try assert_eq_i32(used_memory() as i32, 0);
+}

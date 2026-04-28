@@ -1,7 +1,7 @@
 # redis-uya ARCHITECTURE
 
 > 版本: v0.1.0-dev
-> 日期: 2026-04-25
+> 日期: 2026-04-28
 
 ## 1. 总体结构
 
@@ -13,7 +13,7 @@
 TCP listener
 -> epoll event loop
 -> per-client input buffer
--> RESP2 parser
+-> RESP2 / RESP3 parser
 -> command router
 -> command executor
 -> storage engine
@@ -43,8 +43,8 @@ server open
 ### `src/network/`
 
 - `listener.uya`：loopback TCP 监听、accept、listener 级 epoll fd
-- `connection.uya`：RESP 请求处理、回复编码、非阻塞读写、待发送缓冲
-- `protocol.uya`：RESP2 解析
+- `connection.uya`：RESP 请求处理、连接级 RESP2/RESP3 模式、回复编码、非阻塞读写、待发送缓冲
+- `protocol.uya`：RESP2 与 RESP3 最小解析
 
 ### `src/command/`
 
@@ -80,6 +80,7 @@ server open
 - `output`：待发送响应
 - `output_len` / `output_sent`：发送进度
 - `close_after_write`：`QUIT` 等命令的延迟关闭标志
+- `transaction`：连接级事务队列、WATCH 集合与 RESP 协议版本状态
 
 调度规则：
 
@@ -111,3 +112,4 @@ server open
 - 复制当前已覆盖角色与状态机、`PSYNC / backlog`、replica 侧全量同步、定时拉取式增量同步与心跳；仍不是 Redis 那种长连接流式推送复制
 - 无集群
 - 事务当前已覆盖连接级最小 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`，但仍没有更完整的 Redis 事务中止传播、脚本联动和控制面扩展
+- RESP3 当前是 `HELLO 2/3` 驱动的最小闭环，仍不是完整 RESP3 类型输出与客户端兼容矩阵

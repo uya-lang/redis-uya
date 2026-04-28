@@ -1,7 +1,7 @@
 # redis-uya Definition of Done
 
 > 版本: v0.1.0-dev
-> 日期: 2026-04-25
+> 日期: 2026-04-28
 > 状态: `v0.5.0` 进行中
 
 ## 1. 目标
@@ -101,5 +101,6 @@ bash scripts/verify_definition_of_done.sh
 
 | DoD 项 | 证据 |
 |--------|------|
+| RESP3 最小协议闭环可用：支持 `HELLO 2/3` 连接级协议切换、RESP3 Null/Boolean/Map 解析、RESP3 Null 回复和不支持协议版本错误路径 | `tests/unit/network_protocol_test.uya`、`tests/unit/command_router_test.uya`、`tests/unit/network_connection_test.uya`、`tests/integration/smoke_tcp.py` |
 | `MULTI/EXEC/DISCARD` 最小事务子集可用：连接级队列、`QUEUED`、`EXEC` 数组回复、`DISCARD` 丢弃、无 `MULTI` 错误路径 | `tests/unit/command_router_test.uya`、`tests/unit/network_connection_test.uya`、`tests/integration/smoke_tcp.py`、`tests/integration/error_compat.py` |
 | `WATCH/UNWATCH` 最小事务观察子集可用：按键版本跟踪、变更后 `EXEC` 返回 Null Array、`UNWATCH` 清空观察集、`WATCH/UNWATCH` in-transaction 错误路径 | `tests/unit/command_router_test.uya`、`tests/unit/network_connection_test.uya` |

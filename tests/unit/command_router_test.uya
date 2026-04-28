@@ -29,11 +29,15 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 33);
+    try assert_eq_i32(command_router_count(&router) as i32, 34);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
     try assert_eq_i32(ping.arity, -1);
+
+    const hello: CommandInfo = try command_router_lookup(&router, &"HELLO"[0: 5]);
+    try assert_eq_i32(hello.cmd_type as i32, CommandType.command_hello as i32);
+    try assert_eq_i32(hello.arity, -1);
 
     const multi: CommandInfo = try command_router_lookup(&router, &"MULTI"[0: 5]);
     try assert_eq_i32(multi.cmd_type as i32, CommandType.command_multi as i32);
@@ -146,6 +150,7 @@ export fn test_command_router_lookup_and_case() !void {
 
 export fn test_command_router_arity_validation() !void {
     const router: CommandRouter = command_router_new();
+    const hello: CommandInfo = try command_router_lookup(&router, &"HELLO"[0: 5]);
     const multi: CommandInfo = try command_router_lookup(&router, &"MULTI"[0: 5]);
     const exec: CommandInfo = try command_router_lookup(&router, &"EXEC"[0: 4]);
     const discard: CommandInfo = try command_router_lookup(&router, &"DISCARD"[0: 7]);
@@ -173,6 +178,8 @@ export fn test_command_router_arity_validation() !void {
     const set: CommandInfo = try command_router_lookup(&router, &"SET"[0: 3]);
     const del: CommandInfo = try command_router_lookup(&router, &"DEL"[0: 3]);
 
+    try command_validate_arity(&hello, 1);
+    try command_validate_arity(&hello, 2);
     try command_validate_arity(&multi, 1);
     try command_validate_arity(&exec, 1);
     try command_validate_arity(&discard, 1);

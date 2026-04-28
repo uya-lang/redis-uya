@@ -48,6 +48,7 @@ use tests.unit.network_protocol_test.test_resp2_bulk_string_and_nulls;
 use tests.unit.network_protocol_test.test_resp2_array_of_bulk_strings;
 use tests.unit.network_protocol_test.test_resp2_incomplete_inputs;
 use tests.unit.network_protocol_test.test_resp2_invalid_inputs;
+use tests.unit.network_protocol_test.test_resp3_null_boolean_and_map;
 use tests.unit.replication_backlog_test.test_replication_backlog_append_and_trim;
 use tests.unit.command_router_test.test_command_router_lookup_and_case;
 use tests.unit.command_router_test.test_command_router_arity_validation;
@@ -73,6 +74,7 @@ use tests.unit.network_connection_test.test_connection_encode_resp_replies;
 use tests.unit.network_connection_test.test_connection_process_ping_set_get_quit;
 use tests.unit.network_connection_test.test_connection_process_multi_exec_discard;
 use tests.unit.network_connection_test.test_connection_process_watch_unwatch;
+use tests.unit.network_connection_test.test_connection_process_resp3_hello;
 use tests.unit.network_connection_test.test_connection_process_error_paths;
 use tests.unit.persistence_aof_test.test_aof_connection_append_and_replay_set;
 use tests.unit.persistence_aof_test.test_aof_replay_set_then_del;
@@ -291,6 +293,10 @@ export fn main() i32 {
     _ = test_resp2_invalid_inputs() catch { printf("[FAIL] network_protocol/invalid\n" as *byte); failed = failed + 1; };
     if failed == before_resp_invalid { printf("[PASS] network_protocol/invalid\n" as *byte); }
 
+    const before_resp3_common: i32 = failed;
+    _ = test_resp3_null_boolean_and_map() catch { printf("[FAIL] network_protocol/resp3_common\n" as *byte); failed = failed + 1; };
+    if failed == before_resp3_common { printf("[PASS] network_protocol/resp3_common\n" as *byte); }
+
     const before_cmd_lookup: i32 = failed;
     _ = test_command_router_lookup_and_case() catch { printf("[FAIL] command_router/lookup_case\n" as *byte); failed = failed + 1; };
     if failed == before_cmd_lookup { printf("[PASS] command_router/lookup_case\n" as *byte); }
@@ -390,6 +396,10 @@ export fn main() i32 {
     const before_conn_watch: i32 = failed;
     _ = test_connection_process_watch_unwatch() catch { printf("[FAIL] network_connection/watch_unwatch\n" as *byte); failed = failed + 1; };
     if failed == before_conn_watch { printf("[PASS] network_connection/watch_unwatch\n" as *byte); }
+
+    const before_conn_resp3: i32 = failed;
+    _ = test_connection_process_resp3_hello() catch { printf("[FAIL] network_connection/resp3_hello\n" as *byte); failed = failed + 1; };
+    if failed == before_conn_resp3 { printf("[PASS] network_connection/resp3_hello\n" as *byte); }
 
     const before_conn_errors: i32 = failed;
     _ = test_connection_process_error_paths() catch { printf("[FAIL] network_connection/errors\n" as *byte); failed = failed + 1; };

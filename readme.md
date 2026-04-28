@@ -4,13 +4,13 @@
 > 零 GC 路线 · 显式错误处理 · 可测试演进 · 长期性能目标超过 Redis
 
 > 版本: v0.1.0-dev
-> 日期: 2026-04-25
+> 日期: 2026-04-28
 
 ## 简介
 
 `redis-uya` 是一个使用 **Uya 编程语言** 从零实现的生产级高性能内存数据库系统。项目长期目标是兼容 Redis 6.2+ 协议，覆盖核心数据结构、持久化、复制、基础集群与性能工程，并在同条件核心场景上超过 Redis。
 
-当前项目已完成 `v0.4.0` 规划任务，并已进入 `v0.5.0`：在 `v0.1.0` 发布闭环、`v0.2.0` 数据结构扩展和 `v0.3.0` 持久化增强基础上，补齐了复制角色与状态机、`PSYNC / backlog`、replica 侧全量同步、定时拉取式增量同步、复制心跳、主从一致性 smoke，以及连接级最小 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`。
+当前项目已完成 `v0.4.0` 规划任务，并已进入 `v0.5.0`：在 `v0.1.0` 发布闭环、`v0.2.0` 数据结构扩展和 `v0.3.0` 持久化增强基础上，补齐了复制角色与状态机、`PSYNC / backlog`、replica 侧全量同步、定时拉取式增量同步、复制心跳、主从一致性 smoke、连接级最小 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`，以及 `HELLO 2/3` 驱动的 RESP3 最小协议闭环。
 
 ## 核心目标
 
@@ -34,6 +34,7 @@
 - `RedisObject` 最小 String 包装：RAW/INT 编码、类型名、释放
 - `Engine` 最小实现：键读写删除、覆盖释放、TTL 字段、惰性过期
 - RESP2 最小子集解析：Simple String、Error、Integer、Bulk String、Array、Incomplete、非法输入
+- RESP3 最小协议闭环：`HELLO 2/3` 连接级协议切换，支持 Null、Boolean、Map 等常用 RESP3 类型解析和 RESP3 Null 回复
 - 命令路由：最小命令表、大小写匹配、参数数量校验、未知命令错误、RESP Array 转命令
 - String/Key/Control 命令执行：`PING`、`GET`、`SET`、`DEL`、`EXISTS`、`EXPIRE`、`TTL`、`INFO` 多 section、`CONFIG GET`、`SAVE`
 - Hash 最小对象：基于项目内 `Dict` 的最小 hash value 容器
@@ -195,6 +196,7 @@ build/redis-uya 6380 1
 
 - 单节点、单进程服务模型
 - RESP2 子集
+- RESP3 最小闭环：`HELLO 2/3`、常用 RESP3 输入类型解析、RESP3 Null 回复
 - String / Hash / List / Set / ZSet / `SCAN`
 - AOF append/replay、RDB 子集、`SAVE`、`BGSAVE`、`BGREWRITEAOF`
 - 主从复制最小闭环：`REPLICAOF`、`PSYNC / backlog`、全量同步、定时拉取式增量同步、复制心跳
@@ -203,7 +205,7 @@ build/redis-uya 6380 1
 
 当前主线仍未包含：
 
-- 完整 RESP3
+- 完整 RESP3 类型覆盖与客户端兼容矩阵
 - 完整 Redis RDB 二进制兼容
 - Redis 风格长连接流式复制
 - `PUBLISH/SUBSCRIBE`

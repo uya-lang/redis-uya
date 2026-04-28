@@ -18,6 +18,15 @@ export enum RespType {
     resp_array,
     resp_null_bulk,
     resp_null_array,
+    resp_null,
+    resp_boolean,
+    resp_double,
+    resp_big_number,
+    resp_bulk_error,
+    resp_verbatim_string,
+    resp_map,
+    resp_set,
+    resp_push,
 }
 
 export struct RespValue {
@@ -144,10 +153,13 @@ fn resp_parse_integer_value(input: &[byte]) !RespParseResult {
     return RespParseResult{ value: value, consumed: line_end + 2 };
 }
 
-fn resp_parse_bulk_string(input: &[byte]) !RespParseResult {
+fn resp_parse_blob_value(input: &[byte], typ: RespType, allow_null: bool) !RespParseResult {
     const line_end: usize = try resp_find_crlf(input, 1);
     const len: i64 = try resp_parse_i64(input[1: line_end - 1]);
     if len == -1 {
+        if !allow_null {
+            return error.RespInvalidLength;
+        }
         return RespParseResult{ value: resp_make_value(RespType.resp_null_bulk), consumed: line_end + 2 };
     }
     if len < 0 {
@@ -164,9 +176,34 @@ fn resp_parse_bulk_string(input: &[byte]) !RespParseResult {
         return error.RespInvalidCrlf;
     }
 
-    var value: RespValue = resp_make_value(RespType.resp_bulk_string);
+    var value: RespValue = resp_make_value(typ);
     value.data = input[data_start: data_len];
     return RespParseResult{ value: value, consumed: tail_start + 2 };
+}
+
+fn resp_parse_null_value(input: &[byte]) !RespParseResult {
+    const line_end: usize = try resp_find_crlf(input, 1);
+    if line_end != 1 {
+        return error.RespInvalidLength;
+    }
+    return RespParseResult{ value: resp_make_value(RespType.resp_null), consumed: line_end + 2 };
+}
+
+fn resp_parse_boolean_value(input: &[byte]) !RespParseResult {
+    const line_end: usize = try resp_find_crlf(input, 1);
+    if line_end != 2 {
+        return error.RespInvalidLength;
+    }
+    var value: RespValue = resp_make_value(RespType.resp_boolean);
+    if input.ptr[1] == 116 as byte {
+        value.integer = 1;
+        return RespParseResult{ value: value, consumed: line_end + 2 };
+    }
+    if input.ptr[1] == 102 as byte {
+        value.integer = 0;
+        return RespParseResult{ value: value, consumed: line_end + 2 };
+    }
+    return error.RespInvalidInteger;
 }
 
 fn resp_free_array_prefix(elements: &RespValue, count: usize) void {
@@ -182,17 +219,23 @@ fn resp_free_array_prefix(elements: &RespValue, count: usize) void {
     redis_free(elements as &byte);
 }
 
-fn resp_parse_array(input: &[byte]) !RespParseResult {
+fn resp_parse_collection(input: &[byte], typ: RespType, allow_resp3: bool) !RespParseResult {
     const line_end: usize = try resp_find_crlf(input, 1);
     const count_i64: i64 = try resp_parse_i64(input[1: line_end - 1]);
     if count_i64 == -1 {
-        return RespParseResult{ value: resp_make_value(RespType.resp_null_array), consumed: line_end + 2 };
+        if typ == RespType.resp_array {
+            return RespParseResult{ value: resp_make_value(RespType.resp_null_array), consumed: line_end + 2 };
+        }
+        return error.RespInvalidLength;
     }
     if count_i64 < 0 {
         return error.RespInvalidLength;
     }
 
-    const count: usize = count_i64 as usize;
+    var count: usize = count_i64 as usize;
+    if typ == RespType.resp_map {
+        count = count * 2;
+    }
     const elements_result: !&RespValue = resp_alloc_elements(count);
     const elements: &RespValue = elements_result catch {
         return error.RespOutOfMemory;
@@ -205,7 +248,7 @@ fn resp_parse_array(input: &[byte]) !RespParseResult {
             resp_free_array_prefix(elements, parsed_count);
             return error.RespIncomplete;
         }
-        const child_result: !RespParseResult = parse_resp2(input[offset: input.len - offset]);
+        const child_result: !RespParseResult = resp_parse_value(input[offset: input.len - offset], allow_resp3);
         const child: RespParseResult = child_result catch |err| {
             resp_free_array_prefix(elements, parsed_count);
             if err == error.RespIncomplete { return error.RespIncomplete; }
@@ -221,14 +264,19 @@ fn resp_parse_array(input: &[byte]) !RespParseResult {
         parsed_count = parsed_count + 1;
     }
 
-    var value: RespValue = resp_make_value(RespType.resp_array);
+    var value: RespValue = resp_make_value(typ);
     value.elements = elements;
     value.element_count = count;
     return RespParseResult{ value: value, consumed: offset };
 }
 
+fn resp_parse_array(input: &[byte], allow_resp3: bool) !RespParseResult {
+    return resp_parse_collection(input, RespType.resp_array, allow_resp3);
+}
+
 export fn resp_array_element(value: &RespValue, index: usize) &RespValue {
-    if value.typ != RespType.resp_array || index >= value.element_count || value.elements == null {
+    const aggregate: bool = value.typ == RespType.resp_array || value.typ == RespType.resp_map || value.typ == RespType.resp_set || value.typ == RespType.resp_push;
+    if !aggregate || index >= value.element_count || value.elements == null {
         return null as &RespValue;
     }
     return resp_value_at(value.elements, index);
@@ -243,7 +291,7 @@ export fn resp_value_free(value: &RespValue) void {
     value.data = resp_empty_slice();
 }
 
-export fn parse_resp2(input: &[byte]) !RespParseResult {
+fn resp_parse_value(input: &[byte], allow_resp3: bool) !RespParseResult {
     if input.len == 0 {
         return error.RespIncomplete;
     }
@@ -259,11 +307,47 @@ export fn parse_resp2(input: &[byte]) !RespParseResult {
         return resp_parse_integer_value(input);
     }
     if prefix == 36 as byte {
-        return resp_parse_bulk_string(input);
+        return resp_parse_blob_value(input, RespType.resp_bulk_string, true);
     }
     if prefix == 42 as byte {
-        return resp_parse_array(input);
+        return resp_parse_array(input, allow_resp3);
+    }
+    if allow_resp3 {
+        if prefix == 95 as byte {
+            return resp_parse_null_value(input);
+        }
+        if prefix == 35 as byte {
+            return resp_parse_boolean_value(input);
+        }
+        if prefix == 44 as byte {
+            return resp_parse_line_value(input, RespType.resp_double);
+        }
+        if prefix == 40 as byte {
+            return resp_parse_line_value(input, RespType.resp_big_number);
+        }
+        if prefix == 33 as byte {
+            return resp_parse_blob_value(input, RespType.resp_bulk_error, false);
+        }
+        if prefix == 61 as byte {
+            return resp_parse_blob_value(input, RespType.resp_verbatim_string, false);
+        }
+        if prefix == 37 as byte {
+            return resp_parse_collection(input, RespType.resp_map, true);
+        }
+        if prefix == 126 as byte {
+            return resp_parse_collection(input, RespType.resp_set, true);
+        }
+        if prefix == 62 as byte {
+            return resp_parse_collection(input, RespType.resp_push, true);
+        }
     }
     return error.RespInvalidType;
 }
 
+export fn parse_resp2(input: &[byte]) !RespParseResult {
+    return resp_parse_value(input, false);
+}
+
+export fn parse_resp3(input: &[byte]) !RespParseResult {
+    return resp_parse_value(input, true);
+}

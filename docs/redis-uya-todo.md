@@ -2,7 +2,7 @@
 # redis-uya 开发 TODO 文档
 
 > 版本: v0.1.0-dev
-> 日期: 2026-04-25
+> 日期: 2026-04-28
 > 配套设计文档: `redis-uya-design.md`
 > 配套评审文档: `redis-uya-review.md`
 > 开发规范: `redis-uya-development.md`
@@ -274,7 +274,7 @@
 
 ### N. 协议与控制面增强
 
-- [ ] RESP3
+- [x] RESP3
 - [x] `MULTI/EXEC/DISCARD`
 - [x] `WATCH/UNWATCH`
 - [ ] `PUBLISH/SUBSCRIBE`

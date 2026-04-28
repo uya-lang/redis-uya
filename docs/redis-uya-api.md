@@ -1,17 +1,16 @@
 # redis-uya API
 
 > 版本: v0.1.0-dev
-> 日期: 2026-04-25
+> 日期: 2026-04-28
 
 ## 1. 协议
 
-当前只支持 RESP2 子集。
+当前默认使用 RESP2 子集，支持通过 `HELLO 3` 在连接级切换到 RESP3 最小闭环。
 
 已支持输入类型：
 
-- Array
-- Bulk String
-- Simple String
+- RESP2：Array、Bulk String、Simple String
+- RESP3：Array、Blob String、Simple String、Number、Null、Boolean、Double、Big Number、Blob Error、Verbatim String、Map、Set、Push
 
 已支持输出类型：
 
@@ -20,8 +19,31 @@
 - Integer
 - Bulk String
 - Null Bulk
+- RESP3 Null（连接通过 `HELLO 3` 切换后）
+- `HELLO 3` Map 回复
 
 ## 2. 命令
+
+### `HELLO`
+
+格式：
+
+```text
+HELLO
+HELLO 2
+HELLO 3
+```
+
+返回：
+
+- `HELLO 2`：切回 RESP2，并返回 RESP2 Array 形式的服务信息
+- `HELLO 3`：切到 RESP3，并返回 RESP3 Map 形式的服务信息
+- 不支持的协议版本：`-NOPROTO unsupported protocol version`
+
+说明：
+
+- 当前 `HELLO` 不支持 `AUTH` 与 `SETNAME` 扩展参数
+- RESP3 模式下，不存在的 bulk 值返回 RESP3 Null：`_\r\n`
 
 ### `PING`
 

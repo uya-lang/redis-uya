@@ -278,3 +278,32 @@ export fn test_connection_process_watch_unwatch() !void {
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);
 }
+
+export fn test_connection_process_resp3_hello() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var tx: ConnectionTransaction = connection_transaction_new();
+    defer {
+        connection_transaction_reset(&tx);
+    }
+    var out: [byte: 512] = [];
+
+    const hello3: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$5\r\nHELLO\r\n$1\r\n3\r\n"[0: 22], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: hello3.response_len], &"%7\r\n$6\r\nserver\r\n$9\r\nredis-uya\r\n$7\r\nversion\r\n$9\r\n0.1.0-dev\r\n$5\r\nproto\r\n:3\r\n$2\r\nid\r\n:0\r\n$4\r\nmode\r\n$10\r\nstandalone\r\n$4\r\nrole\r\n$6\r\nmaster\r\n$7\r\nmodules\r\n*0\r\n"[0: 152]));
+
+    const missing_resp3: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$3\r\nGET\r\n$7\r\nmissing\r\n"[0: 26], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: missing_resp3.response_len], &"_\r\n"[0: 3]));
+
+    const hello2: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$5\r\nHELLO\r\n$1\r\n2\r\n"[0: 22], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: hello2.response_len], &"*14\r\n$6\r\nserver\r\n$9\r\nredis-uya\r\n$7\r\nversion\r\n$9\r\n0.1.0-dev\r\n$5\r\nproto\r\n:2\r\n$2\r\nid\r\n:0\r\n$4\r\nmode\r\n$10\r\nstandalone\r\n$4\r\nrole\r\n$6\r\nmaster\r\n$7\r\nmodules\r\n*0\r\n"[0: 153]));
+
+    const missing_resp2: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$3\r\nGET\r\n$7\r\nmissing\r\n"[0: 26], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: missing_resp2.response_len], &"$-1\r\n"[0: 5]));
+
+    const bad_hello: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$5\r\nHELLO\r\n$1\r\n4\r\n"[0: 22], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: bad_hello.response_len], &"-NOPROTO unsupported protocol version\r\n"[0: 39]));
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}

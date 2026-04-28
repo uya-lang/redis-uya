@@ -46,6 +46,29 @@ def roundtrip(sock: socket.socket, request: bytes, expected: bytes) -> None:
         raise AssertionError(f"expected {expected!r}, got {actual!r}")
 
 
+HELLO3_REPLY = (
+    b"%7\r\n"
+    b"$6\r\nserver\r\n$9\r\nredis-uya\r\n"
+    b"$7\r\nversion\r\n$9\r\n0.1.0-dev\r\n"
+    b"$5\r\nproto\r\n:3\r\n"
+    b"$2\r\nid\r\n:0\r\n"
+    b"$4\r\nmode\r\n$10\r\nstandalone\r\n"
+    b"$4\r\nrole\r\n$6\r\nmaster\r\n"
+    b"$7\r\nmodules\r\n*0\r\n"
+)
+
+HELLO2_REPLY = (
+    b"*14\r\n"
+    b"$6\r\nserver\r\n$9\r\nredis-uya\r\n"
+    b"$7\r\nversion\r\n$9\r\n0.1.0-dev\r\n"
+    b"$5\r\nproto\r\n:2\r\n"
+    b"$2\r\nid\r\n:0\r\n"
+    b"$4\r\nmode\r\n$10\r\nstandalone\r\n"
+    b"$4\r\nrole\r\n$6\r\nmaster\r\n"
+    b"$7\r\nmodules\r\n*0\r\n"
+)
+
+
 def stop_process(proc: subprocess.Popen[str]) -> None:
     if proc.poll() is None:
         proc.terminate()
@@ -76,6 +99,11 @@ def run_smoke() -> None:
         with connect_with_retry(port, time.monotonic() + 5.0) as sock:
             sock.settimeout(2.0)
             roundtrip(sock, b"*1\r\n$4\r\nPING\r\n", b"+PONG\r\n")
+            roundtrip(sock, b"*2\r\n$5\r\nHELLO\r\n$1\r\n3\r\n", HELLO3_REPLY)
+            roundtrip(sock, b"*2\r\n$3\r\nGET\r\n$7\r\nmissing\r\n", b"_\r\n")
+            roundtrip(sock, b"*2\r\n$5\r\nHELLO\r\n$1\r\n2\r\n", HELLO2_REPLY)
+            roundtrip(sock, b"*2\r\n$3\r\nGET\r\n$7\r\nmissing\r\n", b"$-1\r\n")
+            roundtrip(sock, b"*2\r\n$5\r\nHELLO\r\n$1\r\n4\r\n", b"-NOPROTO unsupported protocol version\r\n")
             roundtrip(sock, b"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n", b"+OK\r\n")
             roundtrip(sock, b"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n", b"$5\r\nvalue\r\n")
             roundtrip(sock, b"*1\r\n$5\r\nMULTI\r\n", b"+OK\r\n")

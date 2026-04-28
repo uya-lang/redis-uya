@@ -433,6 +433,25 @@ fn command_executor_config_append_replicaof(reply: &RedisObject, runtime: &Comma
     try command_executor_config_append_pair(reply, &"replicaof"[0: 9], tmp.buf[0: tmp.len]);
 }
 
+fn command_executor_config_help() CommandReply {
+    const reply_list: &RedisObject = create_list_object() catch {
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"CONFIG GET <pattern>"[0: 20]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"CONFIG RESETSTAT"[0: 16]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"CONFIG HELP"[0: 11]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    return command_executor_owned_array(reply_list);
+}
+
 fn command_executor_owned_simple(data: &[byte]) CommandReply {
     const obj: &RedisObject = create_string_object(data) catch {
         return command_executor_oom();
@@ -1461,16 +1480,36 @@ fn command_executor_info(engine: &Engine, runtime: &CommandRuntimeInfo, command:
 }
 
 fn command_executor_config(runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
-    if command.argc != 3 {
+    if command.argc < 2 {
         return command_executor_wrong_arity();
     }
 
     const subcommand: &[byte] = command_executor_arg(command, 1) catch {
         return command_executor_wrong_arity();
     };
+
+    if command_executor_keyword_eq(subcommand, &"HELP"[0: 4]) {
+        if command.argc != 2 {
+            return command_executor_wrong_arity();
+        }
+        return command_executor_config_help();
+    }
+
+    if command_executor_keyword_eq(subcommand, &"RESETSTAT"[0: 9]) {
+        if command.argc != 2 {
+            return command_executor_wrong_arity();
+        }
+        return command_executor_simple(&"OK"[0: 2]);
+    }
+
     if !command_executor_keyword_eq(subcommand, &"GET"[0: 3]) {
         return command_executor_syntax_error();
     }
+
+    if command.argc != 3 {
+        return command_executor_wrong_arity();
+    }
+
     const pattern: &[byte] = command_executor_arg(command, 2) catch {
         return command_executor_wrong_arity();
     };
@@ -1523,6 +1562,18 @@ fn command_executor_config(runtime: &CommandRuntimeInfo, command: &Command) Comm
     }
     if command_executor_keyword_match(pattern, &"maxmemory"[0: 9]) {
         _ = command_executor_config_append_u64(reply_list, &"maxmemory"[0: 9], runtime.config.maxmemory as u64) catch {
+            object_free(reply_list);
+            return command_executor_oom();
+        };
+    }
+    if command_executor_keyword_match(pattern, &"maxclients"[0: 10]) {
+        _ = command_executor_config_append_i64(reply_list, &"maxclients"[0: 10], runtime.maxclients as i64) catch {
+            object_free(reply_list);
+            return command_executor_oom();
+        };
+    }
+    if command_executor_keyword_match(pattern, &"databases"[0: 9]) {
+        _ = command_executor_config_append_i64(reply_list, &"databases"[0: 9], 1) catch {
             object_free(reply_list);
             return command_executor_oom();
         };

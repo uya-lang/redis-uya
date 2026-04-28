@@ -164,6 +164,38 @@ export fn test_command_info_and_config() !void {
     command_reply_cleanup(&config_append_reply);
     resp_value_free(&config_append_parsed.value);
 
+    var config_max_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nCONFIG\r\n$3\r\nGET\r\n$4\r\nmax*\r\n"[0: 35]);
+    const config_max_command: Command = try command_executor_test_command(&router, &config_max_parsed);
+    var config_max_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_max_command, 5000u64);
+    const config_max_len: usize = try connection_encode_reply(&config_max_reply, &out[0], 512);
+    try assert_true(command_executor_test_contains(out[0: config_max_len], &"$9\r\nmaxmemory\r\n$1\r\n0\r\n"[0: 22]));
+    try assert_true(command_executor_test_contains(out[0: config_max_len], &"$10\r\nmaxclients\r\n$1\r\n8\r\n"[0: 24]));
+    command_reply_cleanup(&config_max_reply);
+    resp_value_free(&config_max_parsed.value);
+
+    var config_databases_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nCONFIG\r\n$3\r\nGET\r\n$9\r\ndatabases\r\n"[0: 40]);
+    const config_databases_command: Command = try command_executor_test_command(&router, &config_databases_parsed);
+    var config_databases_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_databases_command, 5000u64);
+    const config_databases_len: usize = try connection_encode_reply(&config_databases_reply, &out[0], 512);
+    try assert_true(command_executor_test_slice_eq(out[0: config_databases_len], &"*2\r\n$9\r\ndatabases\r\n$1\r\n1\r\n"[0: 26]));
+    command_reply_cleanup(&config_databases_reply);
+    resp_value_free(&config_databases_parsed.value);
+
+    var config_help_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nCONFIG\r\n$4\r\nHELP\r\n"[0: 26]);
+    const config_help_command: Command = try command_executor_test_command(&router, &config_help_parsed);
+    var config_help_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_help_command, 5000u64);
+    const config_help_len: usize = try connection_encode_reply(&config_help_reply, &out[0], 512);
+    try assert_true(command_executor_test_contains(out[0: config_help_len], &"$20\r\nCONFIG GET <pattern>\r\n"[0: 27]));
+    command_reply_cleanup(&config_help_reply);
+    resp_value_free(&config_help_parsed.value);
+
+    var config_resetstat_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nCONFIG\r\n$9\r\nRESETSTAT\r\n"[0: 31]);
+    const config_resetstat_command: Command = try command_executor_test_command(&router, &config_resetstat_parsed);
+    const config_resetstat_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_resetstat_command, 5000u64);
+    try assert_eq_i32(config_resetstat_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(config_resetstat_reply.data, &"OK"[0: 2]));
+    resp_value_free(&config_resetstat_parsed.value);
+
     runtime.replication_role = ReplicationRole.role_replica;
     runtime.replication_state = ReplicationState.repl_state_configured;
     runtime.config.replicaof_host[0] = 49 as byte; // 1

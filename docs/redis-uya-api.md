@@ -34,6 +34,8 @@
 HELLO
 HELLO 2
 HELLO 3
+HELLO 2 SETNAME name
+HELLO 3 SETNAME name
 ```
 
 返回：
@@ -44,7 +46,7 @@ HELLO 3
 
 说明：
 
-- 当前 `HELLO` 不支持 `AUTH` 与 `SETNAME` 扩展参数
+- 当前 `HELLO` 支持 `SETNAME` 扩展参数，不支持 `AUTH`
 - RESP3 模式下，不存在的 bulk 值返回 RESP3 Null：`_\r\n`
 
 ### `PING`
@@ -178,19 +180,54 @@ INFO keyspace
 - 支持 `server`、`clients`、`memory`、`stats`、`replication`、`keyspace`
 - 未带 section 时返回上述 section 组合段
 
-### `CONFIG GET`
+### `CONFIG`
 
 格式：
 
 ```text
 CONFIG GET pattern
+CONFIG HELP
+CONFIG RESETSTAT
 ```
 
 返回：
 
 - 返回 RESP Array，按 `name`、`value` 成对展开
-- 当前支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`replicaof`、`masterauth`、`maxmemory`、`save`
+- 当前支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`replicaof`、`masterauth`、`maxmemory`、`maxclients`、`databases`、`save`
 - 支持最小 `*` 通配模式
+- `CONFIG HELP` 返回当前支持的 CONFIG 子命令列表
+- `CONFIG RESETSTAT` 当前返回 `+OK`，用于客户端兼容；统计重置仍是最小占位语义
+- 当前不支持 `CONFIG SET` 和 `CONFIG REWRITE`
+
+### `CLIENT`
+
+格式：
+
+```text
+CLIENT ID
+CLIENT GETNAME
+CLIENT SETNAME name
+CLIENT INFO
+CLIENT LIST
+CLIENT SETINFO LIB-NAME value
+CLIENT SETINFO LIB-VER value
+CLIENT HELP
+```
+
+返回：
+
+- `CLIENT ID`：当前连接的整数 ID；真实 TCP 连接使用 fd，单元测试中的无 fd 事务返回 `0`
+- `CLIENT GETNAME`：未设置时返回 Null Bulk，已设置时返回 Bulk String
+- `CLIENT SETNAME`：保存连接级客户端名，成功返回 `+OK`
+- `CLIENT INFO`：返回当前连接的最小客户端信息行，包含 `id/name/resp/multi/sub/lib-name/lib-ver`
+- `CLIENT LIST`：当前为最小兼容实现，只返回当前连接的信息行
+- `CLIENT SETINFO`：保存客户端库名/版本元数据，成功返回 `+OK`
+- `CLIENT HELP`：返回当前支持的 CLIENT 子命令列表
+
+说明：
+
+- 客户端名和 `SETINFO` 元数据存放在连接级 `ConnectionTransaction`
+- 当前不支持 `CLIENT KILL`、`PAUSE`、`TRACKING` 等全局控制命令
 
 ### `MULTI`
 

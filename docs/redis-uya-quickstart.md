@@ -80,6 +80,24 @@ REDIS_UYA_LONG_RUN_SECONDS=1800 python3 tests/integration/long_run_smoke.py
 - `TTL key`
 - `INFO [section]`
 - `CONFIG GET pattern`
+- `CONFIG HELP`
+- `CONFIG RESETSTAT`
+- `CLIENT ID`
+- `CLIENT GETNAME`
+- `CLIENT SETNAME name`
+- `CLIENT INFO`
+- `CLIENT LIST`
+- `CLIENT SETINFO LIB-NAME value`
+- `CLIENT SETINFO LIB-VER value`
+- `HELLO 2|3 [SETNAME name]`
+- `MULTI`
+- `EXEC`
+- `DISCARD`
+- `WATCH key [key ...]`
+- `UNWATCH`
+- `SUBSCRIBE channel [channel ...]`
+- `UNSUBSCRIBE [channel ...]`
+- `PUBLISH channel message`
 - `SAVE`
 - `BGSAVE`
 - `BGREWRITEAOF`
@@ -100,4 +118,5 @@ REDIS_UYA_LONG_RUN_SECONDS=1800 python3 tests/integration/long_run_smoke.py
 - `PSYNC / backlog` 当前已支持最小握手与 backlog 命中判断
 - replica 当前已支持最小全量同步：`REPLICAOF` 后可拉取 master RDB 快照
 - replica 当前已支持定时拉取式增量同步与心跳
-- 不支持 master 主动流式推送复制、集群、事务、Pub/Sub
+- 事务、Pub/Sub、CLIENT / CONFIG 仍是最小兼容子集
+- 不支持 master 主动流式推送复制、集群、Lua、Redis 模块

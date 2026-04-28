@@ -56,6 +56,7 @@ test-integration: build
 	python3 tests/integration/replication_heartbeat.py
 	python3 tests/integration/replication_consistency.py
 	python3 tests/integration/pubsub_smoke.py
+	python3 tests/integration/client_config_smoke.py
 	python3 tests/integration/error_compat.py
 
 test-redis-cli: build

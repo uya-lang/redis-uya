@@ -278,7 +278,7 @@
 - [x] `MULTI/EXEC/DISCARD`
 - [x] `WATCH/UNWATCH`
 - [x] `PUBLISH/SUBSCRIBE`
-- [ ] `CLIENT` / `CONFIG` 命令增强
+- [x] `CLIENT` / `CONFIG` 命令增强
 - [ ] 兼容性回归测试
 
 ## 11. `v0.6.0` 详细规划

@@ -76,6 +76,12 @@ export struct ConnectionTransaction {
     watched: &RedisObject,
     protocol_version: i32,
     client_fd: i32,
+    client_name_len: usize,
+    client_name: [byte: 64],
+    client_lib_name_len: usize,
+    client_lib_name: [byte: 64],
+    client_lib_ver_len: usize,
+    client_lib_ver: [byte: 64],
     pubsub_count: usize,
 }
 
@@ -86,6 +92,8 @@ struct ConnectionSendProgress {
 
 const CONNECTION_PUBSUB_MAX_SUBSCRIPTIONS: usize = 128;
 const CONNECTION_PUBSUB_CHANNEL_MAX: usize = 64;
+const CONNECTION_CLIENT_NAME_MAX: usize = 64;
+const CONNECTION_CLIENT_INFO_MAX: usize = 64;
 
 struct ConnectionPubSubSubscription {
     active: bool,
@@ -105,6 +113,12 @@ fn connection_transaction_empty() ConnectionTransaction {
         watched: null as &RedisObject,
         protocol_version: 2,
         client_fd: -1,
+        client_name_len: 0,
+        client_name: [],
+        client_lib_name_len: 0,
+        client_lib_name: [],
+        client_lib_ver_len: 0,
+        client_lib_ver: [],
         pubsub_count: 0,
     };
 }
@@ -414,6 +428,240 @@ fn connection_raw_reply_owned(data: &[byte]) CommandReply {
     var reply: CommandReply = connection_make_reply(CommandReplyType.reply_raw_bytes, obj.value.buf[0: obj.value.len], 0);
     reply.owned_object = obj;
     return reply;
+}
+
+fn connection_bulk_reply_owned(data: &[byte]) CommandReply {
+    const obj: &RedisObject = create_string_object(data) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    var reply: CommandReply = connection_make_reply(CommandReplyType.reply_bulk_string, obj.value.buf[0: obj.value.len], 0);
+    reply.owned_object = obj;
+    return reply;
+}
+
+fn connection_array_reply_owned(list: &RedisObject, count: usize) CommandReply {
+    var reply: CommandReply = connection_make_reply(CommandReplyType.reply_array_bulk, connection_reply_empty_slice(), 0);
+    reply.array_head = list.list_head;
+    reply.array_count = count;
+    reply.owned_object = list;
+    return reply;
+}
+
+fn connection_ascii_lower(ch: byte) byte {
+    if ch >= 65 as byte && ch <= 90 as byte {
+        return ch + 32 as byte;
+    }
+    return ch;
+}
+
+fn connection_keyword_eq(a: &[byte], b: &[byte]) bool {
+    if a.len != b.len {
+        return false;
+    }
+    var i: usize = 0;
+    while i < a.len {
+        if connection_ascii_lower(a.ptr[i]) != connection_ascii_lower(b.ptr[i]) {
+            return false;
+        }
+        i = i + 1;
+    }
+    return true;
+}
+
+fn connection_client_id(tx: &ConnectionTransaction) i64 {
+    if tx != null && tx.client_fd >= 0 {
+        return tx.client_fd as i64;
+    }
+    return 0;
+}
+
+fn connection_client_name_valid(name: &[byte]) bool {
+    var i: usize = 0;
+    while i < name.len {
+        const ch: byte = name.ptr[i];
+        if ch <= 32 as byte || ch == 127 as byte {
+            return false;
+        }
+        i = i + 1;
+    }
+    return true;
+}
+
+fn connection_client_copy_bytes(dst: &[byte], src: &[byte]) !void {
+    if src.len > dst.len {
+        return error.ConnectionInputTooLarge;
+    }
+    var i: usize = 0;
+    while i < src.len {
+        dst.ptr[i] = src.ptr[i];
+        i = i + 1;
+    }
+    while i < dst.len {
+        dst.ptr[i] = 0 as byte;
+        i = i + 1;
+    }
+}
+
+fn connection_client_store_name(tx: &ConnectionTransaction, name: &[byte]) !void {
+    if name.len > CONNECTION_CLIENT_NAME_MAX || !connection_client_name_valid(name) {
+        return error.ConnectionInputTooLarge;
+    }
+    try connection_client_copy_bytes(tx.client_name[0: CONNECTION_CLIENT_NAME_MAX], name);
+    tx.client_name_len = name.len;
+}
+
+fn connection_client_store_info(tx: &ConnectionTransaction, target: &[byte], value: &[byte]) !void {
+    if value.len > CONNECTION_CLIENT_INFO_MAX {
+        return error.ConnectionInputTooLarge;
+    }
+    if connection_keyword_eq(target, &"LIB-NAME"[0: 8]) {
+        try connection_client_copy_bytes(tx.client_lib_name[0: CONNECTION_CLIENT_INFO_MAX], value);
+        tx.client_lib_name_len = value.len;
+        return;
+    }
+    if connection_keyword_eq(target, &"LIB-VER"[0: 7]) {
+        try connection_client_copy_bytes(tx.client_lib_ver[0: CONNECTION_CLIENT_INFO_MAX], value);
+        tx.client_lib_ver_len = value.len;
+        return;
+    }
+    return error.ConnectionInputTooLarge;
+}
+
+fn connection_client_help_reply() CommandReply {
+    const reply_list: &RedisObject = create_list_object() catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = list_object_push_tail(reply_list, &"CLIENT ID"[0: 9]) catch {
+        object_free(reply_list);
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = list_object_push_tail(reply_list, &"CLIENT GETNAME"[0: 14]) catch {
+        object_free(reply_list);
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = list_object_push_tail(reply_list, &"CLIENT SETNAME <name>"[0: 21]) catch {
+        object_free(reply_list);
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = list_object_push_tail(reply_list, &"CLIENT INFO"[0: 11]) catch {
+        object_free(reply_list);
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = list_object_push_tail(reply_list, &"CLIENT LIST"[0: 11]) catch {
+        object_free(reply_list);
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = list_object_push_tail(reply_list, &"CLIENT SETINFO LIB-NAME <value>"[0: 31]) catch {
+        object_free(reply_list);
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = list_object_push_tail(reply_list, &"CLIENT SETINFO LIB-VER <value>"[0: 30]) catch {
+        object_free(reply_list);
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    return connection_array_reply_owned(reply_list, 7);
+}
+
+fn connection_client_info_reply(tx: &ConnectionTransaction) CommandReply {
+    var raw: Sds = sds_empty() catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    defer {
+        sds_free(&raw);
+    }
+
+    _ = sds_cat(&raw, &"id="[0: 3]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_sds_append_i64(&raw, connection_client_id(tx)) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = sds_cat(&raw, &" name="[0: 6]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    if tx.client_name_len > 0 {
+        _ = sds_cat(&raw, tx.client_name[0: tx.client_name_len]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    }
+    _ = sds_cat(&raw, &" resp="[0: 6]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_sds_append_i64(&raw, tx.protocol_version as i64) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = sds_cat(&raw, &" multi="[0: 7]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    if tx.active {
+        _ = sds_cat(&raw, &"1"[0: 1]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    } else {
+        _ = sds_cat(&raw, &"0"[0: 1]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    }
+    _ = sds_cat(&raw, &" sub="[0: 5]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_sds_append_u64(&raw, tx.pubsub_count as u64) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = sds_cat(&raw, &" lib-name="[0: 10]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    if tx.client_lib_name_len > 0 {
+        _ = sds_cat(&raw, tx.client_lib_name[0: tx.client_lib_name_len]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    }
+    _ = sds_cat(&raw, &" lib-ver="[0: 9]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    if tx.client_lib_ver_len > 0 {
+        _ = sds_cat(&raw, tx.client_lib_ver[0: tx.client_lib_ver_len]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    }
+    _ = sds_cat(&raw, &"\r\n"[0: 2]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    return connection_bulk_reply_owned(raw.buf[0: raw.len]);
+}
+
+fn connection_handle_client(tx: &ConnectionTransaction, command: &Command) CommandReply {
+    if command.argc < 2 {
+        return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+    }
+    const subcommand: &[byte] = command_arg_data(command, 1) catch {
+        return connection_error_reply(&"ERR invalid request"[0: 19]);
+    };
+
+    if connection_keyword_eq(subcommand, &"ID"[0: 2]) {
+        if command.argc != 2 {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        }
+        return connection_make_reply(CommandReplyType.reply_integer, connection_reply_empty_slice(), connection_client_id(tx));
+    }
+    if connection_keyword_eq(subcommand, &"GETNAME"[0: 7]) {
+        if command.argc != 2 {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        }
+        if tx.client_name_len == 0 {
+            return connection_make_reply(CommandReplyType.reply_null_bulk, connection_reply_empty_slice(), 0);
+        }
+        return connection_make_reply(CommandReplyType.reply_bulk_string, tx.client_name[0: tx.client_name_len], 0);
+    }
+    if connection_keyword_eq(subcommand, &"SETNAME"[0: 7]) {
+        if command.argc != 3 {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        }
+        const name: &[byte] = command_arg_data(command, 2) catch {
+            return connection_error_reply(&"ERR invalid request"[0: 19]);
+        };
+        _ = connection_client_store_name(tx, name) catch {
+            return connection_error_reply(&"ERR invalid client name"[0: 23]);
+        };
+        return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+    }
+    if connection_keyword_eq(subcommand, &"SETINFO"[0: 7]) {
+        if command.argc != 4 {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        }
+        const target: &[byte] = command_arg_data(command, 2) catch {
+            return connection_error_reply(&"ERR invalid request"[0: 19]);
+        };
+        const value: &[byte] = command_arg_data(command, 3) catch {
+            return connection_error_reply(&"ERR invalid request"[0: 19]);
+        };
+        _ = connection_client_store_info(tx, target, value) catch {
+            return connection_error_reply(&"ERR syntax error"[0: 16]);
+        };
+        return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+    }
+    if connection_keyword_eq(subcommand, &"INFO"[0: 4]) || connection_keyword_eq(subcommand, &"LIST"[0: 4]) {
+        if command.argc != 2 {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        }
+        return connection_client_info_reply(tx);
+    }
+    if connection_keyword_eq(subcommand, &"HELP"[0: 4]) {
+        if command.argc != 2 {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        }
+        return connection_client_help_reply();
+    }
+
+    return connection_error_reply(&"ERR unknown CLIENT subcommand"[0: 29]);
 }
 
 export fn connection_pubsub_reset_for_test() void {
@@ -960,7 +1208,7 @@ fn connection_handle_hello(tx: &ConnectionTransaction, command: &Command) Comman
     if command.argc == 1 {
         return connection_hello_reply(tx.protocol_version);
     }
-    if command.argc != 2 {
+    if command.argc != 2 && command.argc != 4 {
         return connection_error_reply(&"ERR syntax error"[0: 16]);
     }
     const version_arg: &[byte] = command_arg_data(command, 1) catch {
@@ -973,6 +1221,20 @@ fn connection_handle_hello(tx: &ConnectionTransaction, command: &Command) Comman
         return connection_error_reply(&"NOPROTO unsupported protocol version"[0: 36]);
     }
     tx.protocol_version = version as i32;
+    if command.argc == 4 {
+        const option: &[byte] = command_arg_data(command, 2) catch {
+            return connection_error_reply(&"ERR syntax error"[0: 16]);
+        };
+        if !connection_keyword_eq(option, &"SETNAME"[0: 7]) {
+            return connection_error_reply(&"ERR syntax error"[0: 16]);
+        }
+        const name: &[byte] = command_arg_data(command, 3) catch {
+            return connection_error_reply(&"ERR syntax error"[0: 16]);
+        };
+        _ = connection_client_store_name(tx, name) catch {
+            return connection_error_reply(&"ERR invalid client name"[0: 23]);
+        };
+    }
     return connection_hello_reply(tx.protocol_version);
 }
 
@@ -1282,6 +1544,12 @@ export fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transac
             resp_value_free(&parsed.value);
             return ConnectionProcessResult{ response_len: hello_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
         }
+        if command.info.cmd_type == CommandType.command_client {
+            const client_tx_reply: CommandReply = connection_error_reply(&"ERR CLIENT command inside MULTI is not allowed"[0: 46]);
+            const client_tx_n: usize = try connection_encode_reply_with_protocol(&client_tx_reply, out, out_cap, tx.protocol_version);
+            resp_value_free(&parsed.value);
+            return ConnectionProcessResult{ response_len: client_tx_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+        }
         if command.info.cmd_type == CommandType.command_subscribe || command.info.cmd_type == CommandType.command_unsubscribe || command.info.cmd_type == CommandType.command_publish {
             const pubsub_tx_reply: CommandReply = connection_error_reply(&"ERR pubsub command inside MULTI is not allowed"[0: 46]);
             const pubsub_tx_n: usize = try connection_encode_reply_with_protocol(&pubsub_tx_reply, out, out_cap, tx.protocol_version);
@@ -1362,6 +1630,13 @@ export fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transac
         const hello_n: usize = try connection_encode_reply_with_protocol(&hello_reply, out, out_cap, tx.protocol_version);
         resp_value_free(&parsed.value);
         return ConnectionProcessResult{ response_len: hello_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+    }
+    if command.info.cmd_type == CommandType.command_client {
+        var client_reply: CommandReply = connection_handle_client(tx, &command);
+        const client_n: usize = try connection_encode_reply_with_protocol(&client_reply, out, out_cap, tx.protocol_version);
+        command_reply_cleanup(&client_reply);
+        resp_value_free(&parsed.value);
+        return ConnectionProcessResult{ response_len: client_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
     }
     if command.info.cmd_type == CommandType.command_subscribe {
         var subscribe_reply: CommandReply = connection_handle_subscribe(tx, &command);

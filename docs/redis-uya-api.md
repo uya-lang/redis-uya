@@ -247,6 +247,10 @@ CLUSTER KEYSLOT key
 CLUSTER INFO
 CLUSTER NODES
 CLUSTER SLOTS
+CLUSTER MEET ip port
+CLUSTER SETSLOT slot NODE node-id
+CLUSTER SETSLOT slot MIGRATING node-id
+CLUSTER SETSLOT slot STABLE
 CLUSTER HELP
 ```
 
@@ -256,13 +260,18 @@ CLUSTER HELP
 - `CLUSTER INFO`：Bulk String，包含 `cluster_enabled:1`、`cluster_state:ok`、`cluster_slots_assigned`、`cluster_known_nodes` 与 `cluster_size`
 - `CLUSTER NODES`：Bulk String，当前返回本地 master 节点、`myself,master`、`connected` 和 `0-16383` 槽位范围
 - `CLUSTER SLOTS`：RESP Array，当前返回单个 `0..16383` 槽位范围及本地节点地址、端口和 node id
+- `CLUSTER MEET ip port`：在服务端最小拓扑中注册远端 master 节点元数据
+- `CLUSTER SETSLOT slot NODE node-id`：把指定 slot 的稳定 owner 设置为已知节点；若 owner 不是本节点，后续首 key 落该 slot 的命令返回 `-MOVED slot host:port`
+- `CLUSTER SETSLOT slot MIGRATING node-id`：把指定 slot 标记为迁移到已知节点；后续首 key 落该 slot 的命令返回 `-ASK slot host:port`
+- `CLUSTER SETSLOT slot STABLE`：清除指定 slot 的迁移态 `ASK` 标记
 - `CLUSTER HELP`：返回当前支持的 CLUSTER 子命令列表
 
 说明：
 
 - 当前 `CLUSTER` 命令使用单节点最小拓扑，默认本节点拥有全部 16384 个槽
-- 当前不支持 `CLUSTER MEET`、`ADDSLOTS`、`SETSLOT`、`REPLICATE`、`FAILOVER` 等拓扑变更命令
-- `MOVED` / `ASK` 重定向仍在 v0.7.0 后续子项中实现
+- 当前 `MEET/SETSLOT` 是最小控制面，不实现 Redis Cluster gossip、节点握手、故障检测和配置纪元冲突解决
+- 当前 `MOVED` / `ASK` 只基于命令首个 key 判断，不实现完整多 key 同槽校验和 `ASKING` 一次性放行
+- 当前不支持 `CLUSTER ADDSLOTS`、`REPLICATE`、`FAILOVER` 等拓扑变更命令
 
 ### `MULTI`
 

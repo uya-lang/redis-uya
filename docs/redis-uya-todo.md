@@ -300,7 +300,7 @@
 ### P. 集群基础
 
 - [x] Cluster 槽位模型
-- [ ] `MOVED` / `ASK`
+- [x] `MOVED` / `ASK`
 - [x] 节点元数据
 - [x] 最小集群拓扑
 - [x] `CLUSTER` 最小命令接口

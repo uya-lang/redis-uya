@@ -12,6 +12,7 @@ use tests.unit.cluster_node_test.test_cluster_node_explicit_metadata;
 use tests.unit.cluster_node_test.test_cluster_node_role_names;
 use tests.unit.cluster_topology_test.test_cluster_topology_single_node_owns_all_slots;
 use tests.unit.cluster_topology_test.test_cluster_topology_add_node_and_assign_range;
+use tests.unit.cluster_topology_test.test_cluster_topology_ask_owner;
 use tests.unit.cluster_topology_test.test_cluster_topology_find_node_and_invalid_inputs;
 use tests.unit.cluster_topology_test.test_cluster_topology_capacity_limit;
 use tests.unit.util_time_test.test_time_monotonic_shape;
@@ -76,6 +77,7 @@ use tests.unit.command_router_test.test_command_from_resp_error_paths;
 use tests.unit.command_executor_test.test_command_ping_and_info;
 use tests.unit.command_executor_test.test_command_info_and_config;
 use tests.unit.command_executor_test.test_command_cluster;
+use tests.unit.command_executor_test.test_command_cluster_redirects;
 use tests.unit.command_executor_test.test_command_replicaof;
 use tests.unit.command_executor_test.test_command_psync;
 use tests.unit.command_executor_test.test_command_bgsave;
@@ -173,6 +175,10 @@ export fn main() i32 {
     const before_cluster_topology_range: i32 = failed;
     _ = test_cluster_topology_add_node_and_assign_range() catch { printf("[FAIL] cluster_topology/assign_range\n" as *byte); failed = failed + 1; };
     if failed == before_cluster_topology_range { printf("[PASS] cluster_topology/assign_range\n" as *byte); }
+
+    const before_cluster_topology_ask: i32 = failed;
+    _ = test_cluster_topology_ask_owner() catch { printf("[FAIL] cluster_topology/ask_owner\n" as *byte); failed = failed + 1; };
+    if failed == before_cluster_topology_ask { printf("[PASS] cluster_topology/ask_owner\n" as *byte); }
 
     const before_cluster_topology_invalid: i32 = failed;
     _ = test_cluster_topology_find_node_and_invalid_inputs() catch { printf("[FAIL] cluster_topology/find_invalid\n" as *byte); failed = failed + 1; };
@@ -429,6 +435,10 @@ export fn main() i32 {
     const before_exec_cluster: i32 = failed;
     _ = test_command_cluster() catch { printf("[FAIL] command_executor/cluster\n" as *byte); failed = failed + 1; };
     if failed == before_exec_cluster { printf("[PASS] command_executor/cluster\n" as *byte); }
+
+    const before_exec_cluster_redirects: i32 = failed;
+    _ = test_command_cluster_redirects() catch { printf("[FAIL] command_executor/cluster_redirects\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_cluster_redirects { printf("[PASS] command_executor/cluster_redirects\n" as *byte); }
 
     const before_exec_replicaof: i32 = failed;
     _ = test_command_replicaof() catch { printf("[FAIL] command_executor/replicaof\n" as *byte); failed = failed + 1; };

@@ -5,14 +5,26 @@ use src.config.MaxmemoryPolicy;
 use src.config.default_config;
 use src.config.config_copy_bytes;
 use src.config.maxmemory_policy_name;
+use src.cluster.node.CLUSTER_NODE_FLAG_MASTER;
 use src.cluster.node.ClusterNode;
+use src.cluster.node.ClusterNodeRole;
 use src.cluster.node.cluster_node_host;
 use src.cluster.node.cluster_node_id;
+use src.cluster.node.cluster_node_is_local;
+use src.cluster.node.cluster_node_new;
 use src.cluster.node.cluster_node_role_name;
 use src.cluster.slots.cluster_key_slot;
 use src.cluster.topology.ClusterTopology;
+use src.cluster.topology.cluster_topology_add_node;
+use src.cluster.topology.cluster_topology_assign_ask;
+use src.cluster.topology.cluster_topology_assign_slot;
 use src.cluster.topology.cluster_topology_assigned_slots;
+use src.cluster.topology.cluster_topology_ask_owner;
+use src.cluster.topology.cluster_topology_clear_ask;
+use src.cluster.topology.cluster_topology_find_node;
 use src.cluster.topology.cluster_topology_node_at;
+use src.cluster.topology.cluster_topology_owner;
+use src.cluster.topology.cluster_topology_owner_index;
 use src.cluster.topology.cluster_topology_single_node;
 use src.command.router.Command;
 use src.command.router.CommandType;
@@ -125,6 +137,7 @@ export struct CommandRuntimeInfo {
     bgsave_in_progress: bool,
     aof_rewrite_requested: bool,
     aof_rewrite_in_progress: bool,
+    cluster_topology: &ClusterTopology,
 }
 
 export fn command_runtime_default() CommandRuntimeInfo {
@@ -146,6 +159,7 @@ export fn command_runtime_default() CommandRuntimeInfo {
         bgsave_in_progress: false,
         aof_rewrite_requested: false,
         aof_rewrite_in_progress: false,
+        cluster_topology: null as &ClusterTopology,
     };
 }
 
@@ -439,6 +453,15 @@ fn command_executor_owned_raw(data: &[byte]) CommandReply {
         return command_executor_oom();
     };
     var reply: CommandReply = command_executor_reply(CommandReplyType.reply_raw_bytes, obj.value.buf[0: obj.value.len], 0);
+    reply.owned_object = obj;
+    return reply;
+}
+
+fn command_executor_owned_error(data: &[byte]) CommandReply {
+    const obj: &RedisObject = create_string_object(data) catch {
+        return command_executor_oom();
+    };
+    var reply: CommandReply = command_executor_error(obj.value.buf[0: obj.value.len]);
     reply.owned_object = obj;
     return reply;
 }
@@ -1739,8 +1762,58 @@ fn command_executor_cluster_host(runtime: &CommandRuntimeInfo) &[byte] {
     return bind;
 }
 
-fn command_executor_cluster_topology(runtime: &CommandRuntimeInfo) ClusterTopology {
+fn command_executor_cluster_default_topology(runtime: &CommandRuntimeInfo) ClusterTopology {
     return cluster_topology_single_node(command_executor_cluster_host(runtime), runtime.config.port);
+}
+
+fn command_executor_cluster_redirect_error(kind: &[byte], slot: i32, node: &ClusterNode) CommandReply {
+    var buf: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&buf);
+    }
+    var args: [SdsFmtArg: 4] = [];
+    args[0] = sds_fmt_bytes(kind);
+    args[1] = sds_fmt_i64(slot as i64);
+    args[2] = sds_fmt_bytes(cluster_node_host(node));
+    args[3] = sds_fmt_i64(node.port as i64);
+    _ = sds_cat_fmt(&buf, &"%s %i %s:%i"[0: 11], args[0: 4]) catch {
+        return command_executor_oom();
+    };
+    return command_executor_owned_error(buf.buf[0: buf.len]);
+}
+
+fn command_executor_cluster_redirect(runtime: &CommandRuntimeInfo, command: &Command, out: &CommandReply) bool {
+    if runtime.cluster_topology == null {
+        return false;
+    }
+    if command.info.first_key <= 0 {
+        return false;
+    }
+    const key_index: usize = command.info.first_key as usize;
+    if key_index >= command.argc {
+        return false;
+    }
+    const key: &[byte] = command_executor_arg(command, key_index) catch {
+        return false;
+    };
+    const slot: i32 = cluster_key_slot(key);
+    const ask_node: &ClusterNode = cluster_topology_ask_owner(runtime.cluster_topology, slot) catch {
+        null as &ClusterNode;
+    };
+    if ask_node != null && !cluster_node_is_local(ask_node) {
+        *out = command_executor_cluster_redirect_error(&"ASK"[0: 3], slot, ask_node);
+        return true;
+    }
+    const owner: &ClusterNode = cluster_topology_owner(runtime.cluster_topology, slot) catch {
+        return false;
+    };
+    if !cluster_node_is_local(owner) {
+        *out = command_executor_cluster_redirect_error(&"MOVED"[0: 5], slot, owner);
+        return true;
+    }
+    return false;
 }
 
 fn command_executor_cluster_help() CommandReply {
@@ -1763,6 +1836,14 @@ fn command_executor_cluster_help() CommandReply {
         object_free(reply_list);
         return command_executor_oom();
     };
+    _ = list_object_push_tail(reply_list, &"CLUSTER MEET <ip> <port>"[0: 24]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"CLUSTER SETSLOT <slot> NODE|MIGRATING|STABLE <node-id>"[0: 54]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
     _ = list_object_push_tail(reply_list, &"CLUSTER HELP"[0: 12]) catch {
         object_free(reply_list);
         return command_executor_oom();
@@ -1770,8 +1851,7 @@ fn command_executor_cluster_help() CommandReply {
     return command_executor_owned_array(reply_list);
 }
 
-fn command_executor_cluster_info(runtime: &CommandRuntimeInfo) CommandReply {
-    var topology: ClusterTopology = command_executor_cluster_topology(runtime);
+fn command_executor_cluster_info(topology: &ClusterTopology) CommandReply {
     var buf: Sds = sds_empty() catch {
         return command_executor_oom();
     };
@@ -1781,7 +1861,7 @@ fn command_executor_cluster_info(runtime: &CommandRuntimeInfo) CommandReply {
     _ = sds_cat(&buf, &"# Cluster\r\n"[0: 11]) catch { return command_executor_oom(); };
     _ = sds_cat(&buf, &"cluster_enabled:1\r\n"[0: 19]) catch { return command_executor_oom(); };
     _ = sds_cat(&buf, &"cluster_state:ok\r\n"[0: 18]) catch { return command_executor_oom(); };
-    _ = command_executor_info_append_u64(&buf, &"cluster_slots_assigned:%u\r\n"[0: 27], cluster_topology_assigned_slots(&topology) as u64) catch { return command_executor_oom(); };
+    _ = command_executor_info_append_u64(&buf, &"cluster_slots_assigned:%u\r\n"[0: 27], cluster_topology_assigned_slots(topology) as u64) catch { return command_executor_oom(); };
     _ = command_executor_info_append_u64(&buf, &"cluster_known_nodes:%u\r\n"[0: 24], topology.node_count as u64) catch { return command_executor_oom(); };
     _ = sds_cat(&buf, &"cluster_size:1\r\n\r\n"[0: 18]) catch { return command_executor_oom(); };
     const obj: &RedisObject = create_string_object(buf.buf[0: buf.len]) catch {
@@ -1790,36 +1870,93 @@ fn command_executor_cluster_info(runtime: &CommandRuntimeInfo) CommandReply {
     return command_executor_owned_bulk(obj);
 }
 
-fn command_executor_cluster_nodes(runtime: &CommandRuntimeInfo) CommandReply {
-    var topology: ClusterTopology = command_executor_cluster_topology(runtime);
-    const local: &ClusterNode = cluster_topology_node_at(&topology, topology.local_index) catch {
-        return command_executor_error(&"ERR cluster topology error"[0: 26]);
-    };
+fn command_executor_cluster_nodes(topology: &ClusterTopology) CommandReply {
     var buf: Sds = sds_empty() catch {
         return command_executor_oom();
     };
     defer {
         sds_free(&buf);
     }
-    var args: [SdsFmtArg: 6] = [];
-    args[0] = sds_fmt_bytes(cluster_node_id(local));
-    args[1] = sds_fmt_bytes(cluster_node_host(local));
-    args[2] = sds_fmt_i64(local.port as i64);
-    args[3] = sds_fmt_i64(local.bus_port as i64);
-    args[4] = sds_fmt_bytes(cluster_node_role_name(local.role));
-    args[5] = sds_fmt_u64(local.config_epoch);
-    _ = sds_cat_fmt(&buf, &"%s %s:%i@%i myself,%s - 0 0 %u connected 0-16383\r\n"[0: 50], args[0: 6]) catch {
-        return command_executor_oom();
-    };
+    var index: usize = 0;
+    while index < topology.node_count {
+        const node: &ClusterNode = cluster_topology_node_at(topology, index as i32) catch {
+            return command_executor_error(&"ERR cluster topology error"[0: 26]);
+        };
+        var flags: &[byte] = cluster_node_role_name(node.role);
+        if cluster_node_is_local(node) {
+            flags = "myself,master"[0: 13];
+        }
+        var connected: &[byte] = "disconnected"[0: 12];
+        if node.connected {
+            connected = "connected"[0: 9];
+        }
+        var args: [SdsFmtArg: 7] = [];
+        args[0] = sds_fmt_bytes(cluster_node_id(node));
+        args[1] = sds_fmt_bytes(cluster_node_host(node));
+        args[2] = sds_fmt_i64(node.port as i64);
+        args[3] = sds_fmt_i64(node.bus_port as i64);
+        args[4] = sds_fmt_bytes(flags);
+        args[5] = sds_fmt_u64(node.config_epoch);
+        args[6] = sds_fmt_bytes(connected);
+        _ = sds_cat_fmt(&buf, &"%s %s:%i@%i %s - 0 0 %u %s"[0: 26], args[0: 7]) catch {
+            return command_executor_oom();
+        };
+        _ = command_executor_cluster_nodes_append_slots(&buf, topology, index as i32) catch { return command_executor_oom(); };
+        _ = sds_cat(&buf, &"\r\n"[0: 2]) catch { return command_executor_oom(); };
+        index = index + 1;
+    }
     const obj: &RedisObject = create_string_object(buf.buf[0: buf.len]) catch {
         return command_executor_oom();
     };
     return command_executor_owned_bulk(obj);
 }
 
-fn command_executor_cluster_slots(runtime: &CommandRuntimeInfo) CommandReply {
-    var topology: ClusterTopology = command_executor_cluster_topology(runtime);
-    const local: &ClusterNode = cluster_topology_node_at(&topology, topology.local_index) catch {
+fn command_executor_cluster_append_slot_range(buf: &Sds, start_slot: i32, end_slot: i32) !void {
+    if start_slot == end_slot {
+        var one: [SdsFmtArg: 1] = [];
+        one[0] = sds_fmt_i64(start_slot as i64);
+        try sds_cat_fmt(buf, &" %i"[0: 3], one[0: 1]);
+        return;
+    }
+    var two: [SdsFmtArg: 2] = [];
+    two[0] = sds_fmt_i64(start_slot as i64);
+    two[1] = sds_fmt_i64(end_slot as i64);
+    try sds_cat_fmt(buf, &" %i-%i"[0: 6], two[0: 2]);
+}
+
+fn command_executor_cluster_owner_or_missing(topology: &ClusterTopology, slot: i32) i32 {
+    const owner: i32 = cluster_topology_owner_index(topology, slot) catch {
+        return -1;
+    };
+    return owner;
+}
+
+fn command_executor_cluster_nodes_append_slots(buf: &Sds, topology: &ClusterTopology, node_index: i32) !void {
+    var slot: i32 = 0;
+    while slot < 16384 {
+        const owner: i32 = command_executor_cluster_owner_or_missing(topology, slot);
+        if owner != node_index {
+            slot = slot + 1;
+            continue;
+        }
+        const start_slot: i32 = slot;
+        var end_slot: i32 = slot;
+        var next: i32 = slot + 1;
+        while next < 16384 {
+            const next_owner: i32 = command_executor_cluster_owner_or_missing(topology, next);
+            if next_owner != node_index {
+                break;
+            }
+            end_slot = next;
+            next = next + 1;
+        }
+        try command_executor_cluster_append_slot_range(buf, start_slot, end_slot);
+        slot = end_slot + 1;
+    }
+}
+
+fn command_executor_cluster_slots(topology: &ClusterTopology) CommandReply {
+    const local: &ClusterNode = cluster_topology_node_at(topology, topology.local_index) catch {
         return command_executor_error(&"ERR cluster topology error"[0: 26]);
     };
     var buf: Sds = sds_empty() catch {
@@ -1840,7 +1977,87 @@ fn command_executor_cluster_slots(runtime: &CommandRuntimeInfo) CommandReply {
     return command_executor_owned_raw(buf.buf[0: buf.len]);
 }
 
-fn command_executor_cluster(runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
+fn command_executor_cluster_meet(topology: &ClusterTopology, command: &Command) CommandReply {
+    if command.argc != 4 {
+        return command_executor_wrong_arity();
+    }
+    const host: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    const port_data: &[byte] = command_executor_arg(command, 3) catch {
+        return command_executor_wrong_arity();
+    };
+    const port: i64 = command_executor_parse_i64(port_data) catch {
+        return command_executor_invalid_integer();
+    };
+    if port <= 0 || port > 65535 {
+        return command_executor_invalid_integer();
+    }
+    const node: ClusterNode = cluster_node_new(
+        (null as &byte)[0: 0],
+        host,
+        port as i32,
+        ClusterNodeRole.cluster_node_master,
+        CLUSTER_NODE_FLAG_MASTER,
+        topology.node_count as u64,
+        true,
+    );
+    _ = cluster_topology_add_node(topology, &node) catch {
+        return command_executor_error(&"ERR cluster topology full"[0: 25]);
+    };
+    return command_executor_simple(&"OK"[0: 2]);
+}
+
+fn command_executor_cluster_setslot(topology: &ClusterTopology, command: &Command) CommandReply {
+    if command.argc < 4 {
+        return command_executor_wrong_arity();
+    }
+    const slot_data: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    const slot_i64: i64 = command_executor_parse_i64(slot_data) catch {
+        return command_executor_invalid_integer();
+    };
+    if slot_i64 < 0 || slot_i64 >= 16384 {
+        return command_executor_invalid_integer();
+    }
+    const action: &[byte] = command_executor_arg(command, 3) catch {
+        return command_executor_wrong_arity();
+    };
+    if command_executor_keyword_eq(action, &"STABLE"[0: 6]) {
+        if command.argc != 4 {
+            return command_executor_wrong_arity();
+        }
+        _ = cluster_topology_clear_ask(topology, slot_i64 as i32) catch {
+            return command_executor_error(&"ERR cluster topology error"[0: 26]);
+        };
+        return command_executor_simple(&"OK"[0: 2]);
+    }
+    if command.argc != 5 {
+        return command_executor_wrong_arity();
+    }
+    const node_id: &[byte] = command_executor_arg(command, 4) catch {
+        return command_executor_wrong_arity();
+    };
+    const node_index: i32 = cluster_topology_find_node(topology, node_id) catch {
+        return command_executor_error(&"ERR unknown cluster node"[0: 24]);
+    };
+    if command_executor_keyword_eq(action, &"NODE"[0: 4]) {
+        _ = cluster_topology_assign_slot(topology, slot_i64 as i32, node_index) catch {
+            return command_executor_error(&"ERR cluster topology error"[0: 26]);
+        };
+        return command_executor_simple(&"OK"[0: 2]);
+    }
+    if command_executor_keyword_eq(action, &"MIGRATING"[0: 9]) {
+        _ = cluster_topology_assign_ask(topology, slot_i64 as i32, node_index) catch {
+            return command_executor_error(&"ERR cluster topology error"[0: 26]);
+        };
+        return command_executor_simple(&"OK"[0: 2]);
+    }
+    return command_executor_syntax_error();
+}
+
+fn command_executor_cluster_with_topology(topology: &ClusterTopology, command: &Command) CommandReply {
     if command.argc < 2 {
         return command_executor_wrong_arity();
     }
@@ -1855,6 +2072,12 @@ fn command_executor_cluster(runtime: &CommandRuntimeInfo, command: &Command) Com
         }
         return command_executor_cluster_help();
     }
+    if command_executor_keyword_eq(subcommand, &"MEET"[0: 4]) {
+        return command_executor_cluster_meet(topology, command);
+    }
+    if command_executor_keyword_eq(subcommand, &"SETSLOT"[0: 7]) {
+        return command_executor_cluster_setslot(topology, command);
+    }
     if command_executor_keyword_eq(subcommand, &"KEYSLOT"[0: 7]) {
         if command.argc != 3 {
             return command_executor_wrong_arity();
@@ -1868,21 +2091,29 @@ fn command_executor_cluster(runtime: &CommandRuntimeInfo, command: &Command) Com
         if command.argc != 2 {
             return command_executor_wrong_arity();
         }
-        return command_executor_cluster_info(runtime);
+        return command_executor_cluster_info(topology);
     }
     if command_executor_keyword_eq(subcommand, &"NODES"[0: 5]) {
         if command.argc != 2 {
             return command_executor_wrong_arity();
         }
-        return command_executor_cluster_nodes(runtime);
+        return command_executor_cluster_nodes(topology);
     }
     if command_executor_keyword_eq(subcommand, &"SLOTS"[0: 5]) {
         if command.argc != 2 {
             return command_executor_wrong_arity();
         }
-        return command_executor_cluster_slots(runtime);
+        return command_executor_cluster_slots(topology);
     }
     return command_executor_error(&"ERR unknown CLUSTER subcommand"[0: 30]);
+}
+
+fn command_executor_cluster(runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
+    if runtime.cluster_topology != null {
+        return command_executor_cluster_with_topology(runtime.cluster_topology, command);
+    }
+    var topology: ClusterTopology = command_executor_cluster_default_topology(runtime);
+    return command_executor_cluster_with_topology(&topology, command);
 }
 
 export fn command_reply_cleanup(reply: &CommandReply) void {
@@ -1896,6 +2127,11 @@ export fn command_reply_cleanup(reply: &CommandReply) void {
 }
 
 export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRuntimeInfo, command: &Command, now_ms: u64) CommandReply {
+    var redirect_reply: CommandReply = command_executor_error(command_executor_empty_slice());
+    if command_executor_cluster_redirect(runtime, command, &redirect_reply) {
+        return redirect_reply;
+    }
+
     if !command_executor_prepare_maxmemory(engine, runtime, command, now_ms) {
         return command_executor_maxmemory();
     }

@@ -10,8 +10,12 @@ use src.cluster.node.cluster_node_new;
 use src.cluster.topology.CLUSTER_TOPOLOGY_MAX_NODES;
 use src.cluster.topology.ClusterTopology;
 use src.cluster.topology.cluster_topology_add_node;
+use src.cluster.topology.cluster_topology_assign_ask;
 use src.cluster.topology.cluster_topology_assign_range;
 use src.cluster.topology.cluster_topology_assigned_slots;
+use src.cluster.topology.cluster_topology_ask_owner;
+use src.cluster.topology.cluster_topology_ask_owner_index;
+use src.cluster.topology.cluster_topology_clear_ask;
 use src.cluster.topology.cluster_topology_empty;
 use src.cluster.topology.cluster_topology_find_node;
 use src.cluster.topology.cluster_topology_key_is_local;
@@ -83,6 +87,24 @@ export fn test_cluster_topology_add_node_and_assign_range() !void {
     try assert_true(!cluster_topology_key_is_local(&topology, &"123456789"[0: 9]));
     const owner: &ClusterNode = try cluster_topology_owner(&topology, 150);
     try assert_true(cluster_topology_test_slice_eq(cluster_node_id(owner), cluster_node_id(&remote)));
+}
+
+export fn test_cluster_topology_ask_owner() !void {
+    var host: [byte: 9] = [49, 50, 55, 46, 48, 46, 48, 46, 49];
+    var topology: ClusterTopology = cluster_topology_single_node(host[0: 9], 6379);
+    const remote: ClusterNode = cluster_topology_test_remote_node(52 as byte, 7002);
+    const remote_index: i32 = try cluster_topology_add_node(&topology, &remote);
+    try cluster_topology_assign_ask(&topology, 5061, remote_index);
+    try assert_eq_i32(try cluster_topology_ask_owner_index(&topology, 5061), remote_index);
+    const ask_owner: &ClusterNode = try cluster_topology_ask_owner(&topology, 5061);
+    try assert_true(cluster_topology_test_slice_eq(cluster_node_id(ask_owner), cluster_node_id(&remote)));
+
+    try cluster_topology_clear_ask(&topology, 5061);
+    _ = cluster_topology_ask_owner_index(&topology, 5061) catch |err| {
+        try assert_true(err == error.ClusterTopologyNodeNotFound);
+        return;
+    };
+    try assert_true(false);
 }
 
 export fn test_cluster_topology_find_node_and_invalid_inputs() !void {

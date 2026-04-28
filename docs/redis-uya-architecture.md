@@ -99,7 +99,7 @@ server open
 
 - `CONFIG` 仍由 `command/executor.uya` 执行，当前覆盖 `GET`、`HELP`、`RESETSTAT`
 - `CONFIG GET` 从 `CommandRuntimeInfo` 暴露运行时配置快照，支持 `maxclients`、`databases` 等兼容字段
-- `CLUSTER` 由 `command/executor.uya` 执行，当前通过内部单节点拓扑提供 `KEYSLOT/INFO/NODES/SLOTS/HELP`
+- `CLUSTER` 由 `command/executor.uya` 执行，当前通过服务端最小拓扑提供 `KEYSLOT/INFO/NODES/SLOTS/HELP/MEET/SETSLOT`
 - `CLIENT` 在 `connection.uya` 处理，因为 `SETNAME/GETNAME/SETINFO/INFO/LIST` 依赖连接级状态
 - `HELLO 2/3 SETNAME name` 与 `CLIENT SETNAME` 共享同一份连接级客户端名
 - `CLIENT LIST` 当前只返回当前连接的信息行，不扫描 `RedisServer.clients`
@@ -151,8 +151,10 @@ server open
 - `cluster_hash_key()` 复用 Redis hash tag 规则：首个有效 `{...}` 中的非空内容作为 hash key，空 tag 或缺失右括号时回退完整 key
 - `cluster/node.uya` 已提供节点元数据模型，可构造本地 master 节点和显式远端节点元数据
 - `cluster/topology.uya` 已提供最小拓扑模型，单节点默认拥有全部 16384 个槽，也可在测试和后续控制面中把槽位范围重新分配给远端节点
-- `CLUSTER KEYSLOT/INFO/NODES/SLOTS/HELP` 已接入命令路由和执行器，当前输出单节点拓扑视图
-- 当前尚未接入重定向响应路径
+- `RedisServer` 持有最小 `ClusterTopology`；`CommandRuntimeInfo.cluster_topology` 将该拓扑传入命令执行器
+- `CLUSTER KEYSLOT/INFO/NODES/SLOTS/HELP/MEET/SETSLOT` 已接入命令路由和执行器，当前可注册远端节点并把单个 slot 置为稳定远端 owner 或迁移态 owner
+- key 命令执行前会按首个 key 计算 slot；稳定远端 owner 返回 `MOVED slot host:port`，迁移态 owner 返回 `ASK slot host:port`
+- 当前重定向是最小首 key 判断，不覆盖完整 Redis 多 key 同槽校验、`ASKING` 一次性放行和 gossip 协议
 
 ## 10. 当前限制
 
@@ -160,7 +162,7 @@ server open
 - `BGSAVE` / `BGREWRITEAOF` 已有最小子进程后台路径，但仍未做更细粒度的后台资源隔离与吞吐优化
 - RDB 已覆盖当前五类对象和绝对过期时间，但仍不是 Redis 完整二进制兼容
 - 复制当前已覆盖角色与状态机、`PSYNC / backlog`、replica 侧全量同步、定时拉取式增量同步与心跳；仍不是 Redis 那种长连接流式推送复制
-- 集群当前已有槽位模型、节点元数据、最小拓扑模型和 `CLUSTER` 最小命令接口，尚未提供 `MOVED/ASK` 重定向
+- 集群当前已有槽位模型、节点元数据、最小拓扑模型、`CLUSTER` 最小命令接口和 `MOVED/ASK` 基础重定向，尚未提供完整多节点握手、gossip、故障检测和 failover
 - 事务当前已覆盖连接级最小 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`，但仍没有更完整的 Redis 事务中止传播、脚本联动和控制面扩展
 - RESP3 当前是 `HELLO 2/3` 驱动的最小闭环，仍不是完整 RESP3 类型输出与客户端兼容矩阵
 - Pub/Sub 当前是固定容量最小闭环，仍没有 pattern 订阅、完整 subscribed-mode 命令限制和背压缓冲

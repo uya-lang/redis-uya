@@ -3,6 +3,8 @@
 use src.command.executor.CommandRuntimeInfo;
 use src.command.router.CommandRouter;
 use src.command.router.command_router_new;
+use src.cluster.topology.ClusterTopology;
+use src.cluster.topology.cluster_topology_single_node;
 use src.config.ServerConfig;
 use src.config.MaxmemoryPolicy;
 use src.config.default_config;
@@ -145,6 +147,7 @@ export struct RedisServer {
     aof_rewrite_current: &ListNode,
     aof_rewrite_buf: Sds,
     aof_rewrite_tmp_path: [byte: 512],
+    cluster_topology: ClusterTopology,
 }
 
 export fn server_default_aof_path() &const byte {
@@ -192,6 +195,7 @@ fn server_runtime_info(server: &RedisServer) CommandRuntimeInfo {
         bgsave_in_progress: server.bgsave_in_progress,
         aof_rewrite_requested: server.aof_rewrite_requested,
         aof_rewrite_in_progress: server.aof_rewrite_in_progress,
+        cluster_topology: &server.cluster_topology,
     };
     config_copy_bytes(info.replication_replid[0: 41], server.repl_backlog.replid[0: 40]);
     return info;
@@ -945,6 +949,7 @@ export fn server_open_with_aof_and_memory_policy(
     config_copy_bytes(config.bind[0: 64], &"127.0.0.1"[0: 9]);
     config_copy_bytes(config.dir[0: 256], &"build/"[0: 6]);
     config_copy_bytes(config.appendfilename[0: 128], (aof_path as &byte)[0: server_cstring_len(aof_path)]);
+    const cluster_topology: ClusterTopology = cluster_topology_single_node(&"127.0.0.1"[0: 9], config.port);
     var aof: AofWriter = aof_open_append(aof_path) catch {
         listener_close(&listener);
         engine_free(&engine);
@@ -1009,6 +1014,7 @@ export fn server_open_with_aof_and_memory_policy(
         aof_rewrite_current: null as &ListNode,
         aof_rewrite_buf: rewrite_buf,
         aof_rewrite_tmp_path: [],
+        cluster_topology: cluster_topology,
     };
     if server_config_replicaof_enabled(&server.config) {
         server.replication_role = ReplicationRole.role_replica;

@@ -12,6 +12,13 @@ use src.command.executor.command_execute_at;
 use src.command.executor.command_execute_with_runtime_at;
 use src.command.executor.command_runtime_default;
 use src.command.executor.command_reply_cleanup;
+use src.cluster.node.CLUSTER_NODE_FLAG_MASTER;
+use src.cluster.node.ClusterNode;
+use src.cluster.node.ClusterNodeRole;
+use src.cluster.node.cluster_node_new;
+use src.cluster.topology.ClusterTopology;
+use src.cluster.topology.cluster_topology_add_node;
+use src.cluster.topology.cluster_topology_single_node;
 use src.config.MaxmemoryPolicy;
 use src.config.config_copy_bytes;
 use src.network.connection.connection_encode_reply;
@@ -343,6 +350,76 @@ export fn test_command_cluster() !void {
     try assert_eq_i32(missing_reply.typ as i32, CommandReplyType.reply_error as i32);
     try assert_true(command_executor_test_slice_eq(missing_reply.data, &"ERR unknown CLUSTER subcommand"[0: 30]));
     resp_value_free(&missing_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_command_cluster_redirects() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var topology: ClusterTopology = cluster_topology_single_node(&"127.0.0.1"[0: 9], 6380);
+    var runtime: CommandRuntimeInfo = command_runtime_default();
+    runtime.cluster_topology = &topology;
+
+    var remote_id: [byte: 40] = [
+        97, 97, 97, 97, 97, 97, 97, 97,
+        97, 97, 97, 97, 97, 97, 97, 97,
+        97, 97, 97, 97, 97, 97, 97, 97,
+        97, 97, 97, 97, 97, 97, 97, 97,
+        97, 97, 97, 97, 97, 97, 97, 97,
+    ];
+    const remote: ClusterNode = cluster_node_new(
+        remote_id[0: 40],
+        &"127.0.0.2"[0: 9],
+        7000,
+        ClusterNodeRole.cluster_node_master,
+        CLUSTER_NODE_FLAG_MASTER,
+        1u64,
+        true,
+    );
+    _ = try cluster_topology_add_node(&topology, &remote);
+
+    var setslot_parsed: RespParseResult = try parse_resp2(&"*5\r\n$7\r\nCLUSTER\r\n$7\r\nSETSLOT\r\n$5\r\n12182\r\n$4\r\nNODE\r\n$40\r\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r\n"[0: 98]);
+    const setslot_command: Command = try command_executor_test_command(&router, &setslot_parsed);
+    const setslot_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &setslot_command, 5000u64);
+    try assert_eq_i32(setslot_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    resp_value_free(&setslot_parsed.value);
+
+    var moved_get_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nGET\r\n$3\r\nfoo\r\n"[0: 22]);
+    const moved_get_command: Command = try command_executor_test_command(&router, &moved_get_parsed);
+    var moved_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &moved_get_command, 5000u64);
+    try assert_eq_i32(moved_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(moved_reply.data, &"MOVED 12182 127.0.0.2:7000"[0: 26]));
+    command_reply_cleanup(&moved_reply);
+    resp_value_free(&moved_get_parsed.value);
+
+    var migrating_parsed: RespParseResult = try parse_resp2(&"*5\r\n$7\r\nCLUSTER\r\n$7\r\nSETSLOT\r\n$4\r\n5061\r\n$9\r\nMIGRATING\r\n$40\r\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r\n"[0: 102]);
+    const migrating_command: Command = try command_executor_test_command(&router, &migrating_parsed);
+    const migrating_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &migrating_command, 5000u64);
+    try assert_eq_i32(migrating_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    resp_value_free(&migrating_parsed.value);
+
+    var ask_get_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nGET\r\n$11\r\nfoo{bar}zap\r\n"[0: 31]);
+    const ask_get_command: Command = try command_executor_test_command(&router, &ask_get_parsed);
+    var ask_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &ask_get_command, 5000u64);
+    try assert_eq_i32(ask_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(ask_reply.data, &"ASK 5061 127.0.0.2:7000"[0: 23]));
+    command_reply_cleanup(&ask_reply);
+    resp_value_free(&ask_get_parsed.value);
+
+    var stable_parsed: RespParseResult = try parse_resp2(&"*4\r\n$7\r\nCLUSTER\r\n$7\r\nSETSLOT\r\n$4\r\n5061\r\n$6\r\nSTABLE\r\n"[0: 52]);
+    const stable_command: Command = try command_executor_test_command(&router, &stable_parsed);
+    const stable_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &stable_command, 5000u64);
+    try assert_eq_i32(stable_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    resp_value_free(&stable_parsed.value);
+
+    var local_after_stable_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nGET\r\n$11\r\nfoo{bar}zap\r\n"[0: 31]);
+    const local_after_stable_command: Command = try command_executor_test_command(&router, &local_after_stable_parsed);
+    const local_after_stable_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &local_after_stable_command, 5000u64);
+    try assert_eq_i32(local_after_stable_reply.typ as i32, CommandReplyType.reply_null_bulk as i32);
+    resp_value_free(&local_after_stable_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

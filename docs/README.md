@@ -42,4 +42,4 @@
 
 ## 当前阶段
 
-项目当前主线已完成 `v0.6.0` 内存与性能控制：当前已补齐复制角色与状态机、`PSYNC / backlog`、replica 侧全量同步、定时拉取式增量同步、复制心跳、主从一致性 smoke、连接级最小 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`、`HELLO 2/3` 驱动的 RESP3 最小协议闭环、`PUBLISH/SUBSCRIBE/UNSUBSCRIBE` 最小 Pub/Sub 闭环、`CLIENT` / `CONFIG` 控制面兼容子集、v0.5 兼容性回归、`maxmemory` noeviction、`allkeys-*` / `volatile-*` 基线、`INFO memory` allocator 统计观测、Slab 小对象缓存基线，以及内存压力与淘汰回归。当前正在开发 `v0.7.0` 集群基础，已落地 Cluster 槽位模型、节点元数据、最小拓扑模型和 `CLUSTER` 最小命令接口。
+项目当前主线已完成 `v0.6.0` 内存与性能控制：当前已补齐复制角色与状态机、`PSYNC / backlog`、replica 侧全量同步、定时拉取式增量同步、复制心跳、主从一致性 smoke、连接级最小 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`、`HELLO 2/3` 驱动的 RESP3 最小协议闭环、`PUBLISH/SUBSCRIBE/UNSUBSCRIBE` 最小 Pub/Sub 闭环、`CLIENT` / `CONFIG` 控制面兼容子集、v0.5 兼容性回归、`maxmemory` noeviction、`allkeys-*` / `volatile-*` 基线、`INFO memory` allocator 统计观测、Slab 小对象缓存基线，以及内存压力与淘汰回归。当前正在开发 `v0.7.0` 集群基础，已落地 Cluster 槽位模型、节点元数据、最小拓扑模型、`CLUSTER` 最小命令接口和 `MOVED/ASK` 基础重定向。

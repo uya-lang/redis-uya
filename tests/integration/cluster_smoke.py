@@ -147,6 +147,39 @@ def run_smoke() -> None:
             help_reply = send_command(sock, b"CLUSTER", b"HELP")
             if not isinstance(help_reply, list) or b"CLUSTER KEYSLOT <key>" not in help_reply:
                 raise AssertionError(f"unexpected CLUSTER HELP: {help_reply!r}")
+
+            if send_command(sock, b"CLUSTER", b"MEET", b"127.0.0.2", str(port + 1).encode()) != "OK":
+                raise AssertionError("CLUSTER MEET did not return OK")
+
+            nodes_after_meet = send_command(sock, b"CLUSTER", b"NODES")
+            if not isinstance(nodes_after_meet, bytes):
+                raise AssertionError(f"CLUSTER NODES after MEET returned non-bulk value: {nodes_after_meet!r}")
+            remote_lines = [line for line in nodes_after_meet.splitlines() if b"127.0.0.2" in line]
+            if len(remote_lines) != 1:
+                raise AssertionError(f"remote node line not found after MEET: {nodes_after_meet!r}")
+            remote_id = remote_lines[0].split()[0]
+            if len(remote_id) != 40:
+                raise AssertionError(f"remote node id has wrong length: {remote_id!r}")
+
+            if send_command(sock, b"CLUSTER", b"SETSLOT", b"12182", b"NODE", remote_id) != "OK":
+                raise AssertionError("CLUSTER SETSLOT NODE did not return OK")
+            try:
+                send_command(sock, b"GET", b"foo")
+            except RespError as exc:
+                if str(exc) != f"MOVED 12182 127.0.0.2:{port + 1}":
+                    raise AssertionError(f"unexpected MOVED response: {exc}") from exc
+            else:
+                raise AssertionError("GET foo should have returned MOVED after slot owner change")
+
+            if send_command(sock, b"CLUSTER", b"SETSLOT", b"5061", b"MIGRATING", remote_id) != "OK":
+                raise AssertionError("CLUSTER SETSLOT MIGRATING did not return OK")
+            try:
+                send_command(sock, b"GET", b"foo{bar}zap")
+            except RespError as exc:
+                if str(exc) != f"ASK 5061 127.0.0.2:{port + 1}":
+                    raise AssertionError(f"unexpected ASK response: {exc}") from exc
+            else:
+                raise AssertionError("GET foo{bar}zap should have returned ASK after migrating slot setup")
     finally:
         stop_process(proc)
         aof_path.unlink(missing_ok=True)

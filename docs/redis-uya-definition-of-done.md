@@ -126,3 +126,4 @@ bash scripts/verify_definition_of_done.sh
 |--------|------|
 | Cluster 槽位模型可用：按 Redis Cluster CRC16 计算 `0..16383` 槽位，支持 `{hash-tag}` 子串选择，空 tag、缺失右括号、多个 tag 与嵌套大括号边界行为有单元证据 | `src/cluster/slots.uya`、`tests/unit/cluster_slots_test.uya` |
 | 节点元数据模型可用：支持 40 字节 node id、本地 master 默认构造、host/port/bus port、master/replica 角色、flags、config epoch 与 connected 状态，并覆盖显式元数据和角色名边界 | `src/cluster/node.uya`、`tests/unit/cluster_node_test.uya` |
+| 最小集群拓扑可用：默认单节点拓扑拥有 16384 个槽，可添加远端节点、按槽位范围重新分配 owner、按 slot/key 查询 owner，并覆盖非法 slot、节点查找和容量限制 | `src/cluster/topology.uya`、`tests/unit/cluster_topology_test.uya` |

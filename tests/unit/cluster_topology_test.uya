@@ -1,0 +1,116 @@
+use tests.unit.assert.assert_eq_i32;
+use tests.unit.assert.assert_true;
+
+use src.cluster.node.CLUSTER_NODE_FLAG_MASTER;
+use src.cluster.node.ClusterNode;
+use src.cluster.node.ClusterNodeRole;
+use src.cluster.node.cluster_node_host;
+use src.cluster.node.cluster_node_id;
+use src.cluster.node.cluster_node_new;
+use src.cluster.topology.CLUSTER_TOPOLOGY_MAX_NODES;
+use src.cluster.topology.ClusterTopology;
+use src.cluster.topology.cluster_topology_add_node;
+use src.cluster.topology.cluster_topology_assign_range;
+use src.cluster.topology.cluster_topology_assigned_slots;
+use src.cluster.topology.cluster_topology_empty;
+use src.cluster.topology.cluster_topology_find_node;
+use src.cluster.topology.cluster_topology_key_is_local;
+use src.cluster.topology.cluster_topology_key_owner_index;
+use src.cluster.topology.cluster_topology_owner;
+use src.cluster.topology.cluster_topology_owner_index;
+use src.cluster.topology.cluster_topology_single_node;
+
+fn cluster_topology_test_slice_eq(a: &[byte], b: &[byte]) bool {
+    if a.len != b.len {
+        return false;
+    }
+    var i: usize = 0;
+    while i < a.len {
+        if a.ptr[i] != b.ptr[i] {
+            return false;
+        }
+        i = i + 1;
+    }
+    return true;
+}
+
+fn cluster_topology_test_remote_node(id_digit: byte, port: i32) ClusterNode {
+    var id: [byte: 40] = [];
+    var i: usize = 0;
+    while i < 40 {
+        id[i] = id_digit;
+        i = i + 1;
+    }
+    var host: [byte: 9] = [49, 48, 46, 48, 46, 48, 46, 50, id_digit];
+    return cluster_node_new(
+        id[0: 40],
+        host[0: 9],
+        port,
+        ClusterNodeRole.cluster_node_master,
+        CLUSTER_NODE_FLAG_MASTER,
+        port as u64,
+        true,
+    );
+}
+
+export fn test_cluster_topology_single_node_owns_all_slots() !void {
+    var host: [byte: 9] = [49, 50, 55, 46, 48, 46, 48, 46, 49];
+    var topology: ClusterTopology = cluster_topology_single_node(host[0: 9], 6379);
+    try assert_eq_i32(topology.node_count as i32, 1);
+    try assert_eq_i32(topology.local_index, 0);
+    try assert_eq_i32(cluster_topology_assigned_slots(&topology) as i32, 16384);
+    try assert_eq_i32(try cluster_topology_owner_index(&topology, 0), 0);
+    try assert_eq_i32(try cluster_topology_owner_index(&topology, 16383), 0);
+    try assert_true(cluster_topology_key_is_local(&topology, &"foo"[0: 3]));
+    try assert_eq_i32(try cluster_topology_key_owner_index(&topology, &"foo"[0: 3]), 0);
+    const owner: &ClusterNode = try cluster_topology_owner(&topology, 12182);
+    try assert_true(cluster_topology_test_slice_eq(cluster_node_host(owner), host[0: 9]));
+}
+
+export fn test_cluster_topology_add_node_and_assign_range() !void {
+    var host: [byte: 9] = [49, 50, 55, 46, 48, 46, 48, 46, 49];
+    var topology: ClusterTopology = cluster_topology_single_node(host[0: 9], 6379);
+    const remote: ClusterNode = cluster_topology_test_remote_node(50 as byte, 7000);
+    const remote_index: i32 = try cluster_topology_add_node(&topology, &remote);
+    try assert_eq_i32(remote_index, 1);
+    try assert_eq_i32(topology.node_count as i32, 2);
+    try cluster_topology_assign_range(&topology, 100, 200, remote_index);
+    try assert_eq_i32(try cluster_topology_owner_index(&topology, 99), 0);
+    try assert_eq_i32(try cluster_topology_owner_index(&topology, 100), 1);
+    try assert_eq_i32(try cluster_topology_owner_index(&topology, 200), 1);
+    try assert_eq_i32(try cluster_topology_owner_index(&topology, 201), 0);
+    try cluster_topology_assign_range(&topology, 12739, 12739, remote_index);
+    try assert_true(!cluster_topology_key_is_local(&topology, &"123456789"[0: 9]));
+    const owner: &ClusterNode = try cluster_topology_owner(&topology, 150);
+    try assert_true(cluster_topology_test_slice_eq(cluster_node_id(owner), cluster_node_id(&remote)));
+}
+
+export fn test_cluster_topology_find_node_and_invalid_inputs() !void {
+    var host: [byte: 9] = [49, 50, 55, 46, 48, 46, 48, 46, 49];
+    var topology: ClusterTopology = cluster_topology_single_node(host[0: 9], 6379);
+    const remote: ClusterNode = cluster_topology_test_remote_node(51 as byte, 7001);
+    const remote_index: i32 = try cluster_topology_add_node(&topology, &remote);
+    try assert_eq_i32(try cluster_topology_find_node(&topology, cluster_node_id(&remote)), remote_index);
+
+    _ = cluster_topology_owner_index(&topology, -1) catch |err| {
+        try assert_true(err == error.ClusterTopologyInvalidSlot);
+        return;
+    };
+    try assert_true(false);
+}
+
+export fn test_cluster_topology_capacity_limit() !void {
+    var topology: ClusterTopology = cluster_topology_empty();
+    var index: usize = 0;
+    while index < CLUSTER_TOPOLOGY_MAX_NODES {
+        const node: ClusterNode = cluster_topology_test_remote_node((48 + index) as byte, 7000 + (index as i32));
+        _ = try cluster_topology_add_node(&topology, &node);
+        index = index + 1;
+    }
+    const overflow_node: ClusterNode = cluster_topology_test_remote_node(57 as byte, 7999);
+    _ = cluster_topology_add_node(&topology, &overflow_node) catch |err| {
+        try assert_true(err == error.ClusterTopologyFull);
+        return;
+    };
+    try assert_true(false);
+}

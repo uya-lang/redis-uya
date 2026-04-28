@@ -10,7 +10,7 @@
 
 `redis-uya` 是一个使用 **Uya 编程语言** 从零实现的生产级高性能内存数据库系统。项目长期目标是兼容 Redis 6.2+ 协议，覆盖核心数据结构、持久化、复制、基础集群与性能工程，并在同条件核心场景上超过 Redis。
 
-当前项目已完成 `v0.6.0` 内存与性能控制：在 `v0.1.0` 发布闭环、`v0.2.0` 数据结构扩展和 `v0.3.0` 持久化增强基础上，补齐了复制角色与状态机、`PSYNC / backlog`、replica 侧全量同步、定时拉取式增量同步、复制心跳、主从一致性 smoke、连接级最小 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`、`HELLO 2/3` 驱动的 RESP3 最小协议闭环、`PUBLISH/SUBSCRIBE/UNSUBSCRIBE` 最小 Pub/Sub 闭环、`CLIENT` / `CONFIG` 控制面兼容子集、v0.5 兼容性回归、`maxmemory` noeviction、`allkeys-*` / `volatile-*` 基线、`INFO memory` allocator 统计观测、Slab 小对象缓存基线，以及内存压力与淘汰回归。当前正在开发 `v0.7.0` 集群基础，已落地 Cluster 槽位模型和节点元数据模型。
+当前项目已完成 `v0.6.0` 内存与性能控制：在 `v0.1.0` 发布闭环、`v0.2.0` 数据结构扩展和 `v0.3.0` 持久化增强基础上，补齐了复制角色与状态机、`PSYNC / backlog`、replica 侧全量同步、定时拉取式增量同步、复制心跳、主从一致性 smoke、连接级最小 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`、`HELLO 2/3` 驱动的 RESP3 最小协议闭环、`PUBLISH/SUBSCRIBE/UNSUBSCRIBE` 最小 Pub/Sub 闭环、`CLIENT` / `CONFIG` 控制面兼容子集、v0.5 兼容性回归、`maxmemory` noeviction、`allkeys-*` / `volatile-*` 基线、`INFO memory` allocator 统计观测、Slab 小对象缓存基线，以及内存压力与淘汰回归。当前正在开发 `v0.7.0` 集群基础，已落地 Cluster 槽位模型、节点元数据和最小拓扑模型。
 
 ## 核心目标
 
@@ -75,7 +75,7 @@
 
 当前进行中：
 
-- `v0.7.0`：集群基础，已完成 Cluster 槽位模型和节点元数据模型
+- `v0.7.0`：集群基础，已完成 Cluster 槽位模型、节点元数据和最小拓扑模型
 
 当前阶段尚未生产可用。
 

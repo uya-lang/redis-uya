@@ -1,0 +1,183 @@
+// cluster/topology.uya - minimal Redis Cluster topology state.
+
+use src.cluster.node.ClusterNode;
+use src.cluster.node.cluster_node_id;
+use src.cluster.node.cluster_node_is_local;
+use src.cluster.node.cluster_node_new_self;
+use src.cluster.slots.CLUSTER_SLOT_COUNT;
+use src.cluster.slots.cluster_key_slot;
+
+export error ClusterTopologyFull;
+export error ClusterTopologyInvalidSlot;
+export error ClusterTopologyInvalidNode;
+export error ClusterTopologyNodeNotFound;
+
+export const CLUSTER_TOPOLOGY_MAX_NODES: usize = 8;
+
+export struct ClusterTopology {
+    nodes: [ClusterNode: CLUSTER_TOPOLOGY_MAX_NODES],
+    node_count: usize,
+    local_index: i32,
+    slot_owner: [i32: 16384],
+}
+
+fn cluster_topology_slot_valid(slot: i32) bool {
+    return slot >= 0 && slot < CLUSTER_SLOT_COUNT;
+}
+
+fn cluster_topology_node_valid(topology: &ClusterTopology, node_index: i32) bool {
+    return node_index >= 0 && (node_index as usize) < topology.node_count;
+}
+
+fn cluster_topology_slice_eq(a: &[byte], b: &[byte]) bool {
+    if a.len != b.len {
+        return false;
+    }
+    var i: usize = 0;
+    while i < a.len {
+        if a.ptr[i] != b.ptr[i] {
+            return false;
+        }
+        i = i + 1;
+    }
+    return true;
+}
+
+export fn cluster_topology_empty() ClusterTopology {
+    var topology: ClusterTopology = ClusterTopology{
+        nodes: [],
+        node_count: 0,
+        local_index: -1,
+        slot_owner: [],
+    };
+    var slot: usize = 0;
+    while slot < 16384 {
+        topology.slot_owner[slot] = -1;
+        slot = slot + 1;
+    }
+    return topology;
+}
+
+export fn cluster_topology_single_node(host: &[byte], port: i32) ClusterTopology {
+    var topology: ClusterTopology = cluster_topology_empty();
+    topology.nodes[0] = cluster_node_new_self(host, port);
+    topology.node_count = 1;
+    topology.local_index = 0;
+    var slot: usize = 0;
+    while slot < 16384 {
+        topology.slot_owner[slot] = 0;
+        slot = slot + 1;
+    }
+    return topology;
+}
+
+export fn cluster_topology_add_node(topology: &ClusterTopology, node: &ClusterNode) !i32 {
+    if topology.node_count >= CLUSTER_TOPOLOGY_MAX_NODES {
+        return error.ClusterTopologyFull;
+    }
+    const index: usize = topology.node_count;
+    topology.nodes[index] = *node;
+    topology.node_count = topology.node_count + 1;
+    return index as i32;
+}
+
+export fn cluster_topology_node_at(topology: &ClusterTopology, node_index: i32) !&ClusterNode {
+    if node_index < 0 || node_index >= (CLUSTER_TOPOLOGY_MAX_NODES as i32) || (node_index as usize) >= topology.node_count {
+        return error.ClusterTopologyInvalidNode;
+    }
+    const index: usize = node_index as usize;
+    if index >= CLUSTER_TOPOLOGY_MAX_NODES {
+        return error.ClusterTopologyInvalidNode;
+    }
+    return &topology.nodes[index];
+}
+
+export fn cluster_topology_find_node(topology: &ClusterTopology, id: &[byte]) !i32 {
+    var index: usize = 0;
+    while index < topology.node_count {
+        if cluster_topology_slice_eq(cluster_node_id(&topology.nodes[index]), id) {
+            return index as i32;
+        }
+        index = index + 1;
+    }
+    return error.ClusterTopologyNodeNotFound;
+}
+
+export fn cluster_topology_assign_slot(topology: &ClusterTopology, slot: i32, node_index: i32) !void {
+    if slot < 0 || slot >= 16384 {
+        return error.ClusterTopologyInvalidSlot;
+    }
+    if !cluster_topology_node_valid(topology, node_index) {
+        return error.ClusterTopologyInvalidNode;
+    }
+    const slot_index: usize = slot as usize;
+    if slot_index >= 16384 {
+        return error.ClusterTopologyInvalidSlot;
+    }
+    topology.slot_owner[slot_index] = node_index;
+}
+
+export fn cluster_topology_assign_range(topology: &ClusterTopology, start_slot: i32, end_slot: i32, node_index: i32) !void {
+    if start_slot < 0 || start_slot >= 16384 || end_slot < 0 || end_slot >= 16384 || start_slot > end_slot {
+        return error.ClusterTopologyInvalidSlot;
+    }
+    if !cluster_topology_node_valid(topology, node_index) {
+        return error.ClusterTopologyInvalidNode;
+    }
+    var slot: usize = start_slot as usize;
+    const end_index: usize = end_slot as usize;
+    while slot <= end_index {
+        if slot >= 16384 {
+            return error.ClusterTopologyInvalidSlot;
+        }
+        topology.slot_owner[slot] = node_index;
+        slot = slot + 1;
+    }
+}
+
+export fn cluster_topology_owner_index(topology: &ClusterTopology, slot: i32) !i32 {
+    if slot < 0 || slot >= 16384 {
+        return error.ClusterTopologyInvalidSlot;
+    }
+    const slot_index: usize = slot as usize;
+    if slot_index >= 16384 {
+        return error.ClusterTopologyInvalidSlot;
+    }
+    const node_index: i32 = topology.slot_owner[slot_index];
+    if !cluster_topology_node_valid(topology, node_index) {
+        return error.ClusterTopologyNodeNotFound;
+    }
+    return node_index;
+}
+
+export fn cluster_topology_owner(topology: &ClusterTopology, slot: i32) !&ClusterNode {
+    const node_index: i32 = try cluster_topology_owner_index(topology, slot);
+    return cluster_topology_node_at(topology, node_index);
+}
+
+export fn cluster_topology_key_owner_index(topology: &ClusterTopology, key: &[byte]) !i32 {
+    return cluster_topology_owner_index(topology, cluster_key_slot(key));
+}
+
+export fn cluster_topology_slot_is_local(topology: &ClusterTopology, slot: i32) bool {
+    const node: &ClusterNode = cluster_topology_owner(topology, slot) catch {
+        return false;
+    };
+    return cluster_node_is_local(node);
+}
+
+export fn cluster_topology_key_is_local(topology: &ClusterTopology, key: &[byte]) bool {
+    return cluster_topology_slot_is_local(topology, cluster_key_slot(key));
+}
+
+export fn cluster_topology_assigned_slots(topology: &ClusterTopology) usize {
+    var count: usize = 0;
+    var slot: usize = 0;
+    while slot < 16384 {
+        if cluster_topology_node_valid(topology, topology.slot_owner[slot]) {
+            count = count + 1;
+        }
+        slot = slot + 1;
+    }
+    return count;
+}

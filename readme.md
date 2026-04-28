@@ -10,7 +10,7 @@
 
 `redis-uya` 是一个使用 **Uya 编程语言** 从零实现的生产级高性能内存数据库系统。项目长期目标是兼容 Redis 6.2+ 协议，覆盖核心数据结构、持久化、复制、基础集群与性能工程，并在同条件核心场景上超过 Redis。
 
-当前项目已完成 `v0.4.0` 规划任务，并已进入 `v0.5.0`：在 `v0.1.0` 发布闭环、`v0.2.0` 数据结构扩展和 `v0.3.0` 持久化增强基础上，补齐了复制角色与状态机、`PSYNC / backlog`、replica 侧全量同步、定时拉取式增量同步、复制心跳、主从一致性 smoke、连接级最小 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`、`HELLO 2/3` 驱动的 RESP3 最小协议闭环、`PUBLISH/SUBSCRIBE/UNSUBSCRIBE` 最小 Pub/Sub 闭环，以及 `CLIENT` / `CONFIG` 控制面兼容子集。
+当前项目已完成 `v0.5.0` 规划任务：在 `v0.1.0` 发布闭环、`v0.2.0` 数据结构扩展和 `v0.3.0` 持久化增强基础上，补齐了复制角色与状态机、`PSYNC / backlog`、replica 侧全量同步、定时拉取式增量同步、复制心跳、主从一致性 smoke、连接级最小 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`、`HELLO 2/3` 驱动的 RESP3 最小协议闭环、`PUBLISH/SUBSCRIBE/UNSUBSCRIBE` 最小 Pub/Sub 闭环、`CLIENT` / `CONFIG` 控制面兼容子集，以及 v0.5 兼容性回归。
 
 ## 核心目标
 
@@ -63,11 +63,12 @@
 - 事务控制最小子集：连接级 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`，支持 `QUEUED`、`EXEC` 数组回复、观察键变更后的 Null Array 中止和 `DISCARD` 丢弃
 - Pub/Sub 最小子集：`SUBSCRIBE` 注册连接订阅、`PUBLISH` 跨连接推送 message 并返回订阅者数量、`UNSUBSCRIBE` 取消订阅
 - 控制面兼容子集：`CLIENT ID/GETNAME/SETNAME/INFO/LIST/SETINFO/HELP`、`HELLO SETNAME`、`CONFIG GET/HELP/RESETSTAT`
+- v0.5 兼容性回归：覆盖 RESP3 Null、WATCH 中止、事务内控制命令错误、RESP3 Pub/Sub Push、CLIENT/CONFIG 组合路径
 - Python 客户端风格集成：覆盖更多命令与控制面交互
 
-当前进行中：
+下一阶段：
 
-- `v0.5.0`：协议与控制面增强
+- `v0.6.0`：内存与性能控制
 
 当前阶段尚未生产可用。
 
@@ -194,7 +195,7 @@ build/redis-uya 6380 1
 
 ## 当前主线能力边界
 
-当前仓库主线已进入 `v0.5.0`，并且已经包含：
+当前仓库主线已完成 `v0.5.0`，并且已经包含：
 
 - 单节点、单进程服务模型
 - RESP2 子集
@@ -205,6 +206,7 @@ build/redis-uya 6380 1
 - 事务最小子集：`MULTI/EXEC/DISCARD/WATCH/UNWATCH`
 - Pub/Sub 最小子集：`PUBLISH/SUBSCRIBE/UNSUBSCRIBE`
 - `CLIENT` / `CONFIG` 控制面兼容子集
+- v0.5 协议与控制面兼容性回归
 - `redis-cli` smoke、Python 集成 smoke、持久化与复制 benchmark
 
 当前主线仍未包含：

@@ -19,6 +19,7 @@
 - [release-v0.2.0](./redis-uya-release-v0.2.0.md)
 - [release-v0.3.0](./redis-uya-release-v0.3.0.md)
 - [release-v0.4.0](./redis-uya-release-v0.4.0.md)
+- [release-v0.5.0](./redis-uya-release-v0.5.0.md)
 - [test-report-v0.1.0](./redis-uya-test-report-v0.1.0.md)
 
 ## 文档关系
@@ -34,9 +35,9 @@
 9. `redis-uya-api.md` 记录当前命令与错误语义。
 10. `redis-uya-architecture.md` 记录当前实现架构与数据路径。
 11. `redis-uya-release-v0.1.0.md` 固化 `v0.1.0` 的发布边界、验证入口与已知限制。
-12. `redis-uya-release-v0.2.0.md`、`redis-uya-release-v0.3.0.md`、`redis-uya-release-v0.4.0.md` 固化各阶段收口时的版本边界。
+12. `redis-uya-release-v0.2.0.md`、`redis-uya-release-v0.3.0.md`、`redis-uya-release-v0.4.0.md`、`redis-uya-release-v0.5.0.md` 固化各阶段收口时的版本边界。
 13. `redis-uya-test-report-v0.1.0.md` 固化 `v0.1.0` 收口阶段实际执行的测试和基准结果。
 
 ## 当前阶段
 
-项目当前主线已完成 `v0.4.0` 规划任务，并已进入 `v0.5.0`：当前已补齐复制角色与状态机、`PSYNC / backlog`、replica 侧全量同步、定时拉取式增量同步、复制心跳、主从一致性 smoke、连接级最小 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`、`HELLO 2/3` 驱动的 RESP3 最小协议闭环、`PUBLISH/SUBSCRIBE/UNSUBSCRIBE` 最小 Pub/Sub 闭环，以及 `CLIENT` / `CONFIG` 控制面兼容子集。下一步进入兼容性回归测试收口。
+项目当前主线已完成 `v0.5.0` 规划任务：当前已补齐复制角色与状态机、`PSYNC / backlog`、replica 侧全量同步、定时拉取式增量同步、复制心跳、主从一致性 smoke、连接级最小 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`、`HELLO 2/3` 驱动的 RESP3 最小协议闭环、`PUBLISH/SUBSCRIBE/UNSUBSCRIBE` 最小 Pub/Sub 闭环、`CLIENT` / `CONFIG` 控制面兼容子集，以及 v0.5 兼容性回归。下一步进入 `v0.6.0` 内存与性能控制。

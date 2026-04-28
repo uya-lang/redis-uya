@@ -118,3 +118,4 @@ bash scripts/verify_definition_of_done.sh
 | `volatile-*` 运行时淘汰基线可用：`volatile-lru` / `volatile-lfu` / `volatile-ttl` 只从带 TTL 的 key 中选候选，永久 key 不被 volatile 策略淘汰 | `tests/unit/storage_engine_test.uya`、`tests/integration/maxmemory_volatile_policies.py` |
 | 内存统计完善：allocator 记录当前使用、峰值、累计分配、累计释放、累计分配次数和当前活跃块数，`INFO memory` 可观测这些字段 | `tests/unit/memory_allocator_test.uya`、`tests/unit/command_executor_test.uya`、`tests/integration/memory_info_stats.py` |
 | Slab allocator 基线可用：`redis_malloc/free/realloc` 内部对 16B 到 1KB 小对象做分级 freelist 缓存，缓存块数、缓存字节数和复用次数可通过 `INFO memory` 观测 | `tests/unit/memory_allocator_test.uya`、`tests/unit/command_executor_test.uya`、`tests/integration/memory_info_stats.py` |
+| 内存压力与淘汰回归可复现：真实 TCP 循环写入覆盖 noeviction OOM、allkeys-lru、allkeys-lfu 与 volatile-ttl 压力路径，并校验新写入存活、旧/冷/近过期 key 被淘汰、永久 key 不被 volatile 策略淘汰 | `tests/integration/maxmemory_pressure.py` |

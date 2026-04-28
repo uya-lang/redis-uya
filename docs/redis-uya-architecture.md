@@ -125,6 +125,7 @@ server open
 - `command/executor.uya` 在可能增量分配的写命令执行前做预算检查；`noeviction` 直接 OOM，`allkeys-*` 与 `volatile-*` 分别调用对应 `engine_evict_*()` 后重试预算判断
 - `volatile-lru` / `volatile-lfu` / `volatile-ttl` 扫描主 keyspace 并用 TTL 字典过滤候选，只淘汰带过期时间的 key
 - 超出预算且策略无法腾挪时返回 `OOM command not allowed when used memory > 'maxmemory'`，失败命令不落 Engine、AOF 或 replication backlog
+- `tests/integration/maxmemory_pressure.py` 用真实 TCP 循环写入覆盖 noeviction、allkeys-lru、allkeys-lfu 与 volatile-ttl 的压力路径
 
 当前淘汰策略是全量扫描基线，尚未包含 Redis 风格采样池、LFU 衰减和淘汰事件持久化优化。
 
@@ -147,4 +148,4 @@ server open
 - RESP3 当前是 `HELLO 2/3` 驱动的最小闭环，仍不是完整 RESP3 类型输出与客户端兼容矩阵
 - Pub/Sub 当前是固定容量最小闭环，仍没有 pattern 订阅、完整 subscribed-mode 命令限制和背压缓冲
 - 控制面当前覆盖 `CLIENT` / `CONFIG` 的兼容子集，仍没有 `CONFIG SET/REWRITE`、全局 `CLIENT LIST`、`CLIENT KILL/PAUSE/TRACKING`
-- `maxmemory` 当前已覆盖 noeviction、allkeys-* 与 volatile-* 基线，并补齐 allocator 统计观测和 Slab 小对象缓存；仍没有 LFU 衰减、采样池、淘汰事件持久化优化和压力 benchmark
+- `maxmemory` 当前已覆盖 noeviction、allkeys-* 与 volatile-* 基线，并补齐 allocator 统计观测、Slab 小对象缓存和压力回归；仍没有 LFU 衰减、采样池、淘汰事件持久化优化和正式内存 benchmark

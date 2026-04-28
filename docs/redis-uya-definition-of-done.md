@@ -2,7 +2,7 @@
 
 > 版本: v0.1.0-dev
 > 日期: 2026-04-28
-> 状态: `v0.6.0` 进行中
+> 状态: `v0.6.0` 收口完成
 
 ## 1. 目标
 
@@ -108,7 +108,7 @@ bash scripts/verify_definition_of_done.sh
 | `CLIENT` / `CONFIG` 控制面兼容子集可用：`CLIENT ID/GETNAME/SETNAME/INFO/LIST/SETINFO/HELP`、`HELLO SETNAME`、`CONFIG GET/HELP/RESETSTAT` | `tests/unit/command_router_test.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/network_connection_test.uya`、`tests/integration/client_config_smoke.py` |
 | `v0.5.0` 兼容性回归覆盖协议与控制面组合路径：RESP3 Null、`HELLO SETNAME`、WATCH 中止、事务内控制命令错误、RESP3 Pub/Sub Push、控制面查询 | `tests/integration/v0_5_compat.py`、`tests/integration/error_compat.py`、`tests/integration/redis_py_subset.py` |
 
-## 9. `v0.6.0`（进行中）
+## 9. `v0.6.0`
 
 | DoD 项 | 证据 |
 |--------|------|

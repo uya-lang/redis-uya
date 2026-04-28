@@ -1,8 +1,8 @@
 程序的真正成本不在于编写，而在于维护。
 # redis-uya 开发 TODO 文档
 
-> 版本: v0.1.0-dev
-> 日期: 2026-04-28
+> 版本: v0.6.0
+> 日期: 2026-04-29
 > 配套设计文档: `redis-uya-design.md`
 > 配套评审文档: `redis-uya-review.md`
 > 开发规范: `redis-uya-development.md`

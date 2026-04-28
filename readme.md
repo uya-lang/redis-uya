@@ -3,8 +3,8 @@
 > 使用 Uya 从零实现 Redis 兼容内存数据库
 > 零 GC 路线 · 显式错误处理 · 可测试演进 · 长期性能目标超过 Redis
 
-> 版本: v0.1.0-dev
-> 日期: 2026-04-28
+> 版本: v0.6.0
+> 日期: 2026-04-29
 
 ## 简介
 
@@ -68,6 +68,9 @@
 - `allkeys-lru` 淘汰基线：对象记录最近访问时间，超预算写入可淘汰最久未访问 key 后继续执行
 - `allkeys-lfu` 淘汰基线：对象记录访问计数，超预算写入可淘汰访问次数最低 key 后继续执行
 - `volatile-*` 淘汰基线：`volatile-lru`、`volatile-lfu`、`volatile-ttl` 只从带 TTL 的 key 中选择候选
+- `INFO memory` allocator 统计：当前使用、峰值、累计分配/释放、活跃块数和 Slab 统计可观测
+- Slab 小对象缓存基线：16B 到 1KB 分级 freelist
+- 内存压力与淘汰回归：覆盖 noeviction OOM、allkeys-lru、allkeys-lfu、volatile-ttl
 - Python 客户端风格集成：覆盖更多命令与控制面交互
 
 当前进行中：
@@ -108,7 +111,7 @@ TCP 集成 smoke：
 make test-integration
 ```
 
-`make test-integration` 当前覆盖基础 TCP smoke、空闲连接不阻塞其他客户端、AOF 写入、重启、恢复 smoke，以及基础错误响应兼容检查。
+`make test-integration` 当前覆盖基础 TCP smoke、空闲连接不阻塞其他客户端、持久化/复制/事务/Pub/Sub/控制面兼容路径，以及 v0.6.0 的 `maxmemory`、淘汰策略、内存统计和压力回归。
 
 如本机已安装 `redis-cli`，可额外运行：
 
@@ -271,7 +274,10 @@ build/redis-uya 6380 1
 - [release-v0.2.0](docs/redis-uya-release-v0.2.0.md)
 - [release-v0.3.0](docs/redis-uya-release-v0.3.0.md)
 - [release-v0.4.0](docs/redis-uya-release-v0.4.0.md)
+- [release-v0.5.0](docs/redis-uya-release-v0.5.0.md)
+- [release-v0.6.0](docs/redis-uya-release-v0.6.0.md)
 - [test-report-v0.1.0](docs/redis-uya-test-report-v0.1.0.md)
+- [test-report-v0.6.0](docs/redis-uya-test-report-v0.6.0.md)
 
 ## 目录结构
 

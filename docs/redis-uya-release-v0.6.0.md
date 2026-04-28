@@ -29,8 +29,18 @@
 - `python3 tests/integration/memory_info_stats.py`
 - `python3 tests/integration/maxmemory_pressure.py`
 - `make test-integration`
+- `make test-redis-cli`
+- `git diff --check`
 
-## 4. 已知限制
+## 4. 发布前检查
+
+- 工作区必须干净：`git status --short`
+- 默认构建、单元测试、完整 Python 集成测试和 `redis-cli` smoke 必须通过
+- v0.6.0 新增内存脚本必须纳入 `make test-integration`
+- 发布文档、DoD、TODO、API、ARCHITECTURE、QUICKSTART 和根 README 必须保持一致
+- 如需正式发布 tag，建议在干净工作区执行 `git tag -a v0.6.0 -m "redis-uya v0.6.0"`，本次收口文档未自动打 tag
+
+## 5. 已知限制
 
 - 当前淘汰策略仍是全量扫描基线，没有 Redis 风格采样池
 - LFU 当前只有访问计数和 LRU tie-break，没有衰减周期
@@ -38,7 +48,7 @@
 - `used_memory` 是项目 allocator 的逻辑活跃字节统计，不等同于 OS RSS；Slab 空闲缓存通过单独字段观测
 - 当前有压力回归测试，但还没有正式内存 benchmark 报告
 
-## 5. 发布边界
+## 6. 发布边界
 
 `v0.6.0` 承诺：
 
@@ -55,10 +65,11 @@
 - 正式内存 benchmark
 - 集群、Sentinel、高可用切换
 
-## 6. 发布物
+## 7. 发布物
 
 - 入口二进制：`build/redis-uya`
 - Quickstart：[redis-uya-quickstart.md](./redis-uya-quickstart.md)
 - API：[redis-uya-api.md](./redis-uya-api.md)
 - Architecture：[redis-uya-architecture.md](./redis-uya-architecture.md)
 - DoD：[redis-uya-definition-of-done.md](./redis-uya-definition-of-done.md)
+- 测试报告：[redis-uya-test-report-v0.6.0.md](./redis-uya-test-report-v0.6.0.md)

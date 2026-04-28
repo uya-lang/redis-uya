@@ -1,7 +1,7 @@
 # redis-uya QUICKSTART
 
-> 版本: v0.1.0-dev
-> 日期: 2026-04-25
+> 版本: v0.6.0
+> 日期: 2026-04-29
 
 ## 1. 前置条件
 
@@ -120,5 +120,7 @@ REDIS_UYA_LONG_RUN_SECONDS=1800 python3 tests/integration/long_run_smoke.py
 - `PSYNC / backlog` 当前已支持最小握手与 backlog 命中判断
 - replica 当前已支持最小全量同步：`REPLICAOF` 后可拉取 master RDB 快照
 - replica 当前已支持定时拉取式增量同步与心跳
+- `maxmemory` 当前已支持 noeviction、allkeys-lru、allkeys-lfu、volatile-lru、volatile-lfu、volatile-ttl 基线
+- `INFO memory` 当前可观测 allocator 与 Slab 统计
 - 事务、Pub/Sub、CLIENT / CONFIG 仍是最小兼容子集
 - 不支持 master 主动流式推送复制、集群、Lua、Redis 模块

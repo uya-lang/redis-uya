@@ -16,6 +16,9 @@
 - [API](./redis-uya-api.md)
 - [ARCHITECTURE](./redis-uya-architecture.md)
 - [release-v0.1.0](./redis-uya-release-v0.1.0.md)
+- [release-v0.2.0](./redis-uya-release-v0.2.0.md)
+- [release-v0.3.0](./redis-uya-release-v0.3.0.md)
+- [release-v0.4.0](./redis-uya-release-v0.4.0.md)
 - [test-report-v0.1.0](./redis-uya-test-report-v0.1.0.md)
 
 ## 文档关系
@@ -30,8 +33,9 @@
 8. `redis-uya-quickstart.md` 提供从构建、运行到验证的最短路径。
 9. `redis-uya-api.md` 记录当前命令与错误语义。
 10. `redis-uya-architecture.md` 记录当前实现架构与数据路径。
-11. `redis-uya-release-v0.1.0.md` 汇总当前预发布范围、验证入口与已知限制。
-12. `redis-uya-test-report-v0.1.0.md` 固化 `v0.1.0` 收口阶段实际执行的测试和基准结果。
+11. `redis-uya-release-v0.1.0.md` 固化 `v0.1.0` 的发布边界、验证入口与已知限制。
+12. `redis-uya-release-v0.2.0.md`、`redis-uya-release-v0.3.0.md`、`redis-uya-release-v0.4.0.md` 固化各阶段收口时的版本边界。
+13. `redis-uya-test-report-v0.1.0.md` 固化 `v0.1.0` 收口阶段实际执行的测试和基准结果。
 
 ## 当前阶段
 

@@ -165,7 +165,7 @@ build/redis-uya 6380 1
 
 说明：当前不会依赖未发布的 `v0.9.5` 特性。`v0.9.5` 正式发布后，再评估是否切换内置工具链。
 
-## 当前能力边界
+## `v0.1.0` 发布边界
 
 `v0.1.0` 只承诺交付最小生产内核：
 
@@ -187,7 +187,30 @@ build/redis-uya 6380 1
 - Lua 脚本
 - Redis 模块系统
 
-说明：当前代码主线已进入 `v0.2.0`，因此仓库工作树可能包含超出 `v0.1.0` 发布范围的增量能力；`v0.1.0` 发布文档仍以当时交付边界为准。
+说明：这段只描述 `v0.1.0` 当时的发布承诺，不等于当前仓库主线能力。
+
+## 当前主线能力边界
+
+当前仓库主线已进入 `v0.5.0`，并且已经包含：
+
+- 单节点、单进程服务模型
+- RESP2 子集
+- String / Hash / List / Set / ZSet / `SCAN`
+- AOF append/replay、RDB 子集、`SAVE`、`BGSAVE`、`BGREWRITEAOF`
+- 主从复制最小闭环：`REPLICAOF`、`PSYNC / backlog`、全量同步、定时拉取式增量同步、复制心跳
+- 事务最小子集：`MULTI/EXEC/DISCARD/WATCH/UNWATCH`
+- `redis-cli` smoke、Python 集成 smoke、持久化与复制 benchmark
+
+当前主线仍未包含：
+
+- 完整 RESP3
+- 完整 Redis RDB 二进制兼容
+- Redis 风格长连接流式复制
+- `PUBLISH/SUBSCRIBE`
+- 更完整 `CLIENT` / `CONFIG`
+- 基础集群
+- Lua 脚本
+- Redis 模块系统
 
 ## 路线图
 
@@ -228,29 +251,55 @@ build/redis-uya 6380 1
 - [API](docs/redis-uya-api.md)
 - [ARCHITECTURE](docs/redis-uya-architecture.md)
 - [release-v0.1.0](docs/redis-uya-release-v0.1.0.md)
+- [release-v0.2.0](docs/redis-uya-release-v0.2.0.md)
+- [release-v0.3.0](docs/redis-uya-release-v0.3.0.md)
+- [release-v0.4.0](docs/redis-uya-release-v0.4.0.md)
 - [test-report-v0.1.0](docs/redis-uya-test-report-v0.1.0.md)
 
 ## 目录结构
 
 ```text
 redis-uya/
+├── .gitignore
 ├── Makefile
 ├── build.uya
 ├── readme.md
+├── benchmarks/
+│   ├── v0.1.0.md
+│   ├── v0.3.0-persistence.md
+│   └── v0.4.0-replication.md
 ├── src/
+│   ├── async_rt/
 │   ├── config.uya
 │   ├── main.uya
 │   ├── command/
+│   ├── persistence/
 │   ├── memory/
 │   ├── network/
+│   ├── replication/
 │   ├── storage/
 │   └── util/
 ├── tests/
 │   ├── unit/
+│   │   └── fixtures/
 │   ├── integration/
 │   └── benchmark/
 ├── scripts/
+│   ├── benchmark_v0_1_0.py
+│   ├── benchmark_persistence_v0_3_0.py
+│   ├── benchmark_replication_v0_4_0.py
+│   └── verify_definition_of_done.sh
 ├── docs/
+│   ├── redis-uya-design.md
+│   ├── redis-uya-review.md
+│   ├── redis-uya-todo.md
+│   ├── redis-uya-development.md
+│   ├── redis-uya-definition-of-done.md
+│   ├── redis-uya-quickstart.md
+│   ├── redis-uya-api.md
+│   ├── redis-uya-architecture.md
+│   └── redis-uya-release-v0.*.md
+├── lib/
 └── uya/
 ```
 

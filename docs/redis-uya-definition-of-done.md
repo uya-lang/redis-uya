@@ -2,7 +2,7 @@
 
 > 版本: v0.1.0-dev
 > 日期: 2026-04-25
-> 状态: `v0.1.0` 收口完成
+> 状态: `v0.5.0` 进行中
 
 ## 1. 目标
 
@@ -18,6 +18,7 @@ bash scripts/verify_definition_of_done.sh
 
 - `tests/integration/long_run_smoke.py` 为 30 分钟长时运行验证，不纳入默认一键脚本
 - `benchmarks/v0.1.0.md` 记录同机 Redis 基线与 `floor/target/stretch` 判定
+- 本页同时记录 `v0.1.0` 发布证据，以及后续 `v0.2.0+` 已在主线落地的能力证据
 
 ## 2. `v0.1.0-alpha`
 
@@ -69,6 +70,11 @@ bash scripts/verify_definition_of_done.sh
 | `SCAN` 最小语义可用：cursor 返回、`COUNT` 子集、按稳定顺序迭代非过期 key | `tests/unit/storage_engine_test.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/network_connection_test.uya`、`tests/integration/smoke_tcp.py` |
 | `INFO` 支持 `server/clients/memory/stats/keyspace` section 子集，`CONFIG GET` 支持最小配置查询 | `tests/unit/command_executor_test.uya`、`tests/unit/network_connection_test.uya`、`tests/integration/smoke_tcp.py`、`tests/integration/redis_cli_smoke.sh` |
 | 100ms cron 使用主动过期采样循环，过期比例高时会继续多轮清理 | `tests/unit/storage_engine_test.uya`、`tests/unit/server_test.uya` |
+
+## 6. `v0.3.0`
+
+| DoD 项 | 证据 |
+|--------|------|
 | 项目内 RDB 子集已覆盖 String/Hash/List/Set/ZSet 与绝对过期时间 save/load | `tests/unit/persistence_rdb_test.uya`、`tests/integration/persistence_bgsave.py` |
 | `SAVE` 命令可写出当前五类对象的 RDB 快照 | `tests/unit/command_executor_test.uya`、`tests/integration/smoke_tcp.py`、`tests/integration/redis_cli_smoke.sh` |
 | `BGSAVE` 通过真实 `fork/waitpid` 子进程在后台写出 RDB 快照，并可在去掉 AOF 后仅靠 RDB 恢复 | `tests/unit/command_executor_test.uya`、`tests/unit/network_connection_test.uya`、`tests/unit/server_test.uya`、`tests/integration/persistence_bgsave.py` |
@@ -78,6 +84,11 @@ bash scripts/verify_definition_of_done.sh
 | RDB 损坏/截断与 AOF 损坏/截断在单元与进程级恢复路径上都有证据 | `tests/unit/persistence_rdb_test.uya`、`tests/unit/persistence_aof_test.uya`、`tests/unit/server_test.uya`、`tests/integration/persistence_corruption.py` |
 | 进程级崩溃恢复矩阵覆盖 AOF-only、rewrite in-progress、rewrite completed 三条路径 | `tests/integration/persistence_crash_matrix.py` |
 | 持久化 benchmark 可生成并落盘 | `scripts/benchmark_persistence_v0_3_0.py`、`benchmarks/v0.3.0-persistence.md` |
+
+## 7. `v0.4.0`
+
+| DoD 项 | 证据 |
+|--------|------|
 | 复制角色与状态机可用：支持 master/slave 角色切换、`REPLICAOF`、`INFO replication`、`CONFIG GET replicaof/masterauth` | `tests/unit/config_test.uya`、`tests/unit/command_router_test.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/network_connection_test.uya`、`tests/unit/server_test.uya`、`tests/integration/replication_role_state.py` |
 | `PSYNC / backlog` 最小闭环可用：master 维护复制积压缓冲区，`PSYNC ? -1` 返回 `FULLRESYNC`，匹配 replid+offset 时返回 `CONTINUE` | `tests/unit/replication_backlog_test.uya`、`tests/unit/command_router_test.uya`、`tests/unit/command_executor_test.uya`、`tests/integration/replication_psync_backlog.py` |
 | replica 侧全量同步可用：`REPLICAOF` 后可向 master 发起 `PSYNC ? -1`，拉取 RDB 快照并落当前库 | `tests/unit/persistence_rdb_test.uya`、`tests/integration/replication_full_sync.py` |
@@ -85,5 +96,10 @@ bash scripts/verify_definition_of_done.sh
 | 复制心跳可用：replica 会周期性 `PING` master，掉线后回退到 `configured` 并在 master 恢复后重新同步 | `tests/integration/replication_heartbeat.py` |
 | 主从一致性 smoke 覆盖当前五类对象的 full sync + incremental 复制 | `tests/integration/replication_consistency.py` |
 | 复制 benchmark 可生成并落盘 | `scripts/benchmark_replication_v0_4_0.py`、`benchmarks/v0.4.0-replication.md` |
+
+## 8. `v0.5.0`（进行中）
+
+| DoD 项 | 证据 |
+|--------|------|
 | `MULTI/EXEC/DISCARD` 最小事务子集可用：连接级队列、`QUEUED`、`EXEC` 数组回复、`DISCARD` 丢弃、无 `MULTI` 错误路径 | `tests/unit/command_router_test.uya`、`tests/unit/network_connection_test.uya`、`tests/integration/smoke_tcp.py`、`tests/integration/error_compat.py` |
 | `WATCH/UNWATCH` 最小事务观察子集可用：按键版本跟踪、变更后 `EXEC` 返回 Null Array、`UNWATCH` 清空观察集、`WATCH/UNWATCH` in-transaction 错误路径 | `tests/unit/command_router_test.uya`、`tests/unit/network_connection_test.uya` |

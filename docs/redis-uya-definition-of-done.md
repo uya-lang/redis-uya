@@ -85,3 +85,4 @@ bash scripts/verify_definition_of_done.sh
 | 复制心跳可用：replica 会周期性 `PING` master，掉线后回退到 `configured` 并在 master 恢复后重新同步 | `tests/integration/replication_heartbeat.py` |
 | 主从一致性 smoke 覆盖当前五类对象的 full sync + incremental 复制 | `tests/integration/replication_consistency.py` |
 | 复制 benchmark 可生成并落盘 | `scripts/benchmark_replication_v0_4_0.py`、`benchmarks/v0.4.0-replication.md` |
+| `MULTI/EXEC/DISCARD` 最小事务子集可用：连接级队列、`QUEUED`、`EXEC` 数组回复、`DISCARD` 丢弃、无 `MULTI` 错误路径 | `tests/unit/command_router_test.uya`、`tests/unit/network_connection_test.uya`、`tests/integration/smoke_tcp.py`、`tests/integration/error_compat.py` |

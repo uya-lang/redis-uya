@@ -8,11 +8,15 @@ use src.command.executor.command_execute_at;
 use src.command.executor.command_execute_with_runtime_at;
 use src.command.executor.command_reply_cleanup;
 use src.command.router.Command;
+use src.command.router.CommandInfo;
 use src.command.router.CommandRouter;
 use src.command.router.CommandType;
 use src.command.router.COMMAND_FLAG_WRITE;
 use src.command.router.command_from_resp;
+use src.command.router.command_router_lookup;
 use src.network.protocol.RespParseResult;
+use src.network.protocol.RespType;
+use src.network.protocol.RespValue;
 use src.network.protocol.parse_resp2;
 use src.network.protocol.resp_value_free;
 use src.persistence.aof.AofWriter;
@@ -27,6 +31,9 @@ use src.storage.engine.Engine;
 use src.storage.object.ListNode;
 use src.storage.object.RedisObject;
 use src.storage.object.create_string_object;
+use src.storage.object.create_list_object;
+use src.storage.object.list_object_push_tail;
+use src.storage.object.object_free;
 use src.storage.sds.Sds;
 use src.storage.sds.sds_empty;
 use src.storage.sds.sds_free;
@@ -52,9 +59,75 @@ export struct ConnectionProcessResult {
     request_aof_rewrite: bool,
 }
 
+export struct ConnectionTransaction {
+    active: bool,
+    queue: &RedisObject,
+    queue_count: usize,
+}
+
 struct ConnectionSendProgress {
     next_offset: usize,
     blocked: bool,
+}
+
+fn connection_transaction_empty() ConnectionTransaction {
+    return ConnectionTransaction{
+        active: false,
+        queue: null as &RedisObject,
+        queue_count: 0,
+    };
+}
+
+export fn connection_transaction_new() ConnectionTransaction {
+    return connection_transaction_empty();
+}
+
+export fn connection_transaction_reset(tx: &ConnectionTransaction) void {
+    if tx == null {
+        return;
+    }
+    if tx.queue != null {
+        object_free(tx.queue);
+    }
+    tx.active = false;
+    tx.queue = null as &RedisObject;
+    tx.queue_count = 0;
+}
+
+fn connection_dummy_resp_parse_result() RespParseResult {
+    return RespParseResult{
+        value: RespValue{
+            typ: RespType.resp_simple_string,
+            data: connection_reply_empty_slice(),
+            integer: 0,
+            elements: null as &RespValue,
+            element_count: 0,
+        },
+        consumed: 0,
+    };
+}
+
+fn connection_dummy_command(router: &CommandRouter) Command {
+    const info: CommandInfo = command_router_lookup(router, &"PING"[0: 4]) catch {
+        return Command{
+            info: CommandInfo{
+                cmd_type: CommandType.command_ping,
+                name: &"PING"[0: 4],
+                arity: -1,
+                flags: 0u64,
+                first_key: 0,
+                last_key: 0,
+                key_step: 0,
+            },
+            argc: 0,
+            request: null as &RespValue,
+        };
+    };
+    return Command{
+        info: info,
+        argc: 0,
+        request: null as &RespValue,
+    };
 }
 
 fn connection_reply_empty_slice() &[byte] {
@@ -109,6 +182,104 @@ fn connection_sds_append_u64(buf: &Sds, value: u64) !void {
         count = count - 1;
         try sds_cat(buf, tmp[count: 1]);
     }
+}
+
+fn connection_sds_append_i64(buf: &Sds, value: i64) !void {
+    if value < 0 {
+        try sds_cat(buf, &"-"[0: 1]);
+        try connection_sds_append_u64(buf, (0 - value) as u64);
+        return;
+    }
+    try connection_sds_append_u64(buf, value as u64);
+}
+
+fn connection_append_bulk_node_sds(buf: &Sds, node: &ListNode, count: usize) !void {
+    var current: &ListNode = node;
+    var emitted: usize = 0;
+    while current != null && emitted < count {
+        const data: &[byte] = current.value.value.buf[0: current.value.value.len];
+        try sds_cat(buf, &"$"[0: 1]);
+        try connection_sds_append_u64(buf, data.len as u64);
+        try sds_cat(buf, &"\r\n"[0: 2]);
+        try sds_cat(buf, data);
+        try sds_cat(buf, &"\r\n"[0: 2]);
+        current = current.next;
+        emitted = emitted + 1;
+    }
+}
+
+fn connection_append_reply_sds(buf: &Sds, reply: &CommandReply) !void {
+    if reply.typ == CommandReplyType.reply_simple_string {
+        try sds_cat(buf, &"+"[0: 1]);
+        try sds_cat(buf, reply.data);
+        try sds_cat(buf, &"\r\n"[0: 2]);
+        return;
+    }
+    if reply.typ == CommandReplyType.reply_error {
+        try sds_cat(buf, &"-"[0: 1]);
+        try sds_cat(buf, reply.data);
+        try sds_cat(buf, &"\r\n"[0: 2]);
+        return;
+    }
+    if reply.typ == CommandReplyType.reply_integer {
+        try sds_cat(buf, &":"[0: 1]);
+        try connection_sds_append_i64(buf, reply.integer);
+        try sds_cat(buf, &"\r\n"[0: 2]);
+        return;
+    }
+    if reply.typ == CommandReplyType.reply_bulk_string {
+        try sds_cat(buf, &"$"[0: 1]);
+        try connection_sds_append_u64(buf, reply.data.len as u64);
+        try sds_cat(buf, &"\r\n"[0: 2]);
+        try sds_cat(buf, reply.data);
+        try sds_cat(buf, &"\r\n"[0: 2]);
+        return;
+    }
+    if reply.typ == CommandReplyType.reply_null_bulk {
+        try sds_cat(buf, &"$-1\r\n"[0: 5]);
+        return;
+    }
+    if reply.typ == CommandReplyType.reply_array_bulk {
+        try sds_cat(buf, &"*"[0: 1]);
+        try connection_sds_append_u64(buf, reply.array_count as u64);
+        try sds_cat(buf, &"\r\n"[0: 2]);
+        try connection_append_bulk_node_sds(buf, reply.array_head, reply.array_count);
+        return;
+    }
+    if reply.typ == CommandReplyType.reply_scan {
+        try sds_cat(buf, &"*2\r\n"[0: 4]);
+        try sds_cat(buf, &"$"[0: 1]);
+        try connection_sds_append_u64(buf, connection_u64_decimal_len(reply.scan_cursor) as u64);
+        try sds_cat(buf, &"\r\n"[0: 2]);
+        try connection_sds_append_u64(buf, reply.scan_cursor);
+        try sds_cat(buf, &"\r\n"[0: 2]);
+        try sds_cat(buf, &"*"[0: 1]);
+        try connection_sds_append_u64(buf, reply.array_count as u64);
+        try sds_cat(buf, &"\r\n"[0: 2]);
+        try connection_append_bulk_node_sds(buf, reply.array_head, reply.array_count);
+        return;
+    }
+    if reply.typ == CommandReplyType.reply_raw_bytes {
+        try sds_cat(buf, reply.data);
+        return;
+    }
+}
+
+fn connection_transaction_ensure_queue(tx: &ConnectionTransaction) !&RedisObject {
+    if tx.queue != null {
+        return tx.queue;
+    }
+    const queue: &RedisObject = create_list_object() catch {
+        return error.AllocOutOfMemory;
+    };
+    tx.queue = queue;
+    return queue;
+}
+
+fn connection_transaction_queue_command(tx: &ConnectionTransaction, raw: &[byte]) !void {
+    const queue: &RedisObject = try connection_transaction_ensure_queue(tx);
+    _ = try list_object_push_tail(queue, raw);
+    tx.queue_count = tx.queue_count + 1;
 }
 
 fn connection_raw_reply_owned(data: &[byte]) CommandReply {
@@ -284,6 +455,120 @@ export fn connection_encode_reply(reply: &CommandReply, out: &byte, out_cap: usi
     return pos;
 }
 
+fn connection_transaction_execute_at(
+    engine: &Engine,
+    runtime: &CommandRuntimeInfo,
+    router: &CommandRouter,
+    aof: &AofWriter,
+    rewrite_buf: &Sds,
+    backlog: &ReplicationBacklog,
+    tx: &ConnectionTransaction,
+    now_ms: u64,
+    close_after: &bool,
+    replicaof_requested: &bool,
+    replicaof_promote: &bool,
+    replicaof_host: &[byte],
+    replicaof_port: &i32,
+    bgsave_requested: &bool,
+    rewrite_requested: &bool,
+    rewrite_failed: &bool,
+) CommandReply {
+    var raw: Sds = sds_empty() catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    defer {
+        sds_free(&raw);
+    }
+
+    _ = sds_cat(&raw, &"*"[0: 1]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_sds_append_u64(&raw, tx.queue_count as u64) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = sds_cat(&raw, &"\r\n"[0: 2]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+
+    var node: &ListNode = null as &ListNode;
+    if tx.queue != null {
+        node = tx.queue.list_head;
+    }
+
+    var processed: usize = 0;
+    while node != null && processed < tx.queue_count {
+        const raw_cmd: &[byte] = node.value.value.buf[0: node.value.value.len];
+        const parsed_result: !RespParseResult = parse_resp2(raw_cmd);
+        var parsed_ok: bool = true;
+        const parsed: RespParseResult = parsed_result catch |err| {
+            var err_reply: CommandReply = connection_error_reply(&"ERR transaction replay failed"[0: 29]);
+            _ = connection_append_reply_sds(&raw, &err_reply) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+            parsed_ok = false;
+            node = node.next;
+            processed = processed + 1;
+            connection_dummy_resp_parse_result();
+        };
+        if !parsed_ok {
+            continue;
+        }
+
+        const command_result: !Command = command_from_resp(router, &parsed.value);
+        var command_ok: bool = true;
+        const command: Command = command_result catch |err| {
+            var err_reply_2: CommandReply = connection_error_reply(&"ERR transaction replay failed"[0: 29]);
+            _ = connection_append_reply_sds(&raw, &err_reply_2) catch { resp_value_free(&parsed.value); return connection_error_reply(&"ERR out of memory"[0: 17]); };
+            resp_value_free(&parsed.value);
+            command_ok = false;
+            node = node.next;
+            processed = processed + 1;
+            connection_dummy_command(router);
+        };
+        if !command_ok {
+            continue;
+        }
+
+        var reply: CommandReply = command_execute_with_runtime_at(engine, runtime, &command, now_ms);
+        if aof != null && connection_should_append_aof(&command, &reply) {
+            _ = aof_append_command_at(aof, &command, raw_cmd, now_ms) catch {
+                command_reply_cleanup(&reply);
+                reply = connection_error_reply(&"ERR AOF append failed"[0: 21]);
+            };
+            if rewrite_buf != null && runtime.aof_rewrite_in_progress && reply.typ != CommandReplyType.reply_error {
+                _ = aof_append_command_to_sds_at(rewrite_buf, &command, raw_cmd, now_ms) catch {
+                    if rewrite_failed != null {
+                        *rewrite_failed = true;
+                    }
+                };
+            }
+            if backlog != null && runtime.replication_role == ReplicationRole.role_master && reply.typ != CommandReplyType.reply_error {
+                _ = replication_backlog_append_command_at(backlog, &command, raw_cmd, now_ms) catch {};
+            }
+        }
+
+        if reply.request_replicaof {
+            *replicaof_requested = true;
+            *replicaof_promote = reply.replicaof_promote;
+            *replicaof_port = reply.replicaof_port;
+            connection_copy_replica_host(replicaof_host, reply.replicaof_host);
+        }
+        if reply.request_bgsave {
+            *bgsave_requested = true;
+        }
+        if reply.request_aof_rewrite {
+            *rewrite_requested = true;
+        }
+        if command.info.cmd_type == CommandType.command_quit {
+            *close_after = true;
+        }
+
+        _ = connection_append_reply_sds(&raw, &reply) catch {
+            command_reply_cleanup(&reply);
+            resp_value_free(&parsed.value);
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+        command_reply_cleanup(&reply);
+        resp_value_free(&parsed.value);
+        node = node.next;
+        processed = processed + 1;
+    }
+
+    return connection_raw_reply_owned(raw.buf[0: raw.len]);
+}
+
 fn connection_build_fullresync_reply(engine: &Engine, line: &[byte], now_ms: u64) CommandReply {
     const snapshot: &RedisObject = rdb_dump_object_at(engine, now_ms) catch |err| {
         if err == error.AllocOutOfMemory {
@@ -343,6 +628,19 @@ export fn connection_process_input_at(
     return connection_process_input_with_runtime_with_aof_at(engine, &runtime, router, null as &AofWriter, input, out, out_cap, now_ms);
 }
 
+export fn connection_process_input_with_transaction_at(
+    engine: &Engine,
+    router: &CommandRouter,
+    tx: &ConnectionTransaction,
+    input: &[byte],
+    out: &byte,
+    out_cap: usize,
+    now_ms: u64,
+) !ConnectionProcessResult {
+    var runtime: CommandRuntimeInfo = command_runtime_default();
+    return connection_process_input_with_runtime_with_transaction_at(engine, &runtime, router, tx, input, out, out_cap, now_ms);
+}
+
 export fn connection_process_input_with_runtime_at(
     engine: &Engine,
     runtime: &CommandRuntimeInfo,
@@ -353,6 +651,44 @@ export fn connection_process_input_with_runtime_at(
     now_ms: u64,
 ) !ConnectionProcessResult {
     return connection_process_input_with_runtime_with_aof_at(engine, runtime, router, null as &AofWriter, input, out, out_cap, now_ms);
+}
+
+export fn connection_process_input_with_runtime_with_transaction_at(
+    engine: &Engine,
+    runtime: &CommandRuntimeInfo,
+    router: &CommandRouter,
+    tx: &ConnectionTransaction,
+    input: &[byte],
+    out: &byte,
+    out_cap: usize,
+    now_ms: u64,
+) !ConnectionProcessResult {
+    var replicaof_requested: bool = false;
+    var replicaof_promote: bool = false;
+    var replicaof_host: [byte: 64] = [];
+    var replicaof_port: i32 = 0;
+    var bgsave_requested: bool = false;
+    var rewrite_requested: bool = false;
+    return connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_at(
+        engine,
+        runtime,
+        router,
+        null as &AofWriter,
+        null as &Sds,
+        null as &ReplicationBacklog,
+        tx,
+        input,
+        out,
+        out_cap,
+        now_ms,
+        &replicaof_requested,
+        &replicaof_promote,
+        replicaof_host[0: 64],
+        &replicaof_port,
+        &bgsave_requested,
+        &rewrite_requested,
+        null as &bool,
+    );
 }
 
 export fn connection_process_input_with_aof_at(
@@ -369,7 +705,13 @@ export fn connection_process_input_with_aof_at(
     var replicaof_promote: bool = false;
     var replicaof_host: [byte: 64] = [];
     var replicaof_port: i32 = 0;
-    return connection_process_input_with_runtime_with_aof_and_rewrite_at(engine, &runtime, router, aof, null as &Sds, null as &ReplicationBacklog, input, out, out_cap, now_ms, &replicaof_requested, &replicaof_promote, replicaof_host[0: 64], &replicaof_port, null as &bool);
+    var bgsave_requested: bool = false;
+    var rewrite_requested: bool = false;
+    var tx: ConnectionTransaction = connection_transaction_new();
+    defer {
+        connection_transaction_reset(&tx);
+    }
+    return connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_at(engine, &runtime, router, aof, null as &Sds, null as &ReplicationBacklog, &tx, input, out, out_cap, now_ms, &replicaof_requested, &replicaof_promote, replicaof_host[0: 64], &replicaof_port, &bgsave_requested, &rewrite_requested, null as &bool);
 }
 
 export fn connection_process_input_with_runtime_with_aof_at(
@@ -386,7 +728,13 @@ export fn connection_process_input_with_runtime_with_aof_at(
     var replicaof_promote: bool = false;
     var replicaof_host: [byte: 64] = [];
     var replicaof_port: i32 = 0;
-    return connection_process_input_with_runtime_with_aof_and_rewrite_at(engine, runtime, router, aof, null as &Sds, null as &ReplicationBacklog, input, out, out_cap, now_ms, &replicaof_requested, &replicaof_promote, replicaof_host[0: 64], &replicaof_port, null as &bool);
+    var bgsave_requested: bool = false;
+    var rewrite_requested: bool = false;
+    var tx: ConnectionTransaction = connection_transaction_new();
+    defer {
+        connection_transaction_reset(&tx);
+    }
+    return connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_at(engine, runtime, router, aof, null as &Sds, null as &ReplicationBacklog, &tx, input, out, out_cap, now_ms, &replicaof_requested, &replicaof_promote, replicaof_host[0: 64], &replicaof_port, &bgsave_requested, &rewrite_requested, null as &bool);
 }
 
 export fn connection_process_input_with_runtime_with_aof_and_rewrite_at(
@@ -404,6 +752,35 @@ export fn connection_process_input_with_runtime_with_aof_and_rewrite_at(
     replicaof_promote: &bool,
     replicaof_host: &[byte],
     replicaof_port: &i32,
+    rewrite_failed: &bool,
+) !ConnectionProcessResult {
+    var bgsave_requested: bool = false;
+    var rewrite_requested: bool = false;
+    var tx: ConnectionTransaction = connection_transaction_new();
+    defer {
+        connection_transaction_reset(&tx);
+    }
+    return connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_at(engine, runtime, router, aof, rewrite_buf, backlog, &tx, input, out, out_cap, now_ms, replicaof_requested, replicaof_promote, replicaof_host, replicaof_port, &bgsave_requested, &rewrite_requested, rewrite_failed);
+}
+
+export fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_at(
+    engine: &Engine,
+    runtime: &CommandRuntimeInfo,
+    router: &CommandRouter,
+    aof: &AofWriter,
+    rewrite_buf: &Sds,
+    backlog: &ReplicationBacklog,
+    tx: &ConnectionTransaction,
+    input: &[byte],
+    out: &byte,
+    out_cap: usize,
+    now_ms: u64,
+    replicaof_requested: &bool,
+    replicaof_promote: &bool,
+    replicaof_host: &[byte],
+    replicaof_port: &i32,
+    bgsave_requested: &bool,
+    rewrite_requested: &bool,
     rewrite_failed: &bool,
 ) !ConnectionProcessResult {
     const parsed_result: !RespParseResult = parse_resp2(input);
@@ -430,7 +807,95 @@ export fn connection_process_input_with_runtime_with_aof_and_rewrite_at(
         return ConnectionProcessResult{ response_len: n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
     };
 
-    const reply: CommandReply = command_execute_with_runtime_at(engine, runtime, &command, now_ms);
+    if tx.active {
+        if command.info.cmd_type == CommandType.command_multi {
+            const nested_reply: CommandReply = connection_error_reply(&"ERR MULTI calls can not be nested"[0: 33]);
+            const nested_n: usize = try connection_encode_reply(&nested_reply, out, out_cap);
+            resp_value_free(&parsed.value);
+            return ConnectionProcessResult{ response_len: nested_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+        }
+        if command.info.cmd_type == CommandType.command_discard {
+            connection_transaction_reset(tx);
+            const discard_reply: CommandReply = connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+            const discard_n: usize = try connection_encode_reply(&discard_reply, out, out_cap);
+            resp_value_free(&parsed.value);
+            return ConnectionProcessResult{ response_len: discard_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+        }
+        if command.info.cmd_type == CommandType.command_exec {
+            var exec_close_after: bool = false;
+            var exec_replicaof_requested: bool = false;
+            var exec_replicaof_promote: bool = false;
+            var exec_replicaof_host: [byte: 64] = [];
+            var exec_replicaof_port: i32 = 0;
+            var exec_bgsave_requested: bool = false;
+            var exec_rewrite_requested: bool = false;
+            var exec_reply: CommandReply = connection_transaction_execute_at(
+                engine,
+                runtime,
+                router,
+                aof,
+                rewrite_buf,
+                backlog,
+                tx,
+                now_ms,
+                &exec_close_after,
+                &exec_replicaof_requested,
+                &exec_replicaof_promote,
+                exec_replicaof_host[0: 64],
+                &exec_replicaof_port,
+                &exec_bgsave_requested,
+                &exec_rewrite_requested,
+                rewrite_failed,
+            );
+            connection_transaction_reset(tx);
+            const exec_n: usize = try connection_encode_reply(&exec_reply, out, out_cap);
+            command_reply_cleanup(&exec_reply);
+            resp_value_free(&parsed.value);
+            return ConnectionProcessResult{
+                response_len: exec_n,
+                consumed: parsed.consumed,
+                close_after: exec_close_after,
+                request_replicaof: exec_replicaof_requested,
+                replicaof_promote: exec_replicaof_promote,
+                request_bgsave: exec_bgsave_requested,
+                request_aof_rewrite: exec_rewrite_requested,
+            };
+        }
+
+        _ = connection_transaction_queue_command(tx, input[0: parsed.consumed]) catch {
+            const oom_reply: CommandReply = connection_error_reply(&"ERR out of memory"[0: 17]);
+            const oom_n: usize = try connection_encode_reply(&oom_reply, out, out_cap);
+            resp_value_free(&parsed.value);
+            return ConnectionProcessResult{ response_len: oom_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+        };
+        const queued_reply: CommandReply = connection_make_reply(CommandReplyType.reply_simple_string, &"QUEUED"[0: 6], 0);
+        const queued_n: usize = try connection_encode_reply(&queued_reply, out, out_cap);
+        resp_value_free(&parsed.value);
+        return ConnectionProcessResult{ response_len: queued_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+    }
+
+    if command.info.cmd_type == CommandType.command_multi {
+        connection_transaction_reset(tx);
+        tx.active = true;
+        const multi_reply: CommandReply = connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+        const multi_n: usize = try connection_encode_reply(&multi_reply, out, out_cap);
+        resp_value_free(&parsed.value);
+        return ConnectionProcessResult{ response_len: multi_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+    }
+    if command.info.cmd_type == CommandType.command_exec {
+        const exec_without_multi: CommandReply = connection_error_reply(&"ERR EXEC without MULTI"[0: 22]);
+        const exec_without_multi_n: usize = try connection_encode_reply(&exec_without_multi, out, out_cap);
+        resp_value_free(&parsed.value);
+        return ConnectionProcessResult{ response_len: exec_without_multi_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+    }
+    if command.info.cmd_type == CommandType.command_discard {
+        const discard_without_multi: CommandReply = connection_error_reply(&"ERR DISCARD without MULTI"[0: 25]);
+        const discard_without_multi_n: usize = try connection_encode_reply(&discard_without_multi, out, out_cap);
+        resp_value_free(&parsed.value);
+        return ConnectionProcessResult{ response_len: discard_without_multi_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+    }
+
+    var reply: CommandReply = command_execute_with_runtime_at(engine, runtime, &command, now_ms);
     if aof != null && connection_should_append_aof(&command, &reply) {
         _ = aof_append_command_at(aof, &command, input[0: parsed.consumed], now_ms) catch {
             const aof_reply: CommandReply = connection_error_reply(&"ERR AOF append failed"[0: 21]);
@@ -460,6 +925,12 @@ export fn connection_process_input_with_runtime_with_aof_and_rewrite_at(
     }
     const request_bgsave: bool = reply.request_bgsave;
     const request_aof_rewrite: bool = reply.request_aof_rewrite;
+    if request_bgsave && bgsave_requested != null {
+        *bgsave_requested = true;
+    }
+    if request_aof_rewrite && rewrite_requested != null {
+        *rewrite_requested = true;
+    }
     var n: usize = 0;
     var psync_reply: CommandReply = connection_make_reply(CommandReplyType.reply_simple_string, connection_reply_empty_slice(), 0);
     var use_psync_reply: bool = false;
@@ -641,6 +1112,7 @@ export fn connection_handle_fd_nonblocking_with_aof(
     router: &CommandRouter,
     aof: &AofWriter,
     backlog: &ReplicationBacklog,
+    tx: &ConnectionTransaction,
     fd: i32,
     input: &byte,
     input_cap: usize,
@@ -660,7 +1132,7 @@ export fn connection_handle_fd_nonblocking_with_aof(
     output_cap: usize,
 ) !bool {
     var runtime: CommandRuntimeInfo = command_runtime_default();
-    return connection_handle_fd_nonblocking_with_runtime_with_aof(engine, &runtime, router, aof, null as &Sds, backlog, fd, input, input_cap, filled, pending, pending_cap, pending_len, pending_sent, close_after_write, replicaof_requested, replicaof_promote, replicaof_host, replicaof_port, bgsave_requested, rewrite_requested, null as &bool, output, output_cap);
+    return connection_handle_fd_nonblocking_with_runtime_with_aof(engine, &runtime, router, aof, null as &Sds, backlog, tx, fd, input, input_cap, filled, pending, pending_cap, pending_len, pending_sent, close_after_write, replicaof_requested, replicaof_promote, replicaof_host, replicaof_port, bgsave_requested, rewrite_requested, null as &bool, output, output_cap);
 }
 
 export fn connection_handle_fd_nonblocking_with_runtime_with_aof(
@@ -670,6 +1142,7 @@ export fn connection_handle_fd_nonblocking_with_runtime_with_aof(
     aof: &AofWriter,
     rewrite_buf: &Sds,
     backlog: &ReplicationBacklog,
+    tx: &ConnectionTransaction,
     fd: i32,
     input: &byte,
     input_cap: usize,
@@ -707,13 +1180,14 @@ export fn connection_handle_fd_nonblocking_with_runtime_with_aof(
     var can_continue: bool = true;
     while can_continue && *filled > 0 && *pending_len == 0 {
         var incomplete: bool = false;
-        const result_value: !ConnectionProcessResult = connection_process_input_with_runtime_with_aof_and_rewrite_at(
+        const result_value: !ConnectionProcessResult = connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_at(
             engine,
             runtime,
             router,
             aof,
             rewrite_buf,
             backlog,
+            tx,
             input[0: *filled],
             output,
             output_cap,
@@ -722,6 +1196,8 @@ export fn connection_handle_fd_nonblocking_with_runtime_with_aof(
             replicaof_promote,
             replicaof_host,
             replicaof_port,
+            bgsave_requested,
+            rewrite_requested,
             rewrite_failed,
         );
         const result: ConnectionProcessResult = result_value catch |err| {
@@ -784,7 +1260,11 @@ export fn connection_handle_fd_nonblocking(
     var replicaof_port: i32 = 0;
     var bgsave_requested: bool = false;
     var rewrite_requested: bool = false;
-    return connection_handle_fd_nonblocking_with_aof(engine, router, null as &AofWriter, null as &ReplicationBacklog, fd, input, input_cap, filled, pending, pending_cap, pending_len, pending_sent, close_after_write, &replicaof_requested, &replicaof_promote, replicaof_host[0: 64], &replicaof_port, &bgsave_requested, &rewrite_requested, output, output_cap);
+    var tx: ConnectionTransaction = connection_transaction_new();
+    defer {
+        connection_transaction_reset(&tx);
+    }
+    return connection_handle_fd_nonblocking_with_aof(engine, router, null as &AofWriter, null as &ReplicationBacklog, &tx, fd, input, input_cap, filled, pending, pending_cap, pending_len, pending_sent, close_after_write, &replicaof_requested, &replicaof_promote, replicaof_host[0: 64], &replicaof_port, &bgsave_requested, &rewrite_requested, output, output_cap);
 }
 
 export fn connection_handle_fd(engine: &Engine, router: &CommandRouter, fd: i32) !void {
@@ -796,6 +1276,10 @@ export fn connection_handle_fd_with_aof(engine: &Engine, router: &CommandRouter,
     var output: [byte: 8192] = [];
     var filled: usize = 0;
     var close_after: bool = false;
+    var tx: ConnectionTransaction = connection_transaction_new();
+    defer {
+        connection_transaction_reset(&tx);
+    }
 
     while !close_after {
         if filled >= 8192 {
@@ -813,14 +1297,32 @@ export fn connection_handle_fd_with_aof(engine: &Engine, router: &CommandRouter,
         var can_continue: bool = true;
         while can_continue && filled > 0 {
             var incomplete: bool = false;
-            const result_aof_value: !ConnectionProcessResult = connection_process_input_with_aof_at(
+            var runtime: CommandRuntimeInfo = command_runtime_default();
+            var replicaof_requested: bool = false;
+            var replicaof_promote: bool = false;
+            var replicaof_host: [byte: 64] = [];
+            var replicaof_port: i32 = 0;
+            var bgsave_requested: bool = false;
+            var rewrite_requested: bool = false;
+            const result_aof_value: !ConnectionProcessResult = connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_at(
                 engine,
+                &runtime,
                 router,
                 aof,
+                null as &Sds,
+                null as &ReplicationBacklog,
+                &tx,
                 input[0: filled],
                 &output[0],
                 8192,
                 now_ms_safe(),
+                &replicaof_requested,
+                &replicaof_promote,
+                replicaof_host[0: 64],
+                &replicaof_port,
+                &bgsave_requested,
+                &rewrite_requested,
+                null as &bool,
             );
             const result: ConnectionProcessResult = result_aof_value catch |err| {
                 if err == error.ConnectionIncomplete {

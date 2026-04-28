@@ -71,6 +71,7 @@ use tests.unit.command_executor_test.test_command_expire_and_ttl;
 use tests.unit.command_executor_test.test_command_error_paths;
 use tests.unit.network_connection_test.test_connection_encode_resp_replies;
 use tests.unit.network_connection_test.test_connection_process_ping_set_get_quit;
+use tests.unit.network_connection_test.test_connection_process_multi_exec_discard;
 use tests.unit.network_connection_test.test_connection_process_error_paths;
 use tests.unit.persistence_aof_test.test_aof_connection_append_and_replay_set;
 use tests.unit.persistence_aof_test.test_aof_replay_set_then_del;
@@ -380,6 +381,10 @@ export fn main() i32 {
     const before_conn_process: i32 = failed;
     _ = test_connection_process_ping_set_get_quit() catch { printf("[FAIL] network_connection/process\n" as *byte); failed = failed + 1; };
     if failed == before_conn_process { printf("[PASS] network_connection/process\n" as *byte); }
+
+    const before_conn_multi: i32 = failed;
+    _ = test_connection_process_multi_exec_discard() catch { printf("[FAIL] network_connection/multi_exec_discard\n" as *byte); failed = failed + 1; };
+    if failed == before_conn_multi { printf("[PASS] network_connection/multi_exec_discard\n" as *byte); }
 
     const before_conn_errors: i32 = failed;
     _ = test_connection_process_error_paths() catch { printf("[FAIL] network_connection/errors\n" as *byte); failed = failed + 1; };

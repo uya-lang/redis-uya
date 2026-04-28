@@ -168,6 +168,59 @@ CONFIG GET pattern
 - 当前支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`replicaof`、`masterauth`、`maxmemory`、`save`
 - 支持最小 `*` 通配模式
 
+### `MULTI`
+
+格式：
+
+```text
+MULTI
+```
+
+返回：
+
+- 成功：`+OK`
+- 嵌套调用：`-ERR MULTI calls can not be nested`
+
+说明：
+
+- 当前实现是连接级最小事务队列
+- 进入事务态后，后续命令先返回 `+QUEUED`
+
+### `EXEC`
+
+格式：
+
+```text
+EXEC
+```
+
+返回：
+
+- 成功：RESP Array，按入队顺序返回每条命令的真实回复
+- 未进入 `MULTI`：`-ERR EXEC without MULTI`
+
+说明：
+
+- 当前按单线程顺序执行队列中的命令
+- 队列中的写命令会在 `EXEC` 时真正落 AOF / replication backlog
+
+### `DISCARD`
+
+格式：
+
+```text
+DISCARD
+```
+
+返回：
+
+- 成功：`+OK`
+- 未进入 `MULTI`：`-ERR DISCARD without MULTI`
+
+说明：
+
+- 会清空当前连接已入队命令，并退出事务态
+
 ### `SAVE`
 
 格式：

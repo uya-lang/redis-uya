@@ -6,8 +6,12 @@ use src.command.executor.CommandReplyType;
 use src.command.router.CommandRouter;
 use src.command.router.command_router_new;
 use src.network.connection.ConnectionProcessResult;
+use src.network.connection.ConnectionTransaction;
 use src.network.connection.connection_encode_reply;
 use src.network.connection.connection_process_input_at;
+use src.network.connection.connection_process_input_with_transaction_at;
+use src.network.connection.connection_transaction_new;
+use src.network.connection.connection_transaction_reset;
 use src.storage.engine.Engine;
 use src.storage.engine.engine_new;
 use src.storage.engine.engine_free;
@@ -158,6 +162,59 @@ export fn test_connection_process_error_paths() !void {
         return;
     };
     try assert_true(saw_incomplete);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_connection_process_multi_exec_discard() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var tx: ConnectionTransaction = connection_transaction_new();
+    defer {
+        connection_transaction_reset(&tx);
+    }
+    var out: [byte: 256] = [];
+
+    const multi: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$5\r\nMULTI\r\n"[0: 15], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: multi.response_len], &"+OK\r\n"[0: 5]));
+
+    const queued_set: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 33], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: queued_set.response_len], &"+QUEUED\r\n"[0: 9]));
+
+    const queued_get: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n"[0: 22], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: queued_get.response_len], &"+QUEUED\r\n"[0: 9]));
+
+    const exec: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$4\r\nEXEC\r\n"[0: 14], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: exec.response_len], &"*2\r\n+OK\r\n$5\r\nvalue\r\n"[0: 20]));
+
+    const multi_discard: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$5\r\nMULTI\r\n"[0: 15], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: multi_discard.response_len], &"+OK\r\n"[0: 5]));
+
+    const discard_queue: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nSET\r\n$5\r\nother\r\n$3\r\nabc\r\n"[0: 33], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: discard_queue.response_len], &"+QUEUED\r\n"[0: 9]));
+
+    const discard: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$7\r\nDISCARD\r\n"[0: 17], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: discard.response_len], &"+OK\r\n"[0: 5]));
+
+    const get_other: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$3\r\nGET\r\n$5\r\nother\r\n"[0: 24], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: get_other.response_len], &"$-1\r\n"[0: 5]));
+
+    const exec_without_multi: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$4\r\nEXEC\r\n"[0: 14], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: exec_without_multi.response_len], &"-ERR EXEC without MULTI\r\n"[0: 25]));
+
+    const discard_without_multi: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$7\r\nDISCARD\r\n"[0: 17], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: discard_without_multi.response_len], &"-ERR DISCARD without MULTI\r\n"[0: 28]));
+
+    const multi_again: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$5\r\nMULTI\r\n"[0: 15], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: multi_again.response_len], &"+OK\r\n"[0: 5]));
+
+    const nested_multi: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$5\r\nMULTI\r\n"[0: 15], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: nested_multi.response_len], &"-ERR MULTI calls can not be nested\r\n"[0: 36]));
+
+    const empty_exec: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$4\r\nEXEC\r\n"[0: 14], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: empty_exec.response_len], &"*0\r\n"[0: 4]));
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

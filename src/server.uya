@@ -11,6 +11,9 @@ use src.network.listener.listener_open_loopback;
 use src.network.listener.listener_accept;
 use src.network.listener.listener_close;
 use src.network.connection.connection_handle_fd_nonblocking_with_runtime_with_aof;
+use src.network.connection.ConnectionTransaction;
+use src.network.connection.connection_transaction_new;
+use src.network.connection.connection_transaction_reset;
 use src.persistence.aof.AofWriter;
 use src.persistence.aof.aof_disabled;
 use src.persistence.aof.aof_open_append;
@@ -103,6 +106,7 @@ export struct RedisClient {
     output_len: usize,
     output_sent: usize,
     close_after_write: bool,
+    transaction: ConnectionTransaction,
 }
 
 export struct RedisServer {
@@ -153,6 +157,7 @@ fn server_init_clients(server: &RedisServer) void {
         server.clients[i].output_len = 0;
         server.clients[i].output_sent = 0;
         server.clients[i].close_after_write = false;
+        server.clients[i].transaction = connection_transaction_new();
         i = i + 1;
     }
     server.active_clients = 0;
@@ -747,11 +752,13 @@ fn server_close_client_slot(server: &RedisServer, slot: usize) void {
     _ = sys_epoll_ctl(server.listener.poll_fd, EPOLL_CTL_DEL, fd, null as &EpollEvent) catch {};
     _ = sys_shutdown(fd, SHUT_WR) catch {};
     _ = sys_close(fd) catch {};
+    connection_transaction_reset(&server.clients[slot].transaction);
     server.clients[slot].fd = -1;
     server.clients[slot].input_len = 0;
     server.clients[slot].output_len = 0;
     server.clients[slot].output_sent = 0;
     server.clients[slot].close_after_write = false;
+    server.clients[slot].transaction = connection_transaction_new();
     if server.active_clients > 0 {
         server.active_clients = server.active_clients - 1;
     }
@@ -1187,6 +1194,7 @@ export fn server_accept_once(server: &RedisServer) !void {
     server.clients[slot].output_len = 0;
     server.clients[slot].output_sent = 0;
     server.clients[slot].close_after_write = false;
+    server.clients[slot].transaction = connection_transaction_new();
     server.active_clients = server.active_clients + 1;
     server.served_clients = server.served_clients + 1;
 }
@@ -1219,6 +1227,7 @@ fn server_handle_client_fd(server: &RedisServer, fd: i32) void {
         &server.aof,
         &server.aof_rewrite_buf,
         &server.repl_backlog,
+        &server.clients[slot].transaction,
         fd,
         &server.clients[slot].input[0],
         SERVER_IO_CAP,

@@ -35,4 +35,4 @@
 
 ## 当前阶段
 
-项目当前主线已完成 `v0.4.0` 规划任务，并已进入 `v0.5.0`：当前已补齐复制角色与状态机、`PSYNC / backlog`、replica 侧全量同步、定时拉取式增量同步、复制心跳和主从一致性 smoke。下一步进入 RESP3、事务、Pub/Sub 与更完整控制面。
+项目当前主线已完成 `v0.4.0` 规划任务，并已进入 `v0.5.0`：当前已补齐复制角色与状态机、`PSYNC / backlog`、replica 侧全量同步、定时拉取式增量同步、复制心跳、主从一致性 smoke，以及连接级最小 `MULTI/EXEC/DISCARD`。下一步进入 RESP3、`WATCH/UNWATCH`、Pub/Sub 与更完整控制面。

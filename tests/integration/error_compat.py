@@ -75,6 +75,11 @@ def run_smoke() -> None:
             sock.settimeout(2.0)
             roundtrip(sock, b"*1\r\n$7\r\nMISSING\r\n", b"-ERR unknown command\r\n")
             roundtrip(sock, b"*1\r\n$4\r\nPING\r\n", b"+PONG\r\n")
+            roundtrip(sock, b"*1\r\n$4\r\nEXEC\r\n", b"-ERR EXEC without MULTI\r\n")
+            roundtrip(sock, b"*1\r\n$7\r\nDISCARD\r\n", b"-ERR DISCARD without MULTI\r\n")
+            roundtrip(sock, b"*1\r\n$5\r\nMULTI\r\n", b"+OK\r\n")
+            roundtrip(sock, b"*1\r\n$5\r\nMULTI\r\n", b"-ERR MULTI calls can not be nested\r\n")
+            roundtrip(sock, b"*1\r\n$7\r\nDISCARD\r\n", b"+OK\r\n")
             roundtrip(sock, b"*1\r\n$3\r\nGET\r\n", b"-ERR wrong number of arguments\r\n")
             roundtrip(
                 sock,

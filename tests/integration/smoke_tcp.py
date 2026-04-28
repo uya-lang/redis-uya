@@ -78,6 +78,14 @@ def run_smoke() -> None:
             roundtrip(sock, b"*1\r\n$4\r\nPING\r\n", b"+PONG\r\n")
             roundtrip(sock, b"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n", b"+OK\r\n")
             roundtrip(sock, b"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n", b"$5\r\nvalue\r\n")
+            roundtrip(sock, b"*1\r\n$5\r\nMULTI\r\n", b"+OK\r\n")
+            roundtrip(sock, b"*3\r\n$3\r\nSET\r\n$4\r\nmkey\r\n$4\r\nmval\r\n", b"+QUEUED\r\n")
+            roundtrip(sock, b"*2\r\n$3\r\nGET\r\n$4\r\nmkey\r\n", b"+QUEUED\r\n")
+            roundtrip(sock, b"*1\r\n$4\r\nEXEC\r\n", b"*2\r\n+OK\r\n$4\r\nmval\r\n")
+            roundtrip(sock, b"*1\r\n$5\r\nMULTI\r\n", b"+OK\r\n")
+            roundtrip(sock, b"*3\r\n$3\r\nSET\r\n$4\r\ndkey\r\n$4\r\ndval\r\n", b"+QUEUED\r\n")
+            roundtrip(sock, b"*1\r\n$7\r\nDISCARD\r\n", b"+OK\r\n")
+            roundtrip(sock, b"*2\r\n$3\r\nGET\r\n$4\r\ndkey\r\n", b"$-1\r\n")
             roundtrip(sock, b"*1\r\n$4\r\nSAVE\r\n", b"+OK\r\n")
             roundtrip(sock, b"*4\r\n$4\r\nHSET\r\n$4\r\nhash\r\n$5\r\nfield\r\n$5\r\nvalue\r\n", b":1\r\n")
             roundtrip(sock, b"*3\r\n$4\r\nHGET\r\n$4\r\nhash\r\n$5\r\nfield\r\n", b"$5\r\nvalue\r\n")
@@ -96,7 +104,7 @@ def run_smoke() -> None:
             roundtrip(
                 sock,
                 b"*4\r\n$4\r\nSCAN\r\n$1\r\n0\r\n$5\r\nCOUNT\r\n$2\r\n10\r\n",
-                b"*2\r\n$1\r\n0\r\n*5\r\n$4\r\nhash\r\n$3\r\nkey\r\n$4\r\nlist\r\n$3\r\nset\r\n$4\r\nzset\r\n",
+                b"*2\r\n$1\r\n0\r\n*6\r\n$4\r\nhash\r\n$3\r\nkey\r\n$4\r\nlist\r\n$4\r\nmkey\r\n$3\r\nset\r\n$4\r\nzset\r\n",
             )
             roundtrip(sock, b"*1\r\n$12\r\nBGREWRITEAOF\r\n", b"+Background AOF rewrite scheduled\r\n")
             config_port_expected = f"*2\r\n$4\r\nport\r\n${len(str(port))}\r\n{port}\r\n".encode()

@@ -67,6 +67,18 @@ if [[ "$GET_RESULT" != "value" ]]; then
     exit 1
 fi
 
+MULTI_RESULT="$(printf 'MULTI\nSET mkey mval\nGET mkey\nEXEC\n' | redis-cli --raw -h 127.0.0.1 -p "$PORT")"
+if [[ "$MULTI_RESULT" != $'OK\nQUEUED\nQUEUED\nOK\nmval' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: MULTI/EXEC unexpected output: '$MULTI_RESULT'" >&2
+    exit 1
+fi
+
+DISCARD_RESULT="$(printf 'MULTI\nSET dkey dval\nDISCARD\nGET dkey\n' | redis-cli --raw -h 127.0.0.1 -p "$PORT")"
+if [[ "$DISCARD_RESULT" != $'OK\nQUEUED\nOK' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: DISCARD unexpected output: '$DISCARD_RESULT'" >&2
+    exit 1
+fi
+
 SAVE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" save)"
 if [[ "$SAVE_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected OK on SAVE, got '$SAVE_RESULT'" >&2

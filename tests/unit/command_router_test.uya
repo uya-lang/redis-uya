@@ -29,11 +29,23 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 28);
+    try assert_eq_i32(command_router_count(&router) as i32, 31);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
     try assert_eq_i32(ping.arity, -1);
+
+    const multi: CommandInfo = try command_router_lookup(&router, &"MULTI"[0: 5]);
+    try assert_eq_i32(multi.cmd_type as i32, CommandType.command_multi as i32);
+    try assert_eq_i32(multi.arity, 1);
+
+    const exec: CommandInfo = try command_router_lookup(&router, &"exec"[0: 4]);
+    try assert_eq_i32(exec.cmd_type as i32, CommandType.command_exec as i32);
+    try assert_eq_i32(exec.arity, 1);
+
+    const discard: CommandInfo = try command_router_lookup(&router, &"DISCARD"[0: 7]);
+    try assert_eq_i32(discard.cmd_type as i32, CommandType.command_discard as i32);
+    try assert_eq_i32(discard.arity, 1);
 
     const get: CommandInfo = try command_router_lookup(&router, &"get"[0: 3]);
     try assert_eq_i32(get.cmd_type as i32, CommandType.command_get as i32);
@@ -126,6 +138,9 @@ export fn test_command_router_lookup_and_case() !void {
 
 export fn test_command_router_arity_validation() !void {
     const router: CommandRouter = command_router_new();
+    const multi: CommandInfo = try command_router_lookup(&router, &"MULTI"[0: 5]);
+    const exec: CommandInfo = try command_router_lookup(&router, &"EXEC"[0: 4]);
+    const discard: CommandInfo = try command_router_lookup(&router, &"DISCARD"[0: 7]);
     const get: CommandInfo = try command_router_lookup(&router, &"GET"[0: 3]);
     const lpop: CommandInfo = try command_router_lookup(&router, &"LPOP"[0: 4]);
     const lpush: CommandInfo = try command_router_lookup(&router, &"LPUSH"[0: 5]);
@@ -148,6 +163,9 @@ export fn test_command_router_arity_validation() !void {
     const set: CommandInfo = try command_router_lookup(&router, &"SET"[0: 3]);
     const del: CommandInfo = try command_router_lookup(&router, &"DEL"[0: 3]);
 
+    try command_validate_arity(&multi, 1);
+    try command_validate_arity(&exec, 1);
+    try command_validate_arity(&discard, 1);
     try command_validate_arity(&get, 2);
     try command_validate_arity(&lpop, 2);
     try command_validate_arity(&lpush, 3);
@@ -193,6 +211,15 @@ export fn test_command_router_arity_validation() !void {
         return;
     };
     try assert_true(saw_set_wrong);
+
+    var saw_multi_wrong: bool = false;
+    _ = command_validate_arity(&multi, 2) catch |err| {
+        if err == error.CommandWrongArity {
+            saw_multi_wrong = true;
+        }
+        return;
+    };
+    try assert_true(saw_multi_wrong);
 }
 
 export fn test_command_router_unknown_command() !void {
@@ -259,6 +286,5 @@ export fn test_command_from_resp_error_paths() !void {
     };
     try assert_true(saw_wrong_arity);
     resp_value_free(&wrong_arity.value);
-
     try assert_eq_i32(used_memory() as i32, 0);
 }

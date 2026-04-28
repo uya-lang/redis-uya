@@ -275,7 +275,7 @@
 ### N. 协议与控制面增强
 
 - [ ] RESP3
-- [ ] `MULTI/EXEC/DISCARD`
+- [x] `MULTI/EXEC/DISCARD`
 - [ ] `WATCH/UNWATCH`
 - [ ] `PUBLISH/SUBSCRIBE`
 - [ ] `CLIENT` / `CONFIG` 命令增强

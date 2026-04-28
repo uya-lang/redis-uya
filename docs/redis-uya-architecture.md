@@ -110,4 +110,4 @@ server open
 - RDB 已覆盖当前五类对象和绝对过期时间，但仍不是 Redis 完整二进制兼容
 - 复制当前已覆盖角色与状态机、`PSYNC / backlog`、replica 侧全量同步、定时拉取式增量同步与心跳；仍不是 Redis 那种长连接流式推送复制
 - 无集群
-- 无事务
+- 事务当前只覆盖连接级最小 `MULTI/EXEC/DISCARD`，还没有 `WATCH/UNWATCH`、事务中止传播和更完整的 Redis 事务边界

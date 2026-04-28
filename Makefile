@@ -9,7 +9,7 @@ TEST_DIR ?= tests/unit
 APP_WORKSPACE ?= $(BUILD_DIR)/app_workspace
 TEST_WORKSPACE ?= $(BUILD_DIR)/test_workspace
 
-.PHONY: all build run test test-integration test-redis-cli test-long-run benchmark-v0.1.0 test-all clean version dirs
+.PHONY: all build run test test-integration test-redis-cli test-long-run benchmark-v0.1.0 benchmark-persistence-v0.3.0 benchmark-replication-v0.4.0 test-all clean version dirs
 
 all: build
 
@@ -44,7 +44,17 @@ test-integration: build
 	python3 tests/integration/idle_client.py
 	python3 tests/integration/slow_reader.py
 	python3 tests/integration/persistence_aof.py
+	python3 tests/integration/persistence_bgsave.py
 	python3 tests/integration/persistence_rdb_aof.py
+	python3 tests/integration/persistence_crash_matrix.py
+	python3 tests/integration/persistence_corruption.py
+	python3 tests/integration/redis_py_subset.py
+	python3 tests/integration/replication_role_state.py
+	python3 tests/integration/replication_psync_backlog.py
+	python3 tests/integration/replication_full_sync.py
+	python3 tests/integration/replication_incremental_sync.py
+	python3 tests/integration/replication_heartbeat.py
+	python3 tests/integration/replication_consistency.py
 	python3 tests/integration/error_compat.py
 
 test-redis-cli: build
@@ -55,6 +65,12 @@ test-long-run: build
 
 benchmark-v0.1.0: build
 	python3 scripts/benchmark_v0_1_0.py
+
+benchmark-persistence-v0.3.0: build
+	python3 scripts/benchmark_persistence_v0_3_0.py
+
+benchmark-replication-v0.4.0: build
+	python3 scripts/benchmark_replication_v0_4_0.py
 
 test-all: test test-integration
 

@@ -13,7 +13,16 @@ use src.persistence.aof.aof_open_append;
 use src.persistence.aof.aof_close;
 use src.persistence.aof.aof_append_raw;
 use src.persistence.aof.aof_replay_file_at;
+use src.persistence.rdb.rdb_file_exists;
+use src.persistence.rdb.rdb_load_file_at;
 use src.persistence.rdb.rdb_save_file_at;
+use src.replication.backlog.replication_backlog_disabled;
+use src.replication.backlog.replication_backlog_free;
+use src.replication.state.ReplicationRole;
+use src.replication.state.ReplicationState;
+use src.server.server_replication_reset_to_master;
+use src.server.server_replication_set_replica;
+use src.server.server_run_pending_bgsave_at;
 use src.server.server_run_pending_aof_rewrite_at;
 use src.server.RedisServer;
 use src.server.server_cron_at;
@@ -72,6 +81,42 @@ export fn test_server_cron_expires_keys() !void {
     try assert_eq_i32(server.last_cron_ms as i32, 1000);
     try assert_eq_i32(server.cron_ticks as i32, 1);
 
+    engine_free(&server.engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_server_replication_role_state_switch() !void {
+    reset_memory_stats_for_test();
+    var engine: Engine = engine_new();
+    var server: RedisServer = RedisServer{
+        engine: engine,
+        router: command_router_new(),
+        listener: RedisListener{ listen_fd: -1, poll_fd: -1, port: 0u16 },
+        aof: aof_disabled(),
+        clients: [],
+        active_clients: 0,
+        maxclients: 0,
+        served_clients: 0,
+        config: default_config(),
+        start_ms: 0u64,
+        last_cron_ms: 0u64,
+        cron_ticks: 0u64,
+        replication_role: ReplicationRole.role_master,
+        replication_state: ReplicationState.repl_state_none,
+        repl_backlog: replication_backlog_disabled(),
+    };
+
+    server_replication_set_replica(&server, &"127.0.0.1"[0: 9], 6381);
+    try assert_eq_i32(server.replication_role as i32, ReplicationRole.role_replica as i32);
+    try assert_eq_i32(server.replication_state as i32, ReplicationState.repl_state_configured as i32);
+    try assert_eq_i32(server.config.replicaof_port, 6381);
+
+    server_replication_reset_to_master(&server);
+    try assert_eq_i32(server.replication_role as i32, ReplicationRole.role_master as i32);
+    try assert_eq_i32(server.replication_state as i32, ReplicationState.repl_state_none as i32);
+    try assert_eq_i32(server.config.replicaof_port, 0);
+
+    replication_backlog_free(&server.repl_backlog);
     engine_free(&server.engine);
     try assert_eq_i32(used_memory() as i32, 0);
 }
@@ -181,6 +226,100 @@ export fn test_server_loads_rdb_then_replays_aof() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_server_ignores_bad_rdb_and_replays_aof() !void {
+    reset_memory_stats_for_test();
+    const rdb_path: &const byte = "build/test-server-bad.rdb";
+    const aof_path: &const byte = "build/test-server-bad.aof";
+    _ = unlink(rdb_path);
+    _ = unlink(aof_path);
+
+    var bad_writer: AofWriter = try aof_open_truncate(rdb_path);
+    try aof_append_raw(&bad_writer, &"NOTRDB!!"[0: 8]);
+    aof_close(&bad_writer);
+
+    var writer: AofWriter = try aof_open_truncate(aof_path);
+    try aof_append_raw(&writer, &"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 33]);
+    aof_close(&writer);
+
+    const router: CommandRouter = command_router_new();
+    var config: ServerConfig = default_config();
+    config.dir[0] = 98 as byte;
+    config.dir[1] = 117 as byte;
+    config.dir[2] = 105 as byte;
+    config.dir[3] = 108 as byte;
+    config.dir[4] = 100 as byte;
+    config.dir[5] = 47 as byte;
+    config.dir[6] = 0 as byte;
+    config.dbfilename[0] = 116 as byte;
+    config.dbfilename[1] = 101 as byte;
+    config.dbfilename[2] = 115 as byte;
+    config.dbfilename[3] = 116 as byte;
+    config.dbfilename[4] = 45 as byte;
+    config.dbfilename[5] = 115 as byte;
+    config.dbfilename[6] = 101 as byte;
+    config.dbfilename[7] = 114 as byte;
+    config.dbfilename[8] = 118 as byte;
+    config.dbfilename[9] = 101 as byte;
+    config.dbfilename[10] = 114 as byte;
+    config.dbfilename[11] = 45 as byte;
+    config.dbfilename[12] = 98 as byte;
+    config.dbfilename[13] = 97 as byte;
+    config.dbfilename[14] = 100 as byte;
+    config.dbfilename[15] = 46 as byte;
+    config.dbfilename[16] = 114 as byte;
+    config.dbfilename[17] = 100 as byte;
+    config.dbfilename[18] = 98 as byte;
+    config.dbfilename[19] = 0 as byte;
+
+    var engine: Engine = engine_new();
+    try server_load_persistence_at(&engine, &router, &config, aof_path, 2000u64);
+
+    const found: &RedisObject = try lookup_key_at(&engine, &"key"[0: 3], 2000u64);
+    try assert_true(server_test_slice_eq(found.value.buf[0: found.value.len], &"value"[0: 5]));
+
+    engine_free(&engine);
+    _ = unlink(rdb_path);
+    _ = unlink(aof_path);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_server_load_persistence_fails_on_bad_aof() !void {
+    reset_memory_stats_for_test();
+    const aof_path: &const byte = "build/test-server-bad-aof.aof";
+    _ = unlink(aof_path);
+
+    var writer: AofWriter = try aof_open_truncate(aof_path);
+    try aof_append_raw(&writer, &"?bad\r\n"[0: 6]);
+    aof_close(&writer);
+
+    const router: CommandRouter = command_router_new();
+    var config: ServerConfig = default_config();
+    config.dir[0] = 98 as byte;
+    config.dir[1] = 117 as byte;
+    config.dir[2] = 105 as byte;
+    config.dir[3] = 108 as byte;
+    config.dir[4] = 100 as byte;
+    config.dir[5] = 47 as byte;
+    config.dir[6] = 0 as byte;
+
+    var engine: Engine = engine_new();
+    var failed: bool = false;
+    _ = server_load_persistence_at(&engine, &router, &config, aof_path, 1000u64) catch |err| {
+        if err == error.AofInvalidFormat {
+            failed = true;
+        }
+        engine_free(&engine);
+        _ = unlink(aof_path);
+        try assert_true(failed);
+        try assert_eq_i32(used_memory() as i32, 0);
+        return;
+    };
+
+    engine_free(&engine);
+    _ = unlink(aof_path);
+    try assert_true(false);
+}
+
 export fn test_server_runs_pending_aof_rewrite() !void {
     reset_memory_stats_for_test();
     const aof_path: &const byte = "build/test-server-rewrite.aof";
@@ -242,8 +381,22 @@ export fn test_server_runs_pending_aof_rewrite() !void {
     server.config.appendfilename[28] = 102 as byte; // f
     server.config.appendfilename[29] = 0 as byte;
 
-    const ran: bool = try server_run_pending_aof_rewrite_at(&server, 2000u64);
-    try assert_eq_i32(ran as i32, 1);
+    const started: bool = try server_run_pending_aof_rewrite_at(&server, 2000u64);
+    try assert_eq_i32(started as i32, 1);
+    try assert_eq_i32(server.aof_rewrite_requested as i32, 0);
+    try assert_eq_i32(server.aof_rewrite_in_progress as i32, 1);
+
+    var finished: bool = false;
+    var i: usize = 0;
+    while i < 10000 {
+        const step: bool = try server_run_pending_aof_rewrite_at(&server, 2001u64);
+        if !server.aof_rewrite_in_progress {
+            finished = step;
+            break;
+        }
+        i = i + 1;
+    }
+    try assert_true(finished);
     try assert_eq_i32(server.aof_rewrite_requested as i32, 0);
     try assert_eq_i32(server.aof_rewrite_in_progress as i32, 0);
     try assert_eq_i32(server.aof_rewrite_count as i32, 1);
@@ -258,5 +411,93 @@ export fn test_server_runs_pending_aof_rewrite() !void {
     try assert_true(server_test_slice_eq(found.value.buf[0: found.value.len], &"newer"[0: 5]));
     engine_free(&replay_engine);
     _ = unlink(aof_path);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_server_runs_pending_bgsave() !void {
+    reset_memory_stats_for_test();
+    const rdb_path: &const byte = "build/test-server-bgsave.rdb";
+    _ = unlink(rdb_path);
+
+    var engine: Engine = engine_new();
+    const obj: &RedisObject = try create_string_object(&"value"[0: 5]);
+    try set_key(&engine, &"key"[0: 3], obj);
+
+    var server: RedisServer = RedisServer{
+        engine: engine,
+        router: command_router_new(),
+        listener: RedisListener{ listen_fd: -1, poll_fd: -1, port: 0u16 },
+        aof: aof_disabled(),
+        clients: [],
+        active_clients: 0,
+        maxclients: 0,
+        served_clients: 0,
+        config: default_config(),
+        start_ms: 0u64,
+        last_cron_ms: 0u64,
+        cron_ticks: 0u64,
+        bgsave_requested: true,
+    };
+    server.config.dir[0] = 98 as byte;   // b
+    server.config.dir[1] = 117 as byte;  // u
+    server.config.dir[2] = 105 as byte;  // i
+    server.config.dir[3] = 108 as byte;  // l
+    server.config.dir[4] = 100 as byte;  // d
+    server.config.dir[5] = 47 as byte;   // /
+    server.config.dir[6] = 0 as byte;
+    server.config.dbfilename[0] = 116 as byte;  // t
+    server.config.dbfilename[1] = 101 as byte;  // e
+    server.config.dbfilename[2] = 115 as byte;  // s
+    server.config.dbfilename[3] = 116 as byte;  // t
+    server.config.dbfilename[4] = 45 as byte;   // -
+    server.config.dbfilename[5] = 115 as byte;  // s
+    server.config.dbfilename[6] = 101 as byte;  // e
+    server.config.dbfilename[7] = 114 as byte;  // r
+    server.config.dbfilename[8] = 118 as byte;  // v
+    server.config.dbfilename[9] = 101 as byte;  // e
+    server.config.dbfilename[10] = 114 as byte; // r
+    server.config.dbfilename[11] = 45 as byte;  // -
+    server.config.dbfilename[12] = 98 as byte;  // b
+    server.config.dbfilename[13] = 103 as byte; // g
+    server.config.dbfilename[14] = 115 as byte; // s
+    server.config.dbfilename[15] = 97 as byte;  // a
+    server.config.dbfilename[16] = 118 as byte; // v
+    server.config.dbfilename[17] = 101 as byte; // e
+    server.config.dbfilename[18] = 46 as byte;  // .
+    server.config.dbfilename[19] = 114 as byte; // r
+    server.config.dbfilename[20] = 100 as byte; // d
+    server.config.dbfilename[21] = 98 as byte;  // b
+    server.config.dbfilename[22] = 0 as byte;
+
+    const started: bool = try server_run_pending_bgsave_at(&server, 2000u64);
+    try assert_eq_i32(started as i32, 1);
+    try assert_eq_i32(server.bgsave_requested as i32, 0);
+    try assert_eq_i32(server.bgsave_in_progress as i32, 1);
+
+    var finished: bool = false;
+    var i: usize = 0;
+    while i < 10000 {
+        const step: bool = try server_run_pending_bgsave_at(&server, 2001u64);
+        if !server.bgsave_in_progress {
+            finished = step;
+            break;
+        }
+        i = i + 1;
+    }
+
+    try assert_true(finished);
+    try assert_eq_i32(server.bgsave_in_progress as i32, 0);
+    try assert_eq_i32(server.bgsave_count as i32, 1);
+    try assert_eq_i32(server.lastsave_ms as i32, 2001);
+    try assert_true(rdb_file_exists(rdb_path));
+
+    var replay_engine: Engine = engine_new();
+    try rdb_load_file_at(rdb_path, &replay_engine, 3000u64);
+    const found: &RedisObject = try lookup_key_at(&replay_engine, &"key"[0: 3], 3000u64);
+    try assert_true(server_test_slice_eq(found.value.buf[0: found.value.len], &"value"[0: 5]));
+    engine_free(&replay_engine);
+
+    engine_free(&server.engine);
+    _ = unlink(rdb_path);
     try assert_eq_i32(used_memory() as i32, 0);
 }

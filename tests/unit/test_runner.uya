@@ -48,6 +48,7 @@ use tests.unit.network_protocol_test.test_resp2_bulk_string_and_nulls;
 use tests.unit.network_protocol_test.test_resp2_array_of_bulk_strings;
 use tests.unit.network_protocol_test.test_resp2_incomplete_inputs;
 use tests.unit.network_protocol_test.test_resp2_invalid_inputs;
+use tests.unit.replication_backlog_test.test_replication_backlog_append_and_trim;
 use tests.unit.command_router_test.test_command_router_lookup_and_case;
 use tests.unit.command_router_test.test_command_router_arity_validation;
 use tests.unit.command_router_test.test_command_router_unknown_command;
@@ -55,6 +56,9 @@ use tests.unit.command_router_test.test_command_from_resp_array;
 use tests.unit.command_router_test.test_command_from_resp_error_paths;
 use tests.unit.command_executor_test.test_command_ping_and_info;
 use tests.unit.command_executor_test.test_command_info_and_config;
+use tests.unit.command_executor_test.test_command_replicaof;
+use tests.unit.command_executor_test.test_command_psync;
+use tests.unit.command_executor_test.test_command_bgsave;
 use tests.unit.command_executor_test.test_command_bgrewriteaof;
 use tests.unit.command_executor_test.test_command_save_rdb;
 use tests.unit.command_executor_test.test_command_set_get_del_exists;
@@ -71,15 +75,23 @@ use tests.unit.network_connection_test.test_connection_process_error_paths;
 use tests.unit.persistence_aof_test.test_aof_connection_append_and_replay_set;
 use tests.unit.persistence_aof_test.test_aof_replay_set_then_del;
 use tests.unit.persistence_aof_test.test_aof_replay_truncated_file_fails;
+use tests.unit.persistence_aof_test.test_aof_replay_invalid_format_fails;
 use tests.unit.persistence_aof_test.test_aof_expire_replays_absolute_deadline;
 use tests.unit.persistence_aof_test.test_aof_replay_large_file_over_1mb;
 use tests.unit.persistence_rdb_test.test_rdb_save_and_load_string_subset;
+use tests.unit.persistence_rdb_test.test_rdb_dump_and_load_bytes_string_subset;
+use tests.unit.persistence_rdb_test.test_rdb_dump_and_load_bytes_current_types;
 use tests.unit.persistence_rdb_test.test_rdb_load_invalid_header_fails;
-use tests.unit.persistence_rdb_test.test_rdb_save_rejects_non_string_keys;
+use tests.unit.persistence_rdb_test.test_rdb_load_truncated_file_fails;
+use tests.unit.persistence_rdb_test.test_rdb_save_and_load_current_types;
 use tests.unit.persistence_rewrite_test.test_aof_rewrite_roundtrip_current_types;
 use tests.unit.server_test.test_server_cron_expires_keys;
 use tests.unit.server_test.test_server_cron_active_expire_loop;
 use tests.unit.server_test.test_server_loads_rdb_then_replays_aof;
+use tests.unit.server_test.test_server_ignores_bad_rdb_and_replays_aof;
+use tests.unit.server_test.test_server_load_persistence_fails_on_bad_aof;
+use tests.unit.server_test.test_server_replication_role_state_switch;
+use tests.unit.server_test.test_server_runs_pending_bgsave;
 use tests.unit.server_test.test_server_runs_pending_aof_rewrite;
 
 export fn main() i32 {
@@ -297,6 +309,10 @@ export fn main() i32 {
     _ = test_command_from_resp_error_paths() catch { printf("[FAIL] command_router/from_resp_errors\n" as *byte); failed = failed + 1; };
     if failed == before_cmd_resp_errors { printf("[PASS] command_router/from_resp_errors\n" as *byte); }
 
+    const before_repl_backlog: i32 = failed;
+    _ = test_replication_backlog_append_and_trim() catch { printf("[FAIL] replication/backlog\n" as *byte); failed = failed + 1; };
+    if failed == before_repl_backlog { printf("[PASS] replication/backlog\n" as *byte); }
+
     const before_exec_ping: i32 = failed;
     _ = test_command_ping_and_info() catch { printf("[FAIL] command_executor/ping_info\n" as *byte); failed = failed + 1; };
     if failed == before_exec_ping { printf("[PASS] command_executor/ping_info\n" as *byte); }
@@ -304,6 +320,18 @@ export fn main() i32 {
     const before_exec_info_config: i32 = failed;
     _ = test_command_info_and_config() catch { printf("[FAIL] command_executor/info_config\n" as *byte); failed = failed + 1; };
     if failed == before_exec_info_config { printf("[PASS] command_executor/info_config\n" as *byte); }
+
+    const before_exec_replicaof: i32 = failed;
+    _ = test_command_replicaof() catch { printf("[FAIL] command_executor/replicaof\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_replicaof { printf("[PASS] command_executor/replicaof\n" as *byte); }
+
+    const before_exec_psync: i32 = failed;
+    _ = test_command_psync() catch { printf("[FAIL] command_executor/psync\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_psync { printf("[PASS] command_executor/psync\n" as *byte); }
+
+    const before_exec_bgsave: i32 = failed;
+    _ = test_command_bgsave() catch { printf("[FAIL] command_executor/bgsave\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_bgsave { printf("[PASS] command_executor/bgsave\n" as *byte); }
 
     const before_exec_bgrewriteaof: i32 = failed;
     _ = test_command_bgrewriteaof() catch { printf("[FAIL] command_executor/bgrewriteaof\n" as *byte); failed = failed + 1; };
@@ -369,6 +397,10 @@ export fn main() i32 {
     _ = test_aof_replay_truncated_file_fails() catch { printf("[FAIL] persistence_aof/truncated\n" as *byte); failed = failed + 1; };
     if failed == before_aof_bad { printf("[PASS] persistence_aof/truncated\n" as *byte); }
 
+    const before_aof_invalid: i32 = failed;
+    _ = test_aof_replay_invalid_format_fails() catch { printf("[FAIL] persistence_aof/invalid_format\n" as *byte); failed = failed + 1; };
+    if failed == before_aof_invalid { printf("[PASS] persistence_aof/invalid_format\n" as *byte); }
+
     const before_aof_expire: i32 = failed;
     _ = test_aof_expire_replays_absolute_deadline() catch { printf("[FAIL] persistence_aof/expire_absolute\n" as *byte); failed = failed + 1; };
     if failed == before_aof_expire { printf("[PASS] persistence_aof/expire_absolute\n" as *byte); }
@@ -381,13 +413,25 @@ export fn main() i32 {
     _ = test_rdb_save_and_load_string_subset() catch { printf("[FAIL] persistence_rdb/save_load\n" as *byte); failed = failed + 1; };
     if failed == before_rdb_save_load { printf("[PASS] persistence_rdb/save_load\n" as *byte); }
 
+    const before_rdb_dump_bytes: i32 = failed;
+    _ = test_rdb_dump_and_load_bytes_string_subset() catch { printf("[FAIL] persistence_rdb/dump_load_bytes\n" as *byte); failed = failed + 1; };
+    if failed == before_rdb_dump_bytes { printf("[PASS] persistence_rdb/dump_load_bytes\n" as *byte); }
+
+    const before_rdb_dump_bytes_types: i32 = failed;
+    _ = test_rdb_dump_and_load_bytes_current_types() catch { printf("[FAIL] persistence_rdb/dump_load_bytes_types\n" as *byte); failed = failed + 1; };
+    if failed == before_rdb_dump_bytes_types { printf("[PASS] persistence_rdb/dump_load_bytes_types\n" as *byte); }
+
     const before_rdb_invalid: i32 = failed;
     _ = test_rdb_load_invalid_header_fails() catch { printf("[FAIL] persistence_rdb/invalid_header\n" as *byte); failed = failed + 1; };
     if failed == before_rdb_invalid { printf("[PASS] persistence_rdb/invalid_header\n" as *byte); }
 
-    const before_rdb_unsupported: i32 = failed;
-    _ = test_rdb_save_rejects_non_string_keys() catch { printf("[FAIL] persistence_rdb/unsupported_type\n" as *byte); failed = failed + 1; };
-    if failed == before_rdb_unsupported { printf("[PASS] persistence_rdb/unsupported_type\n" as *byte); }
+    const before_rdb_truncated: i32 = failed;
+    _ = test_rdb_load_truncated_file_fails() catch { printf("[FAIL] persistence_rdb/truncated\n" as *byte); failed = failed + 1; };
+    if failed == before_rdb_truncated { printf("[PASS] persistence_rdb/truncated\n" as *byte); }
+
+    const before_rdb_types: i32 = failed;
+    _ = test_rdb_save_and_load_current_types() catch { printf("[FAIL] persistence_rdb/current_types\n" as *byte); failed = failed + 1; };
+    if failed == before_rdb_types { printf("[PASS] persistence_rdb/current_types\n" as *byte); }
 
     const before_rewrite_roundtrip: i32 = failed;
     _ = test_aof_rewrite_roundtrip_current_types() catch { printf("[FAIL] persistence_rewrite/roundtrip\n" as *byte); failed = failed + 1; };
@@ -404,6 +448,22 @@ export fn main() i32 {
     const before_server_mixed_restore: i32 = failed;
     _ = test_server_loads_rdb_then_replays_aof() catch { printf("[FAIL] server/rdb_aof_restore\n" as *byte); failed = failed + 1; };
     if failed == before_server_mixed_restore { printf("[PASS] server/rdb_aof_restore\n" as *byte); }
+
+    const before_server_bad_rdb: i32 = failed;
+    _ = test_server_ignores_bad_rdb_and_replays_aof() catch { printf("[FAIL] server/bad_rdb_fallback\n" as *byte); failed = failed + 1; };
+    if failed == before_server_bad_rdb { printf("[PASS] server/bad_rdb_fallback\n" as *byte); }
+
+    const before_server_bad_aof: i32 = failed;
+    _ = test_server_load_persistence_fails_on_bad_aof() catch { printf("[FAIL] server/bad_aof_fail\n" as *byte); failed = failed + 1; };
+    if failed == before_server_bad_aof { printf("[PASS] server/bad_aof_fail\n" as *byte); }
+
+    const before_server_replication: i32 = failed;
+    _ = test_server_replication_role_state_switch() catch { printf("[FAIL] server/replication_role_state\n" as *byte); failed = failed + 1; };
+    if failed == before_server_replication { printf("[PASS] server/replication_role_state\n" as *byte); }
+
+    const before_server_bgsave: i32 = failed;
+    _ = test_server_runs_pending_bgsave() catch { printf("[FAIL] server/bgsave\n" as *byte); failed = failed + 1; };
+    if failed == before_server_bgsave { printf("[PASS] server/bgsave\n" as *byte); }
 
     const before_server_rewrite: i32 = failed;
     _ = test_server_runs_pending_aof_rewrite() catch { printf("[FAIL] server/aof_rewrite\n" as *byte); failed = failed + 1; };

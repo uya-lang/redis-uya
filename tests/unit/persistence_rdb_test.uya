@@ -5,7 +5,9 @@ use src.persistence.aof.AofWriter;
 use src.persistence.aof.aof_open_truncate;
 use src.persistence.aof.aof_close;
 use src.persistence.aof.aof_append_raw;
+use src.persistence.rdb.rdb_dump_object_at;
 use src.persistence.rdb.rdb_save_file_at;
+use src.persistence.rdb.rdb_load_bytes_at;
 use src.persistence.rdb.rdb_load_file_at;
 use src.storage.engine.Engine;
 use src.storage.engine.engine_new;
@@ -14,9 +16,25 @@ use src.storage.engine.set_key;
 use src.storage.engine.set_key_expire_at;
 use src.storage.engine.lookup_key_at;
 use src.storage.object.RedisObject;
+use src.storage.object.ObjectType;
+use src.storage.object.ListRangeView;
 use src.storage.object.create_string_object;
 use src.storage.object.create_hash_object;
+use src.storage.object.create_list_object;
+use src.storage.object.create_set_object;
+use src.storage.object.create_zset_object;
 use src.storage.object.hash_object_set_field;
+use src.storage.object.hash_object_get_field;
+use src.storage.object.list_object_push_tail;
+use src.storage.object.list_object_range;
+use src.storage.object.list_object_len;
+use src.storage.object.set_object_len;
+use src.storage.object.set_object_remove_member;
+use src.storage.object.set_object_add_member;
+use src.storage.object.zset_object_add_member;
+use src.storage.object.zset_object_range_reply;
+use src.storage.object.zset_object_get_score;
+use src.storage.object.object_free;
 use src.memory.allocator.used_memory;
 use src.memory.allocator.reset_memory_stats_for_test;
 use libc.unlink;
@@ -102,19 +120,19 @@ export fn test_rdb_load_invalid_header_fails() !void {
     try assert_true(false);
 }
 
-export fn test_rdb_save_rejects_non_string_keys() !void {
+export fn test_rdb_load_truncated_file_fails() !void {
     reset_memory_stats_for_test();
-    const path: &const byte = "build/test-rdb-unsupported.rdb";
+    const path: &const byte = "build/test-rdb-truncated.rdb";
     _ = unlink(path);
 
-    var engine: Engine = engine_new();
-    const hash_obj: &RedisObject = try create_hash_object();
-    _ = try hash_object_set_field(hash_obj, &"field"[0: 5], &"value"[0: 5]);
-    try set_key(&engine, &"hash"[0: 4], hash_obj);
+    var writer: AofWriter = try aof_open_truncate(path);
+    try aof_append_raw(&writer, &"RUYARDB1"[0: 8]);
+    aof_close(&writer);
 
+    var engine: Engine = engine_new();
     var failed: bool = false;
-    _ = rdb_save_file_at(path, &engine, 1000u64) catch |err| {
-        if err == error.RdbUnsupportedType {
+    _ = rdb_load_file_at(path, &engine, 1000u64) catch |err| {
+        if err == error.RdbTruncated {
             failed = true;
         }
         engine_free(&engine);
@@ -127,4 +145,118 @@ export fn test_rdb_save_rejects_non_string_keys() !void {
     engine_free(&engine);
     _ = unlink(path);
     try assert_true(false);
+}
+
+export fn test_rdb_save_and_load_current_types() !void {
+    reset_memory_stats_for_test();
+    const path: &const byte = "build/test-rdb-types.rdb";
+    _ = unlink(path);
+
+    var engine: Engine = engine_new();
+    const hash_obj: &RedisObject = try create_hash_object();
+    _ = try hash_object_set_field(hash_obj, &"field1"[0: 6], &"one"[0: 3]);
+    _ = try hash_object_set_field(hash_obj, &"field2"[0: 6], &"two"[0: 3]);
+    try set_key(&engine, &"hash"[0: 4], hash_obj);
+
+    const list_obj: &RedisObject = try create_list_object();
+    _ = try list_object_push_tail(list_obj, &"a"[0: 1]);
+    _ = try list_object_push_tail(list_obj, &"b"[0: 1]);
+    _ = try list_object_push_tail(list_obj, &"c"[0: 1]);
+    try set_key(&engine, &"list"[0: 4], list_obj);
+
+    const set_obj: &RedisObject = try create_set_object();
+    _ = try set_object_add_member(set_obj, &"a"[0: 1]);
+    _ = try set_object_add_member(set_obj, &"b"[0: 1]);
+    try set_key(&engine, &"set"[0: 3], set_obj);
+
+    const zset_obj: &RedisObject = try create_zset_object();
+    _ = try zset_object_add_member(zset_obj, 2, &"b"[0: 1]);
+    _ = try zset_object_add_member(zset_obj, 1, &"a"[0: 1]);
+    try set_key(&engine, &"zset"[0: 4], zset_obj);
+
+    try rdb_save_file_at(path, &engine, 1000u64);
+    engine_free(&engine);
+
+    var replay_engine: Engine = engine_new();
+    try rdb_load_file_at(path, &replay_engine, 2000u64);
+
+    const hash_found: &RedisObject = try lookup_key_at(&replay_engine, &"hash"[0: 4], 2000u64);
+    try assert_eq_i32(hash_found.obj_type as i32, ObjectType.object_hash as i32);
+    const field1: &RedisObject = try hash_object_get_field(hash_found, &"field1"[0: 6]);
+    const field2: &RedisObject = try hash_object_get_field(hash_found, &"field2"[0: 6]);
+    try assert_true(rdb_test_slice_eq(field1.value.buf[0: field1.value.len], &"one"[0: 3]));
+    try assert_true(rdb_test_slice_eq(field2.value.buf[0: field2.value.len], &"two"[0: 3]));
+
+    const list_found: &RedisObject = try lookup_key_at(&replay_engine, &"list"[0: 4], 2000u64);
+    try assert_eq_i32((try list_object_len(list_found)) as i32, 3);
+    const list_view: ListRangeView = try list_object_range(list_found, 0, -1);
+    try assert_eq_i32(list_view.count as i32, 3);
+    try assert_true(rdb_test_slice_eq(list_view.head.value.value.buf[0: list_view.head.value.value.len], &"a"[0: 1]));
+    try assert_true(rdb_test_slice_eq(list_view.head.next.value.value.buf[0: list_view.head.next.value.value.len], &"b"[0: 1]));
+    try assert_true(rdb_test_slice_eq(list_view.head.next.next.value.value.buf[0: list_view.head.next.next.value.value.len], &"c"[0: 1]));
+
+    const set_found: &RedisObject = try lookup_key_at(&replay_engine, &"set"[0: 3], 2000u64);
+    try assert_eq_i32((try set_object_len(set_found)) as i32, 2);
+    try assert_eq_i32((try set_object_remove_member(set_found, &"a"[0: 1])) as i32, 1);
+    try assert_eq_i32((try set_object_remove_member(set_found, &"b"[0: 1])) as i32, 1);
+
+    const zset_found: &RedisObject = try lookup_key_at(&replay_engine, &"zset"[0: 4], 2000u64);
+    const zrange: &RedisObject = try zset_object_range_reply(zset_found, 0, -1);
+    try assert_eq_i32((try list_object_len(zrange)) as i32, 2);
+    try assert_true(rdb_test_slice_eq(zrange.list_head.value.value.buf[0: zrange.list_head.value.value.len], &"a"[0: 1]));
+    try assert_true(rdb_test_slice_eq(zrange.list_head.next.value.value.buf[0: zrange.list_head.next.value.value.len], &"b"[0: 1]));
+    try assert_eq_i32((try zset_object_get_score(zset_found, &"a"[0: 1])) as i32, 1);
+    try assert_eq_i32((try zset_object_get_score(zset_found, &"b"[0: 1])) as i32, 2);
+    object_free(zrange);
+
+    engine_free(&replay_engine);
+    _ = unlink(path);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_rdb_dump_and_load_bytes_string_subset() !void {
+    reset_memory_stats_for_test();
+    var engine: Engine = engine_new();
+    const obj: &RedisObject = try create_string_object(&"value"[0: 5]);
+    try set_key(&engine, &"key"[0: 3], obj);
+
+    const dump_obj: &RedisObject = try rdb_dump_object_at(&engine, 1000u64);
+    try assert_true(rdb_test_slice_eq(dump_obj.value.buf[0: 8], &"RUYARDB1"[0: 8]));
+
+    var replay_engine: Engine = engine_new();
+    try rdb_load_bytes_at(dump_obj.value.buf[0: dump_obj.value.len], &replay_engine, 1000u64);
+    const found: &RedisObject = try lookup_key_at(&replay_engine, &"key"[0: 3], 1000u64);
+    try assert_true(rdb_test_slice_eq(found.value.buf[0: found.value.len], &"value"[0: 5]));
+
+    object_free(dump_obj);
+    engine_free(&engine);
+    engine_free(&replay_engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_rdb_dump_and_load_bytes_current_types() !void {
+    reset_memory_stats_for_test();
+    var engine: Engine = engine_new();
+
+    const str_obj: &RedisObject = try create_string_object(&"value"[0: 5]);
+    try set_key(&engine, &"str"[0: 3], str_obj);
+
+    const hash_obj: &RedisObject = try create_hash_object();
+    _ = try hash_object_set_field(hash_obj, &"field"[0: 5], &"value"[0: 5]);
+    try set_key(&engine, &"hash"[0: 4], hash_obj);
+
+    const dump_obj: &RedisObject = try rdb_dump_object_at(&engine, 1000u64);
+    var replay_engine: Engine = engine_new();
+    try rdb_load_bytes_at(dump_obj.value.buf[0: dump_obj.value.len], &replay_engine, 1000u64);
+
+    const str_found: &RedisObject = try lookup_key_at(&replay_engine, &"str"[0: 3], 1000u64);
+    try assert_true(rdb_test_slice_eq(str_found.value.buf[0: str_found.value.len], &"value"[0: 5]));
+    const hash_found: &RedisObject = try lookup_key_at(&replay_engine, &"hash"[0: 4], 1000u64);
+    const field_found: &RedisObject = try hash_object_get_field(hash_found, &"field"[0: 5]);
+    try assert_true(rdb_test_slice_eq(field_found.value.buf[0: field_found.value.len], &"value"[0: 5]));
+
+    object_free(dump_obj);
+    engine_free(&engine);
+    engine_free(&replay_engine);
+    try assert_eq_i32(used_memory() as i32, 0);
 }

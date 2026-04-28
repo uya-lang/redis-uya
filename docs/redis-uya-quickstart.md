@@ -81,7 +81,12 @@ REDIS_UYA_LONG_RUN_SECONDS=1800 python3 tests/integration/long_run_smoke.py
 - `INFO [section]`
 - `CONFIG GET pattern`
 - `SAVE`
+- `BGSAVE`
 - `BGREWRITEAOF`
+- `REPLICAOF host port`
+- `REPLICAOF NO ONE`
+- `PSYNC ? -1`
+- `PSYNC replid offset`
 - `QUIT`
 
 ## 5. 当前边界
@@ -90,5 +95,9 @@ REDIS_UYA_LONG_RUN_SECONDS=1800 python3 tests/integration/long_run_smoke.py
 - RESP2 子集
 - 核心数据结构子集 + String/Key/Control 子集
 - AOF append + replay
-- 项目内最小 RDB 子集 + `SAVE`
-- 不支持复制、集群、事务、Pub/Sub
+- 项目内 RDB 子集 + `SAVE` / `BGSAVE`
+- 复制当前已支持：`REPLICAOF`、`INFO replication`、`PSYNC / backlog`、最小 full sync、定时拉取式增量同步与心跳
+- `PSYNC / backlog` 当前已支持最小握手与 backlog 命中判断
+- replica 当前已支持最小全量同步：`REPLICAOF` 后可拉取 master RDB 快照
+- replica 当前已支持定时拉取式增量同步与心跳
+- 不支持 master 主动流式推送复制、集群、事务、Pub/Sub

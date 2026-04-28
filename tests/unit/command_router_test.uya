@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 25);
+    try assert_eq_i32(command_router_count(&router) as i32, 28);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -83,9 +83,21 @@ export fn test_command_router_lookup_and_case() !void {
     try assert_eq_i32(save.cmd_type as i32, CommandType.command_save as i32);
     try assert_eq_i32(save.arity, 1);
 
+    const bgsave: CommandInfo = try command_router_lookup(&router, &"BGSAVE"[0: 6]);
+    try assert_eq_i32(bgsave.cmd_type as i32, CommandType.command_bgsave as i32);
+    try assert_eq_i32(bgsave.arity, 1);
+
     const bgrewriteaof: CommandInfo = try command_router_lookup(&router, &"BGREWRITEAOF"[0: 12]);
     try assert_eq_i32(bgrewriteaof.cmd_type as i32, CommandType.command_bgrewriteaof as i32);
     try assert_eq_i32(bgrewriteaof.arity, 1);
+
+    const replicaof: CommandInfo = try command_router_lookup(&router, &"REPLICAOF"[0: 9]);
+    try assert_eq_i32(replicaof.cmd_type as i32, CommandType.command_replicaof as i32);
+    try assert_eq_i32(replicaof.arity, 3);
+
+    const psync: CommandInfo = try command_router_lookup(&router, &"PSYNC"[0: 5]);
+    try assert_eq_i32(psync.cmd_type as i32, CommandType.command_psync as i32);
+    try assert_eq_i32(psync.arity, 3);
 
     const config: CommandInfo = try command_router_lookup(&router, &"CONFIG"[0: 6]);
     try assert_eq_i32(config.cmd_type as i32, CommandType.command_config as i32);
@@ -126,7 +138,10 @@ export fn test_command_router_arity_validation() !void {
     const zrem: CommandInfo = try command_router_lookup(&router, &"ZREM"[0: 4]);
     const scan: CommandInfo = try command_router_lookup(&router, &"SCAN"[0: 4]);
     const save: CommandInfo = try command_router_lookup(&router, &"SAVE"[0: 4]);
+    const bgsave: CommandInfo = try command_router_lookup(&router, &"BGSAVE"[0: 6]);
     const bgrewriteaof: CommandInfo = try command_router_lookup(&router, &"BGREWRITEAOF"[0: 12]);
+    const replicaof: CommandInfo = try command_router_lookup(&router, &"REPLICAOF"[0: 9]);
+    const psync: CommandInfo = try command_router_lookup(&router, &"PSYNC"[0: 5]);
     const config: CommandInfo = try command_router_lookup(&router, &"CONFIG"[0: 6]);
     const hget: CommandInfo = try command_router_lookup(&router, &"HGET"[0: 4]);
     const hset: CommandInfo = try command_router_lookup(&router, &"HSET"[0: 4]);
@@ -149,7 +164,10 @@ export fn test_command_router_arity_validation() !void {
     try command_validate_arity(&scan, 2);
     try command_validate_arity(&scan, 4);
     try command_validate_arity(&save, 1);
+    try command_validate_arity(&bgsave, 1);
     try command_validate_arity(&bgrewriteaof, 1);
+    try command_validate_arity(&replicaof, 3);
+    try command_validate_arity(&psync, 3);
     try command_validate_arity(&config, 3);
     try command_validate_arity(&hget, 3);
     try command_validate_arity(&hset, 4);

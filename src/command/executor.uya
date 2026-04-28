@@ -2,12 +2,17 @@
 
 use src.config.ServerConfig;
 use src.config.default_config;
+use src.config.config_copy_bytes;
 use src.command.router.Command;
 use src.command.router.CommandType;
 use src.command.router.command_arg_data;
 use src.memory.allocator.used_memory;
 use src.persistence.rdb.rdb_build_path;
 use src.persistence.rdb.rdb_save_file_at;
+use src.replication.state.ReplicationRole;
+use src.replication.state.ReplicationState;
+use src.replication.state.replication_role_name;
+use src.replication.state.replication_state_name;
 use src.storage.engine.Engine;
 use src.storage.engine.engine_len;
 use src.storage.engine.engine_expire_len;
@@ -59,6 +64,7 @@ export enum CommandReplyType {
     reply_null_bulk,
     reply_array_bulk,
     reply_scan,
+    reply_raw_bytes,
 }
 
 export struct CommandReply {
@@ -69,6 +75,11 @@ export struct CommandReply {
     array_head: &ListNode,
     array_count: usize,
     owned_object: &RedisObject,
+    request_replicaof: bool,
+    replicaof_promote: bool,
+    replicaof_host: [byte: 64],
+    replicaof_port: i32,
+    request_bgsave: bool,
     request_aof_rewrite: bool,
 }
 
@@ -79,6 +90,15 @@ export struct CommandRuntimeInfo {
     served_clients: i32,
     cron_ticks: u64,
     start_ms: u64,
+    replication_role: ReplicationRole,
+    replication_state: ReplicationState,
+    replication_replid: [byte: 41],
+    replication_master_offset: u64,
+    replication_backlog_first_offset: u64,
+    replication_backlog_histlen: usize,
+    replication_backlog_active: bool,
+    bgsave_requested: bool,
+    bgsave_in_progress: bool,
     aof_rewrite_requested: bool,
     aof_rewrite_in_progress: bool,
 }
@@ -91,6 +111,15 @@ export fn command_runtime_default() CommandRuntimeInfo {
         served_clients: 0,
         cron_ticks: 0u64,
         start_ms: 0u64,
+        replication_role: ReplicationRole.role_master,
+        replication_state: ReplicationState.repl_state_none,
+        replication_replid: [],
+        replication_master_offset: 0u64,
+        replication_backlog_first_offset: 0u64,
+        replication_backlog_histlen: 0,
+        replication_backlog_active: false,
+        bgsave_requested: false,
+        bgsave_in_progress: false,
         aof_rewrite_requested: false,
         aof_rewrite_in_progress: false,
     };
@@ -109,6 +138,11 @@ fn command_executor_reply(typ: CommandReplyType, data: &[byte], integer: i64) Co
         array_head: null as &ListNode,
         array_count: 0,
         owned_object: null as &RedisObject,
+        request_replicaof: false,
+        replicaof_promote: false,
+        replicaof_host: [],
+        replicaof_port: 0,
+        request_bgsave: false,
         request_aof_rewrite: false,
     };
 }
@@ -255,6 +289,20 @@ fn command_executor_keyword_match(pattern: &[byte], value: &[byte]) bool {
     return command_executor_keyword_match(pattern[1: pattern.len - 1], value[1: value.len - 1]);
 }
 
+fn command_executor_slice_eq(a: &[byte], b: &[byte]) bool {
+    if a.len != b.len {
+        return false;
+    }
+    var i: usize = 0;
+    while i < a.len {
+        if a.ptr[i] != b.ptr[i] {
+            return false;
+        }
+        i = i + 1;
+    }
+    return true;
+}
+
 fn command_executor_cstring_slice(data: &[byte]) &[byte] {
     var len: usize = 0;
     while len < data.len && data.ptr[len] != 0 as byte {
@@ -317,6 +365,18 @@ fn command_executor_info_emit_section(requested: &[byte], name: &[byte]) bool {
     return command_executor_keyword_eq(requested, name);
 }
 
+fn command_executor_config_replicaof_value(runtime: &CommandRuntimeInfo, out: &Sds) !void {
+    const host: &[byte] = command_executor_cstring_slice(runtime.config.replicaof_host[0: 64]);
+    if host.len == 0 || runtime.config.replicaof_port <= 0 {
+        try sds_cat(out, &"no one"[0: 6]);
+        return;
+    }
+    var host_args: [SdsFmtArg: 2] = [];
+    host_args[0] = sds_fmt_bytes(host);
+    host_args[1] = sds_fmt_i64(runtime.config.replicaof_port as i64);
+    try sds_cat_fmt(out, &"%s %i"[0: 5], host_args[0: 2]);
+}
+
 fn command_executor_config_append_pair(reply: &RedisObject, key: &[byte], value: &[byte]) !void {
     _ = try list_object_push_tail(reply, key);
     _ = try list_object_push_tail(reply, value);
@@ -362,6 +422,26 @@ fn command_executor_config_append_save(reply: &RedisObject, seconds: i32, change
     try command_executor_config_append_pair(reply, &"save"[0: 4], tmp.buf[0: tmp.len]);
 }
 
+fn command_executor_config_append_replicaof(reply: &RedisObject, runtime: &CommandRuntimeInfo) !void {
+    var tmp: Sds = sds_empty() catch {
+        return error.AllocOutOfMemory;
+    };
+    defer {
+        sds_free(&tmp);
+    }
+    try command_executor_config_replicaof_value(runtime, &tmp);
+    try command_executor_config_append_pair(reply, &"replicaof"[0: 9], tmp.buf[0: tmp.len]);
+}
+
+fn command_executor_owned_simple(data: &[byte]) CommandReply {
+    const obj: &RedisObject = create_string_object(data) catch {
+        return command_executor_oom();
+    };
+    var reply: CommandReply = command_executor_simple(obj.value.buf[0: obj.value.len]);
+    reply.owned_object = obj;
+    return reply;
+}
+
 fn command_executor_string_value(obj: &RedisObject) !&[byte] {
     if obj == null || obj.obj_type != ObjectType.object_string {
         return error.CommandWrongType;
@@ -375,6 +455,14 @@ fn command_executor_key_exists(engine: &Engine, key: &[byte], now_ms: u64) bool 
     };
     _ = obj;
     return true;
+}
+
+fn command_executor_lookup_key_now_or_null(engine: &Engine, key: &[byte], now_ms: u64) &RedisObject {
+    const obj_result: !&RedisObject = lookup_key_at(engine, key, now_ms);
+    const obj: &RedisObject = obj_result catch {
+        return null as &RedisObject;
+    };
+    return obj;
 }
 
 fn command_executor_ping(command: &Command) CommandReply {
@@ -1113,9 +1201,71 @@ fn command_executor_save(engine: &Engine, runtime: &CommandRuntimeInfo, now_ms: 
     return command_executor_simple(&"OK"[0: 2]);
 }
 
+fn command_executor_rdb_supported(engine: &Engine, now_ms: u64) !bool {
+    const keys_obj: &RedisObject = try engine_scan_keys_at(engine, now_ms);
+    defer {
+        object_free(keys_obj);
+    }
+
+    var node: &ListNode = keys_obj.list_head;
+    while node != null {
+        const key: &[byte] = node.value.value.buf[0: node.value.value.len];
+        const obj: &RedisObject = command_executor_lookup_key_now_or_null(engine, key, now_ms);
+        if obj != null &&
+            obj.obj_type != ObjectType.object_string &&
+            obj.obj_type != ObjectType.object_hash &&
+            obj.obj_type != ObjectType.object_list &&
+            obj.obj_type != ObjectType.object_set &&
+            obj.obj_type != ObjectType.object_zset {
+            return false;
+        }
+        node = node.next;
+    }
+    return true;
+}
+
+fn command_executor_bgsave(engine: &Engine, runtime: &CommandRuntimeInfo, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 1 {
+        return command_executor_wrong_arity();
+    }
+    if runtime.bgsave_requested || runtime.bgsave_in_progress {
+        return command_executor_error(&"ERR Background save already in progress"[0: 39]);
+    }
+    if runtime.aof_rewrite_requested || runtime.aof_rewrite_in_progress {
+        return command_executor_error(&"ERR Background AOF rewrite already in progress"[0: 46]);
+    }
+
+    var path_buf: [byte: 512] = [];
+    const dir: &[byte] = command_executor_cstring_slice(runtime.config.dir[0: 256]);
+    const filename: &[byte] = command_executor_cstring_slice(runtime.config.dbfilename[0: 128]);
+    _ = rdb_build_path(path_buf[0: 512], dir, filename) catch |err| {
+        if err == error.RdbPathTooLong {
+            return command_executor_error(&"ERR RDB path too long"[0: 22]);
+        }
+        return command_executor_error(&"ERR RDB save failed"[0: 19]);
+    };
+
+    const supported: bool = command_executor_rdb_supported(engine, now_ms) catch |err| {
+        if err == error.AllocOutOfMemory {
+            return command_executor_oom();
+        }
+        return command_executor_error(&"ERR RDB save failed"[0: 19]);
+    };
+    if !supported {
+        return command_executor_error(&"ERR RDB save unsupported type"[0: 29]);
+    }
+
+    var reply: CommandReply = command_executor_simple(&"Background saving scheduled"[0: 27]);
+    reply.request_bgsave = true;
+    return reply;
+}
+
 fn command_executor_bgrewriteaof(runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
     if command.argc != 1 {
         return command_executor_wrong_arity();
+    }
+    if runtime.bgsave_requested || runtime.bgsave_in_progress {
+        return command_executor_error(&"ERR Background save already in progress"[0: 39]);
     }
     if runtime.aof_rewrite_requested || runtime.aof_rewrite_in_progress {
         return command_executor_error(&"ERR Background AOF rewrite already in progress"[0: 46]);
@@ -1123,6 +1273,97 @@ fn command_executor_bgrewriteaof(runtime: &CommandRuntimeInfo, command: &Command
     var reply: CommandReply = command_executor_simple(&"Background AOF rewrite scheduled"[0: 32]);
     reply.request_aof_rewrite = true;
     return reply;
+}
+
+fn command_executor_replicaof(runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
+    if command.argc != 3 {
+        return command_executor_wrong_arity();
+    }
+
+    const arg1: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const arg2: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+
+    var reply: CommandReply = command_executor_simple(&"OK"[0: 2]);
+    if command_executor_keyword_eq(arg1, &"NO"[0: 2]) && command_executor_keyword_eq(arg2, &"ONE"[0: 3]) {
+        reply.request_replicaof = true;
+        reply.replicaof_promote = true;
+        return reply;
+    }
+
+    const port: i64 = command_executor_parse_i64(arg2) catch {
+        return command_executor_invalid_integer();
+    };
+    if port <= 0 || port > 65535 {
+        return command_executor_invalid_integer();
+    }
+    if arg1.len == 0 || arg1.len >= 64 {
+        return command_executor_error(&"ERR invalid replica host"[0: 24]);
+    }
+    reply.request_replicaof = true;
+    reply.replicaof_promote = false;
+    config_copy_bytes(reply.replicaof_host[0: 64], arg1);
+    reply.replicaof_port = port as i32;
+    _ = runtime;
+    return reply;
+}
+
+fn command_executor_psync(runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
+    if command.argc != 3 {
+        return command_executor_wrong_arity();
+    }
+    if runtime.replication_role != ReplicationRole.role_master {
+        return command_executor_error(&"ERR PSYNC is only valid for master role"[0: 39]);
+    }
+
+    const replid: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const offset_data: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    const current_replid: &[byte] = command_executor_cstring_slice(runtime.replication_replid[0: 41]);
+
+    var continue_sync: bool = false;
+    if !(replid.len == 1 && replid.ptr[0] == 63 as byte) {
+        const offset: i64 = command_executor_parse_i64(offset_data) catch {
+            return command_executor_invalid_integer();
+        };
+        if offset >= 0 &&
+            runtime.replication_backlog_active &&
+            command_executor_slice_eq(replid, current_replid) &&
+            (offset as u64) >= runtime.replication_backlog_first_offset &&
+            (offset as u64) <= runtime.replication_master_offset {
+            continue_sync = true;
+        }
+    }
+
+    if continue_sync {
+        var continue_reply: CommandReply = command_executor_simple(&"CONTINUE"[0: 8]);
+        continue_reply.integer = offset_data.len as i64;
+        const offset_value: i64 = command_executor_parse_i64(offset_data) catch {
+            return command_executor_invalid_integer();
+        };
+        continue_reply.integer = offset_value;
+        return continue_reply;
+    }
+
+    var buf: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&buf);
+    }
+    var args: [SdsFmtArg: 2] = [];
+    args[0] = sds_fmt_bytes(current_replid);
+    args[1] = sds_fmt_u64(runtime.replication_master_offset);
+    _ = sds_cat_fmt(&buf, &"FULLRESYNC %s %u"[0: 16], args[0: 2]) catch {
+        return command_executor_oom();
+    };
+    return command_executor_owned_simple(buf.buf[0: buf.len]);
 }
 
 fn command_executor_info(engine: &Engine, runtime: &CommandRuntimeInfo, command: &Command, now_ms: u64) CommandReply {
@@ -1175,6 +1416,37 @@ fn command_executor_info(engine: &Engine, runtime: &CommandRuntimeInfo, command:
         _ = command_executor_info_append(&buf, &"# Stats\r\n"[0: 9]) catch { return command_executor_oom(); };
         _ = command_executor_info_append_i64(&buf, &"total_connections_received:%i\r\n"[0: 31], runtime.served_clients as i64) catch { return command_executor_oom(); };
         _ = command_executor_info_append_u64(&buf, &"cron_ticks:%u\r\n\r\n"[0: 17], runtime.cron_ticks) catch { return command_executor_oom(); };
+    }
+
+    if command_executor_info_emit_section(requested, &"replication"[0: 11]) {
+        _ = command_executor_info_append(&buf, &"# Replication\r\n"[0: 15]) catch { return command_executor_oom(); };
+        _ = command_executor_info_append_bytes(&buf, &"role:%s\r\n"[0: 9], replication_role_name(runtime.replication_role)) catch { return command_executor_oom(); };
+        if runtime.replication_role == ReplicationRole.role_master {
+            var backlog_active_i64: i64 = 0;
+            if runtime.replication_backlog_active {
+                backlog_active_i64 = 1;
+            }
+            _ = command_executor_info_append_bytes(&buf, &"master_replid:%s\r\n"[0: 18], command_executor_cstring_slice(runtime.replication_replid[0: 41])) catch { return command_executor_oom(); };
+            _ = command_executor_info_append_i64(&buf, &"connected_slaves:%i\r\n"[0: 21], 0) catch { return command_executor_oom(); };
+            _ = command_executor_info_append_u64(&buf, &"master_repl_offset:%u\r\n"[0: 23], runtime.replication_master_offset) catch { return command_executor_oom(); };
+            _ = command_executor_info_append_i64(&buf, &"repl_backlog_active:%i\r\n"[0: 24], backlog_active_i64) catch { return command_executor_oom(); };
+            _ = command_executor_info_append_u64(&buf, &"repl_backlog_histlen:%u\r\n\r\n"[0: 27], runtime.replication_backlog_histlen as u64) catch { return command_executor_oom(); };
+        } else {
+            var master_link_status: &[byte] = "down"[0: 4];
+            if runtime.replication_state == ReplicationState.repl_state_connected {
+                master_link_status = "up"[0: 2];
+            }
+            var master_sync_in_progress: i64 = 0;
+            if runtime.replication_state == ReplicationState.repl_state_syncing {
+                master_sync_in_progress = 1;
+            }
+            _ = command_executor_info_append_bytes(&buf, &"master_host:%s\r\n"[0: 16], command_executor_cstring_slice(runtime.config.replicaof_host[0: 64])) catch { return command_executor_oom(); };
+            _ = command_executor_info_append_i64(&buf, &"master_port:%i\r\n"[0: 16], runtime.config.replicaof_port as i64) catch { return command_executor_oom(); };
+            _ = command_executor_info_append_bytes(&buf, &"master_link_status:%s\r\n"[0: 23], master_link_status) catch { return command_executor_oom(); };
+            _ = command_executor_info_append_i64(&buf, &"master_sync_in_progress:%i\r\n"[0: 28], master_sync_in_progress) catch { return command_executor_oom(); };
+            _ = command_executor_info_append_i64(&buf, &"slave_read_only:%i\r\n"[0: 20], 1) catch { return command_executor_oom(); };
+            _ = command_executor_info_append_bytes(&buf, &"replication_state:%s\r\n\r\n"[0: 24], replication_state_name(runtime.replication_state)) catch { return command_executor_oom(); };
+        }
     }
 
     if command_executor_info_emit_section(requested, &"keyspace"[0: 8]) {
@@ -1233,6 +1505,18 @@ fn command_executor_config(runtime: &CommandRuntimeInfo, command: &Command) Comm
     }
     if command_executor_keyword_match(pattern, &"appendfilename"[0: 14]) {
         _ = command_executor_config_append_pair(reply_list, &"appendfilename"[0: 14], command_executor_cstring_slice(runtime.config.appendfilename[0: 128])) catch {
+            object_free(reply_list);
+            return command_executor_oom();
+        };
+    }
+    if command_executor_keyword_match(pattern, &"replicaof"[0: 9]) {
+        _ = command_executor_config_append_replicaof(reply_list, runtime) catch {
+            object_free(reply_list);
+            return command_executor_oom();
+        };
+    }
+    if command_executor_keyword_match(pattern, &"masterauth"[0: 10]) {
+        _ = command_executor_config_append_pair(reply_list, &"masterauth"[0: 10], command_executor_cstring_slice(runtime.config.masterauth[0: 128])) catch {
             object_free(reply_list);
             return command_executor_oom();
         };
@@ -1327,8 +1611,17 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     if command.info.cmd_type == CommandType.command_save {
         return command_executor_save(engine, runtime, now_ms);
     }
+    if command.info.cmd_type == CommandType.command_bgsave {
+        return command_executor_bgsave(engine, runtime, command, now_ms);
+    }
     if command.info.cmd_type == CommandType.command_bgrewriteaof {
         return command_executor_bgrewriteaof(runtime, command);
+    }
+    if command.info.cmd_type == CommandType.command_replicaof {
+        return command_executor_replicaof(runtime, command);
+    }
+    if command.info.cmd_type == CommandType.command_psync {
+        return command_executor_psync(runtime, command);
     }
     if command.info.cmd_type == CommandType.command_config {
         return command_executor_config(runtime, command);

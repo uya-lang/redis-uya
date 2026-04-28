@@ -17,6 +17,9 @@ export struct ServerConfig {
     dir: [byte: 256],
     dbfilename: [byte: 128],
     appendfilename: [byte: 128],
+    replicaof_host: [byte: 64],
+    replicaof_port: i32,
+    masterauth: [byte: 128],
     maxmemory: usize,
     save_seconds: i32,
     save_changes: i32,
@@ -46,6 +49,9 @@ export fn default_config() ServerConfig {
     copy_literal(cfg.dir[0: 256], &"./"[0: 2]);
     copy_literal(cfg.dbfilename[0: 128], &"dump.rdb"[0: 8]);
     copy_literal(cfg.appendfilename[0: 128], &"appendonly.aof"[0: 14]);
+    copy_literal(cfg.replicaof_host[0: 64], &""[0: 0]);
+    cfg.replicaof_port = 0;
+    copy_literal(cfg.masterauth[0: 128], &""[0: 0]);
     return cfg;
 }
 
@@ -130,6 +136,12 @@ fn parse_line(cfg: &ServerConfig, line: &[byte]) !void {
         copy_literal(cfg.dbfilename[0: 128], value);
     } else if token_eq(key, &"appendfilename"[0: 14]) {
         copy_literal(cfg.appendfilename[0: 128], value);
+    } else if token_eq(key, &"replicaof"[0: 9]) {
+        copy_literal(cfg.replicaof_host[0: 64], value);
+        const port_token: &[byte] = next_token(line, &pos);
+        cfg.replicaof_port = try parse_i32_token(port_token);
+    } else if token_eq(key, &"masterauth"[0: 10]) {
+        copy_literal(cfg.masterauth[0: 128], value);
     } else if token_eq(key, &"maxmemory"[0: 9]) {
         cfg.maxmemory = try parse_memory_token(value);
     } else if token_eq(key, &"save"[0: 4]) {

@@ -1,0 +1,183 @@
+// replication/backlog.uya - minimal replication backlog buffer.
+
+use src.command.router.Command;
+use src.persistence.aof.aof_append_command_to_sds_at;
+use src.storage.sds.Sds;
+use src.storage.sds.sds_empty;
+use src.storage.sds.sds_free;
+use src.storage.sds.sds_range;
+use src.storage.sds.sds_len;
+use src.util.crc64.crc64;
+
+export struct ReplicationBacklog {
+    replid: [byte: 41],
+    history: Sds,
+    size_limit: usize,
+    master_offset: u64,
+    active: bool,
+}
+
+fn backlog_hex_nibble(value: byte) byte {
+    if value < 10 as byte {
+        return (48 as byte) + value;
+    }
+    return (97 as byte) + (value - 10 as byte);
+}
+
+fn backlog_write_hex8(out: &[byte], value: u32) void {
+    var shift: i32 = 28;
+    var i: usize = 0;
+    while i < 8 {
+        const nibble: byte = ((value >> shift) & 15u32) as byte;
+        out.ptr[i] = backlog_hex_nibble(nibble);
+        shift = shift - 4;
+        i = i + 1;
+    }
+}
+
+fn backlog_build_replid(out: &[byte], seed: u64) void {
+    var block: usize = 0;
+    while block < 5 {
+        var bytes: [byte: 16] = [];
+        var i: usize = 0;
+        while i < 8 {
+            bytes[i] = ((seed >> ((i * 8) as i32)) & 255u64) as byte;
+            i = i + 1;
+        }
+        var salt: u64 = seed + ((block as u64) * 2654435761u64);
+        i = 0;
+        while i < 8 {
+            bytes[8 + i] = ((salt >> ((i * 8) as i32)) & 255u64) as byte;
+            i = i + 1;
+        }
+        const hashed: u64 = crc64(bytes[0: 16]);
+        backlog_write_hex8(out[(block * 8): 8], (hashed & 0xffffffffu64) as u32);
+        block = block + 1;
+    }
+    out.ptr[40] = 0 as byte;
+}
+
+export fn replication_backlog_disabled() ReplicationBacklog {
+    return ReplicationBacklog{
+        replid: [],
+        history: Sds{ buf: (null as &byte)[0: 0], len: 0, alloc: 0 },
+        size_limit: 0,
+        master_offset: 0u64,
+        active: false,
+    };
+}
+
+export fn replication_backlog_new(size_limit: usize, seed: u64) !ReplicationBacklog {
+    var backlog: ReplicationBacklog = replication_backlog_disabled();
+    backlog.history = sds_empty() catch {
+        return error.AllocOutOfMemory;
+    };
+    backlog.size_limit = size_limit;
+    backlog.master_offset = 0u64;
+    backlog.active = true;
+    backlog_build_replid(backlog.replid[0: 41], seed);
+    return backlog;
+}
+
+export fn replication_backlog_free(backlog: &ReplicationBacklog) void {
+    if backlog.history.buf.ptr != null {
+        sds_free(&backlog.history);
+    }
+    backlog.replid[0] = 0 as byte;
+    backlog.size_limit = 0;
+    backlog.master_offset = 0u64;
+    backlog.active = false;
+}
+
+export fn replication_backlog_reset(backlog: &ReplicationBacklog, size_limit: usize, seed: u64) !void {
+    replication_backlog_free(backlog);
+    const next: ReplicationBacklog = try replication_backlog_new(size_limit, seed);
+    backlog_build_replid(backlog.replid[0: 41], seed);
+    backlog.history = next.history;
+    backlog.size_limit = next.size_limit;
+    backlog.master_offset = next.master_offset;
+    backlog.active = next.active;
+}
+
+fn replication_backlog_trim(backlog: &ReplicationBacklog) !void {
+    if !backlog.active || backlog.size_limit == 0 {
+        return;
+    }
+    const hist_len: usize = sds_len(&backlog.history);
+    if hist_len <= backlog.size_limit {
+        return;
+    }
+    const trim_bytes: usize = hist_len - backlog.size_limit;
+    const trimmed: Sds = try sds_range(&backlog.history, trim_bytes, hist_len - trim_bytes);
+    sds_free(&backlog.history);
+    backlog.history = trimmed;
+}
+
+export fn replication_backlog_append_command_at(backlog: &ReplicationBacklog, command: &Command, raw: &[byte], now_ms: u64) !void {
+    if !backlog.active {
+        return;
+    }
+    const before_len: usize = sds_len(&backlog.history);
+    try aof_append_command_to_sds_at(&backlog.history, command, raw, now_ms);
+    const after_len: usize = sds_len(&backlog.history);
+    backlog.master_offset = backlog.master_offset + ((after_len - before_len) as u64);
+    try replication_backlog_trim(backlog);
+}
+
+export fn replication_backlog_history_len(backlog: &ReplicationBacklog) usize {
+    if !backlog.active {
+        return 0;
+    }
+    return sds_len(&backlog.history);
+}
+
+export fn replication_backlog_first_offset(backlog: &ReplicationBacklog) u64 {
+    if !backlog.active {
+        return 0u64;
+    }
+    const hist_len: usize = sds_len(&backlog.history);
+    if hist_len == 0 {
+        return backlog.master_offset;
+    }
+    return backlog.master_offset - (hist_len as u64);
+}
+
+export fn replication_backlog_can_continue(backlog: &ReplicationBacklog, replid: &[byte], offset: u64) bool {
+    if !backlog.active {
+        return false;
+    }
+
+    var current_len: usize = 0;
+    while current_len < 40 && backlog.replid[current_len] != 0 as byte {
+        current_len = current_len + 1;
+    }
+    if replid.len != current_len {
+        return false;
+    }
+    var i: usize = 0;
+    while i < replid.len {
+        if backlog.replid[i] != replid.ptr[i] {
+            return false;
+        }
+        i = i + 1;
+    }
+
+    const first_offset: u64 = replication_backlog_first_offset(backlog);
+    return offset >= first_offset && offset <= backlog.master_offset;
+}
+
+export fn replication_backlog_slice_from(backlog: &ReplicationBacklog, offset: u64) &[byte] {
+    if !backlog.active {
+        return (null as &byte)[0: 0];
+    }
+    const first_offset: u64 = replication_backlog_first_offset(backlog);
+    if offset < first_offset || offset > backlog.master_offset {
+        return (null as &byte)[0: 0];
+    }
+    const start: usize = (offset - first_offset) as usize;
+    const total: usize = sds_len(&backlog.history);
+    if start >= total {
+        return (null as &byte)[0: 0];
+    }
+    return backlog.history.buf[start: total - start];
+}

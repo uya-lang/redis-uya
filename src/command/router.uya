@@ -31,7 +31,10 @@ export enum CommandType {
     command_ttl,
     command_scan,
     command_save,
+    command_bgsave,
     command_bgrewriteaof,
+    command_replicaof,
+    command_psync,
     command_config,
     command_info,
     command_quit,
@@ -61,7 +64,7 @@ export const COMMAND_FLAG_READONLY: u64 = 1u64;
 export const COMMAND_FLAG_WRITE: u64 = 2u64;
 export const COMMAND_FLAG_FAST: u64 = 4u64;
 
-const MIN_COMMAND_COUNT: usize = 25;
+const MIN_COMMAND_COUNT: usize = 28;
 
 fn command_router_lower(ch: byte) byte {
     if ch >= 65 as byte && ch <= 90 as byte {
@@ -170,15 +173,24 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
         return command_router_info(CommandType.command_save, &"SAVE"[0: 4], 1, COMMAND_FLAG_READONLY, 0, 0, 0);
     }
     if index == 21 {
-        return command_router_info(CommandType.command_bgrewriteaof, &"BGREWRITEAOF"[0: 12], 1, COMMAND_FLAG_READONLY, 0, 0, 0);
+        return command_router_info(CommandType.command_bgsave, &"BGSAVE"[0: 6], 1, COMMAND_FLAG_READONLY, 0, 0, 0);
     }
     if index == 22 {
-        return command_router_info(CommandType.command_config, &"CONFIG"[0: 6], 3, COMMAND_FLAG_READONLY, 0, 0, 0);
+        return command_router_info(CommandType.command_bgrewriteaof, &"BGREWRITEAOF"[0: 12], 1, COMMAND_FLAG_READONLY, 0, 0, 0);
     }
     if index == 23 {
-        return command_router_info(CommandType.command_info, &"INFO"[0: 4], -1, COMMAND_FLAG_READONLY, 0, 0, 0);
+        return command_router_info(CommandType.command_replicaof, &"REPLICAOF"[0: 9], 3, COMMAND_FLAG_READONLY, 0, 0, 0);
     }
     if index == 24 {
+        return command_router_info(CommandType.command_psync, &"PSYNC"[0: 5], 3, COMMAND_FLAG_READONLY, 0, 0, 0);
+    }
+    if index == 25 {
+        return command_router_info(CommandType.command_config, &"CONFIG"[0: 6], 3, COMMAND_FLAG_READONLY, 0, 0, 0);
+    }
+    if index == 26 {
+        return command_router_info(CommandType.command_info, &"INFO"[0: 4], -1, COMMAND_FLAG_READONLY, 0, 0, 0);
+    }
+    if index == 27 {
         return command_router_info(CommandType.command_quit, &"QUIT"[0: 4], 1, COMMAND_FLAG_FAST, 0, 0, 0);
     }
     return error.CommandUnknown;

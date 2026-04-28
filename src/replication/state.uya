@@ -1,0 +1,33 @@
+// replication/state.uya - minimal replication role and state model.
+
+export enum ReplicationRole {
+    role_master,
+    role_replica,
+}
+
+export enum ReplicationState {
+    repl_state_none,
+    repl_state_configured,
+    repl_state_connecting,
+    repl_state_syncing,
+    repl_state_connected,
+}
+
+export fn replication_role_name(role: ReplicationRole) &[byte] {
+    match role {
+        ReplicationRole.role_master => { return &"master"[0: 6]; },
+        ReplicationRole.role_replica => { return &"slave"[0: 5]; },
+        else => { return &"unknown"[0: 7]; }
+    }
+}
+
+export fn replication_state_name(state: ReplicationState) &[byte] {
+    match state {
+        ReplicationState.repl_state_none => { return &"none"[0: 4]; },
+        ReplicationState.repl_state_configured => { return &"configured"[0: 10]; },
+        ReplicationState.repl_state_connecting => { return &"connecting"[0: 10]; },
+        ReplicationState.repl_state_syncing => { return &"syncing"[0: 7]; },
+        ReplicationState.repl_state_connected => { return &"connected"[0: 9]; },
+        else => { return &"unknown"[0: 7]; }
+    }
+}

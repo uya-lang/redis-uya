@@ -1,0 +1,62 @@
+use tests.unit.assert.assert_eq_i32;
+use tests.unit.assert.assert_true;
+
+use src.command.router.Command;
+use src.command.router.CommandRouter;
+use src.command.router.command_router_new;
+use src.command.router.command_from_resp;
+use src.network.protocol.RespParseResult;
+use src.network.protocol.parse_resp2;
+use src.network.protocol.resp_value_free;
+use src.replication.backlog.ReplicationBacklog;
+use src.replication.backlog.replication_backlog_new;
+use src.replication.backlog.replication_backlog_free;
+use src.replication.backlog.replication_backlog_append_command_at;
+use src.replication.backlog.replication_backlog_history_len;
+use src.replication.backlog.replication_backlog_first_offset;
+use src.replication.backlog.replication_backlog_can_continue;
+use src.memory.allocator.used_memory;
+use src.memory.allocator.reset_memory_stats_for_test;
+
+fn replication_backlog_test_command(router: &CommandRouter, parsed: &RespParseResult) !Command {
+    return command_from_resp(router, &parsed.value);
+}
+
+fn replication_backlog_replid_len(backlog: &ReplicationBacklog) usize {
+    var len: usize = 0;
+    while len < 40 && backlog.replid[len] != 0 as byte {
+        len = len + 1;
+    }
+    return len;
+}
+
+export fn test_replication_backlog_append_and_trim() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var backlog: ReplicationBacklog = try replication_backlog_new(32, 123u64);
+    try assert_eq_i32(replication_backlog_replid_len(&backlog) as i32, 40);
+
+    var set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 33]);
+    const set_command: Command = try replication_backlog_test_command(&router, &set_parsed);
+    try replication_backlog_append_command_at(&backlog, &set_command, &"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 33], 1000u64);
+    resp_value_free(&set_parsed.value);
+
+    try assert_eq_i32(backlog.master_offset as i32, 33);
+    try assert_eq_i32(replication_backlog_history_len(&backlog) as i32, 32);
+    try assert_eq_i32(replication_backlog_first_offset(&backlog) as i32, 1);
+    try assert_true(replication_backlog_can_continue(&backlog, backlog.replid[0: 40], 1u64));
+    try assert_true(replication_backlog_can_continue(&backlog, backlog.replid[0: 40], 33u64));
+
+    var expire_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nEXPIRE\r\n$3\r\nkey\r\n$1\r\n2\r\n"[0: 32]);
+    const expire_command: Command = try replication_backlog_test_command(&router, &expire_parsed);
+    try replication_backlog_append_command_at(&backlog, &expire_command, &"*3\r\n$6\r\nEXPIRE\r\n$3\r\nkey\r\n$1\r\n2\r\n"[0: 32], 1000u64);
+    resp_value_free(&expire_parsed.value);
+
+    try assert_true(backlog.master_offset > 33u64);
+    try assert_true(replication_backlog_history_len(&backlog) <= 32);
+    try assert_true(replication_backlog_first_offset(&backlog) > 1u64);
+    try assert_true(!replication_backlog_can_continue(&backlog, backlog.replid[0: 40], 0u64));
+
+    replication_backlog_free(&backlog);
+    try assert_eq_i32(used_memory() as i32, 0);
+}

@@ -68,6 +68,10 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const get_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n"[0: 22], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: get_result.response_len], &"$5\r\nvalue\r\n"[0: 11]));
 
+    const bgsave_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*1\r\n$6\r\nBGSAVE\r\n"[0: 16], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: bgsave_result.response_len], &"+Background saving scheduled\r\n"[0: 30]));
+    try assert_eq_i32(bgsave_result.request_bgsave as i32, 1);
+
     const hset_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$4\r\nHSET\r\n$4\r\nhash\r\n$5\r\nfield\r\n$5\r\nvalue\r\n"[0: 46], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: hset_result.response_len], &":1\r\n"[0: 4]));
 
@@ -110,6 +114,11 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const info_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$4\r\nINFO\r\n$6\r\nserver\r\n"[0: 26], &out[0], 256, 1000u64);
     try assert_eq_i32(info_result.response_len as i32, 108);
     try assert_true(network_connection_slice_eq(out[0: info_result.response_len], &"$100\r\n# Server\r\nredis_uya_version:0.1.0-dev\r\nredis_mode:standalone\r\ntcp_port:6379\r\nuptime_in_seconds:0\r\n\r\n\r\n"[0: 108]));
+
+    const replicaof_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$9\r\nREPLICAOF\r\n$9\r\n127.0.0.1\r\n$4\r\n6381\r\n"[0: 44], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: replicaof_result.response_len], &"+OK\r\n"[0: 5]));
+    try assert_eq_i32(replicaof_result.request_replicaof as i32, 1);
+    try assert_eq_i32(replicaof_result.replicaof_promote as i32, 0);
 
     const config_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$6\r\nCONFIG\r\n$3\r\nGET\r\n$4\r\nport\r\n"[0: 35], &out[0], 256, 1000u64);
     try assert_eq_i32(config_result.response_len as i32, 24);

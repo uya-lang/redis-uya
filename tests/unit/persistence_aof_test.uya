@@ -128,6 +128,20 @@ export fn test_aof_replay_truncated_file_fails() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_aof_replay_invalid_format_fails() !void {
+    reset_memory_stats_for_test();
+    const path: &const byte = "build/test-aof-invalid-format.aof";
+    _ = unlink(path);
+
+    var writer: AofWriter = try aof_open_truncate(path);
+    try aof_append_raw(&writer, &"?bad\r\n"[0: 6]);
+    aof_close(&writer);
+
+    try assert_true(aof_replay_fails(path));
+    _ = unlink(path);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_aof_replay_large_file_over_1mb() !void {
     reset_memory_stats_for_test();
     const path: &const byte = "build/test-aof-large.aof";

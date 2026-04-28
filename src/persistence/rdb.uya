@@ -27,7 +27,29 @@ use src.storage.object.RedisObject;
 use src.storage.object.ObjectType;
 use src.storage.object.ListNode;
 use src.storage.object.create_string_object;
+use src.storage.object.create_hash_object;
+use src.storage.object.create_list_object;
+use src.storage.object.create_set_object;
+use src.storage.object.create_zset_object;
+use src.storage.object.hash_object_set_field;
+use src.storage.object.hash_object_get_field;
+use src.storage.object.list_object_push_tail;
+use src.storage.object.list_object_insert_sorted_lex;
+use src.storage.object.list_object_len;
+use src.storage.object.set_object_add_member;
+use src.storage.object.zset_object_add_member;
+use src.storage.object.zset_object_range_reply;
+use src.storage.object.zset_object_get_score;
+use src.storage.sds.Sds;
+use src.storage.sds.sds_empty;
+use src.storage.sds.sds_free;
+use src.storage.sds.sds_cat;
 use src.storage.object.object_free;
+use src.storage.dict.DictEntry;
+use src.storage.dict.DictIterator;
+use src.storage.dict.dict_iter_new;
+use src.storage.dict.dict_iter_next;
+use src.storage.dict.dict_len;
 use src.util.endian.read_u32_be;
 use src.util.endian.read_u64_be;
 use src.util.endian.write_u32_be;
@@ -44,8 +66,21 @@ export error RdbPathTooLong;
 
 const RDB_ENTRY_TYPE_STRING: byte = 0 as byte;
 const RDB_ENTRY_TYPE_STRING_EXPIRE_MS: byte = 1 as byte;
+const RDB_ENTRY_TYPE_HASH: byte = 2 as byte;
+const RDB_ENTRY_TYPE_HASH_EXPIRE_MS: byte = 3 as byte;
+const RDB_ENTRY_TYPE_LIST: byte = 4 as byte;
+const RDB_ENTRY_TYPE_LIST_EXPIRE_MS: byte = 5 as byte;
+const RDB_ENTRY_TYPE_SET: byte = 6 as byte;
+const RDB_ENTRY_TYPE_SET_EXPIRE_MS: byte = 7 as byte;
+const RDB_ENTRY_TYPE_ZSET: byte = 8 as byte;
+const RDB_ENTRY_TYPE_ZSET_EXPIRE_MS: byte = 9 as byte;
 const RDB_ENTRY_TYPE_EOF: byte = 255 as byte;
 const RDB_ENTRY_MAX_BYTES: usize = 1024 * 1024;
+
+struct RdbBlob {
+    ptr: &byte,
+    len: usize,
+}
 
 fn rdb_zero_stat() Stat {
     return Stat{
@@ -74,6 +109,10 @@ fn rdb_write_all(file: &File, data: &[byte]) !void {
     }
 }
 
+fn rdb_sds_write_all(buf: &Sds, data: &[byte]) !void {
+    try sds_cat(buf, data);
+}
+
 fn rdb_read_exact(file: &File, buf: &byte, count: usize) !void {
     var filled: usize = 0;
     while filled < count {
@@ -94,10 +133,30 @@ fn rdb_write_u32(file: &File, value: u32) !void {
     try rdb_write_all(file, buf[0: 4]);
 }
 
+fn rdb_sds_write_u32(buf: &Sds, value: u32) !void {
+    var bytes: [byte: 4] = [];
+    _ = write_u32_be(bytes[0: 4], value);
+    try rdb_sds_write_all(buf, bytes[0: 4]);
+}
+
 fn rdb_write_u64(file: &File, value: u64) !void {
     var buf: [byte: 8] = [];
     _ = write_u64_be(buf[0: 8], value);
     try rdb_write_all(file, buf[0: 8]);
+}
+
+fn rdb_sds_write_u64(buf: &Sds, value: u64) !void {
+    var bytes: [byte: 8] = [];
+    _ = write_u64_be(bytes[0: 8], value);
+    try rdb_sds_write_all(buf, bytes[0: 8]);
+}
+
+fn rdb_write_i64(file: &File, value: i64) !void {
+    try rdb_write_u64(file, value as u64);
+}
+
+fn rdb_sds_write_i64(buf: &Sds, value: i64) !void {
+    try rdb_sds_write_u64(buf, value as u64);
 }
 
 fn rdb_read_u32(file: &File) !u32 {
@@ -110,6 +169,10 @@ fn rdb_read_u64(file: &File) !u64 {
     var buf: [byte: 8] = [];
     try rdb_read_exact(file, &buf[0], 8);
     return read_u64_be(buf[0: 8]);
+}
+
+fn rdb_read_i64(file: &File) !i64 {
+    return (try rdb_read_u64(file)) as i64;
 }
 
 fn rdb_alloc_bytes(len: usize) !&byte {
@@ -131,6 +194,508 @@ fn rdb_copy_bytes(dst: &byte, src: &[byte]) void {
         dst[i] = src.ptr[i];
         i = i + 1;
     }
+}
+
+fn rdb_empty_slice() &[byte] {
+    return (null as &byte)[0: 0];
+}
+
+fn rdb_blob_slice(blob: &RdbBlob) &[byte] {
+    if blob.ptr == null || blob.len == 0 {
+        return rdb_empty_slice();
+    }
+    return blob.ptr[0: blob.len];
+}
+
+fn rdb_free_blob(blob: &RdbBlob) void {
+    rdb_free_bytes(blob.ptr);
+    blob.ptr = null as &byte;
+    blob.len = 0;
+}
+
+fn rdb_write_blob(file: &File, data: &[byte]) !void {
+    if data.len > RDB_ENTRY_MAX_BYTES {
+        return error.RdbEntryTooLarge;
+    }
+    try rdb_write_u32(file, data.len as u32);
+    try rdb_write_all(file, data);
+}
+
+fn rdb_sds_write_blob(buf: &Sds, data: &[byte]) !void {
+    if data.len > RDB_ENTRY_MAX_BYTES {
+        return error.RdbEntryTooLarge;
+    }
+    try rdb_sds_write_u32(buf, data.len as u32);
+    try rdb_sds_write_all(buf, data);
+}
+
+fn rdb_read_blob(file: &File) !RdbBlob {
+    const len: usize = (try rdb_read_u32(file)) as usize;
+    if len > RDB_ENTRY_MAX_BYTES {
+        return error.RdbEntryTooLarge;
+    }
+    const ptr: &byte = try rdb_alloc_bytes(len);
+    if len > 0 {
+        try rdb_read_exact(file, ptr, len);
+    }
+    return RdbBlob{ ptr: ptr, len: len };
+}
+
+fn rdb_read_u32_from_bytes(data: &[byte], pos: &usize) !u32 {
+    if *pos + 4 > data.len {
+        return error.RdbTruncated;
+    }
+    const value: u32 = read_u32_be(data[*pos: 4]);
+    *pos = *pos + 4;
+    return value;
+}
+
+fn rdb_read_u64_from_bytes(data: &[byte], pos: &usize) !u64 {
+    if *pos + 8 > data.len {
+        return error.RdbTruncated;
+    }
+    const value: u64 = read_u64_be(data[*pos: 8]);
+    *pos = *pos + 8;
+    return value;
+}
+
+fn rdb_read_i64_from_bytes(data: &[byte], pos: &usize) !i64 {
+    return (try rdb_read_u64_from_bytes(data, pos)) as i64;
+}
+
+fn rdb_read_blob_from_bytes(data: &[byte], pos: &usize) !RdbBlob {
+    const len: usize = (try rdb_read_u32_from_bytes(data, pos)) as usize;
+    if len > RDB_ENTRY_MAX_BYTES {
+        return error.RdbEntryTooLarge;
+    }
+    if *pos + len > data.len {
+        return error.RdbTruncated;
+    }
+    const ptr: &byte = try rdb_alloc_bytes(len);
+    if len > 0 {
+        rdb_copy_bytes(ptr, data[*pos: len]);
+    }
+    *pos = *pos + len;
+    return RdbBlob{ ptr: ptr, len: len };
+}
+
+fn rdb_entry_type_for_object(obj_type: ObjectType, has_expire: bool) !byte {
+    match obj_type {
+        ObjectType.object_string => {
+            if has_expire { return RDB_ENTRY_TYPE_STRING_EXPIRE_MS; }
+            return RDB_ENTRY_TYPE_STRING;
+        },
+        ObjectType.object_hash => {
+            if has_expire { return RDB_ENTRY_TYPE_HASH_EXPIRE_MS; }
+            return RDB_ENTRY_TYPE_HASH;
+        },
+        ObjectType.object_list => {
+            if has_expire { return RDB_ENTRY_TYPE_LIST_EXPIRE_MS; }
+            return RDB_ENTRY_TYPE_LIST;
+        },
+        ObjectType.object_set => {
+            if has_expire { return RDB_ENTRY_TYPE_SET_EXPIRE_MS; }
+            return RDB_ENTRY_TYPE_SET;
+        },
+        ObjectType.object_zset => {
+            if has_expire { return RDB_ENTRY_TYPE_ZSET_EXPIRE_MS; }
+            return RDB_ENTRY_TYPE_ZSET;
+        },
+        else => {
+            return error.RdbUnsupportedType;
+        }
+    }
+}
+
+fn rdb_entry_type_has_expire(typ: byte) bool {
+    return typ == RDB_ENTRY_TYPE_STRING_EXPIRE_MS ||
+        typ == RDB_ENTRY_TYPE_HASH_EXPIRE_MS ||
+        typ == RDB_ENTRY_TYPE_LIST_EXPIRE_MS ||
+        typ == RDB_ENTRY_TYPE_SET_EXPIRE_MS ||
+        typ == RDB_ENTRY_TYPE_ZSET_EXPIRE_MS;
+}
+
+fn rdb_entry_type_is_supported(typ: byte) bool {
+    return typ == RDB_ENTRY_TYPE_STRING ||
+        typ == RDB_ENTRY_TYPE_STRING_EXPIRE_MS ||
+        typ == RDB_ENTRY_TYPE_HASH ||
+        typ == RDB_ENTRY_TYPE_HASH_EXPIRE_MS ||
+        typ == RDB_ENTRY_TYPE_LIST ||
+        typ == RDB_ENTRY_TYPE_LIST_EXPIRE_MS ||
+        typ == RDB_ENTRY_TYPE_SET ||
+        typ == RDB_ENTRY_TYPE_SET_EXPIRE_MS ||
+        typ == RDB_ENTRY_TYPE_ZSET ||
+        typ == RDB_ENTRY_TYPE_ZSET_EXPIRE_MS;
+}
+
+fn rdb_sorted_dict_keys(dict_obj: &RedisObject) !&RedisObject {
+    const keys: &RedisObject = try create_list_object();
+    var iter: DictIterator = dict_iter_new();
+    var entry: &DictEntry = dict_iter_next(&dict_obj.hash_dict, &iter);
+    while entry != null {
+        _ = list_object_insert_sorted_lex(keys, entry.key.buf[0: entry.key.len]) catch {
+            object_free(keys);
+            return error.AllocOutOfMemory;
+        };
+        entry = dict_iter_next(&dict_obj.hash_dict, &iter);
+    }
+    return keys;
+}
+
+fn rdb_write_hash_payload(file: &File, obj: &RedisObject) !void {
+    const fields: &RedisObject = try rdb_sorted_dict_keys(obj);
+    defer {
+        object_free(fields);
+    }
+
+    const count: usize = list_object_len(fields) catch {
+        return error.RdbUnsupportedType;
+    };
+    try rdb_write_u32(file, count as u32);
+
+    var node: &ListNode = fields.list_head;
+    while node != null {
+        const field: &[byte] = node.value.value.buf[0: node.value.value.len];
+        const value_obj: &RedisObject = try hash_object_get_field(obj, field);
+        if value_obj.obj_type != ObjectType.object_string {
+            return error.RdbUnsupportedType;
+        }
+        try rdb_write_blob(file, field);
+        try rdb_write_blob(file, value_obj.value.buf[0: value_obj.value.len]);
+        node = node.next;
+    }
+}
+
+fn rdb_sds_write_hash_payload(buf: &Sds, obj: &RedisObject) !void {
+    const fields: &RedisObject = try rdb_sorted_dict_keys(obj);
+    defer {
+        object_free(fields);
+    }
+
+    const count: usize = list_object_len(fields) catch {
+        return error.RdbUnsupportedType;
+    };
+    try rdb_sds_write_u32(buf, count as u32);
+
+    var node: &ListNode = fields.list_head;
+    while node != null {
+        const field: &[byte] = node.value.value.buf[0: node.value.value.len];
+        const value_obj: &RedisObject = try hash_object_get_field(obj, field);
+        if value_obj.obj_type != ObjectType.object_string {
+            return error.RdbUnsupportedType;
+        }
+        try rdb_sds_write_blob(buf, field);
+        try rdb_sds_write_blob(buf, value_obj.value.buf[0: value_obj.value.len]);
+        node = node.next;
+    }
+}
+
+fn rdb_write_list_payload(file: &File, obj: &RedisObject) !void {
+    const count: usize = list_object_len(obj) catch {
+        return error.RdbUnsupportedType;
+    };
+    try rdb_write_u32(file, count as u32);
+    var node: &ListNode = obj.list_head;
+    while node != null {
+        try rdb_write_blob(file, node.value.value.buf[0: node.value.value.len]);
+        node = node.next;
+    }
+}
+
+fn rdb_sds_write_list_payload(buf: &Sds, obj: &RedisObject) !void {
+    const count: usize = list_object_len(obj) catch {
+        return error.RdbUnsupportedType;
+    };
+    try rdb_sds_write_u32(buf, count as u32);
+    var node: &ListNode = obj.list_head;
+    while node != null {
+        try rdb_sds_write_blob(buf, node.value.value.buf[0: node.value.value.len]);
+        node = node.next;
+    }
+}
+
+fn rdb_write_set_payload(file: &File, obj: &RedisObject) !void {
+    const members: &RedisObject = try rdb_sorted_dict_keys(obj);
+    defer {
+        object_free(members);
+    }
+    const count: usize = list_object_len(members) catch {
+        return error.RdbUnsupportedType;
+    };
+    try rdb_write_u32(file, count as u32);
+    var node: &ListNode = members.list_head;
+    while node != null {
+        try rdb_write_blob(file, node.value.value.buf[0: node.value.value.len]);
+        node = node.next;
+    }
+}
+
+fn rdb_sds_write_set_payload(buf: &Sds, obj: &RedisObject) !void {
+    const members: &RedisObject = try rdb_sorted_dict_keys(obj);
+    defer {
+        object_free(members);
+    }
+    const count: usize = list_object_len(members) catch {
+        return error.RdbUnsupportedType;
+    };
+    try rdb_sds_write_u32(buf, count as u32);
+    var node: &ListNode = members.list_head;
+    while node != null {
+        try rdb_sds_write_blob(buf, node.value.value.buf[0: node.value.value.len]);
+        node = node.next;
+    }
+}
+
+fn rdb_write_zset_payload(file: &File, obj: &RedisObject) !void {
+    const members: &RedisObject = try zset_object_range_reply(obj, 0, -1);
+    defer {
+        object_free(members);
+    }
+    const count: usize = list_object_len(members) catch {
+        return error.RdbUnsupportedType;
+    };
+    try rdb_write_u32(file, count as u32);
+    var node: &ListNode = members.list_head;
+    while node != null {
+        const member: &[byte] = node.value.value.buf[0: node.value.value.len];
+        const score: i64 = try zset_object_get_score(obj, member);
+        try rdb_write_i64(file, score);
+        try rdb_write_blob(file, member);
+        node = node.next;
+    }
+}
+
+fn rdb_sds_write_zset_payload(buf: &Sds, obj: &RedisObject) !void {
+    const members: &RedisObject = try zset_object_range_reply(obj, 0, -1);
+    defer {
+        object_free(members);
+    }
+    const count: usize = list_object_len(members) catch {
+        return error.RdbUnsupportedType;
+    };
+    try rdb_sds_write_u32(buf, count as u32);
+    var node: &ListNode = members.list_head;
+    while node != null {
+        const member: &[byte] = node.value.value.buf[0: node.value.value.len];
+        const score: i64 = try zset_object_get_score(obj, member);
+        try rdb_sds_write_i64(buf, score);
+        try rdb_sds_write_blob(buf, member);
+        node = node.next;
+    }
+}
+
+fn rdb_write_payload(file: &File, obj: &RedisObject) !void {
+    match obj.obj_type {
+        ObjectType.object_string => {
+            try rdb_write_blob(file, obj.value.buf[0: obj.value.len]);
+        },
+        ObjectType.object_hash => {
+            try rdb_write_hash_payload(file, obj);
+        },
+        ObjectType.object_list => {
+            try rdb_write_list_payload(file, obj);
+        },
+        ObjectType.object_set => {
+            try rdb_write_set_payload(file, obj);
+        },
+        ObjectType.object_zset => {
+            try rdb_write_zset_payload(file, obj);
+        },
+        else => {
+            return error.RdbUnsupportedType;
+        }
+    }
+}
+
+fn rdb_sds_write_payload(buf: &Sds, obj: &RedisObject) !void {
+    match obj.obj_type {
+        ObjectType.object_string => {
+            try rdb_sds_write_blob(buf, obj.value.buf[0: obj.value.len]);
+        },
+        ObjectType.object_hash => {
+            try rdb_sds_write_hash_payload(buf, obj);
+        },
+        ObjectType.object_list => {
+            try rdb_sds_write_list_payload(buf, obj);
+        },
+        ObjectType.object_set => {
+            try rdb_sds_write_set_payload(buf, obj);
+        },
+        ObjectType.object_zset => {
+            try rdb_sds_write_zset_payload(buf, obj);
+        },
+        else => {
+            return error.RdbUnsupportedType;
+        }
+    }
+}
+
+fn rdb_load_hash_payload(file: &File) !&RedisObject {
+    const obj: &RedisObject = try create_hash_object();
+    errdefer object_free(obj);
+
+    const count: usize = (try rdb_read_u32(file)) as usize;
+    var i: usize = 0;
+    while i < count {
+        var field_blob: RdbBlob = try rdb_read_blob(file);
+        defer rdb_free_blob(&field_blob);
+        var value_blob: RdbBlob = try rdb_read_blob(file);
+        defer rdb_free_blob(&value_blob);
+        _ = try hash_object_set_field(obj, rdb_blob_slice(&field_blob), rdb_blob_slice(&value_blob));
+        i = i + 1;
+    }
+    return obj;
+}
+
+fn rdb_load_list_payload(file: &File) !&RedisObject {
+    const obj: &RedisObject = try create_list_object();
+    errdefer object_free(obj);
+
+    const count: usize = (try rdb_read_u32(file)) as usize;
+    var i: usize = 0;
+    while i < count {
+        var value_blob: RdbBlob = try rdb_read_blob(file);
+        defer rdb_free_blob(&value_blob);
+        _ = try list_object_push_tail(obj, rdb_blob_slice(&value_blob));
+        i = i + 1;
+    }
+    return obj;
+}
+
+fn rdb_load_set_payload(file: &File) !&RedisObject {
+    const obj: &RedisObject = try create_set_object();
+    errdefer object_free(obj);
+
+    const count: usize = (try rdb_read_u32(file)) as usize;
+    var i: usize = 0;
+    while i < count {
+        var member_blob: RdbBlob = try rdb_read_blob(file);
+        defer rdb_free_blob(&member_blob);
+        _ = try set_object_add_member(obj, rdb_blob_slice(&member_blob));
+        i = i + 1;
+    }
+    return obj;
+}
+
+fn rdb_load_zset_payload(file: &File) !&RedisObject {
+    const obj: &RedisObject = try create_zset_object();
+    errdefer object_free(obj);
+
+    const count: usize = (try rdb_read_u32(file)) as usize;
+    var i: usize = 0;
+    while i < count {
+        const score: i64 = try rdb_read_i64(file);
+        var member_blob: RdbBlob = try rdb_read_blob(file);
+        defer rdb_free_blob(&member_blob);
+        _ = try zset_object_add_member(obj, score, rdb_blob_slice(&member_blob));
+        i = i + 1;
+    }
+    return obj;
+}
+
+fn rdb_load_payload(file: &File, typ: byte) !&RedisObject {
+    if typ == RDB_ENTRY_TYPE_STRING || typ == RDB_ENTRY_TYPE_STRING_EXPIRE_MS {
+        var value_blob: RdbBlob = try rdb_read_blob(file);
+        defer rdb_free_blob(&value_blob);
+        return create_string_object(rdb_blob_slice(&value_blob));
+    }
+    if typ == RDB_ENTRY_TYPE_HASH || typ == RDB_ENTRY_TYPE_HASH_EXPIRE_MS {
+        return rdb_load_hash_payload(file);
+    }
+    if typ == RDB_ENTRY_TYPE_LIST || typ == RDB_ENTRY_TYPE_LIST_EXPIRE_MS {
+        return rdb_load_list_payload(file);
+    }
+    if typ == RDB_ENTRY_TYPE_SET || typ == RDB_ENTRY_TYPE_SET_EXPIRE_MS {
+        return rdb_load_set_payload(file);
+    }
+    if typ == RDB_ENTRY_TYPE_ZSET || typ == RDB_ENTRY_TYPE_ZSET_EXPIRE_MS {
+        return rdb_load_zset_payload(file);
+    }
+    return error.RdbUnsupportedType;
+}
+
+fn rdb_load_hash_payload_from_bytes(data: &[byte], pos: &usize) !&RedisObject {
+    const obj: &RedisObject = try create_hash_object();
+    errdefer object_free(obj);
+
+    const count: usize = (try rdb_read_u32_from_bytes(data, pos)) as usize;
+    var i: usize = 0;
+    while i < count {
+        var field_blob: RdbBlob = try rdb_read_blob_from_bytes(data, pos);
+        defer rdb_free_blob(&field_blob);
+        var value_blob: RdbBlob = try rdb_read_blob_from_bytes(data, pos);
+        defer rdb_free_blob(&value_blob);
+        _ = try hash_object_set_field(obj, rdb_blob_slice(&field_blob), rdb_blob_slice(&value_blob));
+        i = i + 1;
+    }
+    return obj;
+}
+
+fn rdb_load_list_payload_from_bytes(data: &[byte], pos: &usize) !&RedisObject {
+    const obj: &RedisObject = try create_list_object();
+    errdefer object_free(obj);
+
+    const count: usize = (try rdb_read_u32_from_bytes(data, pos)) as usize;
+    var i: usize = 0;
+    while i < count {
+        var value_blob: RdbBlob = try rdb_read_blob_from_bytes(data, pos);
+        defer rdb_free_blob(&value_blob);
+        _ = try list_object_push_tail(obj, rdb_blob_slice(&value_blob));
+        i = i + 1;
+    }
+    return obj;
+}
+
+fn rdb_load_set_payload_from_bytes(data: &[byte], pos: &usize) !&RedisObject {
+    const obj: &RedisObject = try create_set_object();
+    errdefer object_free(obj);
+
+    const count: usize = (try rdb_read_u32_from_bytes(data, pos)) as usize;
+    var i: usize = 0;
+    while i < count {
+        var member_blob: RdbBlob = try rdb_read_blob_from_bytes(data, pos);
+        defer rdb_free_blob(&member_blob);
+        _ = try set_object_add_member(obj, rdb_blob_slice(&member_blob));
+        i = i + 1;
+    }
+    return obj;
+}
+
+fn rdb_load_zset_payload_from_bytes(data: &[byte], pos: &usize) !&RedisObject {
+    const obj: &RedisObject = try create_zset_object();
+    errdefer object_free(obj);
+
+    const count: usize = (try rdb_read_u32_from_bytes(data, pos)) as usize;
+    var i: usize = 0;
+    while i < count {
+        const score: i64 = try rdb_read_i64_from_bytes(data, pos);
+        var member_blob: RdbBlob = try rdb_read_blob_from_bytes(data, pos);
+        defer rdb_free_blob(&member_blob);
+        _ = try zset_object_add_member(obj, score, rdb_blob_slice(&member_blob));
+        i = i + 1;
+    }
+    return obj;
+}
+
+fn rdb_load_payload_from_bytes(data: &[byte], pos: &usize, typ: byte) !&RedisObject {
+    if typ == RDB_ENTRY_TYPE_STRING || typ == RDB_ENTRY_TYPE_STRING_EXPIRE_MS {
+        var value_blob: RdbBlob = try rdb_read_blob_from_bytes(data, pos);
+        defer rdb_free_blob(&value_blob);
+        return create_string_object(rdb_blob_slice(&value_blob));
+    }
+    if typ == RDB_ENTRY_TYPE_HASH || typ == RDB_ENTRY_TYPE_HASH_EXPIRE_MS {
+        return rdb_load_hash_payload_from_bytes(data, pos);
+    }
+    if typ == RDB_ENTRY_TYPE_LIST || typ == RDB_ENTRY_TYPE_LIST_EXPIRE_MS {
+        return rdb_load_list_payload_from_bytes(data, pos);
+    }
+    if typ == RDB_ENTRY_TYPE_SET || typ == RDB_ENTRY_TYPE_SET_EXPIRE_MS {
+        return rdb_load_set_payload_from_bytes(data, pos);
+    }
+    if typ == RDB_ENTRY_TYPE_ZSET || typ == RDB_ENTRY_TYPE_ZSET_EXPIRE_MS {
+        return rdb_load_zset_payload_from_bytes(data, pos);
+    }
+    return error.RdbUnsupportedType;
 }
 
 fn rdb_get_expire_at_or_zero(engine: &Engine, key: &[byte]) u64 {
@@ -246,29 +811,16 @@ export fn rdb_save_file_at(path: &const byte, engine: &Engine, now_ms: u64) !voi
             node = node.next;
             continue;
         }
-        if obj.obj_type != ObjectType.object_string {
-            return error.RdbUnsupportedType;
-        }
 
         const expire_at: u64 = rdb_get_expire_at_or_zero(engine, key);
-        var entry_type: byte = RDB_ENTRY_TYPE_STRING;
-        if expire_at > now_ms {
-            entry_type = RDB_ENTRY_TYPE_STRING_EXPIRE_MS;
-        }
+        const entry_type: byte = try rdb_entry_type_for_object(obj.obj_type, expire_at > now_ms);
         var entry_type_buf: [byte: 1] = [entry_type];
         try rdb_write_all(&file, entry_type_buf[0: 1]);
-        if entry_type == RDB_ENTRY_TYPE_STRING_EXPIRE_MS {
+        if rdb_entry_type_has_expire(entry_type) {
             try rdb_write_u64(&file, expire_at);
         }
-
-        const value: &[byte] = obj.value.buf[0: obj.value.len];
-        if key.len > RDB_ENTRY_MAX_BYTES || value.len > RDB_ENTRY_MAX_BYTES {
-            return error.RdbEntryTooLarge;
-        }
-        try rdb_write_u32(&file, key.len as u32);
-        try rdb_write_u32(&file, value.len as u32);
-        try rdb_write_all(&file, key);
-        try rdb_write_all(&file, value);
+        try rdb_write_blob(&file, key);
+        try rdb_write_payload(&file, obj);
         node = node.next;
     }
 
@@ -307,61 +859,128 @@ export fn rdb_load_file_at(path: &const byte, engine: &Engine, now_ms: u64) !voi
         if typ == RDB_ENTRY_TYPE_EOF {
             return;
         }
-        if typ != RDB_ENTRY_TYPE_STRING && typ != RDB_ENTRY_TYPE_STRING_EXPIRE_MS {
+        if !rdb_entry_type_is_supported(typ) {
             return error.RdbUnsupportedType;
         }
 
         var expire_at: u64 = 0u64;
-        if typ == RDB_ENTRY_TYPE_STRING_EXPIRE_MS {
+        if rdb_entry_type_has_expire(typ) {
             expire_at = try rdb_read_u64(&file);
         }
 
-        const key_len: usize = (try rdb_read_u32(&file)) as usize;
-        const value_len: usize = (try rdb_read_u32(&file)) as usize;
-        if key_len > RDB_ENTRY_MAX_BYTES || value_len > RDB_ENTRY_MAX_BYTES {
-            return error.RdbEntryTooLarge;
-        }
+        var key_blob: RdbBlob = try rdb_read_blob(&file);
+        const key: &[byte] = rdb_blob_slice(&key_blob);
 
-        const key_ptr: &byte = try rdb_alloc_bytes(key_len);
-        const value_ptr: &byte = try rdb_alloc_bytes(value_len);
+        const obj: &RedisObject = try rdb_load_payload(&file, typ);
 
-        if key_len > 0 {
-            try rdb_read_exact(&file, key_ptr, key_len);
-        }
-        if value_len > 0 {
-            try rdb_read_exact(&file, value_ptr, value_len);
-        }
-
-        var key: &[byte] = (null as &byte)[0: 0];
-        if key_len > 0 {
-            key = key_ptr[0: key_len];
-        }
-        var value: &[byte] = (null as &byte)[0: 0];
-        if value_len > 0 {
-            value = value_ptr[0: value_len];
-        }
-
-        if typ == RDB_ENTRY_TYPE_STRING_EXPIRE_MS && expire_at <= now_ms {
-            rdb_free_bytes(key_ptr);
-            rdb_free_bytes(value_ptr);
+        if rdb_entry_type_has_expire(typ) && expire_at <= now_ms {
+            object_free(obj);
+            rdb_free_blob(&key_blob);
             continue;
         }
 
-        const obj: &RedisObject = create_string_object(value) catch |err| {
-            rdb_free_bytes(key_ptr);
-            rdb_free_bytes(value_ptr);
-            return err;
-        };
         _ = set_key(engine, key, obj) catch |err| {
             object_free(obj);
-            rdb_free_bytes(key_ptr);
-            rdb_free_bytes(value_ptr);
+            rdb_free_blob(&key_blob);
             return err;
         };
-        if typ == RDB_ENTRY_TYPE_STRING_EXPIRE_MS {
+        if rdb_entry_type_has_expire(typ) {
             try set_key_expire_at(engine, key, expire_at);
         }
-        rdb_free_bytes(key_ptr);
-        rdb_free_bytes(value_ptr);
+        rdb_free_blob(&key_blob);
     }
+}
+
+export fn rdb_load_bytes_at(data: &[byte], engine: &Engine, now_ms: u64) !void {
+    if data.len < 8 {
+        return error.RdbTruncated;
+    }
+    const magic: &[byte] = rdb_magic();
+    var i: usize = 0;
+    while i < magic.len {
+        if data.ptr[i] != magic.ptr[i] {
+            return error.RdbInvalidFormat;
+        }
+        i = i + 1;
+    }
+
+    var pos: usize = 8;
+    while pos < data.len {
+        const typ: byte = data.ptr[pos];
+        pos = pos + 1;
+        if typ == RDB_ENTRY_TYPE_EOF {
+            return;
+        }
+        if !rdb_entry_type_is_supported(typ) {
+            return error.RdbUnsupportedType;
+        }
+
+        var expire_at: u64 = 0u64;
+        if rdb_entry_type_has_expire(typ) {
+            expire_at = try rdb_read_u64_from_bytes(data, &pos);
+        }
+
+        var key_blob: RdbBlob = try rdb_read_blob_from_bytes(data, &pos);
+        const key: &[byte] = rdb_blob_slice(&key_blob);
+        const obj: &RedisObject = try rdb_load_payload_from_bytes(data, &pos, typ);
+        if rdb_entry_type_has_expire(typ) && expire_at <= now_ms {
+            object_free(obj);
+            rdb_free_blob(&key_blob);
+            continue;
+        }
+
+        _ = set_key(engine, key, obj) catch |err| {
+            object_free(obj);
+            rdb_free_blob(&key_blob);
+            return err;
+        };
+        if rdb_entry_type_has_expire(typ) {
+            try set_key_expire_at(engine, key, expire_at);
+        }
+        rdb_free_blob(&key_blob);
+    }
+    return error.RdbTruncated;
+}
+
+export fn rdb_dump_object_at(engine: &Engine, now_ms: u64) !&RedisObject {
+    var buf: Sds = sds_empty() catch {
+        return error.AllocOutOfMemory;
+    };
+    errdefer {
+        sds_free(&buf);
+    }
+
+    try rdb_sds_write_all(&buf, rdb_magic());
+    const keys_obj: &RedisObject = try engine_scan_keys_at(engine, now_ms);
+    defer {
+        object_free(keys_obj);
+    }
+
+    var node: &ListNode = keys_obj.list_head;
+    while node != null {
+        const key: &[byte] = node.value.value.buf[0: node.value.value.len];
+        const obj: &RedisObject = rdb_lookup_key_now_or_null(engine, key, now_ms);
+        if obj == null {
+            node = node.next;
+            continue;
+        }
+        const expire_at: u64 = rdb_get_expire_at_or_zero(engine, key);
+        const entry_type: byte = try rdb_entry_type_for_object(obj.obj_type, expire_at > now_ms);
+        var entry_type_buf: [byte: 1] = [entry_type];
+        try rdb_sds_write_all(&buf, entry_type_buf[0: 1]);
+        if rdb_entry_type_has_expire(entry_type) {
+            try rdb_sds_write_u64(&buf, expire_at);
+        }
+        try rdb_sds_write_blob(&buf, key);
+        try rdb_sds_write_payload(&buf, obj);
+        node = node.next;
+    }
+
+    var eof_buf: [byte: 1] = [RDB_ENTRY_TYPE_EOF];
+    try rdb_sds_write_all(&buf, eof_buf[0: 1]);
+    const snapshot: &RedisObject = create_string_object(buf.buf[0: buf.len]) catch |err| {
+        return err;
+    };
+    sds_free(&buf);
+    return snapshot;
 }

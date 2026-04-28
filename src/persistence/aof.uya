@@ -24,6 +24,10 @@ use src.network.protocol.RespParseResult;
 use src.network.protocol.parse_resp2;
 use src.network.protocol.resp_value_free;
 use src.storage.engine.Engine;
+use src.storage.sds.Sds;
+use src.storage.sds.sds_new;
+use src.storage.sds.sds_free;
+use src.storage.sds.sds_cat;
 
 export error AofOpenFailed;
 export error AofReadFailed;
@@ -91,6 +95,10 @@ export fn aof_append_raw(aof: &AofWriter, data: &[byte]) !void {
     }
 }
 
+fn aof_sds_append(s: &Sds, data: &[byte]) !void {
+    try sds_cat(s, data);
+}
+
 fn aof_parse_u64(data: &[byte]) !u64 {
     if data.len == 0 {
         return error.AofInvalidCommand;
@@ -151,6 +159,44 @@ fn aof_append_bulk(aof: &AofWriter, data: &[byte]) !void {
     try aof_append_raw(aof, &"\r\n"[0: 2]);
 }
 
+fn aof_sds_append_u64(s: &Sds, value: u64) !void {
+    if value == 0u64 {
+        try aof_sds_append(s, &"0"[0: 1]);
+        return;
+    }
+
+    var tmp: [byte: 20] = [];
+    var count: usize = 0;
+    var v: u64 = value;
+    while v > 0u64 {
+        const digit: u64 = v % 10u64;
+        tmp[count] = (48u64 + digit) as byte;
+        count = count + 1;
+        v = v / 10u64;
+    }
+
+    while count > 0 {
+        count = count - 1;
+        try aof_sds_append(s, tmp[count: 1]);
+    }
+}
+
+fn aof_sds_append_bulk(s: &Sds, data: &[byte]) !void {
+    try aof_sds_append(s, &"$"[0: 1]);
+    try aof_sds_append_u64(s, data.len as u64);
+    try aof_sds_append(s, &"\r\n"[0: 2]);
+    try aof_sds_append(s, data);
+    try aof_sds_append(s, &"\r\n"[0: 2]);
+}
+
+fn aof_sds_append_bulk_u64(s: &Sds, value: u64) !void {
+    try aof_sds_append(s, &"$"[0: 1]);
+    try aof_sds_append_u64(s, aof_u64_len(value));
+    try aof_sds_append(s, &"\r\n"[0: 2]);
+    try aof_sds_append_u64(s, value);
+    try aof_sds_append(s, &"\r\n"[0: 2]);
+}
+
 fn aof_append_bulk_u64(aof: &AofWriter, value: u64) !void {
     try aof_append_raw(aof, &"$"[0: 1]);
     try aof_append_u64(aof, aof_u64_len(value));
@@ -175,12 +221,36 @@ fn aof_append_pexpireat(aof: &AofWriter, command: &Command, now_ms: u64) !void {
     try aof_append_bulk_u64(aof, expire_at_ms);
 }
 
+fn aof_sds_append_pexpireat(s: &Sds, command: &Command, now_ms: u64) !void {
+    const key: &[byte] = command_arg_data(command, 1) catch {
+        return error.AofInvalidCommand;
+    };
+    const seconds_data: &[byte] = command_arg_data(command, 2) catch {
+        return error.AofInvalidCommand;
+    };
+    const seconds: u64 = try aof_parse_u64(seconds_data);
+    const expire_at_ms: u64 = now_ms + seconds * 1000u64;
+
+    try aof_sds_append(s, &"*3\r\n"[0: 4]);
+    try aof_sds_append_bulk(s, &"PEXPIREAT"[0: 9]);
+    try aof_sds_append_bulk(s, key);
+    try aof_sds_append_bulk_u64(s, expire_at_ms);
+}
+
 export fn aof_append_command_at(aof: &AofWriter, command: &Command, raw: &[byte], now_ms: u64) !void {
     if command.info.cmd_type == CommandType.command_expire {
         try aof_append_pexpireat(aof, command, now_ms);
         return;
     }
     try aof_append_raw(aof, raw);
+}
+
+export fn aof_append_command_to_sds_at(buf: &Sds, command: &Command, raw: &[byte], now_ms: u64) !void {
+    if command.info.cmd_type == CommandType.command_expire {
+        try aof_sds_append_pexpireat(buf, command, now_ms);
+        return;
+    }
+    try aof_sds_append(buf, raw);
 }
 
 fn aof_shift_buffer(base: &byte, filled: &usize, consumed: usize) void {

@@ -42,3 +42,30 @@ p50_us=... p95_us=... p99_us=... req_per_s=... rss_kib=... floor_status=pass
 - 相同数据规模
 - 相同持久化策略
 - 相同统计窗口
+
+## 6. 持久化用例
+
+对于 `SAVE`、重启恢复、rewrite 完成时间这类持久化场景，允许输出专用结果行：
+
+```text
+PERSIST_BENCH_RESULT version=1 impl=redis-uya case_name=save runs=3 p50_ms=... p95_ms=... p99_ms=... rss_kib=...
+```
+
+说明：
+
+- `p50_ms/p95_ms/p99_ms` 表示毫秒级延迟分位
+- `rss_kib` 记录被测进程的常驻内存
+- 持久化场景默认以“更低延迟更好”为比较方向，不复用 `floor/target/stretch` 判定
+
+## 7. 复制用例
+
+对于 full sync、incremental sync、主从重连恢复这类复制场景，允许输出专用结果行：
+
+```text
+REPL_BENCH_RESULT version=1 impl=redis-uya case_name=full_sync runs=3 p50_ms=... p95_ms=... p99_ms=... rss_kib=...
+```
+
+说明：
+
+- `rss_kib` 记录 master + replica 两个进程的合计 RSS
+- 复制场景默认以“更低延迟更好”为比较方向，不复用 `floor/target/stretch` 判定

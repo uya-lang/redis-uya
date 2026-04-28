@@ -143,6 +143,7 @@ TTL key
 ```text
 INFO
 INFO server
+INFO replication
 INFO memory
 INFO stats
 INFO keyspace
@@ -150,7 +151,7 @@ INFO keyspace
 
 返回：
 
-- 支持 `server`、`clients`、`memory`、`stats`、`keyspace`
+- 支持 `server`、`clients`、`memory`、`stats`、`replication`、`keyspace`
 - 未带 section 时返回上述 section 组合段
 
 ### `CONFIG GET`
@@ -164,7 +165,7 @@ CONFIG GET pattern
 返回：
 
 - 返回 RESP Array，按 `name`、`value` 成对展开
-- 当前支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`maxmemory`、`save`
+- 当前支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`replicaof`、`masterauth`、`maxmemory`、`save`
 - 支持最小 `*` 通配模式
 
 ### `SAVE`
@@ -178,8 +179,21 @@ SAVE
 返回：
 
 - 成功：`+OK`
-- 当前仅支持把 String 键值对和绝对过期时间写入项目内最小 RDB 子集格式
-- 若当前数据集中存在 Hash/List/Set/ZSet，会返回错误
+- 当前支持把 String/Hash/List/Set/ZSet 与绝对过期时间写入项目内 RDB 子集格式
+
+### `BGSAVE`
+
+格式：
+
+```text
+BGSAVE
+```
+
+返回：
+
+- 成功：`+Background saving scheduled`
+- 走真实 `fork/waitpid` 子进程后台保存
+- 当前写出的 RDB 子集覆盖 String/Hash/List/Set/ZSet 与绝对过期时间
 
 ### `BGREWRITEAOF`
 
@@ -192,8 +206,40 @@ BGREWRITEAOF
 返回：
 
 - 成功：`+Background AOF rewrite scheduled`
-- 当前是最小 skeleton：请求会被主循环调度后执行，不是独立子进程后台 rewrite
+- 走真实子进程后台 rewrite
+- 父进程会记录 rewrite 增量缓冲，并在子进程结束后合并到新 AOF
 - rewrite 产物会把当前内存态规范化写成可回放 AOF
+
+### `REPLICAOF`
+
+格式：
+
+```text
+REPLICAOF host port
+REPLICAOF NO ONE
+```
+
+返回：
+
+- 成功：`+OK`
+- 当前仅完成复制角色与状态机切换，不包含 `PSYNC`、全量同步、增量同步和心跳
+
+### `PSYNC`
+
+格式：
+
+```text
+PSYNC ? -1
+PSYNC replid offset
+```
+
+返回：
+
+- 首次同步或 backlog 不命中：`+FULLRESYNC <replid> <offset>`
+- backlog 命中：`+CONTINUE <master_offset>`，后跟一个 bulk payload 作为 backlog delta
+- 当前支持最小全量同步：`FULLRESYNC` 后跟一份项目内 RDB 快照
+- 当前 replica 侧已支持把这份快照落库
+- 当前增量同步由 replica 周期性轮询 `PSYNC replid offset` 完成，不是长连接推送流
 
 ### `QUIT`
 

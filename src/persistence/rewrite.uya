@@ -28,7 +28,7 @@ use src.storage.object.object_free;
 export error RewritePathTooLong;
 export error RewriteUnsupportedType;
 
-fn rewrite_build_tmp_path(out: &[byte], path: &const byte) !void {
+export fn aof_rewrite_build_tmp_path(out: &[byte], path: &const byte) !void {
     if out.len < 5 {
         return error.RewritePathTooLong;
     }
@@ -255,9 +255,41 @@ fn rewrite_emit_zset(aof: &AofWriter, key: &[byte], obj: &RedisObject) !void {
     }
 }
 
+export fn aof_rewrite_append_key_at(aof: &AofWriter, engine: &Engine, key: &[byte], now_ms: u64) !bool {
+    const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+        return false;
+    };
+    match obj.obj_type {
+        ObjectType.object_string => {
+            try rewrite_emit_string(aof, key, obj);
+        },
+        ObjectType.object_hash => {
+            try rewrite_emit_hash(aof, key, obj);
+        },
+        ObjectType.object_list => {
+            try rewrite_emit_list(aof, key, obj);
+        },
+        ObjectType.object_set => {
+            try rewrite_emit_set(aof, key, obj);
+        },
+        ObjectType.object_zset => {
+            try rewrite_emit_zset(aof, key, obj);
+        },
+        else => {
+            return error.RewriteUnsupportedType;
+        }
+    }
+
+    const expire_at: u64 = rewrite_get_expire_at_or_zero(engine, key);
+    if expire_at > now_ms {
+        try rewrite_append_expire(aof, key, expire_at);
+    }
+    return true;
+}
+
 export fn aof_rewrite_file_at(path: &const byte, engine: &Engine, now_ms: u64) !void {
     var tmp_path_buf: [byte: 512] = [];
-    try rewrite_build_tmp_path(tmp_path_buf[0: 512], path);
+    try aof_rewrite_build_tmp_path(tmp_path_buf[0: 512], path);
     const tmp_path: &const byte = &tmp_path_buf[0] as &const byte;
     _ = unlink(tmp_path);
 
@@ -280,32 +312,7 @@ export fn aof_rewrite_file_at(path: &const byte, engine: &Engine, now_ms: u64) !
     var node: &ListNode = keys_obj.list_head;
     while node != null {
         const key: &[byte] = node.value.value.buf[0: node.value.value.len];
-        const obj: &RedisObject = try lookup_key_at(engine, key, now_ms);
-        match obj.obj_type {
-            ObjectType.object_string => {
-                try rewrite_emit_string(&writer, key, obj);
-            },
-            ObjectType.object_hash => {
-                try rewrite_emit_hash(&writer, key, obj);
-            },
-            ObjectType.object_list => {
-                try rewrite_emit_list(&writer, key, obj);
-            },
-            ObjectType.object_set => {
-                try rewrite_emit_set(&writer, key, obj);
-            },
-            ObjectType.object_zset => {
-                try rewrite_emit_zset(&writer, key, obj);
-            },
-            else => {
-                return error.RewriteUnsupportedType;
-            }
-        }
-
-        const expire_at: u64 = rewrite_get_expire_at_or_zero(engine, key);
-        if expire_at > now_ms {
-            try rewrite_append_expire(&writer, key, expire_at);
-        }
+        _ = try aof_rewrite_append_key_at(&writer, engine, key, now_ms);
         node = node.next;
     }
 

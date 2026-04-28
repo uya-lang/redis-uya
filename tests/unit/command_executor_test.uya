@@ -12,8 +12,11 @@ use src.command.executor.command_execute_at;
 use src.command.executor.command_execute_with_runtime_at;
 use src.command.executor.command_runtime_default;
 use src.command.executor.command_reply_cleanup;
+use src.config.config_copy_bytes;
 use src.network.connection.connection_encode_reply;
 use src.persistence.rdb.rdb_load_file_at;
+use src.replication.state.ReplicationRole;
+use src.replication.state.ReplicationState;
 use src.storage.engine.Engine;
 use src.storage.engine.engine_new;
 use src.storage.engine.engine_free;
@@ -34,6 +37,32 @@ fn command_executor_test_slice_eq(a: &[byte], b: &[byte]) bool {
         i = i + 1;
     }
     return true;
+}
+
+fn command_executor_test_contains(haystack: &[byte], needle: &[byte]) bool {
+    if needle.len == 0 {
+        return true;
+    }
+    if haystack.len < needle.len {
+        return false;
+    }
+    var start: usize = 0;
+    while start + needle.len <= haystack.len {
+        var matched: bool = true;
+        var i: usize = 0;
+        while i < needle.len {
+            if haystack.ptr[start + i] != needle.ptr[i] {
+                matched = false;
+                break;
+            }
+            i = i + 1;
+        }
+        if matched {
+            return true;
+        }
+        start = start + 1;
+    }
+    return false;
 }
 
 fn command_executor_test_command(router: &CommandRouter, parsed: &RespParseResult) !Command {
@@ -75,6 +104,11 @@ export fn test_command_info_and_config() !void {
     runtime.served_clients = 5;
     runtime.cron_ticks = 9u64;
     runtime.start_ms = 1000u64;
+    config_copy_bytes(runtime.replication_replid[0: 41], &"0123456789abcdef0123456789abcdef01234567"[0: 40]);
+    runtime.replication_backlog_active = true;
+    runtime.replication_master_offset = 128u64;
+    runtime.replication_backlog_first_offset = 64u64;
+    runtime.replication_backlog_histlen = 64;
 
     var set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 33]);
     const set_command: Command = try command_executor_test_command(&router, &set_parsed);
@@ -104,6 +138,14 @@ export fn test_command_info_and_config() !void {
     command_reply_cleanup(&info_keyspace_reply);
     resp_value_free(&info_keyspace_parsed.value);
 
+    var info_repl_master_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nINFO\r\n$11\r\nreplication\r\n"[0: 32]);
+    const info_repl_master_command: Command = try command_executor_test_command(&router, &info_repl_master_parsed);
+    var info_repl_master_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &info_repl_master_command, 5000u64);
+    try assert_eq_i32(info_repl_master_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_contains(info_repl_master_reply.data, &"role:master\r\n"[0: 13]));
+    command_reply_cleanup(&info_repl_master_reply);
+    resp_value_free(&info_repl_master_parsed.value);
+
     var config_port_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nCONFIG\r\n$3\r\nGET\r\n$4\r\nport\r\n"[0: 35]);
     const config_port_command: Command = try command_executor_test_command(&router, &config_port_parsed);
     var config_port_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_port_command, 5000u64);
@@ -121,6 +163,134 @@ export fn test_command_info_and_config() !void {
     try assert_true(command_executor_test_slice_eq(out[0: config_append_len], &"*2\r\n$14\r\nappendfilename\r\n$14\r\nappendonly.aof\r\n"[0: 46]));
     command_reply_cleanup(&config_append_reply);
     resp_value_free(&config_append_parsed.value);
+
+    runtime.replication_role = ReplicationRole.role_replica;
+    runtime.replication_state = ReplicationState.repl_state_configured;
+    runtime.config.replicaof_host[0] = 49 as byte; // 1
+    runtime.config.replicaof_host[1] = 50 as byte; // 2
+    runtime.config.replicaof_host[2] = 55 as byte; // 7
+    runtime.config.replicaof_host[3] = 46 as byte; // .
+    runtime.config.replicaof_host[4] = 48 as byte; // 0
+    runtime.config.replicaof_host[5] = 46 as byte; // .
+    runtime.config.replicaof_host[6] = 48 as byte; // 0
+    runtime.config.replicaof_host[7] = 46 as byte; // .
+    runtime.config.replicaof_host[8] = 49 as byte; // 1
+    runtime.config.replicaof_host[9] = 0 as byte;
+    runtime.config.replicaof_port = 6381;
+    runtime.config.masterauth[0] = 115 as byte; // s
+    runtime.config.masterauth[1] = 101 as byte; // e
+    runtime.config.masterauth[2] = 99 as byte;  // c
+    runtime.config.masterauth[3] = 114 as byte; // r
+    runtime.config.masterauth[4] = 101 as byte; // e
+    runtime.config.masterauth[5] = 116 as byte; // t
+    runtime.config.masterauth[6] = 0 as byte;
+
+    var info_repl_replica_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nINFO\r\n$11\r\nreplication\r\n"[0: 32]);
+    const info_repl_replica_command: Command = try command_executor_test_command(&router, &info_repl_replica_parsed);
+    var info_repl_replica_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &info_repl_replica_command, 5000u64);
+    try assert_eq_i32(info_repl_replica_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_contains(info_repl_replica_reply.data, &"role:slave\r\n"[0: 12]));
+    command_reply_cleanup(&info_repl_replica_reply);
+    resp_value_free(&info_repl_replica_parsed.value);
+
+    var config_replicaof_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nCONFIG\r\n$3\r\nGET\r\n$9\r\nreplicaof\r\n"[0: 40]);
+    const config_replicaof_command: Command = try command_executor_test_command(&router, &config_replicaof_parsed);
+    var config_replicaof_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_replicaof_command, 5000u64);
+    const config_replicaof_len: usize = try connection_encode_reply(&config_replicaof_reply, &out[0], 512);
+    try assert_true(config_replicaof_len > 0);
+    try assert_eq_i32(out[0] as i32, 42);
+    command_reply_cleanup(&config_replicaof_reply);
+    resp_value_free(&config_replicaof_parsed.value);
+
+    var config_masterauth_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nCONFIG\r\n$3\r\nGET\r\n$10\r\nmasterauth\r\n"[0: 42]);
+    const config_masterauth_command: Command = try command_executor_test_command(&router, &config_masterauth_parsed);
+    var config_masterauth_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_masterauth_command, 5000u64);
+    const config_masterauth_len: usize = try connection_encode_reply(&config_masterauth_reply, &out[0], 512);
+    try assert_true(config_masterauth_len > 0);
+    try assert_eq_i32(out[0] as i32, 42);
+    command_reply_cleanup(&config_masterauth_reply);
+    resp_value_free(&config_masterauth_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_command_replicaof() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var runtime: CommandRuntimeInfo = command_runtime_default();
+
+    var replica_parsed: RespParseResult = try parse_resp2(&"*3\r\n$9\r\nREPLICAOF\r\n$9\r\n127.0.0.1\r\n$4\r\n6381\r\n"[0: 44]);
+    const replica_command: Command = try command_executor_test_command(&router, &replica_parsed);
+    const replica_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &replica_command, 1000u64);
+    try assert_eq_i32(replica_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_eq_i32(replica_reply.request_replicaof as i32, 1);
+    try assert_eq_i32(replica_reply.replicaof_promote as i32, 0);
+    resp_value_free(&replica_parsed.value);
+
+    var promote_parsed: RespParseResult = try parse_resp2(&"*3\r\n$9\r\nREPLICAOF\r\n$2\r\nNO\r\n$3\r\nONE\r\n"[0: 36]);
+    const promote_command: Command = try command_executor_test_command(&router, &promote_parsed);
+    const promote_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &promote_command, 1000u64);
+    try assert_eq_i32(promote_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_eq_i32(promote_reply.request_replicaof as i32, 1);
+    try assert_eq_i32(promote_reply.replicaof_promote as i32, 1);
+    resp_value_free(&promote_parsed.value);
+
+    var bad_port_parsed: RespParseResult = try parse_resp2(&"*3\r\n$9\r\nREPLICAOF\r\n$9\r\n127.0.0.1\r\n$4\r\nnope\r\n"[0: 44]);
+    const bad_port_command: Command = try command_executor_test_command(&router, &bad_port_parsed);
+    const bad_port_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &bad_port_command, 1000u64);
+    try assert_eq_i32(bad_port_reply.typ as i32, CommandReplyType.reply_error as i32);
+    resp_value_free(&bad_port_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_command_psync() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var runtime: CommandRuntimeInfo = command_runtime_default();
+    config_copy_bytes(runtime.replication_replid[0: 41], &"0123456789abcdef0123456789abcdef01234567"[0: 40]);
+    runtime.replication_backlog_active = true;
+    runtime.replication_master_offset = 128u64;
+    runtime.replication_backlog_first_offset = 64u64;
+    runtime.replication_backlog_histlen = 64;
+
+    var full_parsed: RespParseResult = try parse_resp2(&"*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n"[0: 30]);
+    const full_command: Command = try command_executor_test_command(&router, &full_parsed);
+    const full_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &full_command, 1000u64);
+    try assert_eq_i32(full_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_contains(full_reply.data, &"FULLRESYNC"[0: 10]));
+    try assert_true(command_executor_test_contains(full_reply.data, &"0123456789abcdef0123456789abcdef01234567"[0: 40]));
+    try assert_true(command_executor_test_contains(full_reply.data, &" 128"[0: 4]));
+    command_reply_cleanup(&full_reply);
+    resp_value_free(&full_parsed.value);
+
+    var continue_parsed: RespParseResult = try parse_resp2(&"*3\r\n$5\r\nPSYNC\r\n$40\r\n0123456789abcdef0123456789abcdef01234567\r\n$2\r\n64\r\n"[0: 70]);
+    const continue_command: Command = try command_executor_test_command(&router, &continue_parsed);
+    const continue_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &continue_command, 1000u64);
+    try assert_eq_i32(continue_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(continue_reply.data, &"CONTINUE"[0: 8]));
+    resp_value_free(&continue_parsed.value);
+
+    var stale_parsed: RespParseResult = try parse_resp2(&"*3\r\n$5\r\nPSYNC\r\n$40\r\n0123456789abcdef0123456789abcdef01234567\r\n$2\r\n10\r\n"[0: 70]);
+    const stale_command: Command = try command_executor_test_command(&router, &stale_parsed);
+    const stale_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &stale_command, 1000u64);
+    try assert_eq_i32(stale_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_contains(stale_reply.data, &"FULLRESYNC"[0: 10]));
+    try assert_true(command_executor_test_contains(stale_reply.data, &"0123456789abcdef0123456789abcdef01234567"[0: 40]));
+    try assert_true(command_executor_test_contains(stale_reply.data, &" 128"[0: 4]));
+    command_reply_cleanup(&stale_reply);
+    resp_value_free(&stale_parsed.value);
+
+    runtime.replication_role = ReplicationRole.role_replica;
+    var bad_role_parsed: RespParseResult = try parse_resp2(&"*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n"[0: 30]);
+    const bad_role_command: Command = try command_executor_test_command(&router, &bad_role_parsed);
+    const bad_role_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &bad_role_command, 1000u64);
+    try assert_eq_i32(bad_role_reply.typ as i32, CommandReplyType.reply_error as i32);
+    resp_value_free(&bad_role_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);
@@ -184,6 +354,63 @@ export fn test_command_save_rdb() !void {
     engine_free(&replay_engine);
 
     _ = unlink(path);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_command_bgsave() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var runtime: CommandRuntimeInfo = command_runtime_default();
+
+    runtime.config.dir[0] = 98 as byte;   // b
+    runtime.config.dir[1] = 117 as byte;  // u
+    runtime.config.dir[2] = 105 as byte;  // i
+    runtime.config.dir[3] = 108 as byte;  // l
+    runtime.config.dir[4] = 100 as byte;  // d
+    runtime.config.dir[5] = 47 as byte;   // /
+    runtime.config.dir[6] = 0 as byte;
+    runtime.config.dbfilename[0] = 99 as byte;   // c
+    runtime.config.dbfilename[1] = 111 as byte;  // o
+    runtime.config.dbfilename[2] = 109 as byte;  // m
+    runtime.config.dbfilename[3] = 109 as byte;  // m
+    runtime.config.dbfilename[4] = 97 as byte;   // a
+    runtime.config.dbfilename[5] = 110 as byte;  // n
+    runtime.config.dbfilename[6] = 100 as byte;  // d
+    runtime.config.dbfilename[7] = 45 as byte;   // -
+    runtime.config.dbfilename[8] = 98 as byte;   // b
+    runtime.config.dbfilename[9] = 103 as byte;  // g
+    runtime.config.dbfilename[10] = 115 as byte; // s
+    runtime.config.dbfilename[11] = 97 as byte;  // a
+    runtime.config.dbfilename[12] = 118 as byte; // v
+    runtime.config.dbfilename[13] = 101 as byte; // e
+    runtime.config.dbfilename[14] = 46 as byte;  // .
+    runtime.config.dbfilename[15] = 114 as byte; // r
+    runtime.config.dbfilename[16] = 100 as byte; // d
+    runtime.config.dbfilename[17] = 98 as byte;  // b
+    runtime.config.dbfilename[18] = 0 as byte;
+
+    var set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 33]);
+    const set_command: Command = try command_executor_test_command(&router, &set_parsed);
+    _ = command_execute_with_runtime_at(&engine, &runtime, &set_command, 1000u64);
+    resp_value_free(&set_parsed.value);
+
+    var parsed: RespParseResult = try parse_resp2(&"*1\r\n$6\r\nBGSAVE\r\n"[0: 16]);
+    const command: Command = try command_executor_test_command(&router, &parsed);
+    const reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &command, 1000u64);
+    try assert_eq_i32(reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(reply.data, &"Background saving scheduled"[0: 27]));
+    try assert_eq_i32(reply.request_bgsave as i32, 1);
+    resp_value_free(&parsed.value);
+
+    runtime.bgsave_requested = true;
+    var repeat_parsed: RespParseResult = try parse_resp2(&"*1\r\n$6\r\nBGSAVE\r\n"[0: 16]);
+    const repeat_command: Command = try command_executor_test_command(&router, &repeat_parsed);
+    const repeat_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &repeat_command, 1000u64);
+    try assert_eq_i32(repeat_reply.typ as i32, CommandReplyType.reply_error as i32);
+    resp_value_free(&repeat_parsed.value);
+
+    engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
@@ -595,7 +822,7 @@ export fn test_command_error_paths() !void {
     var save_parsed: RespParseResult = try parse_resp2(&"*1\r\n$4\r\nSAVE\r\n"[0: 14]);
     const save_command: Command = try command_executor_test_command(&router, &save_parsed);
     const save_reply: CommandReply = command_execute_at(&engine, &save_command, 1000u64);
-    try assert_eq_i32(save_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_eq_i32(save_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
     resp_value_free(&save_parsed.value);
 
     var scan_bad_option_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nSCAN\r\n$1\r\n0\r\n$5\r\nMATCH\r\n$1\r\n*\r\n"[0: 39]);

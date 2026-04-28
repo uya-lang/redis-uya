@@ -20,18 +20,22 @@ export fn test_config_defaults() !void {
     const cfg: ServerConfig = default_config();
     try assert_eq_i32(cfg.port, 6379);
     try assert_eq_i32(cfg.maxmemory as i32, 0);
+    try assert_eq_i32(cfg.replicaof_port, 0);
     try assert_true(cstr_eq(cfg.bind[0: 64], &"0.0.0.0"[0: 7]));
     try assert_true(cstr_eq(cfg.dbfilename[0: 128], &"dump.rdb"[0: 8]));
 }
 
 export fn test_config_parse_core_fields() !void {
-    const text: &[byte] = &"# sample\nport 6380\nbind 127.0.0.1\ndir /data\ndbfilename redis.rdb\nappendfilename redis.aof\nmaxmemory 64mb\nsave 60 1000\n"[0: 125];
+    const text: &[byte] = &"# sample\nport 6380\nbind 127.0.0.1\ndir /data\ndbfilename redis.rdb\nappendfilename redis.aof\nreplicaof 10.0.0.8 6381\nmasterauth secret\nmaxmemory 64mb\nsave 60 1000\n"[0: 170];
     const cfg: ServerConfig = try parse_config_text(text);
     try assert_eq_i32(cfg.port, 6380);
     try assert_true(cstr_eq(cfg.bind[0: 64], &"127.0.0.1"[0: 9]));
     try assert_true(cstr_eq(cfg.dir[0: 256], &"/data"[0: 5]));
     try assert_true(cstr_eq(cfg.dbfilename[0: 128], &"redis.rdb"[0: 9]));
     try assert_true(cstr_eq(cfg.appendfilename[0: 128], &"redis.aof"[0: 9]));
+    try assert_true(cstr_eq(cfg.replicaof_host[0: 64], &"10.0.0.8"[0: 8]));
+    try assert_eq_i32(cfg.replicaof_port, 6381);
+    try assert_true(cstr_eq(cfg.masterauth[0: 128], &"secret"[0: 6]));
     try assert_eq_i32(cfg.maxmemory as i32, 64 * 1024 * 1024);
     try assert_eq_i32(cfg.save_seconds, 60);
     try assert_eq_i32(cfg.save_changes, 1000);

@@ -12,24 +12,62 @@ use src.network.listener.listener_accept;
 use src.network.listener.listener_close;
 use src.network.connection.connection_handle_fd_nonblocking_with_runtime_with_aof;
 use src.persistence.aof.AofWriter;
+use src.persistence.aof.aof_disabled;
 use src.persistence.aof.aof_open_append;
+use src.persistence.aof.aof_open_truncate;
 use src.persistence.aof.aof_close;
 use src.persistence.aof.aof_replay_file_at;
+use src.persistence.aof.aof_replay_buffer_at;
+use src.persistence.aof.aof_append_raw;
 use src.persistence.rewrite.aof_rewrite_file_at;
+use src.persistence.rewrite.aof_rewrite_append_key_at;
+use src.persistence.rewrite.aof_rewrite_build_tmp_path;
 use src.persistence.rdb.rdb_build_path;
 use src.persistence.rdb.rdb_file_exists;
+use src.persistence.rdb.rdb_load_bytes_at;
 use src.persistence.rdb.rdb_load_file_at;
+use src.persistence.rdb.rdb_save_file_at;
+use src.replication.backlog.ReplicationBacklog;
+use src.replication.backlog.replication_backlog_disabled;
+use src.replication.backlog.replication_backlog_new;
+use src.replication.backlog.replication_backlog_free;
+use src.replication.backlog.replication_backlog_reset;
+use src.replication.backlog.replication_backlog_first_offset;
+use src.replication.backlog.replication_backlog_history_len;
+use src.replication.state.ReplicationRole;
+use src.replication.state.ReplicationState;
 use src.storage.engine.Engine;
 use src.storage.engine.engine_new;
 use src.storage.engine.engine_free;
 use src.storage.engine.engine_active_expire_cycle_at;
+use src.storage.engine.engine_scan_keys_at;
+use src.storage.object.RedisObject;
+use src.storage.object.ListNode;
+use src.storage.object.object_free;
+use src.storage.sds.Sds;
+use src.storage.sds.sds_empty;
+use src.storage.sds.sds_free;
+use src.storage.sds.sds_new_len;
 use src.util.time.now_ms_safe;
 use libc.errno;
+use libc.rename;
+use libc.sys_socket;
+use libc.sys_connect;
+use libc.sys_setsockopt;
 use libc.sys_close;
 use libc.sys_fcntl;
 use libc.sys_epoll_ctl;
 use libc.sys_epoll_wait;
 use libc.sys_shutdown;
+use libc.sys_send;
+use libc.sys_recv;
+use libc.fork;
+use libc.waitpid;
+use libc._exit;
+use libc.AF_INET;
+use libc.SOCK_STREAM;
+use libc.IPPROTO_TCP;
+use libc.TCP_NODELAY;
 use libc.F_GETFL;
 use libc.F_SETFL;
 use libc.O_NONBLOCK;
@@ -44,13 +82,18 @@ use libc.SHUT_WR;
 const SERVER_CRON_INTERVAL_MS: u64 = 100;
 const SERVER_CRON_EXPIRE_LIMIT: usize = 20;
 const SERVER_CRON_EXPIRE_MAX_ROUNDS: usize = 4;
+const SERVER_AOF_REWRITE_KEYS_PER_STEP: usize = 4;
 const SERVER_MAX_CLIENTS: usize = 64;
 const SERVER_IO_CAP: usize = 8192;
 const SERVER_EVENT_CAP: usize = 16;
+const SERVER_WAITPID_WNOHANG: i32 = 1;
+const SERVER_REPL_BACKLOG_BYTES: usize = 16384;
+const SERVER_REPL_LINE_BYTES: usize = 256;
 
 export error ServerAofOpenFailed;
 export error ServerAofReplayFailed;
 export error ServerAofRewriteFailed;
+export error ServerBgsaveFailed;
 
 export struct RedisClient {
     fd: i32,
@@ -75,9 +118,27 @@ export struct RedisServer {
     start_ms: u64,
     last_cron_ms: u64,
     cron_ticks: u64,
+    replication_role: ReplicationRole,
+    replication_state: ReplicationState,
+    replication_master_fd: i32,
+    replication_master_replid: [byte: 41],
+    replication_master_offset: u64,
+    replication_last_io_ms: u64,
+    repl_backlog: ReplicationBacklog,
+    bgsave_requested: bool,
+    bgsave_in_progress: bool,
+    bgsave_child_pid: i32,
+    bgsave_count: u64,
+    lastsave_ms: u64,
     aof_rewrite_requested: bool,
     aof_rewrite_in_progress: bool,
     aof_rewrite_count: u64,
+    aof_rewrite_child_pid: i32,
+    aof_rewrite_writer: AofWriter,
+    aof_rewrite_keys: &RedisObject,
+    aof_rewrite_current: &ListNode,
+    aof_rewrite_buf: Sds,
+    aof_rewrite_tmp_path: [byte: 512],
 }
 
 export fn server_default_aof_path() &const byte {
@@ -106,16 +167,515 @@ fn server_cstring_len(data: &const byte) usize {
 }
 
 fn server_runtime_info(server: &RedisServer) CommandRuntimeInfo {
-    return CommandRuntimeInfo{
+    var info: CommandRuntimeInfo = CommandRuntimeInfo{
         config: server.config,
         active_clients: server.active_clients,
         maxclients: server.maxclients,
         served_clients: server.served_clients,
         cron_ticks: server.cron_ticks,
         start_ms: server.start_ms,
+        replication_role: server.replication_role,
+        replication_state: server.replication_state,
+        replication_replid: [],
+        replication_master_offset: server.repl_backlog.master_offset,
+        replication_backlog_first_offset: replication_backlog_first_offset(&server.repl_backlog),
+        replication_backlog_histlen: replication_backlog_history_len(&server.repl_backlog),
+        replication_backlog_active: server.repl_backlog.active,
+        bgsave_requested: server.bgsave_requested,
+        bgsave_in_progress: server.bgsave_in_progress,
         aof_rewrite_requested: server.aof_rewrite_requested,
         aof_rewrite_in_progress: server.aof_rewrite_in_progress,
     };
+    config_copy_bytes(info.replication_replid[0: 41], server.repl_backlog.replid[0: 40]);
+    return info;
+}
+
+fn server_replication_seed(server: &RedisServer) u64 {
+    return server.start_ms + (server.config.port as u64);
+}
+
+fn server_config_replicaof_enabled(config: &ServerConfig) bool {
+    return config.replicaof_host[0] != 0 as byte && config.replicaof_port > 0;
+}
+
+fn server_replication_htons(port: u16) u16 {
+    return ((port & (0xFF as u16)) << 8) | ((port >> 8) & (0xFF as u16));
+}
+
+fn server_replication_parse_i32(data: &[byte]) !i32 {
+    if data.len == 0 {
+        return error.ServerBgsaveFailed;
+    }
+    var value: i32 = 0;
+    var i: usize = 0;
+    while i < data.len {
+        const ch: byte = data.ptr[i];
+        if ch < 48 as byte || ch > 57 as byte {
+            return error.ServerBgsaveFailed;
+        }
+        value = value * 10 + ((ch - 48 as byte) as i32);
+        i = i + 1;
+    }
+    return value;
+}
+
+fn server_replication_parse_ipv4(host: &[byte], out: &[byte]) !void {
+    var seg: usize = 0;
+    var start: usize = 0;
+    while seg < 4 {
+        var end: usize = start;
+        while end < host.len && host.ptr[end] != 46 as byte {
+            end = end + 1;
+        }
+        if end == start {
+            return error.ServerBgsaveFailed;
+        }
+        const value: i32 = try server_replication_parse_i32(host[start: end - start]);
+        if value < 0 || value > 255 {
+            return error.ServerBgsaveFailed;
+        }
+        out.ptr[seg] = value as byte;
+        seg = seg + 1;
+        if seg == 4 {
+            if end != host.len {
+                return error.ServerBgsaveFailed;
+            }
+            return;
+        }
+        if end >= host.len || host.ptr[end] != 46 as byte {
+            return error.ServerBgsaveFailed;
+        }
+        start = end + 1;
+    }
+}
+
+fn server_replication_fill_addr(host: &[byte], port: u16, out: &byte) !void {
+    var i: usize = 0;
+    while i < 16 {
+        out[i] = 0 as byte;
+        i = i + 1;
+    }
+    out[0] = AF_INET as byte;
+    const net_port: u16 = server_replication_htons(port);
+    out[2] = (net_port & (0xFF as u16)) as byte;
+    out[3] = ((net_port >> 8) & (0xFF as u16)) as byte;
+    try server_replication_parse_ipv4(host, out[4: 4]);
+}
+
+fn server_replication_close_master_fd(server: &RedisServer) void {
+    if server.replication_master_fd >= 0 {
+        _ = sys_close(server.replication_master_fd) catch {};
+        server.replication_master_fd = -1;
+    }
+}
+
+fn server_replication_send_all(fd: i32, data: &[byte]) !void {
+    var sent: usize = 0;
+    while sent < data.len {
+        const n: isize = sys_send(fd, @ptr_from_usize(@usize_from_ptr(data.ptr as &void) + sent) as *const byte, data.len - sent, 0) catch {
+            return error.ServerBgsaveFailed;
+        };
+        if n <= 0 {
+            return error.ServerBgsaveFailed;
+        }
+        sent = sent + (n as usize);
+    }
+}
+
+fn server_replication_u64_len(value: u64) u64 {
+    if value == 0u64 {
+        return 1u64;
+    }
+    var digits: u64 = 0u64;
+    var v: u64 = value;
+    while v > 0u64 {
+        digits = digits + 1u64;
+        v = v / 10u64;
+    }
+    return digits;
+}
+
+fn server_replication_sds_append_u64(buf: &Sds, value: u64) !void {
+    if value == 0u64 {
+        try sds_cat(buf, &"0"[0: 1]);
+        return;
+    }
+    var tmp: [byte: 20] = [];
+    var count: usize = 0;
+    var v: u64 = value;
+    while v > 0u64 {
+        const digit: u64 = v % 10u64;
+        tmp[count] = (48u64 + digit) as byte;
+        count = count + 1;
+        v = v / 10u64;
+    }
+    while count > 0 {
+        count = count - 1;
+        try sds_cat(buf, tmp[count: 1]);
+    }
+}
+
+fn server_replication_read_line(fd: i32, out: &[byte]) !usize {
+    var pos: usize = 0;
+    while pos + 2 <= out.len {
+        const n: isize = sys_recv(fd, &out.ptr[pos] as *byte, 1, 0) catch {
+            return error.ServerBgsaveFailed;
+        };
+        if n <= 0 {
+            return error.ServerBgsaveFailed;
+        }
+        pos = pos + 1;
+        if pos >= 2 && out.ptr[pos - 2] == 13 as byte && out.ptr[pos - 1] == 10 as byte {
+            return pos - 2;
+        }
+    }
+    return error.ServerBgsaveFailed;
+}
+
+fn server_replication_read_exact(fd: i32, buf: &byte, len: usize) !void {
+    var pos: usize = 0;
+    while pos < len {
+        const n: isize = sys_recv(fd, &buf[pos] as *byte, len - pos, 0) catch {
+            return error.ServerBgsaveFailed;
+        };
+        if n <= 0 {
+            return error.ServerBgsaveFailed;
+        }
+        pos = pos + (n as usize);
+    }
+}
+
+fn server_replication_parse_fullresync(line: &[byte], replid_out: &[byte], offset_out: &u64) !void {
+    var start: usize = 0;
+    if line.len > 0 && line.ptr[0] == 43 as byte {
+        start = 1;
+    }
+    const prefix: &[byte] = &"FULLRESYNC "[0: 11];
+    var i: usize = 0;
+    while i < prefix.len {
+        if start + i >= line.len || line.ptr[start + i] != prefix.ptr[i] {
+            return error.ServerBgsaveFailed;
+        }
+        i = i + 1;
+    }
+    const replid_start: usize = start + 11;
+    if replid_start + 40 > line.len {
+        return error.ServerBgsaveFailed;
+    }
+    config_copy_bytes(replid_out, line[replid_start: 40]);
+    if replid_start + 40 >= line.len || line.ptr[replid_start + 40] != 32 as byte {
+        return error.ServerBgsaveFailed;
+    }
+    const offset_value: i32 = try server_replication_parse_i32(line[(replid_start + 41): line.len - (replid_start + 41)]);
+    *offset_out = offset_value as u64;
+}
+
+fn server_replication_parse_continue(line: &[byte], offset_out: &u64) !void {
+    var start: usize = 0;
+    if line.len > 0 && line.ptr[0] == 43 as byte {
+        start = 1;
+    }
+    const prefix: &[byte] = &"CONTINUE "[0: 9];
+    var i: usize = 0;
+    while i < prefix.len {
+        if start + i >= line.len || line.ptr[start + i] != prefix.ptr[i] {
+            return error.ServerBgsaveFailed;
+        }
+        i = i + 1;
+    }
+    const offset_value: i32 = try server_replication_parse_i32(line[(start + 9): line.len - (start + 9)]);
+    *offset_out = offset_value as u64;
+}
+
+fn server_replication_read_bulk_payload(fd: i32) !Sds {
+    var line_buf: [byte: SERVER_REPL_LINE_BYTES] = [];
+    const prefix_n: isize = sys_recv(fd, &line_buf[0] as *byte, 1, 0) catch {
+        return error.ServerBgsaveFailed;
+    };
+    if prefix_n != 1 || line_buf[0] != 36 as byte {
+        return error.ServerBgsaveFailed;
+    }
+    const bulk_len_line: usize = try server_replication_read_line(fd, line_buf[0: SERVER_REPL_LINE_BYTES]);
+    const bulk_len_i32: i32 = try server_replication_parse_i32(line_buf[0: bulk_len_line]);
+    if bulk_len_i32 < 0 {
+        return error.ServerBgsaveFailed;
+    }
+    var payload: Sds = sds_new_len(bulk_len_i32 as usize) catch {
+        return error.ServerBgsaveFailed;
+    };
+    errdefer sds_free(&payload);
+    try server_replication_read_exact(fd, payload.buf.ptr, bulk_len_i32 as usize);
+    payload.len = bulk_len_i32 as usize;
+    var crlf: [byte: 2] = [];
+    try server_replication_read_exact(fd, &crlf[0], 2);
+    if crlf[0] != 13 as byte || crlf[1] != 10 as byte {
+        return error.ServerBgsaveFailed;
+    }
+    return payload;
+}
+
+fn server_replication_try_full_sync_at(server: &RedisServer, now_ms: u64) !bool {
+    if server.replication_role != ReplicationRole.role_replica {
+        return false;
+    }
+    if server.replication_state != ReplicationState.repl_state_configured {
+        return false;
+    }
+    const host: &[byte] = server.config.replicaof_host[0: server_cstring_len(&server.config.replicaof_host[0] as &const byte)];
+    if host.len == 0 || server.config.replicaof_port <= 0 {
+        return false;
+    }
+
+    server.replication_state = ReplicationState.repl_state_connecting;
+    const fd: i32 = sys_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP) catch {
+        server.replication_state = ReplicationState.repl_state_configured;
+        return error.ServerBgsaveFailed;
+    };
+    var one: i32 = 1;
+    _ = sys_setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one as &void, 4 as u32) catch {};
+    var addr: [byte: 16] = [];
+    _ = server_replication_fill_addr(host, server.config.replicaof_port as u16, &addr[0]) catch {
+        _ = sys_close(fd) catch {};
+        server.replication_state = ReplicationState.repl_state_configured;
+        return error.ServerBgsaveFailed;
+    };
+    _ = sys_connect(fd, &addr[0] as &void, 16 as u32) catch {
+        _ = sys_close(fd) catch {};
+        server.replication_state = ReplicationState.repl_state_configured;
+        return error.ServerBgsaveFailed;
+    };
+
+    _ = server_replication_send_all(fd, &"*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n"[0: 30]) catch {
+        _ = sys_close(fd) catch {};
+        server.replication_state = ReplicationState.repl_state_configured;
+        return error.ServerBgsaveFailed;
+    };
+
+    server.replication_state = ReplicationState.repl_state_syncing;
+    var line_buf: [byte: SERVER_REPL_LINE_BYTES] = [];
+    const line_len: usize = server_replication_read_line(fd, line_buf[0: SERVER_REPL_LINE_BYTES]) catch {
+        _ = sys_close(fd) catch {};
+        server.replication_state = ReplicationState.repl_state_configured;
+        return error.ServerBgsaveFailed;
+    };
+    var master_offset: u64 = 0u64;
+    _ = server_replication_parse_fullresync(line_buf[0: line_len], server.replication_master_replid[0: 41], &master_offset) catch {
+        _ = sys_close(fd) catch {};
+        server.replication_state = ReplicationState.repl_state_configured;
+        return error.ServerBgsaveFailed;
+    };
+    server.replication_master_offset = master_offset;
+
+    var snapshot: Sds = server_replication_read_bulk_payload(fd) catch {
+        _ = sys_close(fd) catch {};
+        server.replication_state = ReplicationState.repl_state_configured;
+        return error.ServerBgsaveFailed;
+    };
+    errdefer sds_free(&snapshot);
+
+    var snapshot_engine: Engine = engine_new();
+    _ = rdb_load_bytes_at(snapshot.buf[0: snapshot.len], &snapshot_engine, now_ms) catch {
+        sds_free(&snapshot);
+        engine_free(&snapshot_engine);
+        _ = sys_close(fd) catch {};
+        server.replication_state = ReplicationState.repl_state_configured;
+        return error.ServerBgsaveFailed;
+    };
+    sds_free(&snapshot);
+    engine_free(&server.engine);
+    server.engine.db = snapshot_engine.db;
+    _ = sys_close(fd) catch {};
+    server.replication_master_fd = -1;
+    server.replication_last_io_ms = now_ms;
+    server.replication_state = ReplicationState.repl_state_connected;
+    return true;
+}
+
+fn server_replication_try_incremental_sync_at(server: &RedisServer, now_ms: u64) !bool {
+    if server.replication_role != ReplicationRole.role_replica {
+        return false;
+    }
+    if server.replication_state != ReplicationState.repl_state_connected {
+        return false;
+    }
+    const host: &[byte] = server.config.replicaof_host[0: server_cstring_len(&server.config.replicaof_host[0] as &const byte)];
+    if host.len == 0 || server.config.replicaof_port <= 0 {
+        return false;
+    }
+    if server.replication_master_replid[0] == 0 as byte {
+        return false;
+    }
+
+    const fd: i32 = sys_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP) catch {
+        return error.ServerBgsaveFailed;
+    };
+    var one: i32 = 1;
+    _ = sys_setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one as &void, 4 as u32) catch {};
+    var addr: [byte: 16] = [];
+    _ = server_replication_fill_addr(host, server.config.replicaof_port as u16, &addr[0]) catch {
+        _ = sys_close(fd) catch {};
+        return error.ServerBgsaveFailed;
+    };
+    _ = sys_connect(fd, &addr[0] as &void, 16 as u32) catch {
+        _ = sys_close(fd) catch {};
+        return error.ServerBgsaveFailed;
+    };
+
+    var replid_len: usize = 0;
+    while replid_len < 40 && server.replication_master_replid[replid_len] != 0 as byte {
+        replid_len = replid_len + 1;
+    }
+    var req: Sds = sds_empty() catch {
+        _ = sys_close(fd) catch {};
+        return error.ServerBgsaveFailed;
+    };
+    defer sds_free(&req);
+    _ = sds_cat(&req, &"*3\r\n$5\r\nPSYNC\r\n$"[0: 16]) catch {
+        _ = sys_close(fd) catch {};
+        return error.ServerBgsaveFailed;
+    };
+    _ = connection_sds_append_u64(&req, replid_len as u64) catch {
+        _ = sys_close(fd) catch {};
+        return error.ServerBgsaveFailed;
+    };
+    _ = sds_cat(&req, &"\r\n"[0: 2]) catch {
+        _ = sys_close(fd) catch {};
+        return error.ServerBgsaveFailed;
+    };
+    _ = sds_cat(&req, server.replication_master_replid[0: replid_len]) catch {
+        _ = sys_close(fd) catch {};
+        return error.ServerBgsaveFailed;
+    };
+    _ = sds_cat(&req, &"\r\n$"[0: 3]) catch {
+        _ = sys_close(fd) catch {};
+        return error.ServerBgsaveFailed;
+    };
+    _ = server_replication_sds_append_u64(&req, server_replication_u64_len(server.replication_master_offset)) catch {
+        _ = sys_close(fd) catch {};
+        return error.ServerBgsaveFailed;
+    };
+    _ = sds_cat(&req, &"\r\n"[0: 2]) catch {
+        _ = sys_close(fd) catch {};
+        return error.ServerBgsaveFailed;
+    };
+    _ = server_replication_sds_append_u64(&req, server.replication_master_offset) catch {
+        _ = sys_close(fd) catch {};
+        return error.ServerBgsaveFailed;
+    };
+    _ = sds_cat(&req, &"\r\n"[0: 2]) catch {
+        _ = sys_close(fd) catch {};
+        return error.ServerBgsaveFailed;
+    };
+
+    _ = server_replication_send_all(fd, req.buf[0: req.len]) catch {
+        _ = sys_close(fd) catch {};
+        return error.ServerBgsaveFailed;
+    };
+
+    var line_buf: [byte: SERVER_REPL_LINE_BYTES] = [];
+    const line_len: usize = server_replication_read_line(fd, line_buf[0: SERVER_REPL_LINE_BYTES]) catch {
+        _ = sys_close(fd) catch {};
+        return error.ServerBgsaveFailed;
+    };
+    var next_master_offset: u64 = 0u64;
+    if line_len > 0 && line_buf[0] == 43 as byte && line_len >= 10 && line_buf[1] == 67 as byte {
+        _ = server_replication_parse_continue(line_buf[0: line_len], &next_master_offset) catch {
+            _ = sys_close(fd) catch {};
+            return error.ServerBgsaveFailed;
+        };
+        var delta: Sds = server_replication_read_bulk_payload(fd) catch {
+            _ = sys_close(fd) catch {};
+            return error.ServerBgsaveFailed;
+        };
+        defer sds_free(&delta);
+        _ = aof_replay_buffer_at(&server.engine, &server.router, delta.buf[0: delta.len], now_ms) catch {
+            _ = sys_close(fd) catch {};
+            return error.ServerBgsaveFailed;
+        };
+        server.replication_master_offset = next_master_offset;
+        server.replication_last_io_ms = now_ms;
+        _ = sys_close(fd) catch {};
+        return true;
+    }
+    _ = sys_close(fd) catch {};
+    return false;
+}
+
+fn server_replication_try_heartbeat_at(server: &RedisServer, now_ms: u64) !bool {
+    if server.replication_role != ReplicationRole.role_replica {
+        return false;
+    }
+    if server.replication_state != ReplicationState.repl_state_connected {
+        return false;
+    }
+    if server.replication_last_io_ms != 0u64 && now_ms < server.replication_last_io_ms + 1000u64 {
+        return false;
+    }
+
+    const host: &[byte] = server.config.replicaof_host[0: server_cstring_len(&server.config.replicaof_host[0] as &const byte)];
+    if host.len == 0 || server.config.replicaof_port <= 0 {
+        return false;
+    }
+    const fd: i32 = sys_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP) catch {
+        server.replication_state = ReplicationState.repl_state_configured;
+        return error.ServerBgsaveFailed;
+    };
+    var one: i32 = 1;
+    _ = sys_setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one as &void, 4 as u32) catch {};
+    var addr: [byte: 16] = [];
+    _ = server_replication_fill_addr(host, server.config.replicaof_port as u16, &addr[0]) catch {
+        _ = sys_close(fd) catch {};
+        server.replication_state = ReplicationState.repl_state_configured;
+        return error.ServerBgsaveFailed;
+    };
+    _ = sys_connect(fd, &addr[0] as &void, 16 as u32) catch {
+        _ = sys_close(fd) catch {};
+        server.replication_state = ReplicationState.repl_state_configured;
+        return error.ServerBgsaveFailed;
+    };
+    _ = server_replication_send_all(fd, &"*1\r\n$4\r\nPING\r\n"[0: 14]) catch {
+        _ = sys_close(fd) catch {};
+        server.replication_state = ReplicationState.repl_state_configured;
+        return error.ServerBgsaveFailed;
+    };
+    var line_buf: [byte: SERVER_REPL_LINE_BYTES] = [];
+    const line_len: usize = server_replication_read_line(fd, line_buf[0: SERVER_REPL_LINE_BYTES]) catch {
+        _ = sys_close(fd) catch {};
+        server.replication_state = ReplicationState.repl_state_configured;
+        return error.ServerBgsaveFailed;
+    };
+    _ = sys_close(fd) catch {};
+    if line_len < 5 || line_buf[0] != 43 as byte || line_buf[1] != 80 as byte {
+        server.replication_state = ReplicationState.repl_state_configured;
+        return error.ServerBgsaveFailed;
+    }
+    server.replication_last_io_ms = now_ms;
+    return true;
+}
+
+export fn server_replication_reset_to_master(server: &RedisServer) void {
+    server.replication_role = ReplicationRole.role_master;
+    server.replication_state = ReplicationState.repl_state_none;
+    config_copy_bytes(server.config.replicaof_host[0: 64], &""[0: 0]);
+    server.config.replicaof_port = 0;
+    server_replication_close_master_fd(server);
+    server.replication_master_offset = 0u64;
+    server.replication_master_replid[0] = 0 as byte;
+    server.replication_last_io_ms = 0u64;
+    _ = replication_backlog_reset(&server.repl_backlog, SERVER_REPL_BACKLOG_BYTES, server_replication_seed(server)) catch {};
+}
+
+export fn server_replication_set_replica(server: &RedisServer, host: &[byte], port: i32) void {
+    server.replication_role = ReplicationRole.role_replica;
+    server.replication_state = ReplicationState.repl_state_configured;
+    config_copy_bytes(server.config.replicaof_host[0: 64], host);
+    server.config.replicaof_port = port;
+    replication_backlog_free(&server.repl_backlog);
+    server.repl_backlog = replication_backlog_disabled();
+    server_replication_close_master_fd(server);
+    server.replication_master_offset = 0u64;
+    server.replication_master_replid[0] = 0 as byte;
+    server.replication_last_io_ms = 0u64;
 }
 
 fn server_rdb_path(config: &ServerConfig, out: &[byte]) !void {
@@ -205,6 +765,25 @@ fn server_close_all_clients(server: &RedisServer) void {
     }
 }
 
+fn server_child_close_inherited_fds(server: &RedisServer) void {
+    if server.listener.listen_fd >= 0 {
+        _ = sys_close(server.listener.listen_fd) catch {};
+    }
+    if server.listener.poll_fd >= 0 {
+        _ = sys_close(server.listener.poll_fd) catch {};
+    }
+    var i: usize = 0;
+    while i < SERVER_MAX_CLIENTS {
+        if server.clients[i].fd >= 0 {
+            _ = sys_close(server.clients[i].fd) catch {};
+        }
+        i = i + 1;
+    }
+    if server.aof.enabled {
+        aof_close(&server.aof);
+    }
+}
+
 fn server_can_accept_client(server: &RedisServer) bool {
     if server.active_clients >= SERVER_MAX_CLIENTS as i32 {
         return false;
@@ -224,6 +803,95 @@ fn server_has_pending_client_output(server: &RedisServer) bool {
         i = i + 1;
     }
     return false;
+}
+
+fn server_free_rewrite_buffer(server: &RedisServer) void {
+    if server.aof_rewrite_buf.buf.ptr != null {
+        sds_free(&server.aof_rewrite_buf);
+    }
+}
+
+fn server_reset_bgsave_state(server: &RedisServer) void {
+    server.bgsave_requested = false;
+    server.bgsave_in_progress = false;
+    server.bgsave_child_pid = 0;
+}
+
+fn server_child_status_ok(status: i32) bool {
+    if (status & 127) != 0 {
+        return false;
+    }
+    return ((status >> 8) & 255) == 0;
+}
+
+fn server_reset_rewrite_state(server: &RedisServer) void {
+    if server.aof_rewrite_writer.enabled {
+        aof_close(&server.aof_rewrite_writer);
+    }
+    if server.aof_rewrite_keys != null {
+        object_free(server.aof_rewrite_keys);
+    }
+    server_free_rewrite_buffer(server);
+    server.aof_rewrite_writer = aof_disabled();
+    server.aof_rewrite_keys = null as &RedisObject;
+    server.aof_rewrite_current = null as &ListNode;
+    server.aof_rewrite_requested = false;
+    server.aof_rewrite_in_progress = false;
+    server.aof_rewrite_child_pid = 0;
+    server.aof_rewrite_tmp_path[0] = 0 as byte;
+}
+
+export fn server_run_pending_bgsave_at(server: &RedisServer, now_ms: u64) !bool {
+    if server.bgsave_in_progress {
+        var status: i32 = 0;
+        const waited: i32 = waitpid(server.bgsave_child_pid, &status, SERVER_WAITPID_WNOHANG);
+        if waited < 0 {
+            server_reset_bgsave_state(server);
+            return error.ServerBgsaveFailed;
+        }
+        if waited == server.bgsave_child_pid {
+            const ok: bool = server_child_status_ok(status);
+            server_reset_bgsave_state(server);
+            if !ok {
+                return error.ServerBgsaveFailed;
+            }
+            server.bgsave_count = server.bgsave_count + 1u64;
+            server.lastsave_ms = now_ms;
+            return true;
+        }
+    }
+
+    if !server.bgsave_requested {
+        return false;
+    }
+    if server.aof_rewrite_requested || server.aof_rewrite_in_progress {
+        return false;
+    }
+
+    var path_buf: [byte: 512] = [];
+    _ = server_rdb_path(&server.config, path_buf[0: 512]) catch {
+        server.bgsave_requested = false;
+        return error.ServerBgsaveFailed;
+    };
+    const path: &const byte = &path_buf[0] as &const byte;
+
+    const pid: i32 = fork();
+    if pid < 0 {
+        server.bgsave_requested = false;
+        return error.ServerBgsaveFailed;
+    }
+    if pid == 0 {
+        server_child_close_inherited_fds(server);
+        _ = rdb_save_file_at(path, &server.engine, now_ms) catch {
+            _exit(1);
+        };
+        _exit(0);
+    }
+
+    server.bgsave_requested = false;
+    server.bgsave_in_progress = true;
+    server.bgsave_child_pid = pid;
+    return true;
 }
 
 fn server_client_pending_write(server: &RedisServer, slot: usize) bool {
@@ -276,6 +944,19 @@ export fn server_open_with_aof(port: u16, maxclients: i32, aof_path: &const byte
         engine_free(&engine);
         return error.ServerAofOpenFailed;
     };
+    var rewrite_buf: Sds = sds_empty() catch {
+        aof_close(&aof);
+        listener_close(&listener);
+        engine_free(&engine);
+        return error.ServerAofOpenFailed;
+    };
+    var repl_backlog: ReplicationBacklog = replication_backlog_new(SERVER_REPL_BACKLOG_BYTES, now_ms_safe() + (port as u64)) catch {
+        sds_free(&rewrite_buf);
+        aof_close(&aof);
+        listener_close(&listener);
+        engine_free(&engine);
+        return error.ServerAofOpenFailed;
+    };
     var server: RedisServer = RedisServer{
         engine: engine,
         router: router,
@@ -289,10 +970,34 @@ export fn server_open_with_aof(port: u16, maxclients: i32, aof_path: &const byte
         start_ms: now_ms_safe(),
         last_cron_ms: 0u64,
         cron_ticks: 0u64,
+        replication_role: ReplicationRole.role_master,
+        replication_state: ReplicationState.repl_state_none,
+        replication_master_fd: -1,
+        replication_master_replid: [],
+        replication_master_offset: 0u64,
+        replication_last_io_ms: 0u64,
+        repl_backlog: repl_backlog,
+        bgsave_requested: false,
+        bgsave_in_progress: false,
+        bgsave_child_pid: 0,
+        bgsave_count: 0u64,
+        lastsave_ms: 0u64,
         aof_rewrite_requested: false,
         aof_rewrite_in_progress: false,
         aof_rewrite_count: 0u64,
+        aof_rewrite_child_pid: 0,
+        aof_rewrite_writer: aof_disabled(),
+        aof_rewrite_keys: null as &RedisObject,
+        aof_rewrite_current: null as &ListNode,
+        aof_rewrite_buf: rewrite_buf,
+        aof_rewrite_tmp_path: [],
     };
+    if server_config_replicaof_enabled(&server.config) {
+        server.replication_role = ReplicationRole.role_replica;
+        server.replication_state = ReplicationState.repl_state_configured;
+        replication_backlog_free(&server.repl_backlog);
+        server.repl_backlog = replication_backlog_disabled();
+    }
     server_init_clients(&server);
     return server;
 }
@@ -303,6 +1008,18 @@ export fn server_open(port: u16, maxclients: i32) !RedisServer {
 
 export fn server_close(server: &RedisServer) void {
     server_close_all_clients(server);
+    server_replication_close_master_fd(server);
+    if server.bgsave_in_progress {
+        var status: i32 = 0;
+        _ = waitpid(server.bgsave_child_pid, &status, 0);
+        server_reset_bgsave_state(server);
+    }
+    if server.aof_rewrite_in_progress {
+        var rewrite_status: i32 = 0;
+        _ = waitpid(server.aof_rewrite_child_pid, &rewrite_status, 0);
+    }
+    server_reset_rewrite_state(server);
+    replication_backlog_free(&server.repl_backlog);
     aof_close(&server.aof);
     listener_close(&server.listener);
     engine_free(&server.engine);
@@ -319,27 +1036,91 @@ export fn server_cron(server: &RedisServer) void {
 }
 
 export fn server_run_pending_aof_rewrite_at(server: &RedisServer, now_ms: u64) !bool {
-    if !server.aof_rewrite_requested || server.aof_rewrite_in_progress {
+    if server.bgsave_requested || server.bgsave_in_progress {
+        return false;
+    }
+    const aof_path: &const byte = &server.config.appendfilename[0] as &const byte;
+
+    if server.aof_rewrite_in_progress {
+        var status: i32 = 0;
+        const waited: i32 = waitpid(server.aof_rewrite_child_pid, &status, SERVER_WAITPID_WNOHANG);
+        if waited < 0 {
+            server_reset_rewrite_state(server);
+            return error.ServerAofRewriteFailed;
+        }
+        if waited != server.aof_rewrite_child_pid {
+            return true;
+        }
+
+        const ok: bool = server_child_status_ok(status);
+        if !ok {
+            server_reset_rewrite_state(server);
+            return error.ServerAofRewriteFailed;
+        }
+
+        const tmp_path: &const byte = &server.aof_rewrite_tmp_path[0] as &const byte;
+        var writer: AofWriter = aof_open_append(tmp_path) catch {
+            server_reset_rewrite_state(server);
+            return error.ServerAofRewriteFailed;
+        };
+        if server.aof_rewrite_buf.len > 0 {
+            _ = aof_append_raw(&writer, server.aof_rewrite_buf.buf[0: server.aof_rewrite_buf.len]) catch {
+                aof_close(&writer);
+                server_reset_rewrite_state(server);
+                return error.ServerAofRewriteFailed;
+            };
+        }
+        aof_close(&writer);
+
+        if rename(tmp_path, aof_path) != 0 {
+            server_reset_rewrite_state(server);
+            return error.ServerAofRewriteFailed;
+        }
+
+        var new_aof: AofWriter = aof_open_append(aof_path) catch {
+            server_reset_rewrite_state(server);
+            return error.ServerAofRewriteFailed;
+        };
+        aof_close(&server.aof);
+        server.aof = new_aof;
+        server.aof_rewrite_count = server.aof_rewrite_count + 1u64;
+        server_reset_rewrite_state(server);
+        return true;
+    }
+
+    if !server.aof_rewrite_requested {
         return false;
     }
     if server_has_pending_client_output(server) {
         return false;
     }
 
-    const aof_path: &const byte = &server.config.appendfilename[0] as &const byte;
-    server.aof_rewrite_requested = false;
-    server.aof_rewrite_in_progress = true;
-    defer {
-        server.aof_rewrite_in_progress = false;
-    }
+    var tmp_path_buf: [byte: 512] = [];
+    try aof_rewrite_build_tmp_path(tmp_path_buf[0: 512], aof_path);
+    const tmp_path: &const byte = &tmp_path_buf[0] as &const byte;
 
-    try aof_rewrite_file_at(aof_path, &server.engine, now_ms);
-    var new_aof: AofWriter = aof_open_append(aof_path) catch {
+    var rewrite_buf: Sds = sds_empty() catch {
         return error.ServerAofRewriteFailed;
     };
-    aof_close(&server.aof);
-    server.aof = new_aof;
-    server.aof_rewrite_count = server.aof_rewrite_count + 1u64;
+    const pid: i32 = fork();
+    if pid < 0 {
+        sds_free(&rewrite_buf);
+        return error.ServerAofRewriteFailed;
+    }
+    if pid == 0 {
+        server_child_close_inherited_fds(server);
+        _ = aof_rewrite_file_at(tmp_path, &server.engine, now_ms) catch {
+            _exit(1);
+        };
+        _exit(0);
+    }
+
+    server_free_rewrite_buffer(server);
+    server.aof_rewrite_buf = rewrite_buf;
+    config_copy_bytes(server.aof_rewrite_tmp_path[0: 512], tmp_path_buf[0: server_cstring_len(tmp_path)]);
+    server.aof_rewrite_requested = false;
+    server.aof_rewrite_in_progress = true;
+    server.aof_rewrite_child_pid = pid;
     return true;
 }
 
@@ -424,12 +1205,20 @@ fn server_handle_client_fd(server: &RedisServer, fd: i32) void {
     }
     var output: [byte: SERVER_IO_CAP] = [];
     const runtime: CommandRuntimeInfo = server_runtime_info(server);
+    var replicaof_requested: bool = false;
+    var replicaof_promote: bool = false;
+    var replicaof_host: [byte: 64] = [];
+    var replicaof_port: i32 = 0;
+    var bgsave_requested: bool = false;
     var rewrite_requested: bool = false;
+    var rewrite_failed: bool = false;
     const keep_result: !bool = connection_handle_fd_nonblocking_with_runtime_with_aof(
         &server.engine,
         &runtime,
         &server.router,
         &server.aof,
+        &server.aof_rewrite_buf,
+        &server.repl_backlog,
         fd,
         &server.clients[slot].input[0],
         SERVER_IO_CAP,
@@ -439,7 +1228,13 @@ fn server_handle_client_fd(server: &RedisServer, fd: i32) void {
         &server.clients[slot].output_len,
         &server.clients[slot].output_sent,
         &server.clients[slot].close_after_write,
+        &replicaof_requested,
+        &replicaof_promote,
+        replicaof_host[0: 64],
+        &replicaof_port,
+        &bgsave_requested,
         &rewrite_requested,
+        &rewrite_failed,
         &output[0],
         SERVER_IO_CAP,
     );
@@ -451,8 +1246,21 @@ fn server_handle_client_fd(server: &RedisServer, fd: i32) void {
         server_close_client_slot(server, slot);
         return;
     }
+    if replicaof_requested {
+        if replicaof_promote {
+            server_replication_reset_to_master(server);
+        } else {
+            server_replication_set_replica(server, replicaof_host[0: 64], replicaof_port);
+        }
+    }
+    if bgsave_requested {
+        server.bgsave_requested = true;
+    }
     if rewrite_requested {
         server.aof_rewrite_requested = true;
+    }
+    if rewrite_failed {
+        server_reset_rewrite_state(server);
     }
     _ = server_update_client_events(server, slot) catch {
         server_close_client_slot(server, slot);
@@ -464,6 +1272,10 @@ export fn server_run(server: &RedisServer) !void {
     while true {
         const now_ms: u64 = now_ms_safe();
         server_run_cron_due_at(server, now_ms);
+        _ = server_replication_try_full_sync_at(server, now_ms) catch {};
+        _ = server_replication_try_incremental_sync_at(server, now_ms) catch {};
+        _ = server_replication_try_heartbeat_at(server, now_ms) catch {};
+        _ = server_run_pending_bgsave_at(server, now_ms) catch {};
         _ = server_run_pending_aof_rewrite_at(server, now_ms) catch {};
 
         const timeout_ms: i32 = server_ms_until_next_cron(server, now_ms_safe());

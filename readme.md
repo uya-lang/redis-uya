@@ -10,7 +10,7 @@
 
 `redis-uya` 是一个使用 **Uya 编程语言** 从零实现的生产级高性能内存数据库系统。项目长期目标是兼容 Redis 6.2+ 协议，覆盖核心数据结构、持久化、复制、基础集群与性能工程，并在同条件核心场景上超过 Redis。
 
-当前项目已完成 `v0.1.0` 发布闭环：`v0.1.0-alpha` 的存储与协议主线、`v0.1.0-beta` 的可靠性闭环，以及 `v0.1.0` 的文档、长时运行 smoke 和同机 Redis 基线都已收口。下一步进入 `v0.2.0` 数据结构扩展阶段。
+当前项目已完成 `v0.4.0` 规划任务，并已进入 `v0.5.0`：在 `v0.1.0` 发布闭环、`v0.2.0` 数据结构扩展和 `v0.3.0` 持久化增强基础上，补齐了复制角色与状态机、`PSYNC / backlog`、replica 侧全量同步、定时拉取式增量同步、复制心跳与主从一致性 smoke。
 
 ## 核心目标
 
@@ -47,15 +47,23 @@
 - Key 迭代子集：`SCAN`，支持 cursor 返回与 `COUNT` 最小参数
 - TCP 服务闭环：loopback 监听、连接读写缓冲、请求解析执行写回、`QUIT`、`maxclients`、Python socket smoke
 - 服务运行循环：单线程 epoll 多连接、100ms cron 主动过期采样循环、空闲连接不阻塞其他客户端
-- RDB 最小闭环：项目内最小 RDB 子集格式、String 键值对 + 绝对过期时间 save/load、`SAVE`
+- RDB 当前类型闭环：项目内 RDB 子集已覆盖 String/Hash/List/Set/ZSet + 绝对过期时间 save/load、`SAVE`
+- `BGSAVE`：真实 `fork/waitpid` 子进程落盘，支持去掉 AOF 后仅靠 RDB 恢复
 - AOF 最小闭环：写命令追加、启动回放、截断损坏安全失败、SET/DEL 重启恢复 smoke
 - 启动恢复顺序：先加载最小 RDB，再回放 AOF
 - AOF TTL 语义：`EXPIRE` 追加时转换为 `PEXPIREAT`，回放保持绝对过期时间
-- AOF rewrite 预研：离线 rewrite 原型 + `BGREWRITEAOF` 最小 skeleton，可把当前内存态规范化重写为可回放 AOF
+- `BGREWRITEAOF`：真实子进程后台 rewrite + 父进程增量缓冲合并，可把当前内存态规范化重写为可回放 AOF
+- 复制角色与状态机：支持 master/slave 角色切换、`REPLICAOF` 控制入口、`INFO replication` 与复制配置可观测
+- `PSYNC / backlog`：master 维护复制积压缓冲区，支持 `FULLRESYNC` / `CONTINUE` 最小握手判断
+- 全量同步：replica 可通过 `REPLICAOF -> PSYNC ? -1` 拉取 master 当前 RDB 快照并落库
+- 增量同步：replica 在 connected 状态下周期性 `PSYNC replid offset` 拉取 backlog delta 并回放
+- 复制心跳：replica 周期性 `PING` master，链路失败时回到 `configured` 并等待重同步
+- 主从一致性：当前五类对象已有 full sync + incremental smoke
+- Python 客户端风格集成：覆盖更多命令与控制面交互
 
 当前进行中：
 
-- `v0.2.0`：更完整测试覆盖
+- `v0.5.0`：协议与控制面增强
 
 当前阶段尚未生产可用。
 
@@ -111,6 +119,18 @@ REDIS_UYA_LONG_RUN_SECONDS=1800 python3 tests/integration/long_run_smoke.py
 make benchmark-v0.1.0
 ```
 
+如需生成当前机器的持久化 benchmark 报告：
+
+```bash
+make benchmark-persistence-v0.3.0
+```
+
+如需生成当前机器的复制 benchmark 报告：
+
+```bash
+make benchmark-replication-v0.4.0
+```
+
 清理构建产物：
 
 ```bash
@@ -160,7 +180,7 @@ build/redis-uya 6380 1
 
 - 完整 RESP3
 - 完整 RDB 兼容
-- `BGSAVE` / `BGREWRITEAOF`
+- 复制与 `PSYNC`
 - 主从复制
 - 基础集群
 - Lua 脚本

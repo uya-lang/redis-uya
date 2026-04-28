@@ -129,3 +129,4 @@ bash scripts/verify_definition_of_done.sh
 | 最小集群拓扑可用：默认单节点拓扑拥有 16384 个槽，可添加远端节点、按槽位范围重新分配 owner、按 slot/key 查询 owner，并覆盖非法 slot、节点查找和容量限制 | `src/cluster/topology.uya`、`tests/unit/cluster_topology_test.uya` |
 | `CLUSTER` 最小命令接口可用：支持 `KEYSLOT`、`INFO`、`NODES`、`SLOTS`、`HELP`，真实 TCP smoke 校验 hash tag 槽位、单节点拓扑输出、node id 长度和帮助列表 | `tests/unit/command_router_test.uya`、`tests/unit/command_executor_test.uya`、`tests/integration/cluster_smoke.py` |
 | `MOVED` / `ASK` 重定向路径可用：服务端持有最小拓扑状态，`CLUSTER MEET` 可注册远端节点，`CLUSTER SETSLOT ... NODE` 可触发稳定远端槽位 `MOVED`，`CLUSTER SETSLOT ... MIGRATING` 可触发迁移态 `ASK`，失败写命令不会进入 AOF/复制追加路径 | `tests/unit/command_executor_test.uya`、`tests/integration/cluster_smoke.py` |
+| 集群一致性 smoke 可复现：真实 TCP 进程中校验远端槽位后 `CLUSTER NODES` 槽位范围分裂、`MOVED/ASK` 写命令不落本地库、不进入 AOF，以及 `SETSLOT STABLE` 清除迁移态后恢复本地访问 | `tests/integration/cluster_consistency.py` |

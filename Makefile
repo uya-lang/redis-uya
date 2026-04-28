@@ -59,6 +59,7 @@ test-integration: build
 	python3 tests/integration/client_config_smoke.py
 	python3 tests/integration/v0_5_compat.py
 	python3 tests/integration/cluster_smoke.py
+	python3 tests/integration/cluster_consistency.py
 	python3 tests/integration/maxmemory_noeviction.py
 	python3 tests/integration/maxmemory_allkeys_lru.py
 	python3 tests/integration/maxmemory_allkeys_lfu.py

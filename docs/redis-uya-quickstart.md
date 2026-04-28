@@ -121,7 +121,7 @@ REDIS_UYA_LONG_RUN_SECONDS=1800 python3 tests/integration/long_run_smoke.py
 ## 5. 当前边界
 
 - 单节点、单进程
-- 集群当前提供 Cluster 槽位计算、节点元数据、最小拓扑模型、`CLUSTER KEYSLOT/INFO/NODES/SLOTS/HELP/MEET/SETSLOT` 和 `MOVED/ASK` 基础重定向
+- 集群当前提供 Cluster 槽位计算、节点元数据、最小拓扑模型、`CLUSTER KEYSLOT/INFO/NODES/SLOTS/HELP/MEET/SETSLOT`、`MOVED/ASK` 基础重定向和一致性 smoke
 - RESP2 子集
 - 核心数据结构子集 + String/Key/Control 子集
 - AOF append + replay

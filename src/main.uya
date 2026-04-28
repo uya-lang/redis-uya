@@ -1,7 +1,7 @@
 // redis-uya server entry point.
 
 use src.server.RedisServer;
-use src.server.server_open_with_aof;
+use src.server.server_open_with_aof_and_maxmemory;
 use src.server.server_default_aof_path;
 use src.server.server_run;
 use src.server.server_close;
@@ -47,11 +47,27 @@ fn main_aof_path_arg() &const byte {
     return arg as &const byte;
 }
 
+fn main_maxmemory_arg() usize {
+    if get_argc() <= 4 {
+        return 0;
+    }
+    const arg: &byte = get_argv(4);
+    if arg == null {
+        return 0;
+    }
+    const value: i32 = atoi(arg as &const byte);
+    if value < 0 {
+        return 0;
+    }
+    return value as usize;
+}
+
 export fn main() i32 {
     const port: u16 = main_port_arg();
     const maxclients: i32 = main_maxclients_arg();
     const aof_path: &const byte = main_aof_path_arg();
-    var server: RedisServer = server_open_with_aof(port, maxclients, aof_path) catch |err| {
+    const maxmemory: usize = main_maxmemory_arg();
+    var server: RedisServer = server_open_with_aof_and_maxmemory(port, maxclients, aof_path, maxmemory) catch |err| {
         @println("redis-uya failed to listen: ${@error_id(err)}");
         return 1;
     };

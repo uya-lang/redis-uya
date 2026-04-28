@@ -113,7 +113,16 @@ server open
 - 惰性过期：访问键时检查 TTL
 - 主动过期：100ms `cron` 内做受限扫描
 
-## 7. AOF 语义
+## 7. 内存限制基线
+
+- `main.uya` 支持第四个可选启动参数 `maxmemory`，单位为字节，`0` 表示不限制
+- `server_runtime_info()` 将 `ServerConfig.maxmemory` 暴露给命令执行器、`INFO memory` 与 `CONFIG GET maxmemory`
+- `command/executor.uya` 在可能增量分配的写命令执行前做 noeviction 预算检查
+- 超出预算时返回 `OOM command not allowed when used memory > 'maxmemory'`，命令不落 Engine、AOF 或 replication backlog
+
+当前 `maxmemory` 只是 noeviction 基线，尚未包含 LRU/LFU/volatile 淘汰策略。
+
+## 8. AOF 语义
 
 - 写命令直接追加 RESP2 原始请求
 - `EXPIRE` 追加时重写成绝对时间 `PEXPIREAT`
@@ -121,7 +130,7 @@ server open
 - `BGREWRITEAOF` 使用子进程写出规范化 AOF 快照，父进程继续追加旧 AOF 并记录 rewrite 增量缓冲，子进程结束后合并并原子替换
 - 截断、非法协议、非法命令、执行错误都会安全失败
 
-## 8. 当前限制
+## 9. 当前限制
 
 - 单线程
 - `BGSAVE` / `BGREWRITEAOF` 已有最小子进程后台路径，但仍未做更细粒度的后台资源隔离与吞吐优化
@@ -132,3 +141,4 @@ server open
 - RESP3 当前是 `HELLO 2/3` 驱动的最小闭环，仍不是完整 RESP3 类型输出与客户端兼容矩阵
 - Pub/Sub 当前是固定容量最小闭环，仍没有 pattern 订阅、完整 subscribed-mode 命令限制和背压缓冲
 - 控制面当前覆盖 `CLIENT` / `CONFIG` 的兼容子集，仍没有 `CONFIG SET/REWRITE`、全局 `CLIENT LIST`、`CLIENT KILL/PAUSE/TRACKING`
+- `maxmemory` 当前是 noeviction 基线，仍没有 LRU/LFU/volatile 淘汰策略和压力 benchmark

@@ -43,6 +43,7 @@
 - [x] `v0.3.0`：持久化增强与可靠性矩阵
 - [x] `v0.4.0`：复制与高可用基础
 - [x] `v0.5.0`：协议与控制面增强
+- [x] `v0.6.0`：`maxmemory` noeviction 基线
 
 当前进行中：
 
@@ -286,7 +287,7 @@
 
 ### O. 内存控制
 
-- [ ] `maxmemory`
+- [x] `maxmemory`
 - [ ] `allkeys-lru`
 - [ ] `allkeys-lfu`
 - [ ] `volatile-*`

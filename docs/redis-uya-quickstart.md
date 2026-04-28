@@ -30,10 +30,10 @@ make build
 make run
 ```
 
-指定端口、最大连接数和 AOF 路径：
+指定端口、最大连接数、AOF 路径和最大内存：
 
 ```bash
-build/redis-uya 6380 8 build/dev.aof
+build/redis-uya 6380 8 build/dev.aof 1048576
 ```
 
 参数顺序：
@@ -41,6 +41,7 @@ build/redis-uya 6380 8 build/dev.aof
 1. 监听端口
 2. 最大客户端数，`0` 表示不限制
 3. AOF 文件路径，可省略，默认 `build/appendonly.aof`
+4. `maxmemory` 字节数，可省略，`0` 表示不限制
 
 ## 3. 基础验证
 

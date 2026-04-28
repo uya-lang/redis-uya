@@ -190,6 +190,10 @@ fn command_executor_oom() CommandReply {
     return command_executor_error(&"ERR out of memory"[0: 17]);
 }
 
+fn command_executor_maxmemory() CommandReply {
+    return command_executor_error(&"OOM command not allowed when used memory > 'maxmemory'"[0: 54]);
+}
+
 fn command_executor_wrongtype() CommandReply {
     return command_executor_error(&"WRONGTYPE Operation against a key holding the wrong kind of value"[0: 65]);
 }
@@ -287,6 +291,64 @@ fn command_executor_keyword_match(pattern: &[byte], value: &[byte]) bool {
         return false;
     }
     return command_executor_keyword_match(pattern[1: pattern.len - 1], value[1: value.len - 1]);
+}
+
+fn command_executor_growth_write_command(cmd_type: CommandType) bool {
+    if cmd_type == CommandType.command_set {
+        return true;
+    }
+    if cmd_type == CommandType.command_lpush {
+        return true;
+    }
+    if cmd_type == CommandType.command_sadd {
+        return true;
+    }
+    if cmd_type == CommandType.command_zadd {
+        return true;
+    }
+    if cmd_type == CommandType.command_hset {
+        return true;
+    }
+    if cmd_type == CommandType.command_expire || cmd_type == CommandType.command_pexpireat {
+        return true;
+    }
+    return false;
+}
+
+fn command_executor_estimate_sds_allocation(len: usize) usize {
+    if len < 16 {
+        return 17;
+    }
+    return len + 1;
+}
+
+fn command_executor_estimate_request_growth(command: &Command) usize {
+    var estimated: usize = 512;
+    var index: usize = 1;
+    while index < command.argc {
+        const arg: &[byte] = command_executor_arg(command, index) catch {
+            return estimated;
+        };
+        estimated = estimated + command_executor_estimate_sds_allocation(arg.len);
+        index = index + 1;
+    }
+    return estimated;
+}
+
+fn command_executor_within_maxmemory(runtime: &CommandRuntimeInfo, command: &Command) bool {
+    if runtime.config.maxmemory == 0 {
+        return true;
+    }
+    if !command_executor_growth_write_command(command.info.cmd_type) {
+        return true;
+    }
+
+    const current: usize = used_memory();
+    if current >= runtime.config.maxmemory {
+        return false;
+    }
+    const remaining: usize = runtime.config.maxmemory - current;
+    return command_executor_estimate_request_growth(command) <= remaining;
 }
 
 fn command_executor_slice_eq(a: &[byte], b: &[byte]) bool {
@@ -1599,6 +1661,10 @@ export fn command_reply_cleanup(reply: &CommandReply) void {
 }
 
 export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRuntimeInfo, command: &Command, now_ms: u64) CommandReply {
+    if !command_executor_within_maxmemory(runtime, command) {
+        return command_executor_maxmemory();
+    }
+
     if command.info.cmd_type == CommandType.command_ping {
         return command_executor_ping(command);
     }

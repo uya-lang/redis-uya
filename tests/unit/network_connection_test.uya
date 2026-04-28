@@ -3,12 +3,15 @@ use tests.unit.assert.assert_true;
 
 use src.command.executor.CommandReply;
 use src.command.executor.CommandReplyType;
+use src.command.executor.CommandRuntimeInfo;
+use src.command.executor.command_runtime_default;
 use src.command.router.CommandRouter;
 use src.command.router.command_router_new;
 use src.network.connection.ConnectionProcessResult;
 use src.network.connection.ConnectionTransaction;
 use src.network.connection.connection_encode_reply;
 use src.network.connection.connection_process_input_at;
+use src.network.connection.connection_process_input_with_runtime_at;
 use src.network.connection.connection_process_input_with_transaction_at;
 use src.network.connection.connection_transaction_new;
 use src.network.connection.connection_transaction_reset;
@@ -162,6 +165,25 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const quit: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*1\r\n$4\r\nQUIT\r\n"[0: 14], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: quit.response_len], &"+OK\r\n"[0: 5]));
     try assert_eq_i32(quit.close_after as i32, 1);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_connection_process_maxmemory() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var runtime: CommandRuntimeInfo = command_runtime_default();
+    runtime.config.maxmemory = 1;
+    var out: [byte: 256] = [];
+
+    const set_result: ConnectionProcessResult = try connection_process_input_with_runtime_at(&engine, &runtime, &router, &"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 33], &out[0], 256, 1000u64);
+    try assert_true(network_connection_contains(out[0: set_result.response_len], &"OOM command not allowed"[0: 23]));
+
+    runtime.config.maxmemory = 0;
+    const get_result: ConnectionProcessResult = try connection_process_input_with_runtime_at(&engine, &runtime, &router, &"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n"[0: 22], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: get_result.response_len], &"$-1\r\n"[0: 5]));
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

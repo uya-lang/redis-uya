@@ -63,6 +63,7 @@ use tests.unit.command_executor_test.test_command_bgsave;
 use tests.unit.command_executor_test.test_command_bgrewriteaof;
 use tests.unit.command_executor_test.test_command_save_rdb;
 use tests.unit.command_executor_test.test_command_set_get_del_exists;
+use tests.unit.command_executor_test.test_command_maxmemory_noeviction;
 use tests.unit.command_executor_test.test_command_hset_hget;
 use tests.unit.command_executor_test.test_command_lpush_lpop_lrange;
 use tests.unit.command_executor_test.test_command_sadd_srem_smembers;
@@ -72,6 +73,7 @@ use tests.unit.command_executor_test.test_command_expire_and_ttl;
 use tests.unit.command_executor_test.test_command_error_paths;
 use tests.unit.network_connection_test.test_connection_encode_resp_replies;
 use tests.unit.network_connection_test.test_connection_process_ping_set_get_quit;
+use tests.unit.network_connection_test.test_connection_process_maxmemory;
 use tests.unit.network_connection_test.test_connection_process_multi_exec_discard;
 use tests.unit.network_connection_test.test_connection_process_watch_unwatch;
 use tests.unit.network_connection_test.test_connection_process_resp3_hello;
@@ -355,6 +357,10 @@ export fn main() i32 {
     _ = test_command_set_get_del_exists() catch { printf("[FAIL] command_executor/string_key\n" as *byte); failed = failed + 1; };
     if failed == before_exec_string { printf("[PASS] command_executor/string_key\n" as *byte); }
 
+    const before_exec_maxmemory: i32 = failed;
+    _ = test_command_maxmemory_noeviction() catch { printf("[FAIL] command_executor/maxmemory\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_maxmemory { printf("[PASS] command_executor/maxmemory\n" as *byte); }
+
     const before_exec_hash: i32 = failed;
     _ = test_command_hset_hget() catch { printf("[FAIL] command_executor/hash\n" as *byte); failed = failed + 1; };
     if failed == before_exec_hash { printf("[PASS] command_executor/hash\n" as *byte); }
@@ -390,6 +396,10 @@ export fn main() i32 {
     const before_conn_process: i32 = failed;
     _ = test_connection_process_ping_set_get_quit() catch { printf("[FAIL] network_connection/process\n" as *byte); failed = failed + 1; };
     if failed == before_conn_process { printf("[PASS] network_connection/process\n" as *byte); }
+
+    const before_conn_maxmemory: i32 = failed;
+    _ = test_connection_process_maxmemory() catch { printf("[FAIL] network_connection/maxmemory\n" as *byte); failed = failed + 1; };
+    if failed == before_conn_maxmemory { printf("[PASS] network_connection/maxmemory\n" as *byte); }
 
     const before_conn_multi: i32 = failed;
     _ = test_connection_process_multi_exec_discard() catch { printf("[FAIL] network_connection/multi_exec_discard\n" as *byte); failed = failed + 1; };

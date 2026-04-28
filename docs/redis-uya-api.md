@@ -88,6 +88,11 @@ SET key value
 
 - 成功：`+OK`
 - 额外选项当前返回 `-ERR syntax error`
+- 当配置了 `maxmemory` 且增量写入预计超过限制：`-OOM command not allowed when used memory > 'maxmemory'`
+
+说明：
+
+- 当前 `maxmemory` 策略为 noeviction 基线：不主动淘汰，超预算增量写命令直接失败
 
 ### `DEL`
 

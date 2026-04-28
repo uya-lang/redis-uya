@@ -3,6 +3,10 @@ extern "libc" fn printf(fmt: *byte, ...) i32;
 use tests.unit.util_endian_test.test_read_big_endian;
 use tests.unit.util_endian_test.test_write_big_endian;
 use tests.unit.util_crc64_test.test_crc64_known_values;
+use tests.unit.cluster_slots_test.test_cluster_crc16_known_values;
+use tests.unit.cluster_slots_test.test_cluster_hash_tags;
+use tests.unit.cluster_slots_test.test_cluster_hash_tag_edge_cases;
+use tests.unit.cluster_slots_test.test_cluster_slot_range;
 use tests.unit.util_time_test.test_time_monotonic_shape;
 use tests.unit.util_log_test.test_log_level_state;
 use tests.unit.memory_allocator_test.test_allocator_alloc_free;
@@ -125,6 +129,22 @@ export fn main() i32 {
     const before_crc: i32 = failed;
     _ = test_crc64_known_values() catch { printf("[FAIL] util_crc64/known\n" as *byte); failed = failed + 1; };
     if failed == before_crc { printf("[PASS] util_crc64/known\n" as *byte); }
+
+    const before_cluster_crc16: i32 = failed;
+    _ = test_cluster_crc16_known_values() catch { printf("[FAIL] cluster_slots/crc16\n" as *byte); failed = failed + 1; };
+    if failed == before_cluster_crc16 { printf("[PASS] cluster_slots/crc16\n" as *byte); }
+
+    const before_cluster_hash_tags: i32 = failed;
+    _ = test_cluster_hash_tags() catch { printf("[FAIL] cluster_slots/hash_tags\n" as *byte); failed = failed + 1; };
+    if failed == before_cluster_hash_tags { printf("[PASS] cluster_slots/hash_tags\n" as *byte); }
+
+    const before_cluster_hash_tag_edges: i32 = failed;
+    _ = test_cluster_hash_tag_edge_cases() catch { printf("[FAIL] cluster_slots/hash_tag_edges\n" as *byte); failed = failed + 1; };
+    if failed == before_cluster_hash_tag_edges { printf("[PASS] cluster_slots/hash_tag_edges\n" as *byte); }
+
+    const before_cluster_slot_range: i32 = failed;
+    _ = test_cluster_slot_range() catch { printf("[FAIL] cluster_slots/range\n" as *byte); failed = failed + 1; };
+    if failed == before_cluster_slot_range { printf("[PASS] cluster_slots/range\n" as *byte); }
 
     const before_time: i32 = failed;
     _ = test_time_monotonic_shape() catch { printf("[FAIL] util_time/shape\n" as *byte); failed = failed + 1; };

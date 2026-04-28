@@ -1,0 +1,67 @@
+use tests.unit.assert.assert_eq_i32;
+use tests.unit.assert.assert_true;
+
+use src.cluster.slots.CLUSTER_SLOT_COUNT;
+use src.cluster.slots.cluster_crc16;
+use src.cluster.slots.cluster_hash_key;
+use src.cluster.slots.cluster_key_slot;
+
+fn cluster_test_slice_eq(a: &[byte], b: &[byte]) bool {
+    if a.len != b.len {
+        return false;
+    }
+    var i: usize = 0;
+    while i < a.len {
+        if a.ptr[i] != b.ptr[i] {
+            return false;
+        }
+        i = i + 1;
+    }
+    return true;
+}
+
+export fn test_cluster_crc16_known_values() !void {
+    var empty: [byte: 1] = [0];
+    try assert_eq_i32(cluster_crc16(empty[0: 0]) as i32, 0);
+
+    var data: [byte: 9] = [49, 50, 51, 52, 53, 54, 55, 56, 57];
+    try assert_eq_i32(cluster_crc16(data[0: 9]) as i32, 0x31c3);
+    try assert_eq_i32(cluster_key_slot(data[0: 9]), 12739);
+}
+
+export fn test_cluster_hash_tags() !void {
+    var tagged: [byte: 11] = [102, 111, 111, 123, 98, 97, 114, 125, 122, 97, 112];
+    var tag_only: [byte: 5] = [123, 98, 97, 114, 125];
+    var tag: [byte: 3] = [98, 97, 114];
+    try assert_true(cluster_test_slice_eq(cluster_hash_key(tagged[0: 11]), tag[0: 3]));
+    try assert_true(cluster_test_slice_eq(cluster_hash_key(tag_only[0: 5]), tag[0: 3]));
+    try assert_eq_i32(cluster_key_slot(tagged[0: 11]), 5061);
+    try assert_eq_i32(cluster_key_slot(tag_only[0: 5]), 5061);
+}
+
+export fn test_cluster_hash_tag_edge_cases() !void {
+    var empty_tag: [byte: 8] = [102, 111, 111, 123, 125, 98, 97, 114];
+    var no_close: [byte: 7] = [102, 111, 111, 123, 98, 97, 114];
+    var two_tags: [byte: 14] = [102, 111, 111, 123, 98, 97, 114, 125, 123, 122, 97, 112, 125, 120];
+    var nested: [byte: 13] = [102, 111, 111, 123, 123, 98, 97, 114, 125, 125, 122, 97, 112];
+    var first_tag: [byte: 3] = [98, 97, 114];
+    var nested_tag: [byte: 4] = [123, 98, 97, 114];
+
+    try assert_true(cluster_test_slice_eq(cluster_hash_key(empty_tag[0: 8]), empty_tag[0: 8]));
+    try assert_true(cluster_test_slice_eq(cluster_hash_key(no_close[0: 7]), no_close[0: 7]));
+    try assert_true(cluster_test_slice_eq(cluster_hash_key(two_tags[0: 14]), first_tag[0: 3]));
+    try assert_true(cluster_test_slice_eq(cluster_hash_key(nested[0: 13]), nested_tag[0: 4]));
+
+    try assert_eq_i32(cluster_key_slot(empty_tag[0: 8]), 14292);
+    try assert_eq_i32(cluster_key_slot(no_close[0: 7]), 15278);
+    try assert_eq_i32(cluster_key_slot(two_tags[0: 14]), 5061);
+    try assert_eq_i32(cluster_key_slot(nested[0: 13]), 4015);
+}
+
+export fn test_cluster_slot_range() !void {
+    var key: [byte: 3] = [102, 111, 111];
+    const slot: i32 = cluster_key_slot(key[0: 3]);
+    try assert_eq_i32(slot, 12182);
+    try assert_true(slot >= 0);
+    try assert_true(slot < CLUSTER_SLOT_COUNT);
+}

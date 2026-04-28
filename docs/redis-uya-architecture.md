@@ -1,6 +1,6 @@
 # redis-uya ARCHITECTURE
 
-> 版本: v0.6.0
+> 版本: v0.7.0-dev
 > 日期: 2026-04-29
 
 ## 1. 总体结构
@@ -50,6 +50,10 @@ server open
 
 - `router.uya`：命令表、命令名匹配、参数数量校验
 - `executor.uya`：String/Key 命令执行
+
+### `src/cluster/`
+
+- `slots.uya`：Redis Cluster CRC16、hash tag 选择和 `0..16383` 槽位计算；当前作为集群后续命令与重定向的基础工具模块
 
 ### `src/storage/`
 
@@ -137,13 +141,20 @@ server open
 - `BGREWRITEAOF` 使用子进程写出规范化 AOF 快照，父进程继续追加旧 AOF 并记录 rewrite 增量缓冲，子进程结束后合并并原子替换
 - 截断、非法协议、非法命令、执行错误都会安全失败
 
-## 9. 当前限制
+## 9. 集群基础
+
+- `cluster/slots.uya` 已提供 Redis Cluster hash slot 基础模型
+- `cluster_key_slot()` 使用 CRC16 计算槽位并限制在 `0..16383`
+- `cluster_hash_key()` 复用 Redis hash tag 规则：首个有效 `{...}` 中的非空内容作为 hash key，空 tag 或缺失右括号时回退完整 key
+- 当前尚未接入网络命令、节点元数据、槽位归属判断和重定向响应路径
+
+## 10. 当前限制
 
 - 单线程
 - `BGSAVE` / `BGREWRITEAOF` 已有最小子进程后台路径，但仍未做更细粒度的后台资源隔离与吞吐优化
 - RDB 已覆盖当前五类对象和绝对过期时间，但仍不是 Redis 完整二进制兼容
 - 复制当前已覆盖角色与状态机、`PSYNC / backlog`、replica 侧全量同步、定时拉取式增量同步与心跳；仍不是 Redis 那种长连接流式推送复制
-- 无集群
+- 集群当前仅有槽位模型，尚未提供 `CLUSTER` 命令、节点元数据、槽位归属和 `MOVED/ASK` 重定向
 - 事务当前已覆盖连接级最小 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`，但仍没有更完整的 Redis 事务中止传播、脚本联动和控制面扩展
 - RESP3 当前是 `HELLO 2/3` 驱动的最小闭环，仍不是完整 RESP3 类型输出与客户端兼容矩阵
 - Pub/Sub 当前是固定容量最小闭环，仍没有 pattern 订阅、完整 subscribed-mode 命令限制和背压缓冲

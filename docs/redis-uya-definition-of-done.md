@@ -1,8 +1,8 @@
 # redis-uya Definition of Done
 
-> 版本: v0.6.0
+> 版本: v0.7.0-dev
 > 日期: 2026-04-29
-> 状态: `v0.6.0` 收口完成
+> 状态: `v0.7.0` 集群基础开发中
 
 ## 1. 目标
 
@@ -119,3 +119,9 @@ bash scripts/verify_definition_of_done.sh
 | 内存统计完善：allocator 记录当前使用、峰值、累计分配、累计释放、累计分配次数和当前活跃块数，`INFO memory` 可观测这些字段 | `tests/unit/memory_allocator_test.uya`、`tests/unit/command_executor_test.uya`、`tests/integration/memory_info_stats.py` |
 | Slab allocator 基线可用：`redis_malloc/free/realloc` 内部对 16B 到 1KB 小对象做分级 freelist 缓存，缓存块数、缓存字节数和复用次数可通过 `INFO memory` 观测 | `tests/unit/memory_allocator_test.uya`、`tests/unit/command_executor_test.uya`、`tests/integration/memory_info_stats.py` |
 | 内存压力与淘汰回归可复现：真实 TCP 循环写入覆盖 noeviction OOM、allkeys-lru、allkeys-lfu 与 volatile-ttl 压力路径，并校验新写入存活、旧/冷/近过期 key 被淘汰、永久 key 不被 volatile 策略淘汰 | `tests/integration/maxmemory_pressure.py` |
+
+## 10. `v0.7.0`
+
+| DoD 项 | 证据 |
+|--------|------|
+| Cluster 槽位模型可用：按 Redis Cluster CRC16 计算 `0..16383` 槽位，支持 `{hash-tag}` 子串选择，空 tag、缺失右括号、多个 tag 与嵌套大括号边界行为有单元证据 | `src/cluster/slots.uya`、`tests/unit/cluster_slots_test.uya` |

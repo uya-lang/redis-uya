@@ -1,0 +1,57 @@
+// cluster/slots.uya - Redis Cluster hash slot helpers.
+
+export const CLUSTER_SLOT_COUNT: i32 = 16384;
+
+const CLUSTER_CRC16_POLY: u32 = 0x1021u32;
+
+fn cluster_crc16_byte(crc: u16, value: byte) u16 {
+    var c: u32 = ((crc as u32) ^ ((value as u32) << 8)) & 0xffffu32;
+    var bit: i32 = 0;
+    while bit < 8 {
+        if (c & 0x8000u32) != 0u32 {
+            c = ((c << 1) ^ CLUSTER_CRC16_POLY) & 0xffffu32;
+        } else {
+            c = (c << 1) & 0xffffu32;
+        }
+        bit = bit + 1;
+    }
+    return c as u16;
+}
+
+export fn cluster_crc16_update(crc: u16, data: &[byte]) u16 {
+    var c: u16 = crc;
+    var i: usize = 0;
+    while i < data.len {
+        c = cluster_crc16_byte(c, data.ptr[i]);
+        i = i + 1;
+    }
+    return c;
+}
+
+export fn cluster_crc16(data: &[byte]) u16 {
+    return cluster_crc16_update(0 as u16, data);
+}
+
+export fn cluster_hash_key(key: &[byte]) &[byte] {
+    var open: usize = 0;
+    while open < key.len && key.ptr[open] != 123 as byte {
+        open = open + 1;
+    }
+    if open >= key.len {
+        return key;
+    }
+
+    var close: usize = open + 1;
+    while close < key.len && key.ptr[close] != 125 as byte {
+        close = close + 1;
+    }
+    if close >= key.len || close == open + 1 {
+        return key;
+    }
+    return key[(open + 1): (close - open - 1)];
+}
+
+export fn cluster_key_slot(key: &[byte]) i32 {
+    const hash_key: &[byte] = cluster_hash_key(key);
+    return (cluster_crc16(hash_key) as i32) % CLUSTER_SLOT_COUNT;
+}

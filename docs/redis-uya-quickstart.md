@@ -1,6 +1,6 @@
 # redis-uya QUICKSTART
 
-> 版本: v0.6.0
+> 版本: v0.7.0-dev
 > 日期: 2026-04-29
 
 ## 1. 前置条件
@@ -112,6 +112,7 @@ REDIS_UYA_LONG_RUN_SECONDS=1800 python3 tests/integration/long_run_smoke.py
 ## 5. 当前边界
 
 - 单节点、单进程
+- 集群当前仅提供内部 Cluster 槽位计算模型，尚未提供 `CLUSTER` 命令、槽位归属和重定向
 - RESP2 子集
 - 核心数据结构子集 + String/Key/Control 子集
 - AOF append + replay

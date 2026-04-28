@@ -75,12 +75,27 @@ export struct ConnectionTransaction {
     queue_count: usize,
     watched: &RedisObject,
     protocol_version: i32,
+    client_fd: i32,
+    pubsub_count: usize,
 }
 
 struct ConnectionSendProgress {
     next_offset: usize,
     blocked: bool,
 }
+
+const CONNECTION_PUBSUB_MAX_SUBSCRIPTIONS: usize = 128;
+const CONNECTION_PUBSUB_CHANNEL_MAX: usize = 64;
+
+struct ConnectionPubSubSubscription {
+    active: bool,
+    fd: i32,
+    channel_len: usize,
+    channel: [byte: CONNECTION_PUBSUB_CHANNEL_MAX],
+    protocol_version: i32,
+}
+
+var connection_pubsub_subscriptions: [ConnectionPubSubSubscription: CONNECTION_PUBSUB_MAX_SUBSCRIPTIONS] = [];
 
 fn connection_transaction_empty() ConnectionTransaction {
     return ConnectionTransaction{
@@ -89,6 +104,8 @@ fn connection_transaction_empty() ConnectionTransaction {
         queue_count: 0,
         watched: null as &RedisObject,
         protocol_version: 2,
+        client_fd: -1,
+        pubsub_count: 0,
     };
 }
 
@@ -397,6 +414,197 @@ fn connection_raw_reply_owned(data: &[byte]) CommandReply {
     var reply: CommandReply = connection_make_reply(CommandReplyType.reply_raw_bytes, obj.value.buf[0: obj.value.len], 0);
     reply.owned_object = obj;
     return reply;
+}
+
+export fn connection_pubsub_reset_for_test() void {
+    var i: usize = 0;
+    while i < CONNECTION_PUBSUB_MAX_SUBSCRIPTIONS {
+        connection_pubsub_subscriptions[i].active = false;
+        connection_pubsub_subscriptions[i].fd = -1;
+        connection_pubsub_subscriptions[i].channel_len = 0;
+        connection_pubsub_subscriptions[i].protocol_version = 2;
+        i = i + 1;
+    }
+}
+
+fn connection_pubsub_channel_eq(slot: &ConnectionPubSubSubscription, channel: &[byte]) bool {
+    if slot.channel_len != channel.len {
+        return false;
+    }
+    var i: usize = 0;
+    while i < channel.len {
+        if slot.channel[i] != channel.ptr[i] {
+            return false;
+        }
+        i = i + 1;
+    }
+    return true;
+}
+
+fn connection_pubsub_copy_channel(slot: &ConnectionPubSubSubscription, channel: &[byte]) void {
+    slot.channel_len = channel.len;
+    var i: usize = 0;
+    while i < channel.len && i < CONNECTION_PUBSUB_CHANNEL_MAX {
+        slot.channel[i] = channel.ptr[i];
+        i = i + 1;
+    }
+}
+
+fn connection_pubsub_register(fd: i32, protocol_version: i32, channel: &[byte]) !bool {
+    if channel.len > CONNECTION_PUBSUB_CHANNEL_MAX {
+        return error.ConnectionInputTooLarge;
+    }
+    if fd < 0 {
+        return true;
+    }
+
+    var free_index: i32 = -1;
+    var i: usize = 0;
+    while i < CONNECTION_PUBSUB_MAX_SUBSCRIPTIONS {
+        if connection_pubsub_subscriptions[i].active {
+            if connection_pubsub_subscriptions[i].fd == fd && connection_pubsub_channel_eq(&connection_pubsub_subscriptions[i], channel) {
+                connection_pubsub_subscriptions[i].protocol_version = protocol_version;
+                return false;
+            }
+        } else if free_index < 0 {
+            free_index = i as i32;
+        }
+        i = i + 1;
+    }
+    if free_index < 0 {
+        return error.ConnectionOutputTooSmall;
+    }
+
+    const slot: usize = free_index as usize;
+    if slot >= CONNECTION_PUBSUB_MAX_SUBSCRIPTIONS {
+        return error.ConnectionOutputTooSmall;
+    }
+    connection_pubsub_subscriptions[slot].active = true;
+    connection_pubsub_subscriptions[slot].fd = fd;
+    connection_pubsub_subscriptions[slot].protocol_version = protocol_version;
+    connection_pubsub_copy_channel(&connection_pubsub_subscriptions[slot], channel);
+    return true;
+}
+
+fn connection_pubsub_unregister_channel(fd: i32, channel: &[byte]) bool {
+    if fd < 0 {
+        return true;
+    }
+    var i: usize = 0;
+    while i < CONNECTION_PUBSUB_MAX_SUBSCRIPTIONS {
+        if connection_pubsub_subscriptions[i].active && connection_pubsub_subscriptions[i].fd == fd && connection_pubsub_channel_eq(&connection_pubsub_subscriptions[i], channel) {
+            connection_pubsub_subscriptions[i].active = false;
+            return true;
+        }
+        i = i + 1;
+    }
+    return false;
+}
+
+export fn connection_pubsub_unregister_fd(fd: i32) void {
+    var i: usize = 0;
+    while i < CONNECTION_PUBSUB_MAX_SUBSCRIPTIONS {
+        if connection_pubsub_subscriptions[i].active && connection_pubsub_subscriptions[i].fd == fd {
+            connection_pubsub_subscriptions[i].active = false;
+        }
+        i = i + 1;
+    }
+}
+
+fn connection_pubsub_count_channel(channel: &[byte]) usize {
+    var count: usize = 0;
+    var i: usize = 0;
+    while i < CONNECTION_PUBSUB_MAX_SUBSCRIPTIONS {
+        if connection_pubsub_subscriptions[i].active && connection_pubsub_channel_eq(&connection_pubsub_subscriptions[i], channel) {
+            count = count + 1;
+        }
+        i = i + 1;
+    }
+    return count;
+}
+
+fn connection_pubsub_append_bulk(buf: &Sds, data: &[byte]) !void {
+    try sds_cat(buf, &"$"[0: 1]);
+    try connection_sds_append_u64(buf, data.len as u64);
+    try sds_cat(buf, &"\r\n"[0: 2]);
+    try sds_cat(buf, data);
+    try sds_cat(buf, &"\r\n"[0: 2]);
+}
+
+fn connection_pubsub_append_event(buf: &Sds, prefix: &[byte], kind: &[byte], channel: &[byte], value: &[byte], count: usize, has_value: bool) !void {
+    try sds_cat(buf, prefix);
+    try connection_pubsub_append_bulk(buf, kind);
+    try connection_pubsub_append_bulk(buf, channel);
+    if has_value {
+        try connection_pubsub_append_bulk(buf, value);
+    } else {
+        try sds_cat(buf, &":"[0: 1]);
+        try connection_sds_append_u64(buf, count as u64);
+        try sds_cat(buf, &"\r\n"[0: 2]);
+    }
+}
+
+fn connection_pubsub_subscription_reply(kind: &[byte], channel: &[byte], count: usize, protocol_version: i32) CommandReply {
+    var raw: Sds = sds_empty() catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    defer {
+        sds_free(&raw);
+    }
+    if protocol_version == 3 {
+        _ = connection_pubsub_append_event(&raw, &">3\r\n"[0: 4], kind, channel, connection_reply_empty_slice(), count, false) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+    } else {
+        _ = connection_pubsub_append_event(&raw, &"*3\r\n"[0: 4], kind, channel, connection_reply_empty_slice(), count, false) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+    }
+    return connection_raw_reply_owned(raw.buf[0: raw.len]);
+}
+
+fn connection_pubsub_unsubscribe_all_reply(protocol_version: i32) CommandReply {
+    if protocol_version == 3 {
+        return connection_make_reply(CommandReplyType.reply_raw_bytes, &">3\r\n$11\r\nunsubscribe\r\n_\r\n:0\r\n"[0: 29], 0);
+    }
+    return connection_make_reply(CommandReplyType.reply_raw_bytes, &"*3\r\n$11\r\nunsubscribe\r\n$-1\r\n:0\r\n"[0: 31], 0);
+}
+
+fn connection_pubsub_message_raw(channel: &[byte], message: &[byte], protocol_version: i32) CommandReply {
+    var raw: Sds = sds_empty() catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    defer {
+        sds_free(&raw);
+    }
+    if protocol_version == 3 {
+        _ = connection_pubsub_append_event(&raw, &">3\r\n"[0: 4], &"message"[0: 7], channel, message, 0, true) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+    } else {
+        _ = connection_pubsub_append_event(&raw, &"*3\r\n"[0: 4], &"message"[0: 7], channel, message, 0, true) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+    }
+    return connection_raw_reply_owned(raw.buf[0: raw.len]);
+}
+
+fn connection_pubsub_publish(channel: &[byte], message: &[byte]) usize {
+    const receivers: usize = connection_pubsub_count_channel(channel);
+    var i: usize = 0;
+    while i < CONNECTION_PUBSUB_MAX_SUBSCRIPTIONS {
+        if connection_pubsub_subscriptions[i].active && connection_pubsub_channel_eq(&connection_pubsub_subscriptions[i], channel) {
+            var push: CommandReply = connection_pubsub_message_raw(channel, message, connection_pubsub_subscriptions[i].protocol_version);
+            if push.typ == CommandReplyType.reply_raw_bytes {
+                _ = connection_send_all_nonblocking(connection_pubsub_subscriptions[i].fd, push.data.ptr, push.data.len) catch {
+                    connection_pubsub_subscriptions[i].active = false;
+                };
+            }
+            command_reply_cleanup(&push);
+        }
+        i = i + 1;
+    }
+    return receivers;
 }
 
 fn connection_should_append_aof(command: &Command, reply: &CommandReply) bool {
@@ -768,6 +976,89 @@ fn connection_handle_hello(tx: &ConnectionTransaction, command: &Command) Comman
     return connection_hello_reply(tx.protocol_version);
 }
 
+fn connection_handle_subscribe(tx: &ConnectionTransaction, command: &Command) CommandReply {
+    var raw: Sds = sds_empty() catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    defer {
+        sds_free(&raw);
+    }
+
+    var index: usize = 1;
+    while index < command.argc {
+        const channel: &[byte] = command_arg_data(command, index) catch {
+            return connection_error_reply(&"ERR invalid request"[0: 19]);
+        };
+        const added: bool = connection_pubsub_register(tx.client_fd, tx.protocol_version, channel) catch {
+            return connection_error_reply(&"ERR pubsub registration failed"[0: 30]);
+        };
+        if added {
+            tx.pubsub_count = tx.pubsub_count + 1;
+        }
+        var reply: CommandReply = connection_pubsub_subscription_reply(&"subscribe"[0: 9], channel, tx.pubsub_count, tx.protocol_version);
+        if reply.typ == CommandReplyType.reply_error {
+            command_reply_cleanup(&reply);
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        }
+        _ = sds_cat(&raw, reply.data) catch {
+            command_reply_cleanup(&reply);
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+        command_reply_cleanup(&reply);
+        index = index + 1;
+    }
+    return connection_raw_reply_owned(raw.buf[0: raw.len]);
+}
+
+fn connection_handle_unsubscribe(tx: &ConnectionTransaction, command: &Command) CommandReply {
+    if command.argc == 1 {
+        tx.pubsub_count = 0;
+        connection_pubsub_unregister_fd(tx.client_fd);
+        return connection_pubsub_unsubscribe_all_reply(tx.protocol_version);
+    }
+
+    var raw: Sds = sds_empty() catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    defer {
+        sds_free(&raw);
+    }
+
+    var index: usize = 1;
+    while index < command.argc {
+        const channel: &[byte] = command_arg_data(command, index) catch {
+            return connection_error_reply(&"ERR invalid request"[0: 19]);
+        };
+        const removed: bool = connection_pubsub_unregister_channel(tx.client_fd, channel);
+        if removed && tx.pubsub_count > 0 {
+            tx.pubsub_count = tx.pubsub_count - 1;
+        }
+        var reply: CommandReply = connection_pubsub_subscription_reply(&"unsubscribe"[0: 11], channel, tx.pubsub_count, tx.protocol_version);
+        if reply.typ == CommandReplyType.reply_error {
+            command_reply_cleanup(&reply);
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        }
+        _ = sds_cat(&raw, reply.data) catch {
+            command_reply_cleanup(&reply);
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+        command_reply_cleanup(&reply);
+        index = index + 1;
+    }
+    return connection_raw_reply_owned(raw.buf[0: raw.len]);
+}
+
+fn connection_handle_publish(command: &Command) CommandReply {
+    const channel: &[byte] = command_arg_data(command, 1) catch {
+        return connection_error_reply(&"ERR invalid request"[0: 19]);
+    };
+    const message: &[byte] = command_arg_data(command, 2) catch {
+        return connection_error_reply(&"ERR invalid request"[0: 19]);
+    };
+    const receivers: usize = connection_pubsub_publish(channel, message);
+    return connection_make_reply(CommandReplyType.reply_integer, connection_reply_empty_slice(), receivers as i64);
+}
+
 fn connection_parse_input_for_protocol(tx: &ConnectionTransaction, input: &[byte]) !RespParseResult {
     if tx != null && tx.protocol_version == 3 {
         return parse_resp3(input);
@@ -991,6 +1282,12 @@ export fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transac
             resp_value_free(&parsed.value);
             return ConnectionProcessResult{ response_len: hello_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
         }
+        if command.info.cmd_type == CommandType.command_subscribe || command.info.cmd_type == CommandType.command_unsubscribe || command.info.cmd_type == CommandType.command_publish {
+            const pubsub_tx_reply: CommandReply = connection_error_reply(&"ERR pubsub command inside MULTI is not allowed"[0: 46]);
+            const pubsub_tx_n: usize = try connection_encode_reply_with_protocol(&pubsub_tx_reply, out, out_cap, tx.protocol_version);
+            resp_value_free(&parsed.value);
+            return ConnectionProcessResult{ response_len: pubsub_tx_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+        }
         if command.info.cmd_type == CommandType.command_discard {
             connection_transaction_reset(tx);
             const discard_reply: CommandReply = connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
@@ -1065,6 +1362,26 @@ export fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transac
         const hello_n: usize = try connection_encode_reply_with_protocol(&hello_reply, out, out_cap, tx.protocol_version);
         resp_value_free(&parsed.value);
         return ConnectionProcessResult{ response_len: hello_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+    }
+    if command.info.cmd_type == CommandType.command_subscribe {
+        var subscribe_reply: CommandReply = connection_handle_subscribe(tx, &command);
+        const subscribe_n: usize = try connection_encode_reply_with_protocol(&subscribe_reply, out, out_cap, tx.protocol_version);
+        command_reply_cleanup(&subscribe_reply);
+        resp_value_free(&parsed.value);
+        return ConnectionProcessResult{ response_len: subscribe_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+    }
+    if command.info.cmd_type == CommandType.command_unsubscribe {
+        var unsubscribe_reply: CommandReply = connection_handle_unsubscribe(tx, &command);
+        const unsubscribe_n: usize = try connection_encode_reply_with_protocol(&unsubscribe_reply, out, out_cap, tx.protocol_version);
+        command_reply_cleanup(&unsubscribe_reply);
+        resp_value_free(&parsed.value);
+        return ConnectionProcessResult{ response_len: unsubscribe_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+    }
+    if command.info.cmd_type == CommandType.command_publish {
+        const publish_reply: CommandReply = connection_handle_publish(&command);
+        const publish_n: usize = try connection_encode_reply_with_protocol(&publish_reply, out, out_cap, tx.protocol_version);
+        resp_value_free(&parsed.value);
+        return ConnectionProcessResult{ response_len: publish_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
     }
     if command.info.cmd_type == CommandType.command_multi {
         connection_transaction_clear_queue(tx);
@@ -1383,6 +1700,7 @@ export fn connection_handle_fd_nonblocking_with_runtime_with_aof(
     output: &byte,
     output_cap: usize,
 ) !bool {
+    tx.client_fd = fd;
     const pending_flushed: bool = try connection_flush_pending_output(fd, pending, pending_len, pending_sent);
     if !pending_flushed {
         return true;
@@ -1498,6 +1816,7 @@ export fn connection_handle_fd_with_aof(engine: &Engine, router: &CommandRouter,
     var filled: usize = 0;
     var close_after: bool = false;
     var tx: ConnectionTransaction = connection_transaction_new();
+    tx.client_fd = fd;
     defer {
         connection_transaction_reset(&tx);
     }

@@ -19,8 +19,10 @@
 - Integer
 - Bulk String
 - Null Bulk
+- Array
 - RESP3 Null（连接通过 `HELLO 3` 切换后）
 - `HELLO 3` Map 回复
+- RESP3 Push（RESP3 Pub/Sub 确认与消息）
 
 ## 2. 命令
 
@@ -278,6 +280,59 @@ UNWATCH
 
 - 会清空当前连接的观察集
 - `EXEC` 或 `DISCARD` 完成后也会自动清空观察集
+
+### `SUBSCRIBE`
+
+格式：
+
+```text
+SUBSCRIBE channel [channel ...]
+```
+
+返回：
+
+- 每个频道返回一个订阅确认：`["subscribe", channel, count]`
+- RESP3 模式下订阅确认使用 Push 形式
+
+说明：
+
+- 当前实现为固定容量连接级订阅注册表
+- 当前不支持 pattern 订阅
+
+### `UNSUBSCRIBE`
+
+格式：
+
+```text
+UNSUBSCRIBE
+UNSUBSCRIBE channel [channel ...]
+```
+
+返回：
+
+- 每个频道返回一个取消订阅确认：`["unsubscribe", channel, remaining_count]`
+
+说明：
+
+- 显式频道取消订阅后，后续 `PUBLISH` 不再向该连接推送对应消息
+
+### `PUBLISH`
+
+格式：
+
+```text
+PUBLISH channel message
+```
+
+返回：
+
+- 收到消息的订阅者数量，Integer
+
+说明：
+
+- 订阅者会收到 `["message", channel, message]`
+- RESP3 模式下消息使用 Push 形式
+- 当前不把 `PUBLISH` 追加到 AOF，也不复制到 backlog
 
 ### `SAVE`
 

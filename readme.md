@@ -10,7 +10,7 @@
 
 `redis-uya` 是一个使用 **Uya 编程语言** 从零实现的生产级高性能内存数据库系统。项目长期目标是兼容 Redis 6.2+ 协议，覆盖核心数据结构、持久化、复制、基础集群与性能工程，并在同条件核心场景上超过 Redis。
 
-当前项目已完成 `v0.4.0` 规划任务，并已进入 `v0.5.0`：在 `v0.1.0` 发布闭环、`v0.2.0` 数据结构扩展和 `v0.3.0` 持久化增强基础上，补齐了复制角色与状态机、`PSYNC / backlog`、replica 侧全量同步、定时拉取式增量同步、复制心跳、主从一致性 smoke、连接级最小 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`，以及 `HELLO 2/3` 驱动的 RESP3 最小协议闭环。
+当前项目已完成 `v0.4.0` 规划任务，并已进入 `v0.5.0`：在 `v0.1.0` 发布闭环、`v0.2.0` 数据结构扩展和 `v0.3.0` 持久化增强基础上，补齐了复制角色与状态机、`PSYNC / backlog`、replica 侧全量同步、定时拉取式增量同步、复制心跳、主从一致性 smoke、连接级最小 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`、`HELLO 2/3` 驱动的 RESP3 最小协议闭环，以及 `PUBLISH/SUBSCRIBE/UNSUBSCRIBE` 最小 Pub/Sub 闭环。
 
 ## 核心目标
 
@@ -61,6 +61,7 @@
 - 复制心跳：replica 周期性 `PING` master，链路失败时回到 `configured` 并等待重同步
 - 主从一致性：当前五类对象已有 full sync + incremental smoke
 - 事务控制最小子集：连接级 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`，支持 `QUEUED`、`EXEC` 数组回复、观察键变更后的 Null Array 中止和 `DISCARD` 丢弃
+- Pub/Sub 最小子集：`SUBSCRIBE` 注册连接订阅、`PUBLISH` 跨连接推送 message 并返回订阅者数量、`UNSUBSCRIBE` 取消订阅
 - Python 客户端风格集成：覆盖更多命令与控制面交互
 
 当前进行中：
@@ -201,6 +202,7 @@ build/redis-uya 6380 1
 - AOF append/replay、RDB 子集、`SAVE`、`BGSAVE`、`BGREWRITEAOF`
 - 主从复制最小闭环：`REPLICAOF`、`PSYNC / backlog`、全量同步、定时拉取式增量同步、复制心跳
 - 事务最小子集：`MULTI/EXEC/DISCARD/WATCH/UNWATCH`
+- Pub/Sub 最小子集：`PUBLISH/SUBSCRIBE/UNSUBSCRIBE`
 - `redis-cli` smoke、Python 集成 smoke、持久化与复制 benchmark
 
 当前主线仍未包含：
@@ -208,7 +210,7 @@ build/redis-uya 6380 1
 - 完整 RESP3 类型覆盖与客户端兼容矩阵
 - 完整 Redis RDB 二进制兼容
 - Redis 风格长连接流式复制
-- `PUBLISH/SUBSCRIBE`
+- Pub/Sub 模式下的完整命令限制、pattern 订阅与背压处理
 - 更完整 `CLIENT` / `CONFIG`
 - 基础集群
 - Lua 脚本

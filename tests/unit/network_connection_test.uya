@@ -12,6 +12,7 @@ use src.network.connection.connection_process_input_at;
 use src.network.connection.connection_process_input_with_transaction_at;
 use src.network.connection.connection_transaction_new;
 use src.network.connection.connection_transaction_reset;
+use src.network.connection.connection_pubsub_reset_for_test;
 use src.storage.engine.Engine;
 use src.storage.engine.engine_new;
 use src.storage.engine.engine_free;
@@ -303,6 +304,34 @@ export fn test_connection_process_resp3_hello() !void {
 
     const bad_hello: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$5\r\nHELLO\r\n$1\r\n4\r\n"[0: 22], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: bad_hello.response_len], &"-NOPROTO unsupported protocol version\r\n"[0: 39]));
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_connection_process_pubsub_commands() !void {
+    reset_memory_stats_for_test();
+    connection_pubsub_reset_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var tx: ConnectionTransaction = connection_transaction_new();
+    defer {
+        connection_transaction_reset(&tx);
+        connection_pubsub_reset_for_test();
+    }
+    var out: [byte: 256] = [];
+
+    const subscribe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$9\r\nSUBSCRIBE\r\n$5\r\nchan1\r\n"[0: 30], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: subscribe.response_len], &"*3\r\n$9\r\nsubscribe\r\n$5\r\nchan1\r\n:1\r\n"[0: 34]));
+
+    const publish: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$7\r\nPUBLISH\r\n$5\r\nchan1\r\n$5\r\nhello\r\n"[0: 39], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: publish.response_len], &":0\r\n"[0: 4]));
+
+    const unsubscribe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$11\r\nUNSUBSCRIBE\r\n$5\r\nchan1\r\n"[0: 33], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: unsubscribe.response_len], &"*3\r\n$11\r\nunsubscribe\r\n$5\r\nchan1\r\n:0\r\n"[0: 37]));
+
+    const unsubscribe_all: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$11\r\nUNSUBSCRIBE\r\n"[0: 22], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: unsubscribe_all.response_len], &"*3\r\n$11\r\nunsubscribe\r\n$-1\r\n:0\r\n"[0: 31]));
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

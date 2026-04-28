@@ -14,6 +14,7 @@ use src.network.connection.connection_handle_fd_nonblocking_with_runtime_with_ao
 use src.network.connection.ConnectionTransaction;
 use src.network.connection.connection_transaction_new;
 use src.network.connection.connection_transaction_reset;
+use src.network.connection.connection_pubsub_unregister_fd;
 use src.persistence.aof.AofWriter;
 use src.persistence.aof.aof_disabled;
 use src.persistence.aof.aof_open_append;
@@ -750,6 +751,7 @@ fn server_close_client_slot(server: &RedisServer, slot: usize) void {
         return;
     }
     _ = sys_epoll_ctl(server.listener.poll_fd, EPOLL_CTL_DEL, fd, null as &EpollEvent) catch {};
+    connection_pubsub_unregister_fd(fd);
     _ = sys_shutdown(fd, SHUT_WR) catch {};
     _ = sys_close(fd) catch {};
     connection_transaction_reset(&server.clients[slot].transaction);

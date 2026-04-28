@@ -62,6 +62,7 @@ test-integration: build
 	python3 tests/integration/maxmemory_allkeys_lru.py
 	python3 tests/integration/maxmemory_allkeys_lfu.py
 	python3 tests/integration/maxmemory_volatile_policies.py
+	python3 tests/integration/memory_info_stats.py
 	python3 tests/integration/error_compat.py
 
 test-redis-cli: build

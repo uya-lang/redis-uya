@@ -187,7 +187,7 @@ INFO keyspace
 
 - 支持 `server`、`clients`、`memory`、`stats`、`replication`、`keyspace`
 - 未带 section 时返回上述 section 组合段
-- `memory` section 当前包含 `used_memory`、`maxmemory`、`maxmemory_policy`
+- `memory` section 当前包含 `used_memory`、`used_memory_peak`、`total_allocated`、`total_freed`、`allocator_total_allocations`、`allocator_active_allocations`、`maxmemory`、`maxmemory_policy`
 
 ### `CONFIG`
 

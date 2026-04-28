@@ -116,3 +116,4 @@ bash scripts/verify_definition_of_done.sh
 | `allkeys-lru` 运行时淘汰基线可用：对象记录访问时间，读写触碰更新 LRU，超预算写入可淘汰最久未访问 key 后继续执行，`CONFIG GET/INFO memory` 可观测策略 | `tests/unit/storage_engine_test.uya`、`tests/unit/command_executor_test.uya`、`tests/integration/maxmemory_allkeys_lru.py` |
 | `allkeys-lfu` 运行时淘汰基线可用：对象记录访问计数，读写触碰递增 LFU，超预算写入可淘汰访问次数最低 key 后继续执行，同频次用 LRU 打破平局 | `tests/unit/storage_engine_test.uya`、`tests/unit/command_executor_test.uya`、`tests/integration/maxmemory_allkeys_lfu.py` |
 | `volatile-*` 运行时淘汰基线可用：`volatile-lru` / `volatile-lfu` / `volatile-ttl` 只从带 TTL 的 key 中选候选，永久 key 不被 volatile 策略淘汰 | `tests/unit/storage_engine_test.uya`、`tests/integration/maxmemory_volatile_policies.py` |
+| 内存统计完善：allocator 记录当前使用、峰值、累计分配、累计释放、累计分配次数和当前活跃块数，`INFO memory` 可观测这些字段 | `tests/unit/memory_allocator_test.uya`、`tests/unit/command_executor_test.uya`、`tests/integration/memory_info_stats.py` |

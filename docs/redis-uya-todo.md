@@ -291,7 +291,7 @@
 - [x] `allkeys-lru`
 - [x] `allkeys-lfu`
 - [x] `volatile-*`
-- [ ] 内存统计完善
+- [x] 内存统计完善
 - [ ] Slab allocator
 - [ ] 内存压力与淘汰测试
 

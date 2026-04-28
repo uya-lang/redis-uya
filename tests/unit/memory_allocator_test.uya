@@ -5,6 +5,11 @@ use src.memory.allocator.redis_malloc;
 use src.memory.allocator.redis_free;
 use src.memory.allocator.redis_realloc;
 use src.memory.allocator.used_memory;
+use src.memory.allocator.used_memory_peak;
+use src.memory.allocator.total_allocated_memory;
+use src.memory.allocator.total_freed_memory;
+use src.memory.allocator.allocator_total_allocations;
+use src.memory.allocator.allocator_active_allocations;
 use src.memory.allocator.reset_memory_stats_for_test;
 
 export fn test_allocator_alloc_free() !void {
@@ -16,8 +21,17 @@ export fn test_allocator_alloc_free() !void {
     try assert_eq_i32(ptr[0] as i32, 42);
     try assert_eq_i32(ptr[63] as i32, 24);
     try assert_eq_i32(used_memory() as i32, 64);
+    try assert_eq_i32(used_memory_peak() as i32, 64);
+    try assert_eq_i32(total_allocated_memory() as i32, 64);
+    try assert_eq_i32(total_freed_memory() as i32, 0);
+    try assert_eq_i32(allocator_total_allocations() as i32, 1);
+    try assert_eq_i32(allocator_active_allocations() as i32, 1);
     redis_free(ptr);
     try assert_eq_i32(used_memory() as i32, 0);
+    try assert_eq_i32(used_memory_peak() as i32, 64);
+    try assert_eq_i32(total_allocated_memory() as i32, 64);
+    try assert_eq_i32(total_freed_memory() as i32, 64);
+    try assert_eq_i32(allocator_active_allocations() as i32, 0);
 }
 
 export fn test_allocator_realloc() !void {
@@ -28,11 +42,19 @@ export fn test_allocator_realloc() !void {
     try assert_true(ptr != null);
     try assert_eq_i32(ptr[0] as i32, 7);
     try assert_eq_i32(used_memory() as i32, 128);
+    try assert_eq_i32(used_memory_peak() as i32, 128);
+    try assert_eq_i32(total_allocated_memory() as i32, 128);
     ptr = try redis_realloc(ptr, 32);
     try assert_eq_i32(ptr[0] as i32, 7);
     try assert_eq_i32(used_memory() as i32, 32);
+    try assert_eq_i32(total_freed_memory() as i32, 96);
     redis_free(ptr);
     try assert_eq_i32(used_memory() as i32, 0);
+    try assert_eq_i32(used_memory_peak() as i32, 128);
+    try assert_eq_i32(total_allocated_memory() as i32, 128);
+    try assert_eq_i32(total_freed_memory() as i32, 128);
+    try assert_eq_i32(allocator_total_allocations() as i32, 1);
+    try assert_eq_i32(allocator_active_allocations() as i32, 0);
 }
 
 export fn test_allocator_many_allocations() !void {
@@ -45,6 +67,10 @@ export fn test_allocator_many_allocations() !void {
         i = i + 1;
     }
     try assert_eq_i32(used_memory() as i32, 256);
+    try assert_eq_i32(used_memory_peak() as i32, 256);
+    try assert_eq_i32(total_allocated_memory() as i32, 256);
+    try assert_eq_i32(allocator_total_allocations() as i32, 32);
+    try assert_eq_i32(allocator_active_allocations() as i32, 32);
     i = 0;
     while i < 32 {
         try assert_eq_i32(ptrs[i][0] as i32, i as i32);
@@ -52,4 +78,7 @@ export fn test_allocator_many_allocations() !void {
         i = i + 1;
     }
     try assert_eq_i32(used_memory() as i32, 0);
+    try assert_eq_i32(used_memory_peak() as i32, 256);
+    try assert_eq_i32(total_freed_memory() as i32, 256);
+    try assert_eq_i32(allocator_active_allocations() as i32, 0);
 }

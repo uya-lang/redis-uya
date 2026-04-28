@@ -151,6 +151,20 @@ export fn test_command_info_and_config() !void {
     command_reply_cleanup(&info_server_reply);
     resp_value_free(&info_server_parsed.value);
 
+    var info_memory_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nINFO\r\n$6\r\nmemory\r\n"[0: 26]);
+    const info_memory_command: Command = try command_executor_test_command(&router, &info_memory_parsed);
+    var info_memory_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &info_memory_command, 5000u64);
+    try assert_eq_i32(info_memory_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_contains(info_memory_reply.data, &"# Memory\r\n"[0: 10]));
+    try assert_true(command_executor_test_contains(info_memory_reply.data, &"used_memory_peak:"[0: 17]));
+    try assert_true(command_executor_test_contains(info_memory_reply.data, &"total_allocated:"[0: 16]));
+    try assert_true(command_executor_test_contains(info_memory_reply.data, &"total_freed:"[0: 12]));
+    try assert_true(command_executor_test_contains(info_memory_reply.data, &"allocator_total_allocations:"[0: 28]));
+    try assert_true(command_executor_test_contains(info_memory_reply.data, &"allocator_active_allocations:"[0: 29]));
+    try assert_true(command_executor_test_contains(info_memory_reply.data, &"maxmemory_policy:noeviction\r\n"[0: 29]));
+    command_reply_cleanup(&info_memory_reply);
+    resp_value_free(&info_memory_parsed.value);
+
     var info_keyspace_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nINFO\r\n$8\r\nkeyspace\r\n"[0: 28]);
     const info_keyspace_command: Command = try command_executor_test_command(&router, &info_keyspace_parsed);
     var info_keyspace_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &info_keyspace_command, 5000u64);

@@ -8,6 +8,11 @@ export error AllocOutOfMemory;
 export error AllocInvalidSize;
 
 export var used_memory_bytes: usize = 0;
+export var used_memory_peak_bytes: usize = 0;
+export var total_allocated_bytes: usize = 0;
+export var total_freed_bytes: usize = 0;
+export var total_allocation_count: usize = 0;
+export var active_allocation_count: usize = 0;
 
 export struct RedisAllocator {
 }
@@ -18,8 +23,66 @@ export fn used_memory() usize {
     return used_memory_bytes;
 }
 
+export fn used_memory_peak() usize {
+    return used_memory_peak_bytes;
+}
+
+export fn total_allocated_memory() usize {
+    return total_allocated_bytes;
+}
+
+export fn total_freed_memory() usize {
+    return total_freed_bytes;
+}
+
+export fn allocator_total_allocations() usize {
+    return total_allocation_count;
+}
+
+export fn allocator_active_allocations() usize {
+    return active_allocation_count;
+}
+
 export fn reset_memory_stats_for_test() void {
     used_memory_bytes = 0;
+    used_memory_peak_bytes = 0;
+    total_allocated_bytes = 0;
+    total_freed_bytes = 0;
+    total_allocation_count = 0;
+    active_allocation_count = 0;
+}
+
+fn allocator_update_peak() void {
+    if used_memory_bytes > used_memory_peak_bytes {
+        used_memory_peak_bytes = used_memory_bytes;
+    }
+}
+
+fn allocator_note_alloc(size: usize) void {
+    used_memory_bytes += size;
+    total_allocated_bytes += size;
+    total_allocation_count += 1;
+    active_allocation_count += 1;
+    allocator_update_peak();
+}
+
+fn allocator_note_free(size: usize) void {
+    used_memory_bytes -= size;
+    total_freed_bytes += size;
+    active_allocation_count -= 1;
+}
+
+fn allocator_note_resize(old_size: usize, new_size: usize) void {
+    if new_size >= old_size {
+        const growth: usize = new_size - old_size;
+        used_memory_bytes += growth;
+        total_allocated_bytes += growth;
+        allocator_update_peak();
+    } else {
+        const shrink: usize = old_size - new_size;
+        used_memory_bytes -= shrink;
+        total_freed_bytes += shrink;
+    }
 }
 
 export fn redis_malloc(size: usize) !&byte {
@@ -29,7 +92,7 @@ export fn redis_malloc(size: usize) !&byte {
     if raw == null { return error.AllocOutOfMemory; }
     const header: &usize = raw as &usize;
     *header = size;
-    used_memory_bytes += size;
+    allocator_note_alloc(size);
     return ((raw as &byte) + @size_of(usize)) as &byte;
 }
 
@@ -38,7 +101,7 @@ export fn redis_free(ptr: &byte) void {
     const raw: &byte = ptr - @size_of(usize);
     const header: &usize = raw as &usize;
     const size: usize = *header;
-    used_memory_bytes -= size;
+    allocator_note_free(size);
     free(raw as &void);
 }
 
@@ -54,11 +117,7 @@ export fn redis_realloc(ptr: &byte, new_size: usize) !&byte {
     if new_raw_void == null { return error.AllocOutOfMemory; }
     const new_header: &usize = new_raw_void as &usize;
     *new_header = new_size;
-    if new_size >= old_size {
-        used_memory_bytes += new_size - old_size;
-    } else {
-        used_memory_bytes -= old_size - new_size;
-    }
+    allocator_note_resize(old_size, new_size);
     return ((new_raw_void as &byte) + @size_of(usize)) as &byte;
 }
 

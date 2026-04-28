@@ -276,7 +276,7 @@
 
 - [ ] RESP3
 - [x] `MULTI/EXEC/DISCARD`
-- [ ] `WATCH/UNWATCH`
+- [x] `WATCH/UNWATCH`
 - [ ] `PUBLISH/SUBSCRIBE`
 - [ ] `CLIENT` / `CONFIG` 命令增强
 - [ ] 兼容性回归测试

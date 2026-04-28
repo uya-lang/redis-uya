@@ -79,6 +79,8 @@ def run_smoke() -> None:
             roundtrip(sock, b"*1\r\n$7\r\nDISCARD\r\n", b"-ERR DISCARD without MULTI\r\n")
             roundtrip(sock, b"*1\r\n$5\r\nMULTI\r\n", b"+OK\r\n")
             roundtrip(sock, b"*1\r\n$5\r\nMULTI\r\n", b"-ERR MULTI calls can not be nested\r\n")
+            roundtrip(sock, b"*2\r\n$5\r\nWATCH\r\n$3\r\nkey\r\n", b"-ERR WATCH inside MULTI is not allowed\r\n")
+            roundtrip(sock, b"*1\r\n$7\r\nUNWATCH\r\n", b"-ERR UNWATCH inside MULTI is not allowed\r\n")
             roundtrip(sock, b"*1\r\n$7\r\nDISCARD\r\n", b"+OK\r\n")
             roundtrip(sock, b"*1\r\n$3\r\nGET\r\n", b"-ERR wrong number of arguments\r\n")
             roundtrip(

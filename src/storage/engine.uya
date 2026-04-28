@@ -27,10 +27,12 @@ export struct ExpireCycleStats {
 export struct RedisDb {
     dict: Dict,
     expires: Dict,
+    watch_versions: Dict,
 }
 
 export struct Engine {
     db: RedisDb,
+    watch_seq: u64,
 }
 
 fn ptr_to_usize(ptr: &RedisObject) usize {
@@ -46,7 +48,9 @@ export fn engine_new() Engine {
         db: RedisDb{
             dict: dict_new(),
             expires: dict_new(),
+            watch_versions: dict_new(),
         },
+        watch_seq: 1u64,
     };
 }
 
@@ -59,6 +63,7 @@ export fn engine_free(engine: &Engine) void {
     }
     dict_free(&engine.db.dict);
     dict_free(&engine.db.expires);
+    dict_free(&engine.db.watch_versions);
 }
 
 export fn engine_len(engine: &Engine) usize {
@@ -74,11 +79,15 @@ export fn set_key(engine: &Engine, key: &[byte], obj: &RedisObject) !void {
     const old_value: usize = old_value_result catch {
         const inserted: bool = try dict_insert(&engine.db.dict, key, ptr_to_usize(obj));
         _ = inserted;
+        engine.watch_seq = engine.watch_seq + 1u64;
+        _ = try dict_insert(&engine.db.watch_versions, key, engine.watch_seq as usize);
         return;
     };
     object_free(usize_to_object(old_value));
     const updated: bool = try dict_insert(&engine.db.dict, key, ptr_to_usize(obj));
     _ = updated;
+    engine.watch_seq = engine.watch_seq + 1u64;
+    _ = try dict_insert(&engine.db.watch_versions, key, engine.watch_seq as usize);
 }
 
 export fn delete_key(engine: &Engine, key: &[byte]) bool {
@@ -89,11 +98,18 @@ export fn delete_key(engine: &Engine, key: &[byte]) bool {
     };
     object_free(usize_to_object(value));
     _ = dict_delete(&engine.db.expires, key);
-    return dict_delete(&engine.db.dict, key);
+    const deleted: bool = dict_delete(&engine.db.dict, key);
+    if deleted {
+        engine.watch_seq = engine.watch_seq + 1u64;
+        _ = dict_insert(&engine.db.watch_versions, key, engine.watch_seq as usize) catch {};
+    }
+    return deleted;
 }
 
 export fn set_key_expire_at(engine: &Engine, key: &[byte], expire_at_ms: u64) !void {
     _ = try dict_insert(&engine.db.expires, key, expire_at_ms as usize);
+    engine.watch_seq = engine.watch_seq + 1u64;
+    _ = try dict_insert(&engine.db.watch_versions, key, engine.watch_seq as usize);
 }
 
 export fn clear_key_expire(engine: &Engine, key: &[byte]) bool {
@@ -106,6 +122,14 @@ export fn get_key_expire_at(engine: &Engine, key: &[byte]) !u64 {
         return error.EngineKeyNotFound;
     };
     return expire_at as u64;
+}
+
+export fn engine_watch_version(engine: &Engine, key: &[byte]) u64 {
+    const version_result: !usize = dict_lookup(&engine.db.watch_versions, key);
+    const version: usize = version_result catch {
+        return 0u64;
+    };
+    return version as u64;
 }
 
 export fn key_is_expired(engine: &Engine, key: &[byte], now_ms: u64) bool {
@@ -142,6 +166,10 @@ fn delete_expired_key_from_expire_entry(engine: &Engine, key: &[byte]) bool {
     object_free(usize_to_object(value));
     const deleted: bool = dict_delete(&engine.db.dict, key);
     _ = dict_delete(&engine.db.expires, key);
+    if deleted {
+        engine.watch_seq = engine.watch_seq + 1u64;
+        _ = dict_insert(&engine.db.watch_versions, key, engine.watch_seq as usize) catch {};
+    }
     return deleted;
 }
 

@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 31);
+    try assert_eq_i32(command_router_count(&router) as i32, 33);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -46,6 +46,14 @@ export fn test_command_router_lookup_and_case() !void {
     const discard: CommandInfo = try command_router_lookup(&router, &"DISCARD"[0: 7]);
     try assert_eq_i32(discard.cmd_type as i32, CommandType.command_discard as i32);
     try assert_eq_i32(discard.arity, 1);
+
+    const watch: CommandInfo = try command_router_lookup(&router, &"WATCH"[0: 5]);
+    try assert_eq_i32(watch.cmd_type as i32, CommandType.command_watch as i32);
+    try assert_eq_i32(watch.arity, -2);
+
+    const unwatch: CommandInfo = try command_router_lookup(&router, &"UNWATCH"[0: 7]);
+    try assert_eq_i32(unwatch.cmd_type as i32, CommandType.command_unwatch as i32);
+    try assert_eq_i32(unwatch.arity, 1);
 
     const get: CommandInfo = try command_router_lookup(&router, &"get"[0: 3]);
     try assert_eq_i32(get.cmd_type as i32, CommandType.command_get as i32);
@@ -141,6 +149,8 @@ export fn test_command_router_arity_validation() !void {
     const multi: CommandInfo = try command_router_lookup(&router, &"MULTI"[0: 5]);
     const exec: CommandInfo = try command_router_lookup(&router, &"EXEC"[0: 4]);
     const discard: CommandInfo = try command_router_lookup(&router, &"DISCARD"[0: 7]);
+    const watch: CommandInfo = try command_router_lookup(&router, &"WATCH"[0: 5]);
+    const unwatch: CommandInfo = try command_router_lookup(&router, &"UNWATCH"[0: 7]);
     const get: CommandInfo = try command_router_lookup(&router, &"GET"[0: 3]);
     const lpop: CommandInfo = try command_router_lookup(&router, &"LPOP"[0: 4]);
     const lpush: CommandInfo = try command_router_lookup(&router, &"LPUSH"[0: 5]);
@@ -166,6 +176,9 @@ export fn test_command_router_arity_validation() !void {
     try command_validate_arity(&multi, 1);
     try command_validate_arity(&exec, 1);
     try command_validate_arity(&discard, 1);
+    try command_validate_arity(&watch, 2);
+    try command_validate_arity(&watch, 4);
+    try command_validate_arity(&unwatch, 1);
     try command_validate_arity(&get, 2);
     try command_validate_arity(&lpop, 2);
     try command_validate_arity(&lpush, 3);
@@ -220,6 +233,15 @@ export fn test_command_router_arity_validation() !void {
         return;
     };
     try assert_true(saw_multi_wrong);
+
+    var saw_unwatch_wrong: bool = false;
+    _ = command_validate_arity(&unwatch, 2) catch |err| {
+        if err == error.CommandWrongArity {
+            saw_unwatch_wrong = true;
+        }
+        return;
+    };
+    try assert_true(saw_unwatch_wrong);
 }
 
 export fn test_command_router_unknown_command() !void {

@@ -12,6 +12,7 @@ use src.command.router.CommandInfo;
 use src.command.router.CommandRouter;
 use src.command.router.CommandType;
 use src.command.router.COMMAND_FLAG_WRITE;
+use src.command.router.command_arg_data;
 use src.command.router.command_from_resp;
 use src.command.router.command_router_lookup;
 use src.network.protocol.RespParseResult;
@@ -28,10 +29,18 @@ use src.replication.backlog.replication_backlog_append_command_at;
 use src.replication.backlog.replication_backlog_slice_from;
 use src.replication.state.ReplicationRole;
 use src.storage.engine.Engine;
+use src.storage.engine.engine_watch_version;
+use src.storage.dict.DictIterator;
+use src.storage.dict.DictEntry;
+use src.storage.dict.dict_iter_new;
+use src.storage.dict.dict_iter_next;
 use src.storage.object.ListNode;
 use src.storage.object.RedisObject;
 use src.storage.object.create_string_object;
 use src.storage.object.create_list_object;
+use src.storage.object.create_hash_object;
+use src.storage.object.hash_object_set_field;
+use src.storage.object.hash_object_get_field;
 use src.storage.object.list_object_push_tail;
 use src.storage.object.object_free;
 use src.storage.sds.Sds;
@@ -63,6 +72,7 @@ export struct ConnectionTransaction {
     active: bool,
     queue: &RedisObject,
     queue_count: usize,
+    watched: &RedisObject,
 }
 
 struct ConnectionSendProgress {
@@ -75,6 +85,7 @@ fn connection_transaction_empty() ConnectionTransaction {
         active: false,
         queue: null as &RedisObject,
         queue_count: 0,
+        watched: null as &RedisObject,
     };
 }
 
@@ -89,9 +100,35 @@ export fn connection_transaction_reset(tx: &ConnectionTransaction) void {
     if tx.queue != null {
         object_free(tx.queue);
     }
+    if tx.watched != null {
+        object_free(tx.watched);
+    }
     tx.active = false;
     tx.queue = null as &RedisObject;
     tx.queue_count = 0;
+    tx.watched = null as &RedisObject;
+}
+
+fn connection_transaction_clear_queue(tx: &ConnectionTransaction) void {
+    if tx == null {
+        return;
+    }
+    if tx.queue != null {
+        object_free(tx.queue);
+    }
+    tx.active = false;
+    tx.queue = null as &RedisObject;
+    tx.queue_count = 0;
+}
+
+fn connection_transaction_clear_watches(tx: &ConnectionTransaction) void {
+    if tx == null {
+        return;
+    }
+    if tx.watched != null {
+        object_free(tx.watched);
+    }
+    tx.watched = null as &RedisObject;
 }
 
 fn connection_dummy_resp_parse_result() RespParseResult {
@@ -280,6 +317,70 @@ fn connection_transaction_queue_command(tx: &ConnectionTransaction, raw: &[byte]
     const queue: &RedisObject = try connection_transaction_ensure_queue(tx);
     _ = try list_object_push_tail(queue, raw);
     tx.queue_count = tx.queue_count + 1;
+}
+
+fn connection_parse_u64(data: &[byte]) !u64 {
+    if data.len == 0 {
+        return error.ConnectionIoFailed;
+    }
+    var value: u64 = 0u64;
+    var i: usize = 0;
+    while i < data.len {
+        const ch: byte = data.ptr[i];
+        if ch < 48 as byte || ch > 57 as byte {
+            return error.ConnectionIoFailed;
+        }
+        value = value * 10u64 + ((ch - 48 as byte) as u64);
+        i = i + 1;
+    }
+    return value;
+}
+
+fn connection_transaction_ensure_watched(tx: &ConnectionTransaction) !&RedisObject {
+    if tx.watched != null {
+        return tx.watched;
+    }
+    const watched: &RedisObject = create_hash_object() catch {
+        return error.AllocOutOfMemory;
+    };
+    tx.watched = watched;
+    return watched;
+}
+
+fn connection_transaction_watch_key(tx: &ConnectionTransaction, engine: &Engine, key: &[byte]) !void {
+    const watched: &RedisObject = try connection_transaction_ensure_watched(tx);
+    var version_buf: Sds = sds_empty() catch {
+        return error.AllocOutOfMemory;
+    };
+    defer {
+        sds_free(&version_buf);
+    }
+    try connection_sds_append_u64(&version_buf, engine_watch_version(engine, key));
+    _ = try hash_object_set_field(watched, key, version_buf.buf[0: version_buf.len]);
+}
+
+fn connection_transaction_watches_match(tx: &ConnectionTransaction, engine: &Engine) bool {
+    if tx == null || tx.watched == null {
+        return true;
+    }
+
+    var iter: DictIterator = dict_iter_new();
+    var entry: &DictEntry = dict_iter_next(&tx.watched.hash_dict, &iter);
+    while entry != null {
+        const key: &[byte] = entry.key.buf[0: entry.key.len];
+        const version_obj_result: !&RedisObject = hash_object_get_field(tx.watched, key);
+        const version_obj: &RedisObject = version_obj_result catch {
+            return false;
+        };
+        const watched_version: u64 = connection_parse_u64(version_obj.value.buf[0: version_obj.value.len]) catch {
+            return false;
+        };
+        if engine_watch_version(engine, key) != watched_version {
+            return false;
+        }
+        entry = dict_iter_next(&tx.watched.hash_dict, &iter);
+    }
+    return true;
 }
 
 fn connection_raw_reply_owned(data: &[byte]) CommandReply {
@@ -814,6 +915,18 @@ export fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transac
             resp_value_free(&parsed.value);
             return ConnectionProcessResult{ response_len: nested_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
         }
+        if command.info.cmd_type == CommandType.command_watch {
+            const watch_reply: CommandReply = connection_error_reply(&"ERR WATCH inside MULTI is not allowed"[0: 37]);
+            const watch_n: usize = try connection_encode_reply(&watch_reply, out, out_cap);
+            resp_value_free(&parsed.value);
+            return ConnectionProcessResult{ response_len: watch_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+        }
+        if command.info.cmd_type == CommandType.command_unwatch {
+            const unwatch_reply: CommandReply = connection_error_reply(&"ERR UNWATCH inside MULTI is not allowed"[0: 39]);
+            const unwatch_n: usize = try connection_encode_reply(&unwatch_reply, out, out_cap);
+            resp_value_free(&parsed.value);
+            return ConnectionProcessResult{ response_len: unwatch_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+        }
         if command.info.cmd_type == CommandType.command_discard {
             connection_transaction_reset(tx);
             const discard_reply: CommandReply = connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
@@ -822,6 +935,14 @@ export fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transac
             return ConnectionProcessResult{ response_len: discard_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
         }
         if command.info.cmd_type == CommandType.command_exec {
+            if !connection_transaction_watches_match(tx, engine) {
+                var aborted_reply: CommandReply = connection_raw_reply_owned(&"*-1\r\n"[0: 5]);
+                connection_transaction_reset(tx);
+                const aborted_n: usize = try connection_encode_reply(&aborted_reply, out, out_cap);
+                command_reply_cleanup(&aborted_reply);
+                resp_value_free(&parsed.value);
+                return ConnectionProcessResult{ response_len: aborted_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+            }
             var exec_close_after: bool = false;
             var exec_replicaof_requested: bool = false;
             var exec_replicaof_promote: bool = false;
@@ -875,12 +996,41 @@ export fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transac
     }
 
     if command.info.cmd_type == CommandType.command_multi {
-        connection_transaction_reset(tx);
+        connection_transaction_clear_queue(tx);
         tx.active = true;
         const multi_reply: CommandReply = connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
         const multi_n: usize = try connection_encode_reply(&multi_reply, out, out_cap);
         resp_value_free(&parsed.value);
         return ConnectionProcessResult{ response_len: multi_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+    }
+    if command.info.cmd_type == CommandType.command_watch {
+        var watch_index: usize = 1;
+        while watch_index < command.argc {
+            const key: &[byte] = command_arg_data(&command, watch_index) catch {
+                const watch_wrong_arity: CommandReply = connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+                const watch_wrong_n: usize = try connection_encode_reply(&watch_wrong_arity, out, out_cap);
+                resp_value_free(&parsed.value);
+                return ConnectionProcessResult{ response_len: watch_wrong_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+            };
+            _ = connection_transaction_watch_key(tx, engine, key) catch {
+                const watch_oom: CommandReply = connection_error_reply(&"ERR out of memory"[0: 17]);
+                const watch_oom_n: usize = try connection_encode_reply(&watch_oom, out, out_cap);
+                resp_value_free(&parsed.value);
+                return ConnectionProcessResult{ response_len: watch_oom_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+            };
+            watch_index = watch_index + 1;
+        }
+        const watch_ok: CommandReply = connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+        const watch_ok_n: usize = try connection_encode_reply(&watch_ok, out, out_cap);
+        resp_value_free(&parsed.value);
+        return ConnectionProcessResult{ response_len: watch_ok_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+    }
+    if command.info.cmd_type == CommandType.command_unwatch {
+        connection_transaction_clear_watches(tx);
+        const unwatch_ok: CommandReply = connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+        const unwatch_ok_n: usize = try connection_encode_reply(&unwatch_ok, out, out_cap);
+        resp_value_free(&parsed.value);
+        return ConnectionProcessResult{ response_len: unwatch_ok_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
     }
     if command.info.cmd_type == CommandType.command_exec {
         const exec_without_multi: CommandReply = connection_error_reply(&"ERR EXEC without MULTI"[0: 22]);

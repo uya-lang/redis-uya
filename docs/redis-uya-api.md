@@ -221,6 +221,42 @@ DISCARD
 
 - 会清空当前连接已入队命令，并退出事务态
 
+### `WATCH`
+
+格式：
+
+```text
+WATCH key [key ...]
+```
+
+返回：
+
+- 成功：`+OK`
+- 在 `MULTI` 事务态内调用：`-ERR WATCH inside MULTI is not allowed`
+
+说明：
+
+- 当前按键记录观察版本
+- 被观察键在 `EXEC` 前被其他写命令改动时，`EXEC` 返回 Null Array
+
+### `UNWATCH`
+
+格式：
+
+```text
+UNWATCH
+```
+
+返回：
+
+- 成功：`+OK`
+- 在 `MULTI` 事务态内调用：`-ERR UNWATCH inside MULTI is not allowed`
+
+说明：
+
+- 会清空当前连接的观察集
+- `EXEC` 或 `DISCARD` 完成后也会自动清空观察集
+
 ### `SAVE`
 
 格式：

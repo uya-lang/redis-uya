@@ -10,7 +10,7 @@
 
 `redis-uya` 是一个使用 **Uya 编程语言** 从零实现的生产级高性能内存数据库系统。项目长期目标是兼容 Redis 6.2+ 协议，覆盖核心数据结构、持久化、复制、基础集群与性能工程，并在同条件核心场景上超过 Redis。
 
-当前项目已完成 `v0.4.0` 规划任务，并已进入 `v0.5.0`：在 `v0.1.0` 发布闭环、`v0.2.0` 数据结构扩展和 `v0.3.0` 持久化增强基础上，补齐了复制角色与状态机、`PSYNC / backlog`、replica 侧全量同步、定时拉取式增量同步、复制心跳、主从一致性 smoke，以及连接级最小 `MULTI/EXEC/DISCARD`。
+当前项目已完成 `v0.4.0` 规划任务，并已进入 `v0.5.0`：在 `v0.1.0` 发布闭环、`v0.2.0` 数据结构扩展和 `v0.3.0` 持久化增强基础上，补齐了复制角色与状态机、`PSYNC / backlog`、replica 侧全量同步、定时拉取式增量同步、复制心跳、主从一致性 smoke，以及连接级最小 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`。
 
 ## 核心目标
 
@@ -59,7 +59,7 @@
 - 增量同步：replica 在 connected 状态下周期性 `PSYNC replid offset` 拉取 backlog delta 并回放
 - 复制心跳：replica 周期性 `PING` master，链路失败时回到 `configured` 并等待重同步
 - 主从一致性：当前五类对象已有 full sync + incremental smoke
-- 事务控制最小子集：连接级 `MULTI/EXEC/DISCARD`，支持 `QUEUED`、`EXEC` 数组回复和 `DISCARD` 丢弃
+- 事务控制最小子集：连接级 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`，支持 `QUEUED`、`EXEC` 数组回复、观察键变更后的 Null Array 中止和 `DISCARD` 丢弃
 - Python 客户端风格集成：覆盖更多命令与控制面交互
 
 当前进行中：

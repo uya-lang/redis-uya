@@ -219,3 +219,62 @@ export fn test_connection_process_multi_exec_discard() !void {
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);
 }
+
+export fn test_connection_process_watch_unwatch() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var tx: ConnectionTransaction = connection_transaction_new();
+    defer {
+        connection_transaction_reset(&tx);
+    }
+    var out: [byte: 256] = [];
+
+    const watch: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$5\r\nWATCH\r\n$7\r\nwatched\r\n"[0: 28], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: watch.response_len], &"+OK\r\n"[0: 5]));
+
+    const multi: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$5\r\nMULTI\r\n"[0: 15], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: multi.response_len], &"+OK\r\n"[0: 5]));
+
+    const watch_inside_multi: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$5\r\nWATCH\r\n$7\r\nwatched\r\n"[0: 28], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: watch_inside_multi.response_len], &"-ERR WATCH inside MULTI is not allowed\r\n"[0: 40]));
+
+    const queued_set: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nSET\r\n$7\r\nwatched\r\n$3\r\ntxn\r\n"[0: 37], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: queued_set.response_len], &"+QUEUED\r\n"[0: 9]));
+
+    const outside_set: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$3\r\nSET\r\n$7\r\nwatched\r\n$7\r\noutside\r\n"[0: 41], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: outside_set.response_len], &"+OK\r\n"[0: 5]));
+
+    const exec_abort: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$4\r\nEXEC\r\n"[0: 14], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: exec_abort.response_len], &"*-1\r\n"[0: 5]));
+
+    const get_outside: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$3\r\nGET\r\n$7\r\nwatched\r\n"[0: 26], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: get_outside.response_len], &"$7\r\noutside\r\n"[0: 13]));
+
+    const watch_again: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$5\r\nWATCH\r\n$7\r\nwatched\r\n"[0: 28], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: watch_again.response_len], &"+OK\r\n"[0: 5]));
+
+    const unwatch: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$7\r\nUNWATCH\r\n"[0: 17], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: unwatch.response_len], &"+OK\r\n"[0: 5]));
+
+    const multi_again: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$5\r\nMULTI\r\n"[0: 15], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: multi_again.response_len], &"+OK\r\n"[0: 5]));
+
+    const unwatch_inside_multi: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$7\r\nUNWATCH\r\n"[0: 17], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: unwatch_inside_multi.response_len], &"-ERR UNWATCH inside MULTI is not allowed\r\n"[0: 42]));
+
+    const queued_set_again: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nSET\r\n$7\r\nwatched\r\n$2\r\nok\r\n"[0: 36], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: queued_set_again.response_len], &"+QUEUED\r\n"[0: 9]));
+
+    const outside_set_again: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$3\r\nSET\r\n$7\r\nwatched\r\n$5\r\nother\r\n"[0: 39], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: outside_set_again.response_len], &"+OK\r\n"[0: 5]));
+
+    const exec_ok: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$4\r\nEXEC\r\n"[0: 14], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: exec_ok.response_len], &"*1\r\n+OK\r\n"[0: 9]));
+
+    const get_ok: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$3\r\nGET\r\n$7\r\nwatched\r\n"[0: 26], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: get_ok.response_len], &"$2\r\nok\r\n"[0: 8]));
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}

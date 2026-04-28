@@ -125,3 +125,4 @@ bash scripts/verify_definition_of_done.sh
 | DoD 项 | 证据 |
 |--------|------|
 | Cluster 槽位模型可用：按 Redis Cluster CRC16 计算 `0..16383` 槽位，支持 `{hash-tag}` 子串选择，空 tag、缺失右括号、多个 tag 与嵌套大括号边界行为有单元证据 | `src/cluster/slots.uya`、`tests/unit/cluster_slots_test.uya` |
+| 节点元数据模型可用：支持 40 字节 node id、本地 master 默认构造、host/port/bus port、master/replica 角色、flags、config epoch 与 connected 状态，并覆盖显式元数据和角色名边界 | `src/cluster/node.uya`、`tests/unit/cluster_node_test.uya` |

@@ -7,6 +7,9 @@ use tests.unit.cluster_slots_test.test_cluster_crc16_known_values;
 use tests.unit.cluster_slots_test.test_cluster_hash_tags;
 use tests.unit.cluster_slots_test.test_cluster_hash_tag_edge_cases;
 use tests.unit.cluster_slots_test.test_cluster_slot_range;
+use tests.unit.cluster_node_test.test_cluster_node_self_defaults;
+use tests.unit.cluster_node_test.test_cluster_node_explicit_metadata;
+use tests.unit.cluster_node_test.test_cluster_node_role_names;
 use tests.unit.util_time_test.test_time_monotonic_shape;
 use tests.unit.util_log_test.test_log_level_state;
 use tests.unit.memory_allocator_test.test_allocator_alloc_free;
@@ -145,6 +148,18 @@ export fn main() i32 {
     const before_cluster_slot_range: i32 = failed;
     _ = test_cluster_slot_range() catch { printf("[FAIL] cluster_slots/range\n" as *byte); failed = failed + 1; };
     if failed == before_cluster_slot_range { printf("[PASS] cluster_slots/range\n" as *byte); }
+
+    const before_cluster_node_self: i32 = failed;
+    _ = test_cluster_node_self_defaults() catch { printf("[FAIL] cluster_node/self_defaults\n" as *byte); failed = failed + 1; };
+    if failed == before_cluster_node_self { printf("[PASS] cluster_node/self_defaults\n" as *byte); }
+
+    const before_cluster_node_meta: i32 = failed;
+    _ = test_cluster_node_explicit_metadata() catch { printf("[FAIL] cluster_node/explicit_metadata\n" as *byte); failed = failed + 1; };
+    if failed == before_cluster_node_meta { printf("[PASS] cluster_node/explicit_metadata\n" as *byte); }
+
+    const before_cluster_node_role: i32 = failed;
+    _ = test_cluster_node_role_names() catch { printf("[FAIL] cluster_node/role_names\n" as *byte); failed = failed + 1; };
+    if failed == before_cluster_node_role { printf("[PASS] cluster_node/role_names\n" as *byte); }
 
     const before_time: i32 = failed;
     _ = test_time_monotonic_shape() catch { printf("[FAIL] util_time/shape\n" as *byte); failed = failed + 1; };

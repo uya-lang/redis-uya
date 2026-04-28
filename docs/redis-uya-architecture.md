@@ -54,6 +54,7 @@ server open
 ### `src/cluster/`
 
 - `slots.uya`：Redis Cluster CRC16、hash tag 选择和 `0..16383` 槽位计算；当前作为集群后续命令与重定向的基础工具模块
+- `node.uya`：最小集群节点元数据，记录 40 字节 node id、host/port/bus port、master/replica 角色、flags、config epoch 和连接状态
 
 ### `src/storage/`
 
@@ -146,7 +147,8 @@ server open
 - `cluster/slots.uya` 已提供 Redis Cluster hash slot 基础模型
 - `cluster_key_slot()` 使用 CRC16 计算槽位并限制在 `0..16383`
 - `cluster_hash_key()` 复用 Redis hash tag 规则：首个有效 `{...}` 中的非空内容作为 hash key，空 tag 或缺失右括号时回退完整 key
-- 当前尚未接入网络命令、节点元数据、槽位归属判断和重定向响应路径
+- `cluster/node.uya` 已提供节点元数据模型，可构造本地 master 节点和显式远端节点元数据
+- 当前尚未接入网络命令、槽位归属判断和重定向响应路径
 
 ## 10. 当前限制
 
@@ -154,7 +156,7 @@ server open
 - `BGSAVE` / `BGREWRITEAOF` 已有最小子进程后台路径，但仍未做更细粒度的后台资源隔离与吞吐优化
 - RDB 已覆盖当前五类对象和绝对过期时间，但仍不是 Redis 完整二进制兼容
 - 复制当前已覆盖角色与状态机、`PSYNC / backlog`、replica 侧全量同步、定时拉取式增量同步与心跳；仍不是 Redis 那种长连接流式推送复制
-- 集群当前仅有槽位模型，尚未提供 `CLUSTER` 命令、节点元数据、槽位归属和 `MOVED/ASK` 重定向
+- 集群当前已有槽位模型和节点元数据模型，尚未提供 `CLUSTER` 命令、槽位归属和 `MOVED/ASK` 重定向
 - 事务当前已覆盖连接级最小 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`，但仍没有更完整的 Redis 事务中止传播、脚本联动和控制面扩展
 - RESP3 当前是 `HELLO 2/3` 驱动的最小闭环，仍不是完整 RESP3 类型输出与客户端兼容矩阵
 - Pub/Sub 当前是固定容量最小闭环，仍没有 pattern 订阅、完整 subscribed-mode 命令限制和背压缓冲

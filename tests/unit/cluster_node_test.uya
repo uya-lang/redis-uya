@@ -1,0 +1,99 @@
+use tests.unit.assert.assert_eq_i32;
+use tests.unit.assert.assert_eq_u64;
+use tests.unit.assert.assert_true;
+
+use src.cluster.node.CLUSTER_NODE_FLAG_FAIL;
+use src.cluster.node.CLUSTER_NODE_FLAG_MASTER;
+use src.cluster.node.CLUSTER_NODE_FLAG_MYSELF;
+use src.cluster.node.CLUSTER_NODE_FLAG_REPLICA;
+use src.cluster.node.CLUSTER_NODE_ID_LEN;
+use src.cluster.node.ClusterNode;
+use src.cluster.node.ClusterNodeRole;
+use src.cluster.node.cluster_node_has_flag;
+use src.cluster.node.cluster_node_host;
+use src.cluster.node.cluster_node_id;
+use src.cluster.node.cluster_node_is_local;
+use src.cluster.node.cluster_node_is_master;
+use src.cluster.node.cluster_node_new;
+use src.cluster.node.cluster_node_new_self;
+use src.cluster.node.cluster_node_role_name;
+
+fn cluster_node_test_slice_eq(a: &[byte], b: &[byte]) bool {
+    if a.len != b.len {
+        return false;
+    }
+    var i: usize = 0;
+    while i < a.len {
+        if a.ptr[i] != b.ptr[i] {
+            return false;
+        }
+        i = i + 1;
+    }
+    return true;
+}
+
+fn cluster_node_test_is_hex(data: &[byte]) bool {
+    var i: usize = 0;
+    while i < data.len {
+        const ch: byte = data.ptr[i];
+        const digit: bool = ch >= 48 as byte && ch <= 57 as byte;
+        const lower_hex: bool = ch >= 97 as byte && ch <= 102 as byte;
+        if !digit && !lower_hex {
+            return false;
+        }
+        i = i + 1;
+    }
+    return true;
+}
+
+export fn test_cluster_node_self_defaults() !void {
+    var host: [byte: 9] = [49, 50, 55, 46, 48, 46, 48, 46, 49];
+    const node: ClusterNode = cluster_node_new_self(host[0: 9], 6380);
+    try assert_eq_i32(cluster_node_id(&node).len as i32, CLUSTER_NODE_ID_LEN as i32);
+    try assert_true(cluster_node_test_is_hex(cluster_node_id(&node)));
+    try assert_true(cluster_node_test_slice_eq(cluster_node_host(&node), host[0: 9]));
+    try assert_eq_i32(node.port, 6380);
+    try assert_eq_i32(node.bus_port, 16380);
+    try assert_true(node.connected);
+    try assert_true(cluster_node_is_local(&node));
+    try assert_true(cluster_node_is_master(&node));
+    try assert_true(cluster_node_has_flag(&node, CLUSTER_NODE_FLAG_MYSELF));
+    try assert_true(cluster_node_has_flag(&node, CLUSTER_NODE_FLAG_MASTER));
+}
+
+export fn test_cluster_node_explicit_metadata() !void {
+    var id: [byte: 40] = [
+        48, 49, 50, 51, 52, 53, 54, 55,
+        56, 57, 97, 98, 99, 100, 101, 102,
+        48, 49, 50, 51, 52, 53, 54, 55,
+        56, 57, 97, 98, 99, 100, 101, 102,
+        48, 49, 50, 51, 52, 53, 54, 55,
+    ];
+    var host: [byte: 9] = [49, 48, 46, 48, 46, 48, 46, 50, 49];
+    const node: ClusterNode = cluster_node_new(
+        id[0: 40],
+        host[0: 9],
+        7000,
+        ClusterNodeRole.cluster_node_replica,
+        CLUSTER_NODE_FLAG_REPLICA | CLUSTER_NODE_FLAG_FAIL,
+        42u64,
+        false,
+    );
+
+    try assert_true(cluster_node_test_slice_eq(cluster_node_id(&node), id[0: 40]));
+    try assert_true(cluster_node_test_slice_eq(cluster_node_host(&node), host[0: 9]));
+    try assert_eq_i32(node.port, 7000);
+    try assert_eq_i32(node.bus_port, 17000);
+    try assert_eq_u64(node.config_epoch, 42u64);
+    try assert_true(!node.connected);
+    try assert_true(cluster_node_has_flag(&node, CLUSTER_NODE_FLAG_REPLICA));
+    try assert_true(cluster_node_has_flag(&node, CLUSTER_NODE_FLAG_FAIL));
+    try assert_true(!cluster_node_has_flag(&node, CLUSTER_NODE_FLAG_MASTER));
+    try assert_true(!cluster_node_is_local(&node));
+    try assert_true(!cluster_node_is_master(&node));
+}
+
+export fn test_cluster_node_role_names() !void {
+    try assert_true(cluster_node_test_slice_eq(cluster_node_role_name(ClusterNodeRole.cluster_node_master), &"master"[0: 6]));
+    try assert_true(cluster_node_test_slice_eq(cluster_node_role_name(ClusterNodeRole.cluster_node_replica), &"slave"[0: 5]));
+}

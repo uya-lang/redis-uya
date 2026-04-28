@@ -1,0 +1,167 @@
+// cluster/node.uya - Redis Cluster node metadata.
+
+use src.util.crc64.crc64;
+
+export const CLUSTER_NODE_ID_LEN: usize = 40;
+export const CLUSTER_NODE_ID_CAP: usize = 41;
+export const CLUSTER_NODE_HOST_CAP: usize = 64;
+
+export const CLUSTER_NODE_FLAG_MYSELF: u64 = 1u64;
+export const CLUSTER_NODE_FLAG_MASTER: u64 = 2u64;
+export const CLUSTER_NODE_FLAG_REPLICA: u64 = 4u64;
+export const CLUSTER_NODE_FLAG_FAIL: u64 = 8u64;
+
+export enum ClusterNodeRole {
+    cluster_node_master,
+    cluster_node_replica,
+}
+
+export struct ClusterNode {
+    id: [byte: CLUSTER_NODE_ID_CAP],
+    host: [byte: CLUSTER_NODE_HOST_CAP],
+    port: i32,
+    bus_port: i32,
+    role: ClusterNodeRole,
+    flags: u64,
+    config_epoch: u64,
+    connected: bool,
+}
+
+fn cluster_node_copy_bytes(dst: &[byte], src: &[byte]) void {
+    var i: usize = 0;
+    while i < dst.len && i < src.len {
+        dst.ptr[i] = src.ptr[i];
+        i = i + 1;
+    }
+    if i < dst.len {
+        dst.ptr[i] = 0 as byte;
+    }
+}
+
+fn cluster_node_cstring_slice(data: &[byte]) &[byte] {
+    var len: usize = 0;
+    while len < data.len && data.ptr[len] != 0 as byte {
+        len = len + 1;
+    }
+    return data[0: len];
+}
+
+fn cluster_node_hex_nibble(value: byte) byte {
+    if value < 10 as byte {
+        return (48 as byte) + value;
+    }
+    return (97 as byte) + (value - 10 as byte);
+}
+
+fn cluster_node_write_hex8(out: &[byte], value: u32) void {
+    var shift: i32 = 28;
+    var i: usize = 0;
+    while i < 8 {
+        const nibble: byte = ((value >> shift) & 15u32) as byte;
+        out.ptr[i] = cluster_node_hex_nibble(nibble);
+        shift = shift - 4;
+        i = i + 1;
+    }
+}
+
+fn cluster_node_build_id(out: &[byte], host: &[byte], port: i32) void {
+    var seed_bytes: [byte: 72] = [];
+    var i: usize = 0;
+    while i < host.len && i < 64 {
+        seed_bytes[i] = host.ptr[i];
+        i = i + 1;
+    }
+    seed_bytes[64] = (port & 255) as byte;
+    seed_bytes[65] = ((port >> 8) & 255) as byte;
+    seed_bytes[66] = ((port >> 16) & 255) as byte;
+    seed_bytes[67] = ((port >> 24) & 255) as byte;
+
+    var block: usize = 0;
+    while block < 5 {
+        seed_bytes[68] = block as byte;
+        seed_bytes[69] = (block * 17) as byte;
+        seed_bytes[70] = (block * 31) as byte;
+        seed_bytes[71] = (block * 43) as byte;
+        const hashed: u64 = crc64(seed_bytes[0: 72]);
+        cluster_node_write_hex8(out[(block * 8): 8], (hashed & 0xffffffffu64) as u32);
+        block = block + 1;
+    }
+    out.ptr[CLUSTER_NODE_ID_LEN] = 0 as byte;
+}
+
+export fn cluster_node_empty() ClusterNode {
+    return ClusterNode{
+        id: [],
+        host: [],
+        port: 0,
+        bus_port: 0,
+        role: ClusterNodeRole.cluster_node_master,
+        flags: 0u64,
+        config_epoch: 0u64,
+        connected: false,
+    };
+}
+
+export fn cluster_node_new(
+    id: &[byte],
+    host: &[byte],
+    port: i32,
+    role: ClusterNodeRole,
+    flags: u64,
+    config_epoch: u64,
+    connected: bool,
+) ClusterNode {
+    var node: ClusterNode = cluster_node_empty();
+    if id.len == 0 {
+        cluster_node_build_id(node.id[0: CLUSTER_NODE_ID_CAP], host, port);
+    } else {
+        cluster_node_copy_bytes(node.id[0: CLUSTER_NODE_ID_CAP], id);
+    }
+    cluster_node_copy_bytes(node.host[0: CLUSTER_NODE_HOST_CAP], host);
+    node.port = port;
+    node.bus_port = port + 10000;
+    node.role = role;
+    node.flags = flags;
+    node.config_epoch = config_epoch;
+    node.connected = connected;
+    return node;
+}
+
+export fn cluster_node_new_self(host: &[byte], port: i32) ClusterNode {
+    return cluster_node_new(
+        (null as &byte)[0: 0],
+        host,
+        port,
+        ClusterNodeRole.cluster_node_master,
+        CLUSTER_NODE_FLAG_MYSELF | CLUSTER_NODE_FLAG_MASTER,
+        0u64,
+        true,
+    );
+}
+
+export fn cluster_node_id(node: &ClusterNode) &[byte] {
+    return cluster_node_cstring_slice(node.id[0: CLUSTER_NODE_ID_CAP]);
+}
+
+export fn cluster_node_host(node: &ClusterNode) &[byte] {
+    return cluster_node_cstring_slice(node.host[0: CLUSTER_NODE_HOST_CAP]);
+}
+
+export fn cluster_node_role_name(role: ClusterNodeRole) &[byte] {
+    if role == ClusterNodeRole.cluster_node_replica {
+        return &"slave"[0: 5];
+    }
+    return &"master"[0: 6];
+}
+
+export fn cluster_node_has_flag(node: &ClusterNode, flag: u64) bool {
+    return (node.flags & flag) != 0u64;
+}
+
+export fn cluster_node_is_local(node: &ClusterNode) bool {
+    return cluster_node_has_flag(node, CLUSTER_NODE_FLAG_MYSELF);
+}
+
+export fn cluster_node_is_master(node: &ClusterNode) bool {
+    return node.role == ClusterNodeRole.cluster_node_master && cluster_node_has_flag(node, CLUSTER_NODE_FLAG_MASTER);
+}

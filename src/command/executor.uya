@@ -27,6 +27,9 @@ use src.storage.engine.get_key_expire_at;
 use src.storage.engine.engine_scan_keys_at;
 use src.storage.engine.engine_evict_allkeys_lru;
 use src.storage.engine.engine_evict_allkeys_lfu;
+use src.storage.engine.engine_evict_volatile_lru;
+use src.storage.engine.engine_evict_volatile_lfu;
+use src.storage.engine.engine_evict_volatile_ttl;
 use src.storage.object.RedisObject;
 use src.storage.object.ListNode;
 use src.storage.object.ListRangeView;
@@ -349,6 +352,18 @@ fn command_executor_prepare_maxmemory(engine: &Engine, runtime: &CommandRuntimeI
     }
     if runtime.config.maxmemory_policy == MaxmemoryPolicy.maxmemory_allkeys_lfu {
         _ = engine_evict_allkeys_lfu(engine, runtime.config.maxmemory, estimated, now_ms);
+        return command_executor_memory_fits(runtime.config.maxmemory, estimated);
+    }
+    if runtime.config.maxmemory_policy == MaxmemoryPolicy.maxmemory_volatile_lru {
+        _ = engine_evict_volatile_lru(engine, runtime.config.maxmemory, estimated, now_ms);
+        return command_executor_memory_fits(runtime.config.maxmemory, estimated);
+    }
+    if runtime.config.maxmemory_policy == MaxmemoryPolicy.maxmemory_volatile_lfu {
+        _ = engine_evict_volatile_lfu(engine, runtime.config.maxmemory, estimated, now_ms);
+        return command_executor_memory_fits(runtime.config.maxmemory, estimated);
+    }
+    if runtime.config.maxmemory_policy == MaxmemoryPolicy.maxmemory_volatile_ttl {
+        _ = engine_evict_volatile_ttl(engine, runtime.config.maxmemory, estimated, now_ms);
         return command_executor_memory_fits(runtime.config.maxmemory, estimated);
     }
     return false;

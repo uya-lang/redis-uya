@@ -40,4 +40,4 @@
 
 ## 当前阶段
 
-项目当前主线已完成 `v0.5.0` 规划任务，并已进入 `v0.6.0` 内存与性能控制：当前已补齐复制角色与状态机、`PSYNC / backlog`、replica 侧全量同步、定时拉取式增量同步、复制心跳、主从一致性 smoke、连接级最小 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`、`HELLO 2/3` 驱动的 RESP3 最小协议闭环、`PUBLISH/SUBSCRIBE/UNSUBSCRIBE` 最小 Pub/Sub 闭环、`CLIENT` / `CONFIG` 控制面兼容子集、v0.5 兼容性回归，以及 `maxmemory` noeviction、`allkeys-lru` 和 `allkeys-lfu` 基线。下一步继续推进 volatile 策略与内存压力测试。
+项目当前主线已完成 `v0.5.0` 规划任务，并已进入 `v0.6.0` 内存与性能控制：当前已补齐复制角色与状态机、`PSYNC / backlog`、replica 侧全量同步、定时拉取式增量同步、复制心跳、主从一致性 smoke、连接级最小 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`、`HELLO 2/3` 驱动的 RESP3 最小协议闭环、`PUBLISH/SUBSCRIBE/UNSUBSCRIBE` 最小 Pub/Sub 闭环、`CLIENT` / `CONFIG` 控制面兼容子集、v0.5 兼容性回归，以及 `maxmemory` noeviction、`allkeys-*` 和 `volatile-*` 基线。下一步继续推进内存统计、Slab allocator 与压力测试。

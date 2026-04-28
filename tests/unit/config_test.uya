@@ -61,13 +61,17 @@ export fn test_config_parse_memory_units() !void {
     const kb: &[byte] = &"maxmemory 2kb\n"[0: 14];
     const mb: &[byte] = &"maxmemory 3m\n"[0: 13];
     const lfu: &[byte] = &"maxmemory-policy allkeys-lfu\n"[0: 29];
+    const volatile_ttl: &[byte] = &"maxmemory-policy volatile-ttl\n"[0: 30];
     const cfg_kb: ServerConfig = try parse_config_text(kb);
     const cfg_mb: ServerConfig = try parse_config_text(mb);
     const cfg_lfu: ServerConfig = try parse_config_text(lfu);
+    const cfg_volatile_ttl: ServerConfig = try parse_config_text(volatile_ttl);
     try assert_eq_i32(cfg_kb.maxmemory as i32, 2048);
     try assert_eq_i32(cfg_mb.maxmemory as i32, 3 * 1024 * 1024);
     try assert_eq_i32(cfg_lfu.maxmemory_policy as i32, MaxmemoryPolicy.maxmemory_allkeys_lfu as i32);
     try assert_true(config_test_slice_eq(maxmemory_policy_name(cfg_lfu.maxmemory_policy), &"allkeys-lfu"[0: 11]));
+    try assert_eq_i32(cfg_volatile_ttl.maxmemory_policy as i32, MaxmemoryPolicy.maxmemory_volatile_ttl as i32);
+    try assert_true(config_test_slice_eq(maxmemory_policy_name(cfg_volatile_ttl.maxmemory_policy), &"volatile-ttl"[0: 12]));
 }
 
 export fn test_config_parse_invalid_number() !void {

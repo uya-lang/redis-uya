@@ -16,6 +16,9 @@ use src.storage.engine.engine_active_expire_cycle_at;
 use src.storage.engine.engine_scan_keys_at;
 use src.storage.engine.engine_evict_allkeys_lru;
 use src.storage.engine.engine_evict_allkeys_lfu;
+use src.storage.engine.engine_evict_volatile_lru;
+use src.storage.engine.engine_evict_volatile_lfu;
+use src.storage.engine.engine_evict_volatile_ttl;
 use src.storage.object.RedisObject;
 use src.storage.object.Encoding;
 use src.storage.object.create_string_object;
@@ -118,6 +121,84 @@ export fn test_engine_allkeys_lfu_evicts_least_frequent() !void {
     try assert_true(engine_key_missing_at(&engine, &"cold"[0: 4], 4000u64));
     const live_hot: &RedisObject = try lookup_key_at(&engine, &"hot"[0: 3], 4000u64);
     try assert_true(engine_slice_eq(live_hot.value.buf[0: live_hot.value.len], hot_value[0: 1024]));
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_engine_volatile_lru_evicts_only_expiring_keys() !void {
+    reset_memory_stats_for_test();
+    var engine: Engine = engine_new();
+    var value: [byte: 1024] = [];
+    engine_fill_bytes(value[0: 1024], 118 as byte);
+
+    const persistent_obj: &RedisObject = try create_string_object(value[0: 1024]);
+    const old_obj: &RedisObject = try create_string_object(value[0: 1024]);
+    const hot_obj: &RedisObject = try create_string_object(value[0: 1024]);
+    try set_key_at(&engine, &"persistent"[0: 10], persistent_obj, 500u64);
+    try set_key_at(&engine, &"old"[0: 3], old_obj, 1000u64);
+    try set_key_at(&engine, &"hot"[0: 3], hot_obj, 2000u64);
+    try set_key_expire_at(&engine, &"old"[0: 3], 60000u64);
+    try set_key_expire_at(&engine, &"hot"[0: 3], 60000u64);
+    _ = try lookup_key_at(&engine, &"hot"[0: 3], 3000u64);
+
+    const limit: usize = used_memory() - 1;
+    const evicted: usize = engine_evict_volatile_lru(&engine, limit, 0, 4000u64);
+
+    try assert_eq_i32(evicted as i32, 1);
+    try assert_true(engine_key_missing_at(&engine, &"old"[0: 3], 4000u64));
+    _ = try lookup_key_at(&engine, &"hot"[0: 3], 4000u64);
+    _ = try lookup_key_at(&engine, &"persistent"[0: 10], 4000u64);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_engine_volatile_lfu_evicts_least_frequent_expiring_key() !void {
+    reset_memory_stats_for_test();
+    var engine: Engine = engine_new();
+    var value: [byte: 1024] = [];
+    engine_fill_bytes(value[0: 1024], 102 as byte);
+
+    const cold_obj: &RedisObject = try create_string_object(value[0: 1024]);
+    const hot_obj: &RedisObject = try create_string_object(value[0: 1024]);
+    try set_key_at(&engine, &"cold"[0: 4], cold_obj, 1000u64);
+    try set_key_at(&engine, &"hot"[0: 3], hot_obj, 1000u64);
+    try set_key_expire_at(&engine, &"cold"[0: 4], 60000u64);
+    try set_key_expire_at(&engine, &"hot"[0: 3], 60000u64);
+    _ = try lookup_key_at(&engine, &"hot"[0: 3], 2000u64);
+    _ = try lookup_key_at(&engine, &"hot"[0: 3], 3000u64);
+
+    const limit: usize = used_memory() - 1;
+    const evicted: usize = engine_evict_volatile_lfu(&engine, limit, 0, 4000u64);
+
+    try assert_eq_i32(evicted as i32, 1);
+    try assert_true(engine_key_missing_at(&engine, &"cold"[0: 4], 4000u64));
+    _ = try lookup_key_at(&engine, &"hot"[0: 3], 4000u64);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_engine_volatile_ttl_evicts_nearest_deadline() !void {
+    reset_memory_stats_for_test();
+    var engine: Engine = engine_new();
+    var value: [byte: 1024] = [];
+    engine_fill_bytes(value[0: 1024], 116 as byte);
+
+    const soon_obj: &RedisObject = try create_string_object(value[0: 1024]);
+    const later_obj: &RedisObject = try create_string_object(value[0: 1024]);
+    try set_key_at(&engine, &"soon"[0: 4], soon_obj, 1000u64);
+    try set_key_at(&engine, &"later"[0: 5], later_obj, 1000u64);
+    try set_key_expire_at(&engine, &"soon"[0: 4], 5000u64);
+    try set_key_expire_at(&engine, &"later"[0: 5], 60000u64);
+
+    const limit: usize = used_memory() - 1;
+    const evicted: usize = engine_evict_volatile_ttl(&engine, limit, 0, 2000u64);
+
+    try assert_eq_i32(evicted as i32, 1);
+    try assert_true(engine_key_missing_at(&engine, &"soon"[0: 4], 2000u64));
+    _ = try lookup_key_at(&engine, &"later"[0: 5], 2000u64);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

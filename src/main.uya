@@ -91,6 +91,15 @@ fn main_maxmemory_policy_arg() MaxmemoryPolicy {
     if main_cstring_eq(arg, &"allkeys-lfu"[0: 11]) {
         return MaxmemoryPolicy.maxmemory_allkeys_lfu;
     }
+    if main_cstring_eq(arg, &"volatile-lru"[0: 12]) {
+        return MaxmemoryPolicy.maxmemory_volatile_lru;
+    }
+    if main_cstring_eq(arg, &"volatile-lfu"[0: 12]) {
+        return MaxmemoryPolicy.maxmemory_volatile_lfu;
+    }
+    if main_cstring_eq(arg, &"volatile-ttl"[0: 12]) {
+        return MaxmemoryPolicy.maxmemory_volatile_ttl;
+    }
     return MaxmemoryPolicy.maxmemory_noeviction;
 }
 

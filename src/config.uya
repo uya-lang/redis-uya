@@ -16,6 +16,9 @@ export enum MaxmemoryPolicy {
     maxmemory_noeviction,
     maxmemory_allkeys_lru,
     maxmemory_allkeys_lfu,
+    maxmemory_volatile_lru,
+    maxmemory_volatile_lfu,
+    maxmemory_volatile_ttl,
 }
 
 export struct ServerConfig {
@@ -127,10 +130,28 @@ fn parse_maxmemory_policy(token: &[byte]) !MaxmemoryPolicy {
     if token_eq(token, &"allkeys-lfu"[0: 11]) {
         return MaxmemoryPolicy.maxmemory_allkeys_lfu;
     }
+    if token_eq(token, &"volatile-lru"[0: 12]) {
+        return MaxmemoryPolicy.maxmemory_volatile_lru;
+    }
+    if token_eq(token, &"volatile-lfu"[0: 12]) {
+        return MaxmemoryPolicy.maxmemory_volatile_lfu;
+    }
+    if token_eq(token, &"volatile-ttl"[0: 12]) {
+        return MaxmemoryPolicy.maxmemory_volatile_ttl;
+    }
     return error.ConfigInvalidValue;
 }
 
 export fn maxmemory_policy_name(policy: MaxmemoryPolicy) &[byte] {
+    if policy == MaxmemoryPolicy.maxmemory_volatile_lru {
+        return &"volatile-lru"[0: 12];
+    }
+    if policy == MaxmemoryPolicy.maxmemory_volatile_lfu {
+        return &"volatile-lfu"[0: 12];
+    }
+    if policy == MaxmemoryPolicy.maxmemory_volatile_ttl {
+        return &"volatile-ttl"[0: 12];
+    }
     if policy == MaxmemoryPolicy.maxmemory_allkeys_lfu {
         return &"allkeys-lfu"[0: 11];
     }

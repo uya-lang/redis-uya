@@ -46,6 +46,9 @@ use tests.unit.storage_engine_test.test_engine_active_expire_loop_continues;
 use tests.unit.storage_engine_test.test_engine_scan_keys_sorted_skips_expired;
 use tests.unit.storage_engine_test.test_engine_allkeys_lru_evicts_oldest;
 use tests.unit.storage_engine_test.test_engine_allkeys_lfu_evicts_least_frequent;
+use tests.unit.storage_engine_test.test_engine_volatile_lru_evicts_only_expiring_keys;
+use tests.unit.storage_engine_test.test_engine_volatile_lfu_evicts_least_frequent_expiring_key;
+use tests.unit.storage_engine_test.test_engine_volatile_ttl_evicts_nearest_deadline;
 use tests.unit.network_protocol_test.test_resp2_simple_string_error_integer;
 use tests.unit.network_protocol_test.test_resp2_bulk_string_and_nulls;
 use tests.unit.network_protocol_test.test_resp2_array_of_bulk_strings;
@@ -293,6 +296,18 @@ export fn main() i32 {
     const before_engine_lfu: i32 = failed;
     _ = test_engine_allkeys_lfu_evicts_least_frequent() catch { printf("[FAIL] storage_engine/allkeys_lfu\n" as *byte); failed = failed + 1; };
     if failed == before_engine_lfu { printf("[PASS] storage_engine/allkeys_lfu\n" as *byte); }
+
+    const before_engine_volatile_lru: i32 = failed;
+    _ = test_engine_volatile_lru_evicts_only_expiring_keys() catch { printf("[FAIL] storage_engine/volatile_lru\n" as *byte); failed = failed + 1; };
+    if failed == before_engine_volatile_lru { printf("[PASS] storage_engine/volatile_lru\n" as *byte); }
+
+    const before_engine_volatile_lfu: i32 = failed;
+    _ = test_engine_volatile_lfu_evicts_least_frequent_expiring_key() catch { printf("[FAIL] storage_engine/volatile_lfu\n" as *byte); failed = failed + 1; };
+    if failed == before_engine_volatile_lfu { printf("[PASS] storage_engine/volatile_lfu\n" as *byte); }
+
+    const before_engine_volatile_ttl: i32 = failed;
+    _ = test_engine_volatile_ttl_evicts_nearest_deadline() catch { printf("[FAIL] storage_engine/volatile_ttl\n" as *byte); failed = failed + 1; };
+    if failed == before_engine_volatile_ttl { printf("[PASS] storage_engine/volatile_ttl\n" as *byte); }
 
     const before_resp_line: i32 = failed;
     _ = test_resp2_simple_string_error_integer() catch { printf("[FAIL] network_protocol/simple_error_integer\n" as *byte); failed = failed + 1; };

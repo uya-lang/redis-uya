@@ -57,6 +57,9 @@ export extern "libc" fn write_to_buffer(stream: &FILE, buf: &const byte, n: usiz
     if n == 0 {
         return 0;
     }
+    if stream == null || buf == null {
+        return -1;
+    }
     
     const buf_size: usize = @len(stream.buffer);
     // 如果禁用了缓冲或缓冲区太小，直接写入
@@ -394,10 +397,10 @@ export extern "libc" fn print_i64(value: i64) usize {
 
 // 全局 FILE 存储（用于 fopen/fclose，split mirror 自举时会并发打开大量输出文件）
 var fopen_fd_storage: [FILE: 128] = [];
-const _FOPEN_W_FLAGS: i64 = 577;   // O_WRONLY | O_CREAT | O_TRUNC
-const _FOPEN_A_FLAGS: i64 = 1089;  // O_WRONLY | O_CREAT | O_APPEND
-const _FOPEN_W_PLUS_FLAGS: i64 = 578;   // O_RDWR | O_CREAT | O_TRUNC
-const _FOPEN_A_PLUS_FLAGS: i64 = 1090;  // O_RDWR | O_CREAT | O_APPEND
+const _FOPEN_W_FLAGS: i64 = 1537;   // Darwin O_WRONLY | O_CREAT | O_TRUNC
+const _FOPEN_A_FLAGS: i64 = 2561;  // Darwin O_WRONLY | O_CREAT | O_APPEND
+const _FOPEN_W_PLUS_FLAGS: i64 = 1538;   // Darwin O_RDWR | O_CREAT | O_TRUNC
+const _FOPEN_A_PLUS_FLAGS: i64 = 2562;  // Darwin O_RDWR | O_CREAT | O_APPEND
 
 // fopen - 打开文件（C 标准库兼容）
 // 返回：FILE*，失败返回 null

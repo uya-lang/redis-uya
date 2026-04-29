@@ -3,8 +3,8 @@
 UYA ?= ./uya/bin/uya
 SRC ?= src/main.uya
 BUILD_DIR ?= build
-BIN ?= ../$(BUILD_DIR)/redis-uya
-C_OUT ?= ../$(BUILD_DIR)/redis-uya.c
+BIN ?= $(BUILD_DIR)/redis-uya
+C_OUT ?= $(BUILD_DIR)/redis-uya.c
 TEST_DIR ?= tests/unit
 APP_WORKSPACE ?= $(BUILD_DIR)/app_workspace
 TEST_WORKSPACE ?= $(BUILD_DIR)/test_workspace
@@ -36,7 +36,7 @@ test:
 	@ln -s ../../src $(TEST_WORKSPACE)/src
 	@ln -s ../../tests $(TEST_WORKSPACE)/tests
 	@cp tests/unit/test_runner.uya $(TEST_WORKSPACE)/main.uya
-	$(UYA) build $(TEST_WORKSPACE)/main.uya -o ../$(BUILD_DIR)/unit-tests --c99 -e
+	$(UYA) build $(TEST_WORKSPACE)/main.uya -o $(BUILD_DIR)/unit-tests --c99 -e
 	$(BUILD_DIR)/unit-tests
 
 test-integration: build

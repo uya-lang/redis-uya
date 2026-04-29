@@ -1852,6 +1852,9 @@ fn uyagin_engine_run_shards(engine: &Engine, listener: &GinListener, opts: &Engi
     }
 
     var worker_count: i32 = shard_count - 1;
+    std.cfg(std.target_os == .tos_macos, {
+        worker_count = 0;
+    }, {})
     if worker_count > 31 {
         worker_count = 31;
         shard_count = 32;
@@ -1922,6 +1925,16 @@ fn uyagin_engine_run_shards(engine: &Engine, listener: &GinListener, opts: &Engi
     return total;
 }
 
+std.cfg(std.target_os == .tos_macos, {
+fn uyagin_engine_run(engine: &Engine, srv: &HttpServer, loop: EventLoop, scheduler: &Scheduler, opts: &EngineRunOptions, controller: &EngineRunController) !i32 {
+    _ = loop;
+    _ = scheduler;
+    if engine == null || srv == null || srv.listen_fd < 0 || opts == null {
+        return error.InvalidRequest;
+    }
+    return uyagin_run_simple_blocking(engine, srv, opts, controller);
+}
+}, {
 fn uyagin_engine_run(engine: &Engine, srv: &HttpServer, loop: EventLoop, scheduler: &Scheduler, opts: &EngineRunOptions, controller: &EngineRunController) !i32 {
     if engine == null || srv == null || srv.listen_fd < 0 || opts == null || scheduler == null {
         return error.InvalidRequest;
@@ -2124,6 +2137,37 @@ fn uyagin_engine_run(engine: &Engine, srv: &HttpServer, loop: EventLoop, schedul
 
     if accept_registered_fd >= 0 {
         _ = loop.deregister(accept_registered_fd) catch {};
+    }
+    return served_total;
+}
+})
+
+fn uyagin_run_simple_blocking(engine: &Engine, srv: &HttpServer, opts: &EngineRunOptions, controller: &EngineRunController) !i32 {
+    if engine == null || srv == null || srv.listen_fd < 0 || opts == null {
+        return error.InvalidRequest;
+    }
+    const options: EngineRunOptions = uyagin_run_options_normalize(*opts);
+    var scheduler: Scheduler = Scheduler{};
+    scheduler_init(&scheduler);
+    var served_total: i32 = 0;
+    while true {
+        if controller != null && controller.stop_requested != 0 {
+            break;
+        }
+        const fd: i32 = try sys_accept(srv.listen_fd, null, null);
+        uyagin_note_connection_open(engine);
+        var served: i32 = 0;
+        const served_result: !i32 = scheduler_run<!i32>(&scheduler, uyagin_serve_conn(engine, fd, &scheduler));
+        served = served_result catch {
+            uyagin_note_connection_close(engine);
+            continue;
+            0;
+        };
+        uyagin_note_connection_close(engine);
+        served_total = served_total + served;
+        if options.mode == UyaginMode.Debug {
+            break;
+        }
     }
     return served_total;
 }

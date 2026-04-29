@@ -840,6 +840,15 @@ extern "libc" fn uya_macos_fcntl(fd: i32, cmd: i32, arg: i32) !i32;
 extern "libc" fn uya_macos_pipe2(pipefd: &i32, flags: i32) !i32;
 extern "libc" fn uya_macos_dup2(oldfd: i32, newfd: i32) !i32;
 extern "libc" fn uya_macos_fcntl_getpath(fd: i32, buf: *byte, size: usize) !i32;
+extern "libc" fn uya_macos_socket(domain: i32, type: i32, protocol: i32) !i32;
+extern "libc" fn uya_macos_bind(sockfd: i32, addr: *void, addrlen: u32) !i32;
+extern "libc" fn uya_macos_listen(sockfd: i32, backlog: i32) !i32;
+extern "libc" fn uya_macos_accept(sockfd: i32, addr: *void, addrlen: *u32) !i32;
+extern "libc" fn uya_macos_connect(sockfd: i32, addr: *void, addrlen: u32) !i32;
+extern "libc" fn uya_macos_sendto(sockfd: i32, buf: *const byte, len: usize, flags: i32, dest: *void, destlen: u32) !i64;
+extern "libc" fn uya_macos_recvfrom(sockfd: i32, buf: *byte, len: usize, flags: i32, src: *void, srclen: *u32) !i64;
+extern "libc" fn uya_macos_shutdown(sockfd: i32, how: i32) !i32;
+extern "libc" fn uya_macos_setsockopt(sockfd: i32, level: i32, optname: i32, optval: *void, optlen: u32) !i32;
 
 // ============================================================
 // 系统调用封装函数
@@ -1473,47 +1482,83 @@ export fn sys_clone(flags: i64, child_stack: &void, ptid: &i32, ctid: &i32, tls:
 
 // sys_socket - 创建 socket
 export extern "libc" fn sys_socket(domain: i32, type: i32, protocol: i32) !i32 {
-    return @syscall(SYS_socket, domain as i64, type as i64, protocol as i64) as! i32;
+    std.cfg(std.target_os == .tos_macos, {
+        return uya_macos_socket(domain, type, protocol) as! i32;
+    }, {
+        return @syscall(SYS_socket, domain as i64, type as i64, protocol as i64) as! i32;
+    })
 }
 
 // sys_bind - 绑定 socket 到地址
 export extern "libc" fn sys_bind(sockfd: i32, addr: *void, addrlen: u32) !i32 {
-    return @syscall(SYS_bind, sockfd as i64, addr as i64, addrlen as i64) as! i32;
+    std.cfg(std.target_os == .tos_macos, {
+        return uya_macos_bind(sockfd, addr, addrlen) as! i32;
+    }, {
+        return @syscall(SYS_bind, sockfd as i64, addr as i64, addrlen as i64) as! i32;
+    })
 }
 
 // sys_listen - 监听 socket
 export extern "libc" fn sys_listen(sockfd: i32, backlog: i32) !i32 {
-    return @syscall(SYS_listen, sockfd as i64, backlog as i64) as! i32;
+    std.cfg(std.target_os == .tos_macos, {
+        return uya_macos_listen(sockfd, backlog) as! i32;
+    }, {
+        return @syscall(SYS_listen, sockfd as i64, backlog as i64) as! i32;
+    })
 }
 
 // sys_accept - 接受连接
 export extern "libc" fn sys_accept(sockfd: i32, addr: *void, addrlen: *u32) !i32 {
-    return @syscall(SYS_accept, sockfd as i64, addr as i64, addrlen as i64) as! i32;
+    std.cfg(std.target_os == .tos_macos, {
+        return uya_macos_accept(sockfd, addr, addrlen) as! i32;
+    }, {
+        return @syscall(SYS_accept, sockfd as i64, addr as i64, addrlen as i64) as! i32;
+    })
 }
 
 // sys_connect - 连接远程 socket
 export extern "libc" fn sys_connect(sockfd: i32, addr: *void, addrlen: u32) !i32 {
-    return @syscall(SYS_connect, sockfd as i64, addr as i64, addrlen as i64) as! i32;
+    std.cfg(std.target_os == .tos_macos, {
+        return uya_macos_connect(sockfd, addr, addrlen) as! i32;
+    }, {
+        return @syscall(SYS_connect, sockfd as i64, addr as i64, addrlen as i64) as! i32;
+    })
 }
 
 // sys_send - 发送数据（统一走 sendto，与 AArch64 等 ABI 一致）
 export extern "libc" fn sys_send(sockfd: i32, buf: *const byte, len: usize, flags: i32) !isize {
-    return @syscall(SYS_sendto, sockfd as i64, buf as i64, len as i64, flags as i64, 0 as i64, 0 as i64) as! isize;
+    std.cfg(std.target_os == .tos_macos, {
+        return uya_macos_sendto(sockfd, buf, len, flags, null, 0) as! isize;
+    }, {
+        return @syscall(SYS_sendto, sockfd as i64, buf as i64, len as i64, flags as i64, 0 as i64, 0 as i64) as! isize;
+    })
 }
 
 // sys_recv - 接收数据（统一走 recvfrom）
 export extern "libc" fn sys_recv(sockfd: i32, buf: *byte, len: usize, flags: i32) !isize {
-    return @syscall(SYS_recvfrom, sockfd as i64, buf as i64, len as i64, flags as i64, 0 as i64, 0 as i64) as! isize;
+    std.cfg(std.target_os == .tos_macos, {
+        return uya_macos_recvfrom(sockfd, buf, len, flags, null, null) as! isize;
+    }, {
+        return @syscall(SYS_recvfrom, sockfd as i64, buf as i64, len as i64, flags as i64, 0 as i64, 0 as i64) as! isize;
+    })
 }
 
 // sys_shutdown - 关闭 socket
 export extern "libc" fn sys_shutdown(sockfd: i32, how: i32) !i32 {
-    return @syscall(SYS_shutdown, sockfd as i64, how as i64) as! i32;
+    std.cfg(std.target_os == .tos_macos, {
+        return uya_macos_shutdown(sockfd, how) as! i32;
+    }, {
+        return @syscall(SYS_shutdown, sockfd as i64, how as i64) as! i32;
+    })
 }
 
 // sys_setsockopt - 设置 socket 选项
 export extern "libc" fn sys_setsockopt(sockfd: i32, level: i32, optname: i32, optval: *void, optlen: u32) !i32 {
-    return @syscall(SYS_setsockopt, sockfd as i64, level as i64, optname as i64, optval as i64, optlen as i64) as! i32;
+    std.cfg(std.target_os == .tos_macos, {
+        return uya_macos_setsockopt(sockfd, level, optname, optval, optlen) as! i32;
+    }, {
+        return @syscall(SYS_setsockopt, sockfd as i64, level as i64, optname as i64, optval as i64, optlen as i64) as! i32;
+    })
 }
 
 // sys_getsockopt - 获取 socket 选项

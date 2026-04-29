@@ -43,7 +43,7 @@ server open
 ### `src/network/`
 
 - `listener.uya`：loopback TCP 监听、accept、listener 级 epoll fd
-- `connection.uya`：RESP 请求处理、连接级 RESP2/RESP3 模式、CLIENT 元数据、回复编码、非阻塞读写、待发送缓冲
+- `connection.uya`：RESP 请求处理、连接级 RESP2/RESP3 模式、CLIENT 元数据、回复编码、非阻塞读写、待发送缓冲、`GET` bulk string 零拷贝发送路径
 - `protocol.uya`：RESP2 与 RESP3 最小解析
 
 ### `src/command/`
@@ -85,6 +85,7 @@ server open
 - `input_len`：当前已读字节数
 - `output`：待发送响应
 - `output_len` / `output_sent`：发送进度
+- `GET` 命中且 bulk body 不小于 64B 时，连接层会把 RESP header 写入 `output`，再用 `writev` 直接发送对象 value body 与 CRLF；若非阻塞写发生部分发送，剩余字节会退回到 `pending` 缓冲
 - `close_after_write`：`QUIT` 等命令的延迟关闭标志
 - `transaction`：连接级事务队列、WATCH 集合、RESP 协议版本、CLIENT 名称/库信息与 Pub/Sub 订阅计数状态
 

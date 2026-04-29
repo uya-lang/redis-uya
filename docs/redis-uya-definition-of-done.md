@@ -139,3 +139,4 @@ bash scripts/verify_definition_of_done.sh
 | DoD 项 | 证据 |
 |--------|------|
 | 核心 benchmark 矩阵与回归阈值可用：覆盖 `PING`、16B/1KiB `SET`、16B/1KiB `GET`，记录 p50/p95/p99、吞吐、RSS、同机 Redis 对照，并支持用既有报告作为基线判定吞吐和 p99 退化 | `scripts/benchmark_v0_8_0.py`、`make benchmark-v0.8.0`、`benchmarks/v0.8.0-performance.md` |
+| `GET` bulk string 零拷贝响应路径可用：64B 及以上命中值在真实 fd 发送路径使用 `writev` 分段发送 RESP 头、对象值 body 和 CRLF，避免把 value body 复制到连接输出缓冲；小 body 保持原路径，避免 syscall 开销导致退化 | `src/network/connection.uya`、`tests/unit/network_connection_test.uya`、`make test`、`make test-integration`、`REDIS_UYA_BENCH_BASELINE=benchmarks/v0.8.0-performance.md REDIS_UYA_BENCH_OUT=build/v0.8.0-zero-copy.md make benchmark-v0.8.0` |

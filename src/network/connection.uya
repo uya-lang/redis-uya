@@ -50,7 +50,9 @@ use src.storage.sds.sds_free;
 use src.storage.sds.sds_cat;
 use src.util.time.now_ms_safe;
 use libc.errno;
+use libc.IOVec;
 use libc.sys_send;
+use libc.sys_writev;
 use libc.sys_recv;
 
 export error ConnectionIncomplete;
@@ -61,6 +63,9 @@ export error ConnectionWouldBlock;
 
 export struct ConnectionProcessResult {
     response_len: usize,
+    response_head_len: usize,
+    zero_copy_body: &[byte],
+    zero_copy_tail_len: usize,
     consumed: usize,
     close_after: bool,
     request_replicaof: bool,
@@ -94,6 +99,7 @@ const CONNECTION_PUBSUB_MAX_SUBSCRIPTIONS: usize = 128;
 const CONNECTION_PUBSUB_CHANNEL_MAX: usize = 64;
 const CONNECTION_CLIENT_NAME_MAX: usize = 64;
 const CONNECTION_CLIENT_INFO_MAX: usize = 64;
+const CONNECTION_ZERO_COPY_BULK_MIN: usize = 64;
 
 struct ConnectionPubSubSubscription {
     active: bool,
@@ -203,6 +209,31 @@ fn connection_dummy_command(router: &CommandRouter) Command {
 
 fn connection_reply_empty_slice() &[byte] {
     return (null as &byte)[0: 0];
+}
+
+fn connection_zero_copy_process_result(
+    response_head_len: usize,
+    zero_copy_body: &[byte],
+    zero_copy_tail_len: usize,
+    consumed: usize,
+    close_after: bool,
+    request_replicaof: bool,
+    replicaof_promote: bool,
+    request_bgsave: bool,
+    request_aof_rewrite: bool,
+) ConnectionProcessResult {
+    return ConnectionProcessResult{
+        response_len: response_head_len + zero_copy_body.len + zero_copy_tail_len,
+        response_head_len: response_head_len,
+        zero_copy_body: zero_copy_body,
+        zero_copy_tail_len: zero_copy_tail_len,
+        consumed: consumed,
+        close_after: close_after,
+        request_replicaof: request_replicaof,
+        replicaof_promote: replicaof_promote,
+        request_bgsave: request_bgsave,
+        request_aof_rewrite: request_aof_rewrite,
+    };
 }
 
 fn connection_make_reply(typ: CommandReplyType, data: &[byte], integer: i64) CommandReply {
@@ -929,6 +960,14 @@ fn connection_u64_decimal_len(value: u64) usize {
     return digits;
 }
 
+fn connection_encode_bulk_header(out: &byte, out_cap: usize, body_len: usize) !usize {
+    var pos: usize = 0;
+    try connection_append_byte(out, out_cap, &pos, 36 as byte);
+    try connection_append_u64(out, out_cap, &pos, body_len as u64);
+    try connection_append_crlf(out, out_cap, &pos);
+    return pos;
+}
+
 export fn connection_encode_reply_with_protocol(reply: &CommandReply, out: &byte, out_cap: usize, protocol_version: i32) !usize {
     var pos: usize = 0;
 
@@ -1340,6 +1379,48 @@ export fn connection_process_input_at(
     return connection_process_input_with_runtime_with_aof_at(engine, &runtime, router, null as &AofWriter, input, out, out_cap, now_ms);
 }
 
+export fn connection_process_input_zero_copy_for_test_at(
+    engine: &Engine,
+    router: &CommandRouter,
+    input: &[byte],
+    out: &byte,
+    out_cap: usize,
+    now_ms: u64,
+) !ConnectionProcessResult {
+    var runtime: CommandRuntimeInfo = command_runtime_default();
+    var replicaof_requested: bool = false;
+    var replicaof_promote: bool = false;
+    var replicaof_host: [byte: 64] = [];
+    var replicaof_port: i32 = 0;
+    var bgsave_requested: bool = false;
+    var rewrite_requested: bool = false;
+    var tx: ConnectionTransaction = connection_transaction_new();
+    defer {
+        connection_transaction_reset(&tx);
+    }
+    return connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_internal_at(
+        engine,
+        &runtime,
+        router,
+        null as &AofWriter,
+        null as &Sds,
+        null as &ReplicationBacklog,
+        &tx,
+        input,
+        out,
+        out_cap,
+        now_ms,
+        &replicaof_requested,
+        &replicaof_promote,
+        replicaof_host[0: 64],
+        &replicaof_port,
+        &bgsave_requested,
+        &rewrite_requested,
+        null as &bool,
+        true,
+    );
+}
+
 export fn connection_process_input_with_transaction_at(
     engine: &Engine,
     router: &CommandRouter,
@@ -1494,6 +1575,30 @@ export fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transac
     bgsave_requested: &bool,
     rewrite_requested: &bool,
     rewrite_failed: &bool,
+) !ConnectionProcessResult {
+    return connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_internal_at(engine, runtime, router, aof, rewrite_buf, backlog, tx, input, out, out_cap, now_ms, replicaof_requested, replicaof_promote, replicaof_host, replicaof_port, bgsave_requested, rewrite_requested, rewrite_failed, false);
+}
+
+fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_internal_at(
+    engine: &Engine,
+    runtime: &CommandRuntimeInfo,
+    router: &CommandRouter,
+    aof: &AofWriter,
+    rewrite_buf: &Sds,
+    backlog: &ReplicationBacklog,
+    tx: &ConnectionTransaction,
+    input: &[byte],
+    out: &byte,
+    out_cap: usize,
+    now_ms: u64,
+    replicaof_requested: &bool,
+    replicaof_promote: &bool,
+    replicaof_host: &[byte],
+    replicaof_port: &i32,
+    bgsave_requested: &bool,
+    rewrite_requested: &bool,
+    rewrite_failed: &bool,
+    zero_copy_bulk: bool,
 ) !ConnectionProcessResult {
     const parsed_result: !RespParseResult = connection_parse_input_for_protocol(tx, input);
     const parsed: RespParseResult = parsed_result catch |err| {
@@ -1759,6 +1864,14 @@ export fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transac
     if use_psync_reply {
         n = try connection_encode_reply_with_protocol(&psync_reply, out, out_cap, tx.protocol_version);
     } else {
+        if zero_copy_bulk && command.info.cmd_type == CommandType.command_get && reply.typ == CommandReplyType.reply_bulk_string && reply.data.len >= CONNECTION_ZERO_COPY_BULK_MIN {
+            n = try connection_encode_bulk_header(out, out_cap, reply.data.len);
+            const body: &[byte] = reply.data;
+            command_reply_cleanup(&reply);
+            const should_close_zero_copy: bool = command.info.cmd_type == CommandType.command_quit;
+            resp_value_free(&parsed.value);
+            return connection_zero_copy_process_result(n, body, 2, parsed.consumed, should_close_zero_copy, request_replicaof, promote_replicaof, request_bgsave, request_aof_rewrite);
+        }
         n = try connection_encode_reply_with_protocol(&reply, out, out_cap, tx.protocol_version);
     }
     command_reply_cleanup(&reply);
@@ -1834,6 +1947,110 @@ fn connection_send_progress_nonblocking(fd: i32, base: &byte, total: usize, star
     return ConnectionSendProgress{ next_offset: written, blocked: false };
 }
 
+fn connection_send_zero_copy_bulk_all(fd: i32, head: &byte, head_len: usize, body: &[byte], tail_len: usize) !void {
+    var head_sent: usize = 0;
+    var body_sent: usize = 0;
+    var tail_sent: usize = 0;
+    const tail: &[byte] = &"\r\n"[0: 2];
+    while head_sent < head_len || body_sent < body.len || tail_sent < tail_len {
+        var iov: [IOVec: 3] = [];
+        var iovcnt: i32 = 0;
+        if head_sent < head_len {
+            iov[iovcnt as usize] = IOVec{
+                iov_base: @ptr_from_usize(@usize_from_ptr(head as &void) + head_sent) as *const byte,
+                iov_len: head_len - head_sent,
+            };
+            iovcnt = iovcnt + 1;
+        }
+        if body_sent < body.len {
+            iov[iovcnt as usize] = IOVec{
+                iov_base: @ptr_from_usize(@usize_from_ptr(body.ptr as &void) + body_sent) as *const byte,
+                iov_len: body.len - body_sent,
+            };
+            iovcnt = iovcnt + 1;
+        }
+        if tail_sent < tail_len {
+            iov[iovcnt as usize] = IOVec{
+                iov_base: @ptr_from_usize(@usize_from_ptr(tail.ptr as &void) + tail_sent) as *const byte,
+                iov_len: tail_len - tail_sent,
+            };
+            iovcnt = iovcnt + 1;
+        }
+
+        const wr: isize = sys_writev(fd, &iov[0], iovcnt) catch {
+            return error.ConnectionIoFailed;
+        };
+        if wr <= 0 {
+            return error.ConnectionIoFailed;
+        }
+
+        var advanced: usize = wr as usize;
+        if head_sent < head_len {
+            const head_remaining: usize = head_len - head_sent;
+            if advanced >= head_remaining {
+                head_sent = head_len;
+                advanced = advanced - head_remaining;
+            } else {
+                head_sent = head_sent + advanced;
+                advanced = 0;
+            }
+        }
+        if advanced > 0 && body_sent < body.len {
+            const body_remaining: usize = body.len - body_sent;
+            if advanced >= body_remaining {
+                body_sent = body.len;
+                advanced = advanced - body_remaining;
+            } else {
+                body_sent = body_sent + advanced;
+                advanced = 0;
+            }
+        }
+        if advanced > 0 && tail_sent < tail_len {
+            tail_sent = tail_sent + advanced;
+        }
+    }
+}
+
+fn connection_send_zero_copy_bulk_nonblocking(fd: i32, head: &byte, head_len: usize, body: &[byte], tail_len: usize) !ConnectionSendProgress {
+    const total: usize = head_len + body.len + tail_len;
+    const tail: &[byte] = &"\r\n"[0: 2];
+    while true {
+        var iov: [IOVec: 3] = [];
+        var iovcnt: i32 = 0;
+        if head_len > 0 {
+            iov[iovcnt as usize] = IOVec{ iov_base: head as *const byte, iov_len: head_len };
+            iovcnt = iovcnt + 1;
+        }
+        if body.len > 0 {
+            iov[iovcnt as usize] = IOVec{ iov_base: body.ptr as *const byte, iov_len: body.len };
+            iovcnt = iovcnt + 1;
+        }
+        if tail_len > 0 {
+            iov[iovcnt as usize] = IOVec{ iov_base: tail.ptr as *const byte, iov_len: tail_len };
+            iovcnt = iovcnt + 1;
+        }
+        const n_result: !isize = sys_writev(fd, &iov[0], iovcnt);
+        const n: isize = n_result catch |err| {
+            const eid: i32 = @error_id(err) as i32;
+            if eid == EAGAIN || eid == EWOULDBLOCK {
+                return ConnectionSendProgress{ next_offset: 0, blocked: true };
+            }
+            if eid == EINTR {
+                continue;
+            }
+            return error.ConnectionIoFailed;
+        };
+        if n <= 0 {
+            return error.ConnectionIoFailed;
+        }
+        const sent: usize = n as usize;
+        if sent >= total {
+            return ConnectionSendProgress{ next_offset: total, blocked: false };
+        }
+        return ConnectionSendProgress{ next_offset: sent, blocked: true };
+    }
+}
+
 fn connection_store_pending_output(
     pending: &byte,
     pending_cap: usize,
@@ -1860,6 +2077,64 @@ fn connection_store_pending_output(
         i = i + 1;
     }
     *pending_len = remaining;
+    *pending_sent = 0;
+}
+
+fn connection_store_zero_copy_pending(
+    pending: &byte,
+    pending_cap: usize,
+    pending_len: &usize,
+    pending_sent: &usize,
+    head: &byte,
+    head_len: usize,
+    body: &[byte],
+    tail_len: usize,
+    sent: usize,
+) !void {
+    const total: usize = head_len + body.len + tail_len;
+    if sent >= total {
+        *pending_len = 0;
+        *pending_sent = 0;
+        return;
+    }
+
+    const remaining: usize = total - sent;
+    if remaining > pending_cap {
+        return error.ConnectionOutputTooSmall;
+    }
+
+    var copied: usize = 0;
+    var offset: usize = sent;
+    if offset < head_len {
+        var h: usize = offset;
+        while h < head_len {
+            pending[copied] = head[h];
+            copied = copied + 1;
+            h = h + 1;
+        }
+        offset = head_len;
+    }
+    offset = offset - head_len;
+    if offset < body.len {
+        var b: usize = offset;
+        while b < body.len {
+            pending[copied] = body.ptr[b];
+            copied = copied + 1;
+            b = b + 1;
+        }
+        offset = body.len;
+    }
+    offset = offset - body.len;
+    if offset < tail_len {
+        const tail: &[byte] = &"\r\n"[0: 2];
+        var t: usize = offset;
+        while t < tail_len {
+            pending[copied] = tail.ptr[t];
+            copied = copied + 1;
+            t = t + 1;
+        }
+    }
+    *pending_len = copied;
     *pending_sent = 0;
 }
 
@@ -1994,7 +2269,7 @@ export fn connection_handle_fd_nonblocking_with_runtime_with_aof(
     var can_continue: bool = true;
     while can_continue && *filled > 0 && *pending_len == 0 {
         var incomplete: bool = false;
-        const result_value: !ConnectionProcessResult = connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_at(
+        const result_value: !ConnectionProcessResult = connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_internal_at(
             engine,
             runtime,
             router,
@@ -2013,6 +2288,7 @@ export fn connection_handle_fd_nonblocking_with_runtime_with_aof(
             bgsave_requested,
             rewrite_requested,
             rewrite_failed,
+            true,
         );
         const result: ConnectionProcessResult = result_value catch |err| {
             if err == error.ConnectionIncomplete {
@@ -2035,10 +2311,19 @@ export fn connection_handle_fd_nonblocking_with_runtime_with_aof(
             if result.request_aof_rewrite {
                 *rewrite_requested = true;
             }
-            const progress: ConnectionSendProgress = try connection_send_progress_nonblocking(fd, output, result.response_len, 0);
+            var progress: ConnectionSendProgress = ConnectionSendProgress{ next_offset: 0, blocked: false };
+            if result.zero_copy_body.len > 0 {
+                progress = try connection_send_zero_copy_bulk_nonblocking(fd, output, result.response_head_len, result.zero_copy_body, result.zero_copy_tail_len);
+            } else {
+                progress = try connection_send_progress_nonblocking(fd, output, result.response_len, 0);
+            }
             connection_shift_buffer(input, filled, result.consumed);
             if progress.blocked {
-                try connection_store_pending_output(pending, pending_cap, pending_len, pending_sent, output, result.response_len, progress.next_offset);
+                if result.zero_copy_body.len > 0 {
+                    try connection_store_zero_copy_pending(pending, pending_cap, pending_len, pending_sent, output, result.response_head_len, result.zero_copy_body, result.zero_copy_tail_len, progress.next_offset);
+                } else {
+                    try connection_store_pending_output(pending, pending_cap, pending_len, pending_sent, output, result.response_len, progress.next_offset);
+                }
                 *close_after_write = result.close_after;
                 can_continue = false;
             } else {
@@ -2119,7 +2404,7 @@ export fn connection_handle_fd_with_aof(engine: &Engine, router: &CommandRouter,
             var replicaof_port: i32 = 0;
             var bgsave_requested: bool = false;
             var rewrite_requested: bool = false;
-            const result_aof_value: !ConnectionProcessResult = connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_at(
+            const result_aof_value: !ConnectionProcessResult = connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_internal_at(
                 engine,
                 &runtime,
                 router,
@@ -2138,6 +2423,7 @@ export fn connection_handle_fd_with_aof(engine: &Engine, router: &CommandRouter,
                 &bgsave_requested,
                 &rewrite_requested,
                 null as &bool,
+                true,
             );
             const result: ConnectionProcessResult = result_aof_value catch |err| {
                 if err == error.ConnectionIncomplete {
@@ -2150,7 +2436,11 @@ export fn connection_handle_fd_with_aof(engine: &Engine, router: &CommandRouter,
             };
 
             if !incomplete {
-                try connection_send_all(fd, &output[0], result.response_len);
+                if result.zero_copy_body.len > 0 {
+                    try connection_send_zero_copy_bulk_all(fd, &output[0], result.response_head_len, result.zero_copy_body, result.zero_copy_tail_len);
+                } else {
+                    try connection_send_all(fd, &output[0], result.response_len);
+                }
                 connection_shift_buffer(&input[0], &filled, result.consumed);
                 close_after = result.close_after;
                 if close_after {

@@ -11,6 +11,7 @@ use src.network.connection.ConnectionProcessResult;
 use src.network.connection.ConnectionTransaction;
 use src.network.connection.connection_encode_reply;
 use src.network.connection.connection_process_input_at;
+use src.network.connection.connection_process_input_zero_copy_for_test_at;
 use src.network.connection.connection_process_input_with_runtime_at;
 use src.network.connection.connection_process_input_with_transaction_at;
 use src.network.connection.connection_transaction_new;
@@ -165,6 +166,27 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const quit: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*1\r\n$4\r\nQUIT\r\n"[0: 14], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: quit.response_len], &"+OK\r\n"[0: 5]));
     try assert_eq_i32(quit.close_after as i32, 1);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_connection_zero_copy_get_reply_metadata() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var out: [byte: 256] = [];
+    const value: &[byte] = &"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCDEFGH"[0: 70];
+
+    const set_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$70\r\nabcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCDEFGH\r\n"[0: 99], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: set_result.response_len], &"+OK\r\n"[0: 5]));
+
+    const get_result: ConnectionProcessResult = try connection_process_input_zero_copy_for_test_at(&engine, &router, &"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n"[0: 22], &out[0], 256, 1000u64);
+    try assert_eq_i32(get_result.response_len as i32, 77);
+    try assert_eq_i32(get_result.response_head_len as i32, 5);
+    try assert_eq_i32(get_result.zero_copy_tail_len as i32, 2);
+    try assert_true(network_connection_slice_eq(out[0: get_result.response_head_len], &"$70\r\n"[0: 5]));
+    try assert_true(network_connection_slice_eq(get_result.zero_copy_body, value));
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

@@ -96,6 +96,7 @@ use tests.unit.command_executor_test.test_command_expire_and_ttl;
 use tests.unit.command_executor_test.test_command_error_paths;
 use tests.unit.network_connection_test.test_connection_encode_resp_replies;
 use tests.unit.network_connection_test.test_connection_process_ping_set_get_quit;
+use tests.unit.network_connection_test.test_connection_zero_copy_get_reply_metadata;
 use tests.unit.network_connection_test.test_connection_process_maxmemory;
 use tests.unit.network_connection_test.test_connection_process_multi_exec_discard;
 use tests.unit.network_connection_test.test_connection_process_watch_unwatch;
@@ -511,6 +512,10 @@ export fn main() i32 {
     const before_conn_process: i32 = failed;
     _ = test_connection_process_ping_set_get_quit() catch { printf("[FAIL] network_connection/process\n" as *byte); failed = failed + 1; };
     if failed == before_conn_process { printf("[PASS] network_connection/process\n" as *byte); }
+
+    const before_conn_zero_copy: i32 = failed;
+    _ = test_connection_zero_copy_get_reply_metadata() catch { printf("[FAIL] network_connection/zero_copy_get\n" as *byte); failed = failed + 1; };
+    if failed == before_conn_zero_copy { printf("[PASS] network_connection/zero_copy_get\n" as *byte); }
 
     const before_conn_maxmemory: i32 = failed;
     _ = test_connection_process_maxmemory() catch { printf("[FAIL] network_connection/maxmemory\n" as *byte); failed = failed + 1; };

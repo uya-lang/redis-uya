@@ -11,6 +11,10 @@ use src.storage.engine.lookup_key_at;
 use src.storage.engine.delete_key;
 use src.storage.engine.set_key_expire_at;
 use src.storage.engine.clear_key_expire;
+use src.storage.engine.engine_watch_client_count;
+use src.storage.engine.engine_watch_register_client;
+use src.storage.engine.engine_watch_unregister_client;
+use src.storage.engine.engine_watch_version;
 use src.storage.engine.engine_expire_cycle_at;
 use src.storage.engine.engine_active_expire_cycle_at;
 use src.storage.engine.engine_scan_keys_at;
@@ -216,6 +220,42 @@ export fn test_engine_overwrite_releases_old_object() !void {
     try assert_eq_i32(found.encoding as i32, Encoding.encoding_int as i32);
     try assert_eq_i32(found.int_value as i32, 123);
     try assert_eq_i32(engine_len(&engine) as i32, 1);
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_engine_watch_versions_are_lazy_without_watch_clients() !void {
+    reset_memory_stats_for_test();
+    var engine: Engine = engine_new();
+    const first_obj: &RedisObject = try create_string_object(&"one"[0: 3]);
+    const second_obj: &RedisObject = try create_string_object(&"two"[0: 3]);
+
+    try set_key_at(&engine, &"key"[0: 3], first_obj, 1000u64);
+    try set_key_at(&engine, &"key"[0: 3], second_obj, 1001u64);
+    try set_key_expire_at(&engine, &"key"[0: 3], 2000u64);
+    try assert_true(delete_key(&engine, &"key"[0: 3]));
+
+    try assert_eq_i32(engine_watch_client_count(&engine) as i32, 0);
+    try assert_eq_i32(engine_watch_version(&engine, &"key"[0: 3]) as i32, 0);
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_engine_watch_versions_update_with_active_watch_client() !void {
+    reset_memory_stats_for_test();
+    var engine: Engine = engine_new();
+    engine_watch_register_client(&engine);
+    try assert_eq_i32(engine_watch_client_count(&engine) as i32, 1);
+
+    const obj: &RedisObject = try create_string_object(&"watched"[0: 7]);
+    try set_key_at(&engine, &"key"[0: 3], obj, 1000u64);
+    const version_after_set: u64 = engine_watch_version(&engine, &"key"[0: 3]);
+    try assert_true(version_after_set > 0u64);
+    try assert_true(delete_key(&engine, &"key"[0: 3]));
+    try assert_true(engine_watch_version(&engine, &"key"[0: 3]) > version_after_set);
+
+    engine_watch_unregister_client(&engine);
+    try assert_eq_i32(engine_watch_client_count(&engine) as i32, 0);
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);
 }

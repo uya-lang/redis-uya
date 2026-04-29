@@ -75,6 +75,16 @@ def wait_for_rewrite_replace(aof_path: Path, deadline: float) -> None:
     raise RuntimeError("BGREWRITEAOF did not replace AOF in time")
 
 
+def wait_for_aof_contains(aof_path: Path, needles: tuple[bytes, ...], deadline: float) -> None:
+    while time.monotonic() < deadline:
+        if aof_path.exists():
+            payload = aof_path.read_bytes()
+            if all(needle in payload for needle in needles):
+                return
+        time.sleep(0.02)
+    raise RuntimeError(f"AOF did not flush expected payloads: {needles!r}")
+
+
 def start_server(port: int, aof_path: Path) -> subprocess.Popen[str]:
     return subprocess.Popen(
         [str(BIN), str(port), "8", str(aof_path)],
@@ -120,6 +130,7 @@ def run_case_aof_only() -> None:
         with connect_with_retry(port, time.monotonic() + 5.0) as sock:
             sock.settimeout(2.0)
             roundtrip(sock, set_request(b"key", b"value"), b"+OK\r\n")
+        wait_for_aof_contains(aof_path, (b"value",), time.monotonic() + 5.0)
         crash_process(proc)
 
         proc = start_server(port, aof_path)
@@ -152,6 +163,7 @@ def run_case_rewrite_in_progress() -> None:
             roundtrip(sock, set_request(b"key", b"newer"), b"+OK\r\n")
             roundtrip(sock, set_request(b"extra", b"value"), b"+OK\r\n")
 
+        wait_for_aof_contains(aof_path, (b"newer", b"extra"), time.monotonic() + 5.0)
         crash_process(proc)
 
         proc = start_server(port, aof_path)

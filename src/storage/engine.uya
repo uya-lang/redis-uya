@@ -7,6 +7,8 @@ use src.storage.dict.dict_new;
 use src.storage.dict.dict_free;
 use src.storage.dict.dict_len;
 use src.storage.dict.dict_insert;
+use src.storage.dict.DictInsertResult;
+use src.storage.dict.dict_insert_with_old;
 use src.storage.dict.dict_lookup;
 use src.storage.dict.dict_delete;
 use src.storage.dict.dict_iter_new;
@@ -34,6 +36,7 @@ export struct RedisDb {
 export struct Engine {
     db: RedisDb,
     watch_seq: u64,
+    watch_clients: usize,
 }
 
 fn ptr_to_usize(ptr: &RedisObject) usize {
@@ -60,6 +63,7 @@ export fn engine_new() Engine {
             watch_versions: dict_new(),
         },
         watch_seq: 1u64,
+        watch_clients: 0,
     };
 }
 
@@ -83,22 +87,43 @@ export fn engine_expire_len(engine: &Engine) usize {
     return dict_len(&engine.db.expires);
 }
 
+export fn engine_watch_client_count(engine: &Engine) usize {
+    if engine == null {
+        return 0;
+    }
+    return engine.watch_clients;
+}
+
+export fn engine_watch_register_client(engine: &Engine) void {
+    if engine == null {
+        return;
+    }
+    engine.watch_clients = engine.watch_clients + 1;
+}
+
+export fn engine_watch_unregister_client(engine: &Engine) void {
+    if engine == null || engine.watch_clients == 0 {
+        return;
+    }
+    engine.watch_clients = engine.watch_clients - 1;
+}
+
+fn engine_touch_watch_version(engine: &Engine, key: &[byte]) !void {
+    if engine.watch_clients == 0 {
+        return;
+    }
+    engine.watch_seq = engine.watch_seq + 1u64;
+    _ = try dict_insert(&engine.db.watch_versions, key, engine.watch_seq as usize);
+}
+
 export fn set_key_at(engine: &Engine, key: &[byte], obj: &RedisObject, now_ms: u64) !void {
     object_touch_for_memory_policy(obj, now_ms);
 
-    const old_value_result: !usize = dict_lookup(&engine.db.dict, key);
-    const old_value: usize = old_value_result catch {
-        const inserted: bool = try dict_insert(&engine.db.dict, key, ptr_to_usize(obj));
-        _ = inserted;
-        engine.watch_seq = engine.watch_seq + 1u64;
-        _ = try dict_insert(&engine.db.watch_versions, key, engine.watch_seq as usize);
-        return;
-    };
-    object_free(usize_to_object(old_value));
-    const updated: bool = try dict_insert(&engine.db.dict, key, ptr_to_usize(obj));
-    _ = updated;
-    engine.watch_seq = engine.watch_seq + 1u64;
-    _ = try dict_insert(&engine.db.watch_versions, key, engine.watch_seq as usize);
+    const result: DictInsertResult = try dict_insert_with_old(&engine.db.dict, key, ptr_to_usize(obj));
+    if !result.inserted {
+        object_free(usize_to_object(result.old_value));
+    }
+    try engine_touch_watch_version(engine, key);
 }
 
 export fn set_key(engine: &Engine, key: &[byte], obj: &RedisObject) !void {
@@ -115,16 +140,14 @@ export fn delete_key(engine: &Engine, key: &[byte]) bool {
     _ = dict_delete(&engine.db.expires, key);
     const deleted: bool = dict_delete(&engine.db.dict, key);
     if deleted {
-        engine.watch_seq = engine.watch_seq + 1u64;
-        _ = dict_insert(&engine.db.watch_versions, key, engine.watch_seq as usize) catch {};
+        _ = engine_touch_watch_version(engine, key) catch {};
     }
     return deleted;
 }
 
 export fn set_key_expire_at(engine: &Engine, key: &[byte], expire_at_ms: u64) !void {
     _ = try dict_insert(&engine.db.expires, key, expire_at_ms as usize);
-    engine.watch_seq = engine.watch_seq + 1u64;
-    _ = try dict_insert(&engine.db.watch_versions, key, engine.watch_seq as usize);
+    try engine_touch_watch_version(engine, key);
 }
 
 export fn clear_key_expire(engine: &Engine, key: &[byte]) bool {
@@ -417,8 +440,7 @@ fn delete_expired_key_from_expire_entry(engine: &Engine, key: &[byte]) bool {
     const deleted: bool = dict_delete(&engine.db.dict, key);
     _ = dict_delete(&engine.db.expires, key);
     if deleted {
-        engine.watch_seq = engine.watch_seq + 1u64;
-        _ = dict_insert(&engine.db.watch_versions, key, engine.watch_seq as usize) catch {};
+        _ = engine_touch_watch_version(engine, key) catch {};
     }
     return deleted;
 }

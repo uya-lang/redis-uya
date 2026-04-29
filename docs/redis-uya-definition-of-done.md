@@ -1,8 +1,8 @@
 # redis-uya Definition of Done
 
-> 版本: v0.8.0
+> 版本: v0.8.1
 > 日期: 2026-04-29
-> 状态: `v0.8.0` 核心路径性能基线已完成
+> 状态: `v0.8.1` 写路径性能修复已完成
 
 ## 1. 目标
 
@@ -20,6 +20,7 @@ bash scripts/verify_definition_of_done.sh
 - `benchmarks/v0.1.0.md` 记录同机 Redis 基线与 `floor/target/stretch` 判定
 - `benchmarks/v0.8.0-performance.md` 记录 `PING/SET/GET` 热路径矩阵、同机 Redis 对照与回归阈值基线
 - `benchmarks/v0.8.0-gap-report.md` 记录 v0.8.0 相对 Redis 的差距矩阵与后续优化队列
+- `benchmarks/v0.8.1-performance.md` 记录 v0.8.1 写路径修复后相对 v0.8.0 基线的 guard 结果
 - `docs/redis-uya-release-v0.8.0.md` 与 `docs/redis-uya-test-report-v0.8.0.md` 固化 v0.8.0 封版边界和实际验证结果
 - 一键验证脚本会把临时 benchmark 输出写入 `build/`，避免覆盖已记录的基线报告
 - 一键验证脚本包含 `git diff --check`，用于检查本次工作区差异的基础格式问题
@@ -147,3 +148,12 @@ bash scripts/verify_definition_of_done.sh
 | `io_uring` 评估可复现且不绑定生产路径：评估脚本记录内核、sysctl、`io_uring_setup` syscall、liburing 探测和建议，报告明确 `production_binding=no`，当前网络事件循环仍保持 epoll 路径 | `scripts/evaluate_io_uring_v0_8_0.py`、`make evaluate-io-uring-v0.8.0`、`benchmarks/v0.8.0-io-uring.md`、`docs/redis-uya-benchmark-format.md` |
 | 专用对象池与布局观测可用：`RedisObject` 与 `ListNode` 释放后进入专用 freelist，复用时不触碰通用 Slab 路径；allocator stats 仍按逻辑活跃对象增减，`INFO memory` 暴露对象池缓存、复用计数和布局大小 | `src/storage/object.uya`、`src/memory/allocator.uya`、`src/command/executor.uya`、`tests/unit/storage_object_test.uya`、`tests/unit/command_executor_test.uya`、`tests/integration/memory_info_stats.py`、`make test`、`make test-integration`、`REDIS_UYA_BENCH_BASELINE=benchmarks/v0.8.0-performance.md REDIS_UYA_BENCH_OUT=build/v0.8.0-object-pool.md make benchmark-v0.8.0` |
 | Redis 对照差距报告与优化队列可复现：从 `BENCH_RESULT` 生成每个 case 的吞吐、p99、RSS 比例，输出 `PERF_GAP_RESULT` / `PERF_DEBT_RESULT` 机器可读行，并明确后续 P0/P1/P2 性能债务而不把“超越 Redis”作为单版硬门槛 | `scripts/report_v0_8_0_gaps.py`、`make report-v0.8.0-gaps`、`benchmarks/v0.8.0-gap-report.md`、`docs/redis-uya-benchmark-format.md` |
+
+## 12. `v0.8.1`
+
+| DoD 项 | 证据 |
+|--------|------|
+| WATCH 版本表懒维护可用：无活跃 WATCH 客户端时普通写命令不维护 `watch_versions`，有 WATCH 客户端时 `SET/DEL/EXPIRE` 仍推进版本并触发事务中止 | `src/storage/engine.uya`、`src/network/connection.uya`、`tests/unit/storage_engine_test.uya`、`tests/unit/network_connection_test.uya`、`make test` |
+| Dict 覆盖写单次探测可用：`dict_insert_with_old()` 插入时返回 inserted，覆盖时返回旧值，`set_key_at()` 用该结果释放旧对象 | `src/storage/dict.uya`、`src/storage/engine.uya`、`tests/unit/storage_dict_test.uya`、`tests/unit/storage_engine_test.uya`、`make test` |
+| AOF 分层写入可用：512B 以下命令进入 64KiB buffer，较大命令 flush 小缓冲后直接写；flush 在 server cron、客户端关闭、server close 与 BGREWRITEAOF fork 前触发 | `src/persistence/aof.uya`、`src/server.uya`、`tests/unit/persistence_aof_test.uya`、`tests/integration/persistence_crash_matrix.py`、`tests/integration/cluster_consistency.py`、`make test`、`make test-integration` |
+| v0.8.1 性能回归验证可复现：`make benchmark-v0.8.1` 默认以 `benchmarks/v0.8.0-performance.md` 为 guard 基线，输出 `benchmarks/v0.8.1-performance.md`，五个 case 的吞吐和 p99 guard 均通过 | `Makefile`、`scripts/benchmark_v0_8_0.py`、`benchmarks/v0.8.1-performance.md`、`make benchmark-v0.8.1` |

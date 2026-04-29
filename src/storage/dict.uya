@@ -44,6 +44,11 @@ export struct DictIterator {
     entry: &DictEntry,
 }
 
+export struct DictInsertResult {
+    inserted: bool,
+    old_value: usize,
+}
+
 fn dict_entry_stride() usize {
     var sample: [DictEntry: 1] = [];
     return @size_of(sample[0]) as usize;
@@ -370,14 +375,15 @@ export fn rehash_step(dict: &Dict) bool {
     return dict_rehash_one_bucket(dict);
 }
 
-export fn dict_insert(dict: &Dict, key: &[byte], value: usize) !bool {
+export fn dict_insert_with_old(dict: &Dict, key: &[byte], value: usize) !DictInsertResult {
     try dict_ensure_table(dict);
 
     const hash: u64 = dict_hash_key(key);
     const existing: &DictEntry = dict_find_entry(dict, key, hash);
     if existing != null {
+        const old_value: usize = existing.value;
         existing.value = value;
-        return false;
+        return DictInsertResult{ inserted: false, old_value: old_value };
     }
 
     if !dict.rehashing && (dict_len(dict) + 1) * 4 > dict.table.size * 3 {
@@ -390,7 +396,12 @@ export fn dict_insert(dict: &Dict, key: &[byte], value: usize) !bool {
     } else {
         try dict_table_insert_new(&dict.table, key, value, hash);
     }
-    return true;
+    return DictInsertResult{ inserted: true, old_value: 0 };
+}
+
+export fn dict_insert(dict: &Dict, key: &[byte], value: usize) !bool {
+    const result: DictInsertResult = try dict_insert_with_old(dict, key, value);
+    return result.inserted;
 }
 
 export fn dict_lookup(dict: &Dict, key: &[byte]) !usize {

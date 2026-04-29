@@ -1,7 +1,7 @@
 程序的真正成本不在于编写，而在于维护。
 # redis-uya 开发 TODO 文档
 
-> 版本: v0.8.0
+> 版本: v0.8.1
 > 日期: 2026-04-29
 > 配套设计文档: `redis-uya-design.md`
 > 配套评审文档: `redis-uya-review.md`
@@ -46,6 +46,7 @@
 - [x] `v0.6.0`：内存与性能控制
 - [x] `v0.7.0`：集群基础
 - [x] `v0.8.0`：核心路径性能基线
+- [x] `v0.8.1`：写路径性能修复
 
 当前进行中：
 
@@ -65,6 +66,7 @@
 | `v0.6.0` | 内存与性能控制 | `maxmemory`、淘汰策略、主动过期强化、Slab | 内存可控 |
 | `v0.7.0` | 集群基础 | Cluster 槽位、重定向、节点元数据 | 分布式闭环 |
 | `v0.8.0` | 核心路径性能基线 | 零拷贝、批量解析、SIMD、对象布局、回归护栏 | 热路径可度量、不退化 |
+| `v0.8.1` | 写路径性能修复 | WATCH 懒维护、Dict 单次探测、AOF 分层写入 | 写路径首批 P0 债务收敛 |
 | `v0.9.0` | 集群语义正确性 | 多 key 同槽校验、`CROSSSLOT`、`ASKING` | 重定向语义对齐 |
 | `v0.10.0` | 集群成员与 gossip | 节点握手、gossip 消息、拓扑传播、PFAIL/FAIL 基础 | 多节点拓扑可传播 |
 | `v0.11.0` | 集群故障转移基础 | replica 归属、config epoch、最小 failover | 槽位 owner 可切换 |
@@ -342,9 +344,32 @@
 - `make report-v0.8.0-gaps`
 - `benchmarks/v0.8.0-gap-report.md`
 
-## 14. `v0.9.0`：集群语义正确性
+## 14. `v0.8.1`：写路径性能修复
 
-### R. 多 key 与 ASKING
+### R. 首批 P0 写路径债务
+
+- [x] WATCH 版本表懒维护：没有活跃 WATCH 客户端时，普通写命令不维护 `watch_versions`
+- [x] Dict 覆盖写单次探测：`dict_insert_with_old()` 同时完成插入/覆盖和旧值返回，减少 `SET` 覆盖路径重复 lookup
+- [x] AOF 分层写入：512B 以下命令进入 64KiB buffer，较大命令 flush 小缓冲后直接写，避免 1KiB SET 在 debug 构建中逐字节复制
+- [x] AOF flush 边界：server cron、客户端关闭、server close 和 BGREWRITEAOF fork 前都会 flush 当前 AOF buffer
+- [x] 进程级测试适配 AOF 周期 flush 语义，仍断言成功写入可落盘、失败重定向写不进入 AOF
+
+验收项：
+
+- 相对 `benchmarks/v0.8.0-performance.md`，`PING`、16B/1KiB `SET`、16B/1KiB `GET` 的吞吐和 p99 guard 全部通过
+- `SET` 写路径优化不改变命令语义、事务 WATCH 语义、AOF replay 语义、复制 backlog 和集群重定向失败写边界
+- AOF 新语义明确为内存 buffer + 周期 flush；需要立即检查文件内容的集成测试必须等待 flush 完成
+
+测试证据：
+
+- `make test`
+- `make test-integration`
+- `make benchmark-v0.8.1`
+- `benchmarks/v0.8.1-performance.md`
+
+## 15. `v0.9.0`：集群语义正确性
+
+### S. 多 key 与 ASKING
 
 - [ ] 多 key 命令统一提取所有 key，覆盖 `DEL/EXISTS/MGET/MSET` 首批命令
 - [ ] 所有 key 落同一 slot 时继续执行本地或重定向判断
@@ -367,9 +392,9 @@
 - 后续新增 `tests/integration/cluster_crossslot.py`
 - 后续新增 `tests/integration/cluster_asking.py`
 
-## 15. `v0.10.0`：集群成员与 gossip
+## 16. `v0.10.0`：集群成员与 gossip
 
-### S. 成员发现与拓扑传播
+### T. 成员发现与拓扑传播
 
 - [ ] 抽出 cluster bus 消息编码/解码模块
 - [ ] 实现节点握手状态：`MEET` -> handshake -> known node
@@ -391,9 +416,9 @@
 - 后续新增 `tests/integration/cluster_gossip_smoke.py`
 - 后续新增 `tests/integration/cluster_node_failure_smoke.py`
 
-## 16. `v0.11.0`：集群故障转移基础
+## 17. `v0.11.0`：集群故障转移基础
 
-### T. Replica 归属与 failover
+### U. Replica 归属与 failover
 
 - [ ] 节点元数据记录 replica master id 与复制偏移
 - [ ] `CLUSTER REPLICATE` 最小实现
@@ -416,9 +441,9 @@
 - 后续新增 `tests/integration/cluster_failover_smoke.py`
 - 后续新增 `tests/integration/cluster_failover_recovery.py`
 
-## 17. `v0.12.0`：重分片与正式集群 benchmark
+## 18. `v0.12.0`：重分片与正式集群 benchmark
 
-### U. Resharding 与性能报告
+### V. Resharding 与性能报告
 
 - [ ] `CLUSTER ADDSLOTS` / `CLUSTER DELSLOTS` 最小实现
 - [ ] `SETSLOT IMPORTING/MIGRATING/NODE/STABLE` 完整状态收敛

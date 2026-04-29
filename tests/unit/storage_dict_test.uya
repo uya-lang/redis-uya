@@ -2,11 +2,13 @@ use tests.unit.assert.assert_eq_i32;
 use tests.unit.assert.assert_true;
 
 use src.storage.dict.Dict;
+use src.storage.dict.DictInsertResult;
 use src.storage.dict.dict_new;
 use src.storage.dict.dict_free;
 use src.storage.dict.dict_len;
 use src.storage.dict.dict_capacity;
 use src.storage.dict.dict_insert;
+use src.storage.dict.dict_insert_with_old;
 use src.storage.dict.dict_lookup;
 use src.storage.dict.dict_delete;
 use src.storage.dict.begin_rehash;
@@ -48,6 +50,22 @@ export fn test_dict_insert_lookup_update() !void {
     try assert_true(!updated);
     try assert_eq_i32(dict_len(&dict) as i32, 1);
     try assert_eq_i32((try dict_lookup(&dict, &"alpha"[0: 5])) as i32, 22);
+    dict_free(&dict);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_dict_insert_with_old_reports_replaced_value() !void {
+    reset_memory_stats_for_test();
+    var dict: Dict = dict_new();
+    const inserted: DictInsertResult = try dict_insert_with_old(&dict, &"alpha"[0: 5], 11);
+    try assert_true(inserted.inserted);
+    try assert_eq_i32(inserted.old_value as i32, 0);
+
+    const updated: DictInsertResult = try dict_insert_with_old(&dict, &"alpha"[0: 5], 22);
+    try assert_true(!updated.inserted);
+    try assert_eq_i32(updated.old_value as i32, 11);
+    try assert_eq_i32((try dict_lookup(&dict, &"alpha"[0: 5])) as i32, 22);
+    try assert_eq_i32(dict_len(&dict) as i32, 1);
     dict_free(&dict);
     try assert_eq_i32(used_memory() as i32, 0);
 }

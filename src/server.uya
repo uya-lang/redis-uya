@@ -23,6 +23,7 @@ use src.persistence.aof.aof_disabled;
 use src.persistence.aof.aof_open_append;
 use src.persistence.aof.aof_open_truncate;
 use src.persistence.aof.aof_close;
+use src.persistence.aof.aof_flush;
 use src.persistence.aof.aof_replay_file_at;
 use src.persistence.aof.aof_replay_buffer_at;
 use src.persistence.aof.aof_append_raw;
@@ -757,6 +758,7 @@ fn server_close_client_slot(server: &RedisServer, slot: usize) void {
     }
     _ = sys_epoll_ctl(server.listener.poll_fd, EPOLL_CTL_DEL, fd, null as &EpollEvent) catch {};
     connection_pubsub_unregister_fd(fd);
+    _ = aof_flush(&server.aof) catch {};
     _ = sys_shutdown(fd, SHUT_WR) catch {};
     _ = sys_close(fd) catch {};
     connection_transaction_reset(&server.clients[slot].transaction);
@@ -1059,6 +1061,7 @@ export fn server_close(server: &RedisServer) void {
 
 export fn server_cron_at(server: &RedisServer, now_ms: u64) void {
     _ = engine_active_expire_cycle_at(&server.engine, now_ms, SERVER_CRON_EXPIRE_LIMIT, SERVER_CRON_EXPIRE_MAX_ROUNDS);
+    _ = aof_flush(&server.aof) catch {};
     server.last_cron_ms = now_ms;
     server.cron_ticks = server.cron_ticks + 1u64;
 }
@@ -1126,6 +1129,7 @@ export fn server_run_pending_aof_rewrite_at(server: &RedisServer, now_ms: u64) !
     if server_has_pending_client_output(server) {
         return false;
     }
+    try aof_flush(&server.aof);
 
     var tmp_path_buf: [byte: 512] = [];
     try aof_rewrite_build_tmp_path(tmp_path_buf[0: 512], aof_path);

@@ -40,16 +40,22 @@ export error AofReplayCommandFailed;
 export error AofEntryTooLarge;
 
 const AOF_REPLAY_BUFFER_BYTES: usize = 16384;
+const AOF_WRITE_BUFFER_BYTES: usize = 65536;
+const AOF_WRITE_BUFFER_MAX_COPY_BYTES: usize = 512;
 
 export struct AofWriter {
     file: File,
     enabled: bool,
+    buffer: [byte: AOF_WRITE_BUFFER_BYTES],
+    buffer_len: usize,
 }
 
 export fn aof_disabled() AofWriter {
     return AofWriter{
         file: File{ fd: -1, owns_fd: false },
         enabled: false,
+        buffer: [],
+        buffer_len: 0,
     };
 }
 
@@ -58,7 +64,7 @@ fn aof_open_with_flags(path: &const byte, flags: i32) !AofWriter {
     const file: File = file_open(path, flags, mode) catch {
         return error.AofOpenFailed;
     };
-    return AofWriter{ file: file, enabled: true };
+    return AofWriter{ file: file, enabled: true, buffer: [], buffer_len: 0 };
 }
 
 export fn aof_open_append(path: &const byte) !AofWriter {
@@ -73,11 +79,12 @@ export fn aof_close(aof: &AofWriter) void {
     if aof == null || !aof.enabled {
         return;
     }
+    _ = aof_flush(aof) catch {};
     _ = file_close(&aof.file) catch {};
     aof.enabled = false;
 }
 
-export fn aof_append_raw(aof: &AofWriter, data: &[byte]) !void {
+fn aof_write_direct(aof: &AofWriter, data: &[byte]) !void {
     if aof == null || !aof.enabled {
         return;
     }
@@ -93,6 +100,38 @@ export fn aof_append_raw(aof: &AofWriter, data: &[byte]) !void {
         }
         written = written + n;
     }
+}
+
+export fn aof_flush(aof: &AofWriter) !void {
+    if aof == null || !aof.enabled || aof.buffer_len == 0 {
+        return;
+    }
+    try aof_write_direct(aof, aof.buffer[0: aof.buffer_len]);
+    aof.buffer_len = 0;
+}
+
+fn aof_buffer_copy(aof: &AofWriter, data: &[byte]) void {
+    var i: usize = 0;
+    while i < data.len {
+        aof.buffer[aof.buffer_len + i] = data.ptr[i];
+        i = i + 1;
+    }
+    aof.buffer_len = aof.buffer_len + data.len;
+}
+
+export fn aof_append_raw(aof: &AofWriter, data: &[byte]) !void {
+    if aof == null || !aof.enabled || data.len == 0 {
+        return;
+    }
+    if data.len > AOF_WRITE_BUFFER_MAX_COPY_BYTES {
+        try aof_flush(aof);
+        try aof_write_direct(aof, data);
+        return;
+    }
+    if aof.buffer_len + data.len > AOF_WRITE_BUFFER_BYTES {
+        try aof_flush(aof);
+    }
+    aof_buffer_copy(aof, data);
 }
 
 fn aof_sds_append(s: &Sds, data: &[byte]) !void {

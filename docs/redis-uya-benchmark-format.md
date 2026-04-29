@@ -90,7 +90,7 @@ min_req_per_s=... throughput_status=pass baseline_p99_us=... current_p99_us=... 
 - `REDIS_UYA_REGRESSION_P99_RATIO`
 - `REDIS_UYA_REGRESSION_P99_ABS_US`
 
-基线报告通过 `REDIS_UYA_BENCH_BASELINE` 指定。未指定基线时，guard 状态记录为 `skip`，用于生成首次基线报告。
+基线报告通过 `REDIS_UYA_BENCH_BASELINE` 指定。未指定基线时，guard 状态记录为 `skip`，用于生成首次基线报告。报告标题版本可通过 `REDIS_UYA_BENCH_REPORT_VERSION` 覆盖，`make benchmark-v0.8.1` 使用同一脚本输出 `v0.8.1` 标题并默认以 `benchmarks/v0.8.0-performance.md` 为 guard 基线。
 
 ## 9. v0.8.0 io_uring 评估输出
 

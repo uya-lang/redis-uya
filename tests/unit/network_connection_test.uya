@@ -20,6 +20,7 @@ use src.network.connection.connection_pubsub_reset_for_test;
 use src.storage.engine.Engine;
 use src.storage.engine.engine_new;
 use src.storage.engine.engine_free;
+use src.storage.engine.engine_watch_client_count;
 use src.memory.allocator.used_memory;
 use src.memory.allocator.reset_memory_stats_for_test;
 
@@ -303,6 +304,7 @@ export fn test_connection_process_watch_unwatch() !void {
 
     const watch: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$5\r\nWATCH\r\n$7\r\nwatched\r\n"[0: 28], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: watch.response_len], &"+OK\r\n"[0: 5]));
+    try assert_eq_i32(engine_watch_client_count(&engine) as i32, 1);
 
     const multi: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$5\r\nMULTI\r\n"[0: 15], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: multi.response_len], &"+OK\r\n"[0: 5]));
@@ -318,15 +320,18 @@ export fn test_connection_process_watch_unwatch() !void {
 
     const exec_abort: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$4\r\nEXEC\r\n"[0: 14], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: exec_abort.response_len], &"*-1\r\n"[0: 5]));
+    try assert_eq_i32(engine_watch_client_count(&engine) as i32, 0);
 
     const get_outside: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$3\r\nGET\r\n$7\r\nwatched\r\n"[0: 26], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: get_outside.response_len], &"$7\r\noutside\r\n"[0: 13]));
 
     const watch_again: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$5\r\nWATCH\r\n$7\r\nwatched\r\n"[0: 28], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: watch_again.response_len], &"+OK\r\n"[0: 5]));
+    try assert_eq_i32(engine_watch_client_count(&engine) as i32, 1);
 
     const unwatch: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$7\r\nUNWATCH\r\n"[0: 17], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: unwatch.response_len], &"+OK\r\n"[0: 5]));
+    try assert_eq_i32(engine_watch_client_count(&engine) as i32, 0);
 
     const multi_again: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$5\r\nMULTI\r\n"[0: 15], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: multi_again.response_len], &"+OK\r\n"[0: 5]));
@@ -342,6 +347,7 @@ export fn test_connection_process_watch_unwatch() !void {
 
     const exec_ok: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$4\r\nEXEC\r\n"[0: 14], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: exec_ok.response_len], &"*1\r\n+OK\r\n"[0: 9]));
+    try assert_eq_i32(engine_watch_client_count(&engine) as i32, 0);
 
     const get_ok: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$3\r\nGET\r\n$7\r\nwatched\r\n"[0: 26], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: get_ok.response_len], &"$2\r\nok\r\n"[0: 8]));

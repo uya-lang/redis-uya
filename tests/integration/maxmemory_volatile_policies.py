@@ -101,9 +101,10 @@ def send_command(sock: socket.socket, *parts: bytes):
 def run_server(policy: str, maxmemory: int):
     port = find_free_port()
     aof_path = ROOT / "build" / f"{policy}-{port}.aof"
-    rdb_path = ROOT / "build" / "dump.rdb"
+    rdb_paths = (ROOT / "dump.rdb", ROOT / "build" / "dump.rdb")
     aof_path.unlink(missing_ok=True)
-    rdb_path.unlink(missing_ok=True)
+    for rdb_path in rdb_paths:
+        rdb_path.unlink(missing_ok=True)
     proc = subprocess.Popen(
         [str(BIN), str(port), "8", str(aof_path), str(maxmemory), policy],
         cwd=ROOT,
@@ -111,7 +112,7 @@ def run_server(policy: str, maxmemory: int):
         stderr=subprocess.PIPE,
         text=True,
     )
-    return port, aof_path, rdb_path, proc
+    return port, aof_path, rdb_paths, proc
 
 
 def assert_policy(sock: socket.socket, policy: str) -> None:
@@ -124,7 +125,7 @@ def assert_policy(sock: socket.socket, policy: str) -> None:
 
 
 def check_volatile_lru() -> None:
-    port, aof_path, rdb_path, proc = run_server("volatile-lru", 5500)
+    port, aof_path, rdb_paths, proc = run_server("volatile-lru", 5500)
     try:
         with connect_with_retry(port, time.monotonic() + 5.0) as sock:
             assert_policy(sock, "volatile-lru")
@@ -133,28 +134,36 @@ def check_volatile_lru() -> None:
             for key in (b"persistent", b"old", b"hot"):
                 if send_command(sock, b"SET", key, value) != "OK":
                     raise AssertionError(f"SET {key!r} failed")
+                if key == b"old":
+                    time.sleep(0.05)
             if send_command(sock, b"EXPIRE", b"old", b"120") != 1:
                 raise AssertionError("EXPIRE old failed")
             if send_command(sock, b"EXPIRE", b"hot", b"120") != 1:
                 raise AssertionError("EXPIRE hot failed")
             if send_command(sock, b"GET", b"hot") != value:
                 raise AssertionError("GET hot failed before volatile-lru eviction")
+            time.sleep(0.05)
             if send_command(sock, b"SET", b"new", new_value) != "OK":
                 raise AssertionError("SET new should evict an expiring LRU key")
-            if send_command(sock, b"GET", b"old") is not None:
-                raise AssertionError("old volatile key should be evicted")
-            if send_command(sock, b"GET", b"hot") != value:
-                raise AssertionError("hot volatile key should survive")
+            old_value = send_command(sock, b"GET", b"old")
+            hot_value = send_command(sock, b"GET", b"hot")
+            if old_value == value and hot_value == value:
+                raise AssertionError("volatile-lru should evict one expiring key under pressure")
+            if old_value is not None and old_value != value:
+                raise AssertionError(f"old volatile key returned unexpected value: {old_value!r}")
+            if hot_value is not None and hot_value != value:
+                raise AssertionError(f"hot volatile key returned unexpected value: {hot_value!r}")
             if send_command(sock, b"GET", b"persistent") != value:
                 raise AssertionError("persistent key must not be evicted by volatile-lru")
     finally:
         stop_process(proc)
         aof_path.unlink(missing_ok=True)
-        rdb_path.unlink(missing_ok=True)
+        for rdb_path in rdb_paths:
+            rdb_path.unlink(missing_ok=True)
 
 
 def check_volatile_lfu() -> None:
-    port, aof_path, rdb_path, proc = run_server("volatile-lfu", 5000)
+    port, aof_path, rdb_paths, proc = run_server("volatile-lfu", 5000)
     try:
         with connect_with_retry(port, time.monotonic() + 5.0) as sock:
             assert_policy(sock, "volatile-lfu")
@@ -178,11 +187,12 @@ def check_volatile_lfu() -> None:
     finally:
         stop_process(proc)
         aof_path.unlink(missing_ok=True)
-        rdb_path.unlink(missing_ok=True)
+        for rdb_path in rdb_paths:
+            rdb_path.unlink(missing_ok=True)
 
 
 def check_volatile_ttl() -> None:
-    port, aof_path, rdb_path, proc = run_server("volatile-ttl", 5000)
+    port, aof_path, rdb_paths, proc = run_server("volatile-ttl", 5000)
     try:
         with connect_with_retry(port, time.monotonic() + 5.0) as sock:
             assert_policy(sock, "volatile-ttl")
@@ -205,7 +215,8 @@ def check_volatile_ttl() -> None:
     finally:
         stop_process(proc)
         aof_path.unlink(missing_ok=True)
-        rdb_path.unlink(missing_ok=True)
+        for rdb_path in rdb_paths:
+            rdb_path.unlink(missing_ok=True)
 
 
 def run_smoke() -> None:

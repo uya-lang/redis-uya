@@ -33,6 +33,17 @@ def node_line(nodes: bytes, needle: bytes) -> bytes:
     return lines[0]
 
 
+def wait_for_aof_contains(aof_path: Path, needles: tuple[bytes, ...], deadline: float) -> bytes:
+    payload = b""
+    while time.monotonic() < deadline:
+        if aof_path.exists():
+            payload = aof_path.read_bytes()
+            if all(needle in payload for needle in needles):
+                return payload
+        time.sleep(0.02)
+    raise AssertionError(f"AOF missing expected successful local writes: {payload!r}")
+
+
 def run_smoke() -> None:
     if not BIN.exists():
         raise RuntimeError("build/redis-uya is missing; run `make build` first")
@@ -102,6 +113,8 @@ def run_smoke() -> None:
             if send_command(sock, b"GET", b"foo") is not None:
                 raise AssertionError("redirected SET unexpectedly wrote the remote-owned key locally")
 
+        aof_data = wait_for_aof_contains(aof_path, (b"local-value", b"local-hash-value"), time.monotonic() + 5.0)
+
         stop_process(proc)
         if proc.returncode not in (0, -15):
             stdout, stderr = proc.communicate()
@@ -109,9 +122,6 @@ def run_smoke() -> None:
                 f"redis-uya exited with {proc.returncode}\nstdout:\n{stdout}\nstderr:\n{stderr}"
             )
 
-        aof_data = aof_path.read_bytes()
-        if b"local-value" not in aof_data or b"local-hash-value" not in aof_data:
-            raise AssertionError(f"AOF missing successful local writes: {aof_data!r}")
         for forbidden in (b"remote-value", b"migrating-value"):
             if forbidden in aof_data:
                 raise AssertionError(f"redirected write leaked into AOF: {forbidden!r}")

@@ -3,14 +3,14 @@
 > 使用 Uya 从零实现 Redis 兼容内存数据库
 > 零 GC 路线 · 显式错误处理 · 可测试演进 · 长期性能目标超过 Redis
 
-> 版本: v0.8.0
+> 版本: v0.8.1
 > 日期: 2026-04-29
 
 ## 简介
 
 `redis-uya` 是一个使用 **Uya 编程语言** 从零实现的生产级高性能内存数据库系统。项目长期目标是兼容 Redis 6.2+ 协议，覆盖核心数据结构、持久化、复制、基础集群与性能工程，并在同条件核心场景上超过 Redis。
 
-当前项目已完成 `v0.8.0` 核心路径性能基线：在 `v0.1.0` 发布闭环、`v0.2.0` 数据结构扩展、`v0.3.0` 持久化增强、`v0.4.0` 复制基础、`v0.5.0` 协议与控制面增强、`v0.6.0` 内存与性能控制、`v0.7.0` Cluster 基础之上，新增核心 benchmark 矩阵、同机 Redis 对照、吞吐/p99 回归阈值、`GET` bulk string 零拷贝发送路径、RESP2/RESP3 顶层批量解析 API、`@vector` byte-slice 比较、表驱动 CRC64、`io_uring` 主机能力评估报告、`RedisObject` / `ListNode` 专用对象池与 `INFO memory` 布局观测，以及 Redis 对照差距报告和后续优化队列。
+当前项目已完成 `v0.8.1` 写路径性能修复：在 `v0.8.0` 核心路径性能基线之上，收敛首批 P0 写路径债务，新增 WATCH 版本懒维护、Dict 覆盖写单次探测、AOF 小命令缓冲与大命令直写策略，并用 `benchmarks/v0.8.1-performance.md` 固化相对 `v0.8.0` 基线的 benchmark guard。
 
 ## 核心目标
 
@@ -80,6 +80,7 @@
 - v0.8.0 `io_uring` 评估：`make evaluate-io-uring-v0.8.0` 生成主机能力报告，记录 syscall、sysctl、liburing 探测和 `production_binding=no` 边界
 - v0.8.0 专用对象池与布局观测：`RedisObject` / `ListNode` 释放后进入专用 freelist，复用时绕过通用 Slab；`INFO memory` 暴露缓存、复用计数和布局大小
 - v0.8.0 Redis 对照差距报告：`make report-v0.8.0-gaps` 生成吞吐、p99、RSS 比例矩阵与 P0/P1/P2 后续优化队列
+- v0.8.1 写路径性能修复：WATCH 版本表仅在存在 WATCH 客户端时维护，`SET` 覆盖写使用 Dict 单次探测返回旧值，AOF 512B 以下命令缓冲写、较大命令直写，`make benchmark-v0.8.1` 相对 `v0.8.0` 基线 guard 通过
 
 下一阶段：
 
@@ -125,6 +126,12 @@ v0.8.0 核心性能基线：
 
 ```bash
 make benchmark-v0.8.0
+```
+
+v0.8.1 写路径性能回归验证：
+
+```bash
+make benchmark-v0.8.1
 ```
 
 v0.8.0 Redis 对照差距报告：
@@ -273,6 +280,7 @@ build/redis-uya 6380 1
 | `v0.6.0` | 内存与性能控制 | `maxmemory`、淘汰策略、主动过期、Slab |
 | `v0.7.0` | 集群基础 | Cluster 槽位、重定向、节点元数据 |
 | `v0.8.0` | 核心路径性能基线 | 零拷贝、批量解析、SIMD、对象布局、回归护栏 |
+| `v0.8.1` | 写路径性能修复 | WATCH 懒维护、Dict 单次探测、AOF 分层写入 |
 | `v0.9.0` | 集群语义正确性 | 多 key 同槽校验、`CROSSSLOT`、`ASKING` |
 | `v0.10.0` | 集群成员与 gossip | 节点握手、gossip、拓扑传播、PFAIL/FAIL |
 | `v0.11.0` | 集群故障转移基础 | replica 归属、config epoch、最小 failover |
@@ -328,7 +336,8 @@ redis-uya/
 │   ├── v0.4.0-replication.md
 │   ├── v0.8.0-performance.md
 │   ├── v0.8.0-io-uring.md
-│   └── v0.8.0-gap-report.md
+│   ├── v0.8.0-gap-report.md
+│   └── v0.8.1-performance.md
 ├── src/
 │   ├── async_rt/
 │   ├── config.uya

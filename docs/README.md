@@ -1,6 +1,6 @@
 # redis-uya 文档
 
-> 版本: v0.8.0
+> 版本: v0.8.1
 > 日期: 2026-04-29
 
 ## 文档索引
@@ -46,4 +46,4 @@
 
 ## 当前阶段
 
-项目当前已完成 `v0.8.0` 核心路径性能基线：在已完成 `v0.7.0` 集群基础之上，新增 `make benchmark-v0.8.0`、`scripts/benchmark_v0_8_0.py` 和 `benchmarks/v0.8.0-performance.md`，固定 `PING`、16B/1KiB `SET`、16B/1KiB `GET` 矩阵、同机 Redis 对照与吞吐/p99 回归阈值；同时完成 64B 及以上 `GET` bulk string 的 `writev` 零拷贝发送路径、RESP2/RESP3 顶层批量解析 API、`@vector` byte-slice 比较、表驱动 CRC64、`io_uring` 主机能力评估报告、`RedisObject` / `ListNode` 专用对象池与 `INFO memory` 布局观测，以及 Redis 对照差距报告和后续优化队列。
+项目当前已完成 `v0.8.1` 写路径性能修复：在 `v0.8.0` 核心路径性能基线之上，新增 `make benchmark-v0.8.1` 和 `benchmarks/v0.8.1-performance.md`，固定相对 `v0.8.0` 基线的回归验证；本版落地 WATCH 版本懒维护、Dict 覆盖写单次探测、AOF 小命令缓冲和大命令直写策略，保持协议、持久化、复制和集群基础语义不变。

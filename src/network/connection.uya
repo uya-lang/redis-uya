@@ -30,6 +30,8 @@ use src.replication.backlog.replication_backlog_append_command_at;
 use src.replication.backlog.replication_backlog_slice_from;
 use src.replication.state.ReplicationRole;
 use src.storage.engine.Engine;
+use src.storage.engine.engine_watch_register_client;
+use src.storage.engine.engine_watch_unregister_client;
 use src.storage.engine.engine_watch_version;
 use src.storage.dict.DictIterator;
 use src.storage.dict.DictEntry;
@@ -79,6 +81,8 @@ export struct ConnectionTransaction {
     queue: &RedisObject,
     queue_count: usize,
     watched: &RedisObject,
+    watch_registered: bool,
+    watch_engine: &Engine,
     protocol_version: i32,
     client_fd: i32,
     client_name_len: usize,
@@ -117,6 +121,8 @@ fn connection_transaction_empty() ConnectionTransaction {
         queue: null as &RedisObject,
         queue_count: 0,
         watched: null as &RedisObject,
+        watch_registered: false,
+        watch_engine: null as &Engine,
         protocol_version: 2,
         client_fd: -1,
         client_name_len: 0,
@@ -140,13 +146,10 @@ export fn connection_transaction_reset(tx: &ConnectionTransaction) void {
     if tx.queue != null {
         object_free(tx.queue);
     }
-    if tx.watched != null {
-        object_free(tx.watched);
-    }
+    connection_transaction_clear_watches(tx);
     tx.active = false;
     tx.queue = null as &RedisObject;
     tx.queue_count = 0;
-    tx.watched = null as &RedisObject;
 }
 
 fn connection_transaction_clear_queue(tx: &ConnectionTransaction) void {
@@ -169,6 +172,11 @@ fn connection_transaction_clear_watches(tx: &ConnectionTransaction) void {
         object_free(tx.watched);
     }
     tx.watched = null as &RedisObject;
+    if tx.watch_registered {
+        engine_watch_unregister_client(tx.watch_engine);
+    }
+    tx.watch_registered = false;
+    tx.watch_engine = null as &Engine;
 }
 
 fn connection_dummy_resp_parse_result() RespParseResult {
@@ -426,6 +434,11 @@ fn connection_transaction_watch_key(tx: &ConnectionTransaction, engine: &Engine,
     }
     try connection_sds_append_u64(&version_buf, engine_watch_version(engine, key));
     _ = try hash_object_set_field(watched, key, version_buf.buf[0: version_buf.len]);
+    if !tx.watch_registered {
+        engine_watch_register_client(engine);
+        tx.watch_registered = true;
+        tx.watch_engine = engine;
+    }
 }
 
 fn connection_transaction_watches_match(tx: &ConnectionTransaction, engine: &Engine) bool {

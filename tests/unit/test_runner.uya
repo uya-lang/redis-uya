@@ -42,6 +42,7 @@ use tests.unit.storage_sds_test.test_sds_cat_fmt_error_paths;
 use tests.unit.storage_sds_test.test_sds_1mb_append_stress;
 use tests.unit.storage_dict_test.test_dict_create_free;
 use tests.unit.storage_dict_test.test_dict_insert_lookup_update;
+use tests.unit.storage_dict_test.test_dict_insert_with_old_reports_replaced_value;
 use tests.unit.storage_dict_test.test_dict_delete_and_missing;
 use tests.unit.storage_dict_test.test_dict_resize_keeps_values;
 use tests.unit.storage_dict_test.test_dict_10k_keys;
@@ -58,6 +59,8 @@ use tests.unit.storage_engine_test.test_engine_set_lookup_delete;
 use tests.unit.storage_engine_test.test_engine_overwrite_releases_old_object;
 use tests.unit.storage_engine_test.test_engine_lazy_expire;
 use tests.unit.storage_engine_test.test_engine_clear_expire;
+use tests.unit.storage_engine_test.test_engine_watch_versions_are_lazy_without_watch_clients;
+use tests.unit.storage_engine_test.test_engine_watch_versions_update_with_active_watch_client;
 use tests.unit.storage_engine_test.test_engine_active_expire_cycle;
 use tests.unit.storage_engine_test.test_engine_active_expire_loop_continues;
 use tests.unit.storage_engine_test.test_engine_scan_keys_sorted_skips_expired;
@@ -114,6 +117,8 @@ use tests.unit.network_connection_test.test_connection_process_pubsub_commands;
 use tests.unit.network_connection_test.test_connection_process_error_paths;
 use tests.unit.persistence_aof_test.test_aof_connection_append_and_replay_set;
 use tests.unit.persistence_aof_test.test_aof_replay_set_then_del;
+use tests.unit.persistence_aof_test.test_aof_flush_persists_buffer_without_close;
+use tests.unit.persistence_aof_test.test_aof_large_append_bypasses_buffer;
 use tests.unit.persistence_aof_test.test_aof_replay_truncated_file_fails;
 use tests.unit.persistence_aof_test.test_aof_replay_invalid_format_fails;
 use tests.unit.persistence_aof_test.test_aof_expire_replays_absolute_deadline;
@@ -305,6 +310,10 @@ export fn main() i32 {
     _ = test_dict_insert_lookup_update() catch { printf("[FAIL] storage_dict/insert_lookup_update\n" as *byte); failed = failed + 1; };
     if failed == before_dict_insert { printf("[PASS] storage_dict/insert_lookup_update\n" as *byte); }
 
+    const before_dict_insert_old: i32 = failed;
+    _ = test_dict_insert_with_old_reports_replaced_value() catch { printf("[FAIL] storage_dict/insert_with_old\n" as *byte); failed = failed + 1; };
+    if failed == before_dict_insert_old { printf("[PASS] storage_dict/insert_with_old\n" as *byte); }
+
     const before_dict_delete: i32 = failed;
     _ = test_dict_delete_and_missing() catch { printf("[FAIL] storage_dict/delete_missing\n" as *byte); failed = failed + 1; };
     if failed == before_dict_delete { printf("[PASS] storage_dict/delete_missing\n" as *byte); }
@@ -368,6 +377,14 @@ export fn main() i32 {
     const before_engine_clear_expire: i32 = failed;
     _ = test_engine_clear_expire() catch { printf("[FAIL] storage_engine/clear_expire\n" as *byte); failed = failed + 1; };
     if failed == before_engine_clear_expire { printf("[PASS] storage_engine/clear_expire\n" as *byte); }
+
+    const before_engine_watch_lazy: i32 = failed;
+    _ = test_engine_watch_versions_are_lazy_without_watch_clients() catch { printf("[FAIL] storage_engine/watch_lazy\n" as *byte); failed = failed + 1; };
+    if failed == before_engine_watch_lazy { printf("[PASS] storage_engine/watch_lazy\n" as *byte); }
+
+    const before_engine_watch_active: i32 = failed;
+    _ = test_engine_watch_versions_update_with_active_watch_client() catch { printf("[FAIL] storage_engine/watch_active\n" as *byte); failed = failed + 1; };
+    if failed == before_engine_watch_active { printf("[PASS] storage_engine/watch_active\n" as *byte); }
 
     const before_engine_active_expire: i32 = failed;
     _ = test_engine_active_expire_cycle() catch { printf("[FAIL] storage_engine/active_expire\n" as *byte); failed = failed + 1; };
@@ -592,6 +609,14 @@ export fn main() i32 {
     const before_aof_del: i32 = failed;
     _ = test_aof_replay_set_then_del() catch { printf("[FAIL] persistence_aof/replay_del\n" as *byte); failed = failed + 1; };
     if failed == before_aof_del { printf("[PASS] persistence_aof/replay_del\n" as *byte); }
+
+    const before_aof_flush: i32 = failed;
+    _ = test_aof_flush_persists_buffer_without_close() catch { printf("[FAIL] persistence_aof/flush\n" as *byte); failed = failed + 1; };
+    if failed == before_aof_flush { printf("[PASS] persistence_aof/flush\n" as *byte); }
+
+    const before_aof_large_direct: i32 = failed;
+    _ = test_aof_large_append_bypasses_buffer() catch { printf("[FAIL] persistence_aof/large_direct\n" as *byte); failed = failed + 1; };
+    if failed == before_aof_large_direct { printf("[PASS] persistence_aof/large_direct\n" as *byte); }
 
     const before_aof_bad: i32 = failed;
     _ = test_aof_replay_truncated_file_fails() catch { printf("[FAIL] persistence_aof/truncated\n" as *byte); failed = failed + 1; };

@@ -13,6 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BIN = ROOT / "build" / "redis-uya"
 DEFAULT_OUT = ROOT / "benchmarks" / "v0.8.0-performance.md"
+REPORT_VERSION = os.environ.get("REDIS_UYA_BENCH_REPORT_VERSION", "v0.8.0") or "v0.8.0"
 
 CASE_NAMES = ("ping", "set_16b", "get_16b", "set_1024b", "get_1024b")
 
@@ -28,6 +29,10 @@ def benchmark_output_path() -> Path:
 
 
 OUT = benchmark_output_path()
+
+
+def report_version_slug() -> str:
+    return REPORT_VERSION.replace("/", "-").replace(" ", "-")
 
 
 def command_path(name: str) -> str | None:
@@ -443,8 +448,9 @@ def main() -> int:
 
     redis_uya_port = find_free_port()
     redis_port = find_free_port()
-    uya_aof = ROOT / "build" / f"bench-v0.8.0-{redis_uya_port}.aof"
-    redis_workdir = ROOT / "build" / f"redis-v0.8.0-{redis_port}"
+    label = report_version_slug()
+    uya_aof = ROOT / "build" / f"bench-{label}-{redis_uya_port}.aof"
+    redis_workdir = ROOT / "build" / f"redis-{label}-{redis_port}"
     uya_aof.unlink(missing_ok=True)
     shutil.rmtree(redis_workdir, ignore_errors=True)
 
@@ -463,7 +469,7 @@ def main() -> int:
             redis_rss = read_rss_kib(redis_proc.pid)
 
         report_lines = [
-            "# redis-uya v0.8.0 performance benchmark",
+            f"# redis-uya {REPORT_VERSION} performance benchmark",
             "",
             f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S %z')}",
             "",

@@ -3,6 +3,8 @@
 // 说明：基于系统调用的标准 I/O 函数（零外部依赖）；_vfprintf_impl 与 C99 格式对齐（flags/width/precision/length、%a/%A、%zu/%zd、%j/%t、%h/%hh，浮点/%c/%p width）
 // 注意：函数名使用下划线分隔风格，避免与 C 标准库冲突
 
+use std;
+
 // ============================================================
 // 标准流：与 C 标准库完全兼容，可替代系统 libc 供其它 C 程序使用（outlibc）
 // FILE 为流类型（含 fd），stdin/stdout/stderr 由 Uya 初始化，--nostdlib 时由我们提供
@@ -397,10 +399,17 @@ export extern "libc" fn print_i64(value: i64) usize {
 
 // 全局 FILE 存储（用于 fopen/fclose，split mirror 自举时会并发打开大量输出文件）
 var fopen_fd_storage: [FILE: 128] = [];
-const _FOPEN_W_FLAGS: i64 = 1537;   // Darwin O_WRONLY | O_CREAT | O_TRUNC
-const _FOPEN_A_FLAGS: i64 = 2561;  // Darwin O_WRONLY | O_CREAT | O_APPEND
-const _FOPEN_W_PLUS_FLAGS: i64 = 1538;   // Darwin O_RDWR | O_CREAT | O_TRUNC
-const _FOPEN_A_PLUS_FLAGS: i64 = 2562;  // Darwin O_RDWR | O_CREAT | O_APPEND
+std.cfg(std.target_os == .tos_macos, {
+    const _FOPEN_W_FLAGS: i64 = 0x00000001 | 0x00000200 | 0x00000400;
+    const _FOPEN_A_FLAGS: i64 = 0x00000001 | 0x00000200 | 0x00000008;
+    const _FOPEN_W_PLUS_FLAGS: i64 = 0x00000002 | 0x00000200 | 0x00000400;
+    const _FOPEN_A_PLUS_FLAGS: i64 = 0x00000002 | 0x00000200 | 0x00000008;
+}, {
+    const _FOPEN_W_FLAGS: i64 = 0x00000001 | 0x00000040 | 0x00000200;
+    const _FOPEN_A_FLAGS: i64 = 0x00000001 | 0x00000040 | 0x00000400;
+    const _FOPEN_W_PLUS_FLAGS: i64 = 0x00000002 | 0x00000040 | 0x00000200;
+    const _FOPEN_A_PLUS_FLAGS: i64 = 0x00000002 | 0x00000040 | 0x00000400;
+})
 
 // fopen - 打开文件（C 标准库兼容）
 // 返回：FILE*，失败返回 null

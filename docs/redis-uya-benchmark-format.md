@@ -69,3 +69,25 @@ REPL_BENCH_RESULT version=1 impl=redis-uya case_name=full_sync runs=3 p50_ms=...
 
 - `rss_kib` 记录 master + replica 两个进程的合计 RSS
 - 复制场景默认以“更低延迟更好”为比较方向，不复用 `floor/target/stretch` 判定
+
+## 8. v0.8.0 性能回归护栏
+
+`v0.8.0` 起，核心热路径 benchmark 额外输出 `PERF_GUARD_RESULT`：
+
+```text
+PERF_GUARD_RESULT version=1 case_name=get_16b baseline_req_per_s=... current_req_per_s=... \
+min_req_per_s=... throughput_status=pass baseline_p99_us=... current_p99_us=... max_p99_us=... p99_status=pass
+```
+
+默认阈值：
+
+- 吞吐不低于基线的 `0.90x`
+- p99 不高于 `max(基线 * 1.15, 基线 + 100us)`
+
+阈值可通过环境变量覆盖：
+
+- `REDIS_UYA_REGRESSION_RPS_RATIO`
+- `REDIS_UYA_REGRESSION_P99_RATIO`
+- `REDIS_UYA_REGRESSION_P99_ABS_US`
+
+基线报告通过 `REDIS_UYA_BENCH_BASELINE` 指定。未指定基线时，guard 状态记录为 `skip`，用于生成首次基线报告。

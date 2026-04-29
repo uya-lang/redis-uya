@@ -1,6 +1,6 @@
 # redis-uya 文档
 
-> 版本: v0.7.0
+> 版本: v0.8.0-dev
 > 日期: 2026-04-29
 
 ## 文档索引
@@ -44,4 +44,4 @@
 
 ## 当前阶段
 
-项目当前主线已完成 `v0.7.0` 集群基础：当前已补齐复制角色与状态机、`PSYNC / backlog`、replica 侧全量同步、定时拉取式增量同步、复制心跳、主从一致性 smoke、连接级最小 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`、`HELLO 2/3` 驱动的 RESP3 最小协议闭环、`PUBLISH/SUBSCRIBE/UNSUBSCRIBE` 最小 Pub/Sub 闭环、`CLIENT` / `CONFIG` 控制面兼容子集、v0.5 兼容性回归、`maxmemory` noeviction、`allkeys-*` / `volatile-*` 基线、`INFO memory` allocator 统计观测、Slab 小对象缓存基线、内存压力与淘汰回归、Cluster 槽位模型、节点元数据、最小拓扑模型、`CLUSTER` 最小命令接口、`MOVED/ASK` 基础重定向和集群一致性 smoke。下一阶段进入 `v0.8.0` 核心路径性能基线。
+项目当前主线已进入 `v0.8.0` 核心路径性能基线：在已完成 `v0.7.0` 集群基础之上，新增 `make benchmark-v0.8.0`、`scripts/benchmark_v0_8_0.py` 和 `benchmarks/v0.8.0-performance.md`，固定 `PING`、16B/1KiB `SET`、16B/1KiB `GET` 矩阵、同机 Redis 对照与吞吐/p99 回归阈值。后续继续推进零拷贝响应、批量 RESP 解析、SIMD/CRC64、`io_uring` 评估和对象布局优化。

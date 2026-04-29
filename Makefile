@@ -9,7 +9,7 @@ TEST_DIR ?= tests/unit
 APP_WORKSPACE ?= $(BUILD_DIR)/app_workspace
 TEST_WORKSPACE ?= $(BUILD_DIR)/test_workspace
 
-.PHONY: all build run test test-integration test-redis-cli test-long-run benchmark-v0.1.0 benchmark-persistence-v0.3.0 benchmark-replication-v0.4.0 test-all clean version dirs
+.PHONY: all build run test test-integration test-redis-cli test-long-run benchmark-v0.1.0 benchmark-persistence-v0.3.0 benchmark-replication-v0.4.0 benchmark-v0.8.0 test-all clean version dirs
 
 all: build
 
@@ -82,6 +82,9 @@ benchmark-persistence-v0.3.0: build
 
 benchmark-replication-v0.4.0: build
 	python3 scripts/benchmark_replication_v0_4_0.py
+
+benchmark-v0.8.0: build
+	python3 scripts/benchmark_v0_8_0.py
 
 test-all: test test-integration
 

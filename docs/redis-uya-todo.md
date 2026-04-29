@@ -316,7 +316,7 @@
 
 ### Q. 性能地基与回归护栏
 
-- [ ] 核心 benchmark 矩阵与回归阈值
+- [x] 核心 benchmark 矩阵与回归阈值
 - [ ] 零拷贝响应路径
 - [ ] 批量 RESP 解析
 - [ ] SIMD 字符串和 CRC64
@@ -336,7 +336,9 @@
 - `make test`
 - `make test-integration`
 - `scripts/benchmark_v0_1_0.py`
-- 后续新增 `benchmarks/v0.8.0-performance.md`
+- `make benchmark-v0.8.0`
+- `scripts/benchmark_v0_8_0.py`
+- `benchmarks/v0.8.0-performance.md`
 
 ## 14. `v0.9.0`：集群语义正确性
 

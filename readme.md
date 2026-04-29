@@ -3,14 +3,14 @@
 > 使用 Uya 从零实现 Redis 兼容内存数据库
 > 零 GC 路线 · 显式错误处理 · 可测试演进 · 长期性能目标超过 Redis
 
-> 版本: v0.7.0
+> 版本: v0.8.0-dev
 > 日期: 2026-04-29
 
 ## 简介
 
 `redis-uya` 是一个使用 **Uya 编程语言** 从零实现的生产级高性能内存数据库系统。项目长期目标是兼容 Redis 6.2+ 协议，覆盖核心数据结构、持久化、复制、基础集群与性能工程，并在同条件核心场景上超过 Redis。
 
-当前项目已完成 `v0.7.0` 集群基础：在 `v0.1.0` 发布闭环、`v0.2.0` 数据结构扩展、`v0.3.0` 持久化增强、`v0.4.0` 复制基础、`v0.5.0` 协议与控制面增强和 `v0.6.0` 内存与性能控制基础上，新增 Cluster 槽位模型、节点元数据、最小拓扑模型、`CLUSTER KEYSLOT/INFO/NODES/SLOTS/HELP/MEET/SETSLOT`、`MOVED/ASK` 基础重定向和集群一致性 smoke。下一阶段进入 `v0.8.0` 核心路径性能基线。
+当前项目已完成 `v0.7.0` 集群基础，并进入 `v0.8.0` 核心路径性能基线：在 `v0.1.0` 发布闭环、`v0.2.0` 数据结构扩展、`v0.3.0` 持久化增强、`v0.4.0` 复制基础、`v0.5.0` 协议与控制面增强、`v0.6.0` 内存与性能控制、`v0.7.0` Cluster 基础之上，新增核心 benchmark 矩阵、同机 Redis 对照和吞吐/p99 回归阈值。后续继续推进零拷贝响应路径、批量 RESP 解析、SIMD/CRC64、`io_uring` 评估和对象布局优化。
 
 ## 核心目标
 
@@ -73,10 +73,11 @@
 - 内存压力与淘汰回归：覆盖 noeviction OOM、allkeys-lru、allkeys-lfu、volatile-ttl
 - Cluster 基础：槽位计算、节点元数据、单节点最小拓扑、`CLUSTER KEYSLOT/INFO/NODES/SLOTS/HELP/MEET/SETSLOT`、`MOVED/ASK` 基础重定向和一致性 smoke
 - Python 客户端风格集成：覆盖更多命令与控制面交互
+- v0.8.0 核心 benchmark 矩阵与回归阈值：`make benchmark-v0.8.0` 覆盖 `PING`、16B/1KiB `SET`、16B/1KiB `GET`，记录同机 Redis 对照、p50/p95/p99、吞吐、RSS 和吞吐/p99 guard
 
 下一阶段：
 
-- `v0.8.0`：核心路径性能基线，围绕零拷贝响应路径、批量 RESP 解析、SIMD、对象布局和 benchmark 回归护栏继续推进
+- `v0.8.0`：核心路径性能基线，围绕零拷贝响应路径、批量 RESP 解析、SIMD、`io_uring` 评估和对象布局继续推进
 
 当前阶段尚未生产可用。
 
@@ -113,6 +114,12 @@ make test-integration
 ```
 
 `make test-integration` 当前覆盖基础 TCP smoke、空闲连接不阻塞其他客户端、持久化/复制/事务/Pub/Sub/控制面兼容路径，v0.6.0 的 `maxmemory`、淘汰策略、内存统计和压力回归，以及 v0.7.0 的集群 smoke 与一致性 smoke。
+
+v0.8.0 核心性能基线：
+
+```bash
+make benchmark-v0.8.0
+```
 
 如本机已安装 `redis-cli`，可额外运行：
 

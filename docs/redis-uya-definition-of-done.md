@@ -1,8 +1,8 @@
 # redis-uya Definition of Done
 
-> 版本: v0.7.0
+> 版本: v0.8.0-dev
 > 日期: 2026-04-29
-> 状态: `v0.7.0` 集群基础收口完成
+> 状态: `v0.8.0` 核心路径性能基线开发中
 
 ## 1. 目标
 
@@ -18,6 +18,7 @@ bash scripts/verify_definition_of_done.sh
 
 - `tests/integration/long_run_smoke.py` 为 30 分钟长时运行验证，不纳入默认一键脚本
 - `benchmarks/v0.1.0.md` 记录同机 Redis 基线与 `floor/target/stretch` 判定
+- `benchmarks/v0.8.0-performance.md` 记录 `PING/SET/GET` 热路径矩阵、同机 Redis 对照与回归阈值基线
 - 一键验证脚本会把临时 benchmark 输出写入 `build/`，避免覆盖已记录的基线报告
 - 一键验证脚本包含 `git diff --check`，用于检查本次工作区差异的基础格式问题
 - 本页同时记录 `v0.1.0` 发布证据，以及后续 `v0.2.0+` 已在主线落地的能力证据
@@ -132,3 +133,9 @@ bash scripts/verify_definition_of_done.sh
 | `CLUSTER` 最小命令接口可用：支持 `KEYSLOT`、`INFO`、`NODES`、`SLOTS`、`HELP`，真实 TCP smoke 校验 hash tag 槽位、单节点拓扑输出、node id 长度和帮助列表 | `tests/unit/command_router_test.uya`、`tests/unit/command_executor_test.uya`、`tests/integration/cluster_smoke.py` |
 | `MOVED` / `ASK` 重定向路径可用：服务端持有最小拓扑状态，`CLUSTER MEET` 可注册远端节点，`CLUSTER SETSLOT ... NODE` 可触发稳定远端槽位 `MOVED`，`CLUSTER SETSLOT ... MIGRATING` 可触发迁移态 `ASK`，失败写命令不会进入 AOF/复制追加路径 | `tests/unit/command_executor_test.uya`、`tests/integration/cluster_smoke.py` |
 | 集群一致性 smoke 可复现：真实 TCP 进程中校验远端槽位后 `CLUSTER NODES` 槽位范围分裂、`MOVED/ASK` 写命令不落本地库、不进入 AOF，以及 `SETSLOT STABLE` 清除迁移态后恢复本地访问 | `tests/integration/cluster_consistency.py` |
+
+## 11. `v0.8.0`
+
+| DoD 项 | 证据 |
+|--------|------|
+| 核心 benchmark 矩阵与回归阈值可用：覆盖 `PING`、16B/1KiB `SET`、16B/1KiB `GET`，记录 p50/p95/p99、吞吐、RSS、同机 Redis 对照，并支持用既有报告作为基线判定吞吐和 p99 退化 | `scripts/benchmark_v0_8_0.py`、`make benchmark-v0.8.0`、`benchmarks/v0.8.0-performance.md` |

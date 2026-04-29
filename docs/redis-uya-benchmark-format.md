@@ -91,3 +91,20 @@ min_req_per_s=... throughput_status=pass baseline_p99_us=... current_p99_us=... 
 - `REDIS_UYA_REGRESSION_P99_ABS_US`
 
 基线报告通过 `REDIS_UYA_BENCH_BASELINE` 指定。未指定基线时，guard 状态记录为 `skip`，用于生成首次基线报告。
+
+## 9. v0.8.0 io_uring 评估输出
+
+`v0.8.0` 的 `io_uring` 项只做能力评估，不绑定生产路径。评估脚本输出 `IO_URING_EVAL_RESULT`：
+
+```text
+IO_URING_EVAL_RESULT version=1 host_os=linux host_arch=x86_64 kernel_release=... \
+io_uring_disabled=0 io_uring_max_entries=... io_uring_max_workers=... \
+liburing_status=unknown syscall_status=yes recommendation=prototype-only production_binding=no
+```
+
+字段约定：
+
+- `production_binding` 必须为 `no`，表示当前事件循环仍使用 epoll。
+- `syscall_status` 记录 `io_uring_setup` 的实际探测结果：`yes`、`no`、`blocked`、`skip` 或 `error`。
+- `liburing_status` 记录 `pkg-config liburing` 探测结果：`yes`、`no` 或 `unknown`。
+- `recommendation` 只用于后续路线判断，不作为生产路径开关。

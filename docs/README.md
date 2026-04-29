@@ -44,4 +44,4 @@
 
 ## 当前阶段
 
-项目当前主线已进入 `v0.8.0` 核心路径性能基线：在已完成 `v0.7.0` 集群基础之上，新增 `make benchmark-v0.8.0`、`scripts/benchmark_v0_8_0.py` 和 `benchmarks/v0.8.0-performance.md`，固定 `PING`、16B/1KiB `SET`、16B/1KiB `GET` 矩阵、同机 Redis 对照与吞吐/p99 回归阈值；同时完成 64B 及以上 `GET` bulk string 的 `writev` 零拷贝发送路径、RESP2/RESP3 顶层批量解析 API、`@vector` byte-slice 比较和表驱动 CRC64。后续继续推进 `io_uring` 评估和对象布局优化。
+项目当前主线已进入 `v0.8.0` 核心路径性能基线：在已完成 `v0.7.0` 集群基础之上，新增 `make benchmark-v0.8.0`、`scripts/benchmark_v0_8_0.py` 和 `benchmarks/v0.8.0-performance.md`，固定 `PING`、16B/1KiB `SET`、16B/1KiB `GET` 矩阵、同机 Redis 对照与吞吐/p99 回归阈值；同时完成 64B 及以上 `GET` bulk string 的 `writev` 零拷贝发送路径、RESP2/RESP3 顶层批量解析 API、`@vector` byte-slice 比较、表驱动 CRC64 和 `io_uring` 主机能力评估报告。后续继续推进对象布局优化。

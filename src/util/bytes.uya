@@ -1,0 +1,119 @@
+// util/bytes.uya - hot byte-slice helpers.
+
+type ByteVec16 = @vector(u8, 16);
+type ByteMask16 = @mask(16);
+
+fn bytes_min(a: usize, b: usize) usize {
+    if a < b { return a; }
+    return b;
+}
+
+fn bytes_ascii_lower(ch: byte) byte {
+    if ch >= 65 as byte && ch <= 90 as byte {
+        return ch + 32 as byte;
+    }
+    return ch;
+}
+
+fn bytes_cmp_scalar_range(a: &[byte], b: &[byte], start: usize, len: usize) i32 {
+    var i: usize = 0;
+    while i < len {
+        const av: byte = a.ptr[start + i];
+        const bv: byte = b.ptr[start + i];
+        if av < bv { return -1; }
+        if av > bv { return 1; }
+        i = i + 1;
+    }
+    return 0;
+}
+
+fn bytes_ascii_casecmp_scalar_range(a: &[byte], b: &[byte], start: usize, len: usize) i32 {
+    var i: usize = 0;
+    while i < len {
+        const av: byte = bytes_ascii_lower(a.ptr[start + i]);
+        const bv: byte = bytes_ascii_lower(b.ptr[start + i]);
+        if av < bv { return -1; }
+        if av > bv { return 1; }
+        i = i + 1;
+    }
+    return 0;
+}
+
+export fn bytes_eq(a: &[byte], b: &[byte]) bool {
+    if a.len != b.len {
+        return false;
+    }
+
+    var i: usize = 0;
+    while i + 16 <= a.len {
+        const av: ByteVec16 = @vector.load((&a.ptr[i]) as &u8);
+        const bv: ByteVec16 = @vector.load((&b.ptr[i]) as &u8);
+        const same: ByteMask16 = av == bv;
+        if !@vector.all(same) {
+            return false;
+        }
+        i = i + 16;
+    }
+
+    while i < a.len {
+        if a.ptr[i] != b.ptr[i] {
+            return false;
+        }
+        i = i + 1;
+    }
+    return true;
+}
+
+export fn bytes_cmp(a: &[byte], b: &[byte]) i32 {
+    const min_len: usize = bytes_min(a.len, b.len);
+    var i: usize = 0;
+    while i + 16 <= min_len {
+        const av: ByteVec16 = @vector.load((&a.ptr[i]) as &u8);
+        const bv: ByteVec16 = @vector.load((&b.ptr[i]) as &u8);
+        const same: ByteMask16 = av == bv;
+        if !@vector.all(same) {
+            return bytes_cmp_scalar_range(a, b, i, 16);
+        }
+        i = i + 16;
+    }
+
+    const tail_cmp: i32 = bytes_cmp_scalar_range(a, b, i, min_len - i);
+    if tail_cmp != 0 {
+        return tail_cmp;
+    }
+    if a.len < b.len { return -1; }
+    if a.len > b.len { return 1; }
+    return 0;
+}
+
+export fn bytes_ascii_casecmp(a: &[byte], b: &[byte]) i32 {
+    const min_len: usize = bytes_min(a.len, b.len);
+    var i: usize = 0;
+    while i + 16 <= min_len {
+        const av: ByteVec16 = @vector.load((&a.ptr[i]) as &u8);
+        const bv: ByteVec16 = @vector.load((&b.ptr[i]) as &u8);
+        const same: ByteMask16 = av == bv;
+        if !@vector.all(same) {
+            const chunk_cmp: i32 = bytes_ascii_casecmp_scalar_range(a, b, i, 16);
+            if chunk_cmp != 0 {
+                return chunk_cmp;
+            }
+        }
+        i = i + 16;
+    }
+
+    const tail_cmp: i32 = bytes_ascii_casecmp_scalar_range(a, b, i, min_len - i);
+    if tail_cmp != 0 {
+        return tail_cmp;
+    }
+    if a.len < b.len { return -1; }
+    if a.len > b.len { return 1; }
+    return 0;
+}
+
+export fn bytes_ascii_case_eq(a: &[byte], b: &[byte]) bool {
+    if a.len != b.len {
+        return false;
+    }
+    return bytes_ascii_casecmp(a, b) == 0;
+}

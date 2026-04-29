@@ -3,6 +3,7 @@
 use src.network.protocol.RespType;
 use src.network.protocol.RespValue;
 use src.network.protocol.resp_array_element;
+use src.util.bytes.bytes_ascii_case_eq;
 
 export error CommandUnknown;
 export error CommandWrongArity;
@@ -77,26 +78,8 @@ export const COMMAND_FLAG_FAST: u64 = 4u64;
 
 const MIN_COMMAND_COUNT: usize = 39;
 
-fn command_router_lower(ch: byte) byte {
-    if ch >= 65 as byte && ch <= 90 as byte {
-        return ch + 32 as byte;
-    }
-    return ch;
-}
-
 fn command_router_name_eq(a: &[byte], b: &[byte]) bool {
-    if a.len != b.len {
-        return false;
-    }
-
-    var i: usize = 0;
-    while i < a.len {
-        if command_router_lower(a.ptr[i]) != command_router_lower(b.ptr[i]) {
-            return false;
-        }
-        i = i + 1;
-    }
-    return true;
+    return bytes_ascii_case_eq(a, b);
 }
 
 fn command_router_info(

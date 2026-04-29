@@ -11,6 +11,7 @@ use std.io.file.file_open;
 use std.io.file.file_close;
 use std.io.file.file_read;
 use libc.O_RDONLY;
+use src.util.bytes.bytes_ascii_case_eq;
 
 export enum MaxmemoryPolicy {
     maxmemory_noeviction,
@@ -72,17 +73,7 @@ fn is_space(ch: byte) bool {
 }
 
 fn token_eq(token: &[byte], lit: &[byte]) bool {
-    if token.len != lit.len { return false; }
-    var i: usize = 0;
-    while i < token.len {
-        var a: byte = token.ptr[i];
-        var b: byte = lit.ptr[i];
-        if a >= 65 as byte && a <= 90 as byte { a = a + 32 as byte; }
-        if b >= 65 as byte && b <= 90 as byte { b = b + 32 as byte; }
-        if a != b { return false; }
-        i = i + 1;
-    }
-    return true;
+    return bytes_ascii_case_eq(token, lit);
 }
 
 fn parse_i32_token(token: &[byte]) !i32 {

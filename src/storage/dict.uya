@@ -5,6 +5,7 @@ use src.memory.allocator.redis_free;
 use src.storage.sds.Sds;
 use src.storage.sds.sds_new;
 use src.storage.sds.sds_free;
+use src.util.bytes.bytes_eq;
 use src.util.crc64.crc64;
 
 export error DictKeyNotFound;
@@ -67,13 +68,7 @@ fn dict_hash_key(key: &[byte]) u64 {
 }
 
 fn dict_key_eq(entry: &DictEntry, key: &[byte]) bool {
-    if entry.key.len != key.len { return false; }
-    var i: usize = 0;
-    while i < key.len {
-        if entry.key.buf.ptr[i] != key.ptr[i] { return false; }
-        i = i + 1;
-    }
-    return true;
+    return bytes_eq(entry.key.buf[0: entry.key.len], key);
 }
 
 fn dict_init_buckets(base: &byte, size: usize) void {

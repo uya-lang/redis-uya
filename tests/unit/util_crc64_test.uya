@@ -2,6 +2,7 @@ use tests.unit.assert.assert_eq_u64;
 
 use src.util.crc64.crc64;
 use src.util.crc64.crc64_update;
+use src.util.crc64.crc64_update_scalar_for_test;
 
 export fn test_crc64_known_values() !void {
     var empty: [byte: 1] = [0];
@@ -13,4 +14,24 @@ export fn test_crc64_known_values() !void {
     const first: u64 = crc64_update(0u64, data[0: 4]);
     const second: u64 = crc64_update(first, data[4: 5]);
     try assert_eq_u64(second, 0xe9c6d914c4b8d9cau64);
+}
+
+export fn test_crc64_table_matches_scalar() !void {
+    var data: [byte: 512] = [];
+    var i: usize = 0;
+    while i < 512 {
+        data[i] = ((i * 37 + 11) % (256 as usize)) as byte;
+        i = i + 1;
+    }
+
+    const table_all: u64 = crc64_update(0u64, data[0: 512]);
+    const scalar_all: u64 = crc64_update_scalar_for_test(0u64, data[0: 512]);
+    try assert_eq_u64(table_all, scalar_all);
+
+    const table_head: u64 = crc64_update(0u64, data[0: 127]);
+    const table_tail: u64 = crc64_update(table_head, data[127: 385]);
+    const scalar_head: u64 = crc64_update_scalar_for_test(0u64, data[0: 127]);
+    const scalar_tail: u64 = crc64_update_scalar_for_test(scalar_head, data[127: 385]);
+    try assert_eq_u64(table_tail, scalar_tail);
+    try assert_eq_u64(table_tail, table_all);
 }

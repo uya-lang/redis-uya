@@ -3,6 +3,8 @@
 use src.memory.allocator.redis_malloc;
 use src.memory.allocator.redis_free;
 use src.memory.allocator.redis_realloc;
+use src.util.bytes.bytes_ascii_casecmp;
+use src.util.bytes.bytes_cmp;
 
 export error SdsInvalidSize;
 export error SdsInvalidFormat;
@@ -294,34 +296,9 @@ export fn sds_shrink(s: &Sds) void {
 }
 
 export fn sds_cmp(a: &Sds, b: &Sds) i32 {
-    var i: usize = 0;
-    while i < a.len && i < b.len {
-        const av: byte = a.buf.ptr[i];
-        const bv: byte = b.buf.ptr[i];
-        if av < bv { return -1; }
-        if av > bv { return 1; }
-        i = i + 1;
-    }
-    if a.len < b.len { return -1; }
-    if a.len > b.len { return 1; }
-    return 0;
-}
-
-fn lower(ch: byte) byte {
-    if ch >= 65 as byte && ch <= 90 as byte { return ch + 32 as byte; }
-    return ch;
+    return bytes_cmp(a.buf[0: a.len], b.buf[0: b.len]);
 }
 
 export fn sds_casecmp(a: &Sds, b: &Sds) i32 {
-    var i: usize = 0;
-    while i < a.len && i < b.len {
-        const av: byte = lower(a.buf.ptr[i]);
-        const bv: byte = lower(b.buf.ptr[i]);
-        if av < bv { return -1; }
-        if av > bv { return 1; }
-        i = i + 1;
-    }
-    if a.len < b.len { return -1; }
-    if a.len > b.len { return 1; }
-    return 0;
+    return bytes_ascii_casecmp(a.buf[0: a.len], b.buf[0: b.len]);
 }

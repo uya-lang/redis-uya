@@ -60,9 +60,14 @@ server open
 ### `src/storage/`
 
 - `sds.uya`：动态字符串
-- `dict.uya`：项目内专用字典，支持渐进 rehash
+- `dict.uya`：项目内专用字典，支持渐进 rehash；key 比较复用 `util/bytes.uya` 的 16 字节块比较，key hash 使用表驱动 CRC64
 - `object.uya`：最小 `RedisObject`
 - `engine.uya`：键空间、TTL、主动/惰性过期
+
+### `src/util/`
+
+- `bytes.uya`：基于 `@vector` 的 16 字节块 byte-slice 比较与 ASCII 大小写比较，当前用于命令路由、配置解析、SDS 和 Dict key 热路径
+- `crc64.uya`：Redis CRC64；默认使用 256 项表驱动更新，保留标量更新路径作为测试对照
 
 ### `src/persistence/`
 

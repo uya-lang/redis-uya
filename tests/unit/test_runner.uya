@@ -3,6 +3,9 @@ extern "libc" fn printf(fmt: *byte, ...) i32;
 use tests.unit.util_endian_test.test_read_big_endian;
 use tests.unit.util_endian_test.test_write_big_endian;
 use tests.unit.util_crc64_test.test_crc64_known_values;
+use tests.unit.util_crc64_test.test_crc64_table_matches_scalar;
+use tests.unit.util_bytes_test.test_bytes_vector_eq_and_cmp;
+use tests.unit.util_bytes_test.test_bytes_vector_ascii_casecmp;
 use tests.unit.cluster_slots_test.test_cluster_crc16_known_values;
 use tests.unit.cluster_slots_test.test_cluster_hash_tags;
 use tests.unit.cluster_slots_test.test_cluster_hash_tag_edge_cases;
@@ -144,6 +147,18 @@ export fn main() i32 {
     const before_crc: i32 = failed;
     _ = test_crc64_known_values() catch { printf("[FAIL] util_crc64/known\n" as *byte); failed = failed + 1; };
     if failed == before_crc { printf("[PASS] util_crc64/known\n" as *byte); }
+
+    const before_crc_table: i32 = failed;
+    _ = test_crc64_table_matches_scalar() catch { printf("[FAIL] util_crc64/table_scalar\n" as *byte); failed = failed + 1; };
+    if failed == before_crc_table { printf("[PASS] util_crc64/table_scalar\n" as *byte); }
+
+    const before_bytes_eq: i32 = failed;
+    _ = test_bytes_vector_eq_and_cmp() catch { printf("[FAIL] util_bytes/eq_cmp\n" as *byte); failed = failed + 1; };
+    if failed == before_bytes_eq { printf("[PASS] util_bytes/eq_cmp\n" as *byte); }
+
+    const before_bytes_case: i32 = failed;
+    _ = test_bytes_vector_ascii_casecmp() catch { printf("[FAIL] util_bytes/casecmp\n" as *byte); failed = failed + 1; };
+    if failed == before_bytes_case { printf("[PASS] util_bytes/casecmp\n" as *byte); }
 
     const before_cluster_crc16: i32 = failed;
     _ = test_cluster_crc16_known_values() catch { printf("[FAIL] cluster_slots/crc16\n" as *byte); failed = failed + 1; };

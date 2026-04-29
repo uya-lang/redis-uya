@@ -2,6 +2,9 @@
 
 const CRC64_POLY: u64 = 0x95ac9329ac4bc9b5u64;
 
+var crc64_table_ready: bool = false;
+var crc64_table: [u64: 256] = [];
+
 fn crc64_byte(crc: u64, value: byte) u64 {
     var c: u64 = crc ^ (value as u64);
     var bit: i32 = 0;
@@ -16,11 +19,35 @@ fn crc64_byte(crc: u64, value: byte) u64 {
     return c;
 }
 
-export fn crc64_update(crc: u64, data: &[byte]) u64 {
+fn crc64_init_table() void {
+    if crc64_table_ready {
+        return;
+    }
+    var i: usize = 0;
+    while i < 256 {
+        crc64_table[i] = crc64_byte(0u64, i as byte);
+        i = i + 1;
+    }
+    crc64_table_ready = true;
+}
+
+export fn crc64_update_scalar_for_test(crc: u64, data: &[byte]) u64 {
     var c: u64 = crc;
     var i: usize = 0;
     while i < data.len {
         c = crc64_byte(c, data.ptr[i]);
+        i = i + 1;
+    }
+    return c;
+}
+
+export fn crc64_update(crc: u64, data: &[byte]) u64 {
+    crc64_init_table();
+    var c: u64 = crc;
+    var i: usize = 0;
+    while i < data.len {
+        const index: usize = ((c ^ (data.ptr[i] as u64)) & 255u64) as usize;
+        c = crc64_table[index] ^ (c >> 8);
         i = i + 1;
     }
     return c;

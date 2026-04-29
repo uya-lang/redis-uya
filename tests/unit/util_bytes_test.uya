@@ -1,0 +1,35 @@
+use tests.unit.assert.assert_eq_i32;
+use tests.unit.assert.assert_true;
+
+use src.util.bytes.bytes_ascii_case_eq;
+use src.util.bytes.bytes_ascii_casecmp;
+use src.util.bytes.bytes_cmp;
+use src.util.bytes.bytes_eq;
+
+export fn test_bytes_vector_eq_and_cmp() !void {
+    const same_a: &[byte] = &"0123456789abcdef0123456789abcdef"[0: 32];
+    const same_b: &[byte] = &"0123456789abcdef0123456789abcdef"[0: 32];
+    const diff_mid: &[byte] = &"0123456789abcdeg0123456789abcdef"[0: 32];
+    const diff_tail: &[byte] = &"0123456789abcdef0123456789abcdee"[0: 32];
+
+    try assert_true(bytes_eq(same_a, same_b));
+    try assert_true(!bytes_eq(same_a, diff_mid));
+    try assert_true(!bytes_eq(same_a, diff_tail));
+    try assert_eq_i32(bytes_cmp(same_a, same_b), 0);
+    try assert_true(bytes_cmp(same_a, diff_mid) < 0);
+    try assert_true(bytes_cmp(diff_mid, same_a) > 0);
+    try assert_true(bytes_cmp(&"abc"[0: 3], &"abcd"[0: 4]) < 0);
+    try assert_true(bytes_cmp(&"abcd"[0: 4], &"abc"[0: 3]) > 0);
+}
+
+export fn test_bytes_vector_ascii_casecmp() !void {
+    const upper: &[byte] = &"PING0123456789ABCDPING0123456789ABCD"[0: 40];
+    const lower: &[byte] = &"ping0123456789abcdping0123456789abcd"[0: 40];
+    const later: &[byte] = &"ping0123456789abceping0123456789abcd"[0: 40];
+
+    try assert_true(bytes_ascii_case_eq(upper, lower));
+    try assert_eq_i32(bytes_ascii_casecmp(upper, lower), 0);
+    try assert_true(bytes_ascii_casecmp(lower, later) < 0);
+    try assert_true(bytes_ascii_casecmp(later, lower) > 0);
+    try assert_true(!bytes_ascii_case_eq(&"GET"[0: 3], &"GETX"[0: 4]));
+}

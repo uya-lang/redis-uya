@@ -1,6 +1,6 @@
 # redis-uya 文档
 
-> 版本: v0.8.0-dev
+> 版本: v0.8.0
 > 日期: 2026-04-29
 
 ## 文档索引
@@ -22,9 +22,11 @@
 - [release-v0.5.0](./redis-uya-release-v0.5.0.md)
 - [release-v0.6.0](./redis-uya-release-v0.6.0.md)
 - [release-v0.7.0](./redis-uya-release-v0.7.0.md)
+- [release-v0.8.0](./redis-uya-release-v0.8.0.md)
 - [test-report-v0.1.0](./redis-uya-test-report-v0.1.0.md)
 - [test-report-v0.6.0](./redis-uya-test-report-v0.6.0.md)
 - [test-report-v0.7.0](./redis-uya-test-report-v0.7.0.md)
+- [test-report-v0.8.0](./redis-uya-test-report-v0.8.0.md)
 
 ## 文档关系
 
@@ -39,8 +41,8 @@
 9. `redis-uya-api.md` 记录当前命令与错误语义。
 10. `redis-uya-architecture.md` 记录当前实现架构与数据路径。
 11. `redis-uya-release-v0.1.0.md` 固化 `v0.1.0` 的发布边界、验证入口与已知限制。
-12. `redis-uya-release-v0.2.0.md`、`redis-uya-release-v0.3.0.md`、`redis-uya-release-v0.4.0.md`、`redis-uya-release-v0.5.0.md`、`redis-uya-release-v0.6.0.md`、`redis-uya-release-v0.7.0.md` 固化各阶段收口时的版本边界。
-13. `redis-uya-test-report-v0.1.0.md`、`redis-uya-test-report-v0.6.0.md`、`redis-uya-test-report-v0.7.0.md` 固化对应阶段实际执行的测试和基准结果。
+12. `redis-uya-release-v0.2.0.md`、`redis-uya-release-v0.3.0.md`、`redis-uya-release-v0.4.0.md`、`redis-uya-release-v0.5.0.md`、`redis-uya-release-v0.6.0.md`、`redis-uya-release-v0.7.0.md`、`redis-uya-release-v0.8.0.md` 固化各阶段收口时的版本边界。
+13. `redis-uya-test-report-v0.1.0.md`、`redis-uya-test-report-v0.6.0.md`、`redis-uya-test-report-v0.7.0.md`、`redis-uya-test-report-v0.8.0.md` 固化对应阶段实际执行的测试和基准结果。
 
 ## 当前阶段
 

@@ -3,7 +3,7 @@
 > 使用 Uya 从零实现 Redis 兼容内存数据库
 > 零 GC 路线 · 显式错误处理 · 可测试演进 · 长期性能目标超过 Redis
 
-> 版本: v0.8.0-dev
+> 版本: v0.8.0
 > 日期: 2026-04-29
 
 ## 简介
@@ -273,6 +273,10 @@ build/redis-uya 6380 1
 | `v0.6.0` | 内存与性能控制 | `maxmemory`、淘汰策略、主动过期、Slab |
 | `v0.7.0` | 集群基础 | Cluster 槽位、重定向、节点元数据 |
 | `v0.8.0` | 核心路径性能基线 | 零拷贝、批量解析、SIMD、对象布局、回归护栏 |
+| `v0.9.0` | 集群语义正确性 | 多 key 同槽校验、`CROSSSLOT`、`ASKING` |
+| `v0.10.0` | 集群成员与 gossip | 节点握手、gossip、拓扑传播、PFAIL/FAIL |
+| `v0.11.0` | 集群故障转移基础 | replica 归属、config epoch、最小 failover |
+| `v0.12.0` | 重分片与集群 benchmark | slot 迁移闭环、正式集群性能报告 |
 
 完整计划见 [开发 TODO](docs/redis-uya-todo.md)。
 
@@ -304,9 +308,11 @@ build/redis-uya 6380 1
 - [release-v0.5.0](docs/redis-uya-release-v0.5.0.md)
 - [release-v0.6.0](docs/redis-uya-release-v0.6.0.md)
 - [release-v0.7.0](docs/redis-uya-release-v0.7.0.md)
+- [release-v0.8.0](docs/redis-uya-release-v0.8.0.md)
 - [test-report-v0.1.0](docs/redis-uya-test-report-v0.1.0.md)
 - [test-report-v0.6.0](docs/redis-uya-test-report-v0.6.0.md)
 - [test-report-v0.7.0](docs/redis-uya-test-report-v0.7.0.md)
+- [test-report-v0.8.0](docs/redis-uya-test-report-v0.8.0.md)
 
 ## 目录结构
 
@@ -319,7 +325,10 @@ redis-uya/
 ├── benchmarks/
 │   ├── v0.1.0.md
 │   ├── v0.3.0-persistence.md
-│   └── v0.4.0-replication.md
+│   ├── v0.4.0-replication.md
+│   ├── v0.8.0-performance.md
+│   ├── v0.8.0-io-uring.md
+│   └── v0.8.0-gap-report.md
 ├── src/
 │   ├── async_rt/
 │   ├── config.uya
@@ -340,6 +349,9 @@ redis-uya/
 │   ├── benchmark_v0_1_0.py
 │   ├── benchmark_persistence_v0_3_0.py
 │   ├── benchmark_replication_v0_4_0.py
+│   ├── benchmark_v0_8_0.py
+│   ├── evaluate_io_uring_v0_8_0.py
+│   ├── report_v0_8_0_gaps.py
 │   └── verify_definition_of_done.sh
 ├── docs/
 │   ├── redis-uya-design.md

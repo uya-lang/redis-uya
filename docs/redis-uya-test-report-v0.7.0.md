@@ -33,7 +33,7 @@
 
 - `docs/redis-uya-release-v0.7.0.md` 已记录能力、验证入口、限制和发布边界。
 - `docs/redis-uya-definition-of-done.md` 已记录 v0.7.0 DoD 证据。
-- `docs/redis-uya-todo.md` 已将 v0.7.0 标记为完成，当前进行中切到 v0.8.0 及以后性能路线。
+- `docs/redis-uya-todo.md` 已将 v0.7.0 标记为完成，当前进行中切到 v0.8.0 核心路径性能基线。
 - `docs/redis-uya-api.md`、`docs/redis-uya-architecture.md`、`docs/redis-uya-quickstart.md`、`docs/README.md` 和根 `readme.md` 已同步 v0.7.0 口径。
 - 本次未自动创建 `v0.7.0` tag；如需正式发布 tag，应在干净工作区手动执行 tag 命令。
 

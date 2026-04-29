@@ -28,11 +28,11 @@
 
 `benchmarks/v0.8.1-performance.md` 中五个 case 的吞吐和 p99 guard 均通过：
 
-- `ping`: 24006 req/s，p99 62us
-- `set_16b`: 1297 req/s，p99 1348us
-- `get_16b`: 20347 req/s，p99 66us
-- `set_1024b`: 191 req/s，p99 6959us
-- `get_1024b`: 18892 req/s，p99 73us
+- `ping`: 25577 req/s，p99 53us
+- `set_16b`: 1353 req/s，p99 1303us
+- `get_16b`: 19822 req/s，p99 71us
+- `set_1024b`: 191 req/s，p99 6472us
+- `get_1024b`: 19153 req/s，p99 73us
 
 本版仍未解决追平 Redis 的长期目标；`SET` 绝对性能仍明显落后 Redis，但相对 v0.8.0 基线已经不退化，并完成首批写路径开销削减。
 

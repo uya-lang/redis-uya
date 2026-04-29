@@ -74,6 +74,14 @@ REPL_BENCH_RESULT version=1 impl=redis-uya case_name=full_sync runs=3 p50_ms=...
 
 `v0.8.0` 起，核心热路径 benchmark 额外输出 `PERF_GUARD_RESULT`：
 
+报告正文会先输出 `Case Matrix` Markdown 表格，便于人工直接对比 redis-uya 与 Redis：
+
+```text
+| Case | redis-uya req/s | Redis req/s | Throughput ratio | redis-uya p99 us | Redis p99 us | p99 ratio | RSS ratio | Status |
+```
+
+表格中的 `Status` 面向 Redis 对照阅读：吞吐达到 Redis 且 p99 不高于 Redis 时为 `target`；吞吐低于 Redis `0.25x` 或 p99 高于 Redis `4.0x` 时为 `critical`；其他未达标但非极端差距为 `watch`。
+
 ```text
 PERF_GUARD_RESULT version=1 case_name=get_16b baseline_req_per_s=... current_req_per_s=... \
 min_req_per_s=... throughput_status=pass baseline_p99_us=... current_p99_us=... max_p99_us=... p99_status=pass

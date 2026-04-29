@@ -419,6 +419,61 @@ def format_guard_line(
     )
 
 
+def ratio_text(numerator: int, denominator: int) -> str:
+    if denominator <= 0:
+        return "skip"
+    return f"{numerator / denominator:.2f}x"
+
+
+def redis_pk_status(uya: dict[str, float | int], redis: dict[str, float | int] | None) -> str:
+    if redis is None:
+        return "skip"
+    redis_rps = int(redis["req_per_s"])
+    redis_p99 = int(redis["p99_us"])
+    if redis_rps <= 0 or redis_p99 <= 0:
+        return "skip"
+    throughput_ratio = int(uya["req_per_s"]) / redis_rps
+    p99_ratio = int(uya["p99_us"]) / redis_p99
+    if throughput_ratio >= 1.0 and p99_ratio <= 1.0:
+        return "target"
+    if throughput_ratio < 0.25 or p99_ratio > 4.0:
+        return "critical"
+    return "watch"
+
+
+def format_case_matrix(
+    uya_results: dict[str, dict[str, float | int]],
+    redis_results: dict[str, dict[str, float | int]] | None,
+    uya_rss: int,
+    redis_rss: int,
+) -> list[str]:
+    lines = [
+        "## Case Matrix",
+        "",
+        "| Case | redis-uya req/s | Redis req/s | Throughput ratio | redis-uya p99 us | Redis p99 us | p99 ratio | RSS ratio | Status |",
+        "|------|----------------:|------------:|-----------------:|-----------------:|-------------:|----------:|----------:|--------|",
+    ]
+    for case_name in CASE_NAMES:
+        uya = uya_results[case_name]
+        redis = None if redis_results is None else redis_results[case_name]
+        uya_rps = int(uya["req_per_s"])
+        uya_p99 = int(uya["p99_us"])
+        redis_rps = 0 if redis is None else int(redis["req_per_s"])
+        redis_p99 = 0 if redis is None else int(redis["p99_us"])
+        lines.append(
+            f"| {case_name} | "
+            f"{uya_rps} | "
+            f"{redis_rps if redis is not None else 'skip'} | "
+            f"{ratio_text(uya_rps, redis_rps)} | "
+            f"{uya_p99} | "
+            f"{redis_p99 if redis is not None else 'skip'} | "
+            f"{ratio_text(uya_p99, redis_p99)} | "
+            f"{ratio_text(uya_rss, redis_rss)} | "
+            f"{redis_pk_status(uya, redis)} |"
+        )
+    return lines
+
+
 def write_report(report_lines: list[str]) -> None:
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text("\n".join(report_lines) + "\n")
@@ -487,7 +542,7 @@ def main() -> int:
         else:
             report_lines.append(f"- Guard baseline: `{display_path(baseline_path)}`.")
 
-        report_lines.extend(["", "## Raw Output", "", "```text"])
+        report_lines.extend(["", *format_case_matrix(uya_results, redis_results, uya_rss, redis_rss), "", "## Raw Output", "", "```text"])
 
         for case_name in CASE_NAMES:
             value_bytes = int(uya_results[case_name]["value_bytes"])

@@ -49,6 +49,7 @@
 当前进行中：
 
 - [ ] `v0.8.0` 及以后：性能冲刺
+- [ ] `v0.9.0+`：集群语义、gossip、failover、resharding 与正式集群 benchmark
 
 ## 3. 全版本路线图
 
@@ -63,7 +64,11 @@
 | `v0.5.0` | 协议与控制面增强 | RESP3、事务、Pub/Sub、CONFIG/CLIENT 完整化 | 协议兼容扩大 |
 | `v0.6.0` | 内存与性能控制 | `maxmemory`、淘汰策略、主动过期强化、Slab | 内存可控 |
 | `v0.7.0` | 集群基础 | Cluster 槽位、重定向、节点元数据 | 分布式闭环 |
-| `v0.8.0` 及以后 | 性能冲刺 | 零拷贝、批量解析、SIMD、io_uring、极限优化 | 核心场景逼近或超越 Redis |
+| `v0.8.0` | 性能冲刺 | 零拷贝、批量解析、SIMD、io_uring、极限优化 | 核心场景逼近或超越 Redis |
+| `v0.9.0` | 集群语义正确性 | 多 key 同槽校验、`CROSSSLOT`、`ASKING` | 重定向语义对齐 |
+| `v0.10.0` | 集群成员与 gossip | 节点握手、gossip 消息、拓扑传播、PFAIL/FAIL 基础 | 多节点拓扑可传播 |
+| `v0.11.0` | 集群故障转移基础 | replica 归属、config epoch、最小 failover | 槽位 owner 可切换 |
+| `v0.12.0` | 重分片与集群 benchmark | `ADDSLOTS/DELSLOTS`、迁移闭环、正式集群性能报告 | resharding 可复现 |
 
 ## 4. 当前主线：`v0.1.0-alpha`
 
@@ -307,7 +312,7 @@
 - [x] `CLUSTER` 最小命令接口
 - [x] 集群一致性 smoke
 
-## 13. `v0.8.0` 及以后：长期性能路线
+## 13. `v0.8.0`：长期性能路线
 
 ### Q. 性能冲刺
 
@@ -319,7 +324,119 @@
 - [ ] 核心场景 Redis 对照追平
 - [ ] 核心场景 Redis 对照超越
 
-## 14. 风险登记
+验收项：
+
+- `PING/GET/SET` 热路径吞吐和 p99 延迟较 `v0.7.0` 不退化
+- benchmark 报告明确硬件、构建模式、持久化配置、数据规模和 Redis 对照口径
+- 性能优化不改变协议、持久化、复制、集群基础语义
+
+测试证据：
+
+- `make test`
+- `make test-integration`
+- `scripts/benchmark_v0_1_0.py`
+- 后续新增 `benchmarks/v0.8.0-performance.md`
+
+## 14. `v0.9.0`：集群语义正确性
+
+### R. 多 key 与 ASKING
+
+- [ ] 多 key 命令统一提取所有 key，覆盖 `DEL/EXISTS/MGET/MSET` 首批命令
+- [ ] 所有 key 落同一 slot 时继续执行本地或重定向判断
+- [ ] 多 key 跨 slot 时返回 `CROSSSLOT Keys in request don't hash to the same slot`
+- [ ] `ASKING` 连接级一次性放行：只允许下一条命令越过迁移态 `ASK`
+- [ ] `ASKING` 与事务、WATCH、AOF、复制追加路径的边界收敛
+
+验收项：
+
+- 同槽多 key 命令在本地 owner 上保持当前语义
+- 远端稳定 owner 返回 `MOVED`，迁移态 owner 在未 `ASKING` 时返回 `ASK`
+- 客户端发送 `ASKING` 后，下一条同 slot 命令可执行一次，之后恢复正常 `ASK`
+- 跨 slot 多 key 命令不会写本地库，不进入 AOF，不进入复制 backlog
+
+测试证据：
+
+- `tests/unit/command_router_test.uya` 覆盖多 key 元数据
+- `tests/unit/command_executor_test.uya` 覆盖 `CROSSSLOT`、`MOVED`、`ASK`、`ASKING`
+- `tests/unit/network_connection_test.uya` 覆盖连接级 `ASKING` 一次性状态
+- 后续新增 `tests/integration/cluster_crossslot.py`
+- 后续新增 `tests/integration/cluster_asking.py`
+
+## 15. `v0.10.0`：集群成员与 gossip
+
+### S. 成员发现与拓扑传播
+
+- [ ] 抽出 cluster bus 消息编码/解码模块
+- [ ] 实现节点握手状态：`MEET` -> handshake -> known node
+- [ ] 实现 ping/pong gossip 消息与节点表传播
+- [ ] 实现节点超时、`PFAIL`、`FAIL` 最小状态机
+- [ ] `CLUSTER NODES/SLOTS/INFO` 基于真实多节点拓扑输出
+
+验收项：
+
+- 三节点进程 smoke 中，任意节点 `MEET` 后拓扑最终传播到其他节点
+- 节点下线后可观测 `PFAIL/FAIL`，恢复后可重新连通
+- gossip 更新不得破坏本地 slot owner 和 config epoch 单调性
+
+测试证据：
+
+- 后续新增 `src/cluster/gossip.uya`
+- 后续新增 `tests/unit/cluster_gossip_test.uya`
+- 后续新增 `tests/unit/cluster_topology_test.uya` 多节点传播用例
+- 后续新增 `tests/integration/cluster_gossip_smoke.py`
+- 后续新增 `tests/integration/cluster_node_failure_smoke.py`
+
+## 16. `v0.11.0`：集群故障转移基础
+
+### T. Replica 归属与 failover
+
+- [ ] 节点元数据记录 replica master id 与复制偏移
+- [ ] `CLUSTER REPLICATE` 最小实现
+- [ ] replica 继承现有复制能力接入 cluster owner 视图
+- [ ] failover 选择候选 replica，推进 config epoch
+- [ ] failover 后更新 slot owner 并让旧 master 降级或标记 fail
+
+验收项：
+
+- master/replica 拓扑可通过 `CLUSTER NODES` 观测
+- master 下线后，符合条件的 replica 可接管该 master 的 slots
+- failover 后客户端收到新的 `MOVED` 地址，成功写入新 master
+- failover 不破坏 RDB/AOF 恢复和复制一致性 smoke
+
+测试证据：
+
+- 后续新增 `src/cluster/failover.uya`
+- 后续新增 `tests/unit/cluster_failover_test.uya`
+- 后续扩展 `tests/integration/replication_consistency.py`
+- 后续新增 `tests/integration/cluster_failover_smoke.py`
+- 后续新增 `tests/integration/cluster_failover_recovery.py`
+
+## 17. `v0.12.0`：重分片与正式集群 benchmark
+
+### U. Resharding 与性能报告
+
+- [ ] `CLUSTER ADDSLOTS` / `CLUSTER DELSLOTS` 最小实现
+- [ ] `SETSLOT IMPORTING/MIGRATING/NODE/STABLE` 完整状态收敛
+- [ ] 实现项目内 key 迁移闭环，优先覆盖 String 与当前核心类型
+- [ ] 迁移期间 `ASK` / `ASKING` / `MOVED` 与多 key 同槽校验协同
+- [ ] 建立正式集群 benchmark：单节点、2 master、3 master，对照 Redis Cluster
+
+验收项：
+
+- slot 可从节点 A 迁移到节点 B，迁移后旧 owner 返回 `MOVED`
+- 迁移中客户端按 `ASK` + `ASKING` 可完成读写
+- 迁移完成后源节点不保留已迁移 key，目标节点数据完整
+- benchmark 报告包含吞吐、p50/p95/p99、RSS、slot 分布、节点数和 Redis Cluster 对照
+
+测试证据：
+
+- 后续新增 `src/cluster/migration.uya`
+- 后续新增 `tests/unit/cluster_migration_test.uya`
+- 后续新增 `tests/integration/cluster_resharding_smoke.py`
+- 后续新增 `scripts/benchmark_cluster_v0_12_0.py`
+- 后续新增 `benchmarks/v0.12.0-cluster.md`
+
+## 18. 风险登记
 
 | 风险 ID | 描述 | 可能性 | 影响 | 缓解措施 |
 |---------|------|--------|------|---------|
@@ -329,3 +446,4 @@
 | R4 | AOF 与恢复语义不稳定 | 中 | 高 | 先做 append + replay，损坏路径优先补测试 |
 | R5 | 性能目标过早绑死 | 中 | 中 | 先建立 benchmark 基线，再谈追平和超越 |
 | R6 | 后续版本规划过粗导致执行断档 | 中 | 中 | 所有版本先保留完整任务框架，进入执行前再细化实现步骤 |
+| R7 | 完整 Cluster 协议一次性铺开导致状态机失控 | 中 | 高 | 按语义正确性、gossip、failover、resharding 四段拆分，每段必须有单元与进程级 smoke |

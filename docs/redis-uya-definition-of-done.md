@@ -18,6 +18,8 @@ bash scripts/verify_definition_of_done.sh
 
 - `tests/integration/long_run_smoke.py` 为 30 分钟长时运行验证，不纳入默认一键脚本
 - `benchmarks/v0.1.0.md` 记录同机 Redis 基线与 `floor/target/stretch` 判定
+- 一键验证脚本会把临时 benchmark 输出写入 `build/`，避免覆盖已记录的基线报告
+- 一键验证脚本包含 `git diff --check`，用于检查本次工作区差异的基础格式问题
 - 本页同时记录 `v0.1.0` 发布证据，以及后续 `v0.2.0+` 已在主线落地的能力证据
 
 ## 2. `v0.1.0-alpha`

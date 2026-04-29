@@ -11,7 +11,20 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BIN = ROOT / "build" / "redis-uya"
-OUT = ROOT / "benchmarks" / "v0.1.0.md"
+DEFAULT_OUT = ROOT / "benchmarks" / "v0.1.0.md"
+
+
+def benchmark_output_path() -> Path:
+    configured = os.environ.get("REDIS_UYA_BENCH_OUT")
+    if configured is None or configured == "":
+        return DEFAULT_OUT
+    out = Path(configured)
+    if out.is_absolute():
+        return out
+    return ROOT / out
+
+
+OUT = benchmark_output_path()
 
 
 def command_path(name: str) -> str | None:
@@ -355,7 +368,10 @@ def main() -> int:
             stop_process(redis_proc)
             (ROOT / "build" / f"redis-baseline-{redis_port}.rdb").unlink(missing_ok=True)
 
-    print(f"[PASS] benchmark_v0_1_0: wrote {OUT.relative_to(ROOT)}")
+    out_label: Path = OUT
+    if OUT.is_relative_to(ROOT):
+        out_label = OUT.relative_to(ROOT)
+    print(f"[PASS] benchmark_v0_1_0: wrote {out_label}")
     return 0
 
 

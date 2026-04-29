@@ -108,3 +108,24 @@ liburing_status=unknown syscall_status=yes recommendation=prototype-only product
 - `syscall_status` 记录 `io_uring_setup` 的实际探测结果：`yes`、`no`、`blocked`、`skip` 或 `error`。
 - `liburing_status` 记录 `pkg-config liburing` 探测结果：`yes`、`no` 或 `unknown`。
 - `recommendation` 只用于后续路线判断，不作为生产路径开关。
+
+## 10. v0.8.0 Redis 差距报告输出
+
+`v0.8.0` 的 Redis 对照差距报告由 `scripts/report_v0_8_0_gaps.py` 从 `BENCH_RESULT` 生成，默认输出 `benchmarks/v0.8.0-gap-report.md`。报告额外记录 `PERF_GAP_RESULT` 与 `PERF_DEBT_RESULT`：
+
+```text
+PERF_GAP_RESULT version=1 case_name=get_16b redis_uya_req_per_s=... redis_req_per_s=... \
+throughput_ratio=... redis_uya_p99_us=... redis_p99_us=... p99_ratio=... \
+redis_uya_rss_kib=... redis_rss_kib=... rss_ratio=... status=watch
+
+PERF_DEBT_RESULT version=1 priority=P0 area=set_write_path cases=set_16b,set_1024b \
+evidence="..." next="..."
+```
+
+字段约定：
+
+- `throughput_ratio` 表示 `redis-uya req/s / Redis req/s`，越高越好。
+- `p99_ratio` 表示 `redis-uya p99 / Redis p99`，越低越好。
+- `rss_ratio` 表示 `redis-uya RSS / Redis RSS`，用于标记常驻内存差距。
+- `status` 当前取值为 `pass`、`watch`、`high`、`critical` 或 `skip`。
+- `PERF_DEBT_RESULT` 是后续优化队列，不作为 `v0.8.0` 单版硬门槛。

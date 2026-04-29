@@ -10,7 +10,7 @@
 
 `redis-uya` 是一个使用 **Uya 编程语言** 从零实现的生产级高性能内存数据库系统。项目长期目标是兼容 Redis 6.2+ 协议，覆盖核心数据结构、持久化、复制、基础集群与性能工程，并在同条件核心场景上超过 Redis。
 
-当前项目已完成 `v0.7.0` 集群基础，并进入 `v0.8.0` 核心路径性能基线：在 `v0.1.0` 发布闭环、`v0.2.0` 数据结构扩展、`v0.3.0` 持久化增强、`v0.4.0` 复制基础、`v0.5.0` 协议与控制面增强、`v0.6.0` 内存与性能控制、`v0.7.0` Cluster 基础之上，新增核心 benchmark 矩阵、同机 Redis 对照、吞吐/p99 回归阈值、`GET` bulk string 零拷贝发送路径、RESP2/RESP3 顶层批量解析 API、`@vector` byte-slice 比较、表驱动 CRC64、`io_uring` 主机能力评估报告，以及 `RedisObject` / `ListNode` 专用对象池与 `INFO memory` 布局观测。后续继续推进 Redis 对照差距报告与优化队列。
+当前项目已完成 `v0.8.0` 核心路径性能基线：在 `v0.1.0` 发布闭环、`v0.2.0` 数据结构扩展、`v0.3.0` 持久化增强、`v0.4.0` 复制基础、`v0.5.0` 协议与控制面增强、`v0.6.0` 内存与性能控制、`v0.7.0` Cluster 基础之上，新增核心 benchmark 矩阵、同机 Redis 对照、吞吐/p99 回归阈值、`GET` bulk string 零拷贝发送路径、RESP2/RESP3 顶层批量解析 API、`@vector` byte-slice 比较、表驱动 CRC64、`io_uring` 主机能力评估报告、`RedisObject` / `ListNode` 专用对象池与 `INFO memory` 布局观测，以及 Redis 对照差距报告和后续优化队列。
 
 ## 核心目标
 
@@ -79,10 +79,11 @@
 - v0.8.0 SIMD 字符串和 CRC64：新增 `@vector` 16 字节块 byte-slice 比较工具并接入命令路由、配置解析、SDS 和 Dict key 热路径；CRC64 更新改为表驱动并保留标量对照测试
 - v0.8.0 `io_uring` 评估：`make evaluate-io-uring-v0.8.0` 生成主机能力报告，记录 syscall、sysctl、liburing 探测和 `production_binding=no` 边界
 - v0.8.0 专用对象池与布局观测：`RedisObject` / `ListNode` 释放后进入专用 freelist，复用时绕过通用 Slab；`INFO memory` 暴露缓存、复用计数和布局大小
+- v0.8.0 Redis 对照差距报告：`make report-v0.8.0-gaps` 生成吞吐、p99、RSS 比例矩阵与 P0/P1/P2 后续优化队列
 
 下一阶段：
 
-- `v0.8.0`：核心路径性能基线，继续输出 Redis 对照差距报告与后续优化队列
+- `v0.9.0+`：集群语义、gossip、failover、resharding 与正式集群 benchmark
 
 当前阶段尚未生产可用。
 
@@ -124,6 +125,12 @@ v0.8.0 核心性能基线：
 
 ```bash
 make benchmark-v0.8.0
+```
+
+v0.8.0 Redis 对照差距报告：
+
+```bash
+make report-v0.8.0-gaps
 ```
 
 v0.8.0 `io_uring` 主机能力评估：

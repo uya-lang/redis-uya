@@ -2,7 +2,7 @@
 
 > 版本: v0.8.0-dev
 > 日期: 2026-04-29
-> 状态: `v0.8.0` 核心路径性能基线开发中
+> 状态: `v0.8.0` 核心路径性能基线已完成
 
 ## 1. 目标
 
@@ -19,6 +19,7 @@ bash scripts/verify_definition_of_done.sh
 - `tests/integration/long_run_smoke.py` 为 30 分钟长时运行验证，不纳入默认一键脚本
 - `benchmarks/v0.1.0.md` 记录同机 Redis 基线与 `floor/target/stretch` 判定
 - `benchmarks/v0.8.0-performance.md` 记录 `PING/SET/GET` 热路径矩阵、同机 Redis 对照与回归阈值基线
+- `benchmarks/v0.8.0-gap-report.md` 记录 v0.8.0 相对 Redis 的差距矩阵与后续优化队列
 - 一键验证脚本会把临时 benchmark 输出写入 `build/`，避免覆盖已记录的基线报告
 - 一键验证脚本包含 `git diff --check`，用于检查本次工作区差异的基础格式问题
 - 本页同时记录 `v0.1.0` 发布证据，以及后续 `v0.2.0+` 已在主线落地的能力证据
@@ -144,3 +145,4 @@ bash scripts/verify_definition_of_done.sh
 | SIMD 字符串比较与 CRC64 加速可用：新增 `@vector` 16 字节块的 byte-slice 比较/大小写比较工具，命令路由、配置 token、SDS 比较和 Dict key 比较复用该工具；CRC64 更新改为 256 项表驱动，并保留标量路径用于正确性对照 | `src/util/bytes.uya`、`src/util/crc64.uya`、`tests/unit/util_bytes_test.uya`、`tests/unit/util_crc64_test.uya`、`make test`、`make test-integration`、`REDIS_UYA_BENCH_BASELINE=benchmarks/v0.8.0-performance.md REDIS_UYA_BENCH_OUT=build/v0.8.0-simd-crc64.md make benchmark-v0.8.0` |
 | `io_uring` 评估可复现且不绑定生产路径：评估脚本记录内核、sysctl、`io_uring_setup` syscall、liburing 探测和建议，报告明确 `production_binding=no`，当前网络事件循环仍保持 epoll 路径 | `scripts/evaluate_io_uring_v0_8_0.py`、`make evaluate-io-uring-v0.8.0`、`benchmarks/v0.8.0-io-uring.md`、`docs/redis-uya-benchmark-format.md` |
 | 专用对象池与布局观测可用：`RedisObject` 与 `ListNode` 释放后进入专用 freelist，复用时不触碰通用 Slab 路径；allocator stats 仍按逻辑活跃对象增减，`INFO memory` 暴露对象池缓存、复用计数和布局大小 | `src/storage/object.uya`、`src/memory/allocator.uya`、`src/command/executor.uya`、`tests/unit/storage_object_test.uya`、`tests/unit/command_executor_test.uya`、`tests/integration/memory_info_stats.py`、`make test`、`make test-integration`、`REDIS_UYA_BENCH_BASELINE=benchmarks/v0.8.0-performance.md REDIS_UYA_BENCH_OUT=build/v0.8.0-object-pool.md make benchmark-v0.8.0` |
+| Redis 对照差距报告与优化队列可复现：从 `BENCH_RESULT` 生成每个 case 的吞吐、p99、RSS 比例，输出 `PERF_GAP_RESULT` / `PERF_DEBT_RESULT` 机器可读行，并明确后续 P0/P1/P2 性能债务而不把“超越 Redis”作为单版硬门槛 | `scripts/report_v0_8_0_gaps.py`、`make report-v0.8.0-gaps`、`benchmarks/v0.8.0-gap-report.md`、`docs/redis-uya-benchmark-format.md` |

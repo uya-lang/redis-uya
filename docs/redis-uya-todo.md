@@ -45,10 +45,10 @@
 - [x] `v0.5.0`：协议与控制面增强
 - [x] `v0.6.0`：内存与性能控制
 - [x] `v0.7.0`：集群基础
+- [x] `v0.8.0`：核心路径性能基线
 
 当前进行中：
 
-- [ ] `v0.8.0`：核心路径性能基线
 - [ ] `v0.9.0+`：集群语义、gossip、failover、resharding 与正式集群 benchmark
 
 ## 3. 全版本路线图
@@ -322,7 +322,7 @@
 - [x] SIMD 字符串和 CRC64
 - [x] `io_uring` 评估，不把生产路径绑定到未验证能力
 - [x] 专用对象池与布局优化
-- [ ] Redis 对照差距报告与后续优化队列
+- [x] Redis 对照差距报告与后续优化队列
 
 验收项：
 
@@ -339,6 +339,8 @@
 - `make benchmark-v0.8.0`
 - `scripts/benchmark_v0_8_0.py`
 - `benchmarks/v0.8.0-performance.md`
+- `make report-v0.8.0-gaps`
+- `benchmarks/v0.8.0-gap-report.md`
 
 ## 14. `v0.9.0`：集群语义正确性
 

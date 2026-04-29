@@ -25,6 +25,8 @@ use src.server.server_replication_set_replica;
 use src.server.server_run_pending_bgsave_at;
 use src.server.server_run_pending_aof_rewrite_at;
 use src.server.RedisServer;
+use src.server.server_client_async_frame_size_for_test;
+use src.server.server_client_async_frame_storage_size_for_test;
 use src.server.server_cron_at;
 use src.server.server_load_persistence_at;
 use src.storage.engine.Engine;
@@ -48,6 +50,13 @@ fn server_test_slice_eq(a: &[byte], b: &[byte]) bool {
         i = i + 1;
     }
     return true;
+}
+
+export fn test_server_async_client_frame_fits_storage() !void {
+    const frame_size: usize = server_client_async_frame_size_for_test();
+    const storage_size: usize = server_client_async_frame_storage_size_for_test();
+    try assert_true(frame_size > 0);
+    try assert_true(frame_size <= storage_size);
 }
 
 export fn test_server_cron_expires_keys() !void {

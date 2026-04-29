@@ -13,8 +13,10 @@ use src.network.listener.RedisListener;
 use src.network.listener.listener_open_loopback;
 use src.network.listener.listener_accept;
 use src.network.listener.listener_close;
-use src.network.connection.connection_handle_fd_nonblocking_with_runtime_with_aof;
+use src.network.connection.ConnectionProcessResult;
 use src.network.connection.ConnectionTransaction;
+use src.network.connection.connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_zero_copy_close_at;
+use src.network.connection.connection_shift_buffer;
 use src.network.connection.connection_transaction_new;
 use src.network.connection.connection_transaction_reset;
 use src.network.connection.connection_pubsub_unregister_fd;
@@ -57,6 +59,9 @@ use src.storage.sds.sds_empty;
 use src.storage.sds.sds_free;
 use src.storage.sds.sds_new_len;
 use src.util.time.now_ms_safe;
+use std.async;
+use std.async_frame.AsyncFramePool;
+use std.async_frame.async_frame_pool_init_with_buffer;
 use libc.errno;
 use libc.rename;
 use libc.sys_socket;
@@ -69,9 +74,11 @@ use libc.sys_epoll_wait;
 use libc.sys_shutdown;
 use libc.sys_send;
 use libc.sys_recv;
+use libc.sys_writev;
 use libc.fork;
 use libc.waitpid;
 use libc._exit;
+use libc.IOVec;
 use libc.AF_INET;
 use libc.SOCK_STREAM;
 use libc.IPPROTO_TCP;
@@ -97,6 +104,12 @@ const SERVER_EVENT_CAP: usize = 16;
 const SERVER_WAITPID_WNOHANG: i32 = 1;
 const SERVER_REPL_BACKLOG_BYTES: usize = 16384;
 const SERVER_REPL_LINE_BYTES: usize = 256;
+const SERVER_CLIENT_ASYNC_FRAME_BYTES: usize = 16384;
+const SERVER_CLIENT_ASYNC_FRAME_WORDS: usize =
+    (SERVER_CLIENT_ASYNC_FRAME_BYTES + @size_of(usize) - 1) / @size_of(usize);
+const SERVER_ASYNC_FRAME_POOL_BYTES: usize = 512 * 1024;
+const SERVER_ASYNC_FRAME_POOL_WORDS: usize = SERVER_ASYNC_FRAME_POOL_BYTES / @size_of(usize);
+const SERVER_ASYNC_FRAME_STACK_LIMIT: usize = 65536;
 
 export error ServerAofOpenFailed;
 export error ServerAofReplayFailed;
@@ -112,6 +125,11 @@ export struct RedisClient {
     output_sent: usize,
     close_after_write: bool,
     transaction: ConnectionTransaction,
+    async_live: bool,
+    async_epoll_interest: i32,
+    async_waker: Waker,
+    async_frame_storage: [usize: SERVER_CLIENT_ASYNC_FRAME_WORDS],
+    async_replicaof_host: [byte: 64],
 }
 
 export struct RedisServer {
@@ -155,6 +173,14 @@ export fn server_default_aof_path() &const byte {
     return "build/appendonly.aof" as &const byte;
 }
 
+fn server_client_clear_async_replicaof_host(client: &RedisClient) void {
+    var i: usize = 0;
+    while i < 64 {
+        client.async_replicaof_host[i] = 0 as byte;
+        i = i + 1;
+    }
+}
+
 fn server_init_clients(server: &RedisServer) void {
     var i: usize = 0;
     while i < SERVER_MAX_CLIENTS {
@@ -164,6 +190,10 @@ fn server_init_clients(server: &RedisServer) void {
         server.clients[i].output_sent = 0;
         server.clients[i].close_after_write = false;
         server.clients[i].transaction = connection_transaction_new();
+        server.clients[i].async_live = false;
+        server.clients[i].async_epoll_interest = 0;
+        server.clients[i].async_waker = Waker{};
+        server_client_clear_async_replicaof_host(&server.clients[i]);
         i = i + 1;
     }
     server.active_clients = 0;
@@ -175,6 +205,66 @@ fn server_cstring_len(data: &const byte) usize {
         len = len + 1;
     }
     return len;
+}
+
+fn server_send_all_immediate(fd: i32, data: &const byte, len: usize) bool {
+    var sent: usize = 0;
+    while sent < len {
+        const ptr: *const byte = @ptr_from_usize(@usize_from_ptr(data as &void) + sent) as *const byte;
+        const result: !isize = sys_send(fd, ptr, len - sent, 0);
+        const n: isize = result catch |err| {
+            const eid: i32 = @error_id(err) as i32;
+            if eid == EINTR {
+                continue;
+            }
+            return false;
+        };
+        if n <= 0 {
+            return false;
+        }
+        sent = sent + (n as usize);
+    }
+    return true;
+}
+
+fn server_send_zero_copy_immediate(fd: i32, head: &const byte, head_len: usize, body: &[byte], tail_len: usize) bool {
+    const tail: &[byte] = &"\r\n"[0: 2];
+    if head_len > 0 && !server_send_all_immediate(fd, head, head_len) {
+        return false;
+    }
+    if body.len > 0 && !server_send_all_immediate(fd, body.ptr as &const byte, body.len) {
+        return false;
+    }
+    if tail_len > 0 && !server_send_all_immediate(fd, tail.ptr as &const byte, tail_len) {
+        return false;
+    }
+    return true;
+}
+
+fn server_send_progress_nonblocking(fd: i32, data: &const byte, len: usize, start: usize, next_sent: &usize) i32 {
+    var sent: usize = start;
+    while sent < len {
+        const ptr: *const byte = @ptr_from_usize(@usize_from_ptr(data as &void) + sent) as *const byte;
+        const result: !isize = sys_send(fd, ptr, len - sent, 0);
+        const n: isize = result catch |err| {
+            const eid: i32 = @error_id(err) as i32;
+            if eid == EINTR {
+                continue;
+            }
+            *next_sent = sent;
+            if eid == EAGAIN || eid == EWOULDBLOCK {
+                return 1;
+            }
+            return -1;
+        };
+        if n <= 0 {
+            *next_sent = sent;
+            return -1;
+        }
+        sent = sent + (n as usize);
+    }
+    *next_sent = sent;
+    return 0;
 }
 
 fn server_runtime_info(server: &RedisServer) CommandRuntimeInfo {
@@ -761,6 +851,7 @@ fn server_close_client_slot(server: &RedisServer, slot: usize) void {
     _ = aof_flush(&server.aof) catch {};
     _ = sys_shutdown(fd, SHUT_WR) catch {};
     _ = sys_close(fd) catch {};
+    server_client_async_release(&server.clients[slot]);
     connection_transaction_reset(&server.clients[slot].transaction);
     server.clients[slot].fd = -1;
     server.clients[slot].input_len = 0;
@@ -768,6 +859,9 @@ fn server_close_client_slot(server: &RedisServer, slot: usize) void {
     server.clients[slot].output_sent = 0;
     server.clients[slot].close_after_write = false;
     server.clients[slot].transaction = connection_transaction_new();
+    server.clients[slot].async_epoll_interest = 0;
+    server.clients[slot].async_waker = Waker{};
+    server_client_clear_async_replicaof_host(&server.clients[slot]);
     if server.active_clients > 0 {
         server.active_clients = server.active_clients - 1;
     }
@@ -932,6 +1026,422 @@ fn server_update_client_events(server: &RedisServer, slot: usize) !void {
     }
     var event: EpollEvent = EpollEvent{ events: events, _pad: 0, data: fd as u64 };
     _ = try sys_epoll_ctl(server.listener.poll_fd, EPOLL_CTL_MOD, fd, &event);
+}
+
+struct ServerAsyncReadFuture : Future<!usize> {
+    fd: i32,
+    buf: &byte,
+    count: usize,
+
+    fn poll(self: &Self, waker: &Waker) Poll<!usize> {
+        while true {
+            const result: !isize = sys_recv(self.fd, self.buf as *byte, self.count, 0);
+            const n: isize = result catch |err| {
+                const eid: i32 = @error_id(err) as i32;
+                if eid == EINTR {
+                    continue;
+                }
+                if eid == EAGAIN || eid == EWOULDBLOCK {
+                    waker.wait_readable(self.fd);
+                    return Poll<!usize>.Pending({});
+                }
+                return Poll<!usize>.Ready(result as! usize);
+            };
+            if n <= 0 {
+                return poll_ready_ok<usize>(0);
+            }
+            return poll_ready_ok<usize>(n as usize);
+        }
+    }
+
+    fn release(self: &Self) void {
+        _ = self;
+    }
+}
+
+fn server_async_read_future(fd: i32, buf: &byte, count: usize) Future<!usize> {
+    return ServerAsyncReadFuture{ fd: fd, buf: buf, count: count };
+}
+
+struct ServerAsyncSendAllFuture : Future<!usize> {
+    fd: i32,
+    data: &const byte,
+    count: usize,
+    sent: usize,
+
+    fn poll(self: &Self, waker: &Waker) Poll<!usize> {
+        while self.sent < self.count {
+            const ptr: *const byte = @ptr_from_usize(@usize_from_ptr(self.data as &void) + self.sent) as *const byte;
+            const result: !isize = sys_send(self.fd, ptr, self.count - self.sent, 0);
+            const n: isize = result catch |err| {
+                const eid: i32 = @error_id(err) as i32;
+                if eid == EINTR {
+                    continue;
+                }
+                if eid == EAGAIN || eid == EWOULDBLOCK {
+                    waker.wait_writable(self.fd);
+                    return Poll<!usize>.Pending({});
+                }
+                return Poll<!usize>.Ready(result as! usize);
+            };
+            if n <= 0 {
+                return poll_ready_ok<usize>(self.sent);
+            }
+            self.sent = self.sent + (n as usize);
+        }
+        return poll_ready_ok<usize>(self.sent);
+    }
+
+    fn release(self: &Self) void {
+        _ = self;
+    }
+}
+
+fn server_async_send_all_from_future(fd: i32, data: &const byte, count: usize, sent: usize) Future<!usize> {
+    return ServerAsyncSendAllFuture{ fd: fd, data: data, count: count, sent: sent };
+}
+
+struct ServerAsyncWritevAllFuture : Future<!usize> {
+    fd: i32,
+    head: &const byte,
+    head_len: usize,
+    body: &[byte],
+    tail_len: usize,
+    head_sent: usize,
+    body_sent: usize,
+    tail_sent: usize,
+
+    fn poll(self: &Self, waker: &Waker) Poll<!usize> {
+        const tail: &[byte] = &"\r\n"[0: 2];
+        const total: usize = self.head_len + self.body.len + self.tail_len;
+        while self.head_sent < self.head_len || self.body_sent < self.body.len || self.tail_sent < self.tail_len {
+            var iov: [IOVec: 3] = [];
+            var iovcnt: i32 = 0;
+            if self.head_sent < self.head_len {
+                iov[iovcnt as usize] = IOVec{
+                    iov_base: @ptr_from_usize(@usize_from_ptr(self.head as &void) + self.head_sent) as *const byte,
+                    iov_len: self.head_len - self.head_sent,
+                };
+                iovcnt = iovcnt + 1;
+            }
+            if self.body_sent < self.body.len {
+                iov[iovcnt as usize] = IOVec{
+                    iov_base: @ptr_from_usize(@usize_from_ptr(self.body.ptr as &void) + self.body_sent) as *const byte,
+                    iov_len: self.body.len - self.body_sent,
+                };
+                iovcnt = iovcnt + 1;
+            }
+            if self.tail_sent < self.tail_len {
+                iov[iovcnt as usize] = IOVec{
+                    iov_base: @ptr_from_usize(@usize_from_ptr(tail.ptr as &void) + self.tail_sent) as *const byte,
+                    iov_len: self.tail_len - self.tail_sent,
+                };
+                iovcnt = iovcnt + 1;
+            }
+
+            const result: !isize = sys_writev(self.fd, &iov[0], iovcnt);
+            const n: isize = result catch |err| {
+                const eid: i32 = @error_id(err) as i32;
+                if eid == EINTR {
+                    continue;
+                }
+                if eid == EAGAIN || eid == EWOULDBLOCK {
+                    waker.wait_writable(self.fd);
+                    return Poll<!usize>.Pending({});
+                }
+                return Poll<!usize>.Ready(result as! usize);
+            };
+            if n <= 0 {
+                return poll_ready_ok<usize>(self.head_sent + self.body_sent + self.tail_sent);
+            }
+
+            var advanced: usize = n as usize;
+            if self.head_sent < self.head_len {
+                const head_remaining: usize = self.head_len - self.head_sent;
+                if advanced >= head_remaining {
+                    self.head_sent = self.head_len;
+                    advanced = advanced - head_remaining;
+                } else {
+                    self.head_sent = self.head_sent + advanced;
+                    advanced = 0;
+                }
+            }
+            if advanced > 0 && self.body_sent < self.body.len {
+                const body_remaining: usize = self.body.len - self.body_sent;
+                if advanced >= body_remaining {
+                    self.body_sent = self.body.len;
+                    advanced = advanced - body_remaining;
+                } else {
+                    self.body_sent = self.body_sent + advanced;
+                    advanced = 0;
+                }
+            }
+            if advanced > 0 && self.tail_sent < self.tail_len {
+                self.tail_sent = self.tail_sent + advanced;
+                if self.tail_sent > self.tail_len {
+                    self.tail_sent = self.tail_len;
+                }
+            }
+        }
+        return poll_ready_ok<usize>(total);
+    }
+
+    fn release(self: &Self) void {
+        _ = self;
+    }
+}
+
+fn server_async_writev_all_future(fd: i32, head: &const byte, head_len: usize, body: &[byte], tail_len: usize) Future<!usize> {
+    return ServerAsyncWritevAllFuture{
+        fd: fd,
+        head: head,
+        head_len: head_len,
+        body: body,
+        tail_len: tail_len,
+        head_sent: 0,
+        body_sent: 0,
+        tail_sent: 0,
+    };
+}
+
+@align(8)
+@async_fn fn server_client_async(server: &RedisServer, slot: usize) Future<!bool> {
+    if slot >= SERVER_MAX_CLIENTS {
+        return false;
+    }
+    const client: &RedisClient = &server.clients[slot];
+
+    while true {
+        const fd: i32 = client.fd;
+        if fd < 0 {
+            return false;
+        }
+        client.transaction.client_fd = fd;
+
+        var can_process: bool = true;
+        while can_process && client.input_len > 0 {
+            var runtime: CommandRuntimeInfo = server_runtime_info(server);
+            var replicaof_requested: bool = false;
+            var replicaof_promote: bool = false;
+            var replicaof_port: i32 = 0;
+            var bgsave_requested: bool = false;
+            var rewrite_requested: bool = false;
+            var rewrite_failed: bool = false;
+            var incomplete: bool = false;
+            client.close_after_write = false;
+
+            const result_value: !ConnectionProcessResult = connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_zero_copy_close_at(
+                &server.engine,
+                &runtime,
+                &server.router,
+                &server.aof,
+                &server.aof_rewrite_buf,
+                &server.repl_backlog,
+                &client.transaction,
+                client.input[0: client.input_len],
+                &client.output[0],
+                SERVER_IO_CAP,
+                now_ms_safe(),
+                &replicaof_requested,
+                &replicaof_promote,
+                client.async_replicaof_host[0: 64],
+                &replicaof_port,
+                &bgsave_requested,
+                &rewrite_requested,
+                &rewrite_failed,
+                &client.close_after_write,
+            );
+            const result: ConnectionProcessResult = result_value catch |err| {
+                if err == error.ConnectionIncomplete {
+                    incomplete = true;
+                    can_process = false;
+                } else {
+                    return err;
+                }
+                ConnectionProcessResult{ response_len: 0, response_head_len: 0, zero_copy_body: (null as &byte)[0: 0], zero_copy_tail_len: 0, consumed: 0, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+            };
+
+            if incomplete {
+                continue;
+            }
+
+            const response_len: usize = result.response_len;
+            const response_head_len: usize = result.response_head_len;
+            const zero_copy_body: &[byte] = result.zero_copy_body;
+            const zero_copy_tail_len: usize = result.zero_copy_tail_len;
+            connection_shift_buffer(&client.input[0], &client.input_len, result.consumed);
+
+            if result.request_replicaof || replicaof_requested {
+                if replicaof_promote {
+                    server_replication_reset_to_master(server);
+                } else {
+                    server_replication_set_replica(server, client.async_replicaof_host[0: 64], replicaof_port);
+                }
+            }
+            if result.request_bgsave || bgsave_requested {
+                server.bgsave_requested = true;
+            }
+            if result.request_aof_rewrite || rewrite_requested {
+                server.aof_rewrite_requested = true;
+            }
+            if rewrite_failed {
+                server_reset_rewrite_state(server);
+            }
+
+            if client.close_after_write {
+                if zero_copy_body.len > 0 {
+                    client.output_len = response_head_len + zero_copy_body.len + zero_copy_tail_len;
+                    client.output_sent = 0;
+                    _ = server_send_zero_copy_immediate(
+                        fd,
+                        &client.output[0] as &const byte,
+                        response_head_len,
+                        zero_copy_body,
+                        zero_copy_tail_len,
+                    );
+                } else {
+                    client.output_len = response_len;
+                    client.output_sent = 0;
+                    if client.output_len > 0 {
+                        _ = server_send_all_immediate(fd, &client.output[0] as &const byte, client.output_len);
+                    }
+                }
+                return false;
+            }
+
+            if zero_copy_body.len > 0 {
+                client.output_len = response_head_len + zero_copy_body.len + zero_copy_tail_len;
+                client.output_sent = 0;
+
+                const zc_written: usize = try @await server_async_writev_all_future(
+                    fd,
+                    &client.output[0] as &const byte,
+                    response_head_len,
+                    zero_copy_body,
+                    zero_copy_tail_len,
+                );
+                if zc_written < client.output_len {
+                    return false;
+                }
+                client.output_sent = zc_written;
+            } else {
+                client.output_len = response_len;
+                client.output_sent = 0;
+                if client.output_len > 0 {
+                    var sent_now: usize = 0;
+                    const send_status: i32 = server_send_progress_nonblocking(fd, &client.output[0] as &const byte, client.output_len, 0, &sent_now);
+                    if send_status < 0 {
+                        return false;
+                    }
+                    var written: usize = sent_now;
+                    if send_status > 0 {
+                        written = try @await server_async_send_all_from_future(fd, &client.output[0] as &const byte, client.output_len, sent_now);
+                    }
+                    if written < client.output_len {
+                        return false;
+                    }
+                    client.output_sent = written;
+                }
+            }
+
+            client.output_len = 0;
+            client.output_sent = 0;
+            client.close_after_write = false;
+        }
+
+        if client.input_len >= SERVER_IO_CAP {
+            return error.ServerAofReplayFailed;
+        }
+        const read_ptr: &byte = @ptr_from_usize(@usize_from_ptr(&client.input[0] as &void) + client.input_len) as &byte;
+        const rn: usize = try @await server_async_read_future(fd, read_ptr, SERVER_IO_CAP - client.input_len);
+        if rn == 0 {
+            return false;
+        }
+        client.input_len = client.input_len + rn;
+    }
+}
+
+fn server_client_async_frame(client: &RedisClient) &@frame(server_client_async) {
+    return @ptr_from_usize(@usize_from_ptr(&client.async_frame_storage[0] as &void)) as &@frame(server_client_async);
+}
+
+fn server_client_async_release(client: &RedisClient) void {
+    if client.async_live {
+        server_client_async_frame(client).stop();
+    }
+    client.async_live = false;
+    client.async_epoll_interest = 0;
+    client.async_waker = Waker{};
+}
+
+fn server_client_async_start(server: &RedisServer, slot: usize) bool {
+    if slot >= SERVER_MAX_CLIENTS {
+        return false;
+    }
+    if @size_of(@frame(server_client_async)) > SERVER_CLIENT_ASYNC_FRAME_BYTES {
+        return false;
+    }
+    const client: &RedisClient = &server.clients[slot];
+    server_client_async_release(client);
+    server_client_async_frame(client).start(server, slot);
+    client.async_live = true;
+    client.async_epoll_interest = 0;
+    client.async_waker = Waker{};
+    return true;
+}
+
+fn server_poll_client_async_slot(server: &RedisServer, slot: usize) !bool {
+    if slot >= SERVER_MAX_CLIENTS {
+        return false;
+    }
+    const client: &RedisClient = &server.clients[slot];
+    if !client.async_live && !server_client_async_start(server, slot) {
+        return false;
+    }
+
+    while true {
+        client.async_waker.reset();
+        client.async_waker.clear_io_interest();
+        const poll_result: Poll<!bool> = server_client_async_frame(client).poll(&client.async_waker);
+        match poll_result {
+            .Ready(v) => {
+                server_client_async_release(client);
+                const keep_open: bool = v catch {
+                    return false;
+                };
+                return keep_open;
+            },
+            .Pending(_) => {
+                if client.async_waker.is_woken() {
+                    continue;
+                }
+                if client.async_waker.has_io_interest() {
+                    const interest: i32 = client.async_waker.io_interest_code();
+                    if interest != client.async_epoll_interest {
+                        var events: u32 = EPOLLIN as u32;
+                        if interest == 2 {
+                            events = EPOLLOUT as u32;
+                        }
+                        var event: EpollEvent = EpollEvent{ events: events, _pad: 0, data: client.fd as u64 };
+                        _ = try sys_epoll_ctl(server.listener.poll_fd, EPOLL_CTL_MOD, client.fd, &event);
+                        client.async_epoll_interest = interest;
+                    }
+                }
+                if client.async_waker.has_io_interest() {
+                    return true;
+                }
+                continue;
+            },
+        };
+    }
+}
+
+export fn server_client_async_frame_size_for_test() usize {
+    return @size_of(@frame(server_client_async));
+}
+
+export fn server_client_async_frame_storage_size_for_test() usize {
+    return SERVER_CLIENT_ASYNC_FRAME_BYTES;
 }
 
 export fn server_open_with_aof_and_memory_policy(
@@ -1224,6 +1734,13 @@ export fn server_accept_once(server: &RedisServer) !void {
     server.clients[slot].output_sent = 0;
     server.clients[slot].close_after_write = false;
     server.clients[slot].transaction = connection_transaction_new();
+    server.clients[slot].async_epoll_interest = 1;
+    server.clients[slot].async_waker = Waker{};
+    server_client_clear_async_replicaof_host(&server.clients[slot]);
+    if !server_client_async_start(server, slot) {
+        server_close_client_slot(server, slot);
+        return;
+    }
     server.active_clients = server.active_clients + 1;
     server.served_clients = server.served_clients + 1;
 }
@@ -1240,42 +1757,7 @@ fn server_handle_client_fd(server: &RedisServer, fd: i32) void {
         _ = sys_close(fd) catch {};
         return;
     }
-    var output: [byte: SERVER_IO_CAP] = [];
-    const runtime: CommandRuntimeInfo = server_runtime_info(server);
-    var replicaof_requested: bool = false;
-    var replicaof_promote: bool = false;
-    var replicaof_host: [byte: 64] = [];
-    var replicaof_port: i32 = 0;
-    var bgsave_requested: bool = false;
-    var rewrite_requested: bool = false;
-    var rewrite_failed: bool = false;
-    const keep_result: !bool = connection_handle_fd_nonblocking_with_runtime_with_aof(
-        &server.engine,
-        &runtime,
-        &server.router,
-        &server.aof,
-        &server.aof_rewrite_buf,
-        &server.repl_backlog,
-        &server.clients[slot].transaction,
-        fd,
-        &server.clients[slot].input[0],
-        SERVER_IO_CAP,
-        &server.clients[slot].input_len,
-        &server.clients[slot].output[0],
-        SERVER_IO_CAP,
-        &server.clients[slot].output_len,
-        &server.clients[slot].output_sent,
-        &server.clients[slot].close_after_write,
-        &replicaof_requested,
-        &replicaof_promote,
-        replicaof_host[0: 64],
-        &replicaof_port,
-        &bgsave_requested,
-        &rewrite_requested,
-        &rewrite_failed,
-        &output[0],
-        SERVER_IO_CAP,
-    );
+    const keep_result: !bool = server_poll_client_async_slot(server, slot);
     const keep_open: bool = keep_result catch {
         server_close_client_slot(server, slot);
         return;
@@ -1284,28 +1766,22 @@ fn server_handle_client_fd(server: &RedisServer, fd: i32) void {
         server_close_client_slot(server, slot);
         return;
     }
-    if replicaof_requested {
-        if replicaof_promote {
-            server_replication_reset_to_master(server);
-        } else {
-            server_replication_set_replica(server, replicaof_host[0: 64], replicaof_port);
-        }
-    }
-    if bgsave_requested {
-        server.bgsave_requested = true;
-    }
-    if rewrite_requested {
-        server.aof_rewrite_requested = true;
-    }
-    if rewrite_failed {
-        server_reset_rewrite_state(server);
-    }
-    _ = server_update_client_events(server, slot) catch {
-        server_close_client_slot(server, slot);
-    };
 }
 
 export fn server_run(server: &RedisServer) !void {
+    const keep_client_async: &void = &server_client_async as &void;
+    _ = keep_client_async;
+    var frame_pool_storage: [usize: SERVER_ASYNC_FRAME_POOL_WORDS] = [];
+    var frame_pool: AsyncFramePool = AsyncFramePool{};
+    async_frame_pool_init_with_buffer(
+        &frame_pool,
+        &frame_pool_storage[0] as &byte,
+        SERVER_ASYNC_FRAME_POOL_BYTES,
+        1,
+        SERVER_ASYNC_FRAME_STACK_LIMIT,
+    );
+    set_async_frame_allocator(&frame_pool);
+
     var events: [EpollEvent: SERVER_EVENT_CAP] = [];
     while true {
         const now_ms: u64 = now_ms_safe();

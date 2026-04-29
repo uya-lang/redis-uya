@@ -1592,6 +1592,69 @@ export fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transac
     return connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_internal_at(engine, runtime, router, aof, rewrite_buf, backlog, tx, input, out, out_cap, now_ms, replicaof_requested, replicaof_promote, replicaof_host, replicaof_port, bgsave_requested, rewrite_requested, rewrite_failed, false);
 }
 
+export fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_zero_copy_at(
+    engine: &Engine,
+    runtime: &CommandRuntimeInfo,
+    router: &CommandRouter,
+    aof: &AofWriter,
+    rewrite_buf: &Sds,
+    backlog: &ReplicationBacklog,
+    tx: &ConnectionTransaction,
+    input: &[byte],
+    out: &byte,
+    out_cap: usize,
+    now_ms: u64,
+    replicaof_requested: &bool,
+    replicaof_promote: &bool,
+    replicaof_host: &[byte],
+    replicaof_port: &i32,
+    bgsave_requested: &bool,
+    rewrite_requested: &bool,
+    rewrite_failed: &bool,
+) !ConnectionProcessResult {
+    return connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_internal_at(engine, runtime, router, aof, rewrite_buf, backlog, tx, input, out, out_cap, now_ms, replicaof_requested, replicaof_promote, replicaof_host, replicaof_port, bgsave_requested, rewrite_requested, rewrite_failed, true);
+}
+
+export fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_zero_copy_close_at(
+    engine: &Engine,
+    runtime: &CommandRuntimeInfo,
+    router: &CommandRouter,
+    aof: &AofWriter,
+    rewrite_buf: &Sds,
+    backlog: &ReplicationBacklog,
+    tx: &ConnectionTransaction,
+    input: &[byte],
+    out: &byte,
+    out_cap: usize,
+    now_ms: u64,
+    replicaof_requested: &bool,
+    replicaof_promote: &bool,
+    replicaof_host: &[byte],
+    replicaof_port: &i32,
+    bgsave_requested: &bool,
+    rewrite_requested: &bool,
+    rewrite_failed: &bool,
+    close_after_out: &bool,
+) !ConnectionProcessResult {
+    const result_value: !ConnectionProcessResult = connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_internal_at(engine, runtime, router, aof, rewrite_buf, backlog, tx, input, out, out_cap, now_ms, replicaof_requested, replicaof_promote, replicaof_host, replicaof_port, bgsave_requested, rewrite_requested, rewrite_failed, true);
+    const result: ConnectionProcessResult = result_value catch |err| {
+        return err;
+    };
+    *close_after_out = result.close_after;
+    return ConnectionProcessResult{
+        response_len: result.response_len,
+        response_head_len: result.response_head_len,
+        zero_copy_body: result.zero_copy_body,
+        zero_copy_tail_len: result.zero_copy_tail_len,
+        consumed: result.consumed,
+        close_after: result.close_after,
+        request_replicaof: result.request_replicaof,
+        replicaof_promote: result.replicaof_promote,
+        request_bgsave: result.request_bgsave,
+        request_aof_rewrite: result.request_aof_rewrite,
+    };
+}
+
 fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_internal_at(
     engine: &Engine,
     runtime: &CommandRuntimeInfo,

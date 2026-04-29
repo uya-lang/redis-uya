@@ -130,6 +130,7 @@ use tests.unit.persistence_rdb_test.test_rdb_load_invalid_header_fails;
 use tests.unit.persistence_rdb_test.test_rdb_load_truncated_file_fails;
 use tests.unit.persistence_rdb_test.test_rdb_save_and_load_current_types;
 use tests.unit.persistence_rewrite_test.test_aof_rewrite_roundtrip_current_types;
+use tests.unit.server_test.test_server_async_client_frame_fits_storage;
 use tests.unit.server_test.test_server_cron_expires_keys;
 use tests.unit.server_test.test_server_cron_active_expire_loop;
 use tests.unit.server_test.test_server_loads_rdb_then_replays_aof;
@@ -661,6 +662,10 @@ export fn main() i32 {
     const before_rewrite_roundtrip: i32 = failed;
     _ = test_aof_rewrite_roundtrip_current_types() catch { printf("[FAIL] persistence_rewrite/roundtrip\n" as *byte); failed = failed + 1; };
     if failed == before_rewrite_roundtrip { printf("[PASS] persistence_rewrite/roundtrip\n" as *byte); }
+
+    const before_server_async_frame: i32 = failed;
+    _ = test_server_async_client_frame_fits_storage() catch { printf("[FAIL] server/async_frame_storage\n" as *byte); failed = failed + 1; };
+    if failed == before_server_async_frame { printf("[PASS] server/async_frame_storage\n" as *byte); }
 
     const before_server_cron: i32 = failed;
     _ = test_server_cron_expires_keys() catch { printf("[FAIL] server/cron_expires\n" as *byte); failed = failed + 1; };

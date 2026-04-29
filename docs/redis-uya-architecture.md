@@ -1,11 +1,11 @@
 # redis-uya ARCHITECTURE
 
-> 版本: v0.7.0-dev
+> 版本: v0.7.0
 > 日期: 2026-04-29
 
 ## 1. 总体结构
 
-`redis-uya` 当前是单进程、单线程、单节点的最小 Redis 内核。
+`redis-uya` 当前是单进程、单线程、带最小集群拓扑模型的 Redis 内核。
 
 主数据路径：
 

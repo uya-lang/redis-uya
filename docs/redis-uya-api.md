@@ -1,6 +1,6 @@
 # redis-uya API
 
-> 版本: v0.7.0-dev
+> 版本: v0.7.0
 > 日期: 2026-04-29
 
 ## 1. 协议
@@ -258,7 +258,7 @@ CLUSTER HELP
 
 - `CLUSTER KEYSLOT key`：按 Redis Cluster CRC16/hash tag 规则返回 `0..16383` 槽位
 - `CLUSTER INFO`：Bulk String，包含 `cluster_enabled:1`、`cluster_state:ok`、`cluster_slots_assigned`、`cluster_known_nodes` 与 `cluster_size`
-- `CLUSTER NODES`：Bulk String，当前返回本地 master 节点、`myself,master`、`connected` 和 `0-16383` 槽位范围
+- `CLUSTER NODES`：Bulk String，返回当前最小拓扑中的本地与远端节点，包含节点地址、连接状态和已归属 slot 范围
 - `CLUSTER SLOTS`：RESP Array，当前返回单个 `0..16383` 槽位范围及本地节点地址、端口和 node id
 - `CLUSTER MEET ip port`：在服务端最小拓扑中注册远端 master 节点元数据
 - `CLUSTER SETSLOT slot NODE node-id`：把指定 slot 的稳定 owner 设置为已知节点；若 owner 不是本节点，后续首 key 落该 slot 的命令返回 `-MOVED slot host:port`

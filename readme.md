@@ -3,14 +3,14 @@
 > 使用 Uya 从零实现 Redis 兼容内存数据库
 > 零 GC 路线 · 显式错误处理 · 可测试演进 · 长期性能目标超过 Redis
 
-> 版本: v0.7.0-dev
+> 版本: v0.7.0
 > 日期: 2026-04-29
 
 ## 简介
 
 `redis-uya` 是一个使用 **Uya 编程语言** 从零实现的生产级高性能内存数据库系统。项目长期目标是兼容 Redis 6.2+ 协议，覆盖核心数据结构、持久化、复制、基础集群与性能工程，并在同条件核心场景上超过 Redis。
 
-当前项目已完成 `v0.6.0` 内存与性能控制：在 `v0.1.0` 发布闭环、`v0.2.0` 数据结构扩展和 `v0.3.0` 持久化增强基础上，补齐了复制角色与状态机、`PSYNC / backlog`、replica 侧全量同步、定时拉取式增量同步、复制心跳、主从一致性 smoke、连接级最小 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`、`HELLO 2/3` 驱动的 RESP3 最小协议闭环、`PUBLISH/SUBSCRIBE/UNSUBSCRIBE` 最小 Pub/Sub 闭环、`CLIENT` / `CONFIG` 控制面兼容子集、v0.5 兼容性回归、`maxmemory` noeviction、`allkeys-*` / `volatile-*` 基线、`INFO memory` allocator 统计观测、Slab 小对象缓存基线，以及内存压力与淘汰回归。当前正在开发 `v0.7.0` 集群基础，已落地 Cluster 槽位模型、节点元数据、最小拓扑模型、`CLUSTER` 最小命令接口、`MOVED/ASK` 基础重定向和集群一致性 smoke。
+当前项目已完成 `v0.7.0` 集群基础：在 `v0.1.0` 发布闭环、`v0.2.0` 数据结构扩展、`v0.3.0` 持久化增强、`v0.4.0` 复制基础、`v0.5.0` 协议与控制面增强和 `v0.6.0` 内存与性能控制基础上，新增 Cluster 槽位模型、节点元数据、最小拓扑模型、`CLUSTER KEYSLOT/INFO/NODES/SLOTS/HELP/MEET/SETSLOT`、`MOVED/ASK` 基础重定向和集群一致性 smoke。下一阶段进入 `v0.8.0` 性能冲刺。
 
 ## 核心目标
 
@@ -71,12 +71,12 @@
 - `INFO memory` allocator 统计：当前使用、峰值、累计分配/释放、活跃块数和 Slab 统计可观测
 - Slab 小对象缓存基线：16B 到 1KB 分级 freelist
 - 内存压力与淘汰回归：覆盖 noeviction OOM、allkeys-lru、allkeys-lfu、volatile-ttl
-- Cluster 基础：槽位计算、节点元数据、单节点最小拓扑、`CLUSTER KEYSLOT/INFO/NODES/SLOTS/HELP/MEET/SETSLOT` 和 `MOVED/ASK` 基础重定向
+- Cluster 基础：槽位计算、节点元数据、单节点最小拓扑、`CLUSTER KEYSLOT/INFO/NODES/SLOTS/HELP/MEET/SETSLOT`、`MOVED/ASK` 基础重定向和一致性 smoke
 - Python 客户端风格集成：覆盖更多命令与控制面交互
 
-当前进行中：
+下一阶段：
 
-- `v0.7.0`：集群基础，已完成 Cluster 槽位模型、节点元数据、最小拓扑模型、`CLUSTER` 最小命令接口、`MOVED/ASK` 基础重定向和集群一致性 smoke
+- `v0.8.0` 及以后：性能冲刺，围绕零拷贝响应路径、批量 RESP 解析、SIMD、io_uring 和对象布局优化继续推进
 
 当前阶段尚未生产可用。
 
@@ -203,7 +203,7 @@ build/redis-uya 6380 1
 
 ## 当前主线能力边界
 
-当前仓库主线已完成 `v0.6.0`，已经包含：
+当前仓库主线已完成 `v0.7.0`，已经包含：
 
 - 单节点、单进程服务模型
 - RESP2 子集
@@ -219,6 +219,7 @@ build/redis-uya 6380 1
 - `INFO memory` allocator 统计观测：当前使用、峰值、累计分配/释放和活跃块数
 - Slab 小对象缓存基线：16B 到 1KB 分级 freelist，缓存与复用统计可观测
 - 内存压力与淘汰回归：noeviction OOM、allkeys-lru、allkeys-lfu、volatile-ttl
+- 基础集群：Cluster 槽位模型、节点元数据、单节点最小拓扑、`CLUSTER` 最小控制面、`MOVED/ASK` 基础重定向和一致性 smoke
 - `redis-cli` smoke、Python 集成 smoke、持久化与复制 benchmark
 
 当前主线仍未包含：
@@ -229,7 +230,7 @@ build/redis-uya 6380 1
 - Pub/Sub 模式下的完整命令限制、pattern 订阅与背压处理
 - 完整 `CONFIG SET/REWRITE` 与全局 `CLIENT LIST/KILL/PAUSE/TRACKING`
 - LFU 衰减、采样池与正式内存 benchmark
-- 基础集群
+- 完整 Redis Cluster gossip、failover、resharding、`ASKING` 一次性放行和多 key 同槽校验
 - Lua 脚本
 - Redis 模块系统
 
@@ -277,8 +278,10 @@ build/redis-uya 6380 1
 - [release-v0.4.0](docs/redis-uya-release-v0.4.0.md)
 - [release-v0.5.0](docs/redis-uya-release-v0.5.0.md)
 - [release-v0.6.0](docs/redis-uya-release-v0.6.0.md)
+- [release-v0.7.0](docs/redis-uya-release-v0.7.0.md)
 - [test-report-v0.1.0](docs/redis-uya-test-report-v0.1.0.md)
 - [test-report-v0.6.0](docs/redis-uya-test-report-v0.6.0.md)
+- [test-report-v0.7.0](docs/redis-uya-test-report-v0.7.0.md)
 
 ## 目录结构
 

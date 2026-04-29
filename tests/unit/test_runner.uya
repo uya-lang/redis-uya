@@ -68,6 +68,10 @@ use tests.unit.network_protocol_test.test_resp2_array_of_bulk_strings;
 use tests.unit.network_protocol_test.test_resp2_incomplete_inputs;
 use tests.unit.network_protocol_test.test_resp2_invalid_inputs;
 use tests.unit.network_protocol_test.test_resp3_null_boolean_and_map;
+use tests.unit.network_protocol_test.test_resp2_batch_multiple_values;
+use tests.unit.network_protocol_test.test_resp2_batch_incomplete_tail;
+use tests.unit.network_protocol_test.test_resp2_batch_invalid_tail_frees_prefix;
+use tests.unit.network_protocol_test.test_resp3_batch_multiple_values;
 use tests.unit.replication_backlog_test.test_replication_backlog_append_and_trim;
 use tests.unit.command_router_test.test_command_router_lookup_and_case;
 use tests.unit.command_router_test.test_command_router_arity_validation;
@@ -400,6 +404,22 @@ export fn main() i32 {
     const before_resp3_common: i32 = failed;
     _ = test_resp3_null_boolean_and_map() catch { printf("[FAIL] network_protocol/resp3_common\n" as *byte); failed = failed + 1; };
     if failed == before_resp3_common { printf("[PASS] network_protocol/resp3_common\n" as *byte); }
+
+    const before_resp_batch_multi: i32 = failed;
+    _ = test_resp2_batch_multiple_values() catch { printf("[FAIL] network_protocol/batch_multi\n" as *byte); failed = failed + 1; };
+    if failed == before_resp_batch_multi { printf("[PASS] network_protocol/batch_multi\n" as *byte); }
+
+    const before_resp_batch_tail: i32 = failed;
+    _ = test_resp2_batch_incomplete_tail() catch { printf("[FAIL] network_protocol/batch_incomplete_tail\n" as *byte); failed = failed + 1; };
+    if failed == before_resp_batch_tail { printf("[PASS] network_protocol/batch_incomplete_tail\n" as *byte); }
+
+    const before_resp_batch_invalid: i32 = failed;
+    _ = test_resp2_batch_invalid_tail_frees_prefix() catch { printf("[FAIL] network_protocol/batch_invalid_tail\n" as *byte); failed = failed + 1; };
+    if failed == before_resp_batch_invalid { printf("[PASS] network_protocol/batch_invalid_tail\n" as *byte); }
+
+    const before_resp3_batch: i32 = failed;
+    _ = test_resp3_batch_multiple_values() catch { printf("[FAIL] network_protocol/resp3_batch\n" as *byte); failed = failed + 1; };
+    if failed == before_resp3_batch { printf("[PASS] network_protocol/resp3_batch\n" as *byte); }
 
     const before_cmd_lookup: i32 = failed;
     _ = test_command_router_lookup_and_case() catch { printf("[FAIL] command_router/lookup_case\n" as *byte); failed = failed + 1; };

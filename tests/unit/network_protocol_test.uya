@@ -2,11 +2,17 @@ use tests.unit.assert.assert_eq_i32;
 use tests.unit.assert.assert_true;
 
 use src.network.protocol.RespType;
+use src.network.protocol.RespBatchParseResult;
 use src.network.protocol.RespParseResult;
 use src.network.protocol.RespValue;
 use src.network.protocol.parse_resp2;
+use src.network.protocol.parse_resp2_batch;
 use src.network.protocol.parse_resp3;
+use src.network.protocol.parse_resp3_batch;
 use src.network.protocol.resp_array_element;
+use src.network.protocol.resp_batch_free;
+use src.network.protocol.resp_batch_value;
+use src.network.protocol.resp_batch_value_consumed;
 use src.network.protocol.resp_value_free;
 use src.memory.allocator.used_memory;
 use src.memory.allocator.reset_memory_stats_for_test;
@@ -19,6 +25,22 @@ fn protocol_slice_eq(a: &[byte], b: &[byte]) bool {
         i = i + 1;
     }
     return true;
+}
+
+fn protocol_resp2_batch_error_is_invalid_type(input: &[byte]) bool {
+    var batch: RespBatchParseResult = parse_resp2_batch(input, 8) catch |err| {
+        return err == error.RespInvalidType;
+    };
+    resp_batch_free(&batch);
+    return false;
+}
+
+fn protocol_resp2_batch_error_is_incomplete(input: &[byte]) bool {
+    var batch: RespBatchParseResult = parse_resp2_batch(input, 8) catch |err| {
+        return err == error.RespIncomplete;
+    };
+    resp_batch_free(&batch);
+    return false;
 }
 
 export fn test_resp2_simple_string_error_integer() !void {
@@ -157,5 +179,69 @@ export fn test_resp3_null_boolean_and_map() !void {
         return;
     };
     try assert_true(saw_resp2_invalid);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_resp2_batch_multiple_values() !void {
+    reset_memory_stats_for_test();
+    var batch: RespBatchParseResult = try parse_resp2_batch(&"+OK\r\n:1\r\n"[0: 9], 8);
+    try assert_eq_i32(batch.count as i32, 2);
+    try assert_eq_i32(batch.consumed as i32, 9);
+    try assert_eq_i32(resp_batch_value_consumed(&batch, 0) as i32, 5);
+    try assert_eq_i32(resp_batch_value_consumed(&batch, 1) as i32, 4);
+
+    const first: &RespValue = resp_batch_value(&batch, 0);
+    const second: &RespValue = resp_batch_value(&batch, 1);
+    try assert_true(first != null);
+    try assert_true(second != null);
+    try assert_eq_i32(first.typ as i32, RespType.resp_simple_string as i32);
+    try assert_eq_i32(second.typ as i32, RespType.resp_integer as i32);
+    try assert_true(protocol_slice_eq(first.data, &"OK"[0: 2]));
+    try assert_eq_i32(second.integer as i32, 1);
+    resp_batch_free(&batch);
+
+    var limited: RespBatchParseResult = try parse_resp2_batch(&"+OK\r\n:1\r\n"[0: 9], 1);
+    try assert_eq_i32(limited.count as i32, 1);
+    try assert_eq_i32(limited.consumed as i32, 5);
+    resp_batch_free(&limited);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_resp2_batch_incomplete_tail() !void {
+    reset_memory_stats_for_test();
+    var batch: RespBatchParseResult = try parse_resp2_batch(&"+OK\r\n$5\r\nhel"[0: 12], 8);
+    try assert_eq_i32(batch.count as i32, 1);
+    try assert_eq_i32(batch.consumed as i32, 5);
+    try assert_eq_i32(resp_batch_value_consumed(&batch, 0) as i32, 5);
+    const first: &RespValue = resp_batch_value(&batch, 0);
+    try assert_true(first != null);
+    try assert_eq_i32(first.typ as i32, RespType.resp_simple_string as i32);
+    try assert_true(protocol_slice_eq(first.data, &"OK"[0: 2]));
+    resp_batch_free(&batch);
+
+    try assert_true(protocol_resp2_batch_error_is_incomplete(&"$5\r\nhel"[0: 7]));
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_resp2_batch_invalid_tail_frees_prefix() !void {
+    reset_memory_stats_for_test();
+    try assert_true(protocol_resp2_batch_error_is_invalid_type(&"+OK\r\n?bad\r\n"[0: 11]));
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_resp3_batch_multiple_values() !void {
+    reset_memory_stats_for_test();
+    var batch: RespBatchParseResult = try parse_resp3_batch(&"_\r\n#t\r\n"[0: 7], 8);
+    try assert_eq_i32(batch.count as i32, 2);
+    try assert_eq_i32(batch.consumed as i32, 7);
+
+    const first: &RespValue = resp_batch_value(&batch, 0);
+    const second: &RespValue = resp_batch_value(&batch, 1);
+    try assert_true(first != null);
+    try assert_true(second != null);
+    try assert_eq_i32(first.typ as i32, RespType.resp_null as i32);
+    try assert_eq_i32(second.typ as i32, RespType.resp_boolean as i32);
+    try assert_eq_i32(second.integer as i32, 1);
+    resp_batch_free(&batch);
     try assert_eq_i32(used_memory() as i32, 0);
 }

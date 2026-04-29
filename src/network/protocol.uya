@@ -42,6 +42,13 @@ export struct RespParseResult {
     consumed: usize,
 }
 
+export struct RespBatchParseResult {
+    values: &RespValue,
+    value_consumed: &usize,
+    count: usize,
+    consumed: usize,
+}
+
 fn resp_empty_slice() &[byte] {
     return (null as &byte)[0: 0];
 }
@@ -51,9 +58,19 @@ fn resp_value_stride() usize {
     return @size_of(sample[0]) as usize;
 }
 
+fn resp_usize_stride() usize {
+    var sample: [usize: 1] = [];
+    return @size_of(sample[0]) as usize;
+}
+
 fn resp_value_at(base: &RespValue, index: usize) &RespValue {
     const addr: usize = @usize_from_ptr(base as &void) + index * resp_value_stride();
     return @ptr_from_usize(addr) as &RespValue;
+}
+
+fn resp_usize_at(base: &usize, index: usize) &usize {
+    const addr: usize = @usize_from_ptr(base as &void) + index * resp_usize_stride();
+    return @ptr_from_usize(addr) as &usize;
 }
 
 fn resp_value_copy(dst: &RespValue, src: &RespValue) void {
@@ -90,6 +107,23 @@ fn resp_alloc_elements(count: usize) !&RespValue {
         i = i + 1;
     }
     return raw as &RespValue;
+}
+
+fn resp_alloc_usizes(count: usize) !&usize {
+    if count == 0 {
+        return null as &usize;
+    }
+    const raw_result: !&byte = redis_malloc(count * resp_usize_stride());
+    const raw: &byte = raw_result catch {
+        return error.RespOutOfMemory;
+    };
+    var i: usize = 0;
+    while i < count {
+        const slot: &usize = resp_usize_at(raw as &usize, i);
+        *slot = 0;
+        i = i + 1;
+    }
+    return raw as &usize;
 }
 
 fn resp_find_crlf(input: &[byte], start: usize) !usize {
@@ -282,6 +316,20 @@ export fn resp_array_element(value: &RespValue, index: usize) &RespValue {
     return resp_value_at(value.elements, index);
 }
 
+export fn resp_batch_value(batch: &RespBatchParseResult, index: usize) &RespValue {
+    if batch.values == null || index >= batch.count {
+        return null as &RespValue;
+    }
+    return resp_value_at(batch.values, index);
+}
+
+export fn resp_batch_value_consumed(batch: &RespBatchParseResult, index: usize) usize {
+    if batch.value_consumed == null || index >= batch.count {
+        return 0;
+    }
+    return *resp_usize_at(batch.value_consumed, index);
+}
+
 export fn resp_value_free(value: &RespValue) void {
     if value.elements != null {
         resp_free_array_prefix(value.elements, value.element_count);
@@ -289,6 +337,19 @@ export fn resp_value_free(value: &RespValue) void {
     value.elements = null as &RespValue;
     value.element_count = 0;
     value.data = resp_empty_slice();
+}
+
+export fn resp_batch_free(batch: &RespBatchParseResult) void {
+    if batch.values != null {
+        resp_free_array_prefix(batch.values, batch.count);
+    }
+    if batch.value_consumed != null {
+        redis_free(batch.value_consumed as &byte);
+    }
+    batch.values = null as &RespValue;
+    batch.value_consumed = null as &usize;
+    batch.count = 0;
+    batch.consumed = 0;
 }
 
 fn resp_parse_value(input: &[byte], allow_resp3: bool) !RespParseResult {
@@ -350,4 +411,73 @@ export fn parse_resp2(input: &[byte]) !RespParseResult {
 
 export fn parse_resp3(input: &[byte]) !RespParseResult {
     return resp_parse_value(input, true);
+}
+
+fn resp_parse_batch(input: &[byte], max_count: usize, allow_resp3: bool) !RespBatchParseResult {
+    if max_count == 0 {
+        return RespBatchParseResult{
+            values: null as &RespValue,
+            value_consumed: null as &usize,
+            count: 0,
+            consumed: 0,
+        };
+    }
+    if input.len == 0 {
+        return error.RespIncomplete;
+    }
+
+    const values_result: !&RespValue = resp_alloc_elements(max_count);
+    const values: &RespValue = values_result catch {
+        return error.RespOutOfMemory;
+    };
+    const consumed_result: !&usize = resp_alloc_usizes(max_count);
+    const consumed_values: &usize = consumed_result catch {
+        resp_free_array_prefix(values, 0);
+        return error.RespOutOfMemory;
+    };
+
+    var offset: usize = 0;
+    var count: usize = 0;
+    while count < max_count && offset < input.len {
+        const item_result: !RespParseResult = resp_parse_value(input[offset: input.len - offset], allow_resp3);
+        const item: RespParseResult = item_result catch |err| {
+            if err == error.RespIncomplete && count > 0 {
+                return RespBatchParseResult{
+                    values: values,
+                    value_consumed: consumed_values,
+                    count: count,
+                    consumed: offset,
+                };
+            }
+            resp_free_array_prefix(values, count);
+            redis_free(consumed_values as &byte);
+            if err == error.RespIncomplete { return error.RespIncomplete; }
+            if err == error.RespInvalidType { return error.RespInvalidType; }
+            if err == error.RespInvalidInteger { return error.RespInvalidInteger; }
+            if err == error.RespInvalidLength { return error.RespInvalidLength; }
+            if err == error.RespInvalidCrlf { return error.RespInvalidCrlf; }
+            return error.RespOutOfMemory;
+        };
+        const slot: &RespValue = resp_value_at(values, count);
+        const consumed_slot: &usize = resp_usize_at(consumed_values, count);
+        resp_value_copy(slot, &item.value);
+        *consumed_slot = item.consumed;
+        offset = offset + item.consumed;
+        count = count + 1;
+    }
+
+    return RespBatchParseResult{
+        values: values,
+        value_consumed: consumed_values,
+        count: count,
+        consumed: offset,
+    };
+}
+
+export fn parse_resp2_batch(input: &[byte], max_count: usize) !RespBatchParseResult {
+    return resp_parse_batch(input, max_count, false);
+}
+
+export fn parse_resp3_batch(input: &[byte], max_count: usize) !RespBatchParseResult {
+    return resp_parse_batch(input, max_count, true);
 }

@@ -28,6 +28,12 @@ use src.storage.object.ListNode;
 use src.storage.object.object_free;
 use src.storage.object.object_type_name;
 use src.storage.object.object_encoding_name;
+use src.storage.object.object_layout_size;
+use src.storage.object.list_node_layout_size;
+use src.storage.object.object_pool_cached_objects;
+use src.storage.object.object_pool_cached_list_nodes;
+use src.storage.object.object_pool_reuse_count;
+use src.storage.object.object_pool_reset_for_test;
 use src.memory.allocator.used_memory;
 use src.memory.allocator.reset_memory_stats_for_test;
 
@@ -182,5 +188,43 @@ export fn test_object_zset_create_add_remove_range_free() !void {
     try assert_eq_i32((try zset_object_len(obj)) as i32, 2);
 
     object_free(obj);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_object_pool_reuses_objects_and_list_nodes() !void {
+    reset_memory_stats_for_test();
+    object_pool_reset_for_test();
+    try assert_true(object_layout_size() > 0);
+    try assert_true(list_node_layout_size() > 0);
+
+    const first: &RedisObject = try create_string_object(&"first"[0: 5]);
+    object_free(first);
+    try assert_eq_i32(used_memory() as i32, 0);
+    try assert_eq_i32(object_pool_cached_objects() as i32, 1);
+    try assert_eq_i32(object_pool_reuse_count() as i32, 0);
+
+    const second: &RedisObject = try create_string_object(&"second"[0: 6]);
+    try assert_eq_i32(object_pool_reuse_count() as i32, 1);
+    object_free(second);
+    try assert_eq_i32(used_memory() as i32, 0);
+    try assert_eq_i32(object_pool_cached_objects() as i32, 1);
+
+    const list: &RedisObject = try create_list_object();
+    try assert_eq_i32((try list_object_push_head(list, &"a"[0: 1])) as i32, 1);
+    object_free(list);
+    try assert_eq_i32(used_memory() as i32, 0);
+    try assert_true(object_pool_cached_objects() >= 2);
+    try assert_eq_i32(object_pool_cached_list_nodes() as i32, 1);
+
+    const list_again: &RedisObject = try create_list_object();
+    try assert_eq_i32((try list_object_push_head(list_again, &"b"[0: 1])) as i32, 1);
+    try assert_true(object_pool_reuse_count() >= 3);
+    object_free(list_again);
+    try assert_eq_i32(used_memory() as i32, 0);
+
+    object_pool_reset_for_test();
+    try assert_eq_i32(object_pool_cached_objects() as i32, 0);
+    try assert_eq_i32(object_pool_cached_list_nodes() as i32, 0);
+    try assert_eq_i32(object_pool_reuse_count() as i32, 0);
     try assert_eq_i32(used_memory() as i32, 0);
 }

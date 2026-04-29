@@ -150,6 +150,15 @@ def run_smoke() -> None:
             require_field(initial, "allocator_slab_cached_blocks")
             require_field(initial, "allocator_slab_cached_bytes")
             require_field(initial, "allocator_slab_reuse_count")
+            object_layout_size = require_field(initial, "object_layout_size")
+            list_node_layout_size = require_field(initial, "list_node_layout_size")
+            require_field(initial, "object_pool_cached_objects")
+            require_field(initial, "object_pool_cached_list_nodes")
+            require_field(initial, "object_pool_reuse_count")
+            if object_layout_size <= 0:
+                raise AssertionError(f"object_layout_size should be positive: {initial!r}")
+            if list_node_layout_size <= 0:
+                raise AssertionError(f"list_node_layout_size should be positive: {initial!r}")
 
             if send_command(sock, b"SET", b"payload", b"x" * 256) != "OK":
                 raise AssertionError("SET payload failed")
@@ -162,6 +171,13 @@ def run_smoke() -> None:
             require_field(after_set, "allocator_slab_cached_blocks")
             require_field(after_set, "allocator_slab_cached_bytes")
             require_field(after_set, "allocator_slab_reuse_count")
+            require_field(after_set, "object_pool_cached_objects")
+            require_field(after_set, "object_pool_cached_list_nodes")
+            require_field(after_set, "object_pool_reuse_count")
+            if require_field(after_set, "object_layout_size") != object_layout_size:
+                raise AssertionError(f"object layout size should be stable: {after_set!r}")
+            if require_field(after_set, "list_node_layout_size") != list_node_layout_size:
+                raise AssertionError(f"list node layout size should be stable: {after_set!r}")
             if used_after_set <= 0:
                 raise AssertionError(f"used_memory should grow after SET: {after_set!r}")
             if peak_after_set < used_after_set:

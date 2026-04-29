@@ -53,6 +53,7 @@ use tests.unit.storage_object_test.test_object_hash_create_set_get_free;
 use tests.unit.storage_object_test.test_object_list_create_push_pop_range_free;
 use tests.unit.storage_object_test.test_object_set_create_add_remove_members_free;
 use tests.unit.storage_object_test.test_object_zset_create_add_remove_range_free;
+use tests.unit.storage_object_test.test_object_pool_reuses_objects_and_list_nodes;
 use tests.unit.storage_engine_test.test_engine_set_lookup_delete;
 use tests.unit.storage_engine_test.test_engine_overwrite_releases_old_object;
 use tests.unit.storage_engine_test.test_engine_lazy_expire;
@@ -347,6 +348,10 @@ export fn main() i32 {
     const before_object_zset: i32 = failed;
     _ = test_object_zset_create_add_remove_range_free() catch { printf("[FAIL] storage_object/zset_create_add_remove_range_free\n" as *byte); failed = failed + 1; };
     if failed == before_object_zset { printf("[PASS] storage_object/zset_create_add_remove_range_free\n" as *byte); }
+
+    const before_object_pool: i32 = failed;
+    _ = test_object_pool_reuses_objects_and_list_nodes() catch { printf("[FAIL] storage_object/object_pool\n" as *byte); failed = failed + 1; };
+    if failed == before_object_pool { printf("[PASS] storage_object/object_pool\n" as *byte); }
 
     const before_engine_set: i32 = failed;
     _ = test_engine_set_lookup_delete() catch { printf("[FAIL] storage_engine/set_lookup_delete\n" as *byte); failed = failed + 1; };

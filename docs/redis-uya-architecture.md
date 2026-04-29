@@ -136,6 +136,8 @@ server open
 - `memory/allocator.uya` 记录 `used_memory`、峰值、累计分配/释放和分配块计数，`INFO memory` 暴露这些字段作为内存治理观测面
 - `redis_malloc/free/realloc` 内部对 16B、32B、64B、128B、256B、512B、1024B 小对象做 Slab freelist 缓存；每个 class 当前最多缓存 64 个空闲块，超出后回退系统 `free`
 - Slab 复用不改变上层释放契约：调用方仍只通过 `redis_free()` 释放 payload 指针，allocator header 负责记录请求大小、可用 class 大小与 class index
+- `storage/object.uya` 在 Slab 之上增加 `RedisObject` 与 `ListNode` 专用对象池：释放对象时从 allocator 活跃统计扣除但保留 payload 供后续同类型对象复用，池满后再回退 `redis_free`
+- `INFO memory` 暴露 `object_pool_cached_objects`、`object_pool_cached_list_nodes`、`object_pool_reuse_count`、`object_layout_size` 与 `list_node_layout_size`，用于验证对象池复用和结构体布局变化
 - `RedisObject.lru_at_ms` 记录 top-level key 最近访问时间，`RedisObject.lfu_counter` 记录访问计数，`set_key_at()` 写入时初始化，`lookup_key_at()` 读取时刷新
 - `command/executor.uya` 在可能增量分配的写命令执行前做预算检查；`noeviction` 直接 OOM，`allkeys-*` 与 `volatile-*` 分别调用对应 `engine_evict_*()` 后重试预算判断
 - `volatile-lru` / `volatile-lfu` / `volatile-ttl` 扫描主 keyspace 并用 TTL 字典过滤候选，只淘汰带过期时间的 key

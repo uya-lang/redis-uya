@@ -310,6 +310,25 @@ export fn redis_realloc(ptr: &byte, new_size: usize) !&byte {
     return new_ptr;
 }
 
+export fn redis_pool_release(ptr: &byte) void {
+    if ptr == null { return; }
+    const raw: &byte = allocator_raw_from_payload(ptr);
+    const header: &AllocationHeader = raw as &AllocationHeader;
+    allocator_note_free(header.requested_size);
+}
+
+export fn redis_pool_acquire(ptr: &byte) void {
+    if ptr == null { return; }
+    const raw: &byte = allocator_raw_from_payload(ptr);
+    const header: &AllocationHeader = raw as &AllocationHeader;
+    allocator_note_alloc(header.requested_size);
+}
+
+export fn redis_pool_free_cached(ptr: &byte) void {
+    if ptr == null { return; }
+    allocator_payload_free_no_stats(ptr);
+}
+
 RedisAllocator {
     fn alloc(self: &Self, size: usize) !&byte {
         return redis_malloc(size);

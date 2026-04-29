@@ -171,6 +171,11 @@ export fn test_command_info_and_config() !void {
     try assert_true(command_executor_test_contains(info_memory_reply.data, &"allocator_slab_cached_blocks:"[0: 29]));
     try assert_true(command_executor_test_contains(info_memory_reply.data, &"allocator_slab_cached_bytes:"[0: 28]));
     try assert_true(command_executor_test_contains(info_memory_reply.data, &"allocator_slab_reuse_count:"[0: 27]));
+    try assert_true(command_executor_test_contains(info_memory_reply.data, &"object_pool_cached_objects:"[0: 27]));
+    try assert_true(command_executor_test_contains(info_memory_reply.data, &"object_pool_cached_list_nodes:"[0: 30]));
+    try assert_true(command_executor_test_contains(info_memory_reply.data, &"object_pool_reuse_count:"[0: 24]));
+    try assert_true(command_executor_test_contains(info_memory_reply.data, &"object_layout_size:"[0: 19]));
+    try assert_true(command_executor_test_contains(info_memory_reply.data, &"list_node_layout_size:"[0: 22]));
     try assert_true(command_executor_test_contains(info_memory_reply.data, &"maxmemory_policy:noeviction\r\n"[0: 29]));
     command_reply_cleanup(&info_memory_reply);
     resp_value_free(&info_memory_parsed.value);

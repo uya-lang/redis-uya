@@ -125,6 +125,11 @@ def memory_info(sock: socket.socket) -> dict[str, int | str]:
         "allocator_active_allocations",
         "allocator_slab_cached_blocks",
         "allocator_slab_reuse_count",
+        "object_pool_cached_objects",
+        "object_pool_cached_list_nodes",
+        "object_pool_reuse_count",
+        "object_layout_size",
+        "list_node_layout_size",
         "maxmemory",
         "maxmemory_policy",
     )

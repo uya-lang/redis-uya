@@ -10,7 +10,7 @@
 
 `redis-uya` 是一个使用 **Uya 编程语言** 从零实现的生产级高性能内存数据库系统。项目长期目标是兼容 Redis 6.2+ 协议，覆盖核心数据结构、持久化、复制、基础集群与性能工程，并在同条件核心场景上超过 Redis。
 
-当前项目已完成 `v0.7.0` 集群基础，并进入 `v0.8.0` 核心路径性能基线：在 `v0.1.0` 发布闭环、`v0.2.0` 数据结构扩展、`v0.3.0` 持久化增强、`v0.4.0` 复制基础、`v0.5.0` 协议与控制面增强、`v0.6.0` 内存与性能控制、`v0.7.0` Cluster 基础之上，新增核心 benchmark 矩阵、同机 Redis 对照、吞吐/p99 回归阈值、`GET` bulk string 零拷贝发送路径、RESP2/RESP3 顶层批量解析 API、`@vector` byte-slice 比较、表驱动 CRC64 和 `io_uring` 主机能力评估报告。后续继续推进对象布局优化。
+当前项目已完成 `v0.7.0` 集群基础，并进入 `v0.8.0` 核心路径性能基线：在 `v0.1.0` 发布闭环、`v0.2.0` 数据结构扩展、`v0.3.0` 持久化增强、`v0.4.0` 复制基础、`v0.5.0` 协议与控制面增强、`v0.6.0` 内存与性能控制、`v0.7.0` Cluster 基础之上，新增核心 benchmark 矩阵、同机 Redis 对照、吞吐/p99 回归阈值、`GET` bulk string 零拷贝发送路径、RESP2/RESP3 顶层批量解析 API、`@vector` byte-slice 比较、表驱动 CRC64、`io_uring` 主机能力评估报告，以及 `RedisObject` / `ListNode` 专用对象池与 `INFO memory` 布局观测。后续继续推进 Redis 对照差距报告与优化队列。
 
 ## 核心目标
 
@@ -68,7 +68,7 @@
 - `allkeys-lru` 淘汰基线：对象记录最近访问时间，超预算写入可淘汰最久未访问 key 后继续执行
 - `allkeys-lfu` 淘汰基线：对象记录访问计数，超预算写入可淘汰访问次数最低 key 后继续执行
 - `volatile-*` 淘汰基线：`volatile-lru`、`volatile-lfu`、`volatile-ttl` 只从带 TTL 的 key 中选择候选
-- `INFO memory` allocator 统计：当前使用、峰值、累计分配/释放、活跃块数和 Slab 统计可观测
+- `INFO memory` allocator 统计：当前使用、峰值、累计分配/释放、活跃块数、Slab 统计、对象池计数和对象布局大小可观测
 - Slab 小对象缓存基线：16B 到 1KB 分级 freelist
 - 内存压力与淘汰回归：覆盖 noeviction OOM、allkeys-lru、allkeys-lfu、volatile-ttl
 - Cluster 基础：槽位计算、节点元数据、单节点最小拓扑、`CLUSTER KEYSLOT/INFO/NODES/SLOTS/HELP/MEET/SETSLOT`、`MOVED/ASK` 基础重定向和一致性 smoke
@@ -78,10 +78,11 @@
 - v0.8.0 RESP2/RESP3 顶层批量解析：一次扫描可返回多个完整顶层帧、每帧消费长度和完整前缀总消费长度，覆盖半包尾部与错误释放路径
 - v0.8.0 SIMD 字符串和 CRC64：新增 `@vector` 16 字节块 byte-slice 比较工具并接入命令路由、配置解析、SDS 和 Dict key 热路径；CRC64 更新改为表驱动并保留标量对照测试
 - v0.8.0 `io_uring` 评估：`make evaluate-io-uring-v0.8.0` 生成主机能力报告，记录 syscall、sysctl、liburing 探测和 `production_binding=no` 边界
+- v0.8.0 专用对象池与布局观测：`RedisObject` / `ListNode` 释放后进入专用 freelist，复用时绕过通用 Slab；`INFO memory` 暴露缓存、复用计数和布局大小
 
 下一阶段：
 
-- `v0.8.0`：核心路径性能基线，围绕对象布局继续推进
+- `v0.8.0`：核心路径性能基线，继续输出 Redis 对照差距报告与后续优化队列
 
 当前阶段尚未生产可用。
 
@@ -233,7 +234,7 @@ build/redis-uya 6380 1
 - `CLIENT` / `CONFIG` 控制面兼容子集
 - v0.5 协议与控制面兼容性回归
 - `maxmemory` noeviction、`allkeys-*` 与 `volatile-*` 基线
-- `INFO memory` allocator 统计观测：当前使用、峰值、累计分配/释放和活跃块数
+- `INFO memory` allocator 与对象池统计观测：当前使用、峰值、累计分配/释放、活跃块数、Slab、对象池和布局大小
 - Slab 小对象缓存基线：16B 到 1KB 分级 freelist，缓存与复用统计可观测
 - 内存压力与淘汰回归：noeviction OOM、allkeys-lru、allkeys-lfu、volatile-ttl
 - 基础集群：Cluster 槽位模型、节点元数据、单节点最小拓扑、`CLUSTER` 最小控制面、`MOVED/ASK` 基础重定向和一致性 smoke

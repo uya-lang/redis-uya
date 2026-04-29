@@ -2,6 +2,9 @@
 
 use src.memory.allocator.redis_malloc;
 use src.memory.allocator.redis_free;
+use src.memory.allocator.redis_pool_acquire;
+use src.memory.allocator.redis_pool_free_cached;
+use src.memory.allocator.redis_pool_release;
 use src.storage.dict.Dict;
 use src.storage.dict.DictEntry;
 use src.storage.dict.DictIterator;
@@ -15,6 +18,7 @@ use src.storage.sds.Sds;
 use src.storage.sds.sds_empty;
 use src.storage.sds.sds_new;
 use src.storage.sds.sds_free;
+use src.util.bytes.bytes_cmp;
 
 export enum ObjectType {
     object_string,
@@ -62,6 +66,16 @@ struct ParseIntResult {
     value: i64,
 }
 
+const OBJECT_POOL_MAX_CACHED: usize = 256;
+const LIST_NODE_POOL_MAX_CACHED: usize = 512;
+
+var object_pool_head: &byte = null;
+var object_pool_count: usize = 0;
+var object_pool_reuse_counter: usize = 0;
+var list_node_pool_head: &byte = null;
+var list_node_pool_count: usize = 0;
+var list_node_pool_reuse_counter: usize = 0;
+
 export error ObjectWrongType;
 export error ObjectFieldNotFound;
 export error ObjectListEmpty;
@@ -69,6 +83,158 @@ export error ObjectListEmpty;
 fn object_stride() usize {
     var sample: [RedisObject: 1] = [];
     return @size_of(sample[0]) as usize;
+}
+
+export fn object_layout_size() usize {
+    return object_stride();
+}
+
+fn list_node_stride() usize {
+    var sample: [ListNode: 1] = [];
+    return @size_of(sample[0]) as usize;
+}
+
+export fn list_node_layout_size() usize {
+    return list_node_stride();
+}
+
+export fn object_pool_cached_objects() usize {
+    return object_pool_count;
+}
+
+export fn object_pool_cached_list_nodes() usize {
+    return list_node_pool_count;
+}
+
+export fn object_pool_reuse_count() usize {
+    return object_pool_reuse_counter + list_node_pool_reuse_counter;
+}
+
+fn object_pool_pop() &byte {
+    const payload: &byte = object_pool_head;
+    if payload == null {
+        return null;
+    }
+    const next_slot: &&byte = payload as &&byte;
+    object_pool_head = *next_slot;
+    object_pool_count = object_pool_count - 1;
+    object_pool_reuse_counter = object_pool_reuse_counter + 1;
+    redis_pool_acquire(payload);
+    return payload;
+}
+
+fn object_pool_push(payload: &byte) bool {
+    if object_pool_count >= OBJECT_POOL_MAX_CACHED {
+        return false;
+    }
+    redis_pool_release(payload);
+    const next_slot: &&byte = payload as &&byte;
+    *next_slot = object_pool_head;
+    object_pool_head = payload;
+    object_pool_count = object_pool_count + 1;
+    return true;
+}
+
+fn list_node_pool_pop() &byte {
+    const payload: &byte = list_node_pool_head;
+    if payload == null {
+        return null;
+    }
+    const next_slot: &&byte = payload as &&byte;
+    list_node_pool_head = *next_slot;
+    list_node_pool_count = list_node_pool_count - 1;
+    list_node_pool_reuse_counter = list_node_pool_reuse_counter + 1;
+    redis_pool_acquire(payload);
+    return payload;
+}
+
+fn list_node_pool_push(payload: &byte) bool {
+    if list_node_pool_count >= LIST_NODE_POOL_MAX_CACHED {
+        return false;
+    }
+    redis_pool_release(payload);
+    const next_slot: &&byte = payload as &&byte;
+    *next_slot = list_node_pool_head;
+    list_node_pool_head = payload;
+    list_node_pool_count = list_node_pool_count + 1;
+    return true;
+}
+
+export fn object_pool_reset_for_test() void {
+    var object_payload: &byte = object_pool_head;
+    while object_payload != null {
+        const next_slot: &&byte = object_payload as &&byte;
+        const next: &byte = *next_slot;
+        redis_pool_free_cached(object_payload);
+        object_payload = next;
+    }
+    object_pool_head = null;
+    object_pool_count = 0;
+    object_pool_reuse_counter = 0;
+
+    var node_payload: &byte = list_node_pool_head;
+    while node_payload != null {
+        const next_slot_node: &&byte = node_payload as &&byte;
+        const next_node: &byte = *next_slot_node;
+        redis_pool_free_cached(node_payload);
+        node_payload = next_node;
+    }
+    list_node_pool_head = null;
+    list_node_pool_count = 0;
+    list_node_pool_reuse_counter = 0;
+}
+
+fn object_alloc() !&RedisObject {
+    var payload: &byte = object_pool_pop();
+    if payload != null {
+        return payload as &RedisObject;
+    }
+    payload = try redis_malloc(object_stride());
+    return payload as &RedisObject;
+}
+
+fn object_release(obj: &RedisObject) void {
+    if obj == null {
+        return;
+    }
+    const payload: &byte = obj as &byte;
+    if object_pool_push(payload) {
+        return;
+    }
+    redis_free(payload);
+}
+
+fn list_node_alloc() !&ListNode {
+    var payload: &byte = list_node_pool_pop();
+    if payload != null {
+        return payload as &ListNode;
+    }
+    payload = try redis_malloc(list_node_stride());
+    return payload as &ListNode;
+}
+
+fn list_node_release(node: &ListNode) void {
+    if node == null {
+        return;
+    }
+    const payload: &byte = node as &byte;
+    if list_node_pool_push(payload) {
+        return;
+    }
+    redis_free(payload);
+}
+
+fn object_init_base(obj: &RedisObject, obj_type: ObjectType, encoding: Encoding, value: Sds, int_value: i64) void {
+    obj.obj_type = obj_type;
+    obj.encoding = encoding;
+    obj.value = value;
+    obj.int_value = int_value;
+    obj.hash_dict = dict_new();
+    obj.list_head = null as &ListNode;
+    obj.list_tail = null as &ListNode;
+    obj.list_len = 0;
+    obj.lru_at_ms = 0u64;
+    obj.lfu_counter = 0u64;
 }
 
 fn parse_i64(data: &[byte]) ParseIntResult {
@@ -111,50 +277,25 @@ fn parse_i64(data: &[byte]) ParseIntResult {
 }
 
 fn object_slice_cmp(a: &[byte], b: &[byte]) i32 {
-    var i: usize = 0;
-    while i < a.len && i < b.len {
-        if a.ptr[i] < b.ptr[i] {
-            return -1;
-        }
-        if a.ptr[i] > b.ptr[i] {
-            return 1;
-        }
-        i = i + 1;
-    }
-    if a.len < b.len {
-        return -1;
-    }
-    if a.len > b.len {
-        return 1;
-    }
-    return 0;
+    return bytes_cmp(a, b);
 }
 
 export fn create_string_object(data: &[byte]) !&RedisObject {
-    const raw: &byte = try redis_malloc(object_stride());
-    const obj: &RedisObject = raw as &RedisObject;
+    const obj: &RedisObject = try object_alloc();
     const value_result: !Sds = sds_new(data);
     const value: Sds = value_result catch {
-        redis_free(raw);
+        object_release(obj);
         return error.AllocOutOfMemory;
     };
 
     const parsed: ParseIntResult = parse_i64(data);
-    obj.obj_type = ObjectType.object_string;
+    var encoding: Encoding = Encoding.encoding_raw;
+    var int_value: i64 = 0;
     if parsed.ok {
-        obj.encoding = Encoding.encoding_int;
-        obj.int_value = parsed.value;
-    } else {
-        obj.encoding = Encoding.encoding_raw;
-        obj.int_value = 0;
+        encoding = Encoding.encoding_int;
+        int_value = parsed.value;
     }
-    obj.value = value;
-    obj.hash_dict = dict_new();
-    obj.list_head = null as &ListNode;
-    obj.list_tail = null as &ListNode;
-    obj.list_len = 0;
-    obj.lru_at_ms = 0u64;
-    obj.lfu_counter = 0u64;
+    object_init_base(obj, ObjectType.object_string, encoding, value, int_value);
     return obj;
 }
 
@@ -167,35 +308,19 @@ fn object_usize_to_object(value: usize) &RedisObject {
 }
 
 export fn create_hash_object() !&RedisObject {
-    const raw: &byte = try redis_malloc(object_stride());
-    const obj: &RedisObject = raw as &RedisObject;
+    const obj: &RedisObject = try object_alloc();
     const value_result: !Sds = sds_empty();
     const value: Sds = value_result catch {
-        redis_free(raw);
+        object_release(obj);
         return error.AllocOutOfMemory;
     };
 
-    obj.obj_type = ObjectType.object_hash;
-    obj.encoding = Encoding.encoding_hash_table;
-    obj.value = value;
-    obj.int_value = 0;
-    obj.hash_dict = dict_new();
-    obj.list_head = null as &ListNode;
-    obj.list_tail = null as &ListNode;
-    obj.list_len = 0;
-    obj.lru_at_ms = 0u64;
-    obj.lfu_counter = 0u64;
+    object_init_base(obj, ObjectType.object_hash, Encoding.encoding_hash_table, value, 0);
     return obj;
 }
 
-fn list_node_stride() usize {
-    var sample: [ListNode: 1] = [];
-    return @size_of(sample[0]) as usize;
-}
-
 fn list_node_new(value: &RedisObject) !&ListNode {
-    const raw: &byte = try redis_malloc(list_node_stride());
-    const node: &ListNode = raw as &ListNode;
+    const node: &ListNode = try list_node_alloc();
     node.value = value;
     node.next = null as &ListNode;
     node.prev = null as &ListNode;
@@ -206,72 +331,42 @@ fn list_node_free(node: &ListNode) void {
     if node == null {
         return;
     }
-    redis_free(node as &byte);
+    list_node_release(node);
 }
 
 export fn create_list_object() !&RedisObject {
-    const raw: &byte = try redis_malloc(object_stride());
-    const obj: &RedisObject = raw as &RedisObject;
+    const obj: &RedisObject = try object_alloc();
     const value_result: !Sds = sds_empty();
     const value: Sds = value_result catch {
-        redis_free(raw);
+        object_release(obj);
         return error.AllocOutOfMemory;
     };
 
-    obj.obj_type = ObjectType.object_list;
-    obj.encoding = Encoding.encoding_linked_list;
-    obj.value = value;
-    obj.int_value = 0;
-    obj.hash_dict = dict_new();
-    obj.list_head = null as &ListNode;
-    obj.list_tail = null as &ListNode;
-    obj.list_len = 0;
-    obj.lru_at_ms = 0u64;
-    obj.lfu_counter = 0u64;
+    object_init_base(obj, ObjectType.object_list, Encoding.encoding_linked_list, value, 0);
     return obj;
 }
 
 export fn create_set_object() !&RedisObject {
-    const raw: &byte = try redis_malloc(object_stride());
-    const obj: &RedisObject = raw as &RedisObject;
+    const obj: &RedisObject = try object_alloc();
     const value_result: !Sds = sds_empty();
     const value: Sds = value_result catch {
-        redis_free(raw);
+        object_release(obj);
         return error.AllocOutOfMemory;
     };
 
-    obj.obj_type = ObjectType.object_set;
-    obj.encoding = Encoding.encoding_set_table;
-    obj.value = value;
-    obj.int_value = 0;
-    obj.hash_dict = dict_new();
-    obj.list_head = null as &ListNode;
-    obj.list_tail = null as &ListNode;
-    obj.list_len = 0;
-    obj.lru_at_ms = 0u64;
-    obj.lfu_counter = 0u64;
+    object_init_base(obj, ObjectType.object_set, Encoding.encoding_set_table, value, 0);
     return obj;
 }
 
 export fn create_zset_object() !&RedisObject {
-    const raw: &byte = try redis_malloc(object_stride());
-    const obj: &RedisObject = raw as &RedisObject;
+    const obj: &RedisObject = try object_alloc();
     const value_result: !Sds = sds_empty();
     const value: Sds = value_result catch {
-        redis_free(raw);
+        object_release(obj);
         return error.AllocOutOfMemory;
     };
 
-    obj.obj_type = ObjectType.object_zset;
-    obj.encoding = Encoding.encoding_zset_table;
-    obj.value = value;
-    obj.int_value = 0;
-    obj.hash_dict = dict_new();
-    obj.list_head = null as &ListNode;
-    obj.list_tail = null as &ListNode;
-    obj.list_len = 0;
-    obj.lru_at_ms = 0u64;
-    obj.lfu_counter = 0u64;
+    object_init_base(obj, ObjectType.object_zset, Encoding.encoding_zset_table, value, 0);
     return obj;
 }
 
@@ -698,7 +793,7 @@ export fn object_free(obj: &RedisObject) void {
     }
     dict_free(&obj.hash_dict);
     sds_free(&obj.value);
-    redis_free(obj as &byte);
+    object_release(obj);
 }
 
 export fn object_type_name(obj_type: ObjectType) &[byte] {

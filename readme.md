@@ -317,10 +317,12 @@ build/redis-uya 6380 1
 - [release-v0.6.0](docs/redis-uya-release-v0.6.0.md)
 - [release-v0.7.0](docs/redis-uya-release-v0.7.0.md)
 - [release-v0.8.0](docs/redis-uya-release-v0.8.0.md)
+- [release-v0.8.1](docs/redis-uya-release-v0.8.1.md)
 - [test-report-v0.1.0](docs/redis-uya-test-report-v0.1.0.md)
 - [test-report-v0.6.0](docs/redis-uya-test-report-v0.6.0.md)
 - [test-report-v0.7.0](docs/redis-uya-test-report-v0.7.0.md)
 - [test-report-v0.8.0](docs/redis-uya-test-report-v0.8.0.md)
+- [test-report-v0.8.1](docs/redis-uya-test-report-v0.8.1.md)
 
 ## 目录结构
 

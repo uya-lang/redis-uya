@@ -22,6 +22,7 @@ bash scripts/verify_definition_of_done.sh
 - `benchmarks/v0.8.0-gap-report.md` 记录 v0.8.0 相对 Redis 的差距矩阵与后续优化队列
 - `benchmarks/v0.8.1-performance.md` 记录 v0.8.1 写路径修复后相对 v0.8.0 基线的 guard 结果
 - `docs/redis-uya-release-v0.8.0.md` 与 `docs/redis-uya-test-report-v0.8.0.md` 固化 v0.8.0 封版边界和实际验证结果
+- `docs/redis-uya-release-v0.8.1.md` 与 `docs/redis-uya-test-report-v0.8.1.md` 固化 v0.8.1 封版边界和实际验证结果
 - 一键验证脚本会把临时 benchmark 输出写入 `build/`，避免覆盖已记录的基线报告
 - 一键验证脚本包含 `git diff --check`，用于检查本次工作区差异的基础格式问题
 - 本页同时记录 `v0.1.0` 发布证据，以及后续 `v0.2.0+` 已在主线落地的能力证据

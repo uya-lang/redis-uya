@@ -67,6 +67,30 @@ if [[ "$GET_RESULT" != "value" ]]; then
     exit 1
 fi
 
+INCR_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" incr counter)"
+if [[ "$INCR_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected incr 1, got '$INCR_RESULT'" >&2
+    exit 1
+fi
+
+INCRBY_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" incrby counter 4)"
+if [[ "$INCRBY_RESULT" != "5" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected incrby 5, got '$INCRBY_RESULT'" >&2
+    exit 1
+fi
+
+DECR_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" decr counter)"
+if [[ "$DECR_RESULT" != "4" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected decr 4, got '$DECR_RESULT'" >&2
+    exit 1
+fi
+
+DECRBY_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" decrby counter 2)"
+if [[ "$DECRBY_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected decrby 2, got '$DECRBY_RESULT'" >&2
+    exit 1
+fi
+
 STRLEN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" strlen key)"
 if [[ "$STRLEN_RESULT" != "5" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected strlen 5, got '$STRLEN_RESULT'" >&2
@@ -100,6 +124,12 @@ fi
 GETDEL_MISSING_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" getdel gd-key)"
 if [[ -n "$GETDEL_MISSING_RESULT" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected empty output on missing GETDEL, got '$GETDEL_MISSING_RESULT'" >&2
+    exit 1
+fi
+
+COUNTER_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del counter)"
+if [[ "$COUNTER_DEL_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected counter DEL 1, got '$COUNTER_DEL_RESULT'" >&2
     exit 1
 fi
 

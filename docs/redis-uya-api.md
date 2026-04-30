@@ -130,6 +130,59 @@ GETDEL key
 - 命中：返回旧值 Bulk String，并删除 key
 - 不存在：Null Bulk
 
+### `INCR`
+
+格式：
+
+```text
+INCR key
+```
+
+返回：
+
+- 自增后的整数值，Integer
+
+### `DECR`
+
+格式：
+
+```text
+DECR key
+```
+
+返回：
+
+- 自减后的整数值，Integer
+
+### `INCRBY`
+
+格式：
+
+```text
+INCRBY key increment
+```
+
+返回：
+
+- 加法后的整数值，Integer
+
+### `DECRBY`
+
+格式：
+
+```text
+DECRBY key decrement
+```
+
+返回：
+
+- 减法后的整数值，Integer
+
+说明：
+
+- key 不存在时按 `0` 处理
+- key 必须持有可解析的十进制整数字符串，否则返回整数解析错误
+
 ### `TYPE`
 
 格式：

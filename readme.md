@@ -245,6 +245,7 @@ build/redis-uya 6380 1
 - RESP3 最小闭环：`HELLO 2/3`、常用 RESP3 输入类型解析、RESP3 Null 回复
 - String / Hash / List / Set / ZSet / `SCAN`
 - String 第一批增强：`APPEND`、`STRLEN`、`GETDEL`
+- String 第二批计数：`INCR`、`DECR`、`INCRBY`、`DECRBY`
 - Key/Server 第一批：`ECHO`、`TYPE`、`DBSIZE`
 - Key/Server 第二批：`PEXPIRE`、`PERSIST`、`PTTL`
 - AOF append/replay、RDB 子集、`SAVE`、`BGSAVE`、`BGREWRITEAOF`

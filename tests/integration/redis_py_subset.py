@@ -107,6 +107,18 @@ class RedisPySubsetClient:
     def get(self, key: str) -> bytes | None:
         return self._request(b"GET", key.encode())
 
+    def incr(self, key: str) -> int:
+        return int(self._request(b"INCR", key.encode()))
+
+    def decr(self, key: str) -> int:
+        return int(self._request(b"DECR", key.encode()))
+
+    def incrby(self, key: str, amount: int) -> int:
+        return int(self._request(b"INCRBY", key.encode(), str(amount).encode()))
+
+    def decrby(self, key: str, amount: int) -> int:
+        return int(self._request(b"DECRBY", key.encode(), str(amount).encode()))
+
     def append(self, key: str, value: str) -> int:
         return int(self._request(b"APPEND", key.encode(), value.encode()))
 
@@ -264,12 +276,17 @@ def run_smoke() -> None:
             assert client.ping()
             assert client.set("key", "value")
             assert client.get("key") == b"value"
+            assert client.incr("counter") == 1
+            assert client.incrby("counter", 4) == 5
+            assert client.decr("counter") == 4
+            assert client.decrby("counter", 2) == 2
             assert client.strlen("key") == 5
             assert client.append("key", "++") == 7
             assert client.get("key") == b"value++"
             assert client.set("gd-key", "once")
             assert client.getdel("gd-key") == b"once"
             assert client.getdel("gd-key") is None
+            assert client.delete("counter") == 1
             assert client.echo("hi") == b"hi"
             assert client.key_type("key") == "string"
             assert client.dbsize() == 1

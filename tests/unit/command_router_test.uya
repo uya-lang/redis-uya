@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 48);
+    try assert_eq_i32(command_router_count(&router) as i32, 52);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -82,6 +82,22 @@ export fn test_command_router_lookup_and_case() !void {
     const get: CommandInfo = try command_router_lookup(&router, &"get"[0: 3]);
     try assert_eq_i32(get.cmd_type as i32, CommandType.command_get as i32);
     try assert_eq_i32(get.arity, 2);
+
+    const incr: CommandInfo = try command_router_lookup(&router, &"INCR"[0: 4]);
+    try assert_eq_i32(incr.cmd_type as i32, CommandType.command_incr as i32);
+    try assert_eq_i32(incr.arity, 2);
+
+    const decr: CommandInfo = try command_router_lookup(&router, &"decr"[0: 4]);
+    try assert_eq_i32(decr.cmd_type as i32, CommandType.command_decr as i32);
+    try assert_eq_i32(decr.arity, 2);
+
+    const incrby: CommandInfo = try command_router_lookup(&router, &"INCRBY"[0: 6]);
+    try assert_eq_i32(incrby.cmd_type as i32, CommandType.command_incrby as i32);
+    try assert_eq_i32(incrby.arity, 3);
+
+    const decrby: CommandInfo = try command_router_lookup(&router, &"DECRBY"[0: 6]);
+    try assert_eq_i32(decrby.cmd_type as i32, CommandType.command_decrby as i32);
+    try assert_eq_i32(decrby.arity, 3);
 
     const append: CommandInfo = try command_router_lookup(&router, &"APPEND"[0: 6]);
     try assert_eq_i32(append.cmd_type as i32, CommandType.command_append as i32);
@@ -216,6 +232,10 @@ export fn test_command_router_arity_validation() !void {
     const watch: CommandInfo = try command_router_lookup(&router, &"WATCH"[0: 5]);
     const unwatch: CommandInfo = try command_router_lookup(&router, &"UNWATCH"[0: 7]);
     const get: CommandInfo = try command_router_lookup(&router, &"GET"[0: 3]);
+    const incr: CommandInfo = try command_router_lookup(&router, &"INCR"[0: 4]);
+    const decr: CommandInfo = try command_router_lookup(&router, &"DECR"[0: 4]);
+    const incrby: CommandInfo = try command_router_lookup(&router, &"INCRBY"[0: 6]);
+    const decrby: CommandInfo = try command_router_lookup(&router, &"DECRBY"[0: 6]);
     const append: CommandInfo = try command_router_lookup(&router, &"APPEND"[0: 6]);
     const strlen: CommandInfo = try command_router_lookup(&router, &"STRLEN"[0: 6]);
     const getdel: CommandInfo = try command_router_lookup(&router, &"GETDEL"[0: 6]);
@@ -262,6 +282,10 @@ export fn test_command_router_arity_validation() !void {
     try command_validate_arity(&watch, 4);
     try command_validate_arity(&unwatch, 1);
     try command_validate_arity(&get, 2);
+    try command_validate_arity(&incr, 2);
+    try command_validate_arity(&decr, 2);
+    try command_validate_arity(&incrby, 3);
+    try command_validate_arity(&decrby, 3);
     try command_validate_arity(&append, 3);
     try command_validate_arity(&strlen, 2);
     try command_validate_arity(&getdel, 2);

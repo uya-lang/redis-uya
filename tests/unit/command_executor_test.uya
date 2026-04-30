@@ -780,11 +780,25 @@ export fn test_command_set_get_del_exists() !void {
     try assert_eq_i32(append_reply.integer as i32, 7);
     resp_value_free(&append_parsed.value);
 
+    var getrange_parsed: RespParseResult = try parse_resp2(&"*4\r\n$8\r\nGETRANGE\r\n$3\r\nkey\r\n$1\r\n1\r\n$1\r\n3\r\n"[0: 41]);
+    const getrange_command: Command = try command_executor_test_command(&router, &getrange_parsed);
+    const getrange_reply: CommandReply = command_execute_at(&engine, &getrange_command, 1000u64);
+    try assert_eq_i32(getrange_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(getrange_reply.data, &"alu"[0: 3]));
+    resp_value_free(&getrange_parsed.value);
+
+    var setrange_parsed: RespParseResult = try parse_resp2(&"*4\r\n$8\r\nSETRANGE\r\n$3\r\nkey\r\n$1\r\n5\r\n$2\r\n__\r\n"[0: 42]);
+    const setrange_command: Command = try command_executor_test_command(&router, &setrange_parsed);
+    const setrange_reply: CommandReply = command_execute_at(&engine, &setrange_command, 1000u64);
+    try assert_eq_i32(setrange_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(setrange_reply.integer as i32, 7);
+    resp_value_free(&setrange_parsed.value);
+
     var appended_get_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n"[0: 22]);
     const appended_get_command: Command = try command_executor_test_command(&router, &appended_get_parsed);
     const appended_get_reply: CommandReply = command_execute_at(&engine, &appended_get_command, 1000u64);
     try assert_eq_i32(appended_get_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
-    try assert_true(command_executor_test_slice_eq(appended_get_reply.data, &"value++"[0: 7]));
+    try assert_true(command_executor_test_slice_eq(appended_get_reply.data, &"value__"[0: 7]));
     resp_value_free(&appended_get_parsed.value);
 
     var getdel_set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$6\r\ngd-key\r\n$4\r\nonce\r\n"[0: 36]);
@@ -1411,6 +1425,12 @@ export fn test_command_error_paths() !void {
     const setex_bad_reply: CommandReply = command_execute_at(&engine, &setex_bad_command, 1000u64);
     try assert_eq_i32(setex_bad_reply.typ as i32, CommandReplyType.reply_error as i32);
     resp_value_free(&setex_bad_parsed.value);
+
+    var setrange_bad_parsed: RespParseResult = try parse_resp2(&"*4\r\n$8\r\nSETRANGE\r\n$3\r\nkey\r\n$2\r\n-1\r\n$1\r\nx\r\n"[0: 42]);
+    const setrange_bad_command: Command = try command_executor_test_command(&router, &setrange_bad_parsed);
+    const setrange_bad_reply: CommandReply = command_execute_at(&engine, &setrange_bad_command, 1000u64);
+    try assert_eq_i32(setrange_bad_reply.typ as i32, CommandReplyType.reply_error as i32);
+    resp_value_free(&setrange_bad_parsed.value);
 
     var save_parsed: RespParseResult = try parse_resp2(&"*1\r\n$4\r\nSAVE\r\n"[0: 14]);
     const save_command: Command = try command_executor_test_command(&router, &save_parsed);

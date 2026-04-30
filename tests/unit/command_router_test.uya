@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 58);
+    try assert_eq_i32(command_router_count(&router) as i32, 60);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -70,6 +70,14 @@ export fn test_command_router_lookup_and_case() !void {
     const msetnx: CommandInfo = try command_router_lookup(&router, &"MSETNX"[0: 6]);
     try assert_eq_i32(msetnx.cmd_type as i32, CommandType.command_msetnx as i32);
     try assert_eq_i32(msetnx.arity, -3);
+
+    const getrange: CommandInfo = try command_router_lookup(&router, &"GETRANGE"[0: 8]);
+    try assert_eq_i32(getrange.cmd_type as i32, CommandType.command_getrange as i32);
+    try assert_eq_i32(getrange.arity, 4);
+
+    const setrange: CommandInfo = try command_router_lookup(&router, &"setrange"[0: 8]);
+    try assert_eq_i32(setrange.cmd_type as i32, CommandType.command_setrange as i32);
+    try assert_eq_i32(setrange.arity, 4);
 
     const multi: CommandInfo = try command_router_lookup(&router, &"MULTI"[0: 5]);
     try assert_eq_i32(multi.cmd_type as i32, CommandType.command_multi as i32);
@@ -289,6 +297,8 @@ export fn test_command_router_arity_validation() !void {
     const mget: CommandInfo = try command_router_lookup(&router, &"MGET"[0: 4]);
     const mset: CommandInfo = try command_router_lookup(&router, &"MSET"[0: 4]);
     const msetnx: CommandInfo = try command_router_lookup(&router, &"MSETNX"[0: 6]);
+    const getrange: CommandInfo = try command_router_lookup(&router, &"GETRANGE"[0: 8]);
+    const setrange: CommandInfo = try command_router_lookup(&router, &"SETRANGE"[0: 8]);
     const hget: CommandInfo = try command_router_lookup(&router, &"HGET"[0: 4]);
     const hset: CommandInfo = try command_router_lookup(&router, &"HSET"[0: 4]);
     const set: CommandInfo = try command_router_lookup(&router, &"SET"[0: 3]);
@@ -355,6 +365,8 @@ export fn test_command_router_arity_validation() !void {
     try command_validate_arity(&mset, 5);
     try command_validate_arity(&msetnx, 3);
     try command_validate_arity(&msetnx, 5);
+    try command_validate_arity(&getrange, 4);
+    try command_validate_arity(&setrange, 4);
     try command_validate_arity(&hget, 3);
     try command_validate_arity(&hset, 4);
     try command_validate_arity(&set, 3);

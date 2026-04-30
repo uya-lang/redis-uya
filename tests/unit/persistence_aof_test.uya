@@ -112,6 +112,16 @@ export fn test_aof_connection_append_and_replay_set() !void {
         1000u64,
     );
     try assert_true(aof_test_slice_eq(out[0: append_result.response_len], &":7\r\n"[0: 4]));
+    const setrange_result: ConnectionProcessResult = try connection_process_input_with_aof_at(
+        &engine,
+        &router,
+        &writer,
+        &"*4\r\n$8\r\nSETRANGE\r\n$3\r\nkey\r\n$1\r\n5\r\n$2\r\n__\r\n"[0: 42],
+        &out[0],
+        256,
+        1000u64,
+    );
+    try assert_true(aof_test_slice_eq(out[0: setrange_result.response_len], &":7\r\n"[0: 4]));
     const mset_result: ConnectionProcessResult = try connection_process_input_with_aof_at(
         &engine,
         &router,
@@ -138,7 +148,7 @@ export fn test_aof_connection_append_and_replay_set() !void {
     var replay_engine: Engine = engine_new();
     try aof_replay_file_at(path, &replay_engine, &router, 2000u64);
     const found: &RedisObject = try lookup_key_at(&replay_engine, &"key"[0: 3], 2000u64);
-    try assert_true(aof_test_slice_eq(found.value.buf[0: found.value.len], &"value++"[0: 7]));
+    try assert_true(aof_test_slice_eq(found.value.buf[0: found.value.len], &"value__"[0: 7]));
     const found_k1: &RedisObject = try lookup_key_at(&replay_engine, &"k1"[0: 2], 2000u64);
     try assert_true(aof_test_slice_eq(found_k1.value.buf[0: found_k1.value.len], &"v1"[0: 2]));
     const found_k2: &RedisObject = try lookup_key_at(&replay_engine, &"k2"[0: 2], 2000u64);

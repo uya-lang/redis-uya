@@ -263,6 +263,36 @@ MSETNX key value [key value ...]
 - 所有 key 都不存在并完成写入：`1`
 - 任一 key 已存在：`0`
 
+### `GETRANGE`
+
+格式：
+
+```text
+GETRANGE key start end
+```
+
+返回：
+
+- 返回闭区间 `[start, end]` 的子串，支持负索引
+- key 不存在或范围为空时返回空 Bulk String
+
+### `SETRANGE`
+
+格式：
+
+```text
+SETRANGE key offset value
+```
+
+返回：
+
+- 写入后的字符串长度，Integer
+
+说明：
+
+- `offset` 必须为非负整数
+- offset 超过当前长度时，中间空洞会用 `\\0` 填充
+
 ### `TYPE`
 
 格式：

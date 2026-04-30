@@ -157,9 +157,21 @@ if [[ "$APPEND_RESULT" != "7" ]]; then
     exit 1
 fi
 
+GETRANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" getrange key 1 3)"
+if [[ "$GETRANGE_RESULT" != "alu" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected getrange alu, got '$GETRANGE_RESULT'" >&2
+    exit 1
+fi
+
+SETRANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" setrange key 5 __)"
+if [[ "$SETRANGE_RESULT" != "7" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected setrange 7, got '$SETRANGE_RESULT'" >&2
+    exit 1
+fi
+
 GET_APPENDED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" get key)"
-if [[ "$GET_APPENDED_RESULT" != "value++" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected value++, got '$GET_APPENDED_RESULT'" >&2
+if [[ "$GET_APPENDED_RESULT" != "value__" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected value__, got '$GET_APPENDED_RESULT'" >&2
     exit 1
 fi
 

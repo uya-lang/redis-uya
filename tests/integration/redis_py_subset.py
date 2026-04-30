@@ -147,6 +147,14 @@ class RedisPySubsetClient:
             parts.append(value.encode())
         return int(self._request(*parts))
 
+    def getrange(self, key: str, start: int, stop: int) -> bytes:
+        result = self._request(b"GETRANGE", key.encode(), str(start).encode(), str(stop).encode())
+        assert isinstance(result, bytes)
+        return result
+
+    def setrange(self, key: str, offset: int, value: str) -> int:
+        return int(self._request(b"SETRANGE", key.encode(), str(offset).encode(), value.encode()))
+
     def append(self, key: str, value: str) -> int:
         return int(self._request(b"APPEND", key.encode(), value.encode()))
 
@@ -319,7 +327,9 @@ def run_smoke() -> None:
             assert client.msetnx({"mn1": "x", "mn3": "y"}) == 0
             assert client.strlen("key") == 5
             assert client.append("key", "++") == 7
-            assert client.get("key") == b"value++"
+            assert client.getrange("key", 1, 3) == b"alu"
+            assert client.setrange("key", 5, "__") == 7
+            assert client.get("key") == b"value__"
             assert client.set("gd-key", "once")
             assert client.getdel("gd-key") == b"once"
             assert client.getdel("gd-key") is None

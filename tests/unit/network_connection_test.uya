@@ -152,8 +152,14 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const append_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$6\r\nAPPEND\r\n$3\r\nkey\r\n$2\r\n++\r\n"[0: 33], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: append_result.response_len], &":7\r\n"[0: 4]));
 
+    const getrange_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$8\r\nGETRANGE\r\n$3\r\nkey\r\n$1\r\n1\r\n$1\r\n3\r\n"[0: 41], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: getrange_result.response_len], &"$3\r\nalu\r\n"[0: 9]));
+
+    const setrange_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$8\r\nSETRANGE\r\n$3\r\nkey\r\n$1\r\n5\r\n$2\r\n__\r\n"[0: 42], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: setrange_result.response_len], &":7\r\n"[0: 4]));
+
     const appended_get_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n"[0: 22], &out[0], 256, 1000u64);
-    try assert_true(network_connection_slice_eq(out[0: appended_get_result.response_len], &"$7\r\nvalue++\r\n"[0: 13]));
+    try assert_true(network_connection_slice_eq(out[0: appended_get_result.response_len], &"$7\r\nvalue__\r\n"[0: 13]));
 
     const getdel_set_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$3\r\nSET\r\n$6\r\ngd-key\r\n$4\r\nonce\r\n"[0: 36], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: getdel_set_result.response_len], &"+OK\r\n"[0: 5]));

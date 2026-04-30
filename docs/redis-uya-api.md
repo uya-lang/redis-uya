@@ -183,6 +183,49 @@ DECRBY key decrement
 - key 不存在时按 `0` 处理
 - key 必须持有可解析的十进制整数字符串，否则返回整数解析错误
 
+### `GETSET`
+
+格式：
+
+```text
+GETSET key value
+```
+
+返回：
+
+- key 不存在：Null Bulk，并写入新值
+- key 存在：返回旧值 Bulk String，并写入新值
+
+### `SETNX`
+
+格式：
+
+```text
+SETNX key value
+```
+
+返回：
+
+- 写入成功：`1`
+- key 已存在：`0`
+
+### `SETEX`
+
+格式：
+
+```text
+SETEX key seconds value
+```
+
+返回：
+
+- 成功：`+OK`
+
+说明：
+
+- 当前实现要求 `seconds > 0`
+- AOF 中会展开为 `SET` + 绝对 `PEXPIREAT`
+
 ### `TYPE`
 
 格式：

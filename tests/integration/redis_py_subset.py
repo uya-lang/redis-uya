@@ -119,6 +119,15 @@ class RedisPySubsetClient:
     def decrby(self, key: str, amount: int) -> int:
         return int(self._request(b"DECRBY", key.encode(), str(amount).encode()))
 
+    def getset(self, key: str, value: str) -> bytes | None:
+        return self._request(b"GETSET", key.encode(), value.encode())
+
+    def setnx(self, key: str, value: str) -> int:
+        return int(self._request(b"SETNX", key.encode(), value.encode()))
+
+    def setex(self, key: str, seconds: int, value: str) -> bool:
+        return self._request(b"SETEX", key.encode(), str(seconds).encode(), value.encode()) == "OK"
+
     def append(self, key: str, value: str) -> int:
         return int(self._request(b"APPEND", key.encode(), value.encode()))
 
@@ -280,6 +289,11 @@ def run_smoke() -> None:
             assert client.incrby("counter", 4) == 5
             assert client.decr("counter") == 4
             assert client.decrby("counter", 2) == 2
+            assert client.setnx("nx-key", "first") == 1
+            assert client.setnx("nx-key", "second") == 0
+            assert client.getset("gs-key", "first") is None
+            assert client.getset("gs-key", "second") == b"first"
+            assert client.setex("sx-key", 2, "value")
             assert client.strlen("key") == 5
             assert client.append("key", "++") == 7
             assert client.get("key") == b"value++"
@@ -287,6 +301,7 @@ def run_smoke() -> None:
             assert client.getdel("gd-key") == b"once"
             assert client.getdel("gd-key") is None
             assert client.delete("counter") == 1
+            assert client.delete("nx-key", "gs-key", "sx-key") == 3
             assert client.echo("hi") == b"hi"
             assert client.key_type("key") == "string"
             assert client.dbsize() == 1

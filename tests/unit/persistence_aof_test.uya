@@ -353,4 +353,30 @@ export fn test_aof_expire_replays_absolute_deadline() !void {
     engine_free(&replay_persist_engine);
     _ = unlink(persist_path);
     try assert_eq_i32(used_memory() as i32, 0);
+
+    const setex_path: &const byte = "build/test-aof-setex.aof";
+    _ = unlink(setex_path);
+
+    var setex_writer: AofWriter = try aof_open_truncate(setex_path);
+    var setex_engine: Engine = engine_new();
+    _ = try connection_process_input_with_aof_at(
+        &setex_engine,
+        &router,
+        &setex_writer,
+        &"*4\r\n$5\r\nSETEX\r\n$6\r\nsx-key\r\n$1\r\n2\r\n$5\r\nvalue\r\n"[0: 48],
+        &out[0],
+        256,
+        1000u64,
+    );
+    aof_close(&setex_writer);
+    engine_free(&setex_engine);
+
+    var replay_setex_engine: Engine = engine_new();
+    try aof_replay_file_at(setex_path, &replay_setex_engine, &router, 2000u64);
+    const live_setex: &RedisObject = try lookup_key_at(&replay_setex_engine, &"sx-key"[0: 6], 2000u64);
+    try assert_true(aof_test_slice_eq(live_setex.value.buf[0: live_setex.value.len], &"value"[0: 5]));
+    try assert_true(aof_key_missing_at(&replay_setex_engine, &"sx-key"[0: 6], 3500u64));
+    engine_free(&replay_setex_engine);
+    _ = unlink(setex_path);
+    try assert_eq_i32(used_memory() as i32, 0);
 }

@@ -23,6 +23,9 @@ export enum CommandType {
     command_decr,
     command_incrby,
     command_decrby,
+    command_getset,
+    command_setnx,
+    command_setex,
     command_append,
     command_strlen,
     command_getdel,
@@ -89,7 +92,7 @@ export const COMMAND_FLAG_READONLY: u64 = 1u64;
 export const COMMAND_FLAG_WRITE: u64 = 2u64;
 export const COMMAND_FLAG_FAST: u64 = 4u64;
 
-const MIN_COMMAND_COUNT: usize = 52;
+const MIN_COMMAND_COUNT: usize = 55;
 
 fn command_router_name_eq(a: &[byte], b: &[byte]) bool {
     return bytes_ascii_case_eq(a, b);
@@ -150,126 +153,135 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
         return command_router_info(CommandType.command_incrby, &"INCRBY"[0: 6], 3, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     if index == 11 {
-        return command_router_info(CommandType.command_decrby, &"DECRBY"[0: 6], 3, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+        return command_router_info(CommandType.command_getset, &"GETSET"[0: 6], 3, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     if index == 12 {
-        return command_router_info(CommandType.command_append, &"APPEND"[0: 6], 3, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+        return command_router_info(CommandType.command_setnx, &"SETNX"[0: 5], 3, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     if index == 13 {
-        return command_router_info(CommandType.command_strlen, &"STRLEN"[0: 6], 2, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
+        return command_router_info(CommandType.command_setex, &"SETEX"[0: 5], 4, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     if index == 14 {
-        return command_router_info(CommandType.command_getdel, &"GETDEL"[0: 6], 2, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+        return command_router_info(CommandType.command_decrby, &"DECRBY"[0: 6], 3, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     if index == 15 {
-        return command_router_info(CommandType.command_type, &"TYPE"[0: 4], 2, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
+        return command_router_info(CommandType.command_append, &"APPEND"[0: 6], 3, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     if index == 16 {
-        return command_router_info(CommandType.command_lpop, &"LPOP"[0: 4], 2, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+        return command_router_info(CommandType.command_strlen, &"STRLEN"[0: 6], 2, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     if index == 17 {
-        return command_router_info(CommandType.command_lpush, &"LPUSH"[0: 5], -3, COMMAND_FLAG_WRITE, 1, 1, 1);
+        return command_router_info(CommandType.command_getdel, &"GETDEL"[0: 6], 2, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     if index == 18 {
-        return command_router_info(CommandType.command_lrange, &"LRANGE"[0: 6], 4, COMMAND_FLAG_READONLY, 1, 1, 1);
+        return command_router_info(CommandType.command_type, &"TYPE"[0: 4], 2, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     if index == 19 {
-        return command_router_info(CommandType.command_sadd, &"SADD"[0: 4], -3, COMMAND_FLAG_WRITE, 1, 1, 1);
+        return command_router_info(CommandType.command_lpop, &"LPOP"[0: 4], 2, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     if index == 20 {
-        return command_router_info(CommandType.command_smembers, &"SMEMBERS"[0: 8], 2, COMMAND_FLAG_READONLY, 1, 1, 1);
+        return command_router_info(CommandType.command_lpush, &"LPUSH"[0: 5], -3, COMMAND_FLAG_WRITE, 1, 1, 1);
     }
     if index == 21 {
-        return command_router_info(CommandType.command_srem, &"SREM"[0: 4], -3, COMMAND_FLAG_WRITE, 1, 1, 1);
+        return command_router_info(CommandType.command_lrange, &"LRANGE"[0: 6], 4, COMMAND_FLAG_READONLY, 1, 1, 1);
     }
     if index == 22 {
-        return command_router_info(CommandType.command_zadd, &"ZADD"[0: 4], -4, COMMAND_FLAG_WRITE, 1, 1, 1);
+        return command_router_info(CommandType.command_sadd, &"SADD"[0: 4], -3, COMMAND_FLAG_WRITE, 1, 1, 1);
     }
     if index == 23 {
-        return command_router_info(CommandType.command_zrange, &"ZRANGE"[0: 6], 4, COMMAND_FLAG_READONLY, 1, 1, 1);
+        return command_router_info(CommandType.command_smembers, &"SMEMBERS"[0: 8], 2, COMMAND_FLAG_READONLY, 1, 1, 1);
     }
     if index == 24 {
-        return command_router_info(CommandType.command_zrem, &"ZREM"[0: 4], -3, COMMAND_FLAG_WRITE, 1, 1, 1);
+        return command_router_info(CommandType.command_srem, &"SREM"[0: 4], -3, COMMAND_FLAG_WRITE, 1, 1, 1);
     }
     if index == 25 {
-        return command_router_info(CommandType.command_set, &"SET"[0: 3], -3, COMMAND_FLAG_WRITE, 1, 1, 1);
+        return command_router_info(CommandType.command_zadd, &"ZADD"[0: 4], -4, COMMAND_FLAG_WRITE, 1, 1, 1);
     }
     if index == 26 {
-        return command_router_info(CommandType.command_hget, &"HGET"[0: 4], 3, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
+        return command_router_info(CommandType.command_zrange, &"ZRANGE"[0: 6], 4, COMMAND_FLAG_READONLY, 1, 1, 1);
     }
     if index == 27 {
-        return command_router_info(CommandType.command_hset, &"HSET"[0: 4], 4, COMMAND_FLAG_WRITE, 1, 1, 1);
+        return command_router_info(CommandType.command_zrem, &"ZREM"[0: 4], -3, COMMAND_FLAG_WRITE, 1, 1, 1);
     }
     if index == 28 {
-        return command_router_info(CommandType.command_del, &"DEL"[0: 3], -2, COMMAND_FLAG_WRITE, 1, -1, 1);
+        return command_router_info(CommandType.command_set, &"SET"[0: 3], -3, COMMAND_FLAG_WRITE, 1, 1, 1);
     }
     if index == 29 {
-        return command_router_info(CommandType.command_exists, &"EXISTS"[0: 6], -2, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, -1, 1);
+        return command_router_info(CommandType.command_hget, &"HGET"[0: 4], 3, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     if index == 30 {
-        return command_router_info(CommandType.command_dbsize, &"DBSIZE"[0: 6], 1, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 0, 0, 0);
+        return command_router_info(CommandType.command_hset, &"HSET"[0: 4], 4, COMMAND_FLAG_WRITE, 1, 1, 1);
     }
     if index == 31 {
-        return command_router_info(CommandType.command_expire, &"EXPIRE"[0: 6], 3, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+        return command_router_info(CommandType.command_del, &"DEL"[0: 3], -2, COMMAND_FLAG_WRITE, 1, -1, 1);
     }
     if index == 32 {
-        return command_router_info(CommandType.command_pexpire, &"PEXPIRE"[0: 7], 3, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+        return command_router_info(CommandType.command_exists, &"EXISTS"[0: 6], -2, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, -1, 1);
     }
     if index == 33 {
-        return command_router_info(CommandType.command_persist, &"PERSIST"[0: 7], 2, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+        return command_router_info(CommandType.command_dbsize, &"DBSIZE"[0: 6], 1, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 0, 0, 0);
     }
     if index == 34 {
-        return command_router_info(CommandType.command_pexpireat, &"PEXPIREAT"[0: 9], 3, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+        return command_router_info(CommandType.command_expire, &"EXPIRE"[0: 6], 3, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     if index == 35 {
-        return command_router_info(CommandType.command_pttl, &"PTTL"[0: 4], 2, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
+        return command_router_info(CommandType.command_pexpire, &"PEXPIRE"[0: 7], 3, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     if index == 36 {
-        return command_router_info(CommandType.command_ttl, &"TTL"[0: 3], 2, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
+        return command_router_info(CommandType.command_persist, &"PERSIST"[0: 7], 2, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     if index == 37 {
-        return command_router_info(CommandType.command_scan, &"SCAN"[0: 4], -2, COMMAND_FLAG_READONLY, 0, 0, 0);
+        return command_router_info(CommandType.command_pexpireat, &"PEXPIREAT"[0: 9], 3, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     if index == 38 {
-        return command_router_info(CommandType.command_save, &"SAVE"[0: 4], 1, COMMAND_FLAG_READONLY, 0, 0, 0);
+        return command_router_info(CommandType.command_pttl, &"PTTL"[0: 4], 2, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     if index == 39 {
-        return command_router_info(CommandType.command_bgsave, &"BGSAVE"[0: 6], 1, COMMAND_FLAG_READONLY, 0, 0, 0);
+        return command_router_info(CommandType.command_ttl, &"TTL"[0: 3], 2, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     if index == 40 {
-        return command_router_info(CommandType.command_bgrewriteaof, &"BGREWRITEAOF"[0: 12], 1, COMMAND_FLAG_READONLY, 0, 0, 0);
+        return command_router_info(CommandType.command_scan, &"SCAN"[0: 4], -2, COMMAND_FLAG_READONLY, 0, 0, 0);
     }
     if index == 41 {
-        return command_router_info(CommandType.command_replicaof, &"REPLICAOF"[0: 9], 3, COMMAND_FLAG_READONLY, 0, 0, 0);
+        return command_router_info(CommandType.command_save, &"SAVE"[0: 4], 1, COMMAND_FLAG_READONLY, 0, 0, 0);
     }
     if index == 42 {
-        return command_router_info(CommandType.command_psync, &"PSYNC"[0: 5], 3, COMMAND_FLAG_READONLY, 0, 0, 0);
+        return command_router_info(CommandType.command_bgsave, &"BGSAVE"[0: 6], 1, COMMAND_FLAG_READONLY, 0, 0, 0);
     }
     if index == 43 {
-        return command_router_info(CommandType.command_config, &"CONFIG"[0: 6], -2, COMMAND_FLAG_READONLY, 0, 0, 0);
+        return command_router_info(CommandType.command_bgrewriteaof, &"BGREWRITEAOF"[0: 12], 1, COMMAND_FLAG_READONLY, 0, 0, 0);
     }
     if index == 44 {
-        return command_router_info(CommandType.command_client, &"CLIENT"[0: 6], -2, COMMAND_FLAG_FAST, 0, 0, 0);
+        return command_router_info(CommandType.command_replicaof, &"REPLICAOF"[0: 9], 3, COMMAND_FLAG_READONLY, 0, 0, 0);
     }
     if index == 45 {
-        return command_router_info(CommandType.command_info, &"INFO"[0: 4], -1, COMMAND_FLAG_READONLY, 0, 0, 0);
+        return command_router_info(CommandType.command_psync, &"PSYNC"[0: 5], 3, COMMAND_FLAG_READONLY, 0, 0, 0);
     }
     if index == 46 {
-        return command_router_info(CommandType.command_quit, &"QUIT"[0: 4], 1, COMMAND_FLAG_FAST, 0, 0, 0);
+        return command_router_info(CommandType.command_config, &"CONFIG"[0: 6], -2, COMMAND_FLAG_READONLY, 0, 0, 0);
     }
     if index == 47 {
-        return command_router_info(CommandType.command_hello, &"HELLO"[0: 5], -1, COMMAND_FLAG_FAST, 0, 0, 0);
+        return command_router_info(CommandType.command_client, &"CLIENT"[0: 6], -2, COMMAND_FLAG_FAST, 0, 0, 0);
     }
     if index == 48 {
-        return command_router_info(CommandType.command_subscribe, &"SUBSCRIBE"[0: 9], -2, COMMAND_FLAG_FAST, 0, 0, 0);
+        return command_router_info(CommandType.command_info, &"INFO"[0: 4], -1, COMMAND_FLAG_READONLY, 0, 0, 0);
     }
     if index == 49 {
-        return command_router_info(CommandType.command_unsubscribe, &"UNSUBSCRIBE"[0: 11], -1, COMMAND_FLAG_FAST, 0, 0, 0);
+        return command_router_info(CommandType.command_quit, &"QUIT"[0: 4], 1, COMMAND_FLAG_FAST, 0, 0, 0);
     }
     if index == 50 {
-        return command_router_info(CommandType.command_publish, &"PUBLISH"[0: 7], 3, COMMAND_FLAG_FAST, 0, 0, 0);
+        return command_router_info(CommandType.command_hello, &"HELLO"[0: 5], -1, COMMAND_FLAG_FAST, 0, 0, 0);
     }
     if index == 51 {
+        return command_router_info(CommandType.command_subscribe, &"SUBSCRIBE"[0: 9], -2, COMMAND_FLAG_FAST, 0, 0, 0);
+    }
+    if index == 52 {
+        return command_router_info(CommandType.command_unsubscribe, &"UNSUBSCRIBE"[0: 11], -1, COMMAND_FLAG_FAST, 0, 0, 0);
+    }
+    if index == 53 {
+        return command_router_info(CommandType.command_publish, &"PUBLISH"[0: 7], 3, COMMAND_FLAG_FAST, 0, 0, 0);
+    }
+    if index == 54 {
         return command_router_info(CommandType.command_cluster, &"CLUSTER"[0: 7], -2, COMMAND_FLAG_READONLY, 0, 0, 0);
     }
     return error.CommandUnknown;

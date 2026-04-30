@@ -259,6 +259,20 @@ fn aof_sds_append_absolute_pexpireat(s: &Sds, key: &[byte], expire_at_ms: u64) !
     try aof_sds_append_bulk_u64(s, expire_at_ms);
 }
 
+fn aof_append_set_command(aof: &AofWriter, key: &[byte], value: &[byte]) !void {
+    try aof_append_raw(aof, &"*3\r\n"[0: 4]);
+    try aof_append_bulk(aof, &"SET"[0: 3]);
+    try aof_append_bulk(aof, key);
+    try aof_append_bulk(aof, value);
+}
+
+fn aof_sds_append_set_command(s: &Sds, key: &[byte], value: &[byte]) !void {
+    try aof_sds_append(s, &"*3\r\n"[0: 4]);
+    try aof_sds_append_bulk(s, &"SET"[0: 3]);
+    try aof_sds_append_bulk(s, key);
+    try aof_sds_append_bulk(s, value);
+}
+
 fn aof_append_expire_as_pexpireat(aof: &AofWriter, command: &Command, now_ms: u64) !void {
     const key: &[byte] = command_arg_data(command, 1) catch {
         return error.AofInvalidCommand;
@@ -305,6 +319,36 @@ fn aof_sds_append_relative_pexpire_as_pexpireat(s: &Sds, command: &Command, now_
     try aof_sds_append_absolute_pexpireat(s, key, now_ms + milliseconds);
 }
 
+fn aof_append_setex_as_set_and_pexpireat(aof: &AofWriter, command: &Command, now_ms: u64) !void {
+    const key: &[byte] = command_arg_data(command, 1) catch {
+        return error.AofInvalidCommand;
+    };
+    const seconds_data: &[byte] = command_arg_data(command, 2) catch {
+        return error.AofInvalidCommand;
+    };
+    const value: &[byte] = command_arg_data(command, 3) catch {
+        return error.AofInvalidCommand;
+    };
+    const seconds: u64 = try aof_parse_u64(seconds_data);
+    try aof_append_set_command(aof, key, value);
+    try aof_append_absolute_pexpireat(aof, key, now_ms + seconds * 1000u64);
+}
+
+fn aof_sds_append_setex_as_set_and_pexpireat(s: &Sds, command: &Command, now_ms: u64) !void {
+    const key: &[byte] = command_arg_data(command, 1) catch {
+        return error.AofInvalidCommand;
+    };
+    const seconds_data: &[byte] = command_arg_data(command, 2) catch {
+        return error.AofInvalidCommand;
+    };
+    const value: &[byte] = command_arg_data(command, 3) catch {
+        return error.AofInvalidCommand;
+    };
+    const seconds: u64 = try aof_parse_u64(seconds_data);
+    try aof_sds_append_set_command(s, key, value);
+    try aof_sds_append_absolute_pexpireat(s, key, now_ms + seconds * 1000u64);
+}
+
 export fn aof_append_command_at(aof: &AofWriter, command: &Command, raw: &[byte], now_ms: u64) !void {
     if command.info.cmd_type == CommandType.command_expire {
         try aof_append_expire_as_pexpireat(aof, command, now_ms);
@@ -312,6 +356,10 @@ export fn aof_append_command_at(aof: &AofWriter, command: &Command, raw: &[byte]
     }
     if command.info.cmd_type == CommandType.command_pexpire {
         try aof_append_relative_pexpire_as_pexpireat(aof, command, now_ms);
+        return;
+    }
+    if command.info.cmd_type == CommandType.command_setex {
+        try aof_append_setex_as_set_and_pexpireat(aof, command, now_ms);
         return;
     }
     try aof_append_raw(aof, raw);
@@ -324,6 +372,10 @@ export fn aof_append_command_to_sds_at(buf: &Sds, command: &Command, raw: &[byte
     }
     if command.info.cmd_type == CommandType.command_pexpire {
         try aof_sds_append_relative_pexpire_as_pexpireat(buf, command, now_ms);
+        return;
+    }
+    if command.info.cmd_type == CommandType.command_setex {
+        try aof_sds_append_setex_as_set_and_pexpireat(buf, command, now_ms);
         return;
     }
     try aof_sds_append(buf, raw);

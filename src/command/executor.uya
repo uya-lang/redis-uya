@@ -343,6 +343,12 @@ fn command_executor_growth_write_command(command: &Command) bool {
     if cmd_type == CommandType.command_set {
         return command.argc == 3;
     }
+    if cmd_type == CommandType.command_getset || cmd_type == CommandType.command_setnx {
+        return command.argc == 3;
+    }
+    if cmd_type == CommandType.command_setex {
+        return command.argc == 4;
+    }
     if cmd_type == CommandType.command_lpush {
         return command.argc >= 3;
     }
@@ -682,6 +688,18 @@ fn command_executor_string_counter_apply(engine: &Engine, key: &[byte], delta: i
     return command_executor_set_integer_string(engine, key, next, now_ms);
 }
 
+fn command_executor_store_string(engine: &Engine, key: &[byte], value: &[byte], now_ms: u64) CommandReply {
+    const obj: &RedisObject = create_string_object(value) catch {
+        return command_executor_oom();
+    };
+    _ = set_key_at(engine, key, obj, now_ms) catch {
+        object_free(obj);
+        return command_executor_oom();
+    };
+    _ = clear_key_expire(engine, key);
+    return command_executor_simple(&"OK"[0: 2]);
+}
+
 fn command_executor_key_exists(engine: &Engine, key: &[byte], now_ms: u64) bool {
     const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
         return false;
@@ -787,6 +805,88 @@ fn command_executor_decrby(engine: &Engine, command: &Command, now_ms: u64) Comm
         return command_executor_invalid_integer();
     };
     return command_executor_string_counter_apply(engine, key, 0 - delta, now_ms);
+}
+
+fn command_executor_getset(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 3 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const value: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+
+    const existing: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+        const set_reply: CommandReply = command_executor_store_string(engine, key, value, now_ms);
+        if set_reply.typ == CommandReplyType.reply_error {
+            return set_reply;
+        }
+        return command_executor_null_bulk();
+    };
+    const old_value: &[byte] = command_executor_string_value(existing) catch {
+        return command_executor_wrongtype();
+    };
+    var reply: CommandReply = command_executor_owned_bulk_copy(old_value);
+    if reply.typ == CommandReplyType.reply_error {
+        return reply;
+    }
+    const set_reply: CommandReply = command_executor_store_string(engine, key, value, now_ms);
+    if set_reply.typ == CommandReplyType.reply_error {
+        command_reply_cleanup(&reply);
+        return set_reply;
+    }
+    return reply;
+}
+
+fn command_executor_setnx(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 3 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const value: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    if command_executor_key_exists(engine, key, now_ms) {
+        return command_executor_integer(0);
+    }
+    const set_reply: CommandReply = command_executor_store_string(engine, key, value, now_ms);
+    if set_reply.typ == CommandReplyType.reply_error {
+        return set_reply;
+    }
+    return command_executor_integer(1);
+}
+
+fn command_executor_setex(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 4 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const seconds_data: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    const value: &[byte] = command_executor_arg(command, 3) catch {
+        return command_executor_wrong_arity();
+    };
+    const seconds: i64 = command_executor_parse_i64(seconds_data) catch {
+        return command_executor_invalid_integer();
+    };
+    if seconds <= 0 {
+        return command_executor_invalid_integer();
+    }
+    const set_reply: CommandReply = command_executor_store_string(engine, key, value, now_ms);
+    if set_reply.typ == CommandReplyType.reply_error {
+        return set_reply;
+    }
+    _ = set_key_expire_at(engine, key, now_ms + (seconds as u64) * 1000u64) catch {
+        return command_executor_oom();
+    };
+    return command_executor_simple(&"OK"[0: 2]);
 }
 
 fn command_executor_append(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
@@ -1364,15 +1464,7 @@ fn command_executor_set(engine: &Engine, command: &Command, now_ms: u64) Command
     const value: &[byte] = command_executor_arg(command, 2) catch {
         return command_executor_wrong_arity();
     };
-    const obj: &RedisObject = create_string_object(value) catch {
-        return command_executor_oom();
-    };
-    _ = set_key_at(engine, key, obj, now_ms) catch {
-        object_free(obj);
-        return command_executor_oom();
-    };
-    _ = clear_key_expire(engine, key);
-    return command_executor_simple(&"OK"[0: 2]);
+    return command_executor_store_string(engine, key, value, now_ms);
 }
 
 fn command_executor_del(engine: &Engine, command: &Command) CommandReply {
@@ -2462,6 +2554,15 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_decrby {
         return command_executor_decrby(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_getset {
+        return command_executor_getset(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_setnx {
+        return command_executor_setnx(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_setex {
+        return command_executor_setex(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_append {
         return command_executor_append(engine, command, now_ms);

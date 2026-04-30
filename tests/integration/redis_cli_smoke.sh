@@ -91,6 +91,36 @@ if [[ "$DECRBY_RESULT" != "2" ]]; then
     exit 1
 fi
 
+SETNX_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" setnx nx-key first)"
+if [[ "$SETNX_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected setnx 1, got '$SETNX_RESULT'" >&2
+    exit 1
+fi
+
+SETNX_DUP_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" setnx nx-key second)"
+if [[ "$SETNX_DUP_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected setnx duplicate 0, got '$SETNX_DUP_RESULT'" >&2
+    exit 1
+fi
+
+GETSET_MISSING_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" getset gs-key first)"
+if [[ -n "$GETSET_MISSING_RESULT" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected empty output on missing GETSET, got '$GETSET_MISSING_RESULT'" >&2
+    exit 1
+fi
+
+GETSET_EXISTING_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" getset gs-key second)"
+if [[ "$GETSET_EXISTING_RESULT" != "first" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected GETSET first, got '$GETSET_EXISTING_RESULT'" >&2
+    exit 1
+fi
+
+SETEX_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" setex sx-key 2 value)"
+if [[ "$SETEX_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SETEX OK, got '$SETEX_RESULT'" >&2
+    exit 1
+fi
+
 STRLEN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" strlen key)"
 if [[ "$STRLEN_RESULT" != "5" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected strlen 5, got '$STRLEN_RESULT'" >&2
@@ -130,6 +160,12 @@ fi
 COUNTER_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del counter)"
 if [[ "$COUNTER_DEL_RESULT" != "1" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected counter DEL 1, got '$COUNTER_DEL_RESULT'" >&2
+    exit 1
+fi
+
+TEMP_STRING_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del nx-key gs-key sx-key)"
+if [[ "$TEMP_STRING_DEL_RESULT" != "3" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected temp string DEL 3, got '$TEMP_STRING_DEL_RESULT'" >&2
     exit 1
 fi
 

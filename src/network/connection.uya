@@ -360,6 +360,33 @@ fn connection_append_reply_sds(buf: &Sds, reply: &CommandReply, protocol_version
         try connection_append_bulk_node_sds(buf, reply.array_head, reply.array_count);
         return;
     }
+    if reply.typ == CommandReplyType.reply_array_nullable_bulk {
+        try sds_cat(buf, &"*"[0: 1]);
+        try connection_sds_append_u64(buf, reply.array_count as u64);
+        try sds_cat(buf, &"\r\n"[0: 2]);
+        var node_nullable: &ListNode = reply.array_head;
+        var count_nullable: usize = 0;
+        while node_nullable != null && count_nullable < reply.array_count {
+            const is_null: bool = count_nullable < reply.data.len && reply.data.ptr[count_nullable] != 0 as byte;
+            if is_null {
+                if protocol_version == 3 {
+                    try sds_cat(buf, &"_\r\n"[0: 3]);
+                } else {
+                    try sds_cat(buf, &"$-1\r\n"[0: 5]);
+                }
+            } else {
+                const data_nullable: &[byte] = node_nullable.value.value.buf[0: node_nullable.value.value.len];
+                try sds_cat(buf, &"$"[0: 1]);
+                try connection_sds_append_u64(buf, data_nullable.len as u64);
+                try sds_cat(buf, &"\r\n"[0: 2]);
+                try sds_cat(buf, data_nullable);
+                try sds_cat(buf, &"\r\n"[0: 2]);
+            }
+            node_nullable = node_nullable.next;
+            count_nullable = count_nullable + 1;
+        }
+        return;
+    }
     if reply.typ == CommandReplyType.reply_scan {
         try sds_cat(buf, &"*2\r\n"[0: 4]);
         try sds_cat(buf, &"$"[0: 1]);
@@ -1034,6 +1061,34 @@ export fn connection_encode_reply_with_protocol(reply: &CommandReply, out: &byte
             try connection_append_crlf(out, out_cap, &pos);
             node = node.next;
             count = count + 1;
+        }
+        return pos;
+    }
+    if reply.typ == CommandReplyType.reply_array_nullable_bulk {
+        try connection_append_byte(out, out_cap, &pos, 42 as byte);
+        try connection_append_u64(out, out_cap, &pos, reply.array_count as u64);
+        try connection_append_crlf(out, out_cap, &pos);
+
+        var node_nullable: &ListNode = reply.array_head;
+        var count_nullable: usize = 0;
+        while node_nullable != null && count_nullable < reply.array_count {
+            const is_null: bool = count_nullable < reply.data.len && reply.data.ptr[count_nullable] != 0 as byte;
+            if is_null {
+                if protocol_version == 3 {
+                    try connection_append_bytes(out, out_cap, &pos, &"_\r\n"[0: 3]);
+                } else {
+                    try connection_append_bytes(out, out_cap, &pos, &"$-1\r\n"[0: 5]);
+                }
+            } else {
+                const data_nullable: &[byte] = node_nullable.value.value.buf[0: node_nullable.value.value.len];
+                try connection_append_byte(out, out_cap, &pos, 36 as byte);
+                try connection_append_u64(out, out_cap, &pos, data_nullable.len as u64);
+                try connection_append_crlf(out, out_cap, &pos);
+                try connection_append_bytes(out, out_cap, &pos, data_nullable);
+                try connection_append_crlf(out, out_cap, &pos);
+            }
+            node_nullable = node_nullable.next;
+            count_nullable = count_nullable + 1;
         }
         return pos;
     }

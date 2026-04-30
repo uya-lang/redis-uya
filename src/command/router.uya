@@ -66,6 +66,9 @@ export enum CommandType {
     command_unsubscribe,
     command_publish,
     command_cluster,
+    command_mget,
+    command_mset,
+    command_msetnx,
 }
 
 export struct CommandInfo {
@@ -92,7 +95,7 @@ export const COMMAND_FLAG_READONLY: u64 = 1u64;
 export const COMMAND_FLAG_WRITE: u64 = 2u64;
 export const COMMAND_FLAG_FAST: u64 = 4u64;
 
-const MIN_COMMAND_COUNT: usize = 55;
+const MIN_COMMAND_COUNT: usize = 58;
 
 fn command_router_name_eq(a: &[byte], b: &[byte]) bool {
     return bytes_ascii_case_eq(a, b);
@@ -283,6 +286,15 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
     }
     if index == 54 {
         return command_router_info(CommandType.command_cluster, &"CLUSTER"[0: 7], -2, COMMAND_FLAG_READONLY, 0, 0, 0);
+    }
+    if index == 55 {
+        return command_router_info(CommandType.command_mget, &"MGET"[0: 4], -2, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, -1, 1);
+    }
+    if index == 56 {
+        return command_router_info(CommandType.command_mset, &"MSET"[0: 4], -3, COMMAND_FLAG_WRITE, 1, -1, 2);
+    }
+    if index == 57 {
+        return command_router_info(CommandType.command_msetnx, &"MSETNX"[0: 6], -3, COMMAND_FLAG_WRITE, 1, -1, 2);
     }
     return error.CommandUnknown;
 }

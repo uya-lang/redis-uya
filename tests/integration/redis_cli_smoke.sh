@@ -121,6 +121,30 @@ if [[ "$SETEX_RESULT" != "OK" ]]; then
     exit 1
 fi
 
+MSET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" mset mk1 v1 mk2 v2)"
+if [[ "$MSET_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected MSET OK, got '$MSET_RESULT'" >&2
+    exit 1
+fi
+
+MGET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" mget mk1 missing mk2)"
+if [[ "$MGET_RESULT" != $'v1\n\nv2' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected MGET output, got '$MGET_RESULT'" >&2
+    exit 1
+fi
+
+MSETNX_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" msetnx mn1 a mn2 b)"
+if [[ "$MSETNX_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected MSETNX 1, got '$MSETNX_RESULT'" >&2
+    exit 1
+fi
+
+MSETNX_CONFLICT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" msetnx mn1 x mn3 y)"
+if [[ "$MSETNX_CONFLICT_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected MSETNX conflict 0, got '$MSETNX_CONFLICT_RESULT'" >&2
+    exit 1
+fi
+
 STRLEN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" strlen key)"
 if [[ "$STRLEN_RESULT" != "5" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected strlen 5, got '$STRLEN_RESULT'" >&2
@@ -166,6 +190,12 @@ fi
 TEMP_STRING_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del nx-key gs-key sx-key)"
 if [[ "$TEMP_STRING_DEL_RESULT" != "3" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected temp string DEL 3, got '$TEMP_STRING_DEL_RESULT'" >&2
+    exit 1
+fi
+
+TEMP_MULTI_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del mk1 mk2 mn1 mn2)"
+if [[ "$TEMP_MULTI_DEL_RESULT" != "4" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected temp multi DEL 4, got '$TEMP_MULTI_DEL_RESULT'" >&2
     exit 1
 fi
 

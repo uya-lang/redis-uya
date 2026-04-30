@@ -226,6 +226,43 @@ SETEX key seconds value
 - 当前实现要求 `seconds > 0`
 - AOF 中会展开为 `SET` + 绝对 `PEXPIREAT`
 
+### `MGET`
+
+格式：
+
+```text
+MGET key [key ...]
+```
+
+返回：
+
+- RESP Array，按请求顺序返回每个 key 的值或 Null Bulk
+
+### `MSET`
+
+格式：
+
+```text
+MSET key value [key value ...]
+```
+
+返回：
+
+- 成功：`+OK`
+
+### `MSETNX`
+
+格式：
+
+```text
+MSETNX key value [key value ...]
+```
+
+返回：
+
+- 所有 key 都不存在并完成写入：`1`
+- 任一 key 已存在：`0`
+
 ### `TYPE`
 
 格式：

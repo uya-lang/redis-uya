@@ -116,6 +116,21 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const decrby_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$6\r\nDECRBY\r\n$7\r\ncounter\r\n$1\r\n2\r\n"[0: 38], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: decrby_result.response_len], &":2\r\n"[0: 4]));
 
+    const mset_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$4\r\nMSET\r\n$2\r\nk1\r\n$2\r\nv1\r\n$2\r\nk2\r\n$2\r\nv2\r\n"[0: 46], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: mset_result.response_len], &"+OK\r\n"[0: 5]));
+
+    const mget_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$4\r\nMGET\r\n$2\r\nk1\r\n$7\r\nmissing\r\n$2\r\nk2\r\n"[0: 43], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: mget_result.response_len], &"*3\r\n$2\r\nv1\r\n$-1\r\n$2\r\nv2\r\n"[0: 25]));
+
+    const msetnx_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$6\r\nMSETNX\r\n$3\r\nnx1\r\n$1\r\na\r\n$3\r\nnx2\r\n$1\r\nb\r\n"[0: 48], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: msetnx_result.response_len], &":1\r\n"[0: 4]));
+
+    const msetnx_conflict_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$6\r\nMSETNX\r\n$3\r\nnx1\r\n$1\r\nx\r\n$3\r\nnx3\r\n$1\r\ny\r\n"[0: 48], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: msetnx_conflict_result.response_len], &":0\r\n"[0: 4]));
+
+    const mset_cleanup_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$3\r\nDEL\r\n$2\r\nk1\r\n$2\r\nk2\r\n$3\r\nnx1\r\n$3\r\nnx2\r\n"[0: 47], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: mset_cleanup_result.response_len], &":4\r\n"[0: 4]));
+
     const setnx_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$5\r\nSETNX\r\n$6\r\nnx-key\r\n$5\r\nfirst\r\n"[0: 40], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: setnx_result.response_len], &":1\r\n"[0: 4]));
 
@@ -128,7 +143,7 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const getset_existing_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$6\r\nGETSET\r\n$6\r\ngs-key\r\n$6\r\nsecond\r\n"[0: 43], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: getset_existing_result.response_len], &"$5\r\nfirst\r\n"[0: 11]));
 
-    const setex_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$5\r\nSETEX\r\n$6\r\nsx-key\r\n$1\r\n2\r\n$5\r\nvalue\r\n"[0: 48], &out[0], 256, 1000u64);
+    const setex_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$5\r\nSETEX\r\n$6\r\nsx-key\r\n$1\r\n2\r\n$5\r\nvalue\r\n"[0: 45], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: setex_result.response_len], &"+OK\r\n"[0: 5]));
 
     const strlen_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$6\r\nSTRLEN\r\n$3\r\nkey\r\n"[0: 25], &out[0], 256, 1000u64);

@@ -128,6 +128,25 @@ class RedisPySubsetClient:
     def setex(self, key: str, seconds: int, value: str) -> bool:
         return self._request(b"SETEX", key.encode(), str(seconds).encode(), value.encode()) == "OK"
 
+    def mget(self, *keys: str) -> list[bytes | None]:
+        result = self._request(b"MGET", *(key.encode() for key in keys))
+        assert isinstance(result, list)
+        return result
+
+    def mset(self, mapping: dict[str, str]) -> bool:
+        parts: list[bytes] = [b"MSET"]
+        for key, value in mapping.items():
+            parts.append(key.encode())
+            parts.append(value.encode())
+        return self._request(*parts) == "OK"
+
+    def msetnx(self, mapping: dict[str, str]) -> int:
+        parts: list[bytes] = [b"MSETNX"]
+        for key, value in mapping.items():
+            parts.append(key.encode())
+            parts.append(value.encode())
+        return int(self._request(*parts))
+
     def append(self, key: str, value: str) -> int:
         return int(self._request(b"APPEND", key.encode(), value.encode()))
 
@@ -294,6 +313,10 @@ def run_smoke() -> None:
             assert client.getset("gs-key", "first") is None
             assert client.getset("gs-key", "second") == b"first"
             assert client.setex("sx-key", 2, "value")
+            assert client.mset({"mk1": "v1", "mk2": "v2"})
+            assert client.mget("mk1", "missing", "mk2") == [b"v1", None, b"v2"]
+            assert client.msetnx({"mn1": "a", "mn2": "b"}) == 1
+            assert client.msetnx({"mn1": "x", "mn3": "y"}) == 0
             assert client.strlen("key") == 5
             assert client.append("key", "++") == 7
             assert client.get("key") == b"value++"
@@ -301,7 +324,7 @@ def run_smoke() -> None:
             assert client.getdel("gd-key") == b"once"
             assert client.getdel("gd-key") is None
             assert client.delete("counter") == 1
-            assert client.delete("nx-key", "gs-key", "sx-key") == 3
+            assert client.delete("nx-key", "gs-key", "sx-key", "mk1", "mk2", "mn1", "mn2") == 7
             assert client.echo("hi") == b"hi"
             assert client.key_type("key") == "string"
             assert client.dbsize() == 1

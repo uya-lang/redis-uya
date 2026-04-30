@@ -106,6 +106,7 @@ export enum CommandReplyType {
     reply_bulk_string,
     reply_null_bulk,
     reply_array_bulk,
+    reply_array_nullable_bulk,
     reply_scan,
     reply_raw_bytes,
 }
@@ -118,6 +119,7 @@ export struct CommandReply {
     array_head: &ListNode,
     array_count: usize,
     owned_object: &RedisObject,
+    owned_aux_object: &RedisObject,
     request_replicaof: bool,
     replicaof_promote: bool,
     replicaof_host: [byte: 64],
@@ -174,6 +176,10 @@ fn command_executor_empty_slice() &[byte] {
     return (null as &byte)[0: 0];
 }
 
+fn command_executor_dummy_object() &RedisObject {
+    return null as &RedisObject;
+}
+
 fn command_executor_reply(typ: CommandReplyType, data: &[byte], integer: i64) CommandReply {
     return CommandReply{
         typ: typ,
@@ -183,6 +189,7 @@ fn command_executor_reply(typ: CommandReplyType, data: &[byte], integer: i64) Co
         array_head: null as &ListNode,
         array_count: 0,
         owned_object: null as &RedisObject,
+        owned_aux_object: null as &RedisObject,
         request_replicaof: false,
         replicaof_promote: false,
         replicaof_host: [],
@@ -216,6 +223,15 @@ fn command_executor_array_bulk(head: &ListNode, count: usize) CommandReply {
     var reply: CommandReply = command_executor_reply(CommandReplyType.reply_array_bulk, command_executor_empty_slice(), 0);
     reply.array_head = head;
     reply.array_count = count;
+    return reply;
+}
+
+fn command_executor_nullable_array_bulk(head: &ListNode, count: usize, null_map_obj: &RedisObject) CommandReply {
+    var reply: CommandReply = command_executor_reply(CommandReplyType.reply_array_nullable_bulk, command_executor_empty_slice(), 0);
+    reply.array_head = head;
+    reply.array_count = count;
+    reply.data = null_map_obj.value.buf[0: null_map_obj.value.len];
+    reply.owned_aux_object = null_map_obj;
     return reply;
 }
 
@@ -349,6 +365,9 @@ fn command_executor_growth_write_command(command: &Command) bool {
     if cmd_type == CommandType.command_setex {
         return command.argc == 4;
     }
+    if cmd_type == CommandType.command_mset || cmd_type == CommandType.command_msetnx {
+        return command.argc >= 3;
+    }
     if cmd_type == CommandType.command_lpush {
         return command.argc >= 3;
     }
@@ -378,11 +397,36 @@ fn command_executor_memory_fits(maxmemory: usize, growth: usize) bool {
     return growth <= maxmemory - current;
 }
 
+fn command_executor_write_is_noop(engine: &Engine, command: &Command, now_ms: u64) bool {
+    if command.info.cmd_type == CommandType.command_setnx {
+        const key: &[byte] = command_executor_arg(command, 1) catch {
+            return false;
+        };
+        return command_executor_key_exists(engine, key, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_msetnx {
+        var index: usize = 1;
+        while index < command.argc {
+            const key: &[byte] = command_executor_arg(command, index) catch {
+                return false;
+            };
+            if command_executor_key_exists(engine, key, now_ms) {
+                return true;
+            }
+            index = index + 2;
+        }
+    }
+    return false;
+}
+
 fn command_executor_prepare_maxmemory(engine: &Engine, runtime: &CommandRuntimeInfo, command: &Command, now_ms: u64) bool {
     if runtime.config.maxmemory == 0 {
         return true;
     }
     if !command_executor_growth_write_command(command) {
+        return true;
+    }
+    if command_executor_write_is_noop(engine, command, now_ms) {
         return true;
     }
 
@@ -887,6 +931,121 @@ fn command_executor_setex(engine: &Engine, command: &Command, now_ms: u64) Comma
         return command_executor_oom();
     };
     return command_executor_simple(&"OK"[0: 2]);
+}
+
+fn command_executor_mget(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 2 {
+        return command_executor_wrong_arity();
+    }
+    const reply_list: &RedisObject = create_list_object() catch {
+        return command_executor_oom();
+    };
+    var null_map: Sds = sds_empty() catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&null_map);
+    }
+
+    var index: usize = 1;
+    while index < command.argc {
+        const key: &[byte] = command_executor_arg(command, index) catch {
+            object_free(reply_list);
+            return command_executor_wrong_arity();
+        };
+        const existing: &RedisObject = command_executor_lookup_key_now_or_null(engine, key, now_ms);
+        if existing == null {
+            var zero_flag: [byte: 1] = [];
+            zero_flag[0] = 1 as byte;
+            _ = list_object_push_tail(reply_list, command_executor_empty_slice()) catch {
+                object_free(reply_list);
+                return command_executor_oom();
+            };
+            _ = sds_cat(&null_map, zero_flag[0: 1]) catch {
+                object_free(reply_list);
+                return command_executor_oom();
+            };
+            index = index + 1;
+            continue;
+        }
+        const value: &[byte] = command_executor_string_value(existing) catch {
+            object_free(reply_list);
+            return command_executor_wrongtype();
+        };
+        var one_flag: [byte: 1] = [];
+        one_flag[0] = 0 as byte;
+        _ = list_object_push_tail(reply_list, value) catch {
+            object_free(reply_list);
+            return command_executor_oom();
+        };
+        _ = sds_cat(&null_map, one_flag[0: 1]) catch {
+            object_free(reply_list);
+            return command_executor_oom();
+        };
+        index = index + 1;
+    }
+
+    const null_map_obj: &RedisObject = create_string_object(null_map.buf[0: null_map.len]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    var reply: CommandReply = command_executor_nullable_array_bulk(reply_list.list_head, command.argc - 1, null_map_obj);
+    reply.owned_object = reply_list;
+    return reply;
+}
+
+fn command_executor_mset(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 3 || ((command.argc - 1) % (2 as usize)) != 0 {
+        return command_executor_wrong_arity();
+    }
+    var index: usize = 1;
+    while index + 1 < command.argc {
+        const key: &[byte] = command_executor_arg(command, index) catch {
+            return command_executor_wrong_arity();
+        };
+        const value: &[byte] = command_executor_arg(command, index + 1) catch {
+            return command_executor_wrong_arity();
+        };
+        const set_reply: CommandReply = command_executor_store_string(engine, key, value, now_ms);
+        if set_reply.typ == CommandReplyType.reply_error {
+            return set_reply;
+        }
+        index = index + 2;
+    }
+    return command_executor_simple(&"OK"[0: 2]);
+}
+
+fn command_executor_msetnx(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 3 || ((command.argc - 1) % (2 as usize)) != 0 {
+        return command_executor_wrong_arity();
+    }
+    var index_check: usize = 1;
+    while index_check < command.argc {
+        const key_check: &[byte] = command_executor_arg(command, index_check) catch {
+            return command_executor_wrong_arity();
+        };
+        if command_executor_key_exists(engine, key_check, now_ms) {
+            return command_executor_integer(0);
+        }
+        index_check = index_check + 2;
+    }
+
+    var index: usize = 1;
+    while index + 1 < command.argc {
+        const key: &[byte] = command_executor_arg(command, index) catch {
+            return command_executor_wrong_arity();
+        };
+        const value: &[byte] = command_executor_arg(command, index + 1) catch {
+            return command_executor_wrong_arity();
+        };
+        const set_reply: CommandReply = command_executor_store_string(engine, key, value, now_ms);
+        if set_reply.typ == CommandReplyType.reply_error {
+            return set_reply;
+        }
+        index = index + 2;
+    }
+    return command_executor_integer(1);
 }
 
 fn command_executor_append(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
@@ -2522,6 +2681,10 @@ export fn command_reply_cleanup(reply: &CommandReply) void {
         object_free(reply.owned_object);
         reply.owned_object = null as &RedisObject;
     }
+    if reply.owned_aux_object != null {
+        object_free(reply.owned_aux_object);
+        reply.owned_aux_object = null as &RedisObject;
+    }
 }
 
 export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRuntimeInfo, command: &Command, now_ms: u64) CommandReply {
@@ -2563,6 +2726,15 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_setex {
         return command_executor_setex(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_mget {
+        return command_executor_mget(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_mset {
+        return command_executor_mset(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_msetnx {
+        return command_executor_msetnx(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_append {
         return command_executor_append(engine, command, now_ms);

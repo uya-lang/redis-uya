@@ -112,6 +112,26 @@ export fn test_aof_connection_append_and_replay_set() !void {
         1000u64,
     );
     try assert_true(aof_test_slice_eq(out[0: append_result.response_len], &":7\r\n"[0: 4]));
+    const mset_result: ConnectionProcessResult = try connection_process_input_with_aof_at(
+        &engine,
+        &router,
+        &writer,
+        &"*5\r\n$4\r\nMSET\r\n$2\r\nk1\r\n$2\r\nv1\r\n$2\r\nk2\r\n$2\r\nv2\r\n"[0: 46],
+        &out[0],
+        256,
+        1000u64,
+    );
+    try assert_true(aof_test_slice_eq(out[0: mset_result.response_len], &"+OK\r\n"[0: 5]));
+    const msetnx_result: ConnectionProcessResult = try connection_process_input_with_aof_at(
+        &engine,
+        &router,
+        &writer,
+        &"*5\r\n$6\r\nMSETNX\r\n$3\r\nnx1\r\n$1\r\na\r\n$3\r\nnx2\r\n$1\r\nb\r\n"[0: 48],
+        &out[0],
+        256,
+        1000u64,
+    );
+    try assert_true(aof_test_slice_eq(out[0: msetnx_result.response_len], &":1\r\n"[0: 4]));
     aof_close(&writer);
     engine_free(&engine);
 
@@ -119,6 +139,14 @@ export fn test_aof_connection_append_and_replay_set() !void {
     try aof_replay_file_at(path, &replay_engine, &router, 2000u64);
     const found: &RedisObject = try lookup_key_at(&replay_engine, &"key"[0: 3], 2000u64);
     try assert_true(aof_test_slice_eq(found.value.buf[0: found.value.len], &"value++"[0: 7]));
+    const found_k1: &RedisObject = try lookup_key_at(&replay_engine, &"k1"[0: 2], 2000u64);
+    try assert_true(aof_test_slice_eq(found_k1.value.buf[0: found_k1.value.len], &"v1"[0: 2]));
+    const found_k2: &RedisObject = try lookup_key_at(&replay_engine, &"k2"[0: 2], 2000u64);
+    try assert_true(aof_test_slice_eq(found_k2.value.buf[0: found_k2.value.len], &"v2"[0: 2]));
+    const found_nx1: &RedisObject = try lookup_key_at(&replay_engine, &"nx1"[0: 3], 2000u64);
+    try assert_true(aof_test_slice_eq(found_nx1.value.buf[0: found_nx1.value.len], &"a"[0: 1]));
+    const found_nx2: &RedisObject = try lookup_key_at(&replay_engine, &"nx2"[0: 3], 2000u64);
+    try assert_true(aof_test_slice_eq(found_nx2.value.buf[0: found_nx2.value.len], &"b"[0: 1]));
     engine_free(&replay_engine);
     _ = unlink(path);
     try assert_eq_i32(used_memory() as i32, 0);
@@ -363,7 +391,7 @@ export fn test_aof_expire_replays_absolute_deadline() !void {
         &setex_engine,
         &router,
         &setex_writer,
-        &"*4\r\n$5\r\nSETEX\r\n$6\r\nsx-key\r\n$1\r\n2\r\n$5\r\nvalue\r\n"[0: 48],
+        &"*4\r\n$5\r\nSETEX\r\n$6\r\nsx-key\r\n$1\r\n2\r\n$5\r\nvalue\r\n"[0: 45],
         &out[0],
         256,
         1000u64,

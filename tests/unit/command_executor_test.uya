@@ -658,6 +658,7 @@ export fn test_command_set_get_del_exists() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();
     var engine: Engine = engine_new();
+    var out: [byte: 256] = [];
 
     var set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 33]);
     const set_command: Command = try command_executor_test_command(&router, &set_parsed);
@@ -672,6 +673,42 @@ export fn test_command_set_get_del_exists() !void {
     try assert_eq_i32(get_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
     try assert_true(command_executor_test_slice_eq(get_reply.data, &"value"[0: 5]));
     resp_value_free(&get_parsed.value);
+
+    var mset_parsed: RespParseResult = try parse_resp2(&"*5\r\n$4\r\nMSET\r\n$2\r\nk1\r\n$2\r\nv1\r\n$2\r\nk2\r\n$2\r\nv2\r\n"[0: 46]);
+    const mset_command: Command = try command_executor_test_command(&router, &mset_parsed);
+    const mset_reply: CommandReply = command_execute_at(&engine, &mset_command, 1000u64);
+    try assert_eq_i32(mset_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(mset_reply.data, &"OK"[0: 2]));
+    resp_value_free(&mset_parsed.value);
+
+    var mget_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nMGET\r\n$2\r\nk1\r\n$7\r\nmissing\r\n$2\r\nk2\r\n"[0: 43]);
+    const mget_command: Command = try command_executor_test_command(&router, &mget_parsed);
+    var mget_reply: CommandReply = command_execute_at(&engine, &mget_command, 1000u64);
+    const mget_len: usize = try connection_encode_reply(&mget_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: mget_len], &"*3\r\n$2\r\nv1\r\n$-1\r\n$2\r\nv2\r\n"[0: 25]));
+    command_reply_cleanup(&mget_reply);
+    resp_value_free(&mget_parsed.value);
+
+    var msetnx_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nMSETNX\r\n$3\r\nnx1\r\n$1\r\na\r\n$3\r\nnx2\r\n$1\r\nb\r\n"[0: 48]);
+    const msetnx_command: Command = try command_executor_test_command(&router, &msetnx_parsed);
+    const msetnx_reply: CommandReply = command_execute_at(&engine, &msetnx_command, 1000u64);
+    try assert_eq_i32(msetnx_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(msetnx_reply.integer as i32, 1);
+    resp_value_free(&msetnx_parsed.value);
+
+    var msetnx_conflict_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nMSETNX\r\n$3\r\nnx1\r\n$1\r\nx\r\n$3\r\nnx3\r\n$1\r\ny\r\n"[0: 48]);
+    const msetnx_conflict_command: Command = try command_executor_test_command(&router, &msetnx_conflict_parsed);
+    const msetnx_conflict_reply: CommandReply = command_execute_at(&engine, &msetnx_conflict_command, 1000u64);
+    try assert_eq_i32(msetnx_conflict_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(msetnx_conflict_reply.integer as i32, 0);
+    resp_value_free(&msetnx_conflict_parsed.value);
+
+    var multi_del_parsed: RespParseResult = try parse_resp2(&"*5\r\n$3\r\nDEL\r\n$2\r\nk1\r\n$2\r\nk2\r\n$3\r\nnx1\r\n$3\r\nnx2\r\n"[0: 47]);
+    const multi_del_command: Command = try command_executor_test_command(&router, &multi_del_parsed);
+    const multi_del_reply: CommandReply = command_execute_at(&engine, &multi_del_command, 1000u64);
+    try assert_eq_i32(multi_del_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(multi_del_reply.integer as i32, 4);
+    resp_value_free(&multi_del_parsed.value);
 
     var incr_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nINCR\r\n$7\r\ncounter\r\n"[0: 28]);
     const incr_command: Command = try command_executor_test_command(&router, &incr_parsed);
@@ -1270,7 +1307,7 @@ export fn test_command_expire_and_ttl() !void {
     try assert_eq_i32(persisted_pttl_reply.integer as i32, -1);
     resp_value_free(&persisted_pttl_parsed.value);
 
-    var setex_parsed: RespParseResult = try parse_resp2(&"*4\r\n$5\r\nSETEX\r\n$6\r\nsx-key\r\n$1\r\n2\r\n$5\r\nvalue\r\n"[0: 48]);
+    var setex_parsed: RespParseResult = try parse_resp2(&"*4\r\n$5\r\nSETEX\r\n$6\r\nsx-key\r\n$1\r\n2\r\n$5\r\nvalue\r\n"[0: 45]);
     const setex_command: Command = try command_executor_test_command(&router, &setex_parsed);
     const setex_reply: CommandReply = command_execute_at(&engine, &setex_command, 7000u64);
     try assert_eq_i32(setex_reply.typ as i32, CommandReplyType.reply_simple_string as i32);

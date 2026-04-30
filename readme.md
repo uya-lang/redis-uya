@@ -247,6 +247,7 @@ build/redis-uya 6380 1
 - String 第一批增强：`APPEND`、`STRLEN`、`GETDEL`
 - String 第二批计数：`INCR`、`DECR`、`INCRBY`、`DECRBY`
 - String 第三批原子写入：`GETSET`、`SETNX`、`SETEX`
+- String 第四批多 key：`MGET`、`MSET`、`MSETNX`
 - Key/Server 第一批：`ECHO`、`TYPE`、`DBSIZE`
 - Key/Server 第二批：`PEXPIRE`、`PERSIST`、`PTTL`
 - AOF append/replay、RDB 子集、`SAVE`、`BGSAVE`、`BGREWRITEAOF`

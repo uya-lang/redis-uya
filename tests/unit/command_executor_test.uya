@@ -673,6 +673,40 @@ export fn test_command_set_get_del_exists() !void {
     try assert_true(command_executor_test_slice_eq(get_reply.data, &"value"[0: 5]));
     resp_value_free(&get_parsed.value);
 
+    var strlen_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nSTRLEN\r\n$3\r\nkey\r\n"[0: 25]);
+    const strlen_command: Command = try command_executor_test_command(&router, &strlen_parsed);
+    const strlen_reply: CommandReply = command_execute_at(&engine, &strlen_command, 1000u64);
+    try assert_eq_i32(strlen_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(strlen_reply.integer as i32, 5);
+    resp_value_free(&strlen_parsed.value);
+
+    var append_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nAPPEND\r\n$3\r\nkey\r\n$2\r\n++\r\n"[0: 33]);
+    const append_command: Command = try command_executor_test_command(&router, &append_parsed);
+    const append_reply: CommandReply = command_execute_at(&engine, &append_command, 1000u64);
+    try assert_eq_i32(append_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(append_reply.integer as i32, 7);
+    resp_value_free(&append_parsed.value);
+
+    var appended_get_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n"[0: 22]);
+    const appended_get_command: Command = try command_executor_test_command(&router, &appended_get_parsed);
+    const appended_get_reply: CommandReply = command_execute_at(&engine, &appended_get_command, 1000u64);
+    try assert_eq_i32(appended_get_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(appended_get_reply.data, &"value++"[0: 7]));
+    resp_value_free(&appended_get_parsed.value);
+
+    var getdel_set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$6\r\ngd-key\r\n$4\r\nonce\r\n"[0: 36]);
+    const getdel_set_command: Command = try command_executor_test_command(&router, &getdel_set_parsed);
+    _ = command_execute_at(&engine, &getdel_set_command, 1000u64);
+    resp_value_free(&getdel_set_parsed.value);
+
+    var getdel_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nGETDEL\r\n$6\r\ngd-key\r\n"[0: 28]);
+    const getdel_command: Command = try command_executor_test_command(&router, &getdel_parsed);
+    var getdel_reply: CommandReply = command_execute_at(&engine, &getdel_command, 1000u64);
+    try assert_eq_i32(getdel_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(getdel_reply.data, &"once"[0: 4]));
+    command_reply_cleanup(&getdel_reply);
+    resp_value_free(&getdel_parsed.value);
+
     var echo_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nECHO\r\n$2\r\nhi\r\n"[0: 22]);
     const echo_command: Command = try command_executor_test_command(&router, &echo_parsed);
     const echo_reply: CommandReply = command_execute_at(&engine, &echo_command, 1000u64);
@@ -713,6 +747,12 @@ export fn test_command_set_get_del_exists() !void {
     const missing_get_reply: CommandReply = command_execute_at(&engine, &missing_get_command, 1000u64);
     try assert_eq_i32(missing_get_reply.typ as i32, CommandReplyType.reply_null_bulk as i32);
     resp_value_free(&missing_get_parsed.value);
+
+    var missing_getdel_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nGETDEL\r\n$6\r\ngd-key\r\n"[0: 28]);
+    const missing_getdel_command: Command = try command_executor_test_command(&router, &missing_getdel_parsed);
+    const missing_getdel_reply: CommandReply = command_execute_at(&engine, &missing_getdel_command, 1000u64);
+    try assert_eq_i32(missing_getdel_reply.typ as i32, CommandReplyType.reply_null_bulk as i32);
+    resp_value_free(&missing_getdel_parsed.value);
 
     var missing_type_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nTYPE\r\n$3\r\nkey\r\n"[0: 23]);
     const missing_type_command: Command = try command_executor_test_command(&router, &missing_type_parsed);

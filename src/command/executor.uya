@@ -455,6 +455,13 @@ fn command_executor_owned_bulk(obj: &RedisObject) CommandReply {
     return reply;
 }
 
+fn command_executor_owned_bulk_copy(data: &[byte]) CommandReply {
+    const obj: &RedisObject = create_string_object(data) catch {
+        return command_executor_oom();
+    };
+    return command_executor_owned_bulk(obj);
+}
+
 fn command_executor_owned_raw(data: &[byte]) CommandReply {
     const obj: &RedisObject = create_string_object(data) catch {
         return command_executor_oom();
@@ -677,6 +684,88 @@ fn command_executor_get(engine: &Engine, command: &Command, now_ms: u64) Command
         return command_executor_wrongtype();
     };
     return command_executor_bulk(data);
+}
+
+fn command_executor_append(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 3 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const suffix: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+
+    const existing: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+        const new_obj: &RedisObject = create_string_object(suffix) catch {
+            return command_executor_oom();
+        };
+        _ = set_key_at(engine, key, new_obj, now_ms) catch {
+            object_free(new_obj);
+            return command_executor_oom();
+        };
+        return command_executor_integer(suffix.len as i64);
+    };
+
+    const current: &[byte] = command_executor_string_value(existing) catch {
+        return command_executor_wrongtype();
+    };
+    var combined: Sds = sds_new(current) catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&combined);
+    }
+    _ = sds_cat(&combined, suffix) catch {
+        return command_executor_oom();
+    };
+
+    const new_obj: &RedisObject = create_string_object(combined.buf[0: combined.len]) catch {
+        return command_executor_oom();
+    };
+    _ = set_key_at(engine, key, new_obj, now_ms) catch {
+        object_free(new_obj);
+        return command_executor_oom();
+    };
+    return command_executor_integer(combined.len as i64);
+}
+
+fn command_executor_strlen(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 2 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+        return command_executor_integer(0);
+    };
+    const data: &[byte] = command_executor_string_value(obj) catch {
+        return command_executor_wrongtype();
+    };
+    return command_executor_integer(data.len as i64);
+}
+
+fn command_executor_getdel(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 2 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+        return command_executor_null_bulk();
+    };
+    const data: &[byte] = command_executor_string_value(obj) catch {
+        return command_executor_wrongtype();
+    };
+    var reply: CommandReply = command_executor_owned_bulk_copy(data);
+    if reply.typ == CommandReplyType.reply_error {
+        return reply;
+    }
+    _ = delete_key(engine, key);
+    return reply;
 }
 
 fn command_executor_type(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
@@ -2258,6 +2347,15 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_get {
         return command_executor_get(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_append {
+        return command_executor_append(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_strlen {
+        return command_executor_strlen(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_getdel {
+        return command_executor_getdel(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_type {
         return command_executor_type(engine, command, now_ms);

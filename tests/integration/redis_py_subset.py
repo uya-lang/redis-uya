@@ -107,6 +107,15 @@ class RedisPySubsetClient:
     def get(self, key: str) -> bytes | None:
         return self._request(b"GET", key.encode())
 
+    def append(self, key: str, value: str) -> int:
+        return int(self._request(b"APPEND", key.encode(), value.encode()))
+
+    def strlen(self, key: str) -> int:
+        return int(self._request(b"STRLEN", key.encode()))
+
+    def getdel(self, key: str) -> bytes | None:
+        return self._request(b"GETDEL", key.encode())
+
     def key_type(self, key: str) -> str:
         result = self._request(b"TYPE", key.encode())
         assert isinstance(result, str)
@@ -255,6 +264,12 @@ def run_smoke() -> None:
             assert client.ping()
             assert client.set("key", "value")
             assert client.get("key") == b"value"
+            assert client.strlen("key") == 5
+            assert client.append("key", "++") == 7
+            assert client.get("key") == b"value++"
+            assert client.set("gd-key", "once")
+            assert client.getdel("gd-key") == b"once"
+            assert client.getdel("gd-key") is None
             assert client.echo("hi") == b"hi"
             assert client.key_type("key") == "string"
             assert client.dbsize() == 1

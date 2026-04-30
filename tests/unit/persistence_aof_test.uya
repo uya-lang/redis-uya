@@ -102,13 +102,23 @@ export fn test_aof_connection_append_and_replay_set() !void {
         1000u64,
     );
     try assert_true(aof_test_slice_eq(out[0: result.response_len], &"+OK\r\n"[0: 5]));
+    const append_result: ConnectionProcessResult = try connection_process_input_with_aof_at(
+        &engine,
+        &router,
+        &writer,
+        &"*3\r\n$6\r\nAPPEND\r\n$3\r\nkey\r\n$2\r\n++\r\n"[0: 33],
+        &out[0],
+        256,
+        1000u64,
+    );
+    try assert_true(aof_test_slice_eq(out[0: append_result.response_len], &":7\r\n"[0: 4]));
     aof_close(&writer);
     engine_free(&engine);
 
     var replay_engine: Engine = engine_new();
     try aof_replay_file_at(path, &replay_engine, &router, 2000u64);
     const found: &RedisObject = try lookup_key_at(&replay_engine, &"key"[0: 3], 2000u64);
-    try assert_true(aof_test_slice_eq(found.value.buf[0: found.value.len], &"value"[0: 5]));
+    try assert_true(aof_test_slice_eq(found.value.buf[0: found.value.len], &"value++"[0: 7]));
     engine_free(&replay_engine);
     _ = unlink(path);
     try assert_eq_i32(used_memory() as i32, 0);
@@ -121,7 +131,7 @@ export fn test_aof_replay_set_then_del() !void {
 
     var writer: AofWriter = try aof_open_truncate(path);
     try aof_append_raw(&writer, &"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 33]);
-    try aof_append_raw(&writer, &"*2\r\n$3\r\nDEL\r\n$3\r\nkey\r\n"[0: 22]);
+    try aof_append_raw(&writer, &"*2\r\n$6\r\nGETDEL\r\n$3\r\nkey\r\n"[0: 25]);
     aof_close(&writer);
 
     const router: CommandRouter = command_router_new();

@@ -67,6 +67,42 @@ if [[ "$GET_RESULT" != "value" ]]; then
     exit 1
 fi
 
+STRLEN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" strlen key)"
+if [[ "$STRLEN_RESULT" != "5" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected strlen 5, got '$STRLEN_RESULT'" >&2
+    exit 1
+fi
+
+APPEND_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" append key ++)"
+if [[ "$APPEND_RESULT" != "7" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected append result 7, got '$APPEND_RESULT'" >&2
+    exit 1
+fi
+
+GET_APPENDED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" get key)"
+if [[ "$GET_APPENDED_RESULT" != "value++" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected value++, got '$GET_APPENDED_RESULT'" >&2
+    exit 1
+fi
+
+GETDEL_SET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" set gd-key once)"
+if [[ "$GETDEL_SET_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected OK on gd-key SET, got '$GETDEL_SET_RESULT'" >&2
+    exit 1
+fi
+
+GETDEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" getdel gd-key)"
+if [[ "$GETDEL_RESULT" != "once" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected GETDEL once, got '$GETDEL_RESULT'" >&2
+    exit 1
+fi
+
+GETDEL_MISSING_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" getdel gd-key)"
+if [[ -n "$GETDEL_MISSING_RESULT" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected empty output on missing GETDEL, got '$GETDEL_MISSING_RESULT'" >&2
+    exit 1
+fi
+
 ECHO_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" echo hi)"
 if [[ "$ECHO_RESULT" != "hi" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected hi, got '$ECHO_RESULT'" >&2

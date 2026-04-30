@@ -15,6 +15,7 @@ use libc.S_IWUSR;
 use src.command.executor.CommandReply;
 use src.command.executor.CommandReplyType;
 use src.command.executor.command_execute_at;
+use src.command.executor.command_reply_cleanup;
 use src.command.router.Command;
 use src.command.router.CommandRouter;
 use src.command.router.CommandType;
@@ -363,9 +364,11 @@ export fn aof_replay_buffer_at(engine: &Engine, router: &CommandRouter, data: &[
         // AOF replay must preserve command order semantics even when absolute
         // deadlines are already in the past. Expiration is enforced later on
         // lookup/cron with real time.
-        const reply: CommandReply = command_execute_at(engine, &command, 0u64);
+        var reply: CommandReply = command_execute_at(engine, &command, 0u64);
         resp_value_free(&parsed.value);
-        if reply.typ == CommandReplyType.reply_error {
+        const failed: bool = reply.typ == CommandReplyType.reply_error;
+        command_reply_cleanup(&reply);
+        if failed {
             return error.AofReplayCommandFailed;
         }
 
@@ -420,9 +423,11 @@ export fn aof_replay_file_at(path: &const byte, engine: &Engine, router: &Comman
                 return error.AofInvalidCommand;
             };
 
-            const reply: CommandReply = command_execute_at(engine, &command, 0u64);
+            var reply: CommandReply = command_execute_at(engine, &command, 0u64);
             resp_value_free(&parsed.value);
-            if reply.typ == CommandReplyType.reply_error {
+            const failed: bool = reply.typ == CommandReplyType.reply_error;
+            command_reply_cleanup(&reply);
+            if failed {
                 return error.AofReplayCommandFailed;
             }
 

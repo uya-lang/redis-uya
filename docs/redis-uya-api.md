@@ -88,6 +88,48 @@ GET key
 - 命中：Bulk String
 - 不存在：Null Bulk
 
+### `APPEND`
+
+格式：
+
+```text
+APPEND key value
+```
+
+返回：
+
+- 追加后的字符串长度，Integer
+
+语义：
+
+- key 不存在时按空字符串处理并创建新 key
+
+### `STRLEN`
+
+格式：
+
+```text
+STRLEN key
+```
+
+返回：
+
+- key 不存在：`0`
+- 否则返回字符串字节长度
+
+### `GETDEL`
+
+格式：
+
+```text
+GETDEL key
+```
+
+返回：
+
+- 命中：返回旧值 Bulk String，并删除 key
+- 不存在：Null Bulk
+
 ### `TYPE`
 
 格式：

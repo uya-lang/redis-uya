@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 45);
+    try assert_eq_i32(command_router_count(&router) as i32, 48);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -82,6 +82,18 @@ export fn test_command_router_lookup_and_case() !void {
     const get: CommandInfo = try command_router_lookup(&router, &"get"[0: 3]);
     try assert_eq_i32(get.cmd_type as i32, CommandType.command_get as i32);
     try assert_eq_i32(get.arity, 2);
+
+    const append: CommandInfo = try command_router_lookup(&router, &"APPEND"[0: 6]);
+    try assert_eq_i32(append.cmd_type as i32, CommandType.command_append as i32);
+    try assert_eq_i32(append.arity, 3);
+
+    const strlen: CommandInfo = try command_router_lookup(&router, &"strlen"[0: 6]);
+    try assert_eq_i32(strlen.cmd_type as i32, CommandType.command_strlen as i32);
+    try assert_eq_i32(strlen.arity, 2);
+
+    const getdel: CommandInfo = try command_router_lookup(&router, &"GETDEL"[0: 6]);
+    try assert_eq_i32(getdel.cmd_type as i32, CommandType.command_getdel as i32);
+    try assert_eq_i32(getdel.arity, 2);
 
     const type_info: CommandInfo = try command_router_lookup(&router, &"TYPE"[0: 4]);
     try assert_eq_i32(type_info.cmd_type as i32, CommandType.command_type as i32);
@@ -204,6 +216,9 @@ export fn test_command_router_arity_validation() !void {
     const watch: CommandInfo = try command_router_lookup(&router, &"WATCH"[0: 5]);
     const unwatch: CommandInfo = try command_router_lookup(&router, &"UNWATCH"[0: 7]);
     const get: CommandInfo = try command_router_lookup(&router, &"GET"[0: 3]);
+    const append: CommandInfo = try command_router_lookup(&router, &"APPEND"[0: 6]);
+    const strlen: CommandInfo = try command_router_lookup(&router, &"STRLEN"[0: 6]);
+    const getdel: CommandInfo = try command_router_lookup(&router, &"GETDEL"[0: 6]);
     const echo: CommandInfo = try command_router_lookup(&router, &"ECHO"[0: 4]);
     const type_info: CommandInfo = try command_router_lookup(&router, &"TYPE"[0: 4]);
     const lpop: CommandInfo = try command_router_lookup(&router, &"LPOP"[0: 4]);
@@ -247,6 +262,9 @@ export fn test_command_router_arity_validation() !void {
     try command_validate_arity(&watch, 4);
     try command_validate_arity(&unwatch, 1);
     try command_validate_arity(&get, 2);
+    try command_validate_arity(&append, 3);
+    try command_validate_arity(&strlen, 2);
+    try command_validate_arity(&getdel, 2);
     try command_validate_arity(&echo, 2);
     try command_validate_arity(&type_info, 2);
     try command_validate_arity(&lpop, 2);

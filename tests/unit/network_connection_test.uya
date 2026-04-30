@@ -104,6 +104,21 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const get_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n"[0: 22], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: get_result.response_len], &"$5\r\nvalue\r\n"[0: 11]));
 
+    const strlen_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$6\r\nSTRLEN\r\n$3\r\nkey\r\n"[0: 25], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: strlen_result.response_len], &":5\r\n"[0: 4]));
+
+    const append_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$6\r\nAPPEND\r\n$3\r\nkey\r\n$2\r\n++\r\n"[0: 33], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: append_result.response_len], &":7\r\n"[0: 4]));
+
+    const appended_get_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n"[0: 22], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: appended_get_result.response_len], &"$7\r\nvalue++\r\n"[0: 13]));
+
+    const getdel_set_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$3\r\nSET\r\n$6\r\ngd-key\r\n$4\r\nonce\r\n"[0: 36], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: getdel_set_result.response_len], &"+OK\r\n"[0: 5]));
+
+    const getdel_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$6\r\nGETDEL\r\n$6\r\ngd-key\r\n"[0: 28], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: getdel_result.response_len], &"$4\r\nonce\r\n"[0: 10]));
+
     const echo_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$4\r\nECHO\r\n$2\r\nhi\r\n"[0: 22], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: echo_result.response_len], &"$2\r\nhi\r\n"[0: 8]));
 

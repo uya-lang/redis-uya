@@ -1074,6 +1074,13 @@ export fn test_command_expire_and_ttl() !void {
     try assert_eq_i32(ttl_reply.integer as i32, 2);
     resp_value_free(&ttl_parsed.value);
 
+    var pttl_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nPTTL\r\n$3\r\nkey\r\n"[0: 24]);
+    const pttl_command: Command = try command_executor_test_command(&router, &pttl_parsed);
+    const pttl_reply: CommandReply = command_execute_at(&engine, &pttl_command, 1000u64);
+    try assert_eq_i32(pttl_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(pttl_reply.integer as i32, 2000);
+    resp_value_free(&pttl_parsed.value);
+
     var expired_get_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n"[0: 22]);
     const expired_get_command: Command = try command_executor_test_command(&router, &expired_get_parsed);
     const expired_get_reply: CommandReply = command_execute_at(&engine, &expired_get_command, 4000u64);
@@ -1086,6 +1093,13 @@ export fn test_command_expire_and_ttl() !void {
     try assert_eq_i32(missing_ttl_reply.typ as i32, CommandReplyType.reply_integer as i32);
     try assert_eq_i32(missing_ttl_reply.integer as i32, -2);
     resp_value_free(&missing_ttl_parsed.value);
+
+    var missing_pttl_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nPTTL\r\n$3\r\nkey\r\n"[0: 24]);
+    const missing_pttl_command: Command = try command_executor_test_command(&router, &missing_pttl_parsed);
+    const missing_pttl_reply: CommandReply = command_execute_at(&engine, &missing_pttl_command, 4000u64);
+    try assert_eq_i32(missing_pttl_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(missing_pttl_reply.integer as i32, -2);
+    resp_value_free(&missing_pttl_parsed.value);
 
     var set_abs_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$3\r\nabs\r\n$5\r\nvalue\r\n"[0: 33]);
     const set_abs_command: Command = try command_executor_test_command(&router, &set_abs_parsed);
@@ -1105,6 +1119,39 @@ export fn test_command_expire_and_ttl() !void {
     try assert_eq_i32(abs_ttl_reply.typ as i32, CommandReplyType.reply_integer as i32);
     try assert_eq_i32(abs_ttl_reply.integer as i32, 4);
     resp_value_free(&abs_ttl_parsed.value);
+
+    var set_ms_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$2\r\nms\r\n$5\r\nvalue\r\n"[0: 32]);
+    const set_ms_command: Command = try command_executor_test_command(&router, &set_ms_parsed);
+    _ = command_execute_at(&engine, &set_ms_command, 6000u64);
+    resp_value_free(&set_ms_parsed.value);
+
+    var pexpire_parsed: RespParseResult = try parse_resp2(&"*3\r\n$7\r\nPEXPIRE\r\n$2\r\nms\r\n$4\r\n1500\r\n"[0: 37]);
+    const pexpire_command: Command = try command_executor_test_command(&router, &pexpire_parsed);
+    const pexpire_reply: CommandReply = command_execute_at(&engine, &pexpire_command, 6000u64);
+    try assert_eq_i32(pexpire_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(pexpire_reply.integer as i32, 1);
+    resp_value_free(&pexpire_parsed.value);
+
+    var ms_pttl_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nPTTL\r\n$2\r\nms\r\n"[0: 23]);
+    const ms_pttl_command: Command = try command_executor_test_command(&router, &ms_pttl_parsed);
+    const ms_pttl_reply: CommandReply = command_execute_at(&engine, &ms_pttl_command, 6000u64);
+    try assert_eq_i32(ms_pttl_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(ms_pttl_reply.integer as i32, 1500);
+    resp_value_free(&ms_pttl_parsed.value);
+
+    var persist_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nPERSIST\r\n$2\r\nms\r\n"[0: 26]);
+    const persist_command: Command = try command_executor_test_command(&router, &persist_parsed);
+    const persist_reply: CommandReply = command_execute_at(&engine, &persist_command, 6000u64);
+    try assert_eq_i32(persist_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(persist_reply.integer as i32, 1);
+    resp_value_free(&persist_parsed.value);
+
+    var persisted_pttl_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nPTTL\r\n$2\r\nms\r\n"[0: 23]);
+    const persisted_pttl_command: Command = try command_executor_test_command(&router, &persisted_pttl_parsed);
+    const persisted_pttl_reply: CommandReply = command_execute_at(&engine, &persisted_pttl_command, 6000u64);
+    try assert_eq_i32(persisted_pttl_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(persisted_pttl_reply.integer as i32, -1);
+    resp_value_free(&persisted_pttl_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);
@@ -1132,6 +1179,12 @@ export fn test_command_error_paths() !void {
     const expire_bad_reply: CommandReply = command_execute_at(&engine, &expire_bad_command, 1000u64);
     try assert_eq_i32(expire_bad_reply.typ as i32, CommandReplyType.reply_error as i32);
     resp_value_free(&expire_bad_parsed.value);
+
+    var pexpire_bad_parsed: RespParseResult = try parse_resp2(&"*3\r\n$7\r\nPEXPIRE\r\n$3\r\nkey\r\n$3\r\nbad\r\n"[0: 37]);
+    const pexpire_bad_command: Command = try command_executor_test_command(&router, &pexpire_bad_parsed);
+    const pexpire_bad_reply: CommandReply = command_execute_at(&engine, &pexpire_bad_command, 1000u64);
+    try assert_eq_i32(pexpire_bad_reply.typ as i32, CommandReplyType.reply_error as i32);
+    resp_value_free(&pexpire_bad_parsed.value);
 
     var set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 33]);
     const set_command: Command = try command_executor_test_command(&router, &set_parsed);

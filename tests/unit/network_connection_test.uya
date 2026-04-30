@@ -113,6 +113,18 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const dbsize_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*1\r\n$6\r\nDBSIZE\r\n"[0: 16], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: dbsize_result.response_len], &":1\r\n"[0: 4]));
 
+    const pexpire_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$7\r\nPEXPIRE\r\n$3\r\nkey\r\n$4\r\n1500\r\n"[0: 36], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: pexpire_result.response_len], &":1\r\n"[0: 4]));
+
+    const pttl_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$4\r\nPTTL\r\n$3\r\nkey\r\n"[0: 23], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: pttl_result.response_len], &":1500\r\n"[0: 7]));
+
+    const persist_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$7\r\nPERSIST\r\n$3\r\nkey\r\n"[0: 26], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: persist_result.response_len], &":1\r\n"[0: 4]));
+
+    const persisted_pttl_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$4\r\nPTTL\r\n$3\r\nkey\r\n"[0: 23], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: persisted_pttl_result.response_len], &":-1\r\n"[0: 5]));
+
     const bgsave_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*1\r\n$6\r\nBGSAVE\r\n"[0: 16], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: bgsave_result.response_len], &"+Background saving scheduled\r\n"[0: 30]));
     try assert_eq_i32(bgsave_result.request_bgsave as i32, 1);

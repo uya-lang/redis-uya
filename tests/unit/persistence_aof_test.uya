@@ -265,4 +265,82 @@ export fn test_aof_expire_replays_absolute_deadline() !void {
     engine_free(&replay_engine);
     _ = unlink(path);
     try assert_eq_i32(used_memory() as i32, 0);
+
+    const pexpire_path: &const byte = "build/test-aof-pexpire.aof";
+    _ = unlink(pexpire_path);
+
+    var pexpire_writer: AofWriter = try aof_open_truncate(pexpire_path);
+    var pexpire_engine: Engine = engine_new();
+    _ = try connection_process_input_with_aof_at(
+        &pexpire_engine,
+        &router,
+        &pexpire_writer,
+        &"*3\r\n$3\r\nSET\r\n$2\r\nms\r\n$5\r\nvalue\r\n"[0: 32],
+        &out[0],
+        256,
+        1000u64,
+    );
+    _ = try connection_process_input_with_aof_at(
+        &pexpire_engine,
+        &router,
+        &pexpire_writer,
+        &"*3\r\n$7\r\nPEXPIRE\r\n$2\r\nms\r\n$4\r\n1500\r\n"[0: 35],
+        &out[0],
+        256,
+        1000u64,
+    );
+    aof_close(&pexpire_writer);
+    engine_free(&pexpire_engine);
+
+    var replay_ms_engine: Engine = engine_new();
+    try aof_replay_file_at(pexpire_path, &replay_ms_engine, &router, 2000u64);
+    const live_ms: &RedisObject = try lookup_key_at(&replay_ms_engine, &"ms"[0: 2], 2000u64);
+    try assert_true(aof_test_slice_eq(live_ms.value.buf[0: live_ms.value.len], &"value"[0: 5]));
+    try assert_true(aof_key_missing_at(&replay_ms_engine, &"ms"[0: 2], 2600u64));
+    engine_free(&replay_ms_engine);
+    _ = unlink(pexpire_path);
+    try assert_eq_i32(used_memory() as i32, 0);
+
+    const persist_path: &const byte = "build/test-aof-persist.aof";
+    _ = unlink(persist_path);
+
+    var persist_writer: AofWriter = try aof_open_truncate(persist_path);
+    var persist_engine: Engine = engine_new();
+    _ = try connection_process_input_with_aof_at(
+        &persist_engine,
+        &router,
+        &persist_writer,
+        &"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 33],
+        &out[0],
+        256,
+        1000u64,
+    );
+    _ = try connection_process_input_with_aof_at(
+        &persist_engine,
+        &router,
+        &persist_writer,
+        &"*3\r\n$6\r\nEXPIRE\r\n$3\r\nkey\r\n$1\r\n2\r\n"[0: 32],
+        &out[0],
+        256,
+        1000u64,
+    );
+    _ = try connection_process_input_with_aof_at(
+        &persist_engine,
+        &router,
+        &persist_writer,
+        &"*2\r\n$7\r\nPERSIST\r\n$3\r\nkey\r\n"[0: 26],
+        &out[0],
+        256,
+        1000u64,
+    );
+    aof_close(&persist_writer);
+    engine_free(&persist_engine);
+
+    var replay_persist_engine: Engine = engine_new();
+    try aof_replay_file_at(persist_path, &replay_persist_engine, &router, 5000u64);
+    const persisted: &RedisObject = try lookup_key_at(&replay_persist_engine, &"key"[0: 3], 5000u64);
+    try assert_true(aof_test_slice_eq(persisted.value.buf[0: persisted.value.len], &"value"[0: 5]));
+    engine_free(&replay_persist_engine);
+    _ = unlink(persist_path);
+    try assert_eq_i32(used_memory() as i32, 0);
 }

@@ -85,6 +85,54 @@ if [[ "$DBSIZE_RESULT" != "1" ]]; then
     exit 1
 fi
 
+TTL_SET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" set ttlkey value)"
+if [[ "$TTL_SET_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected OK on ttlkey SET, got '$TTL_SET_RESULT'" >&2
+    exit 1
+fi
+
+PEXPIRE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" pexpire ttlkey 0)"
+if [[ "$PEXPIRE_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected PEXPIRE result 1, got '$PEXPIRE_RESULT'" >&2
+    exit 1
+fi
+
+PTTL_MISSING_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" pttl ttlkey)"
+if [[ "$PTTL_MISSING_RESULT" != "-2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected PTTL -2, got '$PTTL_MISSING_RESULT'" >&2
+    exit 1
+fi
+
+KEEP_SET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" set keep value)"
+if [[ "$KEEP_SET_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected OK on keep SET, got '$KEEP_SET_RESULT'" >&2
+    exit 1
+fi
+
+KEEP_EXPIRE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" expire keep 5)"
+if [[ "$KEEP_EXPIRE_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected EXPIRE 1, got '$KEEP_EXPIRE_RESULT'" >&2
+    exit 1
+fi
+
+PERSIST_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" persist keep)"
+if [[ "$PERSIST_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected PERSIST 1, got '$PERSIST_RESULT'" >&2
+    exit 1
+fi
+
+PTTL_PERSISTED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" pttl keep)"
+if [[ "$PTTL_PERSISTED_RESULT" != "-1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected persisted PTTL -1, got '$PTTL_PERSISTED_RESULT'" >&2
+    exit 1
+fi
+
+KEEP_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del keep)"
+if [[ "$KEEP_DEL_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected keep DEL 1, got '$KEEP_DEL_RESULT'" >&2
+    exit 1
+fi
+
 MULTI_RESULT="$(printf 'MULTI\nSET mkey mval\nGET mkey\nEXEC\n' | redis-cli --raw -h 127.0.0.1 -p "$PORT")"
 if [[ "$MULTI_RESULT" != $'OK\nQUEUED\nQUEUED\nOK\nmval' ]]; then
     echo "[FAIL] integration/redis_cli_smoke: MULTI/EXEC unexpected output: '$MULTI_RESULT'" >&2

@@ -11,6 +11,7 @@ use src.storage.engine.lookup_key_at;
 use src.storage.engine.delete_key;
 use src.storage.engine.set_key_expire_at;
 use src.storage.engine.clear_key_expire;
+use src.storage.engine.persist_key_expire;
 use src.storage.engine.engine_watch_client_count;
 use src.storage.engine.engine_watch_register_client;
 use src.storage.engine.engine_watch_unregister_client;
@@ -251,8 +252,13 @@ export fn test_engine_watch_versions_update_with_active_watch_client() !void {
     try set_key_at(&engine, &"key"[0: 3], obj, 1000u64);
     const version_after_set: u64 = engine_watch_version(&engine, &"key"[0: 3]);
     try assert_true(version_after_set > 0u64);
+    try set_key_expire_at(&engine, &"key"[0: 3], 2000u64);
+    const version_after_expire: u64 = engine_watch_version(&engine, &"key"[0: 3]);
+    try assert_true(version_after_expire > version_after_set);
+    try assert_true(persist_key_expire(&engine, &"key"[0: 3]));
+    try assert_true(engine_watch_version(&engine, &"key"[0: 3]) > version_after_expire);
     try assert_true(delete_key(&engine, &"key"[0: 3]));
-    try assert_true(engine_watch_version(&engine, &"key"[0: 3]) > version_after_set);
+    try assert_true(engine_watch_version(&engine, &"key"[0: 3]) > version_after_expire);
 
     engine_watch_unregister_client(&engine);
     try assert_eq_i32(engine_watch_client_count(&engine) as i32, 0);

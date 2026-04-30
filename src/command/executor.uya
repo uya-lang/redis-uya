@@ -52,6 +52,7 @@ use src.storage.engine.set_key_at;
 use src.storage.engine.delete_key;
 use src.storage.engine.set_key_expire_at;
 use src.storage.engine.clear_key_expire;
+use src.storage.engine.persist_key_expire;
 use src.storage.engine.get_key_expire_at;
 use src.storage.engine.engine_scan_keys_at;
 use src.storage.engine.engine_evict_allkeys_lru;
@@ -1258,6 +1259,39 @@ fn command_executor_expire(engine: &Engine, command: &Command, now_ms: u64) Comm
     return command_executor_integer(1);
 }
 
+fn command_executor_pexpire(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 3 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const milliseconds_data: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    const milliseconds: i64 = command_executor_parse_i64(milliseconds_data) catch {
+        return command_executor_invalid_integer();
+    };
+    if milliseconds < 0 {
+        return command_executor_invalid_integer();
+    }
+
+    const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+        return command_executor_integer(0);
+    };
+    _ = obj;
+
+    if milliseconds == 0 {
+        _ = delete_key(engine, key);
+        return command_executor_integer(1);
+    }
+
+    _ = set_key_expire_at(engine, key, now_ms + milliseconds as u64) catch {
+        return command_executor_oom();
+    };
+    return command_executor_integer(1);
+}
+
 fn command_executor_pexpireat(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
     if command.argc != 3 {
         return command_executor_wrong_arity();
@@ -1289,6 +1323,45 @@ fn command_executor_pexpireat(engine: &Engine, command: &Command, now_ms: u64) C
         return command_executor_oom();
     };
     return command_executor_integer(1);
+}
+
+fn command_executor_persist(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 2 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+        return command_executor_integer(0);
+    };
+    _ = obj;
+    if persist_key_expire(engine, key) {
+        return command_executor_integer(1);
+    }
+    return command_executor_integer(0);
+}
+
+fn command_executor_pttl(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 2 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+        return command_executor_integer(-2);
+    };
+    _ = obj;
+
+    const expire_at: u64 = get_key_expire_at(engine, key) catch {
+        return command_executor_integer(-1);
+    };
+    if expire_at <= now_ms {
+        _ = delete_key(engine, key);
+        return command_executor_integer(-2);
+    }
+    return command_executor_integer((expire_at - now_ms) as i64);
 }
 
 fn command_executor_ttl(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
@@ -2237,8 +2310,17 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     if command.info.cmd_type == CommandType.command_expire {
         return command_executor_expire(engine, command, now_ms);
     }
+    if command.info.cmd_type == CommandType.command_pexpire {
+        return command_executor_pexpire(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_persist {
+        return command_executor_persist(engine, command, now_ms);
+    }
     if command.info.cmd_type == CommandType.command_pexpireat {
         return command_executor_pexpireat(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_pttl {
+        return command_executor_pttl(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_ttl {
         return command_executor_ttl(engine, command, now_ms);

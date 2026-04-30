@@ -127,6 +127,15 @@ class RedisPySubsetClient:
     def ttl(self, key: str) -> int:
         return int(self._request(b"TTL", key.encode()))
 
+    def pexpire(self, key: str, milliseconds: int) -> bool:
+        return int(self._request(b"PEXPIRE", key.encode(), str(milliseconds).encode())) == 1
+
+    def pttl(self, key: str) -> int:
+        return int(self._request(b"PTTL", key.encode()))
+
+    def persist(self, key: str) -> bool:
+        return int(self._request(b"PERSIST", key.encode())) == 1
+
     def hset(self, key: str, field: str, value: str) -> int:
         return int(self._request(b"HSET", key.encode(), field.encode(), value.encode()))
 
@@ -254,6 +263,14 @@ def run_smoke() -> None:
             ttl = client.ttl("key")
             if ttl not in (1, 2):
                 raise AssertionError(f"unexpected ttl: {ttl}")
+            assert client.set("ms", "value")
+            assert client.pexpire("ms", 1500)
+            pttl = client.pttl("ms")
+            if pttl <= 0 or pttl > 1500:
+                raise AssertionError(f"unexpected pttl: {pttl}")
+            assert client.persist("ms")
+            assert client.pttl("ms") == -1
+            assert client.delete("ms") == 1
             assert client.save()
 
             assert client.hset("hash", "field", "value") == 1

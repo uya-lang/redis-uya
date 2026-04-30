@@ -164,3 +164,4 @@ bash scripts/verify_definition_of_done.sh
 | DoD 项 | 证据 |
 |--------|------|
 | Key/Server 第一批只读命令可用：`ECHO`、`TYPE`、`DBSIZE` 在命令路由、执行器、TCP 编解码和 redis-cli/redis-py smoke 中可用 | `src/command/router.uya`、`src/command/executor.uya`、`tests/unit/command_router_test.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/network_connection_test.uya`、`tests/integration/smoke_tcp.py`、`tests/integration/redis_py_subset.py`、`tests/integration/redis_cli_smoke.sh` |
+| Key/Server 第二批过期毫秒语义可用：`PEXPIRE`、`PERSIST`、`PTTL` 覆盖命令执行、WATCH 版本推进、AOF 绝对过期时间回放和 TCP/redis-cli/redis-py smoke | `src/storage/engine.uya`、`src/persistence/aof.uya`、`src/command/router.uya`、`src/command/executor.uya`、`tests/unit/storage_engine_test.uya`、`tests/unit/command_router_test.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/network_connection_test.uya`、`tests/unit/persistence_aof_test.uya`、`tests/integration/smoke_tcp.py`、`tests/integration/redis_py_subset.py`、`tests/integration/redis_cli_smoke.sh` |

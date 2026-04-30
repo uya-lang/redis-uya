@@ -154,6 +154,14 @@ export fn clear_key_expire(engine: &Engine, key: &[byte]) bool {
     return dict_delete(&engine.db.expires, key);
 }
 
+export fn persist_key_expire(engine: &Engine, key: &[byte]) bool {
+    const removed: bool = dict_delete(&engine.db.expires, key);
+    if removed {
+        _ = engine_touch_watch_version(engine, key) catch {};
+    }
+    return removed;
+}
+
 export fn get_key_expire_at(engine: &Engine, key: &[byte]) !u64 {
     const expire_result: !usize = dict_lookup(&engine.db.expires, key);
     const expire_at: usize = expire_result catch {

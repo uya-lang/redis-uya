@@ -4,6 +4,8 @@
 > 日期: 2026-04-29
 > 状态: 发布前验证通过
 
+> 路线更新: 2026-04-30 起，后续 `v0.9.0` 起主线调整为单机版完整功能、兼容性、性能和稳定性收敛；`v0.9.4` 是首个单机封版候选，未达标时继续 `v0.9.5`、`v0.9.6` 等 patch 版本；单机版达标后封版 `v1.0.0`，之后才重新规划集群版开发。
+
 ## 1. 目标
 
 本报告汇总 `v0.8.0` 收口阶段已实际执行的构建、单元测试、集成测试、性能回归护栏、Redis 差距报告、`io_uring` 评估和发布前文档检查，作为封版证据。
@@ -45,7 +47,7 @@
 
 - `docs/redis-uya-release-v0.8.0.md` 已记录能力、验证入口、限制和发布边界。
 - `docs/redis-uya-definition-of-done.md` 已记录 v0.8.0 DoD 证据。
-- `docs/redis-uya-todo.md` 已将 v0.8.0 标记为完成，当前进行中切到 v0.9.0+ 集群语义与正式集群 benchmark。
+- `docs/redis-uya-todo.md` 已将 v0.8.0 标记为完成。报告生成时下一阶段曾指向集群语义；2026-04-30 路线已调整为先收敛单机版并封版 `v1.0.0`。
 - `docs/redis-uya-api.md`、`docs/redis-uya-architecture.md`、`docs/redis-uya-benchmark-format.md`、`docs/README.md` 和根 `readme.md` 已同步 v0.8.0 口径。
 - `scripts/verify_definition_of_done.sh` 已纳入 v0.8.0 benchmark guard、gap report 和 `io_uring` 评估的临时输出验证。
 - 本次未自动创建 `v0.8.0` tag；如需正式发布 tag，应在干净工作区手动执行 tag 命令。
@@ -54,7 +56,7 @@
 
 - `v0.8.0` 的代码、文档、测试、benchmark、评估报告和发布边界已收口。
 - 当前主线满足项目对 `v0.8.0` 的核心路径可度量、不退化、可回归验证要求。
-- 剩余性能工作进入后续优化队列；剩余集群语义工作进入 `v0.9.0+`：多 key 同槽校验、`CROSSSLOT`、`ASKING`、gossip、failover、resharding 和正式集群 benchmark。
+- 剩余性能工作进入后续优化队列；集群版开发调整到 `v1.0.0` 单机封版之后重新规划。
 
 ## 7. 相关文档
 

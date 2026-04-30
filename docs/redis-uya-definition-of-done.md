@@ -158,3 +158,9 @@ bash scripts/verify_definition_of_done.sh
 | Dict 覆盖写单次探测可用：`dict_insert_with_old()` 插入时返回 inserted，覆盖时返回旧值，`set_key_at()` 用该结果释放旧对象 | `src/storage/dict.uya`、`src/storage/engine.uya`、`tests/unit/storage_dict_test.uya`、`tests/unit/storage_engine_test.uya`、`make test` |
 | AOF 分层写入可用：512B 以下命令进入 64KiB buffer，较大命令 flush 小缓冲后直接写；flush 在 server cron、客户端关闭、server close 与 BGREWRITEAOF fork 前触发 | `src/persistence/aof.uya`、`src/server.uya`、`tests/unit/persistence_aof_test.uya`、`tests/integration/persistence_crash_matrix.py`、`tests/integration/cluster_consistency.py`、`make test`、`make test-integration` |
 | v0.8.1 性能回归验证可复现：`make benchmark-v0.8.1` 默认以 `benchmarks/v0.8.0-performance.md` 为 guard 基线，输出 `benchmarks/v0.8.1-performance.md`，五个 case 的吞吐和 p99 guard 均通过 | `Makefile`、`scripts/benchmark_v0_8_0.py`、`benchmarks/v0.8.1-performance.md`、`make benchmark-v0.8.1` |
+
+## 13. `v0.9.0`
+
+| DoD 项 | 证据 |
+|--------|------|
+| Key/Server 第一批只读命令可用：`ECHO`、`TYPE`、`DBSIZE` 在命令路由、执行器、TCP 编解码和 redis-cli/redis-py smoke 中可用 | `src/command/router.uya`、`src/command/executor.uya`、`tests/unit/command_router_test.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/network_connection_test.uya`、`tests/integration/smoke_tcp.py`、`tests/integration/redis_py_subset.py`、`tests/integration/redis_cli_smoke.sh` |

@@ -82,6 +82,7 @@ use src.storage.object.zset_object_add_member;
 use src.storage.object.zset_object_remove_member;
 use src.storage.object.zset_object_range_reply;
 use src.storage.object.object_free;
+use src.storage.object.object_type_name;
 use src.storage.object.object_layout_size;
 use src.storage.object.list_node_layout_size;
 use src.storage.object.object_pool_cached_objects;
@@ -651,6 +652,16 @@ fn command_executor_ping(command: &Command) CommandReply {
     return command_executor_wrong_arity();
 }
 
+fn command_executor_echo(command: &Command) CommandReply {
+    if command.argc != 2 {
+        return command_executor_wrong_arity();
+    }
+    const message: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    return command_executor_bulk(message);
+}
+
 fn command_executor_get(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
     if command.argc != 2 {
         return command_executor_wrong_arity();
@@ -665,6 +676,19 @@ fn command_executor_get(engine: &Engine, command: &Command, now_ms: u64) Command
         return command_executor_wrongtype();
     };
     return command_executor_bulk(data);
+}
+
+fn command_executor_type(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 2 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+        return command_executor_simple(&"none"[0: 4]);
+    };
+    return command_executor_simple(object_type_name(obj.obj_type));
 }
 
 fn command_executor_lpush(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
@@ -1192,6 +1216,13 @@ fn command_executor_exists(engine: &Engine, command: &Command, now_ms: u64) Comm
         index = index + 1;
     }
     return command_executor_integer(count);
+}
+
+fn command_executor_dbsize(engine: &Engine, command: &Command) CommandReply {
+    if command.argc != 1 {
+        return command_executor_wrong_arity();
+    }
+    return command_executor_integer(engine_len(engine) as i64);
 }
 
 fn command_executor_expire(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
@@ -2149,8 +2180,14 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     if command.info.cmd_type == CommandType.command_ping {
         return command_executor_ping(command);
     }
+    if command.info.cmd_type == CommandType.command_echo {
+        return command_executor_echo(command);
+    }
     if command.info.cmd_type == CommandType.command_get {
         return command_executor_get(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_type {
+        return command_executor_type(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_lpop {
         return command_executor_lpop(engine, command, now_ms);
@@ -2193,6 +2230,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_exists {
         return command_executor_exists(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_dbsize {
+        return command_executor_dbsize(engine, command);
     }
     if command.info.cmd_type == CommandType.command_expire {
         return command_executor_expire(engine, command, now_ms);

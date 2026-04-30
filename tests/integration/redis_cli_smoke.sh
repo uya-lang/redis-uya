@@ -67,6 +67,24 @@ if [[ "$GET_RESULT" != "value" ]]; then
     exit 1
 fi
 
+ECHO_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" echo hi)"
+if [[ "$ECHO_RESULT" != "hi" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected hi, got '$ECHO_RESULT'" >&2
+    exit 1
+fi
+
+TYPE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" type key)"
+if [[ "$TYPE_RESULT" != "string" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected string, got '$TYPE_RESULT'" >&2
+    exit 1
+fi
+
+DBSIZE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" dbsize)"
+if [[ "$DBSIZE_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected dbsize 1, got '$DBSIZE_RESULT'" >&2
+    exit 1
+fi
+
 MULTI_RESULT="$(printf 'MULTI\nSET mkey mval\nGET mkey\nEXEC\n' | redis-cli --raw -h 127.0.0.1 -p "$PORT")"
 if [[ "$MULTI_RESULT" != $'OK\nQUEUED\nQUEUED\nOK\nmval' ]]; then
     echo "[FAIL] integration/redis_cli_smoke: MULTI/EXEC unexpected output: '$MULTI_RESULT'" >&2

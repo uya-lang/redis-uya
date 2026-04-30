@@ -99,11 +99,24 @@ class RedisPySubsetClient:
     def set(self, key: str, value: str) -> bool:
         return self._request(b"SET", key.encode(), value.encode()) == "OK"
 
+    def echo(self, value: str) -> bytes:
+        result = self._request(b"ECHO", value.encode())
+        assert isinstance(result, bytes)
+        return result
+
     def get(self, key: str) -> bytes | None:
         return self._request(b"GET", key.encode())
 
+    def key_type(self, key: str) -> str:
+        result = self._request(b"TYPE", key.encode())
+        assert isinstance(result, str)
+        return result
+
     def delete(self, *keys: str) -> int:
         return int(self._request(b"DEL", *(key.encode() for key in keys)))
+
+    def dbsize(self) -> int:
+        return int(self._request(b"DBSIZE"))
 
     def exists(self, *keys: str) -> int:
         return int(self._request(b"EXISTS", *(key.encode() for key in keys)))
@@ -233,6 +246,9 @@ def run_smoke() -> None:
             assert client.ping()
             assert client.set("key", "value")
             assert client.get("key") == b"value"
+            assert client.echo("hi") == b"hi"
+            assert client.key_type("key") == "string"
+            assert client.dbsize() == 1
             assert client.exists("key", "missing") == 1
             assert client.expire("key", 2)
             ttl = client.ttl("key")

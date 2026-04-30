@@ -673,6 +673,27 @@ export fn test_command_set_get_del_exists() !void {
     try assert_true(command_executor_test_slice_eq(get_reply.data, &"value"[0: 5]));
     resp_value_free(&get_parsed.value);
 
+    var echo_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nECHO\r\n$2\r\nhi\r\n"[0: 22]);
+    const echo_command: Command = try command_executor_test_command(&router, &echo_parsed);
+    const echo_reply: CommandReply = command_execute_at(&engine, &echo_command, 1000u64);
+    try assert_eq_i32(echo_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(echo_reply.data, &"hi"[0: 2]));
+    resp_value_free(&echo_parsed.value);
+
+    var type_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nTYPE\r\n$3\r\nkey\r\n"[0: 23]);
+    const type_command: Command = try command_executor_test_command(&router, &type_parsed);
+    const type_reply: CommandReply = command_execute_at(&engine, &type_command, 1000u64);
+    try assert_eq_i32(type_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(type_reply.data, &"string"[0: 6]));
+    resp_value_free(&type_parsed.value);
+
+    var dbsize_parsed: RespParseResult = try parse_resp2(&"*1\r\n$6\r\nDBSIZE\r\n"[0: 16]);
+    const dbsize_command: Command = try command_executor_test_command(&router, &dbsize_parsed);
+    const dbsize_reply: CommandReply = command_execute_at(&engine, &dbsize_command, 1000u64);
+    try assert_eq_i32(dbsize_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(dbsize_reply.integer as i32, 1);
+    resp_value_free(&dbsize_parsed.value);
+
     var exists_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nEXISTS\r\n$3\r\nkey\r\n$7\r\nmissing\r\n"[0: 41]);
     const exists_command: Command = try command_executor_test_command(&router, &exists_parsed);
     const exists_reply: CommandReply = command_execute_at(&engine, &exists_command, 1000u64);
@@ -692,6 +713,20 @@ export fn test_command_set_get_del_exists() !void {
     const missing_get_reply: CommandReply = command_execute_at(&engine, &missing_get_command, 1000u64);
     try assert_eq_i32(missing_get_reply.typ as i32, CommandReplyType.reply_null_bulk as i32);
     resp_value_free(&missing_get_parsed.value);
+
+    var missing_type_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nTYPE\r\n$3\r\nkey\r\n"[0: 23]);
+    const missing_type_command: Command = try command_executor_test_command(&router, &missing_type_parsed);
+    const missing_type_reply: CommandReply = command_execute_at(&engine, &missing_type_command, 1000u64);
+    try assert_eq_i32(missing_type_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(missing_type_reply.data, &"none"[0: 4]));
+    resp_value_free(&missing_type_parsed.value);
+
+    var empty_dbsize_parsed: RespParseResult = try parse_resp2(&"*1\r\n$6\r\nDBSIZE\r\n"[0: 16]);
+    const empty_dbsize_command: Command = try command_executor_test_command(&router, &empty_dbsize_parsed);
+    const empty_dbsize_reply: CommandReply = command_execute_at(&engine, &empty_dbsize_command, 1000u64);
+    try assert_eq_i32(empty_dbsize_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(empty_dbsize_reply.integer as i32, 0);
+    resp_value_free(&empty_dbsize_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

@@ -1,7 +1,7 @@
 # redis-uya API
 
-> 版本: v0.7.0
-> 日期: 2026-04-29
+> 版本: v0.9.0-dev
+> 日期: 2026-04-30
 
 ## 1. 协议
 
@@ -63,6 +63,18 @@ PING message
 - 无参数：`+PONG`
 - 有参数：Bulk String 回显
 
+### `ECHO`
+
+格式：
+
+```text
+ECHO message
+```
+
+返回：
+
+- Bulk String 回显
+
 ### `GET`
 
 格式：
@@ -75,6 +87,19 @@ GET key
 
 - 命中：Bulk String
 - 不存在：Null Bulk
+
+### `TYPE`
+
+格式：
+
+```text
+TYPE key
+```
+
+返回：
+
+- 键不存在：`+none`
+- 键存在：返回 `string/hash/list/set/zset`
 
 ### `SET`
 
@@ -108,6 +133,18 @@ DEL key [key ...]
 返回：
 
 - 删除成功的键数量，Integer
+
+### `DBSIZE`
+
+格式：
+
+```text
+DBSIZE
+```
+
+返回：
+
+- 当前数据库中的非过期 key 数量，Integer
 
 ### `EXISTS`
 

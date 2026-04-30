@@ -1,8 +1,8 @@
 程序的真正成本不在于编写，而在于维护。
 # redis-uya 开发 TODO 文档
 
-> 版本: v0.8.1
-> 日期: 2026-04-29
+> 版本: v0.9.0-dev
+> 日期: 2026-04-30
 > 配套设计文档: `redis-uya-design.md`
 > 配套评审文档: `redis-uya-review.md`
 > 开发规范: `redis-uya-development.md`
@@ -19,6 +19,12 @@
 - 近端版本采用可执行粒度，任务细到可以直接开发和验收。
 - 中远期版本保留完整功能范围、里程碑与验收方向，但不提前承诺每个实现细节。
 - 任何阶段都必须满足技术可行性和完整性约束，不能因为规划全面而牺牲收敛。
+- 最小迭代默认递增版本号最后一位：`v0.9.0`、`v0.9.1`、`v0.9.2` 依次推进；不为普通小阶段抬高第二位版本号。
+- `v0.9.0` 起后续主线只迭代单机版：补齐 Redis Open Source 单机功能、兼容性、性能和稳定性。
+- `v0.9.4` 是首个单机封版候选；如未达到 `v1.0.0` 封版条件，继续使用 `v0.9.5`、`v0.9.6` 等 patch 版本顺序迭代。
+- 单机版必须覆盖 Redis 官方命令参考中的全部命令名；命令全集、状态定义和封版标准见 `redis-uya-command-scope.md`。
+- `v1.0.0` 是单机版封版发布点；只有单机版功能和性能达标后才发布。
+- `v1.0.0` 之后才重新规划集群版；`v0.7.0` 已有集群基础作为历史实验能力保留，但不作为 `v0.9.0` 起的后续主线继续扩展。
 
 ## 2. 当前状态
 
@@ -50,7 +56,7 @@
 
 当前进行中：
 
-- [ ] `v0.9.0+`：集群语义、gossip、failover、resharding 与正式集群 benchmark
+- [ ] `v0.9.0` 起：单机版完整功能、兼容性、性能和稳定性收敛，达标后封版 `v1.0.0`
 
 ## 3. 全版本路线图
 
@@ -64,13 +70,17 @@
 | `v0.4.0` | 复制与高可用基础 | 主从复制、PSYNC、复制积压缓冲区 | 副本同步 |
 | `v0.5.0` | 协议与控制面增强 | RESP3、事务、Pub/Sub、CONFIG/CLIENT 完整化 | 协议兼容扩大 |
 | `v0.6.0` | 内存与性能控制 | `maxmemory`、淘汰策略、主动过期强化、Slab | 内存可控 |
-| `v0.7.0` | 集群基础 | Cluster 槽位、重定向、节点元数据 | 分布式闭环 |
+| `v0.7.0` | 集群基础实验 | Cluster 槽位、重定向、节点元数据 | 历史基础能力，后续冻结到 v1.0.0 之后 |
 | `v0.8.0` | 核心路径性能基线 | 零拷贝、批量解析、SIMD、对象布局、回归护栏 | 热路径可度量、不退化 |
 | `v0.8.1` | 写路径性能修复 | WATCH 懒维护、Dict 单次探测、AOF 分层写入 | 写路径首批 P0 债务收敛 |
-| `v0.9.0` | 集群语义正确性 | 多 key 同槽校验、`CROSSSLOT`、`ASKING` | 重定向语义对齐 |
-| `v0.10.0` | 集群成员与 gossip | 节点握手、gossip 消息、拓扑传播、PFAIL/FAIL 基础 | 多节点拓扑可传播 |
-| `v0.11.0` | 集群故障转移基础 | replica 归属、config epoch、最小 failover | 槽位 owner 可切换 |
-| `v0.12.0` | 重分片与集群 benchmark | `ADDSLOTS/DELSLOTS`、迁移闭环、正式集群性能报告 | resharding 可复现 |
+| `v0.9.0` | 单机核心命令补齐 | String/Hash/List/Set/ZSet/Key/Server/Security 核心命令 | redis-cli/redis-py 常用命令兼容 |
+| `v0.9.1` | 单机命令全集矩阵 | Redis 官方命令全集建表，补齐 Connection/Generic/Server/Transaction/Pub/Sub/Scripting/Stream 命令族 | 所有官方命令名可追踪 |
+| `v0.9.2` | 单机高级数据能力 | Bitmap、Bitfield、HyperLogLog、Geo、JSON、Search、Time Series、概率结构、Vector | Redis Open Source 单机功能面覆盖 |
+| `v0.9.3` | 单机运维、安全与可观测 | ACL、TLS、CLIENT/CONFIG/INFO/SLOWLOG/LATENCY/MEMORY 等管理面 | 生产运维可用 |
+| `v0.9.4` | 首个单机性能与稳定性封版候选 | benchmark target、长时运行、故障恢复、兼容矩阵 | v1.0.0 发布候选 |
+| `v0.9.5`, `v0.9.6`, ... | 后续封版候选迭代 | 未达 v1.0.0 条件时继续 patch 位递增 | 补缺口、不扩范围 |
+| `v1.0.0` | 单机版封版 | 单机功能完整、性能达标、文档齐全 | 可发布、可生产评估 |
+| `v1.1.0+` | 集群版规划与开发 | 集群语义、gossip、failover、resharding | v1.0.0 之后启动 |
 
 ## 4. 当前主线：`v0.1.0-alpha`
 
@@ -367,106 +377,105 @@
 - `make benchmark-v0.8.1`
 - `benchmarks/v0.8.1-performance.md`
 
-## 15. `v0.9.0`：集群语义正确性
+## 15. `v0.9.0` 起：单机版总目标
 
-### S. 多 key 与 ASKING
+`v0.9.0` 起后续所有开发都服务于单机版封版。目标不是只实现五大基础类型，而是覆盖 Redis Open Source 在单机部署下可用的全部官方命令名和主要能力：命令语义、数据结构、持久化、复制、脚本、消息、搜索/高级数据结构、运维、安全、可观测和性能。
 
-- [ ] 多 key 命令统一提取所有 key，覆盖 `DEL/EXISTS/MGET/MSET` 首批命令
-- [ ] 所有 key 落同一 slot 时继续执行本地或重定向判断
-- [ ] 多 key 跨 slot 时返回 `CROSSSLOT Keys in request don't hash to the same slot`
-- [ ] `ASKING` 连接级一次性放行：只允许下一条命令越过迁移态 `ASK`
-- [ ] `ASKING` 与事务、WATCH、AOF、复制追加路径的边界收敛
+### S. 单机功能范围
 
-验收项：
+- [ ] Core commands：String、Hash、List、Set、ZSet、Key、Server、Connection、Database、Pub/Sub、Transaction、Scripting、Function、Stream 等命令族
+- [ ] Core data structures：String、Hash、List、Set、Sorted Set、Bitmap、Bitfield、HyperLogLog、Geo、Stream
+- [ ] Advanced data structures：JSON、Search、Time Series、Bloom、Cuckoo、Count-Min Sketch、Top-K、t-digest、Vector
+- [ ] Persistence：RDB、AOF、AOF rewrite、混合持久化、损坏/截断恢复、兼容性测试
+- [ ] Replication：主从复制、PSYNC、backlog、WAIT、只读副本、断线恢复和一致性 smoke
+- [ ] Programmability：Lua 脚本、Redis Functions、脚本缓存、原子执行边界
+- [ ] Security：AUTH、ACL、TLS、命令权限、key pattern 权限、保护模式
+- [ ] Operations：CONFIG、CLIENT、INFO、MEMORY、SLOWLOG、LATENCY、MONITOR、COMMAND、DBSIZE、FLUSH、SHUTDOWN、SAVE/BGSAVE
+- [ ] Performance：解析、命令执行、存储结构、内存分配、网络写回、持久化写路径、长时间运行稳定性
 
-- 同槽多 key 命令在本地 owner 上保持当前语义
-- 远端稳定 owner 返回 `MOVED`，迁移态 owner 在未 `ASKING` 时返回 `ASK`
-- 客户端发送 `ASKING` 后，下一条同 slot 命令可执行一次，之后恢复正常 `ASK`
-- 跨 slot 多 key 命令不会写本地库，不进入 AOF，不进入复制 backlog
+### S1. 官方命令全集兼容矩阵
 
-测试证据：
+- [ ] 以 Redis 官方 Commands Reference 建立命令全集基线，记录命令名、功能组、arity、flags、key spec、ACL category、是否模式相关
+- [ ] 每个命令标记为 `full`、`partial`、`standalone-error`、`alias` 或 `deferred`
+- [ ] `deferred` 命令必须绑定目标版本；不能进入 `v1.0.0` 封版状态
+- [ ] Cluster/Sentinel 等模式相关命令在 `v1.0.0` 前至少实现 standalone 兼容行为或明确错误，完整分布式语义进入 `v1.1.0+`
+- [ ] 兼容矩阵必须由 `COMMAND` / `COMMAND DOCS` / `COMMAND INFO` 等控制面命令共享，避免文档和运行时命令表分叉
 
-- `tests/unit/command_router_test.uya` 覆盖多 key 元数据
-- `tests/unit/command_executor_test.uya` 覆盖 `CROSSSLOT`、`MOVED`、`ASK`、`ASKING`
-- `tests/unit/network_connection_test.uya` 覆盖连接级 `ASKING` 一次性状态
-- 后续新增 `tests/integration/cluster_crossslot.py`
-- 后续新增 `tests/integration/cluster_asking.py`
+非目标：
 
-## 16. `v0.10.0`：集群成员与 gossip
+- [ ] `v1.0.0` 之前不继续扩展 Redis Cluster gossip、failover、resharding、正式集群 benchmark
+- [ ] `v1.0.0` 之前不把已有 `src/cluster/*` 作为主线能力继续放大；只做必要兼容维护和 standalone 兼容命令响应，避免破坏现有测试
 
-### T. 成员发现与拓扑传播
+## 16. `v0.9.0`：单机核心命令补齐
 
-- [ ] 抽出 cluster bus 消息编码/解码模块
-- [ ] 实现节点握手状态：`MEET` -> handshake -> known node
-- [ ] 实现 ping/pong gossip 消息与节点表传播
-- [ ] 实现节点超时、`PFAIL`、`FAIL` 最小状态机
-- [ ] `CLUSTER NODES/SLOTS/INFO` 基于真实多节点拓扑输出
+### T. 基础类型与管理命令
 
-验收项：
-
-- 三节点进程 smoke 中，任意节点 `MEET` 后拓扑最终传播到其他节点
-- 节点下线后可观测 `PFAIL/FAIL`，恢复后可重新连通
-- gossip 更新不得破坏本地 slot owner 和 config epoch 单调性
-
-测试证据：
-
-- 后续新增 `src/cluster/gossip.uya`
-- 后续新增 `tests/unit/cluster_gossip_test.uya`
-- 后续新增 `tests/unit/cluster_topology_test.uya` 多节点传播用例
-- 后续新增 `tests/integration/cluster_gossip_smoke.py`
-- 后续新增 `tests/integration/cluster_node_failure_smoke.py`
-
-## 17. `v0.11.0`：集群故障转移基础
-
-### U. Replica 归属与 failover
-
-- [ ] 节点元数据记录 replica master id 与复制偏移
-- [ ] `CLUSTER REPLICATE` 最小实现
-- [ ] replica 继承现有复制能力接入 cluster owner 视图
-- [ ] failover 选择候选 replica，推进 config epoch
-- [ ] failover 后更新 slot owner 并让旧 master 降级或标记 fail
+- [ ] String：`INCR/DECR/INCRBY/DECRBY/INCRBYFLOAT`、`APPEND`、`STRLEN`、`GETSET`、`SETNX/SETEX/SETRANGE`、`GETRANGE`、`MGET/MSET/MSETNX`、`GETDEL`
+- [ ] Hash：`HINCRBY/HINCRBYFLOAT`、`HKEYS/HVALS/HGETALL`、`HSCAN`
+- [ ] List：`RPUSH/RPOP`、`LINDEX/LINSERT`、`LSET/LLEN/LTRIM`、`LREM`、`LPUSHX/RPUSHX`、`LPOS`
+- [ ] Set：`SPOP/SRANDMEMBER`、`SINTER/SDIFF/SUNION`、`SINTERSTORE/SDIFFSTORE/SUNIONSTORE`
+- [ ] ZSet：`ZINCRBY/ZCARD/ZCOUNT`、`ZRANGEBYSCORE/ZREVRANGEBYSCORE`、`ZREMRANGEBYRANK/ZREMRANGEBYSCORE`、`ZSCAN`
+- [x] Key/Server 第一批：`ECHO`、`TYPE`、`DBSIZE`
+- [ ] Key/Server 后续：`RENAME/RENAMENX`、`MOVE/PERSIST`、`DUMP/RESTORE`、`PTTL/PEXPIRE/PEXPIREAT`、`WAIT`、`FLUSHDB/FLUSHALL`、`SELECT`、`LASTSAVE`、`OBJECT`、`SORT`
+- [ ] Security baseline：`AUTH`、`requirepass`、`SHUTDOWN`
 
 验收项：
 
-- master/replica 拓扑可通过 `CLUSTER NODES` 观测
-- master 下线后，符合条件的 replica 可接管该 master 的 slots
-- failover 后客户端收到新的 `MOVED` 地址，成功写入新 master
-- failover 不破坏 RDB/AOF 恢复和复制一致性 smoke
+- 新增命令必须有单元测试、错误路径测试和 redis-py/redis-cli 兼容 smoke
+- 新增写命令必须覆盖 AOF、RDB、复制 backlog、WATCH 版本推进和 maxmemory 边界
+- 现有 `make test`、`make test-integration`、`make benchmark-v0.8.1` 回归护栏不退化
 
-测试证据：
+## 17. `v0.9.1-v0.9.3`：单机完整功能面
 
-- 后续新增 `src/cluster/failover.uya`
-- 后续新增 `tests/unit/cluster_failover_test.uya`
-- 后续扩展 `tests/integration/replication_consistency.py`
-- 后续新增 `tests/integration/cluster_failover_smoke.py`
-- 后续新增 `tests/integration/cluster_failover_recovery.py`
+### U. 语义、数据结构与运维面
 
-## 18. `v0.12.0`：重分片与正式集群 benchmark
-
-### V. Resharding 与性能报告
-
-- [ ] `CLUSTER ADDSLOTS` / `CLUSTER DELSLOTS` 最小实现
-- [ ] `SETSLOT IMPORTING/MIGRATING/NODE/STABLE` 完整状态收敛
-- [ ] 实现项目内 key 迁移闭环，优先覆盖 String 与当前核心类型
-- [ ] 迁移期间 `ASK` / `ASKING` / `MOVED` 与多 key 同槽校验协同
-- [ ] 建立正式集群 benchmark：单节点、2 master、3 master，对照 Redis Cluster
+- [ ] 官方命令全集矩阵落地：所有 Redis Open Source 官方命令名进入命令表或兼容错误处理
+- [ ] Streams 完整化：消费者组、pending、claim、trim、阻塞读取和持久化恢复
+- [ ] Pub/Sub 完整化：pattern 订阅、订阅态命令限制、背压和断开清理
+- [ ] Lua 与 Functions：`EVAL/EVALSHA`、脚本缓存、只读脚本、原子边界、函数加载和调用
+- [ ] RESP3 与客户端兼容矩阵：push、map、set、attribute、null、HELLO/AUTH/SETNAME 组合路径
+- [ ] Bitmap/Bitfield/HyperLogLog/Geo 命令族
+- [ ] JSON、Search、Time Series、概率结构和 Vector 的项目内实现方案与分阶段命令覆盖
+- [ ] ACL 与 TLS：用户、权限、命令类别、key pattern、证书配置和认证错误兼容
+- [ ] 管理与诊断：`CONFIG SET/REWRITE`、`CLIENT LIST/KILL/PAUSE/TRACKING`、`SLOWLOG`、`LATENCY`、`MEMORY`、`MONITOR`、`COMMAND`
+- [ ] 持久化与复制收敛：RDB 二进制兼容推进、AOF rewrite 压测、复制断线重连、`WAIT` 语义、只读副本限制
 
 验收项：
 
-- slot 可从节点 A 迁移到节点 B，迁移后旧 owner 返回 `MOVED`
-- 迁移中客户端按 `ASK` + `ASKING` 可完成读写
-- 迁移完成后源节点不保留已迁移 key，目标节点数据完整
-- benchmark 报告包含吞吐、p50/p95/p99、RSS、slot 分布、节点数和 Redis Cluster 对照
+- 按命令族建立兼容矩阵，明确已实现、部分实现、暂不支持的语义差异
+- 每个数据类型必须覆盖正常路径、空 key、错类型、过期、持久化恢复、复制恢复、内存淘汰边界
+- 高级数据结构必须先完成项目内设计评审，再进入实现，避免一次性堆入不可维护的半成品
 
-测试证据：
+## 18. `v0.9.4` 起：单机性能与稳定性封版候选
 
-- 后续新增 `src/cluster/migration.uya`
-- 后续新增 `tests/unit/cluster_migration_test.uya`
-- 后续新增 `tests/integration/cluster_resharding_smoke.py`
-- 后续新增 `scripts/benchmark_cluster_v0_12_0.py`
-- 后续新增 `benchmarks/v0.12.0-cluster.md`
+### V. v1.0.0 前置收敛
 
-## 18. 风险登记
+- [ ] release build benchmark 模式，固定硬件、Redis 对照版本、持久化配置、并发、pipeline 和数据集
+- [ ] 核心命令吞吐、p95/p99、RSS 达到 floor/target，关键路径持续向 Redis 对照靠近
+- [ ] SET/写路径、RDB/AOF rewrite、复制增量、Streams、Search/Vector 等重路径单独 benchmark
+- [ ] 长时间运行、内存泄漏、慢客户端、半包/粘包、崩溃恢复和磁盘损坏矩阵
+- [ ] API、部署、运维、安全、性能、已知限制和迁移指南文档齐全
+
+如果 `v0.9.4` 未达到 `v1.0.0` 封版条件，继续按最后一位顺序增加版本号，使用 `v0.9.5`、`v0.9.6` 等版本补齐缺口；这些版本不新增集群主线和新的大范围目标。
+
+`v1.0.0` 封版条件：
+
+- [ ] 单机计划内功能已完成并有测试证据
+- [ ] Redis 官方命令全集兼容矩阵无 `deferred`；非模式相关命令达到 `full`，模式相关命令达到 `full` 或 `standalone-error`
+- [ ] 兼容矩阵清楚标记所有 Redis 差异，不存在未说明的核心语义缺口
+- [ ] 性能达到当前 target，且没有 P0/P1 稳定性缺陷
+- [ ] 发布说明、DoD、benchmark 和测试报告齐全
+
+## 19. `v1.1.0+`：集群版规划与开发
+
+`v1.0.0` 发布前不启动新的集群主线。发布后再基于稳定单机内核重新评审集群架构，规划以下方向：
+
+- [ ] 集群语义：多 key 同槽校验、`CROSSSLOT`、`ASKING`、`MOVED/ASK` 完整边界
+- [ ] 集群成员：cluster bus、节点握手、gossip、拓扑传播、`PFAIL/FAIL`
+- [ ] 集群故障转移：replica 归属、config epoch、failover 选择、旧 master 恢复处理
+- [ ] 集群重分片：`ADDSLOTS/DELSLOTS`、迁移状态机、key 迁移闭环、正式集群 benchmark
+
+## 20. 风险登记
 
 | 风险 ID | 描述 | 可能性 | 影响 | 缓解措施 |
 |---------|------|--------|------|---------|
@@ -476,4 +485,5 @@
 | R4 | AOF 与恢复语义不稳定 | 中 | 高 | 先做 append + replay，损坏路径优先补测试 |
 | R5 | 性能目标过早绑死 | 中 | 中 | 先建立 benchmark 基线，再谈追平和超越 |
 | R6 | 后续版本规划过粗导致执行断档 | 中 | 中 | 所有版本先保留完整任务框架，进入执行前再细化实现步骤 |
-| R7 | 完整 Cluster 协议一次性铺开导致状态机失控 | 中 | 高 | 按语义正确性、gossip、failover、resharding 四段拆分，每段必须有单元与进程级 smoke |
+| R7 | 单机功能范围扩大导致封版失控 | 中 | 高 | 所有 Redis 功能按命令族和数据类型分批验收，未进入当前版本的能力只保留范围，不提前实现 |
+| R8 | 完整 Cluster 协议过早铺开导致状态机失控 | 中 | 高 | `v1.0.0` 前冻结集群扩展，只做现有基础能力维护；`v1.0.0` 后重新评审并分阶段实现 |

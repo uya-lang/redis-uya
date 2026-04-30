@@ -104,6 +104,15 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const get_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n"[0: 22], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: get_result.response_len], &"$5\r\nvalue\r\n"[0: 11]));
 
+    const echo_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$4\r\nECHO\r\n$2\r\nhi\r\n"[0: 22], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: echo_result.response_len], &"$2\r\nhi\r\n"[0: 8]));
+
+    const type_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$4\r\nTYPE\r\n$3\r\nkey\r\n"[0: 23], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: type_result.response_len], &"+string\r\n"[0: 9]));
+
+    const dbsize_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*1\r\n$6\r\nDBSIZE\r\n"[0: 16], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: dbsize_result.response_len], &":1\r\n"[0: 4]));
+
     const bgsave_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*1\r\n$6\r\nBGSAVE\r\n"[0: 16], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: bgsave_result.response_len], &"+Background saving scheduled\r\n"[0: 30]));
     try assert_eq_i32(bgsave_result.request_bgsave as i32, 1);

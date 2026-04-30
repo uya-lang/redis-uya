@@ -4,20 +4,23 @@
 > 零 GC 路线 · 显式错误处理 · 可测试演进 · 长期性能目标超过 Redis
 
 > 版本: v0.8.1
-> 日期: 2026-04-29
+> 日期: 2026-04-30
 
 ## 简介
 
-`redis-uya` 是一个使用 **Uya 编程语言** 从零实现的生产级高性能内存数据库系统。项目长期目标是兼容 Redis 6.2+ 协议，覆盖核心数据结构、持久化、复制、基础集群与性能工程，并在同条件核心场景上超过 Redis。
+`redis-uya` 是一个使用 **Uya 编程语言** 从零实现的生产级高性能内存数据库系统。项目长期目标是兼容 Redis Open Source，先在单机版覆盖官方命令参考中的全部命令名，以及数据结构、持久化、复制、脚本、安全、运维、高级数据能力与性能工程；单机版功能和性能达标后封版为 `v1.0.0`，之后才重新规划集群版开发。
 
 当前项目已完成 `v0.8.1` 写路径性能修复：在 `v0.8.0` 核心路径性能基线之上，收敛首批 P0 写路径债务，新增 WATCH 版本懒维护、Dict 覆盖写单次探测、AOF 小命令缓冲与大命令直写策略，并用 `benchmarks/v0.8.1-performance.md` 固化相对 `v0.8.0` 基线的 benchmark guard。
 
 ## 核心目标
 
 - **协议兼容**：从 RESP2 子集起步，逐步扩展到 RESP3 与更完整的 Redis 命令语义。
-- **数据结构完整**：按版本推进 String、Hash、List、Set、ZSet、过期键、SCAN 与对象编码。
+- **命令全集**：以 Redis 官方 Commands Reference 为基线，单机版 `v1.0.0` 前覆盖全部官方命令名；模式相关命令在单机版至少提供 standalone 兼容行为。
+- **数据结构完整**：按版本推进 String、Hash、List、Set、ZSet、Bitmap、Bitfield、HyperLogLog、Geo、Stream、JSON、Search、Time Series、概率结构和 Vector。
 - **可靠持久化**：首版优先 AOF append/replay，后续补齐 RDB、AOF rewrite、BGSAVE/BGREWRITEAOF。
 - **高性能路线**：建立 Redis 同机对照基线，再优化解析、字典、内存分配、零拷贝、批处理和事件循环。
+- **单机先行**：`v0.9.0` 起只收敛单机版，`v1.0.0` 单机封版后才重新规划集群版。
+- **小步版本**：后续最小迭代按最后一位递增，例如 `v0.9.0`、`v0.9.1`、`v0.9.2`；`v0.9.4` 未达封版条件时继续 `v0.9.5`、`v0.9.6`。
 - **工程可控**：所有能力必须有测试、错误路径、释放路径、恢复路径或 benchmark 证据。
 
 ## 当前状态
@@ -84,7 +87,7 @@
 
 下一阶段：
 
-- `v0.9.0+`：集群语义、gossip、failover、resharding 与正式集群 benchmark
+- `v0.9.0` 起：单机版完整功能、兼容性、性能和稳定性收敛；达标后封版 `v1.0.0`
 
 当前阶段尚未生产可用。
 
@@ -120,7 +123,7 @@ TCP 集成 smoke：
 make test-integration
 ```
 
-`make test-integration` 当前覆盖基础 TCP smoke、空闲连接不阻塞其他客户端、持久化/复制/事务/Pub/Sub/控制面兼容路径，v0.6.0 的 `maxmemory`、淘汰策略、内存统计和压力回归，以及 v0.7.0 的集群 smoke 与一致性 smoke。
+`make test-integration` 当前覆盖基础 TCP smoke、空闲连接不阻塞其他客户端、持久化/复制/事务/Pub/Sub/控制面兼容路径，v0.6.0 的 `maxmemory`、淘汰策略、内存统计和压力回归，以及 v0.7.0 历史集群基础 smoke 与一致性 smoke。
 
 v0.8.0 核心性能基线：
 
@@ -235,12 +238,13 @@ build/redis-uya 6380 1
 
 ## 当前主线能力边界
 
-当前仓库主线已完成 `v0.7.0`，已经包含：
+当前仓库主线已完成 `v0.8.1`，已经包含：
 
 - 单节点、单进程服务模型
 - RESP2 子集
 - RESP3 最小闭环：`HELLO 2/3`、常用 RESP3 输入类型解析、RESP3 Null 回复
 - String / Hash / List / Set / ZSet / `SCAN`
+- Key/Server 第一批：`ECHO`、`TYPE`、`DBSIZE`
 - AOF append/replay、RDB 子集、`SAVE`、`BGSAVE`、`BGREWRITEAOF`
 - 主从复制最小闭环：`REPLICAOF`、`PSYNC / backlog`、全量同步、定时拉取式增量同步、复制心跳
 - 事务最小子集：`MULTI/EXEC/DISCARD/WATCH/UNWATCH`
@@ -251,7 +255,7 @@ build/redis-uya 6380 1
 - `INFO memory` allocator 与对象池统计观测：当前使用、峰值、累计分配/释放、活跃块数、Slab、对象池和布局大小
 - Slab 小对象缓存基线：16B 到 1KB 分级 freelist，缓存与复用统计可观测
 - 内存压力与淘汰回归：noeviction OOM、allkeys-lru、allkeys-lfu、volatile-ttl
-- 基础集群：Cluster 槽位模型、节点元数据、单节点最小拓扑、`CLUSTER` 最小控制面、`MOVED/ASK` 基础重定向和一致性 smoke
+- 历史集群基础：Cluster 槽位模型、节点元数据、单节点最小拓扑、`CLUSTER` 最小控制面、`MOVED/ASK` 基础重定向和一致性 smoke；该能力在 `v1.0.0` 前只做必要维护，不作为 `v0.9.0` 起的后续主线继续扩展
 - `redis-cli` smoke、Python 集成 smoke、持久化与复制 benchmark
 
 当前主线仍未包含：
@@ -262,7 +266,7 @@ build/redis-uya 6380 1
 - Pub/Sub 模式下的完整命令限制、pattern 订阅与背压处理
 - 完整 `CONFIG SET/REWRITE` 与全局 `CLIENT LIST/KILL/PAUSE/TRACKING`
 - LFU 衰减、采样池与正式内存 benchmark
-- 完整 Redis Cluster gossip、failover、resharding、`ASKING` 一次性放行和多 key 同槽校验
+- 完整 Redis Cluster gossip、failover、resharding、`ASKING` 一次性放行和多 key 同槽校验；这些能力在 `v1.0.0` 之后重新规划
 - Lua 脚本
 - Redis 模块系统
 
@@ -278,13 +282,17 @@ build/redis-uya 6380 1
 | `v0.4.0` | 复制基础 | 主从复制、PSYNC、复制积压缓冲区 |
 | `v0.5.0` | 协议与控制面 | RESP3、事务、Pub/Sub、CONFIG/CLIENT |
 | `v0.6.0` | 内存与性能控制 | `maxmemory`、淘汰策略、主动过期、Slab |
-| `v0.7.0` | 集群基础 | Cluster 槽位、重定向、节点元数据 |
+| `v0.7.0` | 集群基础实验 | Cluster 槽位、重定向、节点元数据，后续冻结到 v1.0.0 之后 |
 | `v0.8.0` | 核心路径性能基线 | 零拷贝、批量解析、SIMD、对象布局、回归护栏 |
 | `v0.8.1` | 写路径性能修复 | WATCH 懒维护、Dict 单次探测、AOF 分层写入 |
-| `v0.9.0` | 集群语义正确性 | 多 key 同槽校验、`CROSSSLOT`、`ASKING` |
-| `v0.10.0` | 集群成员与 gossip | 节点握手、gossip、拓扑传播、PFAIL/FAIL |
-| `v0.11.0` | 集群故障转移基础 | replica 归属、config epoch、最小 failover |
-| `v0.12.0` | 重分片与集群 benchmark | slot 迁移闭环、正式集群性能报告 |
+| `v0.9.0` | 单机核心命令补齐 | String/Hash/List/Set/ZSet/Key/Server/Security 核心命令 |
+| `v0.9.1` | 单机命令全集矩阵 | Redis 官方命令全集建表，补齐 Connection/Generic/Server/Transaction/Pub/Sub/Scripting/Stream 命令族 |
+| `v0.9.2` | 单机高级数据能力 | Bitmap、Bitfield、HyperLogLog、Geo、JSON、Search、Time Series、概率结构、Vector |
+| `v0.9.3` | 单机运维、安全与可观测 | ACL、TLS、CLIENT/CONFIG/INFO/SLOWLOG/LATENCY/MEMORY 等管理面 |
+| `v0.9.4` | 首个单机性能与稳定性封版候选 | benchmark target、长时运行、故障恢复、兼容矩阵 |
+| `v0.9.5`, `v0.9.6`, ... | 后续封版候选迭代 | 未达 v1.0.0 条件时继续 patch 位递增 |
+| `v1.0.0` | 单机版封版 | 单机功能完整、性能达标、文档齐全 |
+| `v1.1.0+` | 集群版规划与开发 | 集群语义、gossip、failover、resharding |
 
 完整计划见 [开发 TODO](docs/redis-uya-todo.md)。
 
@@ -302,6 +310,7 @@ build/redis-uya 6380 1
 - [详细设计](docs/redis-uya-design.md)
 - [方案评审](docs/redis-uya-review.md)
 - [开发 TODO](docs/redis-uya-todo.md)
+- [Command Scope](docs/redis-uya-command-scope.md)
 - [开发规范](docs/redis-uya-development.md)
 - [Definition of Done](docs/redis-uya-definition-of-done.md)
 - [Benchmark 输出格式](docs/redis-uya-benchmark-format.md)

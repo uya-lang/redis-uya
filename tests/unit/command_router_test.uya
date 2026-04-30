@@ -29,11 +29,15 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 39);
+    try assert_eq_i32(command_router_count(&router) as i32, 42);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
     try assert_eq_i32(ping.arity, -1);
+
+    const echo: CommandInfo = try command_router_lookup(&router, &"ECHO"[0: 4]);
+    try assert_eq_i32(echo.cmd_type as i32, CommandType.command_echo as i32);
+    try assert_eq_i32(echo.arity, 2);
 
     const hello: CommandInfo = try command_router_lookup(&router, &"HELLO"[0: 5]);
     try assert_eq_i32(hello.cmd_type as i32, CommandType.command_hello as i32);
@@ -78,6 +82,10 @@ export fn test_command_router_lookup_and_case() !void {
     const get: CommandInfo = try command_router_lookup(&router, &"get"[0: 3]);
     try assert_eq_i32(get.cmd_type as i32, CommandType.command_get as i32);
     try assert_eq_i32(get.arity, 2);
+
+    const type_info: CommandInfo = try command_router_lookup(&router, &"TYPE"[0: 4]);
+    try assert_eq_i32(type_info.cmd_type as i32, CommandType.command_type as i32);
+    try assert_eq_i32(type_info.arity, 2);
 
     const lpop: CommandInfo = try command_router_lookup(&router, &"lpop"[0: 4]);
     try assert_eq_i32(lpop.cmd_type as i32, CommandType.command_lpop as i32);
@@ -159,6 +167,10 @@ export fn test_command_router_lookup_and_case() !void {
     try assert_eq_i32(exists.cmd_type as i32, CommandType.command_exists as i32);
     try assert_eq_i32(exists.arity, -2);
 
+    const dbsize: CommandInfo = try command_router_lookup(&router, &"dbsize"[0: 6]);
+    try assert_eq_i32(dbsize.cmd_type as i32, CommandType.command_dbsize as i32);
+    try assert_eq_i32(dbsize.arity, 1);
+
     const pexpireat: CommandInfo = try command_router_lookup(&router, &"pexpireat"[0: 9]);
     try assert_eq_i32(pexpireat.cmd_type as i32, CommandType.command_pexpireat as i32);
     try assert_eq_i32(pexpireat.arity, 3);
@@ -180,6 +192,8 @@ export fn test_command_router_arity_validation() !void {
     const watch: CommandInfo = try command_router_lookup(&router, &"WATCH"[0: 5]);
     const unwatch: CommandInfo = try command_router_lookup(&router, &"UNWATCH"[0: 7]);
     const get: CommandInfo = try command_router_lookup(&router, &"GET"[0: 3]);
+    const echo: CommandInfo = try command_router_lookup(&router, &"ECHO"[0: 4]);
+    const type_info: CommandInfo = try command_router_lookup(&router, &"TYPE"[0: 4]);
     const lpop: CommandInfo = try command_router_lookup(&router, &"LPOP"[0: 4]);
     const lpush: CommandInfo = try command_router_lookup(&router, &"LPUSH"[0: 5]);
     const lrange: CommandInfo = try command_router_lookup(&router, &"LRANGE"[0: 6]);
@@ -202,6 +216,7 @@ export fn test_command_router_arity_validation() !void {
     const hset: CommandInfo = try command_router_lookup(&router, &"HSET"[0: 4]);
     const set: CommandInfo = try command_router_lookup(&router, &"SET"[0: 3]);
     const del: CommandInfo = try command_router_lookup(&router, &"DEL"[0: 3]);
+    const dbsize: CommandInfo = try command_router_lookup(&router, &"DBSIZE"[0: 6]);
 
     try command_validate_arity(&hello, 1);
     try command_validate_arity(&hello, 2);
@@ -217,6 +232,8 @@ export fn test_command_router_arity_validation() !void {
     try command_validate_arity(&watch, 4);
     try command_validate_arity(&unwatch, 1);
     try command_validate_arity(&get, 2);
+    try command_validate_arity(&echo, 2);
+    try command_validate_arity(&type_info, 2);
     try command_validate_arity(&lpop, 2);
     try command_validate_arity(&lpush, 3);
     try command_validate_arity(&lpush, 5);
@@ -248,6 +265,7 @@ export fn test_command_router_arity_validation() !void {
     try command_validate_arity(&set, 5);
     try command_validate_arity(&del, 2);
     try command_validate_arity(&del, 4);
+    try command_validate_arity(&dbsize, 1);
 
     var saw_get_wrong: bool = false;
     _ = command_validate_arity(&get, 1) catch |err| {

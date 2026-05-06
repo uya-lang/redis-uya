@@ -738,6 +738,20 @@ export fn test_command_set_get_del_exists() !void {
     try assert_eq_i32(decrby_reply.integer as i32, 2);
     resp_value_free(&decrby_parsed.value);
 
+    var incrbyfloat_missing_parsed: RespParseResult = try parse_resp2(&"*3\r\n$11\r\nINCRBYFLOAT\r\n$8\r\nfcounter\r\n$3\r\n1.5\r\n"[0: 45]);
+    const incrbyfloat_missing_command: Command = try command_executor_test_command(&router, &incrbyfloat_missing_parsed);
+    const incrbyfloat_missing_reply: CommandReply = command_execute_at(&engine, &incrbyfloat_missing_command, 1000u64);
+    try assert_eq_i32(incrbyfloat_missing_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(incrbyfloat_missing_reply.data, &"1.5"[0: 3]));
+    resp_value_free(&incrbyfloat_missing_parsed.value);
+
+    var incrbyfloat_existing_parsed: RespParseResult = try parse_resp2(&"*3\r\n$11\r\nINCRBYFLOAT\r\n$8\r\nfcounter\r\n$1\r\n2\r\n"[0: 43]);
+    const incrbyfloat_existing_command: Command = try command_executor_test_command(&router, &incrbyfloat_existing_parsed);
+    const incrbyfloat_existing_reply: CommandReply = command_execute_at(&engine, &incrbyfloat_existing_command, 1000u64);
+    try assert_eq_i32(incrbyfloat_existing_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(incrbyfloat_existing_reply.data, &"3.5"[0: 3]));
+    resp_value_free(&incrbyfloat_existing_parsed.value);
+
     var setnx_parsed: RespParseResult = try parse_resp2(&"*3\r\n$5\r\nSETNX\r\n$6\r\nnx-key\r\n$5\r\nfirst\r\n"[0: 40]);
     const setnx_command: Command = try command_executor_test_command(&router, &setnx_parsed);
     const setnx_reply: CommandReply = command_execute_at(&engine, &setnx_command, 1000u64);
@@ -834,6 +848,13 @@ export fn test_command_set_get_del_exists() !void {
     try assert_eq_i32(gs_del_reply.typ as i32, CommandReplyType.reply_integer as i32);
     try assert_eq_i32(gs_del_reply.integer as i32, 1);
     resp_value_free(&gs_del_parsed.value);
+
+    var fcounter_del_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nDEL\r\n$8\r\nfcounter\r\n"[0: 27]);
+    const fcounter_del_command: Command = try command_executor_test_command(&router, &fcounter_del_parsed);
+    const fcounter_del_reply: CommandReply = command_execute_at(&engine, &fcounter_del_command, 1000u64);
+    try assert_eq_i32(fcounter_del_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(fcounter_del_reply.integer as i32, 1);
+    resp_value_free(&fcounter_del_parsed.value);
 
     var echo_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nECHO\r\n$2\r\nhi\r\n"[0: 22]);
     const echo_command: Command = try command_executor_test_command(&router, &echo_parsed);
@@ -1425,6 +1446,23 @@ export fn test_command_error_paths() !void {
     const setex_bad_reply: CommandReply = command_execute_at(&engine, &setex_bad_command, 1000u64);
     try assert_eq_i32(setex_bad_reply.typ as i32, CommandReplyType.reply_error as i32);
     resp_value_free(&setex_bad_parsed.value);
+
+    var incrbyfloat_bad_arg_parsed: RespParseResult = try parse_resp2(&"*3\r\n$11\r\nINCRBYFLOAT\r\n$3\r\nkey\r\n$3\r\nbad\r\n"[0: 42]);
+    const incrbyfloat_bad_arg_command: Command = try command_executor_test_command(&router, &incrbyfloat_bad_arg_parsed);
+    const incrbyfloat_bad_arg_reply: CommandReply = command_execute_at(&engine, &incrbyfloat_bad_arg_command, 1000u64);
+    try assert_eq_i32(incrbyfloat_bad_arg_reply.typ as i32, CommandReplyType.reply_error as i32);
+    resp_value_free(&incrbyfloat_bad_arg_parsed.value);
+
+    var hset_float_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nHSET\r\n$5\r\nfhash\r\n$5\r\nfield\r\n$5\r\nvalue\r\n"[0: 47]);
+    const hset_float_command: Command = try command_executor_test_command(&router, &hset_float_parsed);
+    _ = command_execute_at(&engine, &hset_float_command, 1000u64);
+    resp_value_free(&hset_float_parsed.value);
+
+    var incrbyfloat_wrongtype_parsed: RespParseResult = try parse_resp2(&"*3\r\n$11\r\nINCRBYFLOAT\r\n$5\r\nfhash\r\n$1\r\n1\r\n"[0: 43]);
+    const incrbyfloat_wrongtype_command: Command = try command_executor_test_command(&router, &incrbyfloat_wrongtype_parsed);
+    const incrbyfloat_wrongtype_reply: CommandReply = command_execute_at(&engine, &incrbyfloat_wrongtype_command, 1000u64);
+    try assert_eq_i32(incrbyfloat_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    resp_value_free(&incrbyfloat_wrongtype_parsed.value);
 
     var setrange_bad_parsed: RespParseResult = try parse_resp2(&"*4\r\n$8\r\nSETRANGE\r\n$3\r\nkey\r\n$2\r\n-1\r\n$1\r\nx\r\n"[0: 42]);
     const setrange_bad_command: Command = try command_executor_test_command(&router, &setrange_bad_parsed);

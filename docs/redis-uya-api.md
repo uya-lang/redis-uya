@@ -183,6 +183,24 @@ DECRBY key decrement
 - key 不存在时按 `0` 处理
 - key 必须持有可解析的十进制整数字符串，否则返回整数解析错误
 
+### `INCRBYFLOAT`
+
+格式：
+
+```text
+INCRBYFLOAT key increment
+```
+
+返回：
+
+- 加法后的浮点字符串，Bulk String
+
+说明：
+
+- key 不存在时按 `0` 处理
+- key 和 increment 都必须是合法十进制浮点文本
+- 结果会归一化为最短常见十进制形态，例如 `1.5`、`3.5`
+
 ### `GETSET`
 
 格式：

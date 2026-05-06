@@ -155,6 +155,11 @@ class RedisPySubsetClient:
     def setrange(self, key: str, offset: int, value: str) -> int:
         return int(self._request(b"SETRANGE", key.encode(), str(offset).encode(), value.encode()))
 
+    def incrbyfloat(self, key: str, amount: str) -> bytes:
+        result = self._request(b"INCRBYFLOAT", key.encode(), amount.encode())
+        assert isinstance(result, bytes)
+        return result
+
     def append(self, key: str, value: str) -> int:
         return int(self._request(b"APPEND", key.encode(), value.encode()))
 
@@ -316,6 +321,8 @@ def run_smoke() -> None:
             assert client.incrby("counter", 4) == 5
             assert client.decr("counter") == 4
             assert client.decrby("counter", 2) == 2
+            assert client.incrbyfloat("fcounter", "1.5") == b"1.5"
+            assert client.incrbyfloat("fcounter", "2") == b"3.5"
             assert client.setnx("nx-key", "first") == 1
             assert client.setnx("nx-key", "second") == 0
             assert client.getset("gs-key", "first") is None
@@ -334,7 +341,7 @@ def run_smoke() -> None:
             assert client.getdel("gd-key") == b"once"
             assert client.getdel("gd-key") is None
             assert client.delete("counter") == 1
-            assert client.delete("nx-key", "gs-key", "sx-key", "mk1", "mk2", "mn1", "mn2") == 7
+            assert client.delete("fcounter", "nx-key", "gs-key", "sx-key", "mk1", "mk2", "mn1", "mn2") == 8
             assert client.echo("hi") == b"hi"
             assert client.key_type("key") == "string"
             assert client.dbsize() == 1

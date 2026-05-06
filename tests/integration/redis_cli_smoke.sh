@@ -91,6 +91,18 @@ if [[ "$DECRBY_RESULT" != "2" ]]; then
     exit 1
 fi
 
+INCRBYFLOAT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" incrbyfloat fcounter 1.5)"
+if [[ "$INCRBYFLOAT_RESULT" != "1.5" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected incrbyfloat 1.5, got '$INCRBYFLOAT_RESULT'" >&2
+    exit 1
+fi
+
+INCRBYFLOAT_AGAIN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" incrbyfloat fcounter 2)"
+if [[ "$INCRBYFLOAT_AGAIN_RESULT" != "3.5" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected incrbyfloat 3.5, got '$INCRBYFLOAT_AGAIN_RESULT'" >&2
+    exit 1
+fi
+
 SETNX_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" setnx nx-key first)"
 if [[ "$SETNX_RESULT" != "1" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected setnx 1, got '$SETNX_RESULT'" >&2
@@ -199,9 +211,9 @@ if [[ "$COUNTER_DEL_RESULT" != "1" ]]; then
     exit 1
 fi
 
-TEMP_STRING_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del nx-key gs-key sx-key)"
-if [[ "$TEMP_STRING_DEL_RESULT" != "3" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected temp string DEL 3, got '$TEMP_STRING_DEL_RESULT'" >&2
+TEMP_STRING_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del fcounter nx-key gs-key sx-key)"
+if [[ "$TEMP_STRING_DEL_RESULT" != "4" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected temp string DEL 4, got '$TEMP_STRING_DEL_RESULT'" >&2
     exit 1
 fi
 

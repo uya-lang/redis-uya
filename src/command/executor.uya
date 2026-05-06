@@ -100,6 +100,10 @@ use src.storage.sds.sds_cat_fmt;
 use src.storage.sds.sds_fmt_bytes;
 use src.storage.sds.sds_fmt_i64;
 use src.storage.sds.sds_fmt_u64;
+use libc.strtod;
+use libc.snprintf;
+use libc.isnan;
+use libc.isinf;
 
 export enum CommandReplyType {
     reply_simple_string,
@@ -176,10 +180,6 @@ export fn command_runtime_default() CommandRuntimeInfo {
 
 fn command_executor_empty_slice() &[byte] {
     return (null as &byte)[0: 0];
-}
-
-fn command_executor_dummy_object() &RedisObject {
-    return null as &RedisObject;
 }
 
 fn command_executor_reply(typ: CommandReplyType, data: &[byte], integer: i64) CommandReply {
@@ -265,6 +265,14 @@ fn command_executor_invalid_integer() CommandReply {
     return command_executor_error(&"ERR value is not an integer or out of range"[0: 43]);
 }
 
+fn command_executor_invalid_float() CommandReply {
+    return command_executor_error(&"ERR value is not a valid float"[0: 30]);
+}
+
+fn command_executor_float_overflow() CommandReply {
+    return command_executor_error(&"ERR increment would produce NaN or Infinity"[0: 42]);
+}
+
 fn command_executor_syntax_error() CommandReply {
     return command_executor_error(&"ERR syntax error"[0: 16]);
 }
@@ -306,6 +314,153 @@ fn command_executor_parse_i64(data: &[byte]) !i64 {
 
 fn command_executor_arg(command: &Command, index: usize) !&[byte] {
     return command_arg_data(command, index);
+}
+
+fn command_executor_validate_float_token(data: &[byte]) bool {
+    if data.len == 0 {
+        return false;
+    }
+    var index: usize = 0;
+    if data.ptr[index] == 43 as byte || data.ptr[index] == 45 as byte {
+        index = index + 1;
+        if index >= data.len {
+            return false;
+        }
+    }
+
+    var digits_before: usize = 0;
+    while index < data.len && data.ptr[index] >= 48 as byte && data.ptr[index] <= 57 as byte {
+        digits_before = digits_before + 1;
+        index = index + 1;
+    }
+
+    var digits_after: usize = 0;
+    if index < data.len && data.ptr[index] == 46 as byte {
+        index = index + 1;
+        while index < data.len && data.ptr[index] >= 48 as byte && data.ptr[index] <= 57 as byte {
+            digits_after = digits_after + 1;
+            index = index + 1;
+        }
+    }
+
+    if digits_before + digits_after == 0 {
+        return false;
+    }
+
+    if index < data.len && (data.ptr[index] == 101 as byte || data.ptr[index] == 69 as byte) {
+        index = index + 1;
+        if index >= data.len {
+            return false;
+        }
+        if data.ptr[index] == 43 as byte || data.ptr[index] == 45 as byte {
+            index = index + 1;
+            if index >= data.len {
+                return false;
+            }
+        }
+        var exp_digits: usize = 0;
+        while index < data.len && data.ptr[index] >= 48 as byte && data.ptr[index] <= 57 as byte {
+            exp_digits = exp_digits + 1;
+            index = index + 1;
+        }
+        if exp_digits == 0 {
+            return false;
+        }
+    }
+
+    return index == data.len;
+}
+
+fn command_executor_parse_f64(data: &[byte]) !f64 {
+    if !command_executor_validate_float_token(data) {
+        return error.CommandInvalidFloat;
+    }
+    if data.len >= 255usize {
+        return error.CommandInvalidFloat;
+    }
+    var buf: [byte: 256] = [];
+    var index: usize = 0;
+    while index < data.len {
+        buf[index] = data.ptr[index];
+        index = index + 1;
+    }
+    buf[data.len] = 0 as byte;
+    const parsed: f64 = strtod(&buf[0], null);
+    if isnan(parsed) != 0 || isinf(parsed) != 0 {
+        return error.CommandInvalidFloat;
+    }
+    return parsed;
+}
+
+fn command_executor_set_float_string(engine: &Engine, key: &[byte], value: f64, now_ms: u64) CommandReply {
+    if isnan(value) != 0 || isinf(value) != 0 {
+        return command_executor_float_overflow();
+    }
+    if value == 0.0 {
+        const zero_obj: &RedisObject = create_string_object(&"0"[0: 1]) catch {
+            return command_executor_oom();
+        };
+        _ = set_key_at(engine, key, zero_obj, now_ms) catch {
+            object_free(zero_obj);
+            return command_executor_oom();
+        };
+        return command_executor_bulk(&"0"[0: 1]);
+    }
+
+    var buf: [byte: 128] = [];
+    const written: i32 = snprintf(&buf[0] as *byte, 128usize, "%.17g" as *byte, value);
+    if written <= 0 || written >= 128 {
+        return command_executor_float_overflow();
+    }
+    var text_len: usize = written as usize;
+    var exp_index: usize = text_len;
+    var scan: usize = 0;
+    while scan < text_len {
+        if buf[scan] == 101 as byte || buf[scan] == 69 as byte {
+            exp_index = scan;
+            break;
+        }
+        scan = scan + 1;
+    }
+    var dot_index: usize = exp_index;
+    scan = 0;
+    while scan < exp_index {
+        if buf[scan] == 46 as byte {
+            dot_index = scan;
+            break;
+        }
+        scan = scan + 1;
+    }
+    if dot_index < exp_index {
+        var frac_end: usize = exp_index;
+        while frac_end > dot_index + 1 && frac_end <= text_len && frac_end - 1 < 128usize && buf[frac_end - 1] == 48 as byte {
+            frac_end = frac_end - 1;
+        }
+        if frac_end == dot_index + 1 {
+            frac_end = dot_index;
+        }
+        if exp_index < text_len {
+            var move_src: usize = exp_index;
+            var move_dst: usize = frac_end;
+            while move_src < text_len && move_src < 128usize && move_dst < 128usize {
+                buf[move_dst] = buf[move_src];
+                move_dst = move_dst + 1;
+                move_src = move_src + 1;
+            }
+            text_len = move_dst;
+        } else {
+            text_len = frac_end;
+        }
+    }
+    const text: &[byte] = buf[0: text_len];
+    const obj: &RedisObject = create_string_object(text) catch {
+        return command_executor_oom();
+    };
+    _ = set_key_at(engine, key, obj, now_ms) catch {
+        object_free(obj);
+        return command_executor_oom();
+    };
+    return command_executor_bulk(obj.value.buf[0: obj.value.len]);
 }
 
 fn command_executor_ascii_lower(ch: byte) byte {
@@ -372,6 +527,9 @@ fn command_executor_growth_write_command(command: &Command) bool {
     }
     if cmd_type == CommandType.command_setrange {
         return command.argc == 4;
+    }
+    if cmd_type == CommandType.command_incrbyfloat {
+        return command.argc == 3;
     }
     if cmd_type == CommandType.command_lpush {
         return command.argc >= 3;
@@ -1080,6 +1238,33 @@ fn command_executor_setrange(engine: &Engine, command: &Command, now_ms: u64) Co
         return set_reply_updated;
     }
     return command_executor_integer(updated.len as i64);
+}
+
+fn command_executor_incrbyfloat(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 3 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const increment_data: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    const increment: f64 = command_executor_parse_f64(increment_data) catch {
+        return command_executor_invalid_float();
+    };
+
+    const existing: &RedisObject = command_executor_lookup_key_now_or_null(engine, key, now_ms);
+    if existing == null {
+        return command_executor_set_float_string(engine, key, increment, now_ms);
+    }
+    const current_data: &[byte] = command_executor_string_value(existing) catch {
+        return command_executor_wrongtype();
+    };
+    const current: f64 = command_executor_parse_f64(current_data) catch {
+        return command_executor_invalid_float();
+    };
+    return command_executor_set_float_string(engine, key, current + increment, now_ms);
 }
 
 fn command_executor_mget(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
@@ -2890,6 +3075,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_setrange {
         return command_executor_setrange(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_incrbyfloat {
+        return command_executor_incrbyfloat(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_append {
         return command_executor_append(engine, command, now_ms);

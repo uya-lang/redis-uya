@@ -205,6 +205,36 @@ if [[ -n "$GETDEL_MISSING_RESULT" ]]; then
     exit 1
 fi
 
+HSET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hset hash field value)"
+if [[ "$HSET_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HSET 1, got '$HSET_RESULT'" >&2
+    exit 1
+fi
+
+HGET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hget hash field)"
+if [[ "$HGET_RESULT" != "value" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HGET value, got '$HGET_RESULT'" >&2
+    exit 1
+fi
+
+HINCRBY_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hincrby hash counter 2)"
+if [[ "$HINCRBY_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HINCRBY 2, got '$HINCRBY_RESULT'" >&2
+    exit 1
+fi
+
+HINCRBYFLOAT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hincrbyfloat hash ratio 1.5)"
+if [[ "$HINCRBYFLOAT_RESULT" != "1.5" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HINCRBYFLOAT 1.5, got '$HINCRBYFLOAT_RESULT'" >&2
+    exit 1
+fi
+
+HASH_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del hash)"
+if [[ "$HASH_DEL_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected hash DEL 1, got '$HASH_DEL_RESULT'" >&2
+    exit 1
+fi
+
 COUNTER_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del counter)"
 if [[ "$COUNTER_DEL_RESULT" != "1" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected counter DEL 1, got '$COUNTER_DEL_RESULT'" >&2

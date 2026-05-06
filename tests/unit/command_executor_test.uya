@@ -1055,6 +1055,43 @@ export fn test_command_hset_hget() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_command_hincrby_hincrbyfloat() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+
+    var hincrby_missing_parsed: RespParseResult = try parse_resp2(&"*4\r\n$7\r\nHINCRBY\r\n$4\r\nhash\r\n$7\r\ncounter\r\n$1\r\n2\r\n"[0: 47]);
+    const hincrby_missing_command: Command = try command_executor_test_command(&router, &hincrby_missing_parsed);
+    const hincrby_missing_reply: CommandReply = command_execute_at(&engine, &hincrby_missing_command, 1000u64);
+    try assert_eq_i32(hincrby_missing_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(hincrby_missing_reply.integer as i32, 2);
+    resp_value_free(&hincrby_missing_parsed.value);
+
+    var hincrby_existing_parsed: RespParseResult = try parse_resp2(&"*4\r\n$7\r\nHINCRBY\r\n$4\r\nhash\r\n$7\r\ncounter\r\n$2\r\n-1\r\n"[0: 48]);
+    const hincrby_existing_command: Command = try command_executor_test_command(&router, &hincrby_existing_parsed);
+    const hincrby_existing_reply: CommandReply = command_execute_at(&engine, &hincrby_existing_command, 1000u64);
+    try assert_eq_i32(hincrby_existing_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(hincrby_existing_reply.integer as i32, 1);
+    resp_value_free(&hincrby_existing_parsed.value);
+
+    var hincrbyfloat_missing_parsed: RespParseResult = try parse_resp2(&"*4\r\n$12\r\nHINCRBYFLOAT\r\n$4\r\nhash\r\n$5\r\nratio\r\n$3\r\n1.5\r\n"[0: 53]);
+    const hincrbyfloat_missing_command: Command = try command_executor_test_command(&router, &hincrbyfloat_missing_parsed);
+    const hincrbyfloat_missing_reply: CommandReply = command_execute_at(&engine, &hincrbyfloat_missing_command, 1000u64);
+    try assert_eq_i32(hincrbyfloat_missing_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(hincrbyfloat_missing_reply.data, &"1.5"[0: 3]));
+    resp_value_free(&hincrbyfloat_missing_parsed.value);
+
+    var hincrbyfloat_existing_parsed: RespParseResult = try parse_resp2(&"*4\r\n$12\r\nHINCRBYFLOAT\r\n$4\r\nhash\r\n$5\r\nratio\r\n$1\r\n2\r\n"[0: 51]);
+    const hincrbyfloat_existing_command: Command = try command_executor_test_command(&router, &hincrbyfloat_existing_parsed);
+    const hincrbyfloat_existing_reply: CommandReply = command_execute_at(&engine, &hincrbyfloat_existing_command, 1000u64);
+    try assert_eq_i32(hincrbyfloat_existing_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(hincrbyfloat_existing_reply.data, &"3.5"[0: 3]));
+    resp_value_free(&hincrbyfloat_existing_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_command_lpush_lpop_lrange() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();

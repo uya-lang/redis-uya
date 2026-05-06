@@ -250,6 +250,7 @@ build/redis-uya 6380 1
 - String 第四批多 key：`MGET`、`MSET`、`MSETNX`
 - String 第五批范围读写：`GETRANGE`、`SETRANGE`
 - String 第六批浮点计数：`INCRBYFLOAT`
+- Hash 第一批数值：`HINCRBY`、`HINCRBYFLOAT`
 - Key/Server 第一批：`ECHO`、`TYPE`、`DBSIZE`
 - Key/Server 第二批：`PEXPIRE`、`PERSIST`、`PTTL`
 - AOF append/replay、RDB 子集、`SAVE`、`BGSAVE`、`BGREWRITEAOF`

@@ -204,6 +204,14 @@ class RedisPySubsetClient:
     def hget(self, key: str, field: str) -> bytes | None:
         return self._request(b"HGET", key.encode(), field.encode())
 
+    def hincrby(self, key: str, field: str, amount: int) -> int:
+        return int(self._request(b"HINCRBY", key.encode(), field.encode(), str(amount).encode()))
+
+    def hincrbyfloat(self, key: str, field: str, amount: str) -> bytes:
+        result = self._request(b"HINCRBYFLOAT", key.encode(), field.encode(), amount.encode())
+        assert isinstance(result, bytes)
+        return result
+
     def lpush(self, key: str, *values: str) -> int:
         return int(self._request(b"LPUSH", key.encode(), *(value.encode() for value in values)))
 
@@ -362,6 +370,8 @@ def run_smoke() -> None:
 
             assert client.hset("hash", "field", "value") == 1
             assert client.hget("hash", "field") == b"value"
+            assert client.hincrby("hash", "counter", 2) == 2
+            assert client.hincrbyfloat("hash", "ratio", "1.5") == b"1.5"
 
             assert client.lpush("list", "a", "b", "c") == 3
             assert client.lrange("list", 0, -1) == [b"c", b"b", b"a"]

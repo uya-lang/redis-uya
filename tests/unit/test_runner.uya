@@ -99,6 +99,7 @@ use tests.unit.command_executor_test.test_command_maxmemory_noeviction;
 use tests.unit.command_executor_test.test_command_maxmemory_allkeys_lru;
 use tests.unit.command_executor_test.test_command_maxmemory_allkeys_lfu;
 use tests.unit.command_executor_test.test_command_hset_hget;
+use tests.unit.command_executor_test.test_command_hincrby_hincrbyfloat;
 use tests.unit.command_executor_test.test_command_lpush_lpop_lrange;
 use tests.unit.command_executor_test.test_command_sadd_srem_smembers;
 use tests.unit.command_executor_test.test_command_zadd_zrem_zrange;
@@ -538,6 +539,10 @@ export fn main() i32 {
     const before_exec_hash: i32 = failed;
     _ = test_command_hset_hget() catch { printf("[FAIL] command_executor/hash\n" as *byte); failed = failed + 1; };
     if failed == before_exec_hash { printf("[PASS] command_executor/hash\n" as *byte); }
+
+    const before_exec_hash_numeric: i32 = failed;
+    _ = test_command_hincrby_hincrbyfloat() catch { printf("[FAIL] command_executor/hash_numeric\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_hash_numeric { printf("[PASS] command_executor/hash_numeric\n" as *byte); }
 
     const before_exec_list: i32 = failed;
     _ = test_command_lpush_lpop_lrange() catch { printf("[FAIL] command_executor/list\n" as *byte); failed = failed + 1; };

@@ -244,6 +244,41 @@ SETEX key seconds value
 - 当前实现要求 `seconds > 0`
 - AOF 中会展开为 `SET` + 绝对 `PEXPIREAT`
 
+### `HINCRBY`
+
+格式：
+
+```text
+HINCRBY key field increment
+```
+
+返回：
+
+- 加法后的整数值，Integer
+
+说明：
+
+- key 不存在时会创建 hash，并把 field 从 `0` 加到目标值
+- field 已存在时必须持有合法十进制整数字符串
+
+### `HINCRBYFLOAT`
+
+格式：
+
+```text
+HINCRBYFLOAT key field increment
+```
+
+返回：
+
+- 加法后的浮点字符串，Bulk String
+
+说明：
+
+- key 不存在时会创建 hash，并把 field 从 `0` 加到目标值
+- field 和 increment 都必须是合法十进制浮点文本
+- 返回值会归一化为最短常见十进制形态
+
 ### `MGET`
 
 格式：

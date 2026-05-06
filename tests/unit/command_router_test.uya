@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 61);
+    try assert_eq_i32(command_router_count(&router) as i32, 63);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -227,6 +227,14 @@ export fn test_command_router_lookup_and_case() !void {
     try assert_eq_i32(hset.cmd_type as i32, CommandType.command_hset as i32);
     try assert_eq_i32(hset.arity, 4);
 
+    const hincrby: CommandInfo = try command_router_lookup(&router, &"HINCRBY"[0: 7]);
+    try assert_eq_i32(hincrby.cmd_type as i32, CommandType.command_hincrby as i32);
+    try assert_eq_i32(hincrby.arity, 4);
+
+    const hincrbyfloat: CommandInfo = try command_router_lookup(&router, &"hincrbyfloat"[0: 12]);
+    try assert_eq_i32(hincrbyfloat.cmd_type as i32, CommandType.command_hincrbyfloat as i32);
+    try assert_eq_i32(hincrbyfloat.arity, 4);
+
     const exists: CommandInfo = try command_router_lookup(&router, &"ExIsTs"[0: 6]);
     try assert_eq_i32(exists.cmd_type as i32, CommandType.command_exists as i32);
     try assert_eq_i32(exists.arity, -2);
@@ -306,6 +314,8 @@ export fn test_command_router_arity_validation() !void {
     const incrbyfloat: CommandInfo = try command_router_lookup(&router, &"INCRBYFLOAT"[0: 11]);
     const hget: CommandInfo = try command_router_lookup(&router, &"HGET"[0: 4]);
     const hset: CommandInfo = try command_router_lookup(&router, &"HSET"[0: 4]);
+    const hincrby: CommandInfo = try command_router_lookup(&router, &"HINCRBY"[0: 7]);
+    const hincrbyfloat: CommandInfo = try command_router_lookup(&router, &"HINCRBYFLOAT"[0: 12]);
     const set: CommandInfo = try command_router_lookup(&router, &"SET"[0: 3]);
     const del: CommandInfo = try command_router_lookup(&router, &"DEL"[0: 3]);
     const dbsize: CommandInfo = try command_router_lookup(&router, &"DBSIZE"[0: 6]);
@@ -375,6 +385,8 @@ export fn test_command_router_arity_validation() !void {
     try command_validate_arity(&incrbyfloat, 3);
     try command_validate_arity(&hget, 3);
     try command_validate_arity(&hset, 4);
+    try command_validate_arity(&hincrby, 4);
+    try command_validate_arity(&hincrbyfloat, 4);
     try command_validate_arity(&set, 3);
     try command_validate_arity(&set, 5);
     try command_validate_arity(&del, 2);

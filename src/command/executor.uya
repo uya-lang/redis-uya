@@ -44,6 +44,10 @@ use src.replication.state.ReplicationRole;
 use src.replication.state.ReplicationState;
 use src.replication.state.replication_role_name;
 use src.replication.state.replication_state_name;
+use src.storage.dict.DictEntry;
+use src.storage.dict.DictIterator;
+use src.storage.dict.dict_iter_new;
+use src.storage.dict.dict_iter_next;
 use src.storage.engine.Engine;
 use src.storage.engine.engine_len;
 use src.storage.engine.engine_expire_len;
@@ -71,6 +75,7 @@ use src.storage.object.create_set_object;
 use src.storage.object.create_zset_object;
 use src.storage.object.hash_object_set_field;
 use src.storage.object.hash_object_get_field;
+use src.storage.object.list_object_insert_sorted_lex;
 use src.storage.object.list_object_push_head;
 use src.storage.object.list_object_push_tail;
 use src.storage.object.list_object_pop_head;
@@ -561,6 +566,23 @@ fn command_executor_hash_set_float_field(obj: &RedisObject, field: &[byte], valu
         return command_executor_wrongtype();
     };
     return command_executor_bulk(data);
+}
+
+fn command_executor_hash_sorted_fields(obj: &RedisObject) !&RedisObject {
+    if obj == null || obj.obj_type != ObjectType.object_hash {
+        return error.ObjectWrongType;
+    }
+    const fields: &RedisObject = try create_list_object();
+    var iter: DictIterator = dict_iter_new();
+    var entry: &DictEntry = dict_iter_next(&obj.hash_dict, &iter);
+    while entry != null {
+        _ = list_object_insert_sorted_lex(fields, entry.key.buf[0: entry.key.len]) catch {
+            object_free(fields);
+            return error.AllocOutOfMemory;
+        };
+        entry = dict_iter_next(&obj.hash_dict, &iter);
+    }
+    return fields;
 }
 
 fn command_executor_ascii_lower(ch: byte) byte {
@@ -2129,6 +2151,140 @@ fn command_executor_hincrbyfloat(engine: &Engine, command: &Command, now_ms: u64
     return command_executor_hash_set_float_field(hash_obj, field, current + increment);
 }
 
+fn command_executor_hkeys(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 2 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+        return command_executor_array_bulk(null as &ListNode, 0);
+    };
+    if obj.obj_type != ObjectType.object_hash {
+        return command_executor_wrongtype();
+    }
+    const fields: &RedisObject = command_executor_hash_sorted_fields(obj) catch |err| {
+        if err == error.AllocOutOfMemory {
+            return command_executor_oom();
+        }
+        return command_executor_wrongtype();
+    };
+    const count: usize = list_object_len(fields) catch {
+        object_free(fields);
+        return command_executor_wrongtype();
+    };
+    var reply: CommandReply = command_executor_array_bulk(fields.list_head, count);
+    reply.owned_object = fields;
+    return reply;
+}
+
+fn command_executor_hvals(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 2 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+        return command_executor_array_bulk(null as &ListNode, 0);
+    };
+    if obj.obj_type != ObjectType.object_hash {
+        return command_executor_wrongtype();
+    }
+    const fields: &RedisObject = command_executor_hash_sorted_fields(obj) catch |err| {
+        if err == error.AllocOutOfMemory {
+            return command_executor_oom();
+        }
+        return command_executor_wrongtype();
+    };
+    defer {
+        object_free(fields);
+    }
+    const values: &RedisObject = create_list_object() catch {
+        return command_executor_oom();
+    };
+    var node: &ListNode = fields.list_head;
+    while node != null {
+        const field: &[byte] = node.value.value.buf[0: node.value.value.len];
+        const field_obj: &RedisObject = hash_object_get_field(obj, field) catch {
+            object_free(values);
+            return command_executor_wrongtype();
+        };
+        const data: &[byte] = command_executor_string_value(field_obj) catch {
+            object_free(values);
+            return command_executor_wrongtype();
+        };
+        _ = list_object_push_tail(values, data) catch {
+            object_free(values);
+            return command_executor_oom();
+        };
+        node = node.next;
+    }
+    const count: usize = list_object_len(values) catch {
+        object_free(values);
+        return command_executor_wrongtype();
+    };
+    var reply: CommandReply = command_executor_array_bulk(values.list_head, count);
+    reply.owned_object = values;
+    return reply;
+}
+
+fn command_executor_hgetall(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 2 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+        return command_executor_array_bulk(null as &ListNode, 0);
+    };
+    if obj.obj_type != ObjectType.object_hash {
+        return command_executor_wrongtype();
+    }
+    const fields: &RedisObject = command_executor_hash_sorted_fields(obj) catch |err| {
+        if err == error.AllocOutOfMemory {
+            return command_executor_oom();
+        }
+        return command_executor_wrongtype();
+    };
+    defer {
+        object_free(fields);
+    }
+    const pairs: &RedisObject = create_list_object() catch {
+        return command_executor_oom();
+    };
+    var node: &ListNode = fields.list_head;
+    while node != null {
+        const field: &[byte] = node.value.value.buf[0: node.value.value.len];
+        const field_obj: &RedisObject = hash_object_get_field(obj, field) catch {
+            object_free(pairs);
+            return command_executor_wrongtype();
+        };
+        const data: &[byte] = command_executor_string_value(field_obj) catch {
+            object_free(pairs);
+            return command_executor_wrongtype();
+        };
+        _ = list_object_push_tail(pairs, field) catch {
+            object_free(pairs);
+            return command_executor_oom();
+        };
+        _ = list_object_push_tail(pairs, data) catch {
+            object_free(pairs);
+            return command_executor_oom();
+        };
+        node = node.next;
+    }
+    const count: usize = list_object_len(pairs) catch {
+        object_free(pairs);
+        return command_executor_wrongtype();
+    };
+    var reply: CommandReply = command_executor_array_bulk(pairs.list_head, count);
+    reply.owned_object = pairs;
+    return reply;
+}
+
 fn command_executor_set(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
     if command.argc != 3 {
         return command_executor_error(&"ERR syntax error"[0: 16]);
@@ -3311,6 +3467,15 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_hincrbyfloat {
         return command_executor_hincrbyfloat(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_hkeys {
+        return command_executor_hkeys(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_hvals {
+        return command_executor_hvals(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_hgetall {
+        return command_executor_hgetall(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_set {
         return command_executor_set(engine, command, now_ms);

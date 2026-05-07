@@ -229,6 +229,24 @@ if [[ "$HINCRBYFLOAT_RESULT" != "1.5" ]]; then
     exit 1
 fi
 
+HKEYS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hkeys hash | sort)"
+if [[ "$HKEYS_RESULT" != $'counter\nfield\nratio' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HKEYS set, got '$HKEYS_RESULT'" >&2
+    exit 1
+fi
+
+HVALS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hvals hash | sort)"
+if [[ "$HVALS_RESULT" != $'1.5\n2\nvalue' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HVALS set, got '$HVALS_RESULT'" >&2
+    exit 1
+fi
+
+HGETALL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hgetall hash | wc -l | tr -d ' ')"
+if [[ "$HGETALL_RESULT" != "6" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HGETALL 6 lines, got '$HGETALL_RESULT'" >&2
+    exit 1
+fi
+
 HASH_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del hash)"
 if [[ "$HASH_DEL_RESULT" != "1" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected hash DEL 1, got '$HASH_DEL_RESULT'" >&2

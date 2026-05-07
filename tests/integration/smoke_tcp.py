@@ -173,6 +173,32 @@ def run_smoke() -> None:
             roundtrip(sock, b"*3\r\n$4\r\nHGET\r\n$4\r\nhash\r\n$5\r\nfield\r\n", b"$5\r\nvalue\r\n")
             roundtrip(sock, b"*4\r\n$7\r\nHINCRBY\r\n$4\r\nhash\r\n$7\r\ncounter\r\n$1\r\n2\r\n", b":2\r\n")
             roundtrip(sock, b"*4\r\n$12\r\nHINCRBYFLOAT\r\n$4\r\nhash\r\n$5\r\nratio\r\n$3\r\n1.5\r\n", b"$3\r\n1.5\r\n")
+            sock.sendall(b"*2\r\n$5\r\nHKEYS\r\n$4\r\nhash\r\n")
+            hkeys_actual = recv_exact(sock, len(b"*3\r\n$7\r\ncounter\r\n$5\r\nfield\r\n$5\r\nratio\r\n"))
+            if hkeys_actual not in (
+                b"*3\r\n$7\r\ncounter\r\n$5\r\nfield\r\n$5\r\nratio\r\n",
+                b"*3\r\n$5\r\nfield\r\n$5\r\nratio\r\n$7\r\ncounter\r\n",
+                b"*3\r\n$5\r\nratio\r\n$7\r\ncounter\r\n$5\r\nfield\r\n",
+                b"*3\r\n$5\r\nfield\r\n$7\r\ncounter\r\n$5\r\nratio\r\n",
+                b"*3\r\n$7\r\ncounter\r\n$5\r\nratio\r\n$5\r\nfield\r\n",
+                b"*3\r\n$5\r\nratio\r\n$5\r\nfield\r\n$7\r\ncounter\r\n",
+            ):
+                raise AssertionError(f"unexpected HKEYS reply: {hkeys_actual!r}")
+            sock.sendall(b"*2\r\n$5\r\nHVALS\r\n$4\r\nhash\r\n")
+            hvals_actual = recv_exact(sock, len(b"*3\r\n$1\r\n2\r\n$5\r\nvalue\r\n$3\r\n1.5\r\n"))
+            if hvals_actual not in (
+                b"*3\r\n$1\r\n2\r\n$5\r\nvalue\r\n$3\r\n1.5\r\n",
+                b"*3\r\n$5\r\nvalue\r\n$3\r\n1.5\r\n$1\r\n2\r\n",
+                b"*3\r\n$3\r\n1.5\r\n$1\r\n2\r\n$5\r\nvalue\r\n",
+                b"*3\r\n$5\r\nvalue\r\n$1\r\n2\r\n$3\r\n1.5\r\n",
+                b"*3\r\n$1\r\n2\r\n$3\r\n1.5\r\n$5\r\nvalue\r\n",
+                b"*3\r\n$3\r\n1.5\r\n$5\r\nvalue\r\n$1\r\n2\r\n",
+            ):
+                raise AssertionError(f"unexpected HVALS reply: {hvals_actual!r}")
+            sock.sendall(b"*2\r\n$7\r\nHGETALL\r\n$4\r\nhash\r\n")
+            hgetall_actual = recv_exact(sock, len(b"*6\r\n$7\r\ncounter\r\n$1\r\n2\r\n$5\r\nfield\r\n$5\r\nvalue\r\n$5\r\nratio\r\n$3\r\n1.5\r\n"))
+            if hgetall_actual != b"*6\r\n$7\r\ncounter\r\n$1\r\n2\r\n$5\r\nfield\r\n$5\r\nvalue\r\n$5\r\nratio\r\n$3\r\n1.5\r\n":
+                raise AssertionError(f"unexpected HGETALL reply: {hgetall_actual!r}")
             roundtrip(sock, b"*5\r\n$5\r\nLPUSH\r\n$4\r\nlist\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\nc\r\n", b":3\r\n")
             roundtrip(sock, b"*4\r\n$6\r\nLRANGE\r\n$4\r\nlist\r\n$1\r\n0\r\n$2\r\n-1\r\n", b"*3\r\n$1\r\nc\r\n$1\r\nb\r\n$1\r\na\r\n")
             roundtrip(sock, b"*2\r\n$4\r\nLPOP\r\n$4\r\nlist\r\n", b"$1\r\nc\r\n")

@@ -1117,7 +1117,10 @@ export fn test_command_hkeys_hvals_hgetall() !void {
     const hkeys_command: Command = try command_executor_test_command(&router, &hkeys_parsed);
     var hkeys_reply: CommandReply = command_execute_at(&engine, &hkeys_command, 1000u64);
     const hkeys_len: usize = try connection_encode_reply(&hkeys_reply, &out[0], 256);
-    try assert_true(command_executor_test_slice_eq(out[0: hkeys_len], &"*3\r\n$7\r\ncounter\r\n$5\r\nfield\r\n$5\r\nratio\r\n"[0: 39]));
+    try assert_true(command_executor_test_contains(out[0: hkeys_len], &"*3\r\n"[0: 4]));
+    try assert_true(command_executor_test_contains(out[0: hkeys_len], &"$7\r\ncounter\r\n"[0: 13]));
+    try assert_true(command_executor_test_contains(out[0: hkeys_len], &"$5\r\nfield\r\n"[0: 11]));
+    try assert_true(command_executor_test_contains(out[0: hkeys_len], &"$5\r\nratio\r\n"[0: 11]));
     command_reply_cleanup(&hkeys_reply);
     resp_value_free(&hkeys_parsed.value);
 
@@ -1125,7 +1128,10 @@ export fn test_command_hkeys_hvals_hgetall() !void {
     const hvals_command: Command = try command_executor_test_command(&router, &hvals_parsed);
     var hvals_reply: CommandReply = command_execute_at(&engine, &hvals_command, 1000u64);
     const hvals_len: usize = try connection_encode_reply(&hvals_reply, &out[0], 256);
-    try assert_true(command_executor_test_slice_eq(out[0: hvals_len], &"*3\r\n$1\r\n2\r\n$5\r\nvalue\r\n$3\r\n1.5\r\n"[0: 31]));
+    try assert_true(command_executor_test_contains(out[0: hvals_len], &"*3\r\n"[0: 4]));
+    try assert_true(command_executor_test_contains(out[0: hvals_len], &"$1\r\n2\r\n"[0: 7]));
+    try assert_true(command_executor_test_contains(out[0: hvals_len], &"$5\r\nvalue\r\n"[0: 11]));
+    try assert_true(command_executor_test_contains(out[0: hvals_len], &"$3\r\n1.5\r\n"[0: 9]));
     command_reply_cleanup(&hvals_reply);
     resp_value_free(&hvals_parsed.value);
 
@@ -1133,7 +1139,10 @@ export fn test_command_hkeys_hvals_hgetall() !void {
     const hgetall_command: Command = try command_executor_test_command(&router, &hgetall_parsed);
     var hgetall_reply: CommandReply = command_execute_at(&engine, &hgetall_command, 1000u64);
     const hgetall_len: usize = try connection_encode_reply(&hgetall_reply, &out[0], 256);
-    try assert_true(command_executor_test_slice_eq(out[0: hgetall_len], &"*6\r\n$7\r\ncounter\r\n$1\r\n2\r\n$5\r\nfield\r\n$5\r\nvalue\r\n$5\r\nratio\r\n$3\r\n1.5\r\n"[0: 66]));
+    try assert_true(command_executor_test_contains(out[0: hgetall_len], &"*6\r\n"[0: 4]));
+    try assert_true(command_executor_test_contains(out[0: hgetall_len], &"$7\r\ncounter\r\n$1\r\n2\r\n"[0: 20]));
+    try assert_true(command_executor_test_contains(out[0: hgetall_len], &"$5\r\nfield\r\n$5\r\nvalue\r\n"[0: 22]));
+    try assert_true(command_executor_test_contains(out[0: hgetall_len], &"$5\r\nratio\r\n$3\r\n1.5\r\n"[0: 20]));
     command_reply_cleanup(&hgetall_reply);
     resp_value_free(&hgetall_parsed.value);
 

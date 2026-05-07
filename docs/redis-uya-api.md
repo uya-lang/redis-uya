@@ -279,6 +279,45 @@ HINCRBYFLOAT key field increment
 - field 和 increment 都必须是合法十进制浮点文本
 - 返回值会归一化为最短常见十进制形态
 
+### `HKEYS`
+
+格式：
+
+```text
+HKEYS key
+```
+
+返回：
+
+- 返回 hash 中全部 field 的 RESP Array
+- key 不存在时返回空 Array
+
+### `HVALS`
+
+格式：
+
+```text
+HVALS key
+```
+
+返回：
+
+- 返回 hash 中全部 value 的 RESP Array
+- key 不存在时返回空 Array
+
+### `HGETALL`
+
+格式：
+
+```text
+HGETALL key
+```
+
+返回：
+
+- 返回 `field, value, field, value...` 交替展开的 RESP Array
+- key 不存在时返回空 Array
+
 ### `MGET`
 
 格式：

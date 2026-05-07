@@ -212,6 +212,21 @@ class RedisPySubsetClient:
         assert isinstance(result, bytes)
         return result
 
+    def hkeys(self, key: str) -> list[bytes]:
+        result = self._request(b"HKEYS", key.encode())
+        assert isinstance(result, list)
+        return result
+
+    def hvals(self, key: str) -> list[bytes]:
+        result = self._request(b"HVALS", key.encode())
+        assert isinstance(result, list)
+        return result
+
+    def hgetall(self, key: str) -> list[bytes]:
+        result = self._request(b"HGETALL", key.encode())
+        assert isinstance(result, list)
+        return result
+
     def lpush(self, key: str, *values: str) -> int:
         return int(self._request(b"LPUSH", key.encode(), *(value.encode() for value in values)))
 
@@ -372,6 +387,11 @@ def run_smoke() -> None:
             assert client.hget("hash", "field") == b"value"
             assert client.hincrby("hash", "counter", 2) == 2
             assert client.hincrbyfloat("hash", "ratio", "1.5") == b"1.5"
+            assert set(client.hkeys("hash")) == {b"counter", b"field", b"ratio"}
+            assert set(client.hvals("hash")) == {b"2", b"value", b"1.5"}
+            hgetall = client.hgetall("hash")
+            if len(hgetall) != 6:
+                raise AssertionError(f"unexpected hgetall size: {hgetall!r}")
 
             assert client.lpush("list", "a", "b", "c") == 3
             assert client.lrange("list", 0, -1) == [b"c", b"b", b"a"]

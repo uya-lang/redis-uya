@@ -619,6 +619,244 @@ export fn list_object_insert_sorted_lex(obj: &RedisObject, data: &[byte]) !usize
     return list_object_push_tail(obj, data);
 }
 
+export fn list_object_pop_tail(obj: &RedisObject) !&RedisObject {
+    if obj == null || obj.obj_type != ObjectType.object_list {
+        return error.ObjectWrongType;
+    }
+    const node: &ListNode = obj.list_tail;
+    if node == null {
+        return error.ObjectListEmpty;
+    }
+
+    const prev: &ListNode = node.prev;
+    obj.list_tail = prev;
+    if prev != null {
+        prev.next = null as &ListNode;
+    } else {
+        obj.list_head = null as &ListNode;
+    }
+    obj.list_len = obj.list_len - 1;
+
+    const value: &RedisObject = node.value;
+    list_node_free(node);
+    return value;
+}
+
+export fn list_object_index_value(obj: &RedisObject, idx: i64) !&RedisObject {
+    if obj == null || obj.obj_type != ObjectType.object_list {
+        return error.ObjectWrongType;
+    }
+    const len_i64: i64 = obj.list_len as i64;
+    var index: i64 = idx;
+    if index < 0 {
+        index = len_i64 + index;
+    }
+    if index < 0 || index >= len_i64 {
+        return error.ObjectFieldNotFound;
+    }
+    var node: &ListNode = obj.list_head;
+    var i: i64 = 0;
+    while i < index {
+        node = node.next;
+        i = i + 1;
+    }
+    return node.value;
+}
+
+fn list_object_node_at(obj: &RedisObject, idx: i64) &ListNode {
+    const len_i64: i64 = obj.list_len as i64;
+    var index: i64 = idx;
+    if index < 0 {
+        index = len_i64 + index;
+    }
+    if index < 0 || index >= len_i64 {
+        return null as &ListNode;
+    }
+    var node: &ListNode = obj.list_head;
+    var i: i64 = 0;
+    while i < index {
+        node = node.next;
+        i = i + 1;
+    }
+    return node;
+}
+
+export fn list_object_set_at(obj: &RedisObject, idx: i64, data: &[byte]) !void {
+    if obj == null || obj.obj_type != ObjectType.object_list {
+        return error.ObjectWrongType;
+    }
+    const len_i64: i64 = obj.list_len as i64;
+    var index: i64 = idx;
+    if index < 0 {
+        index = len_i64 + index;
+    }
+    if index < 0 || index >= len_i64 {
+        return error.ObjectFieldNotFound;
+    }
+    var node: &ListNode = obj.list_head;
+    var i: i64 = 0;
+    while i < index {
+        node = node.next;
+        i = i + 1;
+    }
+    const old_value: &RedisObject = node.value;
+    const new_value: &RedisObject = try create_string_object(data);
+    node.value = new_value;
+    object_free(old_value);
+}
+
+export fn list_object_insert_at(obj: &RedisObject, data: &[byte], idx: i64) !usize {
+    if obj == null || obj.obj_type != ObjectType.object_list {
+        return error.ObjectWrongType;
+    }
+    const len_i64: i64 = obj.list_len as i64;
+    var index: i64 = idx;
+    if index < 0 {
+        index = len_i64 + index;
+    }
+    if index < 0 || index > len_i64 {
+        return error.ObjectFieldNotFound;
+    }
+    if index == 0 {
+        return list_object_push_head(obj, data);
+    }
+    if index as usize == obj.list_len {
+        return list_object_push_tail(obj, data);
+    }
+    var node: &ListNode = obj.list_head;
+    var i: i64 = 0;
+    while i < index - 1 {
+        node = node.next;
+        i = i + 1;
+    }
+    const value: &RedisObject = try create_string_object(data);
+    const new_node: &ListNode = list_node_new(value) catch {
+        object_free(value);
+        return error.AllocOutOfMemory;
+    };
+    new_node.next = node.next;
+    new_node.prev = node;
+    if node.next != null {
+        node.next.prev = new_node;
+    } else {
+        obj.list_tail = new_node;
+    }
+    node.next = new_node;
+    obj.list_len = obj.list_len + 1;
+    return obj.list_len;
+}
+
+export fn list_object_remove_value(obj: &RedisObject, data: &[byte], count: i64, from_tail: bool) !usize {
+    if obj == null || obj.obj_type != ObjectType.object_list {
+        return error.ObjectWrongType;
+    }
+    if obj.list_len == 0 {
+        return 0 as usize;
+    }
+    var removed: usize = 0;
+    var limit: usize = count as usize;
+    if count == 0 {
+        limit = obj.list_len;
+    }
+    var to_remove: usize = 0;
+    if from_tail {
+        var node: &ListNode = obj.list_tail;
+        while node != null && to_remove < limit {
+            const node_data: &[byte] = node.value.value.buf[0: node.value.value.len];
+            if bytes_eq(data, node_data) {
+                const to_delete: &ListNode = node;
+                node = node.prev;
+                if to_delete.prev != null {
+                    to_delete.prev.next = to_delete.next;
+                } else {
+                    obj.list_head = to_delete.next;
+                }
+                if to_delete.next != null {
+                    to_delete.next.prev = to_delete.prev;
+                } else {
+                    obj.list_tail = to_delete.prev;
+                }
+                object_free(to_delete.value);
+                list_node_free(to_delete);
+                obj.list_len = obj.list_len - 1;
+                to_remove = to_remove + 1;
+            } else {
+                node = node.prev;
+            }
+        }
+    } else {
+        var node: &ListNode = obj.list_head;
+        while node != null && to_remove < limit {
+            const node_data: &[byte] = node.value.value.buf[0: node.value.value.len];
+            if bytes_eq(data, node_data) {
+                const to_delete: &ListNode = node;
+                node = node.next;
+                if to_delete.prev != null {
+                    to_delete.prev.next = to_delete.next;
+                } else {
+                    obj.list_head = to_delete.next;
+                }
+                if to_delete.next != null {
+                    to_delete.next.prev = to_delete.prev;
+                } else {
+                    obj.list_tail = to_delete.prev;
+                }
+                object_free(to_delete.value);
+                list_node_free(to_delete);
+                obj.list_len = obj.list_len - 1;
+                to_remove = to_remove + 1;
+            } else {
+                node = node.next;
+            }
+        }
+    }
+    return to_remove;
+}
+
+export fn list_object_count_value(obj: &RedisObject, data: &[byte]) !usize {
+    if obj == null || obj.obj_type != ObjectType.object_list {
+        return error.ObjectWrongType;
+    }
+    var count: usize = 0;
+    var node: &ListNode = obj.list_head;
+    while node != null {
+        const node_data: &[byte] = node.value.value.buf[0: node.value.value.len];
+        if bytes_eq(data, node_data) {
+            count = count + 1;
+        }
+        node = node.next;
+    }
+    return count;
+}
+
+export fn list_object_pos(obj: &RedisObject, data: &[byte], rank: i64, count: i64, max_len: i64) !i64 {
+    if obj == null || obj.obj_type != ObjectType.object_list {
+        return error.ObjectWrongType;
+    }
+    if obj.list_len == 0 {
+        return (-1 as i64);
+    }
+    var r: i64 = rank;
+    if r <= 0 {
+        r = 1;
+    }
+    var current_rank: i64 = 0;
+    var node: &ListNode = obj.list_head;
+    var pos: i64 = 0;
+    while node != null {
+        const node_data: &[byte] = node.value.value.buf[0: node.value.value.len];
+        if bytes_eq(data, node_data) {
+            current_rank = current_rank + 1;
+            if current_rank == r {
+                return pos;
+            }
+        }
+        node = node.next;
+        pos = pos + 1;
+    }
+    return (-1 as i64);
+}
+
 fn zset_score_lookup(obj: &RedisObject, member: &[byte]) !i64 {
     if obj == null || obj.obj_type != ObjectType.object_zset {
         return error.ObjectWrongType;

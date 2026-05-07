@@ -78,6 +78,17 @@ export enum CommandType {
     command_setrange,
     command_incrbyfloat,
     command_hscan,
+    command_rpush,
+    command_rpop,
+    command_lindex,
+    command_linsert,
+    command_lset,
+    command_llen,
+    command_ltrim,
+    command_lrem,
+    command_lpushx,
+    command_rpushx,
+    command_lpos,
 }
 
 export struct CommandInfo {
@@ -104,7 +115,7 @@ export const COMMAND_FLAG_READONLY: u64 = 1u64;
 export const COMMAND_FLAG_WRITE: u64 = 2u64;
 export const COMMAND_FLAG_FAST: u64 = 4u64;
 
-const MIN_COMMAND_COUNT: usize = 67;
+const MIN_COMMAND_COUNT: usize = 78;
 
 fn command_router_name_eq(a: &[byte], b: &[byte]) bool {
     return bytes_ascii_case_eq(a, b);
@@ -331,6 +342,39 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
     }
     if index == 66 {
         return command_router_info(CommandType.command_hscan, &"HSCAN"[0: 5], -3, COMMAND_FLAG_READONLY, 1, 1, 1);
+    }
+    if index == 67 {
+        return command_router_info(CommandType.command_rpush, &"RPUSH"[0: 5], -3, COMMAND_FLAG_WRITE, 1, 1, 1);
+    }
+    if index == 68 {
+        return command_router_info(CommandType.command_rpop, &"RPOP"[0: 4], 2, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 69 {
+        return command_router_info(CommandType.command_lindex, &"LINDEX"[0: 6], 3, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 70 {
+        return command_router_info(CommandType.command_linsert, &"LINSERT"[0: 7], 5, COMMAND_FLAG_WRITE, 1, 1, 1);
+    }
+    if index == 71 {
+        return command_router_info(CommandType.command_lset, &"LSET"[0: 4], 4, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 72 {
+        return command_router_info(CommandType.command_llen, &"LLEN"[0: 4], 2, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 73 {
+        return command_router_info(CommandType.command_ltrim, &"LTRIM"[0: 5], 4, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 74 {
+        return command_router_info(CommandType.command_lrem, &"LREM"[0: 4], 4, COMMAND_FLAG_WRITE, 1, 1, 1);
+    }
+    if index == 75 {
+        return command_router_info(CommandType.command_lpushx, &"LPUSHX"[0: 6], -3, COMMAND_FLAG_WRITE, 1, 1, 1);
+    }
+    if index == 76 {
+        return command_router_info(CommandType.command_rpushx, &"RPUSHX"[0: 6], -3, COMMAND_FLAG_WRITE, 1, 1, 1);
+    }
+    if index == 77 {
+        return command_router_info(CommandType.command_lpos, &"LPOS"[0: 4], 3, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     return error.CommandUnknown;
 }

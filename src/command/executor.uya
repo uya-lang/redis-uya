@@ -2285,6 +2285,122 @@ fn command_executor_hgetall(engine: &Engine, command: &Command, now_ms: u64) Com
     return reply;
 }
 
+fn command_executor_hscan(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 3 {
+        return command_executor_wrong_arity();
+    }
+
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+
+    const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+        return command_executor_scan(0u64, null as &ListNode, 0);
+    };
+    if obj.obj_type != ObjectType.object_hash {
+        return command_executor_wrongtype();
+    }
+
+    const cursor_data: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    const cursor_i64: i64 = command_executor_parse_i64(cursor_data) catch {
+        return command_executor_invalid_integer();
+    };
+    if cursor_i64 < 0 {
+        return command_executor_invalid_integer();
+    }
+
+    var count_hint: usize = 10;
+    if command.argc == 5 {
+        const option: &[byte] = command_executor_arg(command, 3) catch {
+            return command_executor_wrong_arity();
+        };
+        if !command_executor_keyword_eq(option, &"COUNT"[0: 5]) {
+            return command_executor_syntax_error();
+        }
+        const count_data: &[byte] = command_executor_arg(command, 4) catch {
+            return command_executor_wrong_arity();
+        };
+        const count_i64: i64 = command_executor_parse_i64(count_data) catch {
+            return command_executor_invalid_integer();
+        };
+        if count_i64 <= 0 {
+            return command_executor_invalid_integer();
+        }
+        count_hint = count_i64 as usize;
+    }
+
+    const fields: &RedisObject = command_executor_hash_sorted_fields(obj) catch |err| {
+        if err == error.AllocOutOfMemory {
+            return command_executor_oom();
+        }
+        return command_executor_wrongtype();
+    };
+
+    const combined: &RedisObject = create_list_object() catch {
+        object_free(fields);
+        return command_executor_oom();
+    };
+
+    var iter: DictIterator = dict_iter_new();
+    var entry: &DictEntry = dict_iter_next(&obj.hash_dict, &iter);
+    while entry != null {
+        const field_data: &[byte] = entry.key.buf[0: entry.key.len];
+        const field_obj: &RedisObject = hash_object_get_field(obj, field_data) catch {
+            object_free(fields);
+            object_free(combined);
+            return command_executor_wrongtype();
+        };
+        const value_data: &[byte] = command_executor_string_value(field_obj) catch {
+            object_free(fields);
+            object_free(combined);
+            return command_executor_wrongtype();
+        };
+        _ = list_object_push_tail(combined, field_data) catch {
+            object_free(fields);
+            object_free(combined);
+            return command_executor_oom();
+        };
+        _ = list_object_push_tail(combined, value_data) catch {
+            object_free(fields);
+            object_free(combined);
+            return command_executor_oom();
+        };
+        entry = dict_iter_next(&obj.hash_dict, &iter);
+    }
+    object_free(fields);
+
+    const total_fields: usize = list_object_len(combined) catch {
+        object_free(combined);
+        return command_executor_wrongtype();
+    };
+    const total: usize = total_fields / 2;
+
+    const cursor: usize = cursor_i64 as usize;
+    var emit_head: &ListNode = null as &ListNode;
+    var emit_count: usize = 0;
+    var next_cursor: u64 = 0u64;
+
+    if cursor < total {
+        const start_offset: i64 = cursor_i64 * 2;
+        const stop_offset: i64 = start_offset + (count_hint as i64) * 2 - 1;
+        const view: ListRangeView = list_object_range(combined, start_offset, stop_offset) catch {
+            object_free(combined);
+            return command_executor_wrongtype();
+        };
+        emit_head = view.head;
+        emit_count = view.count;
+        if cursor + (emit_count / 2) < total {
+            next_cursor = (cursor + (emit_count / 2)) as u64;
+        }
+    }
+
+    var reply: CommandReply = command_executor_scan(next_cursor, emit_head, emit_count);
+    reply.owned_object = combined;
+    return reply;
+}
+
 fn command_executor_set(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
     if command.argc != 3 {
         return command_executor_error(&"ERR syntax error"[0: 16]);
@@ -3476,6 +3592,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_hgetall {
         return command_executor_hgetall(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_hscan {
+        return command_executor_hscan(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_set {
         return command_executor_set(engine, command, now_ms);

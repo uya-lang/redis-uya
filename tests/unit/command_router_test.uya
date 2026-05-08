@@ -195,6 +195,18 @@ export fn test_command_router_lookup_and_case() !void {
     try assert_eq_i32(lrem.cmd_type as i32, CommandType.command_lrem as i32);
     try assert_eq_i32(lrem.arity, 4);
 
+    const lpushx: CommandInfo = try command_router_lookup(&router, &"LPUSHX"[0: 6]);
+    try assert_eq_i32(lpushx.cmd_type as i32, CommandType.command_lpushx as i32);
+    try assert_eq_i32(lpushx.arity, -3);
+
+    const rpushx: CommandInfo = try command_router_lookup(&router, &"rpushx"[0: 6]);
+    try assert_eq_i32(rpushx.cmd_type as i32, CommandType.command_rpushx as i32);
+    try assert_eq_i32(rpushx.arity, -3);
+
+    const lpos: CommandInfo = try command_router_lookup(&router, &"LPOS"[0: 4]);
+    try assert_eq_i32(lpos.cmd_type as i32, CommandType.command_lpos as i32);
+    try assert_eq_i32(lpos.arity, 3);
+
     const sadd: CommandInfo = try command_router_lookup(&router, &"SADD"[0: 4]);
     try assert_eq_i32(sadd.cmd_type as i32, CommandType.command_sadd as i32);
     try assert_eq_i32(sadd.arity, -3);

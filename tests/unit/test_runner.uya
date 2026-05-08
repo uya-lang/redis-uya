@@ -103,6 +103,7 @@ use tests.unit.command_executor_test.test_command_hincrby_hincrbyfloat;
 use tests.unit.command_executor_test.test_command_hkeys_hvals_hgetall;
 use tests.unit.command_executor_test.test_command_lpush_lpop_lrange;
 use tests.unit.command_executor_test.test_command_linsert_ltrim_lrem;
+use tests.unit.command_executor_test.test_command_lpushx_rpushx_lpos;
 use tests.unit.command_executor_test.test_command_rpush_rpop_lindex_lset_llen;
 use tests.unit.command_executor_test.test_command_sadd_srem_smembers;
 use tests.unit.command_executor_test.test_command_zadd_zrem_zrange;
@@ -563,6 +564,10 @@ export fn main() i32 {
     const before_exec_list_mutations: i32 = failed;
     _ = test_command_linsert_ltrim_lrem() catch { printf("[FAIL] command_executor/list_mutations\n" as *byte); failed = failed + 1; };
     if failed == before_exec_list_mutations { printf("[PASS] command_executor/list_mutations\n" as *byte); }
+
+    const before_exec_list_conditionals: i32 = failed;
+    _ = test_command_lpushx_rpushx_lpos() catch { printf("[FAIL] command_executor/list_conditionals\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_list_conditionals { printf("[PASS] command_executor/list_conditionals\n" as *byte); }
 
     const before_exec_set: i32 = failed;
     _ = test_command_sadd_srem_smembers() catch { printf("[FAIL] command_executor/set\n" as *byte); failed = failed + 1; };

@@ -273,6 +273,18 @@ class RedisPySubsetClient:
     def lrem(self, key: str, count: int, value: str) -> int:
         return int(self._request(b"LREM", key.encode(), str(count).encode(), value.encode()))
 
+    def lpushx(self, key: str, *values: str) -> int:
+        return int(self._request(b"LPUSHX", key.encode(), *(value.encode() for value in values)))
+
+    def rpushx(self, key: str, *values: str) -> int:
+        return int(self._request(b"RPUSHX", key.encode(), *(value.encode() for value in values)))
+
+    def lpos(self, key: str, value: str) -> int | None:
+        result = self._request(b"LPOS", key.encode(), value.encode())
+        if result is None:
+            return None
+        return int(result)
+
     def sadd(self, key: str, *members: str) -> int:
         return int(self._request(b"SADD", key.encode(), *(member.encode() for member in members)))
 
@@ -451,6 +463,13 @@ def run_smoke() -> None:
             assert client.ltrim("wlist", 1, 3)
             assert client.lrange("wlist", 0, -1) == [b"x", b"c", b"b"]
             assert client.delete("wlist") == 1
+            assert client.rpush("xlist", "a", "b") == 2
+            assert client.lpushx("missing", "z") == 0
+            assert client.lpushx("xlist", "head") == 3
+            assert client.rpushx("xlist", "tail") == 4
+            assert client.lpos("xlist", "b") == 2
+            assert client.lrange("xlist", 0, -1) == [b"head", b"a", b"b", b"tail"]
+            assert client.delete("xlist") == 1
 
             assert client.sadd("set", "a", "b") == 2
             assert client.smembers("set") == {b"a", b"b"}

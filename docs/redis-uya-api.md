@@ -439,6 +439,45 @@ LREM key count element
 - `count < 0` 从尾开始删
 - `count = 0` 删除全部匹配元素
 
+### `LPUSHX`
+
+格式：
+
+```text
+LPUSHX key value [value ...]
+```
+
+返回：
+
+- key 存在且为 list 时，返回新长度，Integer
+- key 不存在时返回 `0`
+
+### `RPUSHX`
+
+格式：
+
+```text
+RPUSHX key value [value ...]
+```
+
+返回：
+
+- key 存在且为 list 时，返回新长度，Integer
+- key 不存在时返回 `0`
+
+### `LPOS`
+
+格式：
+
+```text
+LPOS key element
+```
+
+返回：
+
+- 返回首个匹配元素位置，Integer
+- 没有命中或 key 不存在时返回 Null Bulk
+
 ### `MGET`
 
 格式：

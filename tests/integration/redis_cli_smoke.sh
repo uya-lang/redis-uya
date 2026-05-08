@@ -307,6 +307,48 @@ if [[ "$WLIST_DEL_RESULT" != "1" ]]; then
     exit 1
 fi
 
+XLIST_RPUSH_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" rpush xlist a b)"
+if [[ "$XLIST_RPUSH_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected xlist RPUSH 2, got '$XLIST_RPUSH_RESULT'" >&2
+    exit 1
+fi
+
+LPUSHX_MISSING_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lpushx missing z)"
+if [[ "$LPUSHX_MISSING_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected missing LPUSHX 0, got '$LPUSHX_MISSING_RESULT'" >&2
+    exit 1
+fi
+
+LPUSHX_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lpushx xlist head)"
+if [[ "$LPUSHX_RESULT" != "3" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected xlist LPUSHX 3, got '$LPUSHX_RESULT'" >&2
+    exit 1
+fi
+
+RPUSHX_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" rpushx xlist tail)"
+if [[ "$RPUSHX_RESULT" != "4" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected xlist RPUSHX 4, got '$RPUSHX_RESULT'" >&2
+    exit 1
+fi
+
+LPOS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lpos xlist b)"
+if [[ "$LPOS_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected xlist LPOS 2, got '$LPOS_RESULT'" >&2
+    exit 1
+fi
+
+XLIST_RANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lrange xlist 0 -1)"
+if [[ "$XLIST_RANGE_RESULT" != $'head\na\nb\ntail' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected xlist range head/a/b/tail, got '$XLIST_RANGE_RESULT'" >&2
+    exit 1
+fi
+
+XLIST_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del xlist)"
+if [[ "$XLIST_DEL_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected xlist DEL 1, got '$XLIST_DEL_RESULT'" >&2
+    exit 1
+fi
+
 HSET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hset hash field value)"
 if [[ "$HSET_RESULT" != "1" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected HSET 1, got '$HSET_RESULT'" >&2

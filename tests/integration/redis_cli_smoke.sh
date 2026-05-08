@@ -205,6 +205,60 @@ if [[ -n "$GETDEL_MISSING_RESULT" ]]; then
     exit 1
 fi
 
+RPUSH_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" rpush rlist a b c)"
+if [[ "$RPUSH_RESULT" != "3" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected RPUSH 3, got '$RPUSH_RESULT'" >&2
+    exit 1
+fi
+
+LLEN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" llen rlist)"
+if [[ "$LLEN_RESULT" != "3" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected LLEN 3, got '$LLEN_RESULT'" >&2
+    exit 1
+fi
+
+LINDEX_HEAD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lindex rlist 0)"
+if [[ "$LINDEX_HEAD_RESULT" != "a" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected LINDEX head a, got '$LINDEX_HEAD_RESULT'" >&2
+    exit 1
+fi
+
+LINDEX_TAIL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lindex rlist -1)"
+if [[ "$LINDEX_TAIL_RESULT" != "c" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected LINDEX tail c, got '$LINDEX_TAIL_RESULT'" >&2
+    exit 1
+fi
+
+LSET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lset rlist 1 mid)"
+if [[ "$LSET_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected LSET OK, got '$LSET_RESULT'" >&2
+    exit 1
+fi
+
+RLIST_RANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lrange rlist 0 -1)"
+if [[ "$RLIST_RANGE_RESULT" != $'a\nmid\nc' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected RLIST range a/mid/c, got '$RLIST_RANGE_RESULT'" >&2
+    exit 1
+fi
+
+RPOP_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" rpop rlist)"
+if [[ "$RPOP_RESULT" != "c" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected RPOP c, got '$RPOP_RESULT'" >&2
+    exit 1
+fi
+
+LLEN_AFTER_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" llen rlist)"
+if [[ "$LLEN_AFTER_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected LLEN after RPOP 2, got '$LLEN_AFTER_RESULT'" >&2
+    exit 1
+fi
+
+RLIST_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del rlist)"
+if [[ "$RLIST_DEL_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected rlist DEL 1, got '$RLIST_DEL_RESULT'" >&2
+    exit 1
+fi
+
 HSET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hset hash field value)"
 if [[ "$HSET_RESULT" != "1" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected HSET 1, got '$HSET_RESULT'" >&2

@@ -332,6 +332,71 @@ HSCAN key cursor [COUNT count]
 - 当前实现支持 `COUNT`
 - key 不存在时返回 cursor `0` 和空 Array
 
+### `RPUSH`
+
+格式：
+
+```text
+RPUSH key value [value ...]
+```
+
+返回：
+
+- 返回 list 新长度，Integer
+
+### `RPOP`
+
+格式：
+
+```text
+RPOP key
+```
+
+返回：
+
+- 成功时返回尾元素 Bulk String
+- key 不存在或空 list 返回 Null Bulk
+
+### `LINDEX`
+
+格式：
+
+```text
+LINDEX key index
+```
+
+返回：
+
+- 返回指定位置元素，支持负索引
+- 越界或 key 不存在时返回 Null Bulk
+
+### `LSET`
+
+格式：
+
+```text
+LSET key index value
+```
+
+返回：
+
+- 成功：`+OK`
+- key 不存在：`-ERR no such key`
+- index 越界：`-ERR index out of range`
+
+### `LLEN`
+
+格式：
+
+```text
+LLEN key
+```
+
+返回：
+
+- 返回 list 当前长度，Integer
+- key 不存在时返回 `0`
+
 ### `MGET`
 
 格式：

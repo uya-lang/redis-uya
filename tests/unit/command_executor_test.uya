@@ -1192,6 +1192,75 @@ export fn test_command_lpush_lpop_lrange() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_command_rpush_rpop_lindex_lset_llen() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var out: [byte: 256] = [];
+
+    var rpush_parsed: RespParseResult = try parse_resp2(&"*5\r\n$5\r\nRPUSH\r\n$5\r\nrlist\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\nc\r\n"[0: 47]);
+    const rpush_command: Command = try command_executor_test_command(&router, &rpush_parsed);
+    const rpush_reply: CommandReply = command_execute_at(&engine, &rpush_command, 1000u64);
+    try assert_eq_i32(rpush_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(rpush_reply.integer as i32, 3);
+    resp_value_free(&rpush_parsed.value);
+
+    var llen_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nLLEN\r\n$5\r\nrlist\r\n"[0: 25]);
+    const llen_command: Command = try command_executor_test_command(&router, &llen_parsed);
+    const llen_reply: CommandReply = command_execute_at(&engine, &llen_command, 1000u64);
+    try assert_eq_i32(llen_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(llen_reply.integer as i32, 3);
+    resp_value_free(&llen_parsed.value);
+
+    var lindex_head_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nLINDEX\r\n$5\r\nrlist\r\n$1\r\n0\r\n"[0: 34]);
+    const lindex_head_command: Command = try command_executor_test_command(&router, &lindex_head_parsed);
+    const lindex_head_reply: CommandReply = command_execute_at(&engine, &lindex_head_command, 1000u64);
+    try assert_eq_i32(lindex_head_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(lindex_head_reply.data, &"a"[0: 1]));
+    resp_value_free(&lindex_head_parsed.value);
+
+    var lindex_tail_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nLINDEX\r\n$5\r\nrlist\r\n$2\r\n-1\r\n"[0: 35]);
+    const lindex_tail_command: Command = try command_executor_test_command(&router, &lindex_tail_parsed);
+    const lindex_tail_reply: CommandReply = command_execute_at(&engine, &lindex_tail_command, 1000u64);
+    try assert_eq_i32(lindex_tail_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(lindex_tail_reply.data, &"c"[0: 1]));
+    resp_value_free(&lindex_tail_parsed.value);
+
+    var lset_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nLSET\r\n$5\r\nrlist\r\n$1\r\n1\r\n$3\r\nmid\r\n"[0: 41]);
+    const lset_command: Command = try command_executor_test_command(&router, &lset_parsed);
+    const lset_reply: CommandReply = command_execute_at(&engine, &lset_command, 1000u64);
+    try assert_eq_i32(lset_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(lset_reply.data, &"OK"[0: 2]));
+    resp_value_free(&lset_parsed.value);
+
+    var lrange_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nLRANGE\r\n$5\r\nrlist\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 42]);
+    const lrange_command: Command = try command_executor_test_command(&router, &lrange_parsed);
+    const lrange_reply: CommandReply = command_execute_at(&engine, &lrange_command, 1000u64);
+    try assert_eq_i32(lrange_reply.typ as i32, CommandReplyType.reply_array_bulk as i32);
+    const lrange_len: usize = try connection_encode_reply(&lrange_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: lrange_len], &"*3\r\n$1\r\na\r\n$3\r\nmid\r\n$1\r\nc\r\n"[0: 27]));
+    command_reply_cleanup(&lrange_reply);
+    resp_value_free(&lrange_parsed.value);
+
+    var rpop_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nRPOP\r\n$5\r\nrlist\r\n"[0: 25]);
+    const rpop_command: Command = try command_executor_test_command(&router, &rpop_parsed);
+    const rpop_reply: CommandReply = command_execute_at(&engine, &rpop_command, 1000u64);
+    try assert_eq_i32(rpop_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(rpop_reply.data, &"c"[0: 1]));
+    command_reply_cleanup(&rpop_reply);
+    resp_value_free(&rpop_parsed.value);
+
+    var llen_after_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nLLEN\r\n$5\r\nrlist\r\n"[0: 25]);
+    const llen_after_command: Command = try command_executor_test_command(&router, &llen_after_parsed);
+    const llen_after_reply: CommandReply = command_execute_at(&engine, &llen_after_command, 1000u64);
+    try assert_eq_i32(llen_after_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(llen_after_reply.integer as i32, 2);
+    resp_value_free(&llen_after_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_command_sadd_srem_smembers() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();

@@ -249,6 +249,21 @@ class RedisPySubsetClient:
     def lpop(self, key: str) -> bytes | None:
         return self._request(b"LPOP", key.encode())
 
+    def rpush(self, key: str, *values: str) -> int:
+        return int(self._request(b"RPUSH", key.encode(), *(value.encode() for value in values)))
+
+    def rpop(self, key: str) -> bytes | None:
+        return self._request(b"RPOP", key.encode())
+
+    def lindex(self, key: str, index: int) -> bytes | None:
+        return self._request(b"LINDEX", key.encode(), str(index).encode())
+
+    def lset(self, key: str, index: int, value: str) -> bool:
+        return self._request(b"LSET", key.encode(), str(index).encode(), value.encode()) == "OK"
+
+    def llen(self, key: str) -> int:
+        return int(self._request(b"LLEN", key.encode()))
+
     def sadd(self, key: str, *members: str) -> int:
         return int(self._request(b"SADD", key.encode(), *(member.encode() for member in members)))
 
@@ -410,6 +425,15 @@ def run_smoke() -> None:
             assert client.lpush("list", "a", "b", "c") == 3
             assert client.lrange("list", 0, -1) == [b"c", b"b", b"a"]
             assert client.lpop("list") == b"c"
+            assert client.rpush("rlist", "a", "b", "c") == 3
+            assert client.llen("rlist") == 3
+            assert client.lindex("rlist", 0) == b"a"
+            assert client.lindex("rlist", -1) == b"c"
+            assert client.lset("rlist", 1, "mid")
+            assert client.lrange("rlist", 0, -1) == [b"a", b"mid", b"c"]
+            assert client.rpop("rlist") == b"c"
+            assert client.llen("rlist") == 2
+            assert client.delete("rlist") == 1
 
             assert client.sadd("set", "a", "b") == 2
             assert client.smembers("set") == {b"a", b"b"}

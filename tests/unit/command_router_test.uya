@@ -163,6 +163,26 @@ export fn test_command_router_lookup_and_case() !void {
     try assert_eq_i32(lrange.cmd_type as i32, CommandType.command_lrange as i32);
     try assert_eq_i32(lrange.arity, 4);
 
+    const rpush: CommandInfo = try command_router_lookup(&router, &"RPUSH"[0: 5]);
+    try assert_eq_i32(rpush.cmd_type as i32, CommandType.command_rpush as i32);
+    try assert_eq_i32(rpush.arity, -3);
+
+    const rpop: CommandInfo = try command_router_lookup(&router, &"rpop"[0: 4]);
+    try assert_eq_i32(rpop.cmd_type as i32, CommandType.command_rpop as i32);
+    try assert_eq_i32(rpop.arity, 2);
+
+    const lindex: CommandInfo = try command_router_lookup(&router, &"LINDEX"[0: 6]);
+    try assert_eq_i32(lindex.cmd_type as i32, CommandType.command_lindex as i32);
+    try assert_eq_i32(lindex.arity, 3);
+
+    const lset: CommandInfo = try command_router_lookup(&router, &"lset"[0: 4]);
+    try assert_eq_i32(lset.cmd_type as i32, CommandType.command_lset as i32);
+    try assert_eq_i32(lset.arity, 4);
+
+    const llen: CommandInfo = try command_router_lookup(&router, &"LLEN"[0: 4]);
+    try assert_eq_i32(llen.cmd_type as i32, CommandType.command_llen as i32);
+    try assert_eq_i32(llen.arity, 2);
+
     const sadd: CommandInfo = try command_router_lookup(&router, &"SADD"[0: 4]);
     try assert_eq_i32(sadd.cmd_type as i32, CommandType.command_sadd as i32);
     try assert_eq_i32(sadd.arity, -3);

@@ -187,6 +187,30 @@ if [[ "$GET_APPENDED_RESULT" != "value__" ]]; then
     exit 1
 fi
 
+RENAME_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" rename key key2)"
+if [[ "$RENAME_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected RENAME OK, got '$RENAME_RESULT'" >&2
+    exit 1
+fi
+
+GET_RENAMED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" get key2)"
+if [[ "$GET_RENAMED_RESULT" != "value__" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected renamed key value__, got '$GET_RENAMED_RESULT'" >&2
+    exit 1
+fi
+
+RENAMENX_CONFLICT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" renamenx key2 gs-key)"
+if [[ "$RENAMENX_CONFLICT_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected RENAMENX conflict 0, got '$RENAMENX_CONFLICT_RESULT'" >&2
+    exit 1
+fi
+
+RENAMENX_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" renamenx key2 key)"
+if [[ "$RENAMENX_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected RENAMENX 1, got '$RENAMENX_RESULT'" >&2
+    exit 1
+fi
+
 GETDEL_SET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" set gd-key once)"
 if [[ "$GETDEL_SET_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected OK on gd-key SET, got '$GETDEL_SET_RESULT'" >&2
@@ -694,6 +718,12 @@ fi
 SAVE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" save)"
 if [[ "$SAVE_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected OK on SAVE, got '$SAVE_RESULT'" >&2
+    exit 1
+fi
+
+LASTSAVE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lastsave)"
+if ! [[ "$LASTSAVE_RESULT" =~ ^[0-9]+$ ]] || [[ "$LASTSAVE_RESULT" == "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected LASTSAVE positive integer, got '$LASTSAVE_RESULT'" >&2
     exit 1
 fi
 

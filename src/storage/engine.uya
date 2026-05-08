@@ -19,8 +19,16 @@ use src.storage.object.list_object_insert_sorted_lex;
 use src.storage.object.object_free;
 use src.memory.allocator.used_memory;
 use src.util.time.now_ms_safe;
+use src.util.bytes.bytes_eq;
 
 export error EngineKeyNotFound;
+
+export enum EngineRenameResult {
+    rename_ok,
+    rename_source_missing,
+    rename_target_exists,
+    rename_same_key,
+}
 
 export struct ExpireCycleStats {
     expired: usize,
@@ -143,6 +151,48 @@ export fn delete_key(engine: &Engine, key: &[byte]) bool {
         _ = engine_touch_watch_version(engine, key) catch {};
     }
     return deleted;
+}
+
+export fn engine_rename_key(engine: &Engine, source: &[byte], target: &[byte], overwrite: bool) !EngineRenameResult {
+    if bytes_eq(source, target) {
+        return EngineRenameResult.rename_same_key;
+    }
+
+    const value_result: !usize = dict_lookup(&engine.db.dict, source);
+    const value: usize = value_result catch {
+        return EngineRenameResult.rename_source_missing;
+    };
+
+    if !overwrite {
+        const target_result: !usize = dict_lookup(&engine.db.dict, target);
+        if target_result.error_id == 0 {
+            return EngineRenameResult.rename_target_exists;
+        }
+    }
+
+    const expire_result: !usize = dict_lookup(&engine.db.expires, source);
+    const has_expire: bool = expire_result.error_id == 0;
+    var expire_at: usize = 0;
+    if has_expire {
+        expire_at = expire_result.value;
+    }
+
+    const insert_result: DictInsertResult = try dict_insert_with_old(&engine.db.dict, target, value);
+    if !insert_result.inserted {
+        object_free(usize_to_object(insert_result.old_value));
+    }
+
+    if has_expire {
+        _ = try dict_insert(&engine.db.expires, target, expire_at);
+    } else {
+        _ = dict_delete(&engine.db.expires, target);
+    }
+
+    _ = dict_delete(&engine.db.dict, source);
+    _ = dict_delete(&engine.db.expires, source);
+    try engine_touch_watch_version(engine, source);
+    try engine_touch_watch_version(engine, target);
+    return EngineRenameResult.rename_ok;
 }
 
 export fn set_key_expire_at(engine: &Engine, key: &[byte], expire_at_ms: u64) !void {

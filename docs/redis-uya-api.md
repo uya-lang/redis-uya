@@ -684,6 +684,47 @@ ZSCAN key cursor [COUNT count]
 - 当前实现支持 `COUNT`
 - 当前项目内 ZSet score 使用整数语义
 
+### `RENAME`
+
+格式：
+
+```text
+RENAME key newkey
+```
+
+返回：
+
+- 成功：`+OK`
+- source 不存在：`-ERR no such key`
+- source 和 target 相同：错误
+
+### `RENAMENX`
+
+格式：
+
+```text
+RENAMENX key newkey
+```
+
+返回：
+
+- 重命名成功：`1`
+- target 已存在：`0`
+- source 不存在：`-ERR no such key`
+- source 和 target 相同：错误
+
+### `LASTSAVE`
+
+格式：
+
+```text
+LASTSAVE
+```
+
+返回：
+
+- 返回最近一次成功 `SAVE` / `BGSAVE` 的 Unix 秒时间戳，Integer
+
 ### `MGET`
 
 格式：

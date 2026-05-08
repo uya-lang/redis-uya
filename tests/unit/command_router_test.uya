@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 94);
+    try assert_eq_i32(command_router_count(&router) as i32, 97);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -274,6 +274,18 @@ export fn test_command_router_lookup_and_case() !void {
     const zscan: CommandInfo = try command_router_lookup(&router, &"ZSCAN"[0: 5]);
     try assert_eq_i32(zscan.cmd_type as i32, CommandType.command_zscan as i32);
     try assert_eq_i32(zscan.arity, -3);
+
+    const rename_info: CommandInfo = try command_router_lookup(&router, &"RENAME"[0: 6]);
+    try assert_eq_i32(rename_info.cmd_type as i32, CommandType.command_rename as i32);
+    try assert_eq_i32(rename_info.arity, 3);
+
+    const renamenx_info: CommandInfo = try command_router_lookup(&router, &"renamenx"[0: 8]);
+    try assert_eq_i32(renamenx_info.cmd_type as i32, CommandType.command_renamenx as i32);
+    try assert_eq_i32(renamenx_info.arity, 3);
+
+    const lastsave_info: CommandInfo = try command_router_lookup(&router, &"LASTSAVE"[0: 8]);
+    try assert_eq_i32(lastsave_info.cmd_type as i32, CommandType.command_lastsave as i32);
+    try assert_eq_i32(lastsave_info.arity, 1);
 
     const smembers: CommandInfo = try command_router_lookup(&router, &"SMEMBERS"[0: 8]);
     try assert_eq_i32(smembers.cmd_type as i32, CommandType.command_smembers as i32);

@@ -116,6 +116,7 @@ use tests.unit.command_executor_test.test_command_zremrangebyrank_zremrangebysco
 use tests.unit.command_executor_test.test_command_scan;
 use tests.unit.command_executor_test.test_command_hscan;
 use tests.unit.command_executor_test.test_command_expire_and_ttl;
+use tests.unit.command_executor_test.test_command_rename_renamenx_lastsave;
 use tests.unit.command_executor_test.test_command_error_paths;
 use tests.unit.network_connection_test.test_connection_encode_resp_replies;
 use tests.unit.network_connection_test.test_connection_process_ping_set_get_quit;
@@ -135,6 +136,7 @@ use tests.unit.persistence_aof_test.test_aof_replay_truncated_file_fails;
 use tests.unit.persistence_aof_test.test_aof_replay_invalid_format_fails;
 use tests.unit.persistence_aof_test.test_aof_expire_replays_absolute_deadline;
 use tests.unit.persistence_aof_test.test_aof_replay_large_file_over_1mb;
+use tests.unit.persistence_aof_test.test_aof_replay_rename_commands;
 use tests.unit.persistence_rdb_test.test_rdb_save_and_load_string_subset;
 use tests.unit.persistence_rdb_test.test_rdb_dump_and_load_bytes_string_subset;
 use tests.unit.persistence_rdb_test.test_rdb_dump_and_load_bytes_current_types;
@@ -619,6 +621,10 @@ export fn main() i32 {
     _ = test_command_expire_and_ttl() catch { printf("[FAIL] command_executor/expire_ttl\n" as *byte); failed = failed + 1; };
     if failed == before_exec_expire { printf("[PASS] command_executor/expire_ttl\n" as *byte); }
 
+    const before_exec_rename: i32 = failed;
+    _ = test_command_rename_renamenx_lastsave() catch { printf("[FAIL] command_executor/rename_lastsave\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_rename { printf("[PASS] command_executor/rename_lastsave\n" as *byte); }
+
     const before_exec_errors: i32 = failed;
     _ = test_command_error_paths() catch { printf("[FAIL] command_executor/errors\n" as *byte); failed = failed + 1; };
     if failed == before_exec_errors { printf("[PASS] command_executor/errors\n" as *byte); }
@@ -670,6 +676,10 @@ export fn main() i32 {
     const before_aof_del: i32 = failed;
     _ = test_aof_replay_set_then_del() catch { printf("[FAIL] persistence_aof/replay_del\n" as *byte); failed = failed + 1; };
     if failed == before_aof_del { printf("[PASS] persistence_aof/replay_del\n" as *byte); }
+
+    const before_aof_rename: i32 = failed;
+    _ = test_aof_replay_rename_commands() catch { printf("[FAIL] persistence_aof/replay_rename\n" as *byte); failed = failed + 1; };
+    if failed == before_aof_rename { printf("[PASS] persistence_aof/replay_rename\n" as *byte); }
 
     const before_aof_flush: i32 = failed;
     _ = test_aof_flush_persists_buffer_without_close() catch { printf("[FAIL] persistence_aof/flush\n" as *byte); failed = failed + 1; };

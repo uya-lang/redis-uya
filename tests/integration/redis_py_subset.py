@@ -163,6 +163,12 @@ class RedisPySubsetClient:
     def append(self, key: str, value: str) -> int:
         return int(self._request(b"APPEND", key.encode(), value.encode()))
 
+    def rename(self, source: str, target: str) -> bool:
+        return self._request(b"RENAME", source.encode(), target.encode()) == "OK"
+
+    def renamenx(self, source: str, target: str) -> int:
+        return int(self._request(b"RENAMENX", source.encode(), target.encode()))
+
     def strlen(self, key: str) -> int:
         return int(self._request(b"STRLEN", key.encode()))
 
@@ -413,6 +419,9 @@ class RedisPySubsetClient:
             i += 2
         return result
 
+    def lastsave(self) -> int:
+        return int(self._request(b"LASTSAVE"))
+
     def save(self) -> bool:
         return self._request(b"SAVE") == "OK"
 
@@ -475,6 +484,11 @@ def run_smoke() -> None:
             assert client.getrange("key", 1, 3) == b"alu"
             assert client.setrange("key", 5, "__") == 7
             assert client.get("key") == b"value__"
+            assert client.rename("key", "key2")
+            assert client.get("key2") == b"value__"
+            assert client.renamenx("key2", "gs-key") == 0
+            assert client.renamenx("key2", "key") == 1
+            assert client.get("key") == b"value__"
             assert client.set("gd-key", "once")
             assert client.getdel("gd-key") == b"once"
             assert client.getdel("gd-key") is None
@@ -497,6 +511,8 @@ def run_smoke() -> None:
             assert client.pttl("ms") == -1
             assert client.delete("ms") == 1
             assert client.save()
+            if client.lastsave() <= 0:
+                raise AssertionError("expected LASTSAVE > 0")
 
             assert client.hset("hash", "field", "value") == 1
             assert client.hget("hash", "field") == b"value"

@@ -1202,6 +1202,13 @@ fn connection_transaction_execute_at(
         }
 
         var reply: CommandReply = command_execute_with_runtime_at(engine, runtime, &command, now_ms);
+        if command.info.cmd_type == CommandType.command_save &&
+            reply.typ == CommandReplyType.reply_simple_string &&
+            reply.data.len == 2 &&
+            reply.data.ptr[0] == 79 as byte &&
+            reply.data.ptr[1] == 75 as byte {
+            runtime.lastsave_ms = now_ms;
+        }
         if aof != null && connection_should_append_aof(&command, &reply) {
             _ = aof_append_command_at(aof, &command, raw_cmd, now_ms) catch {
                 command_reply_cleanup(&reply);
@@ -1945,6 +1952,13 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_in
     }
 
     var reply: CommandReply = command_execute_with_runtime_at(engine, runtime, &command, now_ms);
+    if command.info.cmd_type == CommandType.command_save &&
+        reply.typ == CommandReplyType.reply_simple_string &&
+        reply.data.len == 2 &&
+        reply.data.ptr[0] == 79 as byte &&
+        reply.data.ptr[1] == 75 as byte {
+        runtime.lastsave_ms = now_ms;
+    }
     if aof != null && connection_should_append_aof(&command, &reply) {
         _ = aof_append_command_at(aof, &command, input[0: parsed.consumed], now_ms) catch {
             const aof_reply: CommandReply = connection_error_reply(&"ERR AOF append failed"[0: 21]);

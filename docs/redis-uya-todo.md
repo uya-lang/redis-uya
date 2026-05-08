@@ -430,7 +430,8 @@
 - [x] ZSet 第三批范围删除与扫描：`ZREMRANGEBYRANK`、`ZREMRANGEBYSCORE`、`ZSCAN`
 - [x] Key/Server 第一批：`ECHO`、`TYPE`、`DBSIZE`
 - [x] Key/Server 第二批过期毫秒语义：`PEXPIRE`、`PERSIST`、`PTTL`
-- [ ] Key/Server 后续：`RENAME/RENAMENX`、`MOVE`、`DUMP/RESTORE`、`PEXPIREAT`、`WAIT`、`FLUSHDB/FLUSHALL`、`SELECT`、`LASTSAVE`、`OBJECT`、`SORT`
+- [x] Key/Server 第三批：`RENAME`、`RENAMENX`、`LASTSAVE`
+- [ ] Key/Server 后续：`MOVE`、`DUMP/RESTORE`、`PEXPIREAT`、`WAIT`、`FLUSHDB/FLUSHALL`、`SELECT`、`OBJECT`、`SORT`
 - [ ] Security baseline：`AUTH`、`requirepass`、`SHUTDOWN`
 
 验收项：

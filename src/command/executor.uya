@@ -50,8 +50,10 @@ use src.storage.dict.dict_lookup;
 use src.storage.dict.dict_iter_new;
 use src.storage.dict.dict_iter_next;
 use src.storage.engine.Engine;
+use src.storage.engine.EngineRenameResult;
 use src.storage.engine.engine_len;
 use src.storage.engine.engine_expire_len;
+use src.storage.engine.engine_rename_key;
 use src.storage.engine.lookup_key_at;
 use src.storage.engine.set_key_at;
 use src.storage.engine.delete_key;
@@ -169,6 +171,7 @@ export struct CommandRuntimeInfo {
     aof_rewrite_requested: bool,
     aof_rewrite_in_progress: bool,
     cluster_topology: &ClusterTopology,
+    lastsave_ms: u64,
 }
 
 export fn command_runtime_default() CommandRuntimeInfo {
@@ -191,6 +194,7 @@ export fn command_runtime_default() CommandRuntimeInfo {
         aof_rewrite_requested: false,
         aof_rewrite_in_progress: false,
         cluster_topology: null as &ClusterTopology,
+        lastsave_ms: 0u64,
     };
 }
 
@@ -2672,6 +2676,57 @@ fn command_executor_bulk_i64(value: i64) CommandReply {
     return reply;
 }
 
+fn command_executor_rename_common(engine: &Engine, command: &Command, now_ms: u64, overwrite: bool) CommandReply {
+    if command.argc != 3 {
+        return command_executor_wrong_arity();
+    }
+    const source: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const target: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    const result: EngineRenameResult = engine_rename_key(engine, source, target, overwrite) catch {
+        return command_executor_oom();
+    };
+    _ = now_ms;
+    match result {
+        EngineRenameResult.rename_ok => {
+            if overwrite {
+                return command_executor_simple(&"OK"[0: 2]);
+            }
+            return command_executor_integer(1);
+        },
+        EngineRenameResult.rename_source_missing => {
+            return command_executor_error(&"ERR no such key"[0: 14]);
+        },
+        EngineRenameResult.rename_target_exists => {
+            return command_executor_integer(0);
+        },
+        EngineRenameResult.rename_same_key => {
+            return command_executor_error(&"ERR source and destination objects are the same"[0: 47]);
+        },
+        else => {
+            return command_executor_error(&"ERR rename failed"[0: 17]);
+        }
+    }
+}
+
+fn command_executor_rename(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    return command_executor_rename_common(engine, command, now_ms, true);
+}
+
+fn command_executor_renamenx(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    return command_executor_rename_common(engine, command, now_ms, false);
+}
+
+fn command_executor_lastsave(runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
+    if command.argc != 1 {
+        return command_executor_wrong_arity();
+    }
+    return command_executor_integer((runtime.lastsave_ms / 1000u64) as i64);
+}
+
 fn command_executor_list_push_i64(obj: &RedisObject, value: i64) !void {
     var buf: Sds = sds_empty() catch {
         return error.AllocOutOfMemory;
@@ -5082,6 +5137,15 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_zscan {
         return command_executor_zscan(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_rename {
+        return command_executor_rename(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_renamenx {
+        return command_executor_renamenx(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_lastsave {
+        return command_executor_lastsave(runtime, command);
     }
     if command.info.cmd_type == CommandType.command_zadd {
         return command_executor_zadd(engine, command, now_ms);

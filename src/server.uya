@@ -287,6 +287,7 @@ fn server_runtime_info(server: &RedisServer) CommandRuntimeInfo {
         aof_rewrite_requested: server.aof_rewrite_requested,
         aof_rewrite_in_progress: server.aof_rewrite_in_progress,
         cluster_topology: &server.cluster_topology,
+        lastsave_ms: server.lastsave_ms,
     };
     config_copy_bytes(info.replication_replid[0: 41], server.repl_backlog.replid[0: 40]);
     return info;
@@ -1260,6 +1261,9 @@ fn server_async_writev_all_future(fd: i32, head: &const byte, head_len: usize, b
                 }
                 ConnectionProcessResult{ response_len: 0, response_head_len: 0, zero_copy_body: (null as &byte)[0: 0], zero_copy_tail_len: 0, consumed: 0, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
             };
+            if runtime.lastsave_ms > server.lastsave_ms {
+                server.lastsave_ms = runtime.lastsave_ms;
+            }
 
             if incomplete {
                 continue;

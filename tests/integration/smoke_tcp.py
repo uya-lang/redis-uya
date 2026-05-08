@@ -39,6 +39,17 @@ def recv_exact(sock: socket.socket, size: int) -> bytes:
     return b"".join(chunks)
 
 
+def recv_line(sock: socket.socket) -> bytes:
+    chunks: list[bytes] = []
+    while True:
+        chunk = sock.recv(1)
+        if not chunk:
+            raise RuntimeError("connection closed before line response")
+        chunks.append(chunk)
+        if len(chunks) >= 2 and chunks[-2] == b"\r" and chunks[-1] == b"\n":
+            return b"".join(chunks)
+
+
 def roundtrip(sock: socket.socket, request: bytes, expected: bytes) -> None:
     sock.sendall(request)
     actual = recv_exact(sock, len(expected))
@@ -126,6 +137,10 @@ def run_smoke() -> None:
             roundtrip(sock, b"*4\r\n$8\r\nGETRANGE\r\n$3\r\nkey\r\n$1\r\n1\r\n$1\r\n3\r\n", b"$3\r\nalu\r\n")
             roundtrip(sock, b"*4\r\n$8\r\nSETRANGE\r\n$3\r\nkey\r\n$1\r\n5\r\n$2\r\n__\r\n", b":7\r\n")
             roundtrip(sock, b"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n", b"$7\r\nvalue__\r\n")
+            roundtrip(sock, b"*3\r\n$6\r\nRENAME\r\n$3\r\nkey\r\n$4\r\nkey2\r\n", b"+OK\r\n")
+            roundtrip(sock, b"*2\r\n$3\r\nGET\r\n$4\r\nkey2\r\n", b"$7\r\nvalue__\r\n")
+            roundtrip(sock, b"*3\r\n$8\r\nRENAMENX\r\n$4\r\nkey2\r\n$6\r\ngs-key\r\n", b":0\r\n")
+            roundtrip(sock, b"*3\r\n$8\r\nRENAMENX\r\n$4\r\nkey2\r\n$3\r\nkey\r\n", b":1\r\n")
             roundtrip(sock, b"*3\r\n$3\r\nSET\r\n$6\r\ngd-key\r\n$4\r\nonce\r\n", b"+OK\r\n")
             roundtrip(sock, b"*2\r\n$6\r\nGETDEL\r\n$6\r\ngd-key\r\n", b"$4\r\nonce\r\n")
             roundtrip(sock, b"*2\r\n$6\r\nGETDEL\r\n$6\r\ngd-key\r\n", b"$-1\r\n")
@@ -169,6 +184,10 @@ def run_smoke() -> None:
             roundtrip(sock, b"*1\r\n$4\r\nEXEC\r\n", b"*1\r\n+OK\r\n")
             roundtrip(sock, b"*2\r\n$3\r\nGET\r\n$4\r\nmkey\r\n", b"$2\r\nok\r\n")
             roundtrip(sock, b"*1\r\n$4\r\nSAVE\r\n", b"+OK\r\n")
+            sock.sendall(b"*1\r\n$8\r\nLASTSAVE\r\n")
+            lastsave_reply = recv_line(sock)
+            if not (lastsave_reply.startswith(b":") and lastsave_reply.endswith(b"\r\n")):
+                raise AssertionError(f"unexpected LASTSAVE reply: {lastsave_reply!r}")
             roundtrip(sock, b"*4\r\n$4\r\nHSET\r\n$4\r\nhash\r\n$5\r\nfield\r\n$5\r\nvalue\r\n", b":1\r\n")
             roundtrip(sock, b"*3\r\n$4\r\nHGET\r\n$4\r\nhash\r\n$5\r\nfield\r\n", b"$5\r\nvalue\r\n")
             roundtrip(sock, b"*4\r\n$7\r\nHINCRBY\r\n$4\r\nhash\r\n$7\r\ncounter\r\n$1\r\n2\r\n", b":2\r\n")

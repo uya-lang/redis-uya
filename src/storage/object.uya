@@ -1058,6 +1058,71 @@ export fn zset_object_range_by_score_reply(obj: &RedisObject, min_score: i64, ma
     return ranged;
 }
 
+export fn object_clone(obj: &RedisObject) !&RedisObject {
+    if obj == null {
+        return error.ObjectWrongType;
+    }
+
+    if obj.obj_type == ObjectType.object_string {
+        return create_string_object(obj.value.buf[0: obj.value.len]);
+    }
+
+    if obj.obj_type == ObjectType.object_hash {
+        const cloned_hash: &RedisObject = try create_hash_object();
+        errdefer object_free(cloned_hash);
+        var hash_iter: DictIterator = dict_iter_new();
+        var hash_entry: &DictEntry = dict_iter_next(&obj.hash_dict, &hash_iter);
+        while hash_entry != null {
+            const field_obj: &RedisObject = object_usize_to_object(hash_entry.value);
+            _ = try hash_object_set_field(
+                cloned_hash,
+                hash_entry.key.buf[0: hash_entry.key.len],
+                field_obj.value.buf[0: field_obj.value.len],
+            );
+            hash_entry = dict_iter_next(&obj.hash_dict, &hash_iter);
+        }
+        return cloned_hash;
+    }
+
+    if obj.obj_type == ObjectType.object_list {
+        const cloned_list: &RedisObject = try create_list_object();
+        errdefer object_free(cloned_list);
+        var list_node: &ListNode = obj.list_head;
+        while list_node != null {
+            _ = try list_object_push_tail(cloned_list, list_node.value.value.buf[0: list_node.value.value.len]);
+            list_node = list_node.next;
+        }
+        return cloned_list;
+    }
+
+    if obj.obj_type == ObjectType.object_set {
+        const cloned_set: &RedisObject = try create_set_object();
+        errdefer object_free(cloned_set);
+        var set_iter: DictIterator = dict_iter_new();
+        var set_entry: &DictEntry = dict_iter_next(&obj.hash_dict, &set_iter);
+        while set_entry != null {
+            _ = try set_object_add_member(cloned_set, set_entry.key.buf[0: set_entry.key.len]);
+            set_entry = dict_iter_next(&obj.hash_dict, &set_iter);
+        }
+        return cloned_set;
+    }
+
+    if obj.obj_type == ObjectType.object_zset {
+        const cloned_zset: &RedisObject = try create_zset_object();
+        errdefer object_free(cloned_zset);
+        var zset_iter: DictIterator = dict_iter_new();
+        var zset_entry: &DictEntry = dict_iter_next(&obj.hash_dict, &zset_iter);
+        while zset_entry != null {
+            const score_obj: &RedisObject = object_usize_to_object(zset_entry.value);
+            _ = try zset_object_add_member(cloned_zset, score_obj.int_value, zset_entry.key.buf[0: zset_entry.key.len]);
+            zset_entry = dict_iter_next(&obj.hash_dict, &zset_iter);
+        }
+        return cloned_zset;
+    }
+
+    return error.ObjectWrongType;
+}
+
 export fn object_free(obj: &RedisObject) void {
     if obj == null {
         return;

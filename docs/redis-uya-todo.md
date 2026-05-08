@@ -433,7 +433,8 @@
 - [x] Key/Server 第三批：`RENAME`、`RENAMENX`、`LASTSAVE`
 - [x] Key/Server 第四批：`FLUSHDB`、`FLUSHALL`
 - [x] Key/Server 第五批：`PEXPIREAT`
-- [ ] Key/Server 后续：`MOVE`、`DUMP/RESTORE`、`WAIT`、`SELECT`、`OBJECT`、`SORT`
+- [x] Key/Server 第六批：`DUMP`、`RESTORE`
+- [ ] Key/Server 后续：`MOVE`、`WAIT`、`SELECT`、`OBJECT`、`SORT`
 - [ ] Security baseline：`AUTH`、`requirepass`、`SHUTDOWN`
 
 验收项：

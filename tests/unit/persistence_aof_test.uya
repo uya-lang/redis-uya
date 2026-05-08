@@ -11,13 +11,18 @@ use src.persistence.aof.aof_close;
 use src.persistence.aof.aof_append_raw;
 use src.persistence.aof.aof_flush;
 use src.persistence.aof.aof_replay_file_at;
+use src.persistence.rdb.rdb_dump_object_at;
 use src.storage.engine.Engine;
 use src.storage.engine.engine_new;
 use src.storage.engine.engine_free;
 use src.storage.engine.lookup_key_at;
+use src.storage.engine.set_key_at;
 use src.storage.object.RedisObject;
+use src.storage.object.create_string_object;
+use src.storage.object.object_free;
 use src.memory.allocator.used_memory;
 use src.memory.allocator.reset_memory_stats_for_test;
+use libc.snprintf;
 use libc.unlink;
 
 fn aof_test_slice_eq(a: &[byte], b: &[byte]) bool {
@@ -46,6 +51,15 @@ fn aof_test_fill(dst: &byte, offset: usize, len: usize, value: byte) usize {
         i = i + 1;
     }
     return offset + len;
+}
+
+fn aof_test_append_decimal(dst: &byte, offset: usize, value: usize) !usize {
+    var buf: [byte: 32] = [];
+    const written: i32 = snprintf(&buf[0] as *byte, 32usize, "%zu" as *byte, value);
+    if written <= 0 || written >= 32 {
+        return error.AllocOutOfMemory;
+    }
+    return aof_test_copy(dst, offset, buf[0: written as usize]);
 }
 
 fn aof_replay_fails(path: &const byte) bool {
@@ -236,6 +250,38 @@ export fn test_aof_replay_flush_commands() !void {
     try aof_replay_file_at(path, &engine, &router, 1000u64);
     try assert_true(aof_key_missing_at(&engine, &"a"[0: 1], 1000u64));
     try assert_true(aof_key_missing_at(&engine, &"b"[0: 1], 1000u64));
+    engine_free(&engine);
+    _ = unlink(path);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_aof_replay_restore_command() !void {
+    reset_memory_stats_for_test();
+    var source_engine: Engine = engine_new();
+    const source_obj: &RedisObject = try create_string_object(&"value"[0: 5]);
+    try set_key_at(&source_engine, &"src"[0: 3], source_obj, 1000u64);
+    const dump_obj: &RedisObject = try rdb_dump_object_at(&source_engine, 1000u64);
+    engine_free(&source_engine);
+
+    const path: &const byte = "build/test-aof-restore.aof";
+    _ = unlink(path);
+    var writer: AofWriter = try aof_open_truncate(path);
+    var raw: [byte: 4096] = [];
+    var raw_len: usize = 0;
+    raw_len = aof_test_copy(&raw[0], raw_len, &"*4\r\n$7\r\nRESTORE\r\n$6\r\nkeyout\r\n$1\r\n0\r\n$"[0: 32]);
+    raw_len = try aof_test_append_decimal(&raw[0], raw_len, dump_obj.value.len);
+    raw_len = aof_test_copy(&raw[0], raw_len, &"\r\n"[0: 2]);
+    raw_len = aof_test_copy(&raw[0], raw_len, dump_obj.value.buf[0: dump_obj.value.len]);
+    raw_len = aof_test_copy(&raw[0], raw_len, &"\r\n"[0: 2]);
+    try aof_append_raw(&writer, raw[0: raw_len]);
+    aof_close(&writer);
+    object_free(dump_obj);
+
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    try aof_replay_file_at(path, &engine, &router, 1000u64);
+    const found: &RedisObject = try lookup_key_at(&engine, &"keyout"[0: 6], 1000u64);
+    try assert_true(aof_test_slice_eq(found.value.buf[0: found.value.len], &"value"[0: 5]));
     engine_free(&engine);
     _ = unlink(path);
     try assert_eq_i32(used_memory() as i32, 0);

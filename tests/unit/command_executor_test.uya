@@ -2062,6 +2062,28 @@ export fn test_command_flushdb_flushall() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_command_dump() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+
+    var set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$4\r\nkey1\r\n$5\r\nvalue\r\n"[0: 34]);
+    const set_command: Command = try command_executor_test_command(&router, &set_parsed);
+    _ = command_execute_at(&engine, &set_command, 1000u64);
+    resp_value_free(&set_parsed.value);
+
+    var dump_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nDUMP\r\n$4\r\nkey1\r\n"[0: 25]);
+    const dump_command: Command = try command_executor_test_command(&router, &dump_parsed);
+    const dump_reply: CommandReply = command_execute_at(&engine, &dump_command, 1000u64);
+    try assert_eq_i32(dump_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(dump_reply.data[0: 8], &"RUYARDB1"[0: 8]));
+    command_reply_cleanup(&dump_reply);
+    resp_value_free(&dump_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_command_hscan() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();

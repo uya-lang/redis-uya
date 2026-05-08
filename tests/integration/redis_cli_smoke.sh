@@ -812,6 +812,46 @@ if [[ "$DBSIZE_AFTER_FLUSHALL_RESULT" != "0" ]]; then
     exit 1
 fi
 
+DUMP_SET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" set dump-src value)"
+if [[ "$DUMP_SET_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected OK on dump-src SET, got '$DUMP_SET_RESULT'" >&2
+    exit 1
+fi
+
+DUMP_FILE="$ROOT/build/redis-cli-smoke-dump-${PORT}.rdbfrag"
+rm -f "$DUMP_FILE"
+redis-cli --raw -h 127.0.0.1 -p "$PORT" dump dump-src > "$DUMP_FILE"
+if ! head -c 8 "$DUMP_FILE" | grep -q '^RUYARDB1'; then
+    echo "[FAIL] integration/redis_cli_smoke: unexpected DUMP header" >&2
+    exit 1
+fi
+
+RESTORE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" -x restore dump-dst 1500 < "$DUMP_FILE")"
+if [[ "$RESTORE_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected RESTORE OK, got '$RESTORE_RESULT'" >&2
+    exit 1
+fi
+
+DUMP_GET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" get dump-dst)"
+if [[ "$DUMP_GET_RESULT" != "value" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected dump-dst value, got '$DUMP_GET_RESULT'" >&2
+    exit 1
+fi
+
+DUMP_PTTL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" pttl dump-dst)"
+if ! [[ "$DUMP_PTTL_RESULT" =~ ^[0-9]+$ ]] || [[ "$DUMP_PTTL_RESULT" -le 0 ]] || [[ "$DUMP_PTTL_RESULT" -gt 1500 ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected dump-dst PTTL in (0,1500], got '$DUMP_PTTL_RESULT'" >&2
+    exit 1
+fi
+
+DUMP_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del dump-src dump-dst)"
+if [[ "$DUMP_DEL_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected dump keys DEL 2, got '$DUMP_DEL_RESULT'" >&2
+    exit 1
+fi
+
+rm -f "$DUMP_FILE"
+
 QUIT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" quit)"
 if [[ "$QUIT_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected OK on QUIT, got '$QUIT_RESULT'" >&2

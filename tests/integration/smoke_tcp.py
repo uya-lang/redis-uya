@@ -50,6 +50,19 @@ def recv_line(sock: socket.socket) -> bytes:
             return b"".join(chunks)
 
 
+def recv_bulk(sock: socket.socket) -> bytes | None:
+    header = recv_line(sock)
+    if header == b"$-1\r\n":
+        return None
+    if not header.startswith(b"$") or not header.endswith(b"\r\n"):
+        raise AssertionError(f"unexpected bulk header: {header!r}")
+    size = int(header[1:-2])
+    payload = recv_exact(sock, size + 2)
+    if payload[-2:] != b"\r\n":
+        raise AssertionError(f"unexpected bulk payload terminator: {payload!r}")
+    return payload[:-2]
+
+
 def roundtrip(sock: socket.socket, request: bytes, expected: bytes) -> None:
     sock.sendall(request)
     actual = recv_exact(sock, len(expected))
@@ -319,6 +332,22 @@ def run_smoke() -> None:
             roundtrip(sock, b"*3\r\n$3\r\nSET\r\n$11\r\nflush-key-2\r\n$5\r\nvalue\r\n", b"+OK\r\n")
             roundtrip(sock, b"*1\r\n$8\r\nFLUSHALL\r\n", b"+OK\r\n")
             roundtrip(sock, b"*1\r\n$6\r\nDBSIZE\r\n", b":0\r\n")
+            roundtrip(sock, b"*3\r\n$3\r\nSET\r\n$8\r\ndump-src\r\n$5\r\nvalue\r\n", b"+OK\r\n")
+            sock.sendall(b"*2\r\n$4\r\nDUMP\r\n$8\r\ndump-src\r\n")
+            dump_payload = recv_bulk(sock)
+            if dump_payload is None or dump_payload[0:8] != b"RUYARDB1":
+                raise AssertionError(f"unexpected DUMP payload: {dump_payload!r}")
+            dump_len = str(len(dump_payload)).encode()
+            restore_ttl = b"1500"
+            restore_request = (
+                b"*4\r\n$7\r\nRESTORE\r\n$8\r\ndump-dst\r\n$4\r\n1500\r\n$"
+                + dump_len
+                + b"\r\n"
+                + dump_payload
+                + b"\r\n"
+            )
+            roundtrip(sock, restore_request, b"+OK\r\n")
+            roundtrip(sock, b"*2\r\n$3\r\nGET\r\n$8\r\ndump-dst\r\n", b"$5\r\nvalue\r\n")
             roundtrip(sock, b"*1\r\n$4\r\nQUIT\r\n", b"+OK\r\n")
 
         stop_process(proc)

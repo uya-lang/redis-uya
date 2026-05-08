@@ -39,6 +39,8 @@ use src.memory.allocator.allocator_slab_cached_blocks;
 use src.memory.allocator.allocator_slab_cached_bytes;
 use src.memory.allocator.allocator_slab_reuse_count;
 use src.persistence.rdb.rdb_build_path;
+use src.persistence.rdb.rdb_dump_object_at;
+use src.persistence.rdb.rdb_load_bytes_at;
 use src.persistence.rdb.rdb_save_file_at;
 use src.replication.state.ReplicationRole;
 use src.replication.state.ReplicationState;
@@ -78,6 +80,7 @@ use src.storage.object.create_list_object;
 use src.storage.object.create_set_object;
 use src.storage.object.create_zset_object;
 use src.storage.object.hash_object_set_field;
+use src.storage.object.object_clone;
 use src.storage.object.hash_object_get_field;
 use src.storage.object.list_object_insert_sorted_lex;
 use src.storage.object.list_object_push_head;
@@ -2677,6 +2680,10 @@ fn command_executor_bulk_i64(value: i64) CommandReply {
     return reply;
 }
 
+fn command_executor_busykey() CommandReply {
+    return command_executor_error(&"BUSYKEY Target key name already exists."[0: 37]);
+}
+
 fn command_executor_rename_common(engine: &Engine, command: &Command, now_ms: u64, overwrite: bool) CommandReply {
     if command.argc != 3 {
         return command_executor_wrong_arity();
@@ -2741,6 +2748,120 @@ fn command_executor_flushall(engine: &Engine, command: &Command) CommandReply {
         return command_executor_wrong_arity();
     }
     _ = engine_flush_all(engine);
+    return command_executor_simple(&"OK"[0: 2]);
+}
+
+fn command_executor_dump(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 2 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+        return command_executor_null_bulk();
+    };
+    const clone: &RedisObject = object_clone(obj) catch |err| {
+        if err == error.AllocOutOfMemory {
+            return command_executor_oom();
+        }
+        return command_executor_wrongtype();
+    };
+    var temp_engine: Engine = engine_new();
+    _ = set_key_at(&temp_engine, key, clone, now_ms) catch {
+        object_free(clone);
+        engine_free(&temp_engine);
+        return command_executor_oom();
+    };
+    const dump_obj: &RedisObject = rdb_dump_object_at(&temp_engine, now_ms) catch |err| {
+        engine_free(&temp_engine);
+        if err == error.AllocOutOfMemory {
+            return command_executor_oom();
+        }
+        return command_executor_error(&"ERR dump failed"[0: 15]);
+    };
+    engine_free(&temp_engine);
+    var reply: CommandReply = command_executor_bulk(dump_obj.value.buf[0: dump_obj.value.len]);
+    reply.owned_object = dump_obj;
+    return reply;
+}
+
+fn command_executor_restore(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 4 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const ttl_data: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    const payload: &[byte] = command_executor_arg(command, 3) catch {
+        return command_executor_wrong_arity();
+    };
+    const ttl_ms: i64 = command_executor_parse_i64(ttl_data) catch {
+        return command_executor_invalid_integer();
+    };
+    if ttl_ms < 0 {
+        return command_executor_invalid_integer();
+    }
+    const existing: &RedisObject = command_executor_lookup_key_now_or_null(engine, key, now_ms);
+    if existing != null {
+        return command_executor_busykey();
+    }
+
+    var temp_engine: Engine = engine_new();
+    const load_result: !void = rdb_load_bytes_at(payload, &temp_engine, now_ms);
+    load_result catch |err| {
+        engine_free(&temp_engine);
+        if err == error.RdbInvalidFormat || err == error.RdbTruncated || err == error.RdbUnsupportedType {
+            return command_executor_error(&"ERR invalid dump payload"[0: 24]);
+        }
+        if err == error.AllocOutOfMemory {
+            return command_executor_oom();
+        }
+        return command_executor_error(&"ERR invalid dump payload"[0: 24]);
+    };
+
+    const keys_obj: &RedisObject = engine_scan_keys_at(&temp_engine, now_ms) catch {
+        engine_free(&temp_engine);
+        return command_executor_error(&"ERR invalid dump payload"[0: 24]);
+    };
+    defer {
+        object_free(keys_obj);
+    }
+    const key_count: usize = list_object_len(keys_obj) catch {
+        engine_free(&temp_engine);
+        return command_executor_error(&"ERR invalid dump payload"[0: 24]);
+    };
+    if key_count != 1 || keys_obj.list_head == null {
+        engine_free(&temp_engine);
+        return command_executor_error(&"ERR invalid dump payload"[0: 24]);
+    }
+    const source_key: &[byte] = keys_obj.list_head.value.value.buf[0: keys_obj.list_head.value.value.len];
+    const restored_obj: &RedisObject = lookup_key_at(&temp_engine, source_key, now_ms) catch {
+        engine_free(&temp_engine);
+        return command_executor_error(&"ERR invalid dump payload"[0: 24]);
+    };
+    const clone: &RedisObject = object_clone(restored_obj) catch |err| {
+        engine_free(&temp_engine);
+        if err == error.AllocOutOfMemory {
+            return command_executor_oom();
+        }
+        return command_executor_error(&"ERR invalid dump payload"[0: 24]);
+    };
+    engine_free(&temp_engine);
+
+    _ = set_key_at(engine, key, clone, now_ms) catch {
+        object_free(clone);
+        return command_executor_oom();
+    };
+    if ttl_ms > 0 {
+        _ = set_key_expire_at(engine, key, now_ms + ttl_ms as u64) catch {
+            _ = delete_key(engine, key);
+            return command_executor_oom();
+        };
+    }
     return command_executor_simple(&"OK"[0: 2]);
 }
 
@@ -5169,6 +5290,12 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_flushall {
         return command_executor_flushall(engine, command);
+    }
+    if command.info.cmd_type == CommandType.command_dump {
+        return command_executor_dump(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_restore {
+        return command_executor_restore(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_zadd {
         return command_executor_zadd(engine, command, now_ms);

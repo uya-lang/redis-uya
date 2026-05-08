@@ -431,6 +431,12 @@ class RedisPySubsetClient:
     def flushall(self) -> bool:
         return self._request(b"FLUSHALL") == "OK"
 
+    def dump(self, key: str) -> bytes | None:
+        return self._request(b"DUMP", key.encode())
+
+    def restore(self, key: str, ttl_ms: int, payload: bytes) -> bool:
+        return self._request(b"RESTORE", key.encode(), str(ttl_ms).encode(), payload) == "OK"
+
     def save(self) -> bool:
         return self._request(b"SAVE") == "OK"
 
@@ -642,6 +648,16 @@ def run_smoke() -> None:
             assert client.set("flush-key-2", "value")
             assert client.flushall()
             assert client.dbsize() == 0
+            assert client.set("dump-src", "value")
+            dump_payload = client.dump("dump-src")
+            if dump_payload is None or dump_payload[0:8] != b"RUYARDB1":
+                raise AssertionError(f"unexpected dump payload: {dump_payload!r}")
+            assert client.restore("dump-dst", 1500, dump_payload)
+            assert client.get("dump-dst") == b"value"
+            dump_pttl = client.pttl("dump-dst")
+            if dump_pttl <= 0 or dump_pttl > 1500:
+                raise AssertionError(f"unexpected dump restore pttl: {dump_pttl}")
+            assert client.delete("dump-src", "dump-dst") == 2
 
             assert client.bgrewriteaof()
             assert client.quit()

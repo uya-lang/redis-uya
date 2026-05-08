@@ -751,6 +751,38 @@ FLUSHALL
 - 成功：`+OK`
 - 当前单机实现中等价于清空当前唯一数据库
 
+### `DUMP`
+
+格式：
+
+```text
+DUMP key
+```
+
+返回：
+
+- 返回项目内 RDB 子集二进制 payload，Bulk String
+- key 不存在时返回 Null Bulk
+
+### `RESTORE`
+
+格式：
+
+```text
+RESTORE key ttl serialized-value
+```
+
+返回：
+
+- 成功：`+OK`
+- target 已存在：`-BUSYKEY ...`
+- payload 非法：错误
+
+说明：
+
+- `ttl` 为相对毫秒 TTL，`0` 表示不过期
+- 当前实现不支持 `REPLACE` / `ABSTTL` / `IDLETIME` / `FREQ`
+
 ### `MGET`
 
 格式：

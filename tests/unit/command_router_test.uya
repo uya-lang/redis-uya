@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 99);
+    try assert_eq_i32(command_router_count(&router) as i32, 101);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -294,6 +294,14 @@ export fn test_command_router_lookup_and_case() !void {
     const flushall_info: CommandInfo = try command_router_lookup(&router, &"flushall"[0: 8]);
     try assert_eq_i32(flushall_info.cmd_type as i32, CommandType.command_flushall as i32);
     try assert_eq_i32(flushall_info.arity, 1);
+
+    const dump_info: CommandInfo = try command_router_lookup(&router, &"DUMP"[0: 4]);
+    try assert_eq_i32(dump_info.cmd_type as i32, CommandType.command_dump as i32);
+    try assert_eq_i32(dump_info.arity, 2);
+
+    const restore_info: CommandInfo = try command_router_lookup(&router, &"restore"[0: 7]);
+    try assert_eq_i32(restore_info.cmd_type as i32, CommandType.command_restore as i32);
+    try assert_eq_i32(restore_info.arity, 4);
 
     const smembers: CommandInfo = try command_router_lookup(&router, &"SMEMBERS"[0: 8]);
     try assert_eq_i32(smembers.cmd_type as i32, CommandType.command_smembers as i32);

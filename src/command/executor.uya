@@ -53,6 +53,7 @@ use src.storage.engine.Engine;
 use src.storage.engine.EngineRenameResult;
 use src.storage.engine.engine_len;
 use src.storage.engine.engine_expire_len;
+use src.storage.engine.engine_flush_all;
 use src.storage.engine.engine_rename_key;
 use src.storage.engine.lookup_key_at;
 use src.storage.engine.set_key_at;
@@ -2727,6 +2728,22 @@ fn command_executor_lastsave(runtime: &CommandRuntimeInfo, command: &Command) Co
     return command_executor_integer((runtime.lastsave_ms / 1000u64) as i64);
 }
 
+fn command_executor_flushdb(engine: &Engine, command: &Command) CommandReply {
+    if command.argc != 1 {
+        return command_executor_wrong_arity();
+    }
+    _ = engine_flush_all(engine);
+    return command_executor_simple(&"OK"[0: 2]);
+}
+
+fn command_executor_flushall(engine: &Engine, command: &Command) CommandReply {
+    if command.argc != 1 {
+        return command_executor_wrong_arity();
+    }
+    _ = engine_flush_all(engine);
+    return command_executor_simple(&"OK"[0: 2]);
+}
+
 fn command_executor_list_push_i64(obj: &RedisObject, value: i64) !void {
     var buf: Sds = sds_empty() catch {
         return error.AllocOutOfMemory;
@@ -5146,6 +5163,12 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_lastsave {
         return command_executor_lastsave(runtime, command);
+    }
+    if command.info.cmd_type == CommandType.command_flushdb {
+        return command_executor_flushdb(engine, command);
+    }
+    if command.info.cmd_type == CommandType.command_flushall {
+        return command_executor_flushall(engine, command);
     }
     if command.info.cmd_type == CommandType.command_zadd {
         return command_executor_zadd(engine, command, now_ms);

@@ -751,6 +751,42 @@ if [[ "$REWRITE_RESULT" != "Background AOF rewrite scheduled" ]]; then
     exit 1
 fi
 
+FLUSH_SET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" set flush-key value)"
+if [[ "$FLUSH_SET_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected OK on flush-key SET, got '$FLUSH_SET_RESULT'" >&2
+    exit 1
+fi
+
+FLUSHDB_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" flushdb)"
+if [[ "$FLUSHDB_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected FLUSHDB OK, got '$FLUSHDB_RESULT'" >&2
+    exit 1
+fi
+
+DBSIZE_AFTER_FLUSHDB_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" dbsize)"
+if [[ "$DBSIZE_AFTER_FLUSHDB_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected DBSIZE 0 after FLUSHDB, got '$DBSIZE_AFTER_FLUSHDB_RESULT'" >&2
+    exit 1
+fi
+
+FLUSHALL_SET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" set flush-key-2 value)"
+if [[ "$FLUSHALL_SET_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected OK on flush-key-2 SET, got '$FLUSHALL_SET_RESULT'" >&2
+    exit 1
+fi
+
+FLUSHALL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" flushall)"
+if [[ "$FLUSHALL_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected FLUSHALL OK, got '$FLUSHALL_RESULT'" >&2
+    exit 1
+fi
+
+DBSIZE_AFTER_FLUSHALL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" dbsize)"
+if [[ "$DBSIZE_AFTER_FLUSHALL_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected DBSIZE 0 after FLUSHALL, got '$DBSIZE_AFTER_FLUSHALL_RESULT'" >&2
+    exit 1
+fi
+
 QUIT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" quit)"
 if [[ "$QUIT_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected OK on QUIT, got '$QUIT_RESULT'" >&2

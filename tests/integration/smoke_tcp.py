@@ -297,6 +297,12 @@ def run_smoke() -> None:
             roundtrip(sock, b"*2\r\n$6\r\nEXISTS\r\n$3\r\nkey\r\n", b":1\r\n")
             roundtrip(sock, b"*2\r\n$3\r\nDEL\r\n$3\r\nkey\r\n", b":1\r\n")
             roundtrip(sock, b"*2\r\n$6\r\nEXISTS\r\n$3\r\nkey\r\n", b":0\r\n")
+            roundtrip(sock, b"*3\r\n$3\r\nSET\r\n$9\r\nflush-key\r\n$5\r\nvalue\r\n", b"+OK\r\n")
+            roundtrip(sock, b"*1\r\n$7\r\nFLUSHDB\r\n", b"+OK\r\n")
+            roundtrip(sock, b"*1\r\n$6\r\nDBSIZE\r\n", b":0\r\n")
+            roundtrip(sock, b"*3\r\n$3\r\nSET\r\n$11\r\nflush-key-2\r\n$5\r\nvalue\r\n", b"+OK\r\n")
+            roundtrip(sock, b"*1\r\n$8\r\nFLUSHALL\r\n", b"+OK\r\n")
+            roundtrip(sock, b"*1\r\n$6\r\nDBSIZE\r\n", b":0\r\n")
             roundtrip(sock, b"*1\r\n$4\r\nQUIT\r\n", b"+OK\r\n")
 
         stop_process(proc)

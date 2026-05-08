@@ -219,6 +219,28 @@ export fn test_aof_replay_rename_commands() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_aof_replay_flush_commands() !void {
+    reset_memory_stats_for_test();
+    const path: &const byte = "build/test-aof-flush-cmds.aof";
+    _ = unlink(path);
+
+    var writer: AofWriter = try aof_open_truncate(path);
+    try aof_append_raw(&writer, &"*3\r\n$3\r\nSET\r\n$1\r\na\r\n$1\r\n1\r\n"[0: 27]);
+    try aof_append_raw(&writer, &"*1\r\n$7\r\nFLUSHDB\r\n"[0: 17]);
+    try aof_append_raw(&writer, &"*3\r\n$3\r\nSET\r\n$1\r\nb\r\n$1\r\n2\r\n"[0: 27]);
+    try aof_append_raw(&writer, &"*1\r\n$8\r\nFLUSHALL\r\n"[0: 18]);
+    aof_close(&writer);
+
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    try aof_replay_file_at(path, &engine, &router, 1000u64);
+    try assert_true(aof_key_missing_at(&engine, &"a"[0: 1], 1000u64));
+    try assert_true(aof_key_missing_at(&engine, &"b"[0: 1], 1000u64));
+    engine_free(&engine);
+    _ = unlink(path);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_aof_flush_persists_buffer_without_close() !void {
     reset_memory_stats_for_test();
     const path: &const byte = "build/test-aof-flush.aof";

@@ -725,6 +725,32 @@ LASTSAVE
 
 - 返回最近一次成功 `SAVE` / `BGSAVE` 的 Unix 秒时间戳，Integer
 
+### `FLUSHDB`
+
+格式：
+
+```text
+FLUSHDB
+```
+
+返回：
+
+- 成功：`+OK`
+- 当前单机实现中清空当前唯一数据库
+
+### `FLUSHALL`
+
+格式：
+
+```text
+FLUSHALL
+```
+
+返回：
+
+- 成功：`+OK`
+- 当前单机实现中等价于清空当前唯一数据库
+
 ### `MGET`
 
 格式：

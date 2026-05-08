@@ -153,6 +153,35 @@ export fn delete_key(engine: &Engine, key: &[byte]) bool {
     return deleted;
 }
 
+export fn engine_flush_all(engine: &Engine) usize {
+    const removed: usize = dict_len(&engine.db.dict);
+    if removed == 0 {
+        return 0;
+    }
+
+    if engine.watch_clients > 0 {
+        var watch_iter: DictIterator = dict_iter_new();
+        var watch_entry: &DictEntry = dict_iter_next(&engine.db.dict, &watch_iter);
+        while watch_entry != null {
+            _ = engine_touch_watch_version(engine, watch_entry.key.buf[0: watch_entry.key.len]) catch {};
+            watch_entry = dict_iter_next(&engine.db.dict, &watch_iter);
+        }
+    }
+
+    var iter: DictIterator = dict_iter_new();
+    var entry: &DictEntry = dict_iter_next(&engine.db.dict, &iter);
+    while entry != null {
+        object_free(usize_to_object(entry.value));
+        entry = dict_iter_next(&engine.db.dict, &iter);
+    }
+
+    dict_free(&engine.db.dict);
+    dict_free(&engine.db.expires);
+    engine.db.dict = dict_new();
+    engine.db.expires = dict_new();
+    return removed;
+}
+
 export fn engine_rename_key(engine: &Engine, source: &[byte], target: &[byte], overwrite: bool) !EngineRenameResult {
     if bytes_eq(source, target) {
         return EngineRenameResult.rename_same_key;

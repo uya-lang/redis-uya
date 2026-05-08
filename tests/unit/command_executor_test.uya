@@ -2022,6 +2022,46 @@ export fn test_command_rename_renamenx_lastsave() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_command_flushdb_flushall() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+
+    var set_a_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$1\r\na\r\n$1\r\n1\r\n"[0: 29]);
+    const set_a_command: Command = try command_executor_test_command(&router, &set_a_parsed);
+    _ = command_execute_at(&engine, &set_a_command, 1000u64);
+    resp_value_free(&set_a_parsed.value);
+
+    var set_b_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$1\r\nb\r\n$1\r\n2\r\n"[0: 29]);
+    const set_b_command: Command = try command_executor_test_command(&router, &set_b_parsed);
+    _ = command_execute_at(&engine, &set_b_command, 1000u64);
+    resp_value_free(&set_b_parsed.value);
+
+    var flushdb_parsed: RespParseResult = try parse_resp2(&"*1\r\n$7\r\nFLUSHDB\r\n"[0: 17]);
+    const flushdb_command: Command = try command_executor_test_command(&router, &flushdb_parsed);
+    const flushdb_reply: CommandReply = command_execute_at(&engine, &flushdb_command, 1000u64);
+    try assert_eq_i32(flushdb_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(flushdb_reply.data, &"OK"[0: 2]));
+    try assert_eq_i32(engine_len(&engine) as i32, 0);
+    resp_value_free(&flushdb_parsed.value);
+
+    var set_c_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$1\r\nc\r\n$1\r\n3\r\n"[0: 29]);
+    const set_c_command: Command = try command_executor_test_command(&router, &set_c_parsed);
+    _ = command_execute_at(&engine, &set_c_command, 1000u64);
+    resp_value_free(&set_c_parsed.value);
+
+    var flushall_parsed: RespParseResult = try parse_resp2(&"*1\r\n$8\r\nFLUSHALL\r\n"[0: 18]);
+    const flushall_command: Command = try command_executor_test_command(&router, &flushall_parsed);
+    const flushall_reply: CommandReply = command_execute_at(&engine, &flushall_command, 1000u64);
+    try assert_eq_i32(flushall_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(flushall_reply.data, &"OK"[0: 2]));
+    try assert_eq_i32(engine_len(&engine) as i32, 0);
+    resp_value_free(&flushall_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_command_hscan() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();

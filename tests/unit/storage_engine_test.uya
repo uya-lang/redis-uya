@@ -16,6 +16,7 @@ use src.storage.engine.engine_watch_client_count;
 use src.storage.engine.engine_watch_register_client;
 use src.storage.engine.engine_watch_unregister_client;
 use src.storage.engine.engine_watch_version;
+use src.storage.engine.engine_flush_all;
 use src.storage.engine.engine_expire_cycle_at;
 use src.storage.engine.engine_active_expire_cycle_at;
 use src.storage.engine.engine_scan_keys_at;
@@ -262,6 +263,28 @@ export fn test_engine_watch_versions_update_with_active_watch_client() !void {
 
     engine_watch_unregister_client(&engine);
     try assert_eq_i32(engine_watch_client_count(&engine) as i32, 0);
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_engine_flush_all_updates_watch_versions() !void {
+    reset_memory_stats_for_test();
+    var engine: Engine = engine_new();
+    engine_watch_register_client(&engine);
+
+    const first: &RedisObject = try create_string_object(&"one"[0: 3]);
+    const second: &RedisObject = try create_string_object(&"two"[0: 3]);
+    try set_key_at(&engine, &"k1"[0: 2], first, 1000u64);
+    try set_key_at(&engine, &"k2"[0: 2], second, 1000u64);
+    const version_before: u64 = engine_watch_version(&engine, &"k1"[0: 2]);
+    try assert_true(version_before > 0u64);
+
+    try assert_eq_i32(engine_flush_all(&engine) as i32, 2);
+    try assert_eq_i32(engine_len(&engine) as i32, 0);
+    try assert_true(engine_watch_version(&engine, &"k1"[0: 2]) > version_before);
+    try assert_true(engine_watch_version(&engine, &"k2"[0: 2]) > 0u64);
+
+    engine_watch_unregister_client(&engine);
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);
 }

@@ -422,6 +422,12 @@ class RedisPySubsetClient:
     def lastsave(self) -> int:
         return int(self._request(b"LASTSAVE"))
 
+    def flushdb(self) -> bool:
+        return self._request(b"FLUSHDB") == "OK"
+
+    def flushall(self) -> bool:
+        return self._request(b"FLUSHALL") == "OK"
+
     def save(self) -> bool:
         return self._request(b"SAVE") == "OK"
 
@@ -619,6 +625,13 @@ def run_smoke() -> None:
             config = client.config_get("port")
             if config.get("port") != str(port):
                 raise AssertionError(f"unexpected config get port: {config!r}")
+
+            assert client.set("flush-key", "value")
+            assert client.flushdb()
+            assert client.dbsize() == 0
+            assert client.set("flush-key-2", "value")
+            assert client.flushall()
+            assert client.dbsize() == 0
 
             assert client.bgrewriteaof()
             assert client.quit()

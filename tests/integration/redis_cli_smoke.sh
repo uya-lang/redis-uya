@@ -247,6 +247,12 @@ if [[ "$HGETALL_RESULT" != "6" ]]; then
     exit 1
 fi
 
+HSCAN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hscan hash 0 count 16 | wc -l | tr -d ' ')"
+if [[ "$HSCAN_RESULT" != "7" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HSCAN 7 lines, got '$HSCAN_RESULT'" >&2
+    exit 1
+fi
+
 HASH_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del hash)"
 if [[ "$HASH_DEL_RESULT" != "1" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected hash DEL 1, got '$HASH_DEL_RESULT'" >&2

@@ -199,6 +199,7 @@ def run_smoke() -> None:
             hgetall_actual = recv_exact(sock, len(b"*6\r\n$7\r\ncounter\r\n$1\r\n2\r\n$5\r\nfield\r\n$5\r\nvalue\r\n$5\r\nratio\r\n$3\r\n1.5\r\n"))
             if hgetall_actual != b"*6\r\n$7\r\ncounter\r\n$1\r\n2\r\n$5\r\nfield\r\n$5\r\nvalue\r\n$5\r\nratio\r\n$3\r\n1.5\r\n":
                 raise AssertionError(f"unexpected HGETALL reply: {hgetall_actual!r}")
+            roundtrip(sock, b"*5\r\n$5\r\nHSCAN\r\n$4\r\nhash\r\n$1\r\n0\r\n$5\r\nCOUNT\r\n$2\r\n16\r\n", b"*2\r\n$1\r\n0\r\n*6\r\n$7\r\ncounter\r\n$1\r\n2\r\n$5\r\nfield\r\n$5\r\nvalue\r\n$5\r\nratio\r\n$3\r\n1.5\r\n")
             roundtrip(sock, b"*5\r\n$5\r\nLPUSH\r\n$4\r\nlist\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\nc\r\n", b":3\r\n")
             roundtrip(sock, b"*4\r\n$6\r\nLRANGE\r\n$4\r\nlist\r\n$1\r\n0\r\n$2\r\n-1\r\n", b"*3\r\n$1\r\nc\r\n$1\r\nb\r\n$1\r\na\r\n")
             roundtrip(sock, b"*2\r\n$4\r\nLPOP\r\n$4\r\nlist\r\n", b"$1\r\nc\r\n")

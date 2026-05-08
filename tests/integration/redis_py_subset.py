@@ -227,6 +227,17 @@ class RedisPySubsetClient:
         assert isinstance(result, list)
         return result
 
+    def hscan(self, key: str, cursor: int = 0, count: int | None = None) -> tuple[int, list[bytes]]:
+        parts: list[bytes] = [b"HSCAN", key.encode(), str(cursor).encode()]
+        if count is not None:
+            parts.extend([b"COUNT", str(count).encode()])
+        result = self._request(*parts)
+        assert isinstance(result, list) and len(result) == 2
+        next_cursor = int(result[0])
+        items = result[1]
+        assert isinstance(items, list)
+        return next_cursor, items
+
     def lpush(self, key: str, *values: str) -> int:
         return int(self._request(b"LPUSH", key.encode(), *(value.encode() for value in values)))
 
@@ -392,6 +403,9 @@ def run_smoke() -> None:
             hgetall = client.hgetall("hash")
             if len(hgetall) != 6:
                 raise AssertionError(f"unexpected hgetall size: {hgetall!r}")
+            cursor, hscan_items = client.hscan("hash", 0, count=16)
+            if cursor != 0 or len(hscan_items) != 6:
+                raise AssertionError(f"unexpected hscan result: cursor={cursor} items={hscan_items!r}")
 
             assert client.lpush("list", "a", "b", "c") == 3
             assert client.lrange("list", 0, -1) == [b"c", b"b", b"a"]

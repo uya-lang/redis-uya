@@ -2812,10 +2812,9 @@ fn command_executor_hscan(engine: &Engine, command: &Command, now_ms: u64) Comma
         return command_executor_oom();
     };
 
-    var iter: DictIterator = dict_iter_new();
-    var entry: &DictEntry = dict_iter_next(&obj.hash_dict, &iter);
-    while entry != null {
-        const field_data: &[byte] = entry.key.buf[0: entry.key.len];
+    var field_node: &ListNode = fields.list_head;
+    while field_node != null {
+        const field_data: &[byte] = field_node.value.value.buf[0: field_node.value.value.len];
         const field_obj: &RedisObject = hash_object_get_field(obj, field_data) catch {
             object_free(fields);
             object_free(combined);
@@ -2836,7 +2835,7 @@ fn command_executor_hscan(engine: &Engine, command: &Command, now_ms: u64) Comma
             object_free(combined);
             return command_executor_oom();
         };
-        entry = dict_iter_next(&obj.hash_dict, &iter);
+        field_node = field_node.next;
     }
     object_free(fields);
 

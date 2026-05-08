@@ -318,6 +318,20 @@ HGETALL key
 - 返回 `field, value, field, value...` 交替展开的 RESP Array
 - key 不存在时返回空 Array
 
+### `HSCAN`
+
+格式：
+
+```text
+HSCAN key cursor [COUNT count]
+```
+
+返回：
+
+- 返回两段 RESP Array：`[next-cursor, [field1, value1, field2, value2...]]`
+- 当前实现支持 `COUNT`
+- key 不存在时返回 cursor `0` 和空 Array
+
 ### `MGET`
 
 格式：

@@ -1468,22 +1468,22 @@ export fn test_command_hscan() !void {
     var out: [byte: 256] = [];
     _ = out;
 
-    var hset_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nHSET\r\n$6\r\nhscan\r\n$1\r\na\r\n$1\r\n1\r\n"[0: 39]);
+    var hset_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nHSET\r\n$5\r\nhscan\r\n$1\r\na\r\n$1\r\n1\r\n"[0: 39]);
     const hset_command: Command = try command_executor_test_command(&router, &hset_parsed);
     _ = command_execute_at(&engine, &hset_command, 1000u64);
     resp_value_free(&hset_parsed.value);
 
-    var hset_b_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nHSET\r\n$6\r\nhscan\r\n$1\r\nb\r\n$1\r\n2\r\n"[0: 39]);
+    var hset_b_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nHSET\r\n$5\r\nhscan\r\n$1\r\nb\r\n$1\r\n2\r\n"[0: 39]);
     const hset_b_command: Command = try command_executor_test_command(&router, &hset_b_parsed);
     _ = command_execute_at(&engine, &hset_b_command, 1000u64);
     resp_value_free(&hset_b_parsed.value);
 
-    var hset_c_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nHSET\r\n$6\r\nhscan\r\n$1\r\nc\r\n$1\r\n3\r\n"[0: 39]);
+    var hset_c_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nHSET\r\n$5\r\nhscan\r\n$1\r\nc\r\n$1\r\n3\r\n"[0: 39]);
     const hset_c_command: Command = try command_executor_test_command(&router, &hset_c_parsed);
     _ = command_execute_at(&engine, &hset_c_command, 1000u64);
     resp_value_free(&hset_c_parsed.value);
 
-    var hscan_parsed: RespParseResult = try parse_resp2(&"*3\r\n$5\r\nHSCAN\r\n$6\r\nhscan\r\n$1\r\n0\r\n"[0: 33]);
+    var hscan_parsed: RespParseResult = try parse_resp2(&"*3\r\n$5\r\nHSCAN\r\n$5\r\nhscan\r\n$1\r\n0\r\n"[0: 33]);
     const hscan_command: Command = try command_executor_test_command(&router, &hscan_parsed);
     var hscan_reply: CommandReply = command_execute_at(&engine, &hscan_command, 1000u64);
     try assert_eq_i32(hscan_reply.typ as i32, CommandReplyType.reply_scan as i32);
@@ -1492,7 +1492,7 @@ export fn test_command_hscan() !void {
     command_reply_cleanup(&hscan_reply);
     resp_value_free(&hscan_parsed.value);
 
-    var hscan_partial_parsed: RespParseResult = try parse_resp2(&"*5\r\n$5\r\nHSCAN\r\n$6\r\nhscan\r\n$1\r\n0\r\n$5\r\nCOUNT\r\n$1\r\n2\r\n"[0: 51]);
+    var hscan_partial_parsed: RespParseResult = try parse_resp2(&"*5\r\n$5\r\nHSCAN\r\n$5\r\nhscan\r\n$1\r\n0\r\n$5\r\nCOUNT\r\n$1\r\n2\r\n"[0: 51]);
     const hscan_partial_command: Command = try command_executor_test_command(&router, &hscan_partial_parsed);
     var hscan_partial_reply: CommandReply = command_execute_at(&engine, &hscan_partial_command, 1000u64);
     try assert_eq_i32(hscan_partial_reply.typ as i32, CommandReplyType.reply_scan as i32);

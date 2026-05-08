@@ -252,6 +252,7 @@ build/redis-uya 6380 1
 - String 第六批浮点计数：`INCRBYFLOAT`
 - Hash 第一批数值：`HINCRBY`、`HINCRBYFLOAT`
 - Hash 第二批视图：`HKEYS`、`HVALS`、`HGETALL`
+- Hash 第三批扫描：`HSCAN`
 - Key/Server 第一批：`ECHO`、`TYPE`、`DBSIZE`
 - Key/Server 第二批：`PEXPIRE`、`PERSIST`、`PTTL`
 - AOF append/replay、RDB 子集、`SAVE`、`BGSAVE`、`BGREWRITEAOF`

@@ -58,6 +58,7 @@ use src.storage.engine.engine_expire_len;
 use src.storage.engine.engine_flush_all;
 use src.storage.engine.engine_rename_key;
 use src.storage.engine.lookup_key_at;
+use src.storage.engine.lookup_key_no_touch_at;
 use src.storage.engine.set_key_at;
 use src.storage.engine.delete_key;
 use src.storage.engine.set_key_expire_at;
@@ -106,6 +107,7 @@ use src.storage.object.zset_object_range_reply;
 use src.storage.object.zset_object_range_by_score_reply;
 use src.storage.object.object_free;
 use src.storage.object.object_type_name;
+use src.storage.object.object_encoding_name;
 use src.storage.object.object_layout_size;
 use src.storage.object.list_node_layout_size;
 use src.storage.object.object_pool_cached_objects;
@@ -2735,6 +2737,119 @@ fn command_executor_lastsave(runtime: &CommandRuntimeInfo, command: &Command) Co
     return command_executor_integer((runtime.lastsave_ms / 1000u64) as i64);
 }
 
+fn command_executor_select(runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
+    _ = runtime;
+    if command.argc != 2 {
+        return command_executor_wrong_arity();
+    }
+    const db_data: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const db_index: i64 = command_executor_parse_i64(db_data) catch {
+        return command_executor_invalid_integer();
+    };
+    if db_index != 0 {
+        return command_executor_error(&"ERR DB index is out of range"[0: 28]);
+    }
+    return command_executor_simple(&"OK"[0: 2]);
+}
+
+fn command_executor_object_help() CommandReply {
+    const reply_list: &RedisObject = create_list_object() catch {
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"OBJECT ENCODING <key>"[0: 21]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"OBJECT FREQ <key>"[0: 17]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"OBJECT IDLETIME <key>"[0: 21]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"OBJECT REFCOUNT <key>"[0: 21]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"OBJECT HELP"[0: 11]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    return command_executor_owned_array(reply_list);
+}
+
+fn command_executor_object(runtime: &CommandRuntimeInfo, engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 2 {
+        return command_executor_wrong_arity();
+    }
+
+    const subcommand: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+
+    if command_executor_keyword_eq(subcommand, &"HELP"[0: 4]) {
+        if command.argc != 2 {
+            return command_executor_wrong_arity();
+        }
+        return command_executor_object_help();
+    }
+
+    if command.argc != 3 {
+        return command_executor_owned_error(&"ERR wrong number of arguments for 'object|encoding' command"[0: 59]);
+    }
+
+    const key: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    const obj: &RedisObject = lookup_key_no_touch_at(engine, key, now_ms) catch {
+        return command_executor_null_bulk();
+    };
+
+    if command_executor_keyword_eq(subcommand, &"ENCODING"[0: 8]) {
+        return command_executor_bulk(object_encoding_name(obj.encoding));
+    }
+    if command_executor_keyword_eq(subcommand, &"REFCOUNT"[0: 8]) {
+        return command_executor_integer(1);
+    }
+    if command_executor_keyword_eq(subcommand, &"IDLETIME"[0: 8]) {
+        if runtime.config.maxmemory_policy == MaxmemoryPolicy.maxmemory_allkeys_lfu ||
+            runtime.config.maxmemory_policy == MaxmemoryPolicy.maxmemory_volatile_lfu {
+            return command_executor_error(&"ERR An LFU maxmemory policy is selected, idle time not tracked. Please note that when switching between policies at runtime LRU and LFU data will take some time to adjust."[0: 171]);
+        }
+        if now_ms <= obj.lru_at_ms {
+            return command_executor_integer(0);
+        }
+        return command_executor_integer(((now_ms - obj.lru_at_ms) / 1000u64) as i64);
+    }
+    if command_executor_keyword_eq(subcommand, &"FREQ"[0: 4]) {
+        if runtime.config.maxmemory_policy != MaxmemoryPolicy.maxmemory_allkeys_lfu &&
+            runtime.config.maxmemory_policy != MaxmemoryPolicy.maxmemory_volatile_lfu {
+            return command_executor_error(&"ERR An LFU maxmemory policy is not selected, access frequency not tracked. Please note that when switching between policies at runtime LRU and LFU data will take some time to adjust."[0: 182]);
+        }
+        return command_executor_integer(obj.lfu_counter as i64);
+    }
+
+    var err: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&err);
+    }
+    _ = command_executor_info_append(&err, &"ERR unknown subcommand '"[0: 24]) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append(&err, subcommand) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append(&err, &"'. Try OBJECT HELP."[0: 19]) catch {
+        return command_executor_oom();
+    };
+    return command_executor_owned_error(err.buf[0: err.len]);
+}
+
 fn command_executor_flushdb(engine: &Engine, command: &Command) CommandReply {
     if command.argc != 1 {
         return command_executor_wrong_arity();
@@ -5284,6 +5399,12 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_lastsave {
         return command_executor_lastsave(runtime, command);
+    }
+    if command.info.cmd_type == CommandType.command_select {
+        return command_executor_select(runtime, command);
+    }
+    if command.info.cmd_type == CommandType.command_object {
+        return command_executor_object(runtime, engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_flushdb {
         return command_executor_flushdb(engine, command);

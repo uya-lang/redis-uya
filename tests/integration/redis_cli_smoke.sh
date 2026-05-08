@@ -655,6 +655,36 @@ if [[ "$DBSIZE_RESULT" != "1" ]]; then
     exit 1
 fi
 
+SELECT_ZERO_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" select 0)"
+if [[ "$SELECT_ZERO_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SELECT 0 OK, got '$SELECT_ZERO_RESULT'" >&2
+    exit 1
+fi
+
+SELECT_ONE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" select 1 2>&1 || true)"
+if [[ "$SELECT_ONE_RESULT" != "ERR DB index is out of range" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SELECT 1 range error, got '$SELECT_ONE_RESULT'" >&2
+    exit 1
+fi
+
+OBJECT_ENCODING_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" object encoding key)"
+if [[ "$OBJECT_ENCODING_RESULT" != "raw" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected OBJECT ENCODING raw, got '$OBJECT_ENCODING_RESULT'" >&2
+    exit 1
+fi
+
+OBJECT_REFCOUNT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" object refcount key)"
+if [[ "$OBJECT_REFCOUNT_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected OBJECT REFCOUNT 1, got '$OBJECT_REFCOUNT_RESULT'" >&2
+    exit 1
+fi
+
+OBJECT_FREQ_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" object freq key 2>&1 || true)"
+if [[ "$OBJECT_FREQ_RESULT" != ERR\ An\ LFU\ maxmemory\ policy\ is\ not\ selected* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected OBJECT FREQ LFU policy error, got '$OBJECT_FREQ_RESULT'" >&2
+    exit 1
+fi
+
 TTL_SET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" set ttlkey value)"
 if [[ "$TTL_SET_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected OK on ttlkey SET, got '$TTL_SET_RESULT'" >&2

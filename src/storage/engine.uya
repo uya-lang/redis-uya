@@ -265,7 +265,7 @@ export fn key_is_expired(engine: &Engine, key: &[byte], now_ms: u64) bool {
     return now_ms >= expire_at as u64;
 }
 
-export fn lookup_key_at(engine: &Engine, key: &[byte], now_ms: u64) !&RedisObject {
+export fn lookup_key_no_touch_at(engine: &Engine, key: &[byte], now_ms: u64) !&RedisObject {
     if key_is_expired(engine, key, now_ms) {
         _ = delete_key(engine, key);
         return error.EngineKeyNotFound;
@@ -275,7 +275,11 @@ export fn lookup_key_at(engine: &Engine, key: &[byte], now_ms: u64) !&RedisObjec
     const value: usize = value_result catch {
         return error.EngineKeyNotFound;
     };
-    const obj: &RedisObject = usize_to_object(value);
+    return usize_to_object(value);
+}
+
+export fn lookup_key_at(engine: &Engine, key: &[byte], now_ms: u64) !&RedisObject {
+    const obj: &RedisObject = try lookup_key_no_touch_at(engine, key, now_ms);
     object_touch_for_memory_policy(obj, now_ms);
     return obj;
 }

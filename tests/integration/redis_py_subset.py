@@ -186,6 +186,30 @@ class RedisPySubsetClient:
     def dbsize(self) -> int:
         return int(self._request(b"DBSIZE"))
 
+    def select(self, db: int) -> bool:
+        return self._request(b"SELECT", str(db).encode()) == "OK"
+
+    def object_encoding(self, key: str) -> bytes | None:
+        return self._request(b"OBJECT", b"ENCODING", key.encode())
+
+    def object_refcount(self, key: str) -> int | None:
+        result = self._request(b"OBJECT", b"REFCOUNT", key.encode())
+        if result is None:
+            return None
+        return int(result)
+
+    def object_idletime(self, key: str) -> int | None:
+        result = self._request(b"OBJECT", b"IDLETIME", key.encode())
+        if result is None:
+            return None
+        return int(result)
+
+    def object_freq(self, key: str) -> int | None:
+        result = self._request(b"OBJECT", b"FREQ", key.encode())
+        if result is None:
+            return None
+        return int(result)
+
     def exists(self, *keys: str) -> int:
         return int(self._request(b"EXISTS", *(key.encode() for key in keys)))
 
@@ -512,6 +536,25 @@ def run_smoke() -> None:
             assert client.echo("hi") == b"hi"
             assert client.key_type("key") == "string"
             assert client.dbsize() == 1
+            assert client.select(0)
+            try:
+                client.select(1)
+                raise AssertionError("expected SELECT 1 to fail with single db")
+            except RespError as exc:
+                if str(exc) != "ERR DB index is out of range":
+                    raise AssertionError(f"unexpected SELECT error: {exc}") from exc
+            assert client.object_encoding("key") == b"raw"
+            if client.object_refcount("key") != 1:
+                raise AssertionError("expected OBJECT REFCOUNT key to be 1")
+            object_idle = client.object_idletime("key")
+            if object_idle is None or object_idle < 0:
+                raise AssertionError(f"unexpected OBJECT IDLETIME: {object_idle}")
+            try:
+                client.object_freq("key")
+                raise AssertionError("expected OBJECT FREQ to fail without LFU policy")
+            except RespError as exc:
+                if "An LFU maxmemory policy is not selected" not in str(exc):
+                    raise AssertionError(f"unexpected OBJECT FREQ error: {exc}") from exc
             assert client.exists("key", "missing") == 1
             assert client.expire("key", 2)
             ttl = client.ttl("key")

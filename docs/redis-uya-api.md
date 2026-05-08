@@ -783,6 +783,49 @@ RESTORE key ttl serialized-value
 - `ttl` 为相对毫秒 TTL，`0` 表示不过期
 - 当前实现不支持 `REPLACE` / `ABSTTL` / `IDLETIME` / `FREQ`
 
+### `SELECT`
+
+格式：
+
+```text
+SELECT index
+```
+
+返回：
+
+- `index = 0`：`+OK`
+- 非整数：`-ERR value is not an integer or out of range`
+- 非 `0`：`-ERR DB index is out of range`
+
+说明：
+
+- 当前单机运行时只暴露一个数据库，`SELECT 0` 为兼容性切换，`SELECT` 到其他 DB 返回越界错误
+
+### `OBJECT`
+
+格式：
+
+```text
+OBJECT ENCODING key
+OBJECT REFCOUNT key
+OBJECT IDLETIME key
+OBJECT FREQ key
+OBJECT HELP
+```
+
+返回：
+
+- `ENCODING`：返回对象当前内部编码，Bulk String
+- `REFCOUNT`：返回对象引用计数，当前实现固定为 `:1`
+- `IDLETIME`：返回对象近似空闲秒数，Integer；key 不存在时 Null Bulk
+- `FREQ`：返回对象访问频次计数，Integer；key 不存在时 Null Bulk
+- `HELP`：返回支持的 `OBJECT` 子命令列表
+
+说明：
+
+- `IDLETIME` / `FREQ` 查询本身不会刷新对象的 LRU/LFU 统计
+- 当前实现下，LFU 淘汰策略未启用时 `OBJECT FREQ` 返回错误；LFU 淘汰策略启用时 `OBJECT IDLETIME` 返回错误
+
 ### `MGET`
 
 格式：

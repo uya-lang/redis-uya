@@ -268,7 +268,7 @@ export fn test_aof_replay_restore_command() !void {
     var writer: AofWriter = try aof_open_truncate(path);
     var raw: [byte: 4096] = [];
     var raw_len: usize = 0;
-    raw_len = aof_test_copy(&raw[0], raw_len, &"*4\r\n$7\r\nRESTORE\r\n$6\r\nkeyout\r\n$1\r\n0\r\n$"[0: 32]);
+    raw_len = aof_test_copy(&raw[0], raw_len, &"*4\r\n$7\r\nRESTORE\r\n$6\r\nkeyout\r\n$1\r\n0\r\n$"[0: 37]);
     raw_len = try aof_test_append_decimal(&raw[0], raw_len, dump_obj.value.len);
     raw_len = aof_test_copy(&raw[0], raw_len, &"\r\n"[0: 2]);
     raw_len = aof_test_copy(&raw[0], raw_len, dump_obj.value.buf[0: dump_obj.value.len]);

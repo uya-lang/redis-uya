@@ -197,6 +197,27 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const dbsize_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*1\r\n$6\r\nDBSIZE\r\n"[0: 16], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: dbsize_result.response_len], &":1\r\n"[0: 4]));
 
+    const select_zero_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$6\r\nSELECT\r\n$1\r\n0\r\n"[0: 23], &out[0], 256, 1000u64);
+    try assert_true(select_zero_result.response_len >= 5);
+    try assert_true(out[0] == 43 as byte);
+
+    const select_bad_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$6\r\nSELECT\r\n$1\r\n1\r\n"[0: 23], &out[0], 256, 1000u64);
+    try assert_true(network_connection_contains(out[0: select_bad_result.response_len], &"DB index is out of range"[0: 24]));
+
+    const object_encoding_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$6\r\nOBJECT\r\n$8\r\nENCODING\r\n$3\r\nkey\r\n"[0: 39], &out[0], 256, 1000u64);
+    try assert_true(network_connection_contains(out[0: object_encoding_result.response_len], &"raw"[0: 3]));
+
+    const object_refcount_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$6\r\nOBJECT\r\n$8\r\nREFCOUNT\r\n$3\r\nkey\r\n"[0: 39], &out[0], 256, 1000u64);
+    try assert_true(out[0] == 58 as byte);
+
+    const object_freq_err_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$6\r\nOBJECT\r\n$4\r\nFREQ\r\n$3\r\nkey\r\n"[0: 35], &out[0], 256, 1000u64);
+    try assert_true(network_connection_contains(out[0: object_freq_err_result.response_len], &"LFU maxmemory policy is not selected"[0: 36]));
+
+    var object_runtime: CommandRuntimeInfo = command_runtime_default();
+    object_runtime.config.maxmemory_policy = MaxmemoryPolicy.maxmemory_allkeys_lfu;
+    const object_freq_result: ConnectionProcessResult = try connection_process_input_with_runtime_at(&engine, &object_runtime, &router, &"*3\r\n$6\r\nOBJECT\r\n$4\r\nFREQ\r\n$3\r\nkey\r\n"[0: 35], &out[0], 256, 1000u64);
+    try assert_true(out[0] == 58 as byte);
+
     const pexpire_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$7\r\nPEXPIRE\r\n$3\r\nkey\r\n$4\r\n1500\r\n"[0: 36], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: pexpire_result.response_len], &":1\r\n"[0: 4]));
 

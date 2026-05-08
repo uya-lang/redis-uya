@@ -2084,6 +2084,121 @@ export fn test_command_dump() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_command_select_and_object() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var runtime: CommandRuntimeInfo = command_runtime_default();
+    var out: [byte: 512] = [];
+
+    var set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$4\r\nokey\r\n$5\r\nvalue\r\n"[0: 34]);
+    const set_command: Command = try command_executor_test_command(&router, &set_parsed);
+    _ = command_execute_with_runtime_at(&engine, &runtime, &set_command, 1000u64);
+    resp_value_free(&set_parsed.value);
+
+    var select_zero_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nSELECT\r\n$1\r\n0\r\n"[0: 23]);
+    const select_zero_command: Command = try command_executor_test_command(&router, &select_zero_parsed);
+    const select_zero_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &select_zero_command, 1000u64);
+    try assert_eq_i32(select_zero_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(select_zero_reply.data, &"OK"[0: 2]));
+    resp_value_free(&select_zero_parsed.value);
+
+    var select_bad_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nSELECT\r\n$1\r\n1\r\n"[0: 23]);
+    const select_bad_command: Command = try command_executor_test_command(&router, &select_bad_parsed);
+    const select_bad_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &select_bad_command, 1000u64);
+    try assert_eq_i32(select_bad_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(select_bad_reply.data, &"ERR DB index is out of range"[0: 28]));
+    resp_value_free(&select_bad_parsed.value);
+
+    var object_encoding_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nOBJECT\r\n$8\r\nENCODING\r\n$4\r\nokey\r\n"[0: 40]);
+    const object_encoding_command: Command = try command_executor_test_command(&router, &object_encoding_parsed);
+    const object_encoding_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &object_encoding_command, 3500u64);
+    try assert_eq_i32(object_encoding_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(object_encoding_reply.data, &"raw"[0: 3]));
+    resp_value_free(&object_encoding_parsed.value);
+
+    var object_refcount_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nOBJECT\r\n$8\r\nREFCOUNT\r\n$4\r\nokey\r\n"[0: 40]);
+    const object_refcount_command: Command = try command_executor_test_command(&router, &object_refcount_parsed);
+    const object_refcount_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &object_refcount_command, 3500u64);
+    try assert_eq_i32(object_refcount_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(object_refcount_reply.integer as i32, 1);
+    resp_value_free(&object_refcount_parsed.value);
+
+    var object_idletime_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nOBJECT\r\n$8\r\nIDLETIME\r\n$4\r\nokey\r\n"[0: 40]);
+    const object_idletime_command: Command = try command_executor_test_command(&router, &object_idletime_parsed);
+    const object_idletime_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &object_idletime_command, 3500u64);
+    try assert_eq_i32(object_idletime_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(object_idletime_reply.integer as i32, 2);
+    resp_value_free(&object_idletime_parsed.value);
+
+    var object_freq_err_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nOBJECT\r\n$4\r\nFREQ\r\n$4\r\nokey\r\n"[0: 36]);
+    const object_freq_err_command: Command = try command_executor_test_command(&router, &object_freq_err_parsed);
+    const object_freq_err_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &object_freq_err_command, 3500u64);
+    try assert_eq_i32(object_freq_err_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(object_freq_err_reply.data, &"LFU maxmemory policy is not selected"[0: 36]));
+    resp_value_free(&object_freq_err_parsed.value);
+
+    runtime.config.maxmemory_policy = MaxmemoryPolicy.maxmemory_allkeys_lfu;
+
+    var object_freq_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nOBJECT\r\n$4\r\nFREQ\r\n$4\r\nokey\r\n"[0: 36]);
+    const object_freq_command: Command = try command_executor_test_command(&router, &object_freq_parsed);
+    const object_freq_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &object_freq_command, 3600u64);
+    try assert_eq_i32(object_freq_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(object_freq_reply.integer as i32, 1);
+    resp_value_free(&object_freq_parsed.value);
+
+    var get_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nGET\r\n$4\r\nokey\r\n"[0: 23]);
+    const get_command: Command = try command_executor_test_command(&router, &get_parsed);
+    _ = command_execute_with_runtime_at(&engine, &runtime, &get_command, 4000u64);
+    resp_value_free(&get_parsed.value);
+
+    var object_freq_after_get_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nOBJECT\r\n$4\r\nFREQ\r\n$4\r\nokey\r\n"[0: 36]);
+    const object_freq_after_get_command: Command = try command_executor_test_command(&router, &object_freq_after_get_parsed);
+    const object_freq_after_get_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &object_freq_after_get_command, 4000u64);
+    try assert_eq_i32(object_freq_after_get_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(object_freq_after_get_reply.integer as i32, 2);
+    resp_value_free(&object_freq_after_get_parsed.value);
+
+    var object_idletime_lfu_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nOBJECT\r\n$8\r\nIDLETIME\r\n$4\r\nokey\r\n"[0: 40]);
+    const object_idletime_lfu_command: Command = try command_executor_test_command(&router, &object_idletime_lfu_parsed);
+    const object_idletime_lfu_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &object_idletime_lfu_command, 4000u64);
+    try assert_eq_i32(object_idletime_lfu_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(object_idletime_lfu_reply.data, &"LFU maxmemory policy is selected"[0: 32]));
+    resp_value_free(&object_idletime_lfu_parsed.value);
+
+    runtime.config.maxmemory_policy = MaxmemoryPolicy.maxmemory_noeviction;
+
+    var get_refresh_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nGET\r\n$4\r\nokey\r\n"[0: 23]);
+    const get_refresh_command: Command = try command_executor_test_command(&router, &get_refresh_parsed);
+    _ = command_execute_with_runtime_at(&engine, &runtime, &get_refresh_command, 6000u64);
+    resp_value_free(&get_refresh_parsed.value);
+
+    var object_idletime_after_get_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nOBJECT\r\n$8\r\nIDLETIME\r\n$4\r\nokey\r\n"[0: 40]);
+    const object_idletime_after_get_command: Command = try command_executor_test_command(&router, &object_idletime_after_get_parsed);
+    const object_idletime_after_get_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &object_idletime_after_get_command, 6500u64);
+    try assert_eq_i32(object_idletime_after_get_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(object_idletime_after_get_reply.integer as i32, 0);
+    resp_value_free(&object_idletime_after_get_parsed.value);
+
+    var object_missing_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nOBJECT\r\n$8\r\nENCODING\r\n$7\r\nmissing\r\n"[0: 43]);
+    const object_missing_command: Command = try command_executor_test_command(&router, &object_missing_parsed);
+    const object_missing_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &object_missing_command, 6500u64);
+    try assert_eq_i32(object_missing_reply.typ as i32, CommandReplyType.reply_null_bulk as i32);
+    resp_value_free(&object_missing_parsed.value);
+
+    var object_help_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nOBJECT\r\n$4\r\nHELP\r\n"[0: 26]);
+    const object_help_command: Command = try command_executor_test_command(&router, &object_help_parsed);
+    var object_help_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &object_help_command, 6500u64);
+    const object_help_len: usize = try connection_encode_reply(&object_help_reply, &out[0], 512);
+    try assert_true(command_executor_test_contains(out[0: object_help_len], &"OBJECT ENCODING <key>"[0: 21]));
+    try assert_true(command_executor_test_contains(out[0: object_help_len], &"OBJECT HELP"[0: 11]));
+    command_reply_cleanup(&object_help_reply);
+    resp_value_free(&object_help_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_command_hscan() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();

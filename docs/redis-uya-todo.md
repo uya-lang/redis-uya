@@ -434,7 +434,8 @@
 - [x] Key/Server 第四批：`FLUSHDB`、`FLUSHALL`
 - [x] Key/Server 第五批：`PEXPIREAT`
 - [x] Key/Server 第六批：`DUMP`、`RESTORE`
-- [ ] Key/Server 后续：`MOVE`、`WAIT`、`SELECT`、`OBJECT`、`SORT`
+- [x] Key/Server 第七批：`SELECT`、`OBJECT`
+- [ ] Key/Server 后续：`MOVE`、`WAIT`、`SORT`
 - [ ] Security baseline：`AUTH`、`requirepass`、`SHUTDOWN`
 
 验收项：

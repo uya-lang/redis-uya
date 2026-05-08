@@ -163,6 +163,17 @@ def run_smoke() -> None:
             roundtrip(sock, b"*2\r\n$4\r\nECHO\r\n$2\r\nhi\r\n", b"$2\r\nhi\r\n")
             roundtrip(sock, b"*2\r\n$4\r\nTYPE\r\n$3\r\nkey\r\n", b"+string\r\n")
             roundtrip(sock, b"*1\r\n$6\r\nDBSIZE\r\n", b":1\r\n")
+            roundtrip(sock, b"*2\r\n$6\r\nSELECT\r\n$1\r\n0\r\n", b"+OK\r\n")
+            sock.sendall(b"*2\r\n$6\r\nSELECT\r\n$1\r\n1\r\n")
+            select_bad_reply = recv_line(sock)
+            if select_bad_reply != b"-ERR DB index is out of range\r\n":
+                raise AssertionError(f"unexpected SELECT reply: {select_bad_reply!r}")
+            roundtrip(sock, b"*3\r\n$6\r\nOBJECT\r\n$8\r\nENCODING\r\n$3\r\nkey\r\n", b"$3\r\nraw\r\n")
+            roundtrip(sock, b"*3\r\n$6\r\nOBJECT\r\n$8\r\nREFCOUNT\r\n$3\r\nkey\r\n", b":1\r\n")
+            sock.sendall(b"*3\r\n$6\r\nOBJECT\r\n$4\r\nFREQ\r\n$3\r\nkey\r\n")
+            object_freq_reply = recv_line(sock)
+            if not object_freq_reply.startswith(b"-ERR An LFU maxmemory policy is not selected"):
+                raise AssertionError(f"unexpected OBJECT FREQ reply: {object_freq_reply!r}")
             roundtrip(sock, b"*3\r\n$3\r\nSET\r\n$3\r\nttl\r\n$5\r\nvalue\r\n", b"+OK\r\n")
             roundtrip(sock, b"*3\r\n$7\r\nPEXPIRE\r\n$3\r\nttl\r\n$1\r\n0\r\n", b":1\r\n")
             roundtrip(sock, b"*2\r\n$4\r\nPTTL\r\n$3\r\nttl\r\n", b":-2\r\n")

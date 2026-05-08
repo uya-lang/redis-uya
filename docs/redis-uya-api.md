@@ -504,6 +504,42 @@ SRANDMEMBER key
 - 返回一个成员 Bulk String
 - key 不存在或空 set 返回 Null Bulk
 
+### `SINTER`
+
+格式：
+
+```text
+SINTER key [key ...]
+```
+
+返回：
+
+- 返回多个 set 的交集 RESP Array
+
+### `SDIFF`
+
+格式：
+
+```text
+SDIFF key [key ...]
+```
+
+返回：
+
+- 返回第一个 set 相对后续 set 的差集 RESP Array
+
+### `SUNION`
+
+格式：
+
+```text
+SUNION key [key ...]
+```
+
+返回：
+
+- 返回多个 set 的并集 RESP Array
+
 ### `MGET`
 
 格式：

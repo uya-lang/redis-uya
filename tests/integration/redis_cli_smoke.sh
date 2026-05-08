@@ -433,6 +433,48 @@ if [[ "$SPIN_DEL_RESULT" != "1" ]]; then
     exit 1
 fi
 
+S1_SADD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" sadd s1 a b c d)"
+if [[ "$S1_SADD_RESULT" != "4" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected s1 SADD 4, got '$S1_SADD_RESULT'" >&2
+    exit 1
+fi
+
+S2_SADD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" sadd s2 b c)"
+if [[ "$S2_SADD_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected s2 SADD 2, got '$S2_SADD_RESULT'" >&2
+    exit 1
+fi
+
+S3_SADD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" sadd s3 c d)"
+if [[ "$S3_SADD_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected s3 SADD 2, got '$S3_SADD_RESULT'" >&2
+    exit 1
+fi
+
+SINTER_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" sinter s1 s2 s3)"
+if [[ "$SINTER_RESULT" != "c" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SINTER c, got '$SINTER_RESULT'" >&2
+    exit 1
+fi
+
+SDIFF_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" sdiff s1 s2)"
+if [[ "$SDIFF_RESULT" != $'a\nd' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SDIFF a/d, got '$SDIFF_RESULT'" >&2
+    exit 1
+fi
+
+SUNION_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" sunion s1 s2 s3)"
+if [[ "$SUNION_RESULT" != $'a\nb\nc\nd' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SUNION a/b/c/d, got '$SUNION_RESULT'" >&2
+    exit 1
+fi
+
+SET_ALGEBRA_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del s1 s2 s3)"
+if [[ "$SET_ALGEBRA_DEL_RESULT" != "3" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected set algebra DEL 3, got '$SET_ALGEBRA_DEL_RESULT'" >&2
+    exit 1
+fi
+
 HASH_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del hash)"
 if [[ "$HASH_DEL_RESULT" != "1" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected hash DEL 1, got '$HASH_DEL_RESULT'" >&2

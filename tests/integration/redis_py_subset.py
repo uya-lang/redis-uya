@@ -302,6 +302,21 @@ class RedisPySubsetClient:
     def srandmember(self, key: str) -> bytes | None:
         return self._request(b"SRANDMEMBER", key.encode())
 
+    def sinter(self, *keys: str) -> set[bytes]:
+        result = self._request(b"SINTER", *(key.encode() for key in keys))
+        assert isinstance(result, list)
+        return set(result)
+
+    def sdiff(self, *keys: str) -> set[bytes]:
+        result = self._request(b"SDIFF", *(key.encode() for key in keys))
+        assert isinstance(result, list)
+        return set(result)
+
+    def sunion(self, *keys: str) -> set[bytes]:
+        result = self._request(b"SUNION", *(key.encode() for key in keys))
+        assert isinstance(result, list)
+        return set(result)
+
     def zadd(self, key: str, mapping: dict[str, int]) -> int:
         parts: list[bytes] = [b"ZADD", key.encode()]
         for member, score in mapping.items():
@@ -490,6 +505,13 @@ def run_smoke() -> None:
             if len(client.smembers("spin")) != 1:
                 raise AssertionError("expected spin to retain exactly one member after SPOP")
             assert client.delete("spin") == 1
+            assert client.sadd("s1", "a", "b", "c", "d") == 4
+            assert client.sadd("s2", "b", "c") == 2
+            assert client.sadd("s3", "c", "d") == 2
+            assert client.sinter("s1", "s2", "s3") == {b"c"}
+            assert client.sdiff("s1", "s2") == {b"a", b"d"}
+            assert client.sunion("s1", "s2", "s3") == {b"a", b"b", b"c", b"d"}
+            assert client.delete("s1", "s2", "s3") == 3
 
             assert client.zadd("zset", {"b": 2, "a": 1}) == 2
             assert client.zrange("zset", 0, -1) == [b"a", b"b"]

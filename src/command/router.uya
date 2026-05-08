@@ -38,6 +38,9 @@ export enum CommandType {
     command_srem,
     command_spop,
     command_srandmember,
+    command_sinter,
+    command_sdiff,
+    command_sunion,
     command_set,
     command_hget,
     command_hset,
@@ -117,7 +120,7 @@ export const COMMAND_FLAG_READONLY: u64 = 1u64;
 export const COMMAND_FLAG_WRITE: u64 = 2u64;
 export const COMMAND_FLAG_FAST: u64 = 4u64;
 
-const MIN_COMMAND_COUNT: usize = 80;
+const MIN_COMMAND_COUNT: usize = 83;
 
 fn command_router_name_eq(a: &[byte], b: &[byte]) bool {
     return bytes_ascii_case_eq(a, b);
@@ -383,6 +386,15 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
     }
     if index == 79 {
         return command_router_info(CommandType.command_lpos, &"LPOS"[0: 4], 3, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 80 {
+        return command_router_info(CommandType.command_sinter, &"SINTER"[0: 6], -2, COMMAND_FLAG_READONLY, 1, -1, 1);
+    }
+    if index == 81 {
+        return command_router_info(CommandType.command_sdiff, &"SDIFF"[0: 5], -2, COMMAND_FLAG_READONLY, 1, -1, 1);
+    }
+    if index == 82 {
+        return command_router_info(CommandType.command_sunion, &"SUNION"[0: 6], -2, COMMAND_FLAG_READONLY, 1, -1, 1);
     }
     return error.CommandUnknown;
 }

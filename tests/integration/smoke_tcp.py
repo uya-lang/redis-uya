@@ -246,6 +246,13 @@ def run_smoke() -> None:
             if spin_members_actual not in (b"*1\r\n$1\r\na\r\n", b"*1\r\n$1\r\nb\r\n"):
                 raise AssertionError(f"unexpected spin SMEMBERS reply: {spin_members_actual!r}")
             roundtrip(sock, b"*2\r\n$3\r\nDEL\r\n$4\r\nspin\r\n", b":1\r\n")
+            roundtrip(sock, b"*6\r\n$4\r\nSADD\r\n$2\r\ns1\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\nc\r\n$1\r\nd\r\n", b":4\r\n")
+            roundtrip(sock, b"*4\r\n$4\r\nSADD\r\n$2\r\ns2\r\n$1\r\nb\r\n$1\r\nc\r\n", b":2\r\n")
+            roundtrip(sock, b"*4\r\n$4\r\nSADD\r\n$2\r\ns3\r\n$1\r\nc\r\n$1\r\nd\r\n", b":2\r\n")
+            roundtrip(sock, b"*4\r\n$6\r\nSINTER\r\n$2\r\ns1\r\n$2\r\ns2\r\n$2\r\ns3\r\n", b"*1\r\n$1\r\nc\r\n")
+            roundtrip(sock, b"*3\r\n$5\r\nSDIFF\r\n$2\r\ns1\r\n$2\r\ns2\r\n", b"*2\r\n$1\r\na\r\n$1\r\nd\r\n")
+            roundtrip(sock, b"*4\r\n$6\r\nSUNION\r\n$2\r\ns1\r\n$2\r\ns2\r\n$2\r\ns3\r\n", b"*4\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\nc\r\n$1\r\nd\r\n")
+            roundtrip(sock, b"*4\r\n$3\r\nDEL\r\n$2\r\ns1\r\n$2\r\ns2\r\n$2\r\ns3\r\n", b":3\r\n")
             roundtrip(sock, b"*6\r\n$4\r\nZADD\r\n$4\r\nzset\r\n$1\r\n2\r\n$1\r\nb\r\n$1\r\n1\r\n$1\r\na\r\n", b":2\r\n")
             roundtrip(sock, b"*4\r\n$6\r\nZRANGE\r\n$4\r\nzset\r\n$1\r\n0\r\n$2\r\n-1\r\n", b"*2\r\n$1\r\na\r\n$1\r\nb\r\n")
             roundtrip(sock, b"*3\r\n$4\r\nZREM\r\n$4\r\nzset\r\n$1\r\na\r\n", b":1\r\n")

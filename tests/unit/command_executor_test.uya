@@ -1469,6 +1469,55 @@ export fn test_command_spop_srandmember() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_command_sinter_sdiff_sunion() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var out: [byte: 256] = [];
+
+    var sadd_s1_parsed: RespParseResult = try parse_resp2(&"*6\r\n$4\r\nSADD\r\n$2\r\ns1\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\nc\r\n$1\r\nd\r\n"[0: 50]);
+    const sadd_s1_command: Command = try command_executor_test_command(&router, &sadd_s1_parsed);
+    _ = command_execute_at(&engine, &sadd_s1_command, 1000u64);
+    resp_value_free(&sadd_s1_parsed.value);
+
+    var sadd_s2_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nSADD\r\n$2\r\ns2\r\n$1\r\nb\r\n$1\r\nc\r\n"[0: 36]);
+    const sadd_s2_command: Command = try command_executor_test_command(&router, &sadd_s2_parsed);
+    _ = command_execute_at(&engine, &sadd_s2_command, 1000u64);
+    resp_value_free(&sadd_s2_parsed.value);
+
+    var sadd_s3_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nSADD\r\n$2\r\ns3\r\n$1\r\nc\r\n$1\r\nd\r\n"[0: 36]);
+    const sadd_s3_command: Command = try command_executor_test_command(&router, &sadd_s3_parsed);
+    _ = command_execute_at(&engine, &sadd_s3_command, 1000u64);
+    resp_value_free(&sadd_s3_parsed.value);
+
+    var sinter_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nSINTER\r\n$2\r\ns1\r\n$2\r\ns2\r\n$2\r\ns3\r\n"[0: 40]);
+    const sinter_command: Command = try command_executor_test_command(&router, &sinter_parsed);
+    const sinter_reply: CommandReply = command_execute_at(&engine, &sinter_command, 1000u64);
+    const sinter_len: usize = try connection_encode_reply(&sinter_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: sinter_len], &"*1\r\n$1\r\nc\r\n"[0: 11]));
+    command_reply_cleanup(&sinter_reply);
+    resp_value_free(&sinter_parsed.value);
+
+    var sdiff_parsed: RespParseResult = try parse_resp2(&"*3\r\n$5\r\nSDIFF\r\n$2\r\ns1\r\n$2\r\ns2\r\n"[0: 31]);
+    const sdiff_command: Command = try command_executor_test_command(&router, &sdiff_parsed);
+    const sdiff_reply: CommandReply = command_execute_at(&engine, &sdiff_command, 1000u64);
+    const sdiff_len: usize = try connection_encode_reply(&sdiff_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: sdiff_len], &"*2\r\n$1\r\na\r\n$1\r\nd\r\n"[0: 18]));
+    command_reply_cleanup(&sdiff_reply);
+    resp_value_free(&sdiff_parsed.value);
+
+    var sunion_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nSUNION\r\n$2\r\ns1\r\n$2\r\ns2\r\n$2\r\ns3\r\n"[0: 40]);
+    const sunion_command: Command = try command_executor_test_command(&router, &sunion_parsed);
+    const sunion_reply: CommandReply = command_execute_at(&engine, &sunion_command, 1000u64);
+    const sunion_len: usize = try connection_encode_reply(&sunion_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: sunion_len], &"*4\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\nc\r\n$1\r\nd\r\n"[0: 32]));
+    command_reply_cleanup(&sunion_reply);
+    resp_value_free(&sunion_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_command_zadd_zrem_zrange() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();

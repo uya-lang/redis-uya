@@ -685,6 +685,18 @@ if [[ "$OBJECT_FREQ_RESULT" != ERR\ An\ LFU\ maxmemory\ policy\ is\ not\ selecte
     exit 1
 fi
 
+MOVE_ZERO_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" move key 0 2>&1 || true)"
+if [[ "$MOVE_ZERO_RESULT" != "ERR source and destination objects are the same" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected MOVE key 0 same-db error, got '$MOVE_ZERO_RESULT'" >&2
+    exit 1
+fi
+
+MOVE_ONE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" move key 1 2>&1 || true)"
+if [[ "$MOVE_ONE_RESULT" != "ERR DB index is out of range" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected MOVE key 1 range error, got '$MOVE_ONE_RESULT'" >&2
+    exit 1
+fi
+
 TTL_SET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" set ttlkey value)"
 if [[ "$TTL_SET_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected OK on ttlkey SET, got '$TTL_SET_RESULT'" >&2

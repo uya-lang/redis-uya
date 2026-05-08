@@ -2199,6 +2199,42 @@ export fn test_command_select_and_object() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_command_move() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var runtime: CommandRuntimeInfo = command_runtime_default();
+
+    var move_same_missing_parsed: RespParseResult = try parse_resp2(&"*3\r\n$4\r\nMOVE\r\n$7\r\nmissing\r\n$1\r\n0\r\n"[0: 34]);
+    const move_same_missing_command: Command = try command_executor_test_command(&router, &move_same_missing_parsed);
+    const move_same_missing_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &move_same_missing_command, 1000u64);
+    try assert_eq_i32(move_same_missing_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(move_same_missing_reply.data, &"ERR source and destination objects are the same"[0: 47]));
+    resp_value_free(&move_same_missing_parsed.value);
+
+    var set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$4\r\nmkey\r\n$5\r\nvalue\r\n"[0: 34]);
+    const set_command: Command = try command_executor_test_command(&router, &set_parsed);
+    _ = command_execute_with_runtime_at(&engine, &runtime, &set_command, 1000u64);
+    resp_value_free(&set_parsed.value);
+
+    var move_same_parsed: RespParseResult = try parse_resp2(&"*3\r\n$4\r\nMOVE\r\n$4\r\nmkey\r\n$1\r\n0\r\n"[0: 31]);
+    const move_same_command: Command = try command_executor_test_command(&router, &move_same_parsed);
+    const move_same_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &move_same_command, 1000u64);
+    try assert_eq_i32(move_same_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(move_same_reply.data, &"ERR source and destination objects are the same"[0: 47]));
+    resp_value_free(&move_same_parsed.value);
+
+    var move_range_parsed: RespParseResult = try parse_resp2(&"*3\r\n$4\r\nMOVE\r\n$4\r\nmkey\r\n$1\r\n1\r\n"[0: 31]);
+    const move_range_command: Command = try command_executor_test_command(&router, &move_range_parsed);
+    const move_range_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &move_range_command, 1000u64);
+    try assert_eq_i32(move_range_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(move_range_reply.data, &"ERR DB index is out of range"[0: 28]));
+    resp_value_free(&move_range_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_command_hscan() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();

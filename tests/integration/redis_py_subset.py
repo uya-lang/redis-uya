@@ -210,6 +210,9 @@ class RedisPySubsetClient:
             return None
         return int(result)
 
+    def move(self, key: str, db: int) -> int:
+        return int(self._request(b"MOVE", key.encode(), str(db).encode()))
+
     def exists(self, *keys: str) -> int:
         return int(self._request(b"EXISTS", *(key.encode() for key in keys)))
 
@@ -555,6 +558,18 @@ def run_smoke() -> None:
             except RespError as exc:
                 if "An LFU maxmemory policy is not selected" not in str(exc):
                     raise AssertionError(f"unexpected OBJECT FREQ error: {exc}") from exc
+            try:
+                client.move("key", 0)
+                raise AssertionError("expected MOVE key 0 to fail in single-db mode")
+            except RespError as exc:
+                if str(exc) != "ERR source and destination objects are the same":
+                    raise AssertionError(f"unexpected MOVE same-db error: {exc}") from exc
+            try:
+                client.move("key", 1)
+                raise AssertionError("expected MOVE key 1 to fail in single-db mode")
+            except RespError as exc:
+                if str(exc) != "ERR DB index is out of range":
+                    raise AssertionError(f"unexpected MOVE range error: {exc}") from exc
             assert client.exists("key", "missing") == 1
             assert client.expire("key", 2)
             ttl = client.ttl("key")

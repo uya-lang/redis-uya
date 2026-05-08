@@ -121,6 +121,7 @@ use tests.unit.command_executor_test.test_command_rename_renamenx_lastsave;
 use tests.unit.command_executor_test.test_command_flushdb_flushall;
 use tests.unit.command_executor_test.test_command_dump;
 use tests.unit.command_executor_test.test_command_select_and_object;
+use tests.unit.command_executor_test.test_command_move;
 use tests.unit.command_executor_test.test_command_error_paths;
 use tests.unit.network_connection_test.test_connection_encode_resp_replies;
 use tests.unit.network_connection_test.test_connection_process_ping_set_get_quit;
@@ -646,6 +647,10 @@ export fn main() i32 {
     const before_exec_select_object: i32 = failed;
     _ = test_command_select_and_object() catch { printf("[FAIL] command_executor/select_object\n" as *byte); failed = failed + 1; };
     if failed == before_exec_select_object { printf("[PASS] command_executor/select_object\n" as *byte); }
+
+    const before_exec_move: i32 = failed;
+    _ = test_command_move() catch { printf("[FAIL] command_executor/move\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_move { printf("[PASS] command_executor/move\n" as *byte); }
 
     const before_exec_errors: i32 = failed;
     _ = test_command_error_paths() catch { printf("[FAIL] command_executor/errors\n" as *byte); failed = failed + 1; };

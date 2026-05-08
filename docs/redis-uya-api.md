@@ -826,6 +826,24 @@ OBJECT HELP
 - `IDLETIME` / `FREQ` 查询本身不会刷新对象的 LRU/LFU 统计
 - 当前实现下，LFU 淘汰策略未启用时 `OBJECT FREQ` 返回错误；LFU 淘汰策略启用时 `OBJECT IDLETIME` 返回错误
 
+### `MOVE`
+
+格式：
+
+```text
+MOVE key db
+```
+
+返回：
+
+- 当前单机实现中：`db = 0` 返回 `-ERR source and destination objects are the same`
+- 非整数 DB 参数：`-ERR value is not an integer or out of range`
+- 非 `0`：`-ERR DB index is out of range`
+
+说明：
+
+- 当前运行时只暴露唯一数据库，因此 `MOVE` 只固化与单库模式一致的错误语义，不存在成功迁移路径
+
 ### `MGET`
 
 格式：

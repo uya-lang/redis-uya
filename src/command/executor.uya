@@ -2850,6 +2850,23 @@ fn command_executor_object(runtime: &CommandRuntimeInfo, engine: &Engine, comman
     return command_executor_owned_error(err.buf[0: err.len]);
 }
 
+fn command_executor_move(runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
+    _ = runtime;
+    if command.argc != 3 {
+        return command_executor_wrong_arity();
+    }
+    const db_data: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    const db_index: i64 = command_executor_parse_i64(db_data) catch {
+        return command_executor_invalid_integer();
+    };
+    if db_index != 0 {
+        return command_executor_error(&"ERR DB index is out of range"[0: 28]);
+    }
+    return command_executor_error(&"ERR source and destination objects are the same"[0: 47]);
+}
+
 fn command_executor_flushdb(engine: &Engine, command: &Command) CommandReply {
     if command.argc != 1 {
         return command_executor_wrong_arity();
@@ -5405,6 +5422,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_object {
         return command_executor_object(runtime, engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_move {
+        return command_executor_move(runtime, command);
     }
     if command.info.cmd_type == CommandType.command_flushdb {
         return command_executor_flushdb(engine, command);

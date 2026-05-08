@@ -218,6 +218,12 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const object_freq_result: ConnectionProcessResult = try connection_process_input_with_runtime_at(&engine, &object_runtime, &router, &"*3\r\n$6\r\nOBJECT\r\n$4\r\nFREQ\r\n$3\r\nkey\r\n"[0: 35], &out[0], 256, 1000u64);
     try assert_true(out[0] == 58 as byte);
 
+    const move_same_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$4\r\nMOVE\r\n$3\r\nkey\r\n$1\r\n0\r\n"[0: 30], &out[0], 256, 1000u64);
+    try assert_true(network_connection_contains(out[0: move_same_result.response_len], &"source and destination objects are the same"[0: 42]));
+
+    const move_range_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$4\r\nMOVE\r\n$3\r\nkey\r\n$1\r\n1\r\n"[0: 30], &out[0], 256, 1000u64);
+    try assert_true(network_connection_contains(out[0: move_range_result.response_len], &"DB index is out of range"[0: 24]));
+
     const pexpire_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$7\r\nPEXPIRE\r\n$3\r\nkey\r\n$4\r\n1500\r\n"[0: 36], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: pexpire_result.response_len], &":1\r\n"[0: 4]));
 

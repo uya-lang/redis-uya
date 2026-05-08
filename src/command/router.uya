@@ -62,6 +62,7 @@ export enum CommandType {
     command_select,
     command_object,
     command_move,
+    command_wait,
     command_set,
     command_hget,
     command_hset,
@@ -141,7 +142,7 @@ export const COMMAND_FLAG_READONLY: u64 = 1u64;
 export const COMMAND_FLAG_WRITE: u64 = 2u64;
 export const COMMAND_FLAG_FAST: u64 = 4u64;
 
-const MIN_COMMAND_COUNT: usize = 104;
+const MIN_COMMAND_COUNT: usize = 105;
 
 fn command_router_name_eq(a: &[byte], b: &[byte]) bool {
     return bytes_ascii_case_eq(a, b);
@@ -479,6 +480,9 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
     }
     if index == 103 {
         return command_router_info(CommandType.command_move, &"MOVE"[0: 4], 3, COMMAND_FLAG_WRITE, 1, 1, 1);
+    }
+    if index == 104 {
+        return command_router_info(CommandType.command_wait, &"WAIT"[0: 4], 3, COMMAND_FLAG_READONLY, 0, 0, 0);
     }
     return error.CommandUnknown;
 }

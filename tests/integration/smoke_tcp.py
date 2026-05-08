@@ -182,6 +182,12 @@ def run_smoke() -> None:
             move_range_reply = recv_line(sock)
             if move_range_reply != b"-ERR DB index is out of range\r\n":
                 raise AssertionError(f"unexpected MOVE range reply: {move_range_reply!r}")
+            roundtrip(sock, b"*3\r\n$4\r\nWAIT\r\n$1\r\n0\r\n$1\r\n0\r\n", b":0\r\n")
+            roundtrip(sock, b"*3\r\n$4\r\nWAIT\r\n$1\r\n1\r\n$2\r\n10\r\n", b":0\r\n")
+            sock.sendall(b"*3\r\n$4\r\nWAIT\r\n$1\r\n1\r\n$2\r\n-1\r\n")
+            wait_negative_reply = recv_line(sock)
+            if wait_negative_reply != b"-ERR timeout is negative\r\n":
+                raise AssertionError(f"unexpected WAIT negative reply: {wait_negative_reply!r}")
             roundtrip(sock, b"*3\r\n$3\r\nSET\r\n$3\r\nttl\r\n$5\r\nvalue\r\n", b"+OK\r\n")
             roundtrip(sock, b"*3\r\n$7\r\nPEXPIRE\r\n$3\r\nttl\r\n$1\r\n0\r\n", b":1\r\n")
             roundtrip(sock, b"*2\r\n$4\r\nPTTL\r\n$3\r\nttl\r\n", b":-2\r\n")

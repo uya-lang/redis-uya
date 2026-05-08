@@ -697,6 +697,24 @@ if [[ "$MOVE_ONE_RESULT" != "ERR DB index is out of range" ]]; then
     exit 1
 fi
 
+WAIT_ZERO_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" wait 0 0)"
+if [[ "$WAIT_ZERO_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected WAIT 0 0 to return 0, got '$WAIT_ZERO_RESULT'" >&2
+    exit 1
+fi
+
+WAIT_ONE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" wait 1 10)"
+if [[ "$WAIT_ONE_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected WAIT 1 10 to return 0, got '$WAIT_ONE_RESULT'" >&2
+    exit 1
+fi
+
+WAIT_NEGATIVE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" wait 1 -1 2>&1 || true)"
+if [[ "$WAIT_NEGATIVE_RESULT" != "ERR timeout is negative" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected WAIT negative timeout error, got '$WAIT_NEGATIVE_RESULT'" >&2
+    exit 1
+fi
+
 TTL_SET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" set ttlkey value)"
 if [[ "$TTL_SET_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected OK on ttlkey SET, got '$TTL_SET_RESULT'" >&2

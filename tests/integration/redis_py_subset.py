@@ -213,6 +213,9 @@ class RedisPySubsetClient:
     def move(self, key: str, db: int) -> int:
         return int(self._request(b"MOVE", key.encode(), str(db).encode()))
 
+    def wait(self, replicas: int, timeout_ms: int) -> int:
+        return int(self._request(b"WAIT", str(replicas).encode(), str(timeout_ms).encode()))
+
     def exists(self, *keys: str) -> int:
         return int(self._request(b"EXISTS", *(key.encode() for key in keys)))
 
@@ -570,6 +573,16 @@ def run_smoke() -> None:
             except RespError as exc:
                 if str(exc) != "ERR DB index is out of range":
                     raise AssertionError(f"unexpected MOVE range error: {exc}") from exc
+            if client.wait(0, 0) != 0:
+                raise AssertionError("expected WAIT 0 0 to return 0")
+            if client.wait(1, 10) != 0:
+                raise AssertionError("expected WAIT 1 10 to return 0 without replicas")
+            try:
+                client.wait(1, -1)
+                raise AssertionError("expected WAIT negative timeout to fail")
+            except RespError as exc:
+                if str(exc) != "ERR timeout is negative":
+                    raise AssertionError(f"unexpected WAIT timeout error: {exc}") from exc
             assert client.exists("key", "missing") == 1
             assert client.expire("key", 2)
             ttl = client.ttl("key")

@@ -224,6 +224,12 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const move_range_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$4\r\nMOVE\r\n$3\r\nkey\r\n$1\r\n1\r\n"[0: 30], &out[0], 256, 1000u64);
     try assert_true(network_connection_contains(out[0: move_range_result.response_len], &"DB index is out of range"[0: 24]));
 
+    const wait_zero_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$4\r\nWAIT\r\n$1\r\n0\r\n$1\r\n0\r\n"[0: 31], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: wait_zero_result.response_len], &":0\r\n"[0: 4]));
+
+    const wait_negative_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$4\r\nWAIT\r\n$1\r\n1\r\n$2\r\n-1\r\n"[0: 32], &out[0], 256, 1000u64);
+    try assert_true(network_connection_contains(out[0: wait_negative_result.response_len], &"timeout is negative"[0: 19]));
+
     const pexpire_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$7\r\nPEXPIRE\r\n$3\r\nkey\r\n$4\r\n1500\r\n"[0: 36], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: pexpire_result.response_len], &":1\r\n"[0: 4]));
 

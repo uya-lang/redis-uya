@@ -2867,6 +2867,32 @@ fn command_executor_move(runtime: &CommandRuntimeInfo, command: &Command) Comman
     return command_executor_error(&"ERR source and destination objects are the same"[0: 47]);
 }
 
+fn command_executor_wait(runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
+    _ = runtime;
+    if command.argc != 3 {
+        return command_executor_wrong_arity();
+    }
+    const replicas_data: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const timeout_data: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    const replicas: i64 = command_executor_parse_i64(replicas_data) catch {
+        return command_executor_invalid_integer();
+    };
+    const timeout_ms: i64 = command_executor_parse_i64(timeout_data) catch {
+        return command_executor_invalid_integer();
+    };
+    if timeout_ms < 0 {
+        return command_executor_error(&"ERR timeout is negative"[0: 23]);
+    }
+    if replicas <= 0 {
+        return command_executor_integer(0);
+    }
+    return command_executor_integer(0);
+}
+
 fn command_executor_flushdb(engine: &Engine, command: &Command) CommandReply {
     if command.argc != 1 {
         return command_executor_wrong_arity();
@@ -5425,6 +5451,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_move {
         return command_executor_move(runtime, command);
+    }
+    if command.info.cmd_type == CommandType.command_wait {
+        return command_executor_wait(runtime, command);
     }
     if command.info.cmd_type == CommandType.command_flushdb {
         return command_executor_flushdb(engine, command);

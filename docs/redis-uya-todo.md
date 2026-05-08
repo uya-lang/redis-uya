@@ -436,7 +436,8 @@
 - [x] Key/Server 第六批：`DUMP`、`RESTORE`
 - [x] Key/Server 第七批：`SELECT`、`OBJECT`
 - [x] Key/Server 第八批：`MOVE`
-- [ ] Key/Server 后续：`WAIT`、`SORT`
+- [x] Key/Server 第九批：`WAIT`
+- [ ] Key/Server 后续：`SORT`
 - [ ] Security baseline：`AUTH`、`requirepass`、`SHUTDOWN`
 
 验收项：

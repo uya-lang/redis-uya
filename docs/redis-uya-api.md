@@ -844,6 +844,26 @@ MOVE key db
 
 - 当前运行时只暴露唯一数据库，因此 `MOVE` 只固化与单库模式一致的错误语义，不存在成功迁移路径
 
+### `WAIT`
+
+格式：
+
+```text
+WAIT numreplicas timeout
+```
+
+返回：
+
+- 成功：返回 Integer
+- `numreplicas` 非整数：`-ERR value is not an integer or out of range`
+- `timeout` 非整数：`-ERR value is not an integer or out of range`
+- `timeout < 0`：`-ERR timeout is negative`
+
+说明：
+
+- 当前单机实现下尚未引入副本 ACK 收敛路径，因此在参数合法时返回 `:0`
+- `numreplicas <= 0` 时也直接返回 `:0`
+
 ### `MGET`
 
 格式：

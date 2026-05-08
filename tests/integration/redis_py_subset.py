@@ -352,6 +352,33 @@ class RedisPySubsetClient:
     def zcount(self, key: str, minimum: int, maximum: int) -> int:
         return int(self._request(b"ZCOUNT", key.encode(), str(minimum).encode(), str(maximum).encode()))
 
+    def zrangebyscore(self, key: str, minimum: int, maximum: int) -> list[bytes]:
+        result = self._request(b"ZRANGEBYSCORE", key.encode(), str(minimum).encode(), str(maximum).encode())
+        assert isinstance(result, list)
+        return result
+
+    def zrevrangebyscore(self, key: str, maximum: int, minimum: int) -> list[bytes]:
+        result = self._request(b"ZREVRANGEBYSCORE", key.encode(), str(maximum).encode(), str(minimum).encode())
+        assert isinstance(result, list)
+        return result
+
+    def zremrangebyrank(self, key: str, start: int, stop: int) -> int:
+        return int(self._request(b"ZREMRANGEBYRANK", key.encode(), str(start).encode(), str(stop).encode()))
+
+    def zremrangebyscore(self, key: str, minimum: int, maximum: int) -> int:
+        return int(self._request(b"ZREMRANGEBYSCORE", key.encode(), str(minimum).encode(), str(maximum).encode()))
+
+    def zscan(self, key: str, cursor: int = 0, count: int | None = None) -> tuple[int, list[bytes]]:
+        parts: list[bytes] = [b"ZSCAN", key.encode(), str(cursor).encode()]
+        if count is not None:
+            parts.extend([b"COUNT", str(count).encode()])
+        result = self._request(*parts)
+        assert isinstance(result, list) and len(result) == 2
+        next_cursor = int(result[0])
+        items = result[1]
+        assert isinstance(items, list)
+        return next_cursor, items
+
     def scan(self, cursor: int = 0, count: int | None = None) -> tuple[int, list[bytes]]:
         parts: list[bytes] = [b"SCAN", str(cursor).encode()]
         if count is not None:
@@ -545,7 +572,18 @@ def run_smoke() -> None:
             assert client.zincrby("zset", 3, "a") == b"4"
             assert client.zcount("zset", 4, 4) == 1
             assert client.zrange("zset", 0, -1) == [b"b", b"a"]
+            assert client.zrangebyscore("zset", 2, 4) == [b"b", b"a"]
+            assert client.zrevrangebyscore("zset", 4, 2) == [b"a", b"b"]
             assert client.zrem("zset", "a") == 1
+            assert client.zadd("zwork", {"b": 2, "a": 1, "c": 3}) == 3
+            cursor, zscan_items = client.zscan("zwork", 0, count=16)
+            if cursor != 0 or zscan_items != [b"a", b"1", b"b", b"2", b"c", b"3"]:
+                raise AssertionError(f"unexpected zscan result: cursor={cursor} items={zscan_items!r}")
+            assert client.zremrangebyrank("zwork", 0, 1) == 2
+            assert client.zrange("zwork", 0, -1) == [b"c"]
+            assert client.zremrangebyscore("zwork", 3, 3) == 1
+            assert client.zcard("zwork") == 0
+            assert client.delete("zwork") == 0
 
             cursor, keys = client.scan(0, count=16)
             if cursor != 0:

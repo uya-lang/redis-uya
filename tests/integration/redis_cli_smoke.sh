@@ -391,6 +391,42 @@ if [[ "$ZSET_DEL_RESULT" != "1" ]]; then
     exit 1
 fi
 
+ZWORK_ADD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zadd zwork 2 b 1 a 3 c)"
+if [[ "$ZWORK_ADD_RESULT" != "3" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected zwork ZADD 3, got '$ZWORK_ADD_RESULT'" >&2
+    exit 1
+fi
+
+ZSCAN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zscan zwork 0 count 16)"
+if [[ "$ZSCAN_RESULT" != $'0\na\n1\nb\n2\nc\n3' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZSCAN payload, got '$ZSCAN_RESULT'" >&2
+    exit 1
+fi
+
+ZREMRANGEBYRANK_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zremrangebyrank zwork 0 1)"
+if [[ "$ZREMRANGEBYRANK_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZREMRANGEBYRANK 2, got '$ZREMRANGEBYRANK_RESULT'" >&2
+    exit 1
+fi
+
+ZWORK_RANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrange zwork 0 -1)"
+if [[ "$ZWORK_RANGE_RESULT" != "c" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected zwork range c, got '$ZWORK_RANGE_RESULT'" >&2
+    exit 1
+fi
+
+ZREMRANGEBYSCORE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zremrangebyscore zwork 3 3)"
+if [[ "$ZREMRANGEBYSCORE_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZREMRANGEBYSCORE 1, got '$ZREMRANGEBYSCORE_RESULT'" >&2
+    exit 1
+fi
+
+ZWORK_CARD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zcard zwork)"
+if [[ "$ZWORK_CARD_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected zwork ZCARD 0, got '$ZWORK_CARD_RESULT'" >&2
+    exit 1
+fi
+
 HSET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hset hash field value)"
 if [[ "$HSET_RESULT" != "1" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected HSET 1, got '$HSET_RESULT'" >&2

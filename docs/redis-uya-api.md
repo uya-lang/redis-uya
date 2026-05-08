@@ -644,6 +644,46 @@ ZREVRANGEBYSCORE key max min
 - 返回 score 落在闭区间 `[min, max]` 内的成员，按 score 降序
 - 当前项目内 ZSet score 使用整数语义
 
+### `ZREMRANGEBYRANK`
+
+格式：
+
+```text
+ZREMRANGEBYRANK key start stop
+```
+
+返回：
+
+- 删除 rank 落在闭区间 `[start, stop]` 内的成员
+- 返回删除成员个数，Integer
+
+### `ZREMRANGEBYSCORE`
+
+格式：
+
+```text
+ZREMRANGEBYSCORE key min max
+```
+
+返回：
+
+- 删除 score 落在闭区间 `[min, max]` 内的成员
+- 返回删除成员个数，Integer
+
+### `ZSCAN`
+
+格式：
+
+```text
+ZSCAN key cursor [COUNT count]
+```
+
+返回：
+
+- 返回两段 RESP Array：`[next-cursor, [member1, score1, member2, score2...]]`
+- 当前实现支持 `COUNT`
+- 当前项目内 ZSet score 使用整数语义
+
 ### `MGET`
 
 格式：

@@ -432,7 +432,8 @@
 - [x] Key/Server 第二批过期毫秒语义：`PEXPIRE`、`PERSIST`、`PTTL`
 - [x] Key/Server 第三批：`RENAME`、`RENAMENX`、`LASTSAVE`
 - [x] Key/Server 第四批：`FLUSHDB`、`FLUSHALL`
-- [ ] Key/Server 后续：`MOVE`、`DUMP/RESTORE`、`PEXPIREAT`、`WAIT`、`SELECT`、`OBJECT`、`SORT`
+- [x] Key/Server 第五批：`PEXPIREAT`
+- [ ] Key/Server 后续：`MOVE`、`DUMP/RESTORE`、`WAIT`、`SELECT`、`OBJECT`、`SORT`
 - [ ] Security baseline：`AUTH`、`requirepass`、`SHUTDOWN`
 
 验收项：

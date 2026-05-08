@@ -158,6 +158,22 @@ def run_smoke() -> None:
             roundtrip(sock, b"*2\r\n$7\r\nPERSIST\r\n$4\r\nkeep\r\n", b":1\r\n")
             roundtrip(sock, b"*2\r\n$4\r\nPTTL\r\n$4\r\nkeep\r\n", b":-1\r\n")
             roundtrip(sock, b"*2\r\n$3\r\nDEL\r\n$4\r\nkeep\r\n", b":1\r\n")
+            roundtrip(sock, b"*3\r\n$3\r\nSET\r\n$3\r\nabs\r\n$5\r\nvalue\r\n", b"+OK\r\n")
+            abs_deadline = int(time.time() * 1000) + 4500
+            abs_deadline_bytes = str(abs_deadline).encode()
+            request = (
+                b"*3\r\n$9\r\nPEXPIREAT\r\n$3\r\nabs\r\n$"
+                + str(len(abs_deadline_bytes)).encode()
+                + b"\r\n"
+                + abs_deadline_bytes
+                + b"\r\n"
+            )
+            roundtrip(sock, request, b":1\r\n")
+            sock.sendall(b"*2\r\n$3\r\nTTL\r\n$3\r\nabs\r\n")
+            abs_ttl_reply = recv_line(sock)
+            if abs_ttl_reply not in (b":3\r\n", b":4\r\n", b":5\r\n"):
+                raise AssertionError(f"unexpected abs TTL reply: {abs_ttl_reply!r}")
+            roundtrip(sock, b"*2\r\n$3\r\nDEL\r\n$3\r\nabs\r\n", b":1\r\n")
             roundtrip(sock, b"*1\r\n$5\r\nMULTI\r\n", b"+OK\r\n")
             roundtrip(sock, b"*3\r\n$3\r\nSET\r\n$4\r\nmkey\r\n$4\r\nmval\r\n", b"+QUEUED\r\n")
             roundtrip(sock, b"*2\r\n$3\r\nGET\r\n$4\r\nmkey\r\n", b"+QUEUED\r\n")

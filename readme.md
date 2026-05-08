@@ -264,6 +264,7 @@ build/redis-uya 6380 1
 - ZSet 第三批范围删除与扫描：`ZREMRANGEBYRANK`、`ZREMRANGEBYSCORE`、`ZSCAN`
 - Key/Server 第三批：`RENAME`、`RENAMENX`、`LASTSAVE`
 - Key/Server 第四批：`FLUSHDB`、`FLUSHALL`
+- Key/Server 第五批：`PEXPIREAT`
 - Key/Server 第一批：`ECHO`、`TYPE`、`DBSIZE`
 - Key/Server 第二批：`PEXPIRE`、`PERSIST`、`PTTL`
 - AOF append/replay、RDB 子集、`SAVE`、`BGSAVE`、`BGREWRITEAOF`

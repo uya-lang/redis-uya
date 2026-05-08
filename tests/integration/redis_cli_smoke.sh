@@ -703,6 +703,31 @@ if [[ "$KEEP_DEL_RESULT" != "1" ]]; then
     exit 1
 fi
 
+ABS_SET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" set abs value)"
+if [[ "$ABS_SET_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected OK on abs SET, got '$ABS_SET_RESULT'" >&2
+    exit 1
+fi
+
+ABS_DEADLINE_MS="$(( $(date +%s) * 1000 + 4500 ))"
+PEXPIREAT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" pexpireat abs "$ABS_DEADLINE_MS")"
+if [[ "$PEXPIREAT_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected PEXPIREAT 1, got '$PEXPIREAT_RESULT'" >&2
+    exit 1
+fi
+
+ABS_TTL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" ttl abs)"
+if [[ "$ABS_TTL_RESULT" != "3" && "$ABS_TTL_RESULT" != "4" && "$ABS_TTL_RESULT" != "5" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected abs TTL 3-5, got '$ABS_TTL_RESULT'" >&2
+    exit 1
+fi
+
+ABS_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del abs)"
+if [[ "$ABS_DEL_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected abs DEL 1, got '$ABS_DEL_RESULT'" >&2
+    exit 1
+fi
+
 MULTI_RESULT="$(printf 'MULTI\nSET mkey mval\nGET mkey\nEXEC\n' | redis-cli --raw -h 127.0.0.1 -p "$PORT")"
 if [[ "$MULTI_RESULT" != $'OK\nQUEUED\nQUEUED\nOK\nmval' ]]; then
     echo "[FAIL] integration/redis_cli_smoke: MULTI/EXEC unexpected output: '$MULTI_RESULT'" >&2

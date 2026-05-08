@@ -204,6 +204,9 @@ class RedisPySubsetClient:
     def persist(self, key: str) -> bool:
         return int(self._request(b"PERSIST", key.encode())) == 1
 
+    def pexpireat(self, key: str, unix_ms: int) -> bool:
+        return int(self._request(b"PEXPIREAT", key.encode(), str(unix_ms).encode())) == 1
+
     def hset(self, key: str, field: str, value: str) -> int:
         return int(self._request(b"HSET", key.encode(), field.encode(), value.encode()))
 
@@ -516,6 +519,13 @@ def run_smoke() -> None:
             assert client.persist("ms")
             assert client.pttl("ms") == -1
             assert client.delete("ms") == 1
+            assert client.set("abs", "value")
+            abs_deadline = int(time.time() * 1000) + 4500
+            assert client.pexpireat("abs", abs_deadline)
+            abs_ttl = client.ttl("abs")
+            if abs_ttl < 3 or abs_ttl > 5:
+                raise AssertionError(f"unexpected abs ttl: {abs_ttl}")
+            assert client.delete("abs") == 1
             assert client.save()
             if client.lastsave() <= 0:
                 raise AssertionError("expected LASTSAVE > 0")

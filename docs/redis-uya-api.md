@@ -579,6 +579,45 @@ SUNIONSTORE destination key [key ...]
 - 把并集写入 `destination`
 - 返回写入后的成员个数，Integer
 
+### `ZINCRBY`
+
+格式：
+
+```text
+ZINCRBY key increment member
+```
+
+返回：
+
+- 返回递增后的 score，Bulk String
+- 当前项目内 ZSet score 使用整数语义
+
+### `ZCARD`
+
+格式：
+
+```text
+ZCARD key
+```
+
+返回：
+
+- 返回 zset 当前成员个数，Integer
+- key 不存在时返回 `0`
+
+### `ZCOUNT`
+
+格式：
+
+```text
+ZCOUNT key min max
+```
+
+返回：
+
+- 返回闭区间 `[min, max]` 内的成员个数，Integer
+- 当前项目内 ZSet score 使用整数语义
+
 ### `MGET`
 
 格式：

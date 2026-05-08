@@ -110,6 +110,7 @@ use tests.unit.command_executor_test.test_command_sinter_sdiff_sunion;
 use tests.unit.command_executor_test.test_command_sinterstore_sdiffstore_sunionstore;
 use tests.unit.command_executor_test.test_command_spop_srandmember;
 use tests.unit.command_executor_test.test_command_zadd_zrem_zrange;
+use tests.unit.command_executor_test.test_command_zincrby_zcard_zcount;
 use tests.unit.command_executor_test.test_command_scan;
 use tests.unit.command_executor_test.test_command_hscan;
 use tests.unit.command_executor_test.test_command_expire_and_ttl;
@@ -591,6 +592,10 @@ export fn main() i32 {
     const before_exec_zset: i32 = failed;
     _ = test_command_zadd_zrem_zrange() catch { printf("[FAIL] command_executor/zset\n" as *byte); failed = failed + 1; };
     if failed == before_exec_zset { printf("[PASS] command_executor/zset\n" as *byte); }
+
+    const before_exec_zset_counts: i32 = failed;
+    _ = test_command_zincrby_zcard_zcount() catch { printf("[FAIL] command_executor/zset_counts\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_zset_counts { printf("[PASS] command_executor/zset_counts\n" as *byte); }
 
     const before_exec_scan: i32 = failed;
     _ = test_command_scan() catch { printf("[FAIL] command_executor/scan\n" as *byte); failed = failed + 1; };

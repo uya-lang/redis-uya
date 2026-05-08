@@ -341,6 +341,17 @@ class RedisPySubsetClient:
     def zrem(self, key: str, *members: str) -> int:
         return int(self._request(b"ZREM", key.encode(), *(member.encode() for member in members)))
 
+    def zincrby(self, key: str, amount: int, member: str) -> bytes:
+        result = self._request(b"ZINCRBY", key.encode(), str(amount).encode(), member.encode())
+        assert isinstance(result, bytes)
+        return result
+
+    def zcard(self, key: str) -> int:
+        return int(self._request(b"ZCARD", key.encode()))
+
+    def zcount(self, key: str, minimum: int, maximum: int) -> int:
+        return int(self._request(b"ZCOUNT", key.encode(), str(minimum).encode(), str(maximum).encode()))
+
     def scan(self, cursor: int = 0, count: int | None = None) -> tuple[int, list[bytes]]:
         parts: list[bytes] = [b"SCAN", str(cursor).encode()]
         if count is not None:
@@ -529,7 +540,11 @@ def run_smoke() -> None:
             assert client.delete("s1", "s2", "s3", "si", "sd", "su") == 6
 
             assert client.zadd("zset", {"b": 2, "a": 1}) == 2
-            assert client.zrange("zset", 0, -1) == [b"a", b"b"]
+            assert client.zcard("zset") == 2
+            assert client.zcount("zset", 1, 2) == 2
+            assert client.zincrby("zset", 3, "a") == b"4"
+            assert client.zcount("zset", 4, 4) == 1
+            assert client.zrange("zset", 0, -1) == [b"b", b"a"]
             assert client.zrem("zset", "a") == 1
 
             cursor, keys = client.scan(0, count=16)

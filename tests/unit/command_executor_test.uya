@@ -1642,6 +1642,58 @@ export fn test_command_zadd_zrem_zrange() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_command_zincrby_zcard_zcount() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var out: [byte: 256] = [];
+
+    var zadd_parsed: RespParseResult = try parse_resp2(&"*6\r\n$4\r\nZADD\r\n$4\r\nzset\r\n$1\r\n2\r\n$1\r\nb\r\n$1\r\n1\r\n$1\r\na\r\n"[0: 52]);
+    const zadd_command: Command = try command_executor_test_command(&router, &zadd_parsed);
+    _ = command_execute_at(&engine, &zadd_command, 1000u64);
+    resp_value_free(&zadd_parsed.value);
+
+    var zcard_parsed: RespParseResult = try parse_resp2(&"*2\r\n$5\r\nZCARD\r\n$4\r\nzset\r\n"[0: 25]);
+    const zcard_command: Command = try command_executor_test_command(&router, &zcard_parsed);
+    const zcard_reply: CommandReply = command_execute_at(&engine, &zcard_command, 1000u64);
+    try assert_eq_i32(zcard_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(zcard_reply.integer as i32, 2);
+    resp_value_free(&zcard_parsed.value);
+
+    var zcount_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nZCOUNT\r\n$4\r\nzset\r\n$1\r\n1\r\n$1\r\n2\r\n"[0: 40]);
+    const zcount_command: Command = try command_executor_test_command(&router, &zcount_parsed);
+    const zcount_reply: CommandReply = command_execute_at(&engine, &zcount_command, 1000u64);
+    try assert_eq_i32(zcount_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(zcount_reply.integer as i32, 2);
+    resp_value_free(&zcount_parsed.value);
+
+    var zincrby_parsed: RespParseResult = try parse_resp2(&"*4\r\n$7\r\nZINCRBY\r\n$4\r\nzset\r\n$1\r\n3\r\n$1\r\na\r\n"[0: 41]);
+    const zincrby_command: Command = try command_executor_test_command(&router, &zincrby_parsed);
+    const zincrby_reply: CommandReply = command_execute_at(&engine, &zincrby_command, 1000u64);
+    try assert_eq_i32(zincrby_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(zincrby_reply.data, &"4"[0: 1]));
+    command_reply_cleanup(&zincrby_reply);
+    resp_value_free(&zincrby_parsed.value);
+
+    var zrange_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nZRANGE\r\n$4\r\nzset\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 41]);
+    const zrange_command: Command = try command_executor_test_command(&router, &zrange_parsed);
+    const zrange_reply: CommandReply = command_execute_at(&engine, &zrange_command, 1000u64);
+    const zrange_len: usize = try connection_encode_reply(&zrange_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: zrange_len], &"*2\r\n$1\r\nb\r\n$1\r\na\r\n"[0: 18]));
+    command_reply_cleanup(&zrange_reply);
+    resp_value_free(&zrange_parsed.value);
+
+    var zcount_after_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nZCOUNT\r\n$4\r\nzset\r\n$1\r\n4\r\n$1\r\n4\r\n"[0: 40]);
+    const zcount_after_command: Command = try command_executor_test_command(&router, &zcount_after_parsed);
+    const zcount_after_reply: CommandReply = command_execute_at(&engine, &zcount_after_command, 1000u64);
+    try assert_eq_i32(zcount_after_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(zcount_after_reply.integer as i32, 1);
+    resp_value_free(&zcount_after_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_command_scan() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();

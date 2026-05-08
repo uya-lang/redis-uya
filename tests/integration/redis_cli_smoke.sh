@@ -349,6 +349,48 @@ if [[ "$XLIST_DEL_RESULT" != "1" ]]; then
     exit 1
 fi
 
+ZADD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zadd zset 2 b 1 a)"
+if [[ "$ZADD_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZADD 2, got '$ZADD_RESULT'" >&2
+    exit 1
+fi
+
+ZCARD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zcard zset)"
+if [[ "$ZCARD_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZCARD 2, got '$ZCARD_RESULT'" >&2
+    exit 1
+fi
+
+ZCOUNT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zcount zset 1 2)"
+if [[ "$ZCOUNT_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZCOUNT 2, got '$ZCOUNT_RESULT'" >&2
+    exit 1
+fi
+
+ZINCRBY_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zincrby zset 3 a)"
+if [[ "$ZINCRBY_RESULT" != "4" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZINCRBY 4, got '$ZINCRBY_RESULT'" >&2
+    exit 1
+fi
+
+ZCOUNT_AFTER_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zcount zset 4 4)"
+if [[ "$ZCOUNT_AFTER_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZCOUNT after ZINCRBY 1, got '$ZCOUNT_AFTER_RESULT'" >&2
+    exit 1
+fi
+
+ZRANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrange zset 0 -1)"
+if [[ "$ZRANGE_RESULT" != $'b\na' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZRANGE b/a after ZINCRBY, got '$ZRANGE_RESULT'" >&2
+    exit 1
+fi
+
+ZSET_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del zset)"
+if [[ "$ZSET_DEL_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected zset DEL 1, got '$ZSET_DEL_RESULT'" >&2
+    exit 1
+fi
+
 HSET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hset hash field value)"
 if [[ "$HSET_RESULT" != "1" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected HSET 1, got '$HSET_RESULT'" >&2

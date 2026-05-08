@@ -259,6 +259,7 @@ build/redis-uya 6380 1
 - Set 第一批随机取值：`SPOP`、`SRANDMEMBER`
 - Set 第二批集合运算：`SINTER`、`SDIFF`、`SUNION`
 - Set 第三批集合写回：`SINTERSTORE`、`SDIFFSTORE`、`SUNIONSTORE`
+- ZSet 第一批数值与计数：`ZINCRBY`、`ZCARD`、`ZCOUNT`
 - Key/Server 第一批：`ECHO`、`TYPE`、`DBSIZE`
 - Key/Server 第二批：`PEXPIRE`、`PERSIST`、`PTTL`
 - AOF append/replay、RDB 子集、`SAVE`、`BGSAVE`、`BGREWRITEAOF`

@@ -397,6 +397,48 @@ LLEN key
 - 返回 list 当前长度，Integer
 - key 不存在时返回 `0`
 
+### `LINSERT`
+
+格式：
+
+```text
+LINSERT key BEFORE|AFTER pivot element
+```
+
+返回：
+
+- 成功时返回插入后的 list 长度，Integer
+- pivot 不存在时返回 `-1`
+- key 不存在时返回 `0`
+
+### `LTRIM`
+
+格式：
+
+```text
+LTRIM key start stop
+```
+
+返回：
+
+- 成功：`+OK`
+- 按闭区间 `[start, stop]` 保留元素，支持负索引
+
+### `LREM`
+
+格式：
+
+```text
+LREM key count element
+```
+
+返回：
+
+- 返回实际删除元素个数，Integer
+- `count > 0` 从头开始删
+- `count < 0` 从尾开始删
+- `count = 0` 删除全部匹配元素
+
 ### `MGET`
 
 格式：

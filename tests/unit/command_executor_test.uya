@@ -1261,6 +1261,68 @@ export fn test_command_rpush_rpop_lindex_lset_llen() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_command_linsert_ltrim_lrem() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var out: [byte: 256] = [];
+
+    var rpush_parsed: RespParseResult = try parse_resp2(&"*7\r\n$5\r\nRPUSH\r\n$5\r\nwlist\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\nc\r\n$1\r\nb\r\n$1\r\nd\r\n"[0: 61]);
+    const rpush_command: Command = try command_executor_test_command(&router, &rpush_parsed);
+    const rpush_reply: CommandReply = command_execute_at(&engine, &rpush_command, 1000u64);
+    try assert_eq_i32(rpush_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(rpush_reply.integer as i32, 5);
+    resp_value_free(&rpush_parsed.value);
+
+    var linsert_parsed: RespParseResult = try parse_resp2(&"*5\r\n$7\r\nLINSERT\r\n$5\r\nwlist\r\n$6\r\nBEFORE\r\n$1\r\nc\r\n$1\r\nx\r\n"[0: 54]);
+    const linsert_command: Command = try command_executor_test_command(&router, &linsert_parsed);
+    const linsert_reply: CommandReply = command_execute_at(&engine, &linsert_command, 1000u64);
+    try assert_eq_i32(linsert_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(linsert_reply.integer as i32, 6);
+    resp_value_free(&linsert_parsed.value);
+
+    var lrange_before_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nLRANGE\r\n$5\r\nwlist\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 42]);
+    const lrange_before_command: Command = try command_executor_test_command(&router, &lrange_before_parsed);
+    const lrange_before_reply: CommandReply = command_execute_at(&engine, &lrange_before_command, 1000u64);
+    const lrange_before_len: usize = try connection_encode_reply(&lrange_before_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: lrange_before_len], &"*6\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\nx\r\n$1\r\nc\r\n$1\r\nb\r\n$1\r\nd\r\n"[0: 46]));
+    command_reply_cleanup(&lrange_before_reply);
+    resp_value_free(&lrange_before_parsed.value);
+
+    var lrem_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nLREM\r\n$5\r\nwlist\r\n$1\r\n1\r\n$1\r\nb\r\n"[0: 39]);
+    const lrem_command: Command = try command_executor_test_command(&router, &lrem_parsed);
+    const lrem_reply: CommandReply = command_execute_at(&engine, &lrem_command, 1000u64);
+    try assert_eq_i32(lrem_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(lrem_reply.integer as i32, 1);
+    resp_value_free(&lrem_parsed.value);
+
+    var lrange_after_lrem_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nLRANGE\r\n$5\r\nwlist\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 42]);
+    const lrange_after_lrem_command: Command = try command_executor_test_command(&router, &lrange_after_lrem_parsed);
+    const lrange_after_lrem_reply: CommandReply = command_execute_at(&engine, &lrange_after_lrem_command, 1000u64);
+    const lrange_after_lrem_len: usize = try connection_encode_reply(&lrange_after_lrem_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: lrange_after_lrem_len], &"*5\r\n$1\r\na\r\n$1\r\nx\r\n$1\r\nc\r\n$1\r\nb\r\n$1\r\nd\r\n"[0: 39]));
+    command_reply_cleanup(&lrange_after_lrem_reply);
+    resp_value_free(&lrange_after_lrem_parsed.value);
+
+    var ltrim_parsed: RespParseResult = try parse_resp2(&"*4\r\n$5\r\nLTRIM\r\n$5\r\nwlist\r\n$1\r\n1\r\n$1\r\n3\r\n"[0: 40]);
+    const ltrim_command: Command = try command_executor_test_command(&router, &ltrim_parsed);
+    const ltrim_reply: CommandReply = command_execute_at(&engine, &ltrim_command, 1000u64);
+    try assert_eq_i32(ltrim_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(ltrim_reply.data, &"OK"[0: 2]));
+    resp_value_free(&ltrim_parsed.value);
+
+    var lrange_after_ltrim_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nLRANGE\r\n$5\r\nwlist\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 42]);
+    const lrange_after_ltrim_command: Command = try command_executor_test_command(&router, &lrange_after_ltrim_parsed);
+    const lrange_after_ltrim_reply: CommandReply = command_execute_at(&engine, &lrange_after_ltrim_command, 1000u64);
+    const lrange_after_ltrim_len: usize = try connection_encode_reply(&lrange_after_ltrim_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: lrange_after_ltrim_len], &"*3\r\n$1\r\nx\r\n$1\r\nc\r\n$1\r\nb\r\n"[0: 25]));
+    command_reply_cleanup(&lrange_after_ltrim_reply);
+    resp_value_free(&lrange_after_ltrim_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_command_sadd_srem_smembers() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();

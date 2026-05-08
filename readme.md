@@ -254,6 +254,7 @@ build/redis-uya 6380 1
 - Hash 第二批视图：`HKEYS`、`HVALS`、`HGETALL`
 - Hash 第三批扫描：`HSCAN`
 - List 第一批基础：`RPUSH`、`RPOP`、`LINDEX`、`LSET`、`LLEN`
+- List 第二批变异：`LINSERT`、`LTRIM`、`LREM`
 - Key/Server 第一批：`ECHO`、`TYPE`、`DBSIZE`
 - Key/Server 第二批：`PEXPIRE`、`PERSIST`、`PTTL`
 - AOF append/replay、RDB 子集、`SAVE`、`BGSAVE`、`BGREWRITEAOF`

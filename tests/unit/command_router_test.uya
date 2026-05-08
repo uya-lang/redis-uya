@@ -183,6 +183,18 @@ export fn test_command_router_lookup_and_case() !void {
     try assert_eq_i32(llen.cmd_type as i32, CommandType.command_llen as i32);
     try assert_eq_i32(llen.arity, 2);
 
+    const linsert: CommandInfo = try command_router_lookup(&router, &"LINSERT"[0: 7]);
+    try assert_eq_i32(linsert.cmd_type as i32, CommandType.command_linsert as i32);
+    try assert_eq_i32(linsert.arity, 5);
+
+    const ltrim: CommandInfo = try command_router_lookup(&router, &"ltrim"[0: 5]);
+    try assert_eq_i32(ltrim.cmd_type as i32, CommandType.command_ltrim as i32);
+    try assert_eq_i32(ltrim.arity, 4);
+
+    const lrem: CommandInfo = try command_router_lookup(&router, &"LREM"[0: 4]);
+    try assert_eq_i32(lrem.cmd_type as i32, CommandType.command_lrem as i32);
+    try assert_eq_i32(lrem.arity, 4);
+
     const sadd: CommandInfo = try command_router_lookup(&router, &"SADD"[0: 4]);
     try assert_eq_i32(sadd.cmd_type as i32, CommandType.command_sadd as i32);
     try assert_eq_i32(sadd.arity, -3);

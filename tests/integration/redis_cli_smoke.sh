@@ -259,6 +259,54 @@ if [[ "$RLIST_DEL_RESULT" != "1" ]]; then
     exit 1
 fi
 
+WLIST_RPUSH_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" rpush wlist a b c b d)"
+if [[ "$WLIST_RPUSH_RESULT" != "5" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected wlist RPUSH 5, got '$WLIST_RPUSH_RESULT'" >&2
+    exit 1
+fi
+
+WLIST_LINSERT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" linsert wlist before c x)"
+if [[ "$WLIST_LINSERT_RESULT" != "6" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected wlist LINSERT 6, got '$WLIST_LINSERT_RESULT'" >&2
+    exit 1
+fi
+
+WLIST_RANGE_BEFORE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lrange wlist 0 -1)"
+if [[ "$WLIST_RANGE_BEFORE_RESULT" != $'a\nb\nx\nc\nb\nd' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected wlist range before trim, got '$WLIST_RANGE_BEFORE_RESULT'" >&2
+    exit 1
+fi
+
+WLIST_LREM_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lrem wlist 1 b)"
+if [[ "$WLIST_LREM_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected wlist LREM 1, got '$WLIST_LREM_RESULT'" >&2
+    exit 1
+fi
+
+WLIST_RANGE_AFTER_LREM_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lrange wlist 0 -1)"
+if [[ "$WLIST_RANGE_AFTER_LREM_RESULT" != $'a\nx\nc\nb\nd' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected wlist range after LREM, got '$WLIST_RANGE_AFTER_LREM_RESULT'" >&2
+    exit 1
+fi
+
+WLIST_LTRIM_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" ltrim wlist 1 3)"
+if [[ "$WLIST_LTRIM_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected wlist LTRIM OK, got '$WLIST_LTRIM_RESULT'" >&2
+    exit 1
+fi
+
+WLIST_RANGE_AFTER_LTRIM_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lrange wlist 0 -1)"
+if [[ "$WLIST_RANGE_AFTER_LTRIM_RESULT" != $'x\nc\nb' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected wlist range after LTRIM, got '$WLIST_RANGE_AFTER_LTRIM_RESULT'" >&2
+    exit 1
+fi
+
+WLIST_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del wlist)"
+if [[ "$WLIST_DEL_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected wlist DEL 1, got '$WLIST_DEL_RESULT'" >&2
+    exit 1
+fi
+
 HSET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hset hash field value)"
 if [[ "$HSET_RESULT" != "1" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected HSET 1, got '$HSET_RESULT'" >&2

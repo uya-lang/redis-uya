@@ -264,6 +264,15 @@ class RedisPySubsetClient:
     def llen(self, key: str) -> int:
         return int(self._request(b"LLEN", key.encode()))
 
+    def linsert(self, key: str, where: str, pivot: str, value: str) -> int:
+        return int(self._request(b"LINSERT", key.encode(), where.encode(), pivot.encode(), value.encode()))
+
+    def ltrim(self, key: str, start: int, stop: int) -> bool:
+        return self._request(b"LTRIM", key.encode(), str(start).encode(), str(stop).encode()) == "OK"
+
+    def lrem(self, key: str, count: int, value: str) -> int:
+        return int(self._request(b"LREM", key.encode(), str(count).encode(), value.encode()))
+
     def sadd(self, key: str, *members: str) -> int:
         return int(self._request(b"SADD", key.encode(), *(member.encode() for member in members)))
 
@@ -434,6 +443,14 @@ def run_smoke() -> None:
             assert client.rpop("rlist") == b"c"
             assert client.llen("rlist") == 2
             assert client.delete("rlist") == 1
+            assert client.rpush("wlist", "a", "b", "c", "b", "d") == 5
+            assert client.linsert("wlist", "BEFORE", "c", "x") == 6
+            assert client.lrange("wlist", 0, -1) == [b"a", b"b", b"x", b"c", b"b", b"d"]
+            assert client.lrem("wlist", 1, "b") == 1
+            assert client.lrange("wlist", 0, -1) == [b"a", b"x", b"c", b"b", b"d"]
+            assert client.ltrim("wlist", 1, 3)
+            assert client.lrange("wlist", 0, -1) == [b"x", b"c", b"b"]
+            assert client.delete("wlist") == 1
 
             assert client.sadd("set", "a", "b") == 2
             assert client.smembers("set") == {b"a", b"b"}

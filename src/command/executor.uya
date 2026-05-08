@@ -97,6 +97,7 @@ use src.storage.object.zset_object_len;
 use src.storage.object.zset_object_get_score;
 use src.storage.object.zset_object_remove_member;
 use src.storage.object.zset_object_range_reply;
+use src.storage.object.zset_object_range_by_score_reply;
 use src.storage.object.object_free;
 use src.storage.object.object_type_name;
 use src.storage.object.object_layout_size;
@@ -3000,6 +3001,92 @@ fn command_executor_zcount(engine: &Engine, command: &Command, now_ms: u64) Comm
     return command_executor_integer(count);
 }
 
+fn command_executor_zrangebyscore(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 4 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const min_data: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    const max_data: &[byte] = command_executor_arg(command, 3) catch {
+        return command_executor_wrong_arity();
+    };
+    const min_score: i64 = command_executor_parse_i64(min_data) catch {
+        return command_executor_invalid_integer();
+    };
+    const max_score: i64 = command_executor_parse_i64(max_data) catch {
+        return command_executor_invalid_integer();
+    };
+    if min_score > max_score {
+        return command_executor_array_bulk(null as &ListNode, 0);
+    }
+    const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+        return command_executor_array_bulk(null as &ListNode, 0);
+    };
+    if obj.obj_type != ObjectType.object_zset {
+        return command_executor_wrongtype();
+    }
+    const ranged: &RedisObject = zset_object_range_by_score_reply(obj, min_score, max_score, false) catch |err| {
+        if err == error.AllocOutOfMemory {
+            return command_executor_oom();
+        }
+        return command_executor_wrongtype();
+    };
+    const count: usize = list_object_len(ranged) catch {
+        object_free(ranged);
+        return command_executor_wrongtype();
+    };
+    var reply: CommandReply = command_executor_array_bulk(ranged.list_head, count);
+    reply.owned_object = ranged;
+    return reply;
+}
+
+fn command_executor_zrevrangebyscore(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 4 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const max_data: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    const min_data: &[byte] = command_executor_arg(command, 3) catch {
+        return command_executor_wrong_arity();
+    };
+    const max_score: i64 = command_executor_parse_i64(max_data) catch {
+        return command_executor_invalid_integer();
+    };
+    const min_score: i64 = command_executor_parse_i64(min_data) catch {
+        return command_executor_invalid_integer();
+    };
+    if min_score > max_score {
+        return command_executor_array_bulk(null as &ListNode, 0);
+    }
+    const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+        return command_executor_array_bulk(null as &ListNode, 0);
+    };
+    if obj.obj_type != ObjectType.object_zset {
+        return command_executor_wrongtype();
+    }
+    const ranged: &RedisObject = zset_object_range_by_score_reply(obj, min_score, max_score, true) catch |err| {
+        if err == error.AllocOutOfMemory {
+            return command_executor_oom();
+        }
+        return command_executor_wrongtype();
+    };
+    const count: usize = list_object_len(ranged) catch {
+        object_free(ranged);
+        return command_executor_wrongtype();
+    };
+    var reply: CommandReply = command_executor_array_bulk(ranged.list_head, count);
+    reply.owned_object = ranged;
+    return reply;
+}
+
 fn command_executor_zadd(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
     if command.argc < 4 || ((command.argc - 2) % (2 as usize)) != 0 {
         return command_executor_wrong_arity();
@@ -4747,6 +4834,12 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_zcount {
         return command_executor_zcount(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_zrangebyscore {
+        return command_executor_zrangebyscore(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_zrevrangebyscore {
+        return command_executor_zrevrangebyscore(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_zadd {
         return command_executor_zadd(engine, command, now_ms);

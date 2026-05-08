@@ -618,6 +618,32 @@ ZCOUNT key min max
 - 返回闭区间 `[min, max]` 内的成员个数，Integer
 - 当前项目内 ZSet score 使用整数语义
 
+### `ZRANGEBYSCORE`
+
+格式：
+
+```text
+ZRANGEBYSCORE key min max
+```
+
+返回：
+
+- 返回 score 落在闭区间 `[min, max]` 内的成员，按 score 升序
+- 当前项目内 ZSet score 使用整数语义
+
+### `ZREVRANGEBYSCORE`
+
+格式：
+
+```text
+ZREVRANGEBYSCORE key max min
+```
+
+返回：
+
+- 返回 score 落在闭区间 `[min, max]` 内的成员，按 score 降序
+- 当前项目内 ZSet score 使用整数语义
+
 ### `MGET`
 
 格式：

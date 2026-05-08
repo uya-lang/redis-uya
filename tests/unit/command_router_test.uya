@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 89);
+    try assert_eq_i32(command_router_count(&router) as i32, 91);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -242,6 +242,26 @@ export fn test_command_router_lookup_and_case() !void {
     const sunionstore: CommandInfo = try command_router_lookup(&router, &"SUNIONSTORE"[0: 11]);
     try assert_eq_i32(sunionstore.cmd_type as i32, CommandType.command_sunionstore as i32);
     try assert_eq_i32(sunionstore.arity, -3);
+
+    const zincrby: CommandInfo = try command_router_lookup(&router, &"ZINCRBY"[0: 7]);
+    try assert_eq_i32(zincrby.cmd_type as i32, CommandType.command_zincrby as i32);
+    try assert_eq_i32(zincrby.arity, 4);
+
+    const zcard: CommandInfo = try command_router_lookup(&router, &"zcard"[0: 5]);
+    try assert_eq_i32(zcard.cmd_type as i32, CommandType.command_zcard as i32);
+    try assert_eq_i32(zcard.arity, 2);
+
+    const zcount: CommandInfo = try command_router_lookup(&router, &"ZCOUNT"[0: 6]);
+    try assert_eq_i32(zcount.cmd_type as i32, CommandType.command_zcount as i32);
+    try assert_eq_i32(zcount.arity, 4);
+
+    const zrangebyscore: CommandInfo = try command_router_lookup(&router, &"ZRANGEBYSCORE"[0: 13]);
+    try assert_eq_i32(zrangebyscore.cmd_type as i32, CommandType.command_zrangebyscore as i32);
+    try assert_eq_i32(zrangebyscore.arity, 4);
+
+    const zrevrangebyscore: CommandInfo = try command_router_lookup(&router, &"zrevrangebyscore"[0: 16]);
+    try assert_eq_i32(zrevrangebyscore.cmd_type as i32, CommandType.command_zrevrangebyscore as i32);
+    try assert_eq_i32(zrevrangebyscore.arity, 4);
 
     const smembers: CommandInfo = try command_router_lookup(&router, &"SMEMBERS"[0: 8]);
     try assert_eq_i32(smembers.cmd_type as i32, CommandType.command_smembers as i32);

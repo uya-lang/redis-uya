@@ -1694,6 +1694,37 @@ export fn test_command_zincrby_zcard_zcount() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_command_zrangebyscore_zrevrangebyscore() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var out: [byte: 256] = [];
+
+    var zadd_parsed: RespParseResult = try parse_resp2(&"*8\r\n$4\r\nZADD\r\n$4\r\nzset\r\n$1\r\n2\r\n$1\r\nb\r\n$1\r\n1\r\n$1\r\na\r\n$1\r\n3\r\n$1\r\nc\r\n"[0: 66]);
+    const zadd_command: Command = try command_executor_test_command(&router, &zadd_parsed);
+    _ = command_execute_at(&engine, &zadd_command, 1000u64);
+    resp_value_free(&zadd_parsed.value);
+
+    var zrangebyscore_parsed: RespParseResult = try parse_resp2(&"*4\r\n$13\r\nZRANGEBYSCORE\r\n$4\r\nzset\r\n$1\r\n2\r\n$1\r\n3\r\n"[0: 48]);
+    const zrangebyscore_command: Command = try command_executor_test_command(&router, &zrangebyscore_parsed);
+    const zrangebyscore_reply: CommandReply = command_execute_at(&engine, &zrangebyscore_command, 1000u64);
+    const zrangebyscore_len: usize = try connection_encode_reply(&zrangebyscore_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: zrangebyscore_len], &"*2\r\n$1\r\nb\r\n$1\r\nc\r\n"[0: 18]));
+    command_reply_cleanup(&zrangebyscore_reply);
+    resp_value_free(&zrangebyscore_parsed.value);
+
+    var zrevrangebyscore_parsed: RespParseResult = try parse_resp2(&"*4\r\n$16\r\nZREVRANGEBYSCORE\r\n$4\r\nzset\r\n$1\r\n3\r\n$1\r\n2\r\n"[0: 51]);
+    const zrevrangebyscore_command: Command = try command_executor_test_command(&router, &zrevrangebyscore_parsed);
+    const zrevrangebyscore_reply: CommandReply = command_execute_at(&engine, &zrevrangebyscore_command, 1000u64);
+    const zrevrangebyscore_len: usize = try connection_encode_reply(&zrevrangebyscore_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: zrevrangebyscore_len], &"*2\r\n$1\r\nc\r\n$1\r\nb\r\n"[0: 18]));
+    command_reply_cleanup(&zrevrangebyscore_reply);
+    resp_value_free(&zrevrangebyscore_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_command_scan() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();

@@ -47,6 +47,8 @@ export enum CommandType {
     command_zincrby,
     command_zcard,
     command_zcount,
+    command_zrangebyscore,
+    command_zrevrangebyscore,
     command_set,
     command_hget,
     command_hset,
@@ -126,7 +128,7 @@ export const COMMAND_FLAG_READONLY: u64 = 1u64;
 export const COMMAND_FLAG_WRITE: u64 = 2u64;
 export const COMMAND_FLAG_FAST: u64 = 4u64;
 
-const MIN_COMMAND_COUNT: usize = 89;
+const MIN_COMMAND_COUNT: usize = 91;
 
 fn command_router_name_eq(a: &[byte], b: &[byte]) bool {
     return bytes_ascii_case_eq(a, b);
@@ -419,6 +421,12 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
     }
     if index == 88 {
         return command_router_info(CommandType.command_zcount, &"ZCOUNT"[0: 6], 4, COMMAND_FLAG_READONLY, 1, 1, 1);
+    }
+    if index == 89 {
+        return command_router_info(CommandType.command_zrangebyscore, &"ZRANGEBYSCORE"[0: 13], 4, COMMAND_FLAG_READONLY, 1, 1, 1);
+    }
+    if index == 90 {
+        return command_router_info(CommandType.command_zrevrangebyscore, &"ZREVRANGEBYSCORE"[0: 16], 4, COMMAND_FLAG_READONLY, 1, 1, 1);
     }
     return error.CommandUnknown;
 }

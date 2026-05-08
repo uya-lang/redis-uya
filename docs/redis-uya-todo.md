@@ -426,7 +426,7 @@
 - [x] Set 第二批集合运算：`SINTER`、`SDIFF`、`SUNION`
 - [x] Set 第三批集合写回：`SINTERSTORE`、`SDIFFSTORE`、`SUNIONSTORE`
 - [x] ZSet 第一批数值与计数：`ZINCRBY`、`ZCARD`、`ZCOUNT`
-- [ ] ZSet 第二批范围读取：`ZRANGEBYSCORE`、`ZREVRANGEBYSCORE`
+- [x] ZSet 第二批范围读取：`ZRANGEBYSCORE`、`ZREVRANGEBYSCORE`
 - [ ] ZSet 第三批范围删除与扫描：`ZREMRANGEBYRANK`、`ZREMRANGEBYSCORE`、`ZSCAN`
 - [x] Key/Server 第一批：`ECHO`、`TYPE`、`DBSIZE`
 - [x] Key/Server 第二批过期毫秒语义：`PEXPIRE`、`PERSIST`、`PTTL`

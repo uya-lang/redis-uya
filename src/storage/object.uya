@@ -1008,6 +1008,56 @@ export fn zset_object_range_reply(obj: &RedisObject, start: i64, stop: i64) !&Re
     return ranged;
 }
 
+export fn zset_object_range_by_score_reply(obj: &RedisObject, min_score: i64, max_score: i64, reversed: bool) !&RedisObject {
+    if obj == null || obj.obj_type != ObjectType.object_zset {
+        return error.ObjectWrongType;
+    }
+
+    const sorted_members: &RedisObject = try zset_object_range_reply(obj, 0, -1);
+    const ranged: &RedisObject = try create_list_object();
+
+    if reversed {
+        var node_rev: &ListNode = sorted_members.list_tail;
+        while node_rev != null {
+            const member_data_rev: &[byte] = node_rev.value.value.buf[0: node_rev.value.value.len];
+            const score_rev: i64 = zset_score_lookup(obj, member_data_rev) catch {
+                object_free(sorted_members);
+                object_free(ranged);
+                return error.ObjectWrongType;
+            };
+            if score_rev >= min_score && score_rev <= max_score {
+                _ = list_object_push_tail(ranged, member_data_rev) catch {
+                    object_free(sorted_members);
+                    object_free(ranged);
+                    return error.AllocOutOfMemory;
+                };
+            }
+            node_rev = node_rev.prev;
+        }
+    } else {
+        var node: &ListNode = sorted_members.list_head;
+        while node != null {
+            const member_data: &[byte] = node.value.value.buf[0: node.value.value.len];
+            const score: i64 = zset_score_lookup(obj, member_data) catch {
+                object_free(sorted_members);
+                object_free(ranged);
+                return error.ObjectWrongType;
+            };
+            if score >= min_score && score <= max_score {
+                _ = list_object_push_tail(ranged, member_data) catch {
+                    object_free(sorted_members);
+                    object_free(ranged);
+                    return error.AllocOutOfMemory;
+                };
+            }
+            node = node.next;
+        }
+    }
+
+    object_free(sorted_members);
+    return ranged;
+}
+
 export fn object_free(obj: &RedisObject) void {
     if obj == null {
         return;

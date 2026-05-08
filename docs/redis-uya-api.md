@@ -540,6 +540,45 @@ SUNION key [key ...]
 
 - 返回多个 set 的并集 RESP Array
 
+### `SINTERSTORE`
+
+格式：
+
+```text
+SINTERSTORE destination key [key ...]
+```
+
+返回：
+
+- 把交集写入 `destination`
+- 返回写入后的成员个数，Integer
+
+### `SDIFFSTORE`
+
+格式：
+
+```text
+SDIFFSTORE destination key [key ...]
+```
+
+返回：
+
+- 把差集写入 `destination`
+- 返回写入后的成员个数，Integer
+
+### `SUNIONSTORE`
+
+格式：
+
+```text
+SUNIONSTORE destination key [key ...]
+```
+
+返回：
+
+- 把并集写入 `destination`
+- 返回写入后的成员个数，Integer
+
 ### `MGET`
 
 格式：

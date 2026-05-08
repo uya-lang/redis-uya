@@ -1518,6 +1518,82 @@ export fn test_command_sinter_sdiff_sunion() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_command_sinterstore_sdiffstore_sunionstore() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var out: [byte: 256] = [];
+
+    var sadd_s1_parsed: RespParseResult = try parse_resp2(&"*6\r\n$4\r\nSADD\r\n$2\r\ns1\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\nc\r\n$1\r\nd\r\n"[0: 50]);
+    const sadd_s1_command: Command = try command_executor_test_command(&router, &sadd_s1_parsed);
+    _ = command_execute_at(&engine, &sadd_s1_command, 1000u64);
+    resp_value_free(&sadd_s1_parsed.value);
+
+    var sadd_s2_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nSADD\r\n$2\r\ns2\r\n$1\r\nb\r\n$1\r\nc\r\n"[0: 36]);
+    const sadd_s2_command: Command = try command_executor_test_command(&router, &sadd_s2_parsed);
+    _ = command_execute_at(&engine, &sadd_s2_command, 1000u64);
+    resp_value_free(&sadd_s2_parsed.value);
+
+    var sadd_s3_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nSADD\r\n$2\r\ns3\r\n$1\r\nc\r\n$1\r\nd\r\n"[0: 36]);
+    const sadd_s3_command: Command = try command_executor_test_command(&router, &sadd_s3_parsed);
+    _ = command_execute_at(&engine, &sadd_s3_command, 1000u64);
+    resp_value_free(&sadd_s3_parsed.value);
+
+    var sinterstore_parsed: RespParseResult = try parse_resp2(&"*5\r\n$11\r\nSINTERSTORE\r\n$2\r\nsi\r\n$2\r\ns1\r\n$2\r\ns2\r\n$2\r\ns3\r\n"[0: 54]);
+    const sinterstore_command: Command = try command_executor_test_command(&router, &sinterstore_parsed);
+    const sinterstore_reply: CommandReply = command_execute_at(&engine, &sinterstore_command, 1000u64);
+    try assert_eq_i32(sinterstore_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(sinterstore_reply.integer as i32, 1);
+    resp_value_free(&sinterstore_parsed.value);
+
+    var smembers_si_parsed: RespParseResult = try parse_resp2(&"*2\r\n$8\r\nSMEMBERS\r\n$2\r\nsi\r\n"[0: 26]);
+    const smembers_si_command: Command = try command_executor_test_command(&router, &smembers_si_parsed);
+    const smembers_si_reply: CommandReply = command_execute_at(&engine, &smembers_si_command, 1000u64);
+    const smembers_si_len: usize = try connection_encode_reply(&smembers_si_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: smembers_si_len], &"*1\r\n$1\r\nc\r\n"[0: 11]));
+    command_reply_cleanup(&smembers_si_reply);
+    resp_value_free(&smembers_si_parsed.value);
+
+    var sdiffstore_parsed: RespParseResult = try parse_resp2(&"*4\r\n$10\r\nSDIFFSTORE\r\n$2\r\nsd\r\n$2\r\ns1\r\n$2\r\ns2\r\n"[0: 45]);
+    const sdiffstore_command: Command = try command_executor_test_command(&router, &sdiffstore_parsed);
+    const sdiffstore_reply: CommandReply = command_execute_at(&engine, &sdiffstore_command, 1000u64);
+    try assert_eq_i32(sdiffstore_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(sdiffstore_reply.integer as i32, 2);
+    resp_value_free(&sdiffstore_parsed.value);
+
+    var smembers_sd_parsed: RespParseResult = try parse_resp2(&"*2\r\n$8\r\nSMEMBERS\r\n$2\r\nsd\r\n"[0: 26]);
+    const smembers_sd_command: Command = try command_executor_test_command(&router, &smembers_sd_parsed);
+    const smembers_sd_reply: CommandReply = command_execute_at(&engine, &smembers_sd_command, 1000u64);
+    const smembers_sd_len: usize = try connection_encode_reply(&smembers_sd_reply, &out[0], 256);
+    try assert_true(command_executor_test_contains(out[0: smembers_sd_len], &"*2\r\n"[0: 4]));
+    try assert_true(command_executor_test_contains(out[0: smembers_sd_len], &"$1\r\na\r\n"[0: 7]));
+    try assert_true(command_executor_test_contains(out[0: smembers_sd_len], &"$1\r\nd\r\n"[0: 7]));
+    command_reply_cleanup(&smembers_sd_reply);
+    resp_value_free(&smembers_sd_parsed.value);
+
+    var sunionstore_parsed: RespParseResult = try parse_resp2(&"*5\r\n$11\r\nSUNIONSTORE\r\n$2\r\nsu\r\n$2\r\ns1\r\n$2\r\ns2\r\n$2\r\ns3\r\n"[0: 54]);
+    const sunionstore_command: Command = try command_executor_test_command(&router, &sunionstore_parsed);
+    const sunionstore_reply: CommandReply = command_execute_at(&engine, &sunionstore_command, 1000u64);
+    try assert_eq_i32(sunionstore_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(sunionstore_reply.integer as i32, 4);
+    resp_value_free(&sunionstore_parsed.value);
+
+    var smembers_su_parsed: RespParseResult = try parse_resp2(&"*2\r\n$8\r\nSMEMBERS\r\n$2\r\nsu\r\n"[0: 26]);
+    const smembers_su_command: Command = try command_executor_test_command(&router, &smembers_su_parsed);
+    const smembers_su_reply: CommandReply = command_execute_at(&engine, &smembers_su_command, 1000u64);
+    const smembers_su_len: usize = try connection_encode_reply(&smembers_su_reply, &out[0], 256);
+    try assert_true(command_executor_test_contains(out[0: smembers_su_len], &"*4\r\n"[0: 4]));
+    try assert_true(command_executor_test_contains(out[0: smembers_su_len], &"$1\r\na\r\n"[0: 7]));
+    try assert_true(command_executor_test_contains(out[0: smembers_su_len], &"$1\r\nb\r\n"[0: 7]));
+    try assert_true(command_executor_test_contains(out[0: smembers_su_len], &"$1\r\nc\r\n"[0: 7]));
+    try assert_true(command_executor_test_contains(out[0: smembers_su_len], &"$1\r\nd\r\n"[0: 7]));
+    command_reply_cleanup(&smembers_su_reply);
+    resp_value_free(&smembers_su_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_command_zadd_zrem_zrange() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();

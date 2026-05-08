@@ -469,9 +469,45 @@ if [[ "$SUNION_RESULT" != $'a\nb\nc\nd' ]]; then
     exit 1
 fi
 
-SET_ALGEBRA_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del s1 s2 s3)"
-if [[ "$SET_ALGEBRA_DEL_RESULT" != "3" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected set algebra DEL 3, got '$SET_ALGEBRA_DEL_RESULT'" >&2
+SINTERSTORE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" sinterstore si s1 s2 s3)"
+if [[ "$SINTERSTORE_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SINTERSTORE 1, got '$SINTERSTORE_RESULT'" >&2
+    exit 1
+fi
+
+SI_MEMBERS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" smembers si)"
+if [[ "$SI_MEMBERS_RESULT" != "c" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected si members c, got '$SI_MEMBERS_RESULT'" >&2
+    exit 1
+fi
+
+SDIFFSTORE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" sdiffstore sd s1 s2)"
+if [[ "$SDIFFSTORE_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SDIFFSTORE 2, got '$SDIFFSTORE_RESULT'" >&2
+    exit 1
+fi
+
+SD_MEMBERS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" smembers sd | sort)"
+if [[ "$SD_MEMBERS_RESULT" != $'a\nd' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected sd members a/d, got '$SD_MEMBERS_RESULT'" >&2
+    exit 1
+fi
+
+SUNIONSTORE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" sunionstore su s1 s2 s3)"
+if [[ "$SUNIONSTORE_RESULT" != "4" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SUNIONSTORE 4, got '$SUNIONSTORE_RESULT'" >&2
+    exit 1
+fi
+
+SU_MEMBERS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" smembers su | sort)"
+if [[ "$SU_MEMBERS_RESULT" != $'a\nb\nc\nd' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected su members a/b/c/d, got '$SU_MEMBERS_RESULT'" >&2
+    exit 1
+fi
+
+SET_ALGEBRA_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del s1 s2 s3 si sd su)"
+if [[ "$SET_ALGEBRA_DEL_RESULT" != "6" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected set algebra DEL 6, got '$SET_ALGEBRA_DEL_RESULT'" >&2
     exit 1
 fi
 

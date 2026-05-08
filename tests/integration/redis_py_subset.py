@@ -317,6 +317,15 @@ class RedisPySubsetClient:
         assert isinstance(result, list)
         return set(result)
 
+    def sinterstore(self, dest: str, *keys: str) -> int:
+        return int(self._request(b"SINTERSTORE", dest.encode(), *(key.encode() for key in keys)))
+
+    def sdiffstore(self, dest: str, *keys: str) -> int:
+        return int(self._request(b"SDIFFSTORE", dest.encode(), *(key.encode() for key in keys)))
+
+    def sunionstore(self, dest: str, *keys: str) -> int:
+        return int(self._request(b"SUNIONSTORE", dest.encode(), *(key.encode() for key in keys)))
+
     def zadd(self, key: str, mapping: dict[str, int]) -> int:
         parts: list[bytes] = [b"ZADD", key.encode()]
         for member, score in mapping.items():
@@ -511,7 +520,13 @@ def run_smoke() -> None:
             assert client.sinter("s1", "s2", "s3") == {b"c"}
             assert client.sdiff("s1", "s2") == {b"a", b"d"}
             assert client.sunion("s1", "s2", "s3") == {b"a", b"b", b"c", b"d"}
-            assert client.delete("s1", "s2", "s3") == 3
+            assert client.sinterstore("si", "s1", "s2", "s3") == 1
+            assert client.smembers("si") == {b"c"}
+            assert client.sdiffstore("sd", "s1", "s2") == 2
+            assert client.smembers("sd") == {b"a", b"d"}
+            assert client.sunionstore("su", "s1", "s2", "s3") == 4
+            assert client.smembers("su") == {b"a", b"b", b"c", b"d"}
+            assert client.delete("s1", "s2", "s3", "si", "sd", "su") == 6
 
             assert client.zadd("zset", {"b": 2, "a": 1}) == 2
             assert client.zrange("zset", 0, -1) == [b"a", b"b"]

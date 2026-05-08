@@ -258,6 +258,7 @@ build/redis-uya 6380 1
 - List 第三批条件：`LPUSHX`、`RPUSHX`、`LPOS`
 - Set 第一批随机取值：`SPOP`、`SRANDMEMBER`
 - Set 第二批集合运算：`SINTER`、`SDIFF`、`SUNION`
+- Set 第三批集合写回：`SINTERSTORE`、`SDIFFSTORE`、`SUNIONSTORE`
 - Key/Server 第一批：`ECHO`、`TYPE`、`DBSIZE`
 - Key/Server 第二批：`PEXPIRE`、`PERSIST`、`PTTL`
 - AOF append/replay、RDB 子集、`SAVE`、`BGSAVE`、`BGREWRITEAOF`

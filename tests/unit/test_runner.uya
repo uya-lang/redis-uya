@@ -107,6 +107,7 @@ use tests.unit.command_executor_test.test_command_lpushx_rpushx_lpos;
 use tests.unit.command_executor_test.test_command_rpush_rpop_lindex_lset_llen;
 use tests.unit.command_executor_test.test_command_sadd_srem_smembers;
 use tests.unit.command_executor_test.test_command_sinter_sdiff_sunion;
+use tests.unit.command_executor_test.test_command_sinterstore_sdiffstore_sunionstore;
 use tests.unit.command_executor_test.test_command_spop_srandmember;
 use tests.unit.command_executor_test.test_command_zadd_zrem_zrange;
 use tests.unit.command_executor_test.test_command_scan;
@@ -582,6 +583,10 @@ export fn main() i32 {
     const before_exec_set_algebra: i32 = failed;
     _ = test_command_sinter_sdiff_sunion() catch { printf("[FAIL] command_executor/set_algebra\n" as *byte); failed = failed + 1; };
     if failed == before_exec_set_algebra { printf("[PASS] command_executor/set_algebra\n" as *byte); }
+
+    const before_exec_set_store: i32 = failed;
+    _ = test_command_sinterstore_sdiffstore_sunionstore() catch { printf("[FAIL] command_executor/set_store\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_set_store { printf("[PASS] command_executor/set_store\n" as *byte); }
 
     const before_exec_zset: i32 = failed;
     _ = test_command_zadd_zrem_zrange() catch { printf("[FAIL] command_executor/zset\n" as *byte); failed = failed + 1; };

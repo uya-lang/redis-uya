@@ -256,6 +256,7 @@ build/redis-uya 6380 1
 - List 第一批基础：`RPUSH`、`RPOP`、`LINDEX`、`LSET`、`LLEN`
 - List 第二批变异：`LINSERT`、`LTRIM`、`LREM`
 - List 第三批条件：`LPUSHX`、`RPUSHX`、`LPOS`
+- Set 第一批随机取值：`SPOP`、`SRANDMEMBER`
 - Key/Server 第一批：`ECHO`、`TYPE`、`DBSIZE`
 - Key/Server 第二批：`PEXPIRE`、`PERSIST`、`PTTL`
 - AOF append/replay、RDB 子集、`SAVE`、`BGSAVE`、`BGREWRITEAOF`

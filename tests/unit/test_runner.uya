@@ -106,6 +106,7 @@ use tests.unit.command_executor_test.test_command_linsert_ltrim_lrem;
 use tests.unit.command_executor_test.test_command_lpushx_rpushx_lpos;
 use tests.unit.command_executor_test.test_command_rpush_rpop_lindex_lset_llen;
 use tests.unit.command_executor_test.test_command_sadd_srem_smembers;
+use tests.unit.command_executor_test.test_command_spop_srandmember;
 use tests.unit.command_executor_test.test_command_zadd_zrem_zrange;
 use tests.unit.command_executor_test.test_command_scan;
 use tests.unit.command_executor_test.test_command_hscan;
@@ -572,6 +573,10 @@ export fn main() i32 {
     const before_exec_set: i32 = failed;
     _ = test_command_sadd_srem_smembers() catch { printf("[FAIL] command_executor/set\n" as *byte); failed = failed + 1; };
     if failed == before_exec_set { printf("[PASS] command_executor/set\n" as *byte); }
+
+    const before_exec_set_random: i32 = failed;
+    _ = test_command_spop_srandmember() catch { printf("[FAIL] command_executor/set_random\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_set_random { printf("[PASS] command_executor/set_random\n" as *byte); }
 
     const before_exec_zset: i32 = failed;
     _ = test_command_zadd_zrem_zrange() catch { printf("[FAIL] command_executor/zset\n" as *byte); failed = failed + 1; };

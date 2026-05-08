@@ -1420,6 +1420,55 @@ export fn test_command_sadd_srem_smembers() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_command_spop_srandmember() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var out: [byte: 256] = [];
+
+    var sadd_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nSADD\r\n$4\r\nspin\r\n$1\r\na\r\n$1\r\nb\r\n"[0: 38]);
+    const sadd_command: Command = try command_executor_test_command(&router, &sadd_parsed);
+    const sadd_reply: CommandReply = command_execute_at(&engine, &sadd_command, 1000u64);
+    try assert_eq_i32(sadd_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(sadd_reply.integer as i32, 2);
+    resp_value_free(&sadd_parsed.value);
+
+    var srand_parsed: RespParseResult = try parse_resp2(&"*2\r\n$11\r\nSRANDMEMBER\r\n$4\r\nspin\r\n"[0: 32]);
+    const srand_command: Command = try command_executor_test_command(&router, &srand_parsed);
+    const srand_reply: CommandReply = command_execute_at(&engine, &srand_command, 1000u64);
+    try assert_eq_i32(srand_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(
+        command_executor_test_slice_eq(srand_reply.data, &"a"[0: 1]) ||
+        command_executor_test_slice_eq(srand_reply.data, &"b"[0: 1])
+    );
+    resp_value_free(&srand_parsed.value);
+
+    var spop_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nSPOP\r\n$4\r\nspin\r\n"[0: 24]);
+    const spop_command: Command = try command_executor_test_command(&router, &spop_parsed);
+    const spop_reply: CommandReply = command_execute_at(&engine, &spop_command, 1000u64);
+    try assert_eq_i32(spop_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(
+        command_executor_test_slice_eq(spop_reply.data, &"a"[0: 1]) ||
+        command_executor_test_slice_eq(spop_reply.data, &"b"[0: 1])
+    );
+    command_reply_cleanup(&spop_reply);
+    resp_value_free(&spop_parsed.value);
+
+    var smembers_parsed: RespParseResult = try parse_resp2(&"*2\r\n$8\r\nSMEMBERS\r\n$4\r\nspin\r\n"[0: 28]);
+    const smembers_command: Command = try command_executor_test_command(&router, &smembers_parsed);
+    const smembers_reply: CommandReply = command_execute_at(&engine, &smembers_command, 1000u64);
+    const smembers_len: usize = try connection_encode_reply(&smembers_reply, &out[0], 256);
+    try assert_true(
+        command_executor_test_slice_eq(out[0: smembers_len], &"*1\r\n$1\r\na\r\n"[0: 11]) ||
+        command_executor_test_slice_eq(out[0: smembers_len], &"*1\r\n$1\r\nb\r\n"[0: 11])
+    );
+    command_reply_cleanup(&smembers_reply);
+    resp_value_free(&smembers_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_command_zadd_zrem_zrange() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();

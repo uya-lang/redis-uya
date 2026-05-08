@@ -397,6 +397,42 @@ if [[ "$HSCAN_RESULT" != "7" ]]; then
     exit 1
 fi
 
+SPIN_SADD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" sadd spin a b)"
+if [[ "$SPIN_SADD_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected spin SADD 2, got '$SPIN_SADD_RESULT'" >&2
+    exit 1
+fi
+
+SRANDMEMBER_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" srandmember spin)"
+case "$SRANDMEMBER_RESULT" in
+    a|b) ;;
+    *)
+        echo "[FAIL] integration/redis_cli_smoke: unexpected SRANDMEMBER '$SRANDMEMBER_RESULT'" >&2
+        exit 1
+        ;;
+esac
+
+SPOP_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" spop spin)"
+case "$SPOP_RESULT" in
+    a|b) ;;
+    *)
+        echo "[FAIL] integration/redis_cli_smoke: unexpected SPOP '$SPOP_RESULT'" >&2
+        exit 1
+        ;;
+esac
+
+SPIN_MEMBERS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" smembers spin | wc -l | tr -d ' ')"
+if [[ "$SPIN_MEMBERS_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected spin to retain 1 member, got '$SPIN_MEMBERS_RESULT'" >&2
+    exit 1
+fi
+
+SPIN_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del spin)"
+if [[ "$SPIN_DEL_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected spin DEL 1, got '$SPIN_DEL_RESULT'" >&2
+    exit 1
+fi
+
 HASH_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del hash)"
 if [[ "$HASH_DEL_RESULT" != "1" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected hash DEL 1, got '$HASH_DEL_RESULT'" >&2

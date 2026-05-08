@@ -232,6 +232,20 @@ def run_smoke() -> None:
             actual = recv_exact(sock, len(b"*2\r\n$1\r\nb\r\n$1\r\na\r\n"))
             if actual not in (b"*2\r\n$1\r\na\r\n$1\r\nb\r\n", b"*2\r\n$1\r\nb\r\n$1\r\na\r\n"):
                 raise AssertionError(f"unexpected SMEMBERS reply: {actual!r}")
+            roundtrip(sock, b"*4\r\n$4\r\nSADD\r\n$4\r\nspin\r\n$1\r\na\r\n$1\r\nb\r\n", b":2\r\n")
+            sock.sendall(b"*2\r\n$11\r\nSRANDMEMBER\r\n$4\r\nspin\r\n")
+            srand_actual = recv_exact(sock, len(b"$1\r\na\r\n"))
+            if srand_actual not in (b"$1\r\na\r\n", b"$1\r\nb\r\n"):
+                raise AssertionError(f"unexpected SRANDMEMBER reply: {srand_actual!r}")
+            sock.sendall(b"*2\r\n$4\r\nSPOP\r\n$4\r\nspin\r\n")
+            spop_actual = recv_exact(sock, len(b"$1\r\na\r\n"))
+            if spop_actual not in (b"$1\r\na\r\n", b"$1\r\nb\r\n"):
+                raise AssertionError(f"unexpected SPOP reply: {spop_actual!r}")
+            sock.sendall(b"*2\r\n$8\r\nSMEMBERS\r\n$4\r\nspin\r\n")
+            spin_members_actual = recv_exact(sock, len(b"*1\r\n$1\r\na\r\n"))
+            if spin_members_actual not in (b"*1\r\n$1\r\na\r\n", b"*1\r\n$1\r\nb\r\n"):
+                raise AssertionError(f"unexpected spin SMEMBERS reply: {spin_members_actual!r}")
+            roundtrip(sock, b"*2\r\n$3\r\nDEL\r\n$4\r\nspin\r\n", b":1\r\n")
             roundtrip(sock, b"*6\r\n$4\r\nZADD\r\n$4\r\nzset\r\n$1\r\n2\r\n$1\r\nb\r\n$1\r\n1\r\n$1\r\na\r\n", b":2\r\n")
             roundtrip(sock, b"*4\r\n$6\r\nZRANGE\r\n$4\r\nzset\r\n$1\r\n0\r\n$2\r\n-1\r\n", b"*2\r\n$1\r\na\r\n$1\r\nb\r\n")
             roundtrip(sock, b"*3\r\n$4\r\nZREM\r\n$4\r\nzset\r\n$1\r\na\r\n", b":1\r\n")

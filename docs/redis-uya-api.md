@@ -478,6 +478,32 @@ LPOS key element
 - 返回首个匹配元素位置，Integer
 - 没有命中或 key 不存在时返回 Null Bulk
 
+### `SPOP`
+
+格式：
+
+```text
+SPOP key
+```
+
+返回：
+
+- 返回一个被移除的成员 Bulk String
+- key 不存在或空 set 返回 Null Bulk
+
+### `SRANDMEMBER`
+
+格式：
+
+```text
+SRANDMEMBER key
+```
+
+返回：
+
+- 返回一个成员 Bulk String
+- key 不存在或空 set 返回 Null Bulk
+
 ### `MGET`
 
 格式：

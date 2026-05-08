@@ -296,6 +296,12 @@ class RedisPySubsetClient:
     def srem(self, key: str, *members: str) -> int:
         return int(self._request(b"SREM", key.encode(), *(member.encode() for member in members)))
 
+    def spop(self, key: str) -> bytes | None:
+        return self._request(b"SPOP", key.encode())
+
+    def srandmember(self, key: str) -> bytes | None:
+        return self._request(b"SRANDMEMBER", key.encode())
+
     def zadd(self, key: str, mapping: dict[str, int]) -> int:
         parts: list[bytes] = [b"ZADD", key.encode()]
         for member, score in mapping.items():
@@ -474,6 +480,16 @@ def run_smoke() -> None:
             assert client.sadd("set", "a", "b") == 2
             assert client.smembers("set") == {b"a", b"b"}
             assert client.srem("set", "a") == 1
+            assert client.sadd("spin", "a", "b") == 2
+            srand = client.srandmember("spin")
+            if srand not in (b"a", b"b"):
+                raise AssertionError(f"unexpected srandmember: {srand!r}")
+            spop = client.spop("spin")
+            if spop not in (b"a", b"b"):
+                raise AssertionError(f"unexpected spop: {spop!r}")
+            if len(client.smembers("spin")) != 1:
+                raise AssertionError("expected spin to retain exactly one member after SPOP")
+            assert client.delete("spin") == 1
 
             assert client.zadd("zset", {"b": 2, "a": 1}) == 2
             assert client.zrange("zset", 0, -1) == [b"a", b"b"]

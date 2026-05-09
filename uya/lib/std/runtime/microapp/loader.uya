@@ -213,6 +213,10 @@ fn microapp_hosted_report_payload_result(kernel: &SimKernel, cid: u32) void {
     @println("[microapp loader] payload result=ok");
 }
 
+fn microapp_hosted_log_store_child_result_failure() void {
+    @println("[microapp loader] failed to store child result");
+}
+
 fn microapp_hosted_resolve_uapp_path(argc: i32, argv: & &byte, default_uapp_path: &byte) &byte {
     if argc > 1 && argv != null {
         const arg_path: *byte = argv[1];
@@ -344,7 +348,7 @@ fn microapp_hosted_run_mapped_payload(kernel: &SimKernel) i32 {
     }
     if child_read == @size_of(MicroappHostedChildResult) as i64 {
         microapp_hosted_store_child_result(kernel, 0u32, &child_result) catch {
-            @println("[microapp loader] failed to store child result");
+            microapp_hosted_log_store_child_result_failure();
         };
     }
     return status;

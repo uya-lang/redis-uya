@@ -836,6 +836,7 @@ extern "libc" fn uya_macos_lseek(fd: i32, offset: i64, whence: i32) !i64;
 extern "libc" fn uya_macos_access(pathname: *const byte, mode: i32) !i32;
 extern "libc" fn uya_macos_readlink(pathname: *const byte, buf: *byte, bufsiz: usize) !i64;
 extern "libc" fn uya_macos_chdir(pathname: *const byte) !i32;
+extern "libc" fn uya_macos_getcwd(buf: *byte, size: usize) !i64;
 extern "libc" fn uya_macos_fcntl(fd: i32, cmd: i32, arg: i32) !i32;
 extern "libc" fn uya_macos_pipe2(pipefd: &i32, flags: i32) !i32;
 extern "libc" fn uya_macos_dup2(oldfd: i32, newfd: i32) !i32;
@@ -849,6 +850,11 @@ extern "libc" fn uya_macos_sendto(sockfd: i32, buf: *const byte, len: usize, fla
 extern "libc" fn uya_macos_recvfrom(sockfd: i32, buf: *byte, len: usize, flags: i32, src: *void, srclen: *u32) !i64;
 extern "libc" fn uya_macos_shutdown(sockfd: i32, how: i32) !i32;
 extern "libc" fn uya_macos_setsockopt(sockfd: i32, level: i32, optname: i32, optval: *void, optlen: u32) !i32;
+extern "libc" fn uya_macos_fork() !i64;
+extern "libc" fn uya_macos_waitpid(pid: i32, status: &i32, options: i32) !i32;
+extern "libc" fn uya_macos_getpid() i32;
+extern "libc" fn uya_macos_getppid() i32;
+extern "libc" fn uya_macos_exit(status: i32) void;
 
 // ============================================================
 // 系统调用封装函数
@@ -904,17 +910,29 @@ export extern "libc" fn sys_close(fd: i32) !i32 {
 
 // sys_exit - 退出进程
 export extern "libc" fn sys_exit(status: i32) void {
-    _ = @syscall(SYS_exit, status as i64);
+    std.cfg(std.target_os == .tos_macos, {
+        uya_macos_exit(status);
+    }, {
+        _ = @syscall(SYS_exit, status as i64);
+    })
 }
 
 // sys_getpid - 获取当前进程 ID
 export extern "libc" fn sys_getpid() !i64 {
-    return @syscall(SYS_getpid);
+    std.cfg(std.target_os == .tos_macos, {
+        return uya_macos_getpid() as i64;
+    }, {
+        return @syscall(SYS_getpid);
+    })
 }
 
 // sys_getppid - 获取父进程 ID
 export extern "libc" fn sys_getppid() !i64 {
-    return @syscall(SYS_getppid);
+    std.cfg(std.target_os == .tos_macos, {
+        return uya_macos_getppid() as i64;
+    }, {
+        return @syscall(SYS_getppid);
+    })
 }
 
 // sys_lseek - 移动文件读写位置
@@ -994,14 +1012,7 @@ export extern "libc" fn sys_chdir(path: *const byte) !i32 {
 // sys_getcwd - 获取当前工作目录
 export extern "libc" fn sys_getcwd(buf: *byte, size: usize) !isize {
     std.cfg(std.target_os == .tos_macos, {
-        const fd: i32 = try sys_open("." as *const byte, (O_RDONLY | O_DIRECTORY) as i32, 0);
-        const path_len_result: !i32 = uya_macos_fcntl_getpath(fd, buf, size);
-        const path_len: i32 = path_len_result catch {
-            _ = sys_close(fd) catch {};
-            return path_len_result as! isize;
-        };
-        _ = sys_close(fd) catch {};
-        return path_len as isize;
+        return uya_macos_getcwd(buf, size) as! isize;
     }, {
         return @syscall(SYS_getcwd, buf as i64, size as i64) as! isize;
     })
@@ -1069,7 +1080,11 @@ export extern "libc" fn sys_set_tid_address(tidptr: &i32) !i32 {
 // sys_waitpid - 等待子进程/线程退出（用于 pthread_join 等）
 // 底层为 wait4：第四参 rusage 传 0（不要资源用量）。
 export extern "libc" fn sys_waitpid(pid: i32, status: &i32, options: i32) !i32 {
-    return @syscall(SYS_waitpid, pid as i64, status as i64, options as i64, 0 as i64) as! i32;
+    std.cfg(std.target_os == .tos_macos, {
+        return uya_macos_waitpid(pid, status, options);
+    }, {
+        return @syscall(SYS_waitpid, pid as i64, status as i64, options as i64, 0 as i64) as! i32;
+    })
 }
 
 // sys_futex - futex 系统调用（用于 mutex/cond，零依赖）
@@ -1248,7 +1263,11 @@ export extern "libc" fn sys_lstat(path: &const byte, statbuf: &Stat) !i32 {
 // sys_fork - 创建新进程
 // 返回：子进程返回 0，父进程返回子进程 PID，-1 表示失败
 export extern "libc" fn sys_fork() !i64 {
-    return @syscall(SYS_fork);
+    std.cfg(std.target_os == .tos_macos, {
+        return uya_macos_fork();
+    }, {
+        return @syscall(SYS_fork);
+    })
 }
 
 // sys_execve - 执行新程序

@@ -71,7 +71,10 @@ fn _pthread_call_start(start_fn: &void, start_arg: &void) &void {
             @asm {
                 "mov x16, %1\n\tmov x0, %2\n\tblr x16\n\tmov %0, x0"
                 (start_fn, start_arg, -> r);
-            } clobbers = ["x16", "x17", "memory"];
+            } clobbers = [
+                "x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7",
+                "x8", "x9", "x10", "x16", "x17", "x30", "cc", "memory"
+            ];
         }, {
             std.cfg(std.target_arch == .ta_arm, {
                 @asm {
@@ -672,7 +675,7 @@ export extern "libc" fn pthread_once(once_control: &pthread_once_t, init_routine
     var expected: i32 = 0;
     if __atomic_compare_exchange_n((&once_control.state) as &i32, &expected, 1, 0, PTHREAD_ATOMIC_SEQ_CST, PTHREAD_ATOMIC_SEQ_CST) != 0 {
         std.cfg(std.target_os == .tos_macos, {
-            _ = _uya_init_async_frame_allocator_key(null);
+            _pthread_call_start(init_routine, null);
         }, {
             _pthread_call_start(init_routine, null);
             sys_futex((&once_control.state) as &i32, FUTEX_WAKE, 2147483647, null);

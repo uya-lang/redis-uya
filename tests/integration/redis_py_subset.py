@@ -216,6 +216,12 @@ class RedisPySubsetClient:
     def wait(self, replicas: int, timeout_ms: int) -> int:
         return int(self._request(b"WAIT", str(replicas).encode(), str(timeout_ms).encode()))
 
+    def sort(self, key: str, *parts: str) :
+        encoded: list[bytes] = [b"SORT", key.encode()]
+        for part in parts:
+            encoded.append(part.encode())
+        return self._request(*encoded)
+
     def exists(self, *keys: str) -> int:
         return int(self._request(b"EXISTS", *(key.encode() for key in keys)))
 
@@ -583,6 +589,18 @@ def run_smoke() -> None:
             except RespError as exc:
                 if str(exc) != "ERR timeout is negative":
                     raise AssertionError(f"unexpected WAIT timeout error: {exc}") from exc
+            assert client.rpush("sortnums", "3", "1", "2") == 3
+            assert client.sort("sortnums") == [b"1", b"2", b"3"]
+            assert client.set("sortw_1", "20")
+            assert client.set("sortw_2", "10")
+            assert client.set("sortw_3", "30")
+            assert client.set("obj_1", "one")
+            assert client.set("obj_2", "two")
+            assert client.set("obj_3", "three")
+            assert client.sort("sortnums", "BY", "sortw_*", "GET", "obj_*", "GET", "#") == [b"two", b"2", b"one", b"1", b"three", b"3"]
+            assert client.sort("sortnums", "STORE", "sortout") == 3
+            assert client.lrange("sortout", 0, -1) == [b"1", b"2", b"3"]
+            assert client.delete("sortnums", "sortout", "sortw_1", "sortw_2", "sortw_3", "obj_1", "obj_2", "obj_3") == 8
             assert client.exists("key", "missing") == 1
             assert client.expire("key", 2)
             ttl = client.ttl("key")

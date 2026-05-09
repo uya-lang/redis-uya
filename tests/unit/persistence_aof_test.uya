@@ -18,7 +18,9 @@ use src.storage.engine.engine_free;
 use src.storage.engine.lookup_key_at;
 use src.storage.engine.set_key_at;
 use src.storage.object.RedisObject;
+use src.storage.object.ObjectType;
 use src.storage.object.create_string_object;
+use src.storage.object.list_object_index_value;
 use src.storage.object.object_free;
 use src.memory.allocator.used_memory;
 use src.memory.allocator.reset_memory_stats_for_test;
@@ -282,6 +284,32 @@ export fn test_aof_replay_restore_command() !void {
     try aof_replay_file_at(path, &engine, &router, 1000u64);
     const found: &RedisObject = try lookup_key_at(&engine, &"keyout"[0: 6], 1000u64);
     try assert_true(aof_test_slice_eq(found.value.buf[0: found.value.len], &"value"[0: 5]));
+    engine_free(&engine);
+    _ = unlink(path);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_aof_replay_sort_store_command() !void {
+    reset_memory_stats_for_test();
+    const path: &const byte = "build/test-aof-sort-store.aof";
+    _ = unlink(path);
+
+    var writer: AofWriter = try aof_open_truncate(path);
+    try aof_append_raw(&writer, &"*5\r\n$5\r\nRPUSH\r\n$7\r\nsortsrc\r\n$1\r\n3\r\n$1\r\n1\r\n$1\r\n2\r\n"[0: 49]);
+    try aof_append_raw(&writer, &"*4\r\n$4\r\nSORT\r\n$7\r\nsortsrc\r\n$5\r\nSTORE\r\n$7\r\nsortout\r\n"[0: 51]);
+    aof_close(&writer);
+
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    try aof_replay_file_at(path, &engine, &router, 1000u64);
+    const found: &RedisObject = try lookup_key_at(&engine, &"sortout"[0: 7], 1000u64);
+    try assert_eq_i32(found.obj_type as i32, ObjectType.object_list as i32);
+    const first: &RedisObject = try list_object_index_value(found, 0);
+    const second: &RedisObject = try list_object_index_value(found, 1);
+    const third: &RedisObject = try list_object_index_value(found, 2);
+    try assert_true(aof_test_slice_eq(first.value.buf[0: first.value.len], &"1"[0: 1]));
+    try assert_true(aof_test_slice_eq(second.value.buf[0: second.value.len], &"2"[0: 1]));
+    try assert_true(aof_test_slice_eq(third.value.buf[0: third.value.len], &"3"[0: 1]));
     engine_free(&engine);
     _ = unlink(path);
     try assert_eq_i32(used_memory() as i32, 0);

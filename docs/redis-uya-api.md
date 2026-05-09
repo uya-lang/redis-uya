@@ -864,6 +864,31 @@ WAIT numreplicas timeout
 - 当前单机实现下尚未引入副本 ACK 收敛路径，因此在参数合法时返回 `:0`
 - `numreplicas <= 0` 时也直接返回 `:0`
 
+### `SORT`
+
+格式：
+
+```text
+SORT key [ASC|DESC] [ALPHA] [LIMIT offset count] [BY pattern] [GET pattern ...] [STORE destination]
+```
+
+返回：
+
+- 默认返回排序后的 RESP Array
+- 带 `STORE destination` 时返回写入元素个数，Integer
+- 非数值排序且未指定 `ALPHA`：`-ERR One or more scores can't be converted into double`
+- 选项缺参或未知选项：`-ERR syntax error`
+
+说明：
+
+- 当前实现支持 `list` / `set` / `zset` 作为源集合
+- 支持 `BY nosort`
+- 支持字符串 key pattern 与 hash field pattern，例如 `weight_*`、`user_*->score`
+- 支持多次 `GET`；`GET #` 返回当前元素本身
+- `GET` 缺失值在普通回复里返回 Null Bulk，在 `STORE` 路径里写入空字符串
+- `LIMIT` 中 `offset < 0` 按 `0` 处理，`count < 0` 表示取到尾部
+- `SORT STORE` 在当前实现中会覆盖目标 key 并清除其 TTL；结果为空时删除目标 key
+
 ### `MGET`
 
 格式：

@@ -123,6 +123,7 @@ use tests.unit.command_executor_test.test_command_dump;
 use tests.unit.command_executor_test.test_command_select_and_object;
 use tests.unit.command_executor_test.test_command_move;
 use tests.unit.command_executor_test.test_command_wait;
+use tests.unit.command_executor_test.test_command_sort;
 use tests.unit.command_executor_test.test_command_error_paths;
 use tests.unit.network_connection_test.test_connection_encode_resp_replies;
 use tests.unit.network_connection_test.test_connection_process_ping_set_get_quit;
@@ -145,6 +146,7 @@ use tests.unit.persistence_aof_test.test_aof_replay_large_file_over_1mb;
 use tests.unit.persistence_aof_test.test_aof_replay_rename_commands;
 use tests.unit.persistence_aof_test.test_aof_replay_flush_commands;
 use tests.unit.persistence_aof_test.test_aof_replay_restore_command;
+use tests.unit.persistence_aof_test.test_aof_replay_sort_store_command;
 use tests.unit.persistence_rdb_test.test_rdb_save_and_load_string_subset;
 use tests.unit.persistence_rdb_test.test_rdb_dump_and_load_bytes_string_subset;
 use tests.unit.persistence_rdb_test.test_rdb_dump_and_load_bytes_current_types;
@@ -657,6 +659,10 @@ export fn main() i32 {
     _ = test_command_wait() catch { printf("[FAIL] command_executor/wait\n" as *byte); failed = failed + 1; };
     if failed == before_exec_wait { printf("[PASS] command_executor/wait\n" as *byte); }
 
+    const before_exec_sort: i32 = failed;
+    _ = test_command_sort() catch { printf("[FAIL] command_executor/sort\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_sort { printf("[PASS] command_executor/sort\n" as *byte); }
+
     const before_exec_errors: i32 = failed;
     _ = test_command_error_paths() catch { printf("[FAIL] command_executor/errors\n" as *byte); failed = failed + 1; };
     if failed == before_exec_errors { printf("[PASS] command_executor/errors\n" as *byte); }
@@ -720,6 +726,10 @@ export fn main() i32 {
     const before_aof_restore_cmd: i32 = failed;
     _ = test_aof_replay_restore_command() catch { printf("[FAIL] persistence_aof/replay_restore\n" as *byte); failed = failed + 1; };
     if failed == before_aof_restore_cmd { printf("[PASS] persistence_aof/replay_restore\n" as *byte); }
+
+    const before_aof_sort_store_cmd: i32 = failed;
+    _ = test_aof_replay_sort_store_command() catch { printf("[FAIL] persistence_aof/replay_sort_store\n" as *byte); failed = failed + 1; };
+    if failed == before_aof_sort_store_cmd { printf("[PASS] persistence_aof/replay_sort_store\n" as *byte); }
 
     const before_aof_flush: i32 = failed;
     _ = test_aof_flush_persists_buffer_without_close() catch { printf("[FAIL] persistence_aof/flush\n" as *byte); failed = failed + 1; };

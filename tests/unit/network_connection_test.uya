@@ -230,6 +230,18 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const wait_negative_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$4\r\nWAIT\r\n$1\r\n1\r\n$2\r\n-1\r\n"[0: 32], &out[0], 256, 1000u64);
     try assert_true(network_connection_contains(out[0: wait_negative_result.response_len], &"timeout is negative"[0: 19]));
 
+    const sort_seed_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$5\r\nRPUSH\r\n$7\r\nsortnet\r\n$1\r\n3\r\n$1\r\n1\r\n$1\r\n2\r\n"[0: 49], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: sort_seed_result.response_len], &":3\r\n"[0: 4]));
+
+    const sort_read_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$4\r\nSORT\r\n$7\r\nsortnet\r\n"[0: 27], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: sort_read_result.response_len], &"*3\r\n$1\r\n1\r\n$1\r\n2\r\n$1\r\n3\r\n"[0: 25]));
+
+    const sort_store_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$4\r\nSORT\r\n$7\r\nsortnet\r\n$5\r\nSTORE\r\n$10\r\nsortnetout\r\n"[0: 55], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: sort_store_result.response_len], &":3\r\n"[0: 4]));
+
+    const sort_cleanup_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$3\r\nDEL\r\n$7\r\nsortnet\r\n$10\r\nsortnetout\r\n"[0: 43], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: sort_cleanup_result.response_len], &":2\r\n"[0: 4]));
+
     const pexpire_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$7\r\nPEXPIRE\r\n$3\r\nkey\r\n$4\r\n1500\r\n"[0: 36], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: pexpire_result.response_len], &":1\r\n"[0: 4]));
 
@@ -258,7 +270,7 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const hincrbyfloat_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$12\r\nHINCRBYFLOAT\r\n$4\r\nhash\r\n$5\r\nratio\r\n$3\r\n1.5\r\n"[0: 53], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: hincrbyfloat_result.response_len], &"$3\r\n1.5\r\n"[0: 9]));
 
-    const lpush_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$5\r\nLPUSH\r\n$4\r\nlist\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\nc\r\n"[0: 47], &out[0], 256, 1000u64);
+    const lpush_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$5\r\nLPUSH\r\n$4\r\nlist\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\nc\r\n"[0: 46], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: lpush_result.response_len], &":3\r\n"[0: 4]));
 
     const lrange_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$6\r\nLRANGE\r\n$4\r\nlist\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 41], &out[0], 256, 1000u64);

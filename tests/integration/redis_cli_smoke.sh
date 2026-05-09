@@ -715,6 +715,43 @@ if [[ "$WAIT_NEGATIVE_RESULT" != "ERR timeout is negative" ]]; then
     exit 1
 fi
 
+SORT_SEED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" rpush sortnums 3 1 2)"
+if [[ "$SORT_SEED_RESULT" != "3" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected RPUSH sortnums 3, got '$SORT_SEED_RESULT'" >&2
+    exit 1
+fi
+
+SORT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" sort sortnums)"
+if [[ "$SORT_RESULT" != $'1\n2\n3' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SORT default 1/2/3, got '$SORT_RESULT'" >&2
+    exit 1
+fi
+
+redis-cli --raw -h 127.0.0.1 -p "$PORT" set sortw_1 20 >/dev/null
+redis-cli --raw -h 127.0.0.1 -p "$PORT" set sortw_2 10 >/dev/null
+redis-cli --raw -h 127.0.0.1 -p "$PORT" set sortw_3 30 >/dev/null
+redis-cli --raw -h 127.0.0.1 -p "$PORT" set obj_1 one >/dev/null
+redis-cli --raw -h 127.0.0.1 -p "$PORT" set obj_2 two >/dev/null
+redis-cli --raw -h 127.0.0.1 -p "$PORT" set obj_3 three >/dev/null
+
+SORT_GET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" sort sortnums by 'sortw_*' get 'obj_*' get '#')"
+if [[ "$SORT_GET_RESULT" != $'two\n2\none\n1\nthree\n3' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: unexpected SORT BY/GET output: '$SORT_GET_RESULT'" >&2
+    exit 1
+fi
+
+SORT_STORE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" sort sortnums store sortout)"
+if [[ "$SORT_STORE_RESULT" != "3" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SORT STORE 3, got '$SORT_STORE_RESULT'" >&2
+    exit 1
+fi
+
+SORT_STORE_LRANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lrange sortout 0 -1)"
+if [[ "$SORT_STORE_LRANGE_RESULT" != $'1\n2\n3' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: unexpected SORT STORE LRANGE output: '$SORT_STORE_LRANGE_RESULT'" >&2
+    exit 1
+fi
+
 TTL_SET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" set ttlkey value)"
 if [[ "$TTL_SET_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected OK on ttlkey SET, got '$TTL_SET_RESULT'" >&2

@@ -269,6 +269,7 @@ build/redis-uya 6380 1
 - Key/Server 第七批：`SELECT`、`OBJECT`
 - Key/Server 第八批：`MOVE`
 - Key/Server 第九批：`WAIT`
+- Key/Server 第十批：`SORT`
 - Key/Server 第一批：`ECHO`、`TYPE`、`DBSIZE`
 - Key/Server 第二批：`PEXPIRE`、`PERSIST`、`PTTL`
 - AOF append/replay、RDB 子集、`SAVE`、`BGSAVE`、`BGREWRITEAOF`

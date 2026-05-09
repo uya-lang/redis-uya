@@ -2266,6 +2266,180 @@ export fn test_command_wait() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_command_sort() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var out: [byte: 512] = [];
+
+    var rpush_nums_parsed: RespParseResult = try parse_resp2(&"*5\r\n$5\r\nRPUSH\r\n$7\r\nsortnum\r\n$1\r\n3\r\n$1\r\n1\r\n$1\r\n2\r\n"[0: 49]);
+    const rpush_nums_command: Command = try command_executor_test_command(&router, &rpush_nums_parsed);
+    _ = command_execute_at(&engine, &rpush_nums_command, 1000u64);
+    resp_value_free(&rpush_nums_parsed.value);
+
+    var sort_default_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nSORT\r\n$7\r\nsortnum\r\n"[0: 27]);
+    const sort_default_command: Command = try command_executor_test_command(&router, &sort_default_parsed);
+    var sort_default_reply: CommandReply = command_execute_at(&engine, &sort_default_command, 1000u64);
+    const sort_default_len: usize = try connection_encode_reply(&sort_default_reply, &out[0], 512);
+    try assert_true(command_executor_test_slice_eq(out[0: sort_default_len], &"*3\r\n$1\r\n1\r\n$1\r\n2\r\n$1\r\n3\r\n"[0: 25]));
+    command_reply_cleanup(&sort_default_reply);
+    resp_value_free(&sort_default_parsed.value);
+
+    var sort_desc_parsed: RespParseResult = try parse_resp2(&"*3\r\n$4\r\nSORT\r\n$7\r\nsortnum\r\n$4\r\nDESC\r\n"[0: 37]);
+    const sort_desc_command: Command = try command_executor_test_command(&router, &sort_desc_parsed);
+    var sort_desc_reply: CommandReply = command_execute_at(&engine, &sort_desc_command, 1000u64);
+    const sort_desc_len: usize = try connection_encode_reply(&sort_desc_reply, &out[0], 512);
+    try assert_true(command_executor_test_slice_eq(out[0: sort_desc_len], &"*3\r\n$1\r\n3\r\n$1\r\n2\r\n$1\r\n1\r\n"[0: 25]));
+    command_reply_cleanup(&sort_desc_reply);
+    resp_value_free(&sort_desc_parsed.value);
+
+    var sort_limit_parsed: RespParseResult = try parse_resp2(&"*5\r\n$4\r\nSORT\r\n$7\r\nsortnum\r\n$5\r\nLIMIT\r\n$1\r\n1\r\n$1\r\n2\r\n"[0: 52]);
+    const sort_limit_command: Command = try command_executor_test_command(&router, &sort_limit_parsed);
+    var sort_limit_reply: CommandReply = command_execute_at(&engine, &sort_limit_command, 1000u64);
+    const sort_limit_len: usize = try connection_encode_reply(&sort_limit_reply, &out[0], 512);
+    try assert_true(command_executor_test_slice_eq(out[0: sort_limit_len], &"*2\r\n$1\r\n2\r\n$1\r\n3\r\n"[0: 18]));
+    command_reply_cleanup(&sort_limit_reply);
+    resp_value_free(&sort_limit_parsed.value);
+
+    var set_w1_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$7\r\nsortw_1\r\n$2\r\n20\r\n"[0: 35]);
+    const set_w1_command: Command = try command_executor_test_command(&router, &set_w1_parsed);
+    _ = command_execute_at(&engine, &set_w1_command, 1000u64);
+    resp_value_free(&set_w1_parsed.value);
+
+    var set_w2_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$7\r\nsortw_2\r\n$2\r\n10\r\n"[0: 35]);
+    const set_w2_command: Command = try command_executor_test_command(&router, &set_w2_parsed);
+    _ = command_execute_at(&engine, &set_w2_command, 1000u64);
+    resp_value_free(&set_w2_parsed.value);
+
+    var set_w3_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$7\r\nsortw_3\r\n$2\r\n30\r\n"[0: 35]);
+    const set_w3_command: Command = try command_executor_test_command(&router, &set_w3_parsed);
+    _ = command_execute_at(&engine, &set_w3_command, 1000u64);
+    resp_value_free(&set_w3_parsed.value);
+
+    var sort_by_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nSORT\r\n$7\r\nsortnum\r\n$2\r\nBY\r\n$7\r\nsortw_*\r\n"[0: 48]);
+    const sort_by_command: Command = try command_executor_test_command(&router, &sort_by_parsed);
+    var sort_by_reply: CommandReply = command_execute_at(&engine, &sort_by_command, 1000u64);
+    const sort_by_len: usize = try connection_encode_reply(&sort_by_reply, &out[0], 512);
+    try assert_true(command_executor_test_slice_eq(out[0: sort_by_len], &"*3\r\n$1\r\n2\r\n$1\r\n1\r\n$1\r\n3\r\n"[0: 25]));
+    command_reply_cleanup(&sort_by_reply);
+    resp_value_free(&sort_by_parsed.value);
+
+    var sort_nosort_desc_parsed: RespParseResult = try parse_resp2(&"*5\r\n$4\r\nSORT\r\n$7\r\nsortnum\r\n$2\r\nBY\r\n$6\r\nnosort\r\n$4\r\nDESC\r\n"[0: 57]);
+    const sort_nosort_desc_command: Command = try command_executor_test_command(&router, &sort_nosort_desc_parsed);
+    var sort_nosort_desc_reply: CommandReply = command_execute_at(&engine, &sort_nosort_desc_command, 1000u64);
+    const sort_nosort_desc_len: usize = try connection_encode_reply(&sort_nosort_desc_reply, &out[0], 512);
+    try assert_true(command_executor_test_slice_eq(out[0: sort_nosort_desc_len], &"*3\r\n$1\r\n2\r\n$1\r\n1\r\n$1\r\n3\r\n"[0: 25]));
+    command_reply_cleanup(&sort_nosort_desc_reply);
+    resp_value_free(&sort_nosort_desc_parsed.value);
+
+    var set_obj1_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$5\r\nobj_1\r\n$3\r\none\r\n"[0: 33]);
+    const set_obj1_command: Command = try command_executor_test_command(&router, &set_obj1_parsed);
+    _ = command_execute_at(&engine, &set_obj1_command, 1000u64);
+    resp_value_free(&set_obj1_parsed.value);
+
+    var set_obj2_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$5\r\nobj_2\r\n$3\r\ntwo\r\n"[0: 33]);
+    const set_obj2_command: Command = try command_executor_test_command(&router, &set_obj2_parsed);
+    _ = command_execute_at(&engine, &set_obj2_command, 1000u64);
+    resp_value_free(&set_obj2_parsed.value);
+
+    var set_obj3_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$5\r\nobj_3\r\n$5\r\nthree\r\n"[0: 35]);
+    const set_obj3_command: Command = try command_executor_test_command(&router, &set_obj3_parsed);
+    _ = command_execute_at(&engine, &set_obj3_command, 1000u64);
+    resp_value_free(&set_obj3_parsed.value);
+
+    var sort_get_parsed: RespParseResult = try parse_resp2(&"*8\r\n$4\r\nSORT\r\n$7\r\nsortnum\r\n$2\r\nBY\r\n$7\r\nsortw_*\r\n$3\r\nGET\r\n$5\r\nobj_*\r\n$3\r\nGET\r\n$1\r\n#\r\n"[0: 84]);
+    const sort_get_command: Command = try command_executor_test_command(&router, &sort_get_parsed);
+    var sort_get_reply: CommandReply = command_execute_at(&engine, &sort_get_command, 1000u64);
+    const sort_get_len: usize = try connection_encode_reply(&sort_get_reply, &out[0], 512);
+    try assert_true(command_executor_test_slice_eq(out[0: sort_get_len], &"*6\r\n$3\r\ntwo\r\n$1\r\n2\r\n$3\r\none\r\n$1\r\n1\r\n$5\r\nthree\r\n$1\r\n3\r\n"[0: 54]));
+    command_reply_cleanup(&sort_get_reply);
+    resp_value_free(&sort_get_parsed.value);
+
+    var sort_missing_get_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nSORT\r\n$7\r\nsortnum\r\n$3\r\nGET\r\n$9\r\nmissing_*\r\n"[0: 51]);
+    const sort_missing_get_command: Command = try command_executor_test_command(&router, &sort_missing_get_parsed);
+    var sort_missing_get_reply: CommandReply = command_execute_at(&engine, &sort_missing_get_command, 1000u64);
+    const sort_missing_get_len: usize = try connection_encode_reply(&sort_missing_get_reply, &out[0], 512);
+    try assert_true(command_executor_test_slice_eq(out[0: sort_missing_get_len], &"*3\r\n$-1\r\n$-1\r\n$-1\r\n"[0: 19]));
+    command_reply_cleanup(&sort_missing_get_reply);
+    resp_value_free(&sort_missing_get_parsed.value);
+
+    var sort_store_parsed: RespParseResult = try parse_resp2(&"*6\r\n$4\r\nSORT\r\n$7\r\nsortnum\r\n$2\r\nBY\r\n$7\r\nsortw_*\r\n$5\r\nSTORE\r\n$7\r\nsortout\r\n"[0: 72]);
+    const sort_store_command: Command = try command_executor_test_command(&router, &sort_store_parsed);
+    const sort_store_reply: CommandReply = command_execute_at(&engine, &sort_store_command, 1000u64);
+    try assert_eq_i32(sort_store_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(sort_store_reply.integer as i32, 3);
+    resp_value_free(&sort_store_parsed.value);
+
+    var lrange_out_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nLRANGE\r\n$7\r\nsortout\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 44]);
+    const lrange_out_command: Command = try command_executor_test_command(&router, &lrange_out_parsed);
+    var lrange_out_reply: CommandReply = command_execute_at(&engine, &lrange_out_command, 1000u64);
+    const lrange_out_len: usize = try connection_encode_reply(&lrange_out_reply, &out[0], 512);
+    try assert_true(command_executor_test_slice_eq(out[0: lrange_out_len], &"*3\r\n$1\r\n2\r\n$1\r\n1\r\n$1\r\n3\r\n"[0: 25]));
+    command_reply_cleanup(&lrange_out_reply);
+    resp_value_free(&lrange_out_parsed.value);
+
+    var hset_score1_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nHSET\r\n$3\r\nh_1\r\n$5\r\nscore\r\n$1\r\n2\r\n"[0: 41]);
+    const hset_score1_command: Command = try command_executor_test_command(&router, &hset_score1_parsed);
+    _ = command_execute_at(&engine, &hset_score1_command, 1000u64);
+    resp_value_free(&hset_score1_parsed.value);
+
+    var hset_name1_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nHSET\r\n$3\r\nh_1\r\n$4\r\nname\r\n$3\r\none\r\n"[0: 42]);
+    const hset_name1_command: Command = try command_executor_test_command(&router, &hset_name1_parsed);
+    _ = command_execute_at(&engine, &hset_name1_command, 1000u64);
+    resp_value_free(&hset_name1_parsed.value);
+
+    var hset_score2_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nHSET\r\n$3\r\nh_2\r\n$5\r\nscore\r\n$1\r\n1\r\n"[0: 41]);
+    const hset_score2_command: Command = try command_executor_test_command(&router, &hset_score2_parsed);
+    _ = command_execute_at(&engine, &hset_score2_command, 1000u64);
+    resp_value_free(&hset_score2_parsed.value);
+
+    var hset_name2_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nHSET\r\n$3\r\nh_2\r\n$4\r\nname\r\n$3\r\ntwo\r\n"[0: 42]);
+    const hset_name2_command: Command = try command_executor_test_command(&router, &hset_name2_parsed);
+    _ = command_execute_at(&engine, &hset_name2_command, 1000u64);
+    resp_value_free(&hset_name2_parsed.value);
+
+    var hset_score3_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nHSET\r\n$3\r\nh_3\r\n$5\r\nscore\r\n$1\r\n3\r\n"[0: 41]);
+    const hset_score3_command: Command = try command_executor_test_command(&router, &hset_score3_parsed);
+    _ = command_execute_at(&engine, &hset_score3_command, 1000u64);
+    resp_value_free(&hset_score3_parsed.value);
+
+    var hset_name3_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nHSET\r\n$3\r\nh_3\r\n$4\r\nname\r\n$5\r\nthree\r\n"[0: 44]);
+    const hset_name3_command: Command = try command_executor_test_command(&router, &hset_name3_parsed);
+    _ = command_execute_at(&engine, &hset_name3_command, 1000u64);
+    resp_value_free(&hset_name3_parsed.value);
+
+    var sort_hash_get_parsed: RespParseResult = try parse_resp2(&"*6\r\n$4\r\nSORT\r\n$7\r\nsortnum\r\n$2\r\nBY\r\n$10\r\nh_*->score\r\n$3\r\nGET\r\n$9\r\nh_*->name\r\n"[0: 76]);
+    const sort_hash_get_command: Command = try command_executor_test_command(&router, &sort_hash_get_parsed);
+    var sort_hash_get_reply: CommandReply = command_execute_at(&engine, &sort_hash_get_command, 1000u64);
+    const sort_hash_get_len: usize = try connection_encode_reply(&sort_hash_get_reply, &out[0], 512);
+    try assert_true(command_executor_test_slice_eq(out[0: sort_hash_get_len], &"*3\r\n$3\r\ntwo\r\n$3\r\none\r\n$5\r\nthree\r\n"[0: 33]));
+    command_reply_cleanup(&sort_hash_get_reply);
+    resp_value_free(&sort_hash_get_parsed.value);
+
+    var rpush_alpha_parsed: RespParseResult = try parse_resp2(&"*4\r\n$5\r\nRPUSH\r\n$9\r\nsortalpha\r\n$1\r\nb\r\n$1\r\na\r\n"[0: 44]);
+    const rpush_alpha_command: Command = try command_executor_test_command(&router, &rpush_alpha_parsed);
+    _ = command_execute_at(&engine, &rpush_alpha_command, 1000u64);
+    resp_value_free(&rpush_alpha_parsed.value);
+
+    var sort_alpha_bad_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nSORT\r\n$9\r\nsortalpha\r\n"[0: 29]);
+    const sort_alpha_bad_command: Command = try command_executor_test_command(&router, &sort_alpha_bad_parsed);
+    const sort_alpha_bad_reply: CommandReply = command_execute_at(&engine, &sort_alpha_bad_command, 1000u64);
+    try assert_eq_i32(sort_alpha_bad_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(sort_alpha_bad_reply.data, &"ERR One or more scores can't be converted into double"[0: 53]));
+    resp_value_free(&sort_alpha_bad_parsed.value);
+
+    var sort_alpha_parsed: RespParseResult = try parse_resp2(&"*3\r\n$4\r\nSORT\r\n$9\r\nsortalpha\r\n$5\r\nALPHA\r\n"[0: 40]);
+    const sort_alpha_command: Command = try command_executor_test_command(&router, &sort_alpha_parsed);
+    var sort_alpha_reply: CommandReply = command_execute_at(&engine, &sort_alpha_command, 1000u64);
+    const sort_alpha_len: usize = try connection_encode_reply(&sort_alpha_reply, &out[0], 512);
+    try assert_true(command_executor_test_slice_eq(out[0: sort_alpha_len], &"*2\r\n$1\r\na\r\n$1\r\nb\r\n"[0: 18]));
+    command_reply_cleanup(&sort_alpha_reply);
+    resp_value_free(&sort_alpha_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_command_hscan() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();

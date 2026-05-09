@@ -3,14 +3,14 @@
 > 使用 Uya 从零实现 Redis 兼容内存数据库
 > 零 GC 路线 · 显式错误处理 · 可测试演进 · 长期性能目标超过 Redis
 
-> 版本: v0.9.0
+> 版本: v0.9.1-dev
 > 日期: 2026-05-09
 
 ## 简介
 
 `redis-uya` 是一个使用 **Uya 编程语言** 从零实现的生产级高性能内存数据库系统。项目长期目标是兼容 Redis Open Source，先在单机版覆盖官方命令参考中的全部命令名，以及数据结构、持久化、复制、脚本、安全、运维、高级数据能力与性能工程；单机版功能和性能达标后封版为 `v1.0.0`，之后才重新规划集群版开发。
 
-当前项目已完成 `v0.9.0` 单机核心命令补齐：按计划补齐 String / Hash / List / Set / ZSet / Key / Server / Security 核心命令批次，收口 `SORT`、`AUTH`、`requirepass`、`SHUTDOWN`，并通过单元测试、全量集成回归和 DoD 一键验证。
+当前项目已完成 `v0.9.0` 单机核心命令补齐：按计划补齐 String / Hash / List / Set / ZSet / Key / Server / Security 核心命令批次，收口 `SORT`、`AUTH`、`requirepass`、`SHUTDOWN`。当前主线已进入 `v0.9.1` 第一批，新增官方命令全集矩阵、共享运行时目录和 `COMMAND` / `COMMAND COUNT` / `COMMAND LIST` / `COMMAND INFO` / `COMMAND DOCS` 控制面。
 
 ## 核心目标
 
@@ -67,6 +67,8 @@
 - Pub/Sub 最小子集：`SUBSCRIBE` 注册连接订阅、`PUBLISH` 跨连接推送 message 并返回订阅者数量、`UNSUBSCRIBE` 取消订阅
 - 控制面兼容子集：`CLIENT ID/GETNAME/SETNAME/INFO/LIST/SETINFO/HELP`、`HELLO SETNAME`、`CONFIG GET/HELP/RESETSTAT`
 - 安全基线：`requirepass`、`AUTH`、`SHUTDOWN`
+- `v0.9.1` 命令全集矩阵第一批：基于 Redis 8.6 官方命令页生成 `531` 个官方命令名目录，落地 `docs/redis-uya-command-matrix.md` 与 `src/command/catalog_generated*`
+- `COMMAND` 控制面第一批：`COMMAND`、`COMMAND COUNT`、`COMMAND LIST`、`COMMAND INFO`、`COMMAND DOCS` 共用同一份运行时目录；`COMMAND GETKEYS` / `COMMAND GETKEYSANDFLAGS` 当前已显式识别并返回 deferred 错误
 - v0.5 兼容性回归：覆盖 RESP3 Null、WATCH 中止、事务内控制命令错误、RESP3 Pub/Sub Push、CLIENT/CONFIG 组合路径
 - `maxmemory` noeviction 基线：启动参数可设置最大内存，超预算增量写命令返回 OOM 且不落库
 - `allkeys-lru` 淘汰基线：对象记录最近访问时间，超预算写入可淘汰最久未访问 key 后继续执行
@@ -88,7 +90,7 @@
 
 下一阶段：
 
-- `v0.9.1`：继续推进单机命令全集矩阵、连接/管理面补齐和兼容边界收敛；达标后继续向单机版 `v1.0.0` 封版推进
+- `v0.9.1`：继续推进单机命令全集矩阵、连接/管理面补齐和兼容边界收敛；当前已完成官方命令全集矩阵与 `COMMAND*` 第一批，待续 `COMMAND GETKEYS*`、`CLIENT/CONFIG` 缺口、pattern Pub/Sub、Scripting/Stream 命令族与 standalone 错误边界。
 
 当前阶段尚未生产可用。
 
@@ -345,6 +347,7 @@ build/redis-uya 6380 1
 - [方案评审](docs/redis-uya-review.md)
 - [开发 TODO](docs/redis-uya-todo.md)
 - [Command Scope](docs/redis-uya-command-scope.md)
+- [Command Matrix](docs/redis-uya-command-matrix.md)
 - [开发规范](docs/redis-uya-development.md)
 - [Definition of Done](docs/redis-uya-definition-of-done.md)
 - [Benchmark 输出格式](docs/redis-uya-benchmark-format.md)

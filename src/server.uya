@@ -289,6 +289,7 @@ fn server_runtime_info(server: &RedisServer) CommandRuntimeInfo {
         aof_rewrite_in_progress: server.aof_rewrite_in_progress,
         cluster_topology: &server.cluster_topology,
         lastsave_ms: server.lastsave_ms,
+        protocol_version: 2,
     };
     config_copy_bytes(info.replication_replid[0: 41], server.repl_backlog.replid[0: 40]);
     return info;

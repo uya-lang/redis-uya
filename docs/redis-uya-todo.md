@@ -1,8 +1,8 @@
 程序的真正成本不在于编写，而在于维护。
 # redis-uya 开发 TODO 文档
 
-> 版本: v0.9.0-dev
-> 日期: 2026-04-30
+> 版本: v0.9.1-dev
+> 日期: 2026-05-09
 > 配套设计文档: `redis-uya-design.md`
 > 配套评审文档: `redis-uya-review.md`
 > 开发规范: `redis-uya-development.md`
@@ -57,7 +57,7 @@
 当前进行中：
 
 - [x] `v0.9.0`：单机核心命令补齐与安全基线收口完成
-- [ ] `v0.9.1` 起：单机命令全集矩阵、连接/管理面补齐与兼容边界继续收敛
+- [ ] `v0.9.1` 起：单机命令全集矩阵、连接/管理面补齐与兼容边界继续收敛（第一批命令矩阵与 `COMMAND*` 已完成）
 
 ## 3. 全版本路线图
 
@@ -396,11 +396,11 @@
 
 ### S1. 官方命令全集兼容矩阵
 
-- [ ] 以 Redis 官方 Commands Reference 建立命令全集基线，记录命令名、功能组、arity、flags、key spec、ACL category、是否模式相关
-- [ ] 每个命令标记为 `full`、`partial`、`standalone-error`、`alias` 或 `deferred`
-- [ ] `deferred` 命令必须绑定目标版本；不能进入 `v1.0.0` 封版状态
+- [x] 以 Redis 官方 Commands Reference 建立命令全集基线，记录命令名、功能组、arity、flags、key spec、ACL category、是否模式相关
+- [x] 每个命令标记为 `full`、`partial`、`standalone-error`、`alias` 或 `deferred`
+- [x] `deferred` 命令必须绑定目标版本；不能进入 `v1.0.0` 封版状态
 - [ ] Cluster/Sentinel 等模式相关命令在 `v1.0.0` 前至少实现 standalone 兼容行为或明确错误，完整分布式语义进入 `v1.1.0+`
-- [ ] 兼容矩阵必须由 `COMMAND` / `COMMAND DOCS` / `COMMAND INFO` 等控制面命令共享，避免文档和运行时命令表分叉
+- [x] 兼容矩阵必须由 `COMMAND` / `COMMAND DOCS` / `COMMAND INFO` 等控制面命令共享，避免文档和运行时命令表分叉
 
 非目标：
 
@@ -451,7 +451,9 @@
 
 ### U. 语义、数据结构与运维面
 
-- [ ] 官方命令全集矩阵落地：所有 Redis Open Source 官方命令名进入命令表或兼容错误处理
+- [x] 官方命令全集矩阵第一批落地：`531` 个官方命令名进入共享目录，生成 `docs/redis-uya-command-matrix.md` 并由 `src/command/catalog_generated*` 提供运行时数据
+- [x] `COMMAND` 控制面第一批落地：`COMMAND` / `COMMAND COUNT` / `COMMAND LIST` / `COMMAND INFO` / `COMMAND DOCS` 共享官方目录，覆盖 RESP2/RESP3 基础返回形态与过滤/未知命令边界
+- [ ] `COMMAND GETKEYS` / `COMMAND GETKEYSANDFLAGS`、其余 standalone 兼容错误与命令家族补齐继续推进
 - [ ] Streams 完整化：消费者组、pending、claim、trim、阻塞读取和持久化恢复
 - [ ] Pub/Sub 完整化：pattern 订阅、订阅态命令限制、背压和断开清理
 - [ ] Lua 与 Functions：`EVAL/EVALSHA`、脚本缓存、只读脚本、原子边界、函数加载和调用

@@ -1,0 +1,121 @@
+use src.command.catalog_generated_base.CommandCatalogEntry;
+use src.command.catalog_generated.COMMAND_CATALOG_TOTAL_COUNT;
+use src.command.catalog_generated.COMMAND_CATALOG_TOP_LEVEL_COUNT;
+use src.command.catalog_generated.command_catalog_generated_entry;
+use src.util.bytes.bytes_ascii_case_eq;
+
+export error CommandUnknown;
+
+fn command_catalog_ascii_lower(ch: byte) byte {
+    if ch >= 65 as byte && ch <= 90 as byte {
+        return ch + 32 as byte;
+    }
+    return ch;
+}
+
+fn command_catalog_strip_acl_prefix(category: &[byte]) &[byte] {
+    if category.len > 0 && category.ptr[0] == 64 as byte {
+        return category[1: category.len - 1];
+    }
+    return category;
+}
+
+fn command_catalog_glob_match(pattern: &[byte], pattern_index: usize, value: &[byte], value_index: usize) bool {
+    if pattern_index == pattern.len {
+        return value_index == value.len;
+    }
+
+    const current: byte = pattern.ptr[pattern_index];
+    if current == 42 as byte {
+        var next_index: usize = pattern_index;
+        while next_index < pattern.len && pattern.ptr[next_index] == 42 as byte {
+            next_index = next_index + 1;
+        }
+        if next_index == pattern.len {
+            return true;
+        }
+        var scan: usize = value_index;
+        while scan <= value.len {
+            if command_catalog_glob_match(pattern, next_index, value, scan) {
+                return true;
+            }
+            if scan == value.len {
+                break;
+            }
+            scan = scan + 1;
+        }
+        return false;
+    }
+
+    if value_index >= value.len {
+        return false;
+    }
+
+    if current == 63 as byte {
+        return command_catalog_glob_match(pattern, pattern_index + 1, value, value_index + 1);
+    }
+
+    return command_catalog_ascii_lower(current) == command_catalog_ascii_lower(value.ptr[value_index]) &&
+        command_catalog_glob_match(pattern, pattern_index + 1, value, value_index + 1);
+}
+
+export fn command_catalog_total_count() usize {
+    return COMMAND_CATALOG_TOTAL_COUNT;
+}
+
+export fn command_catalog_top_level_count() usize {
+    return COMMAND_CATALOG_TOP_LEVEL_COUNT;
+}
+
+export fn command_catalog_entry(index: usize) !CommandCatalogEntry {
+    return command_catalog_generated_entry(index);
+}
+
+export fn command_catalog_lookup(name: &[byte]) !CommandCatalogEntry {
+    var index: usize = 0;
+    while index < command_catalog_total_count() {
+        const entry: CommandCatalogEntry = try command_catalog_entry(index);
+        if bytes_ascii_case_eq(entry.name, name) {
+            return entry;
+        }
+        index = index + 1;
+    }
+    return error.CommandUnknown;
+}
+
+export fn command_catalog_has_acl_category(entry: &CommandCatalogEntry, category: &[byte]) bool {
+    const needle: &[byte] = command_catalog_strip_acl_prefix(category);
+    if needle.len == 0 || entry.acl_tags.len == 0 {
+        return false;
+    }
+
+    var start: usize = 0;
+    while start <= entry.acl_tags.len {
+        var end: usize = start;
+        while end < entry.acl_tags.len && entry.acl_tags.ptr[end] != 124 as byte {
+            end = end + 1;
+        }
+        if end > start {
+            const token: &[byte] = entry.acl_tags[start: end - start];
+            if bytes_ascii_case_eq(token, needle) {
+                return true;
+            }
+        }
+        if end == entry.acl_tags.len {
+            break;
+        }
+        start = end + 1;
+    }
+    return false;
+}
+
+export fn command_catalog_matches_module(entry: &CommandCatalogEntry, module_name: &[byte]) bool {
+    return module_name.len > 0 && bytes_ascii_case_eq(entry.module_name, module_name);
+}
+
+export fn command_catalog_matches_pattern(entry: &CommandCatalogEntry, pattern: &[byte]) bool {
+    if pattern.len == 0 {
+        return false;
+    }
+    return command_catalog_glob_match(pattern, 0, entry.name, 0);
+}

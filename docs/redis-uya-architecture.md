@@ -1,7 +1,7 @@
 # redis-uya ARCHITECTURE
 
-> 版本: v0.8.1
-> 日期: 2026-04-30
+> 版本: v0.9.1-dev
+> 日期: 2026-05-09
 
 ## 1. 总体结构
 
@@ -49,7 +49,9 @@ server open
 ### `src/command/`
 
 - `router.uya`：命令表、命令名匹配、参数数量校验
-- `executor.uya`：String/Key 命令执行
+- `executor.uya`：命令执行与控制面拼装
+- `catalog.uya`：共享命令目录查询、过滤和 pattern 匹配
+- `catalog_generated_base.uya`、`catalog_generated.uya`、`catalog_generated_part_*.uya`：由 `scripts/generate_command_catalog.py` 生成的官方命令目录分片
 
 ### `src/cluster/`
 
@@ -107,10 +109,12 @@ server open
 
 - `CONFIG` 仍由 `command/executor.uya` 执行，当前覆盖 `GET`、`HELP`、`RESETSTAT`
 - `CONFIG GET` 从 `CommandRuntimeInfo` 暴露运行时配置快照，支持 `maxclients`、`databases` 等兼容字段
+- `COMMAND` 由 `command/executor.uya` 执行，当前覆盖 `COMMAND`、`COUNT`、`LIST`、`INFO`、`DOCS`，运行时数据统一来自 `catalog_generated*`
 - `CLUSTER` 由 `command/executor.uya` 执行，当前通过服务端最小拓扑提供 `KEYSLOT/INFO/NODES/SLOTS/HELP/MEET/SETSLOT`
 - `CLIENT` 在 `connection.uya` 处理，因为 `SETNAME/GETNAME/SETINFO/INFO/LIST` 依赖连接级状态
 - `HELLO 2/3 SETNAME name` 与 `CLIENT SETNAME` 共享同一份连接级客户端名
 - `CLIENT LIST` 当前只返回当前连接的信息行，不扫描 `RedisServer.clients`
+- `CommandRuntimeInfo.protocol_version` 由连接层注入，供 `COMMAND DOCS` 等控制面在 RESP2/RESP3 下切换集合和 map 形态
 
 ## 5. Pub/Sub 最小闭环
 

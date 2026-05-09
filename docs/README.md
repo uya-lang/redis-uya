@@ -1,6 +1,6 @@
 # redis-uya 文档
 
-> 版本: v0.9.0
+> 版本: v0.9.1-dev
 > 日期: 2026-05-09
 
 ## 文档索引
@@ -9,6 +9,7 @@
 - [方案评审](./redis-uya-review.md)
 - [开发 TODO](./redis-uya-todo.md)
 - [Command Scope](./redis-uya-command-scope.md)
+- [Command Matrix](./redis-uya-command-matrix.md)
 - [开发规范](./redis-uya-development.md)
 - [Definition of Done](./redis-uya-definition-of-done.md)
 - [Benchmark 输出格式](./redis-uya-benchmark-format.md)
@@ -52,4 +53,4 @@
 
 ## 当前阶段
 
-项目当前已完成 `v0.9.0` 单机核心命令补齐：String / Hash / List / Set / ZSet / Key / Server / Security 计划内命令批次已经全部收口，并补齐发布说明、测试报告和 DoD 验证证据。后续进入 `v0.9.1`，继续推进单机命令全集矩阵和管理/连接面补齐。
+项目当前已完成 `v0.9.0` 单机核心命令补齐：String / Hash / List / Set / ZSet / Key / Server / Security 计划内命令批次已经全部收口，并补齐发布说明、测试报告和 DoD 验证证据。当前已进入 `v0.9.1` 第一批，落地官方命令全集矩阵、共享运行时目录和 `COMMAND*` 控制面；后续继续推进连接/管理面和命令族补齐。

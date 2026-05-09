@@ -1,0 +1,589 @@
+# redis-uya command matrix
+
+> version: v0.9.1-dev  
+> date: 2026-05-09  
+> source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`  
+> runtime source: `src/command/catalog_generated.uya`
+
+## Summary
+
+- tracked official command names: `531`
+- tracked top-level command names: `388`
+- `COMMAND` / `COMMAND INFO` / `COMMAND DOCS` / `COMMAND LIST` / `COMMAND COUNT` share the same generated catalog
+
+## Status counts
+
+| status | count |
+|--------|-------|
+| `full` | `98` |
+| `partial` | `36` |
+| `standalone-error` | `26` |
+| `alias` | `3` |
+| `deferred` | `368` |
+
+## Group counts
+
+| group | count |
+|-------|-------|
+| `bf` | `10` |
+| `bitmap` | `7` |
+| `cf` | `12` |
+| `cluster` | `34` |
+| `cms` | `6` |
+| `connection` | `26` |
+| `generic` | `34` |
+| `geo` | `10` |
+| `hash` | `28` |
+| `hyperloglog` | `5` |
+| `json` | `26` |
+| `list` | `22` |
+| `pubsub` | `15` |
+| `scripting` | `23` |
+| `search` | `26` |
+| `server` | `82` |
+| `set` | `17` |
+| `sorted-set` | `35` |
+| `stream` | `28` |
+| `string` | `25` |
+| `suggestion` | `4` |
+| `tdigest` | `14` |
+| `timeseries` | `17` |
+| `topk` | `7` |
+| `transactions` | `5` |
+| `vector_set` | `13` |
+
+## Matrix
+
+| name | group | status | target | arity | module | pattern | acl |
+|------|-------|--------|--------|-------|--------|---------|-----|
+| `acl` | `server` | `deferred` | `v0.9.3` | `-2` | `-` | `no` | `@slow` |
+| `acl|cat` | `server` | `deferred` | `v0.9.3` | `-2` | `-` | `no` | `@slow` |
+| `acl|deluser` | `server` | `deferred` | `v0.9.3` | `-3` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `acl|dryrun` | `server` | `deferred` | `v0.9.3` | `-4` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `acl|genpass` | `server` | `deferred` | `v0.9.3` | `-2` | `-` | `no` | `@slow` |
+| `acl|getuser` | `server` | `deferred` | `v0.9.3` | `3` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `acl|help` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@slow` |
+| `acl|list` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `acl|load` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `acl|log` | `server` | `deferred` | `v0.9.3` | `-2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `acl|save` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `acl|setuser` | `server` | `deferred` | `v0.9.3` | `-3` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `acl|users` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `acl|whoami` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@slow` |
+| `append` | `string` | `full` | `-` | `3` | `-` | `no` | `@write, @string, @fast` |
+| `asking` | `cluster` | `standalone-error` | `v1.1.0` | `1` | `-` | `no` | `@fast, @connection` |
+| `auth` | `connection` | `partial` | `-` | `-2` | `-` | `no` | `@fast, @connection` |
+| `bf.add` | `bf` | `deferred` | `v0.9.2` | `3` | `bf` | `no` | `@bloom, @write, @slow` |
+| `bf.card` | `bf` | `deferred` | `v0.9.2` | `2` | `bf` | `no` | `@bloom, @read, @fast` |
+| `bf.exists` | `bf` | `deferred` | `v0.9.2` | `3` | `bf` | `no` | `@bloom, @read, @slow` |
+| `bf.info` | `bf` | `deferred` | `v0.9.2` | `-2` | `bf` | `no` | `@bloom, @read, @fast` |
+| `bf.insert` | `bf` | `deferred` | `v0.9.2` | `-3` | `bf` | `no` | `@bloom, @write, @slow` |
+| `bf.loadchunk` | `bf` | `deferred` | `v0.9.2` | `4` | `bf` | `no` | `@bloom, @write, @slow` |
+| `bf.madd` | `bf` | `deferred` | `v0.9.2` | `-2` | `bf` | `no` | `@bloom, @write, @slow` |
+| `bf.mexists` | `bf` | `deferred` | `v0.9.2` | `-2` | `bf` | `no` | `@bloom, @read, @slow` |
+| `bf.reserve` | `bf` | `deferred` | `v0.9.2` | `-4` | `bf` | `no` | `@bloom, @write, @fast` |
+| `bf.scandump` | `bf` | `deferred` | `v0.9.2` | `3` | `bf` | `no` | `@bloom, @write, @slow` |
+| `bgrewriteaof` | `server` | `partial` | `-` | `1` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `bgsave` | `server` | `partial` | `-` | `-1` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `bitcount` | `bitmap` | `deferred` | `v0.9.2` | `-2` | `-` | `no` | `@read, @bitmap, @slow` |
+| `bitfield` | `bitmap` | `deferred` | `v0.9.2` | `-2` | `-` | `no` | `@write, @bitmap, @slow` |
+| `bitfield_ro` | `bitmap` | `deferred` | `v0.9.2` | `-2` | `-` | `no` | `@read, @bitmap, @fast` |
+| `bitop` | `bitmap` | `deferred` | `v0.9.2` | `-4` | `-` | `no` | `@write, @bitmap, @slow` |
+| `bitpos` | `bitmap` | `deferred` | `v0.9.2` | `-3` | `-` | `no` | `@read, @bitmap, @slow` |
+| `blmove` | `list` | `deferred` | `v0.9.1` | `6` | `-` | `no` | `@write, @list, @slow, @blocking` |
+| `blmpop` | `list` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@write, @list, @slow, @blocking` |
+| `blpop` | `list` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@write, @list, @slow, @blocking` |
+| `brpop` | `list` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@write, @list, @slow, @blocking` |
+| `brpoplpush` | `list` | `deferred` | `v0.9.1` | `4` | `-` | `no` | `@write, @list, @slow, @blocking` |
+| `bzmpop` | `sorted-set` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@write, @sortedset, @slow, @blocking` |
+| `bzpopmax` | `sorted-set` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@write, @sortedset, @fast, @blocking` |
+| `bzpopmin` | `sorted-set` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@write, @sortedset, @fast, @blocking` |
+| `cf.add` | `cf` | `deferred` | `v0.9.2` | `3` | `cf` | `no` | `@cuckoo, @write, @slow` |
+| `cf.addnx` | `cf` | `deferred` | `v0.9.2` | `3` | `cf` | `no` | `@cuckoo, @write, @slow` |
+| `cf.count` | `cf` | `deferred` | `v0.9.2` | `3` | `cf` | `no` | `@cuckoo, @read, @slow` |
+| `cf.del` | `cf` | `deferred` | `v0.9.2` | `3` | `cf` | `no` | `@cuckoo, @write, @slow` |
+| `cf.exists` | `cf` | `deferred` | `v0.9.2` | `3` | `cf` | `no` | `@cuckoo, @read, @slow` |
+| `cf.info` | `cf` | `deferred` | `v0.9.2` | `2` | `cf` | `no` | `@cuckoo, @read, @fast` |
+| `cf.insert` | `cf` | `deferred` | `v0.9.2` | `-3` | `cf` | `no` | `@cuckoo, @write, @slow` |
+| `cf.insertnx` | `cf` | `deferred` | `v0.9.2` | `-3` | `cf` | `no` | `@cuckoo, @write, @slow` |
+| `cf.loadchunk` | `cf` | `deferred` | `v0.9.2` | `4` | `cf` | `no` | `@cuckoo, @write, @slow` |
+| `cf.mexists` | `cf` | `deferred` | `v0.9.2` | `-2` | `cf` | `no` | `@cuckoo, @read, @slow` |
+| `cf.reserve` | `cf` | `deferred` | `v0.9.2` | `-3` | `cf` | `no` | `@cuckoo, @write, @fast` |
+| `cf.scandump` | `cf` | `deferred` | `v0.9.2` | `3` | `cf` | `no` | `@cuckoo, @write, @slow` |
+| `client` | `connection` | `partial` | `-` | `-2` | `-` | `no` | `@slow` |
+| `client|caching` | `connection` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@slow, @connection` |
+| `client|getname` | `connection` | `partial` | `-` | `2` | `-` | `no` | `@slow, @connection` |
+| `client|getredir` | `connection` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@slow, @connection` |
+| `client|help` | `connection` | `full` | `-` | `2` | `-` | `no` | `@slow, @connection` |
+| `client|id` | `connection` | `full` | `-` | `2` | `-` | `no` | `@slow, @connection` |
+| `client|info` | `connection` | `partial` | `-` | `2` | `-` | `no` | `@slow, @connection` |
+| `client|kill` | `connection` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
+| `client|list` | `connection` | `partial` | `-` | `-2` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
+| `client|no-evict` | `connection` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
+| `client|no-touch` | `connection` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@slow, @connection` |
+| `client|pause` | `connection` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
+| `client|reply` | `connection` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@slow, @connection` |
+| `client|setinfo` | `connection` | `full` | `-` | `4` | `-` | `no` | `@slow, @connection` |
+| `client|setname` | `connection` | `partial` | `-` | `3` | `-` | `no` | `@slow, @connection` |
+| `client|tracking` | `connection` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@slow, @connection` |
+| `client|trackinginfo` | `connection` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@slow, @connection` |
+| `client|unblock` | `connection` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
+| `client|unpause` | `connection` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
+| `cluster` | `cluster` | `partial` | `-` | `-2` | `-` | `no` | `@slow` |
+| `cluster|addslots` | `cluster` | `standalone-error` | `v1.1.0` | `-3` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `cluster|addslotsrange` | `cluster` | `standalone-error` | `v1.1.0` | `-4` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `cluster|bumpepoch` | `cluster` | `standalone-error` | `v1.1.0` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `cluster|count-failure-reports` | `cluster` | `standalone-error` | `v1.1.0` | `3` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `cluster|countkeysinslot` | `cluster` | `standalone-error` | `v1.1.0` | `3` | `-` | `no` | `@slow` |
+| `cluster|delslots` | `cluster` | `standalone-error` | `v1.1.0` | `-3` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `cluster|delslotsrange` | `cluster` | `standalone-error` | `v1.1.0` | `-4` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `cluster|failover` | `cluster` | `standalone-error` | `v1.1.0` | `-2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `cluster|flushslots` | `cluster` | `standalone-error` | `v1.1.0` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `cluster|forget` | `cluster` | `standalone-error` | `v1.1.0` | `3` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `cluster|getkeysinslot` | `cluster` | `standalone-error` | `v1.1.0` | `4` | `-` | `no` | `@slow` |
+| `cluster|help` | `cluster` | `full` | `-` | `2` | `-` | `no` | `@slow` |
+| `cluster|info` | `cluster` | `partial` | `-` | `2` | `-` | `no` | `@slow` |
+| `cluster|keyslot` | `cluster` | `partial` | `-` | `3` | `-` | `no` | `@slow` |
+| `cluster|links` | `cluster` | `standalone-error` | `v1.1.0` | `2` | `-` | `no` | `@slow` |
+| `cluster|meet` | `cluster` | `partial` | `-` | `-4` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `cluster|migration` | `cluster` | `standalone-error` | `v1.1.0` | `-4` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `cluster|myid` | `cluster` | `standalone-error` | `v1.1.0` | `2` | `-` | `no` | `@slow` |
+| `cluster|myshardid` | `cluster` | `standalone-error` | `v1.1.0` | `2` | `-` | `no` | `@slow` |
+| `cluster|nodes` | `cluster` | `partial` | `-` | `2` | `-` | `no` | `@slow` |
+| `cluster|replicas` | `cluster` | `standalone-error` | `v1.1.0` | `3` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `cluster|replicate` | `cluster` | `standalone-error` | `v1.1.0` | `3` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `cluster|reset` | `cluster` | `standalone-error` | `v1.1.0` | `-2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `cluster|saveconfig` | `cluster` | `standalone-error` | `v1.1.0` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `cluster|set-config-epoch` | `cluster` | `standalone-error` | `v1.1.0` | `3` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `cluster|setslot` | `cluster` | `partial` | `-` | `-4` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `cluster|shards` | `cluster` | `standalone-error` | `v1.1.0` | `2` | `-` | `no` | `@slow` |
+| `cluster|slaves` | `cluster` | `standalone-error` | `v1.1.0` | `3` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `cluster|slot-stats` | `cluster` | `standalone-error` | `v1.1.0` | `-4` | `-` | `no` | `-` |
+| `cluster|slots` | `cluster` | `partial` | `-` | `2` | `-` | `no` | `@slow` |
+| `cms.incrby` | `cms` | `deferred` | `v0.9.2` | `-2` | `cms` | `no` | `@cms, @write` |
+| `cms.info` | `cms` | `deferred` | `v0.9.2` | `2` | `cms` | `no` | `@cms, @read, @fast` |
+| `cms.initbydim` | `cms` | `deferred` | `v0.9.2` | `4` | `cms` | `no` | `@cms, @write, @fast` |
+| `cms.initbyprob` | `cms` | `deferred` | `v0.9.2` | `4` | `cms` | `no` | `@cms, @write, @fast` |
+| `cms.merge` | `cms` | `deferred` | `v0.9.2` | `-3` | `cms` | `no` | `@cms, @write` |
+| `cms.query` | `cms` | `deferred` | `v0.9.2` | `-2` | `cms` | `no` | `@cms, @read` |
+| `command` | `server` | `partial` | `-` | `-1` | `-` | `no` | `@slow, @connection` |
+| `command|count` | `server` | `full` | `-` | `2` | `-` | `no` | `@slow, @connection` |
+| `command|docs` | `server` | `full` | `-` | `-2` | `-` | `no` | `@slow, @connection` |
+| `command|getkeys` | `server` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@slow, @connection` |
+| `command|getkeysandflags` | `server` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@slow, @connection` |
+| `command|help` | `server` | `full` | `-` | `2` | `-` | `no` | `@slow, @connection` |
+| `command|info` | `server` | `full` | `-` | `-2` | `-` | `no` | `@slow, @connection` |
+| `command|list` | `server` | `partial` | `-` | `-2` | `-` | `yes` | `@slow, @connection` |
+| `config` | `server` | `partial` | `-` | `-2` | `-` | `no` | `@slow` |
+| `config|get` | `server` | `partial` | `-` | `-3` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `config|help` | `server` | `full` | `-` | `2` | `-` | `no` | `@slow` |
+| `config|resetstat` | `server` | `full` | `-` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `config|rewrite` | `server` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `config|set` | `server` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `copy` | `generic` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@keyspace, @write, @slow` |
+| `dbsize` | `server` | `full` | `-` | `1` | `-` | `no` | `@keyspace, @read, @fast` |
+| `debug` | `server` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `decr` | `string` | `full` | `-` | `2` | `-` | `no` | `@write, @string, @fast` |
+| `decrby` | `string` | `full` | `-` | `3` | `-` | `no` | `@write, @string, @fast` |
+| `del` | `generic` | `full` | `-` | `-2` | `-` | `no` | `@keyspace, @write, @slow` |
+| `delex` | `string` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@write, @string, @fast` |
+| `digest` | `string` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@read, @string, @fast` |
+| `discard` | `transactions` | `full` | `-` | `1` | `-` | `no` | `@fast, @transaction` |
+| `dump` | `generic` | `full` | `-` | `2` | `-` | `no` | `@keyspace, @read, @slow` |
+| `echo` | `connection` | `full` | `-` | `2` | `-` | `no` | `@fast, @connection` |
+| `eval` | `scripting` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@slow, @scripting` |
+| `eval_ro` | `scripting` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@slow, @scripting` |
+| `evalsha` | `scripting` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@slow, @scripting` |
+| `evalsha_ro` | `scripting` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@slow, @scripting` |
+| `exec` | `transactions` | `full` | `-` | `1` | `-` | `no` | `@slow, @transaction` |
+| `exists` | `generic` | `full` | `-` | `-2` | `-` | `no` | `@keyspace, @read, @fast` |
+| `expire` | `generic` | `full` | `-` | `-3` | `-` | `no` | `@keyspace, @write, @fast` |
+| `expireat` | `generic` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@keyspace, @write, @fast` |
+| `expiretime` | `generic` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@keyspace, @read, @fast` |
+| `failover` | `server` | `deferred` | `v0.9.1` | `-1` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `fcall` | `scripting` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@slow, @scripting` |
+| `fcall_ro` | `scripting` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@slow, @scripting` |
+| `flushall` | `server` | `partial` | `-` | `-1` | `-` | `no` | `@keyspace, @write, @slow, @dangerous` |
+| `flushdb` | `server` | `partial` | `-` | `-1` | `-` | `no` | `@keyspace, @write, @slow, @dangerous` |
+| `ft._list` | `search` | `deferred` | `v0.9.2` | `0` | `ft` | `no` | `@admin, @search, @slow` |
+| `ft.aggregate` | `search` | `deferred` | `v0.9.2` | `-3` | `ft` | `no` | `@search, @read, @fast` |
+| `ft.aliasadd` | `search` | `deferred` | `v0.9.2` | `3` | `ft` | `no` | `@search` |
+| `ft.aliasdel` | `search` | `deferred` | `v0.9.2` | `2` | `ft` | `no` | `@search` |
+| `ft.aliasupdate` | `search` | `deferred` | `v0.9.2` | `3` | `ft` | `no` | `@search` |
+| `ft.alter` | `search` | `deferred` | `v0.9.2` | `-6` | `ft` | `no` | `@search` |
+| `ft.config|get` | `search` | `deferred` | `v0.9.2` | `2` | `ft` | `no` | `@admin, @search` |
+| `ft.config|help` | `search` | `deferred` | `v0.9.2` | `2` | `ft` | `no` | `@admin, @search` |
+| `ft.config|set` | `search` | `deferred` | `v0.9.2` | `3` | `ft` | `no` | `@admin, @search` |
+| `ft.create` | `search` | `deferred` | `v0.9.2` | `-3` | `ft` | `no` | `@search` |
+| `ft.cursor|del` | `search` | `deferred` | `v0.9.2` | `3` | `ft` | `no` | `@read, @search` |
+| `ft.cursor|read` | `search` | `deferred` | `v0.9.2` | `-3` | `ft` | `no` | `@read, @search` |
+| `ft.dictadd` | `search` | `deferred` | `v0.9.2` | `-2` | `ft` | `no` | `@search` |
+| `ft.dictdel` | `search` | `deferred` | `v0.9.2` | `-2` | `ft` | `no` | `@search` |
+| `ft.dictdump` | `search` | `deferred` | `v0.9.2` | `2` | `ft` | `no` | `@search` |
+| `ft.dropindex` | `search` | `deferred` | `v0.9.2` | `-2` | `ft` | `no` | `@dangerous, @search, @slow, @write` |
+| `ft.explain` | `search` | `deferred` | `v0.9.2` | `-3` | `ft` | `no` | `@search` |
+| `ft.explaincli` | `search` | `deferred` | `v0.9.2` | `-3` | `ft` | `no` | `@search` |
+| `ft.hybrid` | `search` | `deferred` | `v0.9.2` | `-7` | `ft` | `no` | `@read, @search` |
+| `ft.info` | `search` | `deferred` | `v0.9.2` | `2` | `ft` | `no` | `@search` |
+| `ft.profile` | `search` | `deferred` | `v0.9.2` | `-5` | `ft` | `no` | `@read, @search` |
+| `ft.search` | `search` | `deferred` | `v0.9.2` | `-3` | `ft` | `no` | `@read, @search` |
+| `ft.spellcheck` | `search` | `deferred` | `v0.9.2` | `-3` | `ft` | `no` | `@search` |
+| `ft.sugadd` | `suggestion` | `deferred` | `v0.9.2` | `-4` | `ft` | `no` | `@search, @write` |
+| `ft.sugdel` | `suggestion` | `deferred` | `v0.9.2` | `3` | `ft` | `no` | `@search, @write` |
+| `ft.sugget` | `suggestion` | `deferred` | `v0.9.2` | `-3` | `ft` | `no` | `@search` |
+| `ft.suglen` | `suggestion` | `deferred` | `v0.9.2` | `2` | `ft` | `no` | `@search` |
+| `ft.syndump` | `search` | `deferred` | `v0.9.2` | `2` | `ft` | `no` | `@search` |
+| `ft.synupdate` | `search` | `deferred` | `v0.9.2` | `-3` | `ft` | `no` | `@search` |
+| `ft.tagvals` | `search` | `deferred` | `v0.9.2` | `3` | `ft` | `no` | `@dangerous, @read, @search, @slow` |
+| `function` | `scripting` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@slow` |
+| `function|delete` | `scripting` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@write, @slow, @scripting` |
+| `function|dump` | `scripting` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@slow, @scripting` |
+| `function|flush` | `scripting` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@write, @slow, @scripting` |
+| `function|help` | `scripting` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@slow, @scripting` |
+| `function|kill` | `scripting` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@slow, @scripting` |
+| `function|list` | `scripting` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@slow, @scripting` |
+| `function|load` | `scripting` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@write, @slow, @scripting` |
+| `function|restore` | `scripting` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@write, @slow, @scripting` |
+| `function|stats` | `scripting` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@slow, @scripting` |
+| `geoadd` | `geo` | `deferred` | `v0.9.2` | `-5` | `-` | `no` | `@write, @geo, @slow` |
+| `geodist` | `geo` | `deferred` | `v0.9.2` | `-4` | `-` | `no` | `@read, @geo, @slow` |
+| `geohash` | `geo` | `deferred` | `v0.9.2` | `-2` | `-` | `no` | `@read, @geo, @slow` |
+| `geopos` | `geo` | `deferred` | `v0.9.2` | `-2` | `-` | `no` | `@read, @geo, @slow` |
+| `georadius` | `geo` | `deferred` | `v0.9.2` | `-6` | `-` | `no` | `@write, @geo, @slow` |
+| `georadius_ro` | `geo` | `deferred` | `v0.9.2` | `-6` | `-` | `no` | `@read, @geo, @slow` |
+| `georadiusbymember` | `geo` | `deferred` | `v0.9.2` | `-5` | `-` | `no` | `@write, @geo, @slow` |
+| `georadiusbymember_ro` | `geo` | `deferred` | `v0.9.2` | `-5` | `-` | `no` | `@read, @geo, @slow` |
+| `geosearch` | `geo` | `deferred` | `v0.9.2` | `-7` | `-` | `no` | `@read, @geo, @slow` |
+| `geosearchstore` | `geo` | `deferred` | `v0.9.2` | `-8` | `-` | `no` | `@write, @geo, @slow` |
+| `get` | `string` | `full` | `-` | `2` | `-` | `no` | `@read, @string, @fast` |
+| `getbit` | `bitmap` | `deferred` | `v0.9.2` | `3` | `-` | `no` | `@read, @bitmap, @fast` |
+| `getdel` | `string` | `full` | `-` | `2` | `-` | `no` | `@write, @string, @fast` |
+| `getex` | `string` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@write, @string, @fast` |
+| `getrange` | `string` | `full` | `-` | `4` | `-` | `no` | `@read, @string, @slow` |
+| `getset` | `string` | `full` | `-` | `3` | `-` | `no` | `@write, @string, @fast` |
+| `hdel` | `hash` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@write, @hash, @fast` |
+| `hello` | `connection` | `partial` | `-` | `-1` | `-` | `no` | `@fast, @connection` |
+| `hexists` | `hash` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@read, @hash, @fast` |
+| `hexpire` | `hash` | `deferred` | `v0.9.1` | `-6` | `-` | `no` | `@write, @hash, @fast` |
+| `hexpireat` | `hash` | `deferred` | `v0.9.1` | `-6` | `-` | `no` | `@write, @hash, @fast` |
+| `hexpiretime` | `hash` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@read, @hash, @fast` |
+| `hget` | `hash` | `full` | `-` | `3` | `-` | `no` | `@read, @hash, @fast` |
+| `hgetall` | `hash` | `full` | `-` | `2` | `-` | `no` | `@read, @hash, @slow` |
+| `hgetdel` | `hash` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@write, @hash, @fast` |
+| `hgetex` | `hash` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@write, @hash, @fast` |
+| `hincrby` | `hash` | `full` | `-` | `4` | `-` | `no` | `@write, @hash, @fast` |
+| `hincrbyfloat` | `hash` | `full` | `-` | `4` | `-` | `no` | `@write, @hash, @fast` |
+| `hkeys` | `hash` | `full` | `-` | `2` | `-` | `no` | `@read, @hash, @slow` |
+| `hlen` | `hash` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@read, @hash, @fast` |
+| `hmget` | `hash` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @hash, @fast` |
+| `hmset` | `hash` | `alias` | `-` | `-4` | `-` | `no` | `@write, @hash, @fast` |
+| `hotkeys` | `server` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@slow` |
+| `hotkeys|get` | `server` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `hotkeys|help` | `server` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@admin` |
+| `hotkeys|reset` | `server` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `hotkeys|start` | `server` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `hotkeys|stop` | `server` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `hpersist` | `hash` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@write, @hash, @fast` |
+| `hpexpire` | `hash` | `deferred` | `v0.9.1` | `-6` | `-` | `no` | `@write, @hash, @fast` |
+| `hpexpireat` | `hash` | `deferred` | `v0.9.1` | `-6` | `-` | `no` | `@write, @hash, @fast` |
+| `hpexpiretime` | `hash` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@read, @hash, @fast` |
+| `hpttl` | `hash` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@read, @hash, @fast` |
+| `hrandfield` | `hash` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@read, @hash, @slow` |
+| `hscan` | `hash` | `full` | `-` | `-3` | `-` | `yes` | `@read, @hash, @slow` |
+| `hset` | `hash` | `full` | `-` | `-4` | `-` | `no` | `@write, @hash, @fast` |
+| `hsetex` | `hash` | `deferred` | `v0.9.1` | `-6` | `-` | `no` | `@write, @hash, @fast` |
+| `hsetnx` | `hash` | `deferred` | `v0.9.1` | `4` | `-` | `no` | `@write, @hash, @fast` |
+| `hstrlen` | `hash` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@read, @hash, @fast` |
+| `httl` | `hash` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@read, @hash, @fast` |
+| `hvals` | `hash` | `full` | `-` | `2` | `-` | `no` | `@read, @hash, @slow` |
+| `incr` | `string` | `full` | `-` | `2` | `-` | `no` | `@write, @string, @fast` |
+| `incrby` | `string` | `full` | `-` | `3` | `-` | `no` | `@write, @string, @fast` |
+| `incrbyfloat` | `string` | `full` | `-` | `3` | `-` | `no` | `@write, @string, @fast` |
+| `info` | `server` | `partial` | `-` | `-1` | `-` | `no` | `@slow, @dangerous` |
+| `json.arrappend` | `json` | `deferred` | `v0.9.2` | `-3` | `json` | `no` | `@json, @write, @slow` |
+| `json.arrindex` | `json` | `deferred` | `v0.9.2` | `-4` | `json` | `no` | `@json, @read, @slow` |
+| `json.arrinsert` | `json` | `deferred` | `v0.9.2` | `-4` | `json` | `no` | `@json, @write, @slow` |
+| `json.arrlen` | `json` | `deferred` | `v0.9.2` | `-2` | `json` | `no` | `@json, @read, @slow` |
+| `json.arrpop` | `json` | `deferred` | `v0.9.2` | `-2` | `json` | `no` | `@json, @write, @slow` |
+| `json.arrtrim` | `json` | `deferred` | `v0.9.2` | `5` | `json` | `no` | `@json, @write, @slow` |
+| `json.clear` | `json` | `deferred` | `v0.9.2` | `-2` | `json` | `no` | `@json, @write, @slow` |
+| `json.debug` | `json` | `deferred` | `v0.9.2` | `0` | `json` | `no` | `-` |
+| `json.debug|help` | `json` | `deferred` | `v0.9.2` | `0` | `json` | `no` | `-` |
+| `json.debug|memory` | `json` | `deferred` | `v0.9.2` | `-2` | `json` | `no` | `@json, @read` |
+| `json.del` | `json` | `deferred` | `v0.9.2` | `-2` | `json` | `no` | `@json, @write, @slow` |
+| `json.forget` | `json` | `deferred` | `v0.9.2` | `-2` | `json` | `no` | `@json, @write, @slow` |
+| `json.get` | `json` | `deferred` | `v0.9.2` | `-2` | `json` | `no` | `@json, @read, @slow` |
+| `json.merge` | `json` | `deferred` | `v0.9.2` | `4` | `json` | `no` | `@json, @write, @slow` |
+| `json.mget` | `json` | `deferred` | `v0.9.2` | `-2` | `json` | `no` | `@json, @read, @slow` |
+| `json.mset` | `json` | `deferred` | `v0.9.2` | `-1` | `json` | `no` | `@json, @write, @slow` |
+| `json.numincrby` | `json` | `deferred` | `v0.9.2` | `4` | `json` | `no` | `@json, @write, @slow` |
+| `json.nummultby` | `json` | `deferred` | `v0.9.2` | `4` | `json` | `no` | `@json, @write, @slow` |
+| `json.objkeys` | `json` | `deferred` | `v0.9.2` | `-2` | `json` | `no` | `@json, @read, @slow` |
+| `json.objlen` | `json` | `deferred` | `v0.9.2` | `-2` | `json` | `no` | `@json, @read, @slow` |
+| `json.resp` | `json` | `deferred` | `v0.9.2` | `-2` | `json` | `no` | `@json, @read, @slow` |
+| `json.set` | `json` | `deferred` | `v0.9.2` | `-4` | `json` | `no` | `@json, @write, @slow` |
+| `json.strappend` | `json` | `deferred` | `v0.9.2` | `-3` | `json` | `no` | `@json, @write, @slow` |
+| `json.strlen` | `json` | `deferred` | `v0.9.2` | `-2` | `json` | `no` | `@json, @read, @slow` |
+| `json.toggle` | `json` | `deferred` | `v0.9.2` | `3` | `json` | `no` | `@json, @write, @slow` |
+| `json.type` | `json` | `deferred` | `v0.9.2` | `-2` | `json` | `no` | `@json, @read, @slow` |
+| `keys` | `generic` | `deferred` | `v0.9.1` | `2` | `-` | `yes` | `@keyspace, @read, @slow, @dangerous` |
+| `lastsave` | `server` | `full` | `-` | `1` | `-` | `no` | `@admin, @fast, @dangerous` |
+| `latency` | `server` | `deferred` | `v0.9.3` | `-2` | `-` | `no` | `@slow` |
+| `latency|doctor` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `latency|graph` | `server` | `deferred` | `v0.9.3` | `3` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `latency|help` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@slow` |
+| `latency|histogram` | `server` | `deferred` | `v0.9.3` | `-2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `latency|history` | `server` | `deferred` | `v0.9.3` | `3` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `latency|latest` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `latency|reset` | `server` | `deferred` | `v0.9.3` | `-2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `lcs` | `string` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @string, @slow` |
+| `lindex` | `list` | `full` | `-` | `3` | `-` | `no` | `@read, @list, @slow` |
+| `linsert` | `list` | `full` | `-` | `5` | `-` | `no` | `@write, @list, @slow` |
+| `llen` | `list` | `full` | `-` | `2` | `-` | `no` | `@read, @list, @fast` |
+| `lmove` | `list` | `deferred` | `v0.9.1` | `5` | `-` | `no` | `@write, @list, @slow` |
+| `lmpop` | `list` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@write, @list, @slow` |
+| `lolwut` | `server` | `deferred` | `v0.9.1` | `-1` | `-` | `no` | `@read, @fast` |
+| `lpop` | `list` | `full` | `-` | `-2` | `-` | `no` | `@write, @list, @fast` |
+| `lpos` | `list` | `full` | `-` | `-3` | `-` | `no` | `@read, @list, @slow` |
+| `lpush` | `list` | `full` | `-` | `-3` | `-` | `no` | `@write, @list, @fast` |
+| `lpushx` | `list` | `full` | `-` | `-3` | `-` | `no` | `@write, @list, @fast` |
+| `lrange` | `list` | `full` | `-` | `4` | `-` | `no` | `@read, @list, @slow` |
+| `lrem` | `list` | `full` | `-` | `4` | `-` | `no` | `@write, @list, @slow` |
+| `lset` | `list` | `full` | `-` | `4` | `-` | `no` | `@write, @list, @slow` |
+| `ltrim` | `list` | `full` | `-` | `4` | `-` | `no` | `@write, @list, @slow` |
+| `memory` | `server` | `deferred` | `v0.9.3` | `-2` | `-` | `no` | `@slow` |
+| `memory|doctor` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@slow` |
+| `memory|help` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@slow` |
+| `memory|malloc-stats` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@slow` |
+| `memory|purge` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@slow` |
+| `memory|stats` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@slow` |
+| `memory|usage` | `server` | `deferred` | `v0.9.3` | `-3` | `-` | `no` | `@read, @slow` |
+| `mget` | `string` | `full` | `-` | `-2` | `-` | `no` | `@read, @string, @fast` |
+| `migrate` | `generic` | `deferred` | `v0.9.1` | `-6` | `-` | `no` | `@keyspace, @write, @slow, @dangerous` |
+| `module` | `server` | `deferred` | `v0.9.3` | `-2` | `-` | `no` | `@slow` |
+| `module|help` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@slow` |
+| `module|list` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `module|load` | `server` | `deferred` | `v0.9.3` | `-3` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `module|loadex` | `server` | `deferred` | `v0.9.3` | `-3` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `module|unload` | `server` | `deferred` | `v0.9.3` | `3` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `monitor` | `server` | `deferred` | `v0.9.3` | `1` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `move` | `generic` | `partial` | `-` | `3` | `-` | `no` | `@keyspace, @write, @fast` |
+| `mset` | `string` | `full` | `-` | `-3` | `-` | `no` | `@write, @string, @slow` |
+| `msetex` | `string` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@write, @string, @slow` |
+| `msetnx` | `string` | `full` | `-` | `-3` | `-` | `no` | `@write, @string, @slow` |
+| `multi` | `transactions` | `full` | `-` | `1` | `-` | `no` | `@fast, @transaction` |
+| `object` | `generic` | `partial` | `-` | `-2` | `-` | `no` | `@slow` |
+| `object|encoding` | `generic` | `full` | `-` | `3` | `-` | `no` | `@keyspace, @read, @slow` |
+| `object|freq` | `generic` | `full` | `-` | `3` | `-` | `no` | `@keyspace, @read, @slow` |
+| `object|help` | `generic` | `full` | `-` | `2` | `-` | `no` | `@keyspace, @slow` |
+| `object|idletime` | `generic` | `full` | `-` | `3` | `-` | `no` | `@keyspace, @read, @slow` |
+| `object|refcount` | `generic` | `full` | `-` | `3` | `-` | `no` | `@keyspace, @read, @slow` |
+| `persist` | `generic` | `full` | `-` | `2` | `-` | `no` | `@keyspace, @write, @fast` |
+| `pexpire` | `generic` | `full` | `-` | `-3` | `-` | `no` | `@keyspace, @write, @fast` |
+| `pexpireat` | `generic` | `full` | `-` | `-3` | `-` | `no` | `@keyspace, @write, @fast` |
+| `pexpiretime` | `generic` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@keyspace, @read, @fast` |
+| `pfadd` | `hyperloglog` | `deferred` | `v0.9.2` | `-2` | `-` | `no` | `@write, @hyperloglog, @fast` |
+| `pfcount` | `hyperloglog` | `deferred` | `v0.9.2` | `-2` | `-` | `no` | `@read, @hyperloglog, @slow` |
+| `pfdebug` | `hyperloglog` | `deferred` | `v0.9.2` | `3` | `-` | `no` | `@write, @hyperloglog, @admin, @slow, @dangerous` |
+| `pfmerge` | `hyperloglog` | `deferred` | `v0.9.2` | `-2` | `-` | `no` | `@write, @hyperloglog, @slow` |
+| `pfselftest` | `hyperloglog` | `deferred` | `v0.9.2` | `1` | `-` | `no` | `@hyperloglog, @admin, @slow, @dangerous` |
+| `ping` | `connection` | `deferred` | `v0.9.1` | `-1` | `-` | `no` | `@fast, @connection` |
+| `psetex` | `string` | `deferred` | `v0.9.1` | `4` | `-` | `no` | `@write, @string, @slow` |
+| `psubscribe` | `pubsub` | `deferred` | `v0.9.1` | `-2` | `-` | `yes` | `@pubsub, @slow` |
+| `psync` | `server` | `partial` | `-` | `-3` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `pttl` | `generic` | `full` | `-` | `2` | `-` | `no` | `@keyspace, @read, @fast` |
+| `publish` | `pubsub` | `partial` | `-` | `3` | `-` | `no` | `@pubsub, @fast` |
+| `pubsub` | `pubsub` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@slow` |
+| `pubsub|channels` | `pubsub` | `deferred` | `v0.9.1` | `-2` | `-` | `yes` | `@pubsub, @slow` |
+| `pubsub|help` | `pubsub` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@slow` |
+| `pubsub|numpat` | `pubsub` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@pubsub, @slow` |
+| `pubsub|numsub` | `pubsub` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@pubsub, @slow` |
+| `pubsub|shardchannels` | `pubsub` | `deferred` | `v0.9.1` | `-2` | `-` | `yes` | `@pubsub, @slow` |
+| `pubsub|shardnumsub` | `pubsub` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@pubsub, @slow` |
+| `punsubscribe` | `pubsub` | `deferred` | `v0.9.1` | `-1` | `-` | `yes` | `@pubsub, @slow` |
+| `quit` | `connection` | `partial` | `-` | `-1` | `-` | `no` | `@fast, @connection` |
+| `randomkey` | `generic` | `deferred` | `v0.9.1` | `1` | `-` | `no` | `@keyspace, @read, @slow` |
+| `readonly` | `cluster` | `standalone-error` | `v1.1.0` | `1` | `-` | `no` | `@fast, @connection` |
+| `readwrite` | `cluster` | `standalone-error` | `v1.1.0` | `1` | `-` | `no` | `@fast, @connection` |
+| `rename` | `generic` | `full` | `-` | `3` | `-` | `no` | `@keyspace, @write, @slow` |
+| `renamenx` | `generic` | `full` | `-` | `3` | `-` | `no` | `@keyspace, @write, @fast` |
+| `replconf` | `server` | `deferred` | `v0.9.1` | `-1` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `replicaof` | `server` | `partial` | `-` | `3` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `reset` | `connection` | `deferred` | `v0.9.1` | `1` | `-` | `no` | `@fast, @connection` |
+| `restore` | `generic` | `partial` | `-` | `-4` | `-` | `no` | `@keyspace, @write, @slow, @dangerous` |
+| `restore-asking` | `server` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@keyspace, @write, @slow, @dangerous` |
+| `role` | `server` | `deferred` | `v0.9.1` | `1` | `-` | `no` | `@admin, @fast, @dangerous` |
+| `rpop` | `list` | `full` | `-` | `-2` | `-` | `no` | `@write, @list, @fast` |
+| `rpoplpush` | `list` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@write, @list, @slow` |
+| `rpush` | `list` | `full` | `-` | `-3` | `-` | `no` | `@write, @list, @fast` |
+| `rpushx` | `list` | `full` | `-` | `-3` | `-` | `no` | `@write, @list, @fast` |
+| `sadd` | `set` | `full` | `-` | `-3` | `-` | `no` | `@write, @set, @fast` |
+| `save` | `server` | `partial` | `-` | `1` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `scan` | `generic` | `full` | `-` | `-2` | `-` | `yes` | `@keyspace, @read, @slow` |
+| `scard` | `set` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@read, @set, @fast` |
+| `script` | `scripting` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@slow` |
+| `script|debug` | `scripting` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@slow, @scripting` |
+| `script|exists` | `scripting` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@slow, @scripting` |
+| `script|flush` | `scripting` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@slow, @scripting` |
+| `script|help` | `scripting` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@slow, @scripting` |
+| `script|kill` | `scripting` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@slow, @scripting` |
+| `script|load` | `scripting` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@slow, @scripting` |
+| `sdiff` | `set` | `full` | `-` | `-2` | `-` | `no` | `@read, @set, @slow` |
+| `sdiffstore` | `set` | `full` | `-` | `-3` | `-` | `no` | `@write, @set, @slow` |
+| `select` | `connection` | `partial` | `-` | `2` | `-` | `no` | `@fast, @connection` |
+| `set` | `string` | `full` | `-` | `-3` | `-` | `no` | `@write, @string, @slow` |
+| `setbit` | `bitmap` | `deferred` | `v0.9.2` | `4` | `-` | `no` | `@write, @bitmap, @slow` |
+| `setex` | `string` | `full` | `-` | `4` | `-` | `no` | `@write, @string, @slow` |
+| `setnx` | `string` | `full` | `-` | `3` | `-` | `no` | `@write, @string, @fast` |
+| `setrange` | `string` | `full` | `-` | `4` | `-` | `no` | `@write, @string, @slow` |
+| `shutdown` | `server` | `full` | `-` | `-1` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `sinter` | `set` | `full` | `-` | `-2` | `-` | `no` | `@read, @set, @slow` |
+| `sintercard` | `set` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @set, @slow` |
+| `sinterstore` | `set` | `full` | `-` | `-3` | `-` | `no` | `@write, @set, @slow` |
+| `sismember` | `set` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@read, @set, @fast` |
+| `slaveof` | `server` | `alias` | `-` | `3` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `slowlog` | `server` | `deferred` | `v0.9.3` | `-2` | `-` | `no` | `@slow` |
+| `slowlog|get` | `server` | `deferred` | `v0.9.3` | `-2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `slowlog|help` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@slow` |
+| `slowlog|len` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `slowlog|reset` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `smembers` | `set` | `full` | `-` | `2` | `-` | `no` | `@read, @set, @slow` |
+| `smismember` | `set` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @set, @fast` |
+| `smove` | `set` | `deferred` | `v0.9.1` | `4` | `-` | `no` | `@write, @set, @fast` |
+| `sort` | `generic` | `partial` | `-` | `-2` | `-` | `yes` | `@write, @set, @sortedset, @list, @slow, @dangerous` |
+| `sort_ro` | `generic` | `deferred` | `v0.9.1` | `-2` | `-` | `yes` | `@read, @set, @sortedset, @list, @slow, @dangerous` |
+| `spop` | `set` | `full` | `-` | `-2` | `-` | `no` | `@write, @set, @fast` |
+| `spublish` | `pubsub` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@pubsub, @fast` |
+| `srandmember` | `set` | `full` | `-` | `-2` | `-` | `no` | `@read, @set, @slow` |
+| `srem` | `set` | `full` | `-` | `-3` | `-` | `no` | `@write, @set, @fast` |
+| `sscan` | `set` | `deferred` | `v0.9.1` | `-3` | `-` | `yes` | `@read, @set, @slow` |
+| `ssubscribe` | `pubsub` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@pubsub, @slow` |
+| `strlen` | `string` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@read, @string, @fast` |
+| `subscribe` | `pubsub` | `partial` | `-` | `-2` | `-` | `no` | `@pubsub, @slow` |
+| `substr` | `string` | `alias` | `-` | `4` | `-` | `no` | `@read, @string, @slow` |
+| `sunion` | `set` | `full` | `-` | `-2` | `-` | `no` | `@read, @set, @slow` |
+| `sunionstore` | `set` | `full` | `-` | `-3` | `-` | `no` | `@write, @set, @slow` |
+| `sunsubscribe` | `pubsub` | `deferred` | `v0.9.1` | `-1` | `-` | `no` | `@pubsub, @slow` |
+| `swapdb` | `server` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@keyspace, @write, @fast, @dangerous` |
+| `sync` | `server` | `deferred` | `v0.9.1` | `1` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `tdigest.add` | `tdigest` | `deferred` | `v0.9.2` | `-2` | `tdigest` | `no` | `@tdigest, @write, @slow` |
+| `tdigest.byrank` | `tdigest` | `deferred` | `v0.9.2` | `-2` | `tdigest` | `no` | `@tdigest, @read` |
+| `tdigest.byrevrank` | `tdigest` | `deferred` | `v0.9.2` | `-2` | `tdigest` | `no` | `@tdigest, @read` |
+| `tdigest.cdf` | `tdigest` | `deferred` | `v0.9.2` | `-2` | `tdigest` | `no` | `@tdigest, @read` |
+| `tdigest.create` | `tdigest` | `deferred` | `v0.9.2` | `-2` | `tdigest` | `no` | `@tdigest, @write` |
+| `tdigest.info` | `tdigest` | `deferred` | `v0.9.2` | `2` | `tdigest` | `no` | `@tdigest, @read` |
+| `tdigest.max` | `tdigest` | `deferred` | `v0.9.2` | `2` | `tdigest` | `no` | `@tdigest, @read, @fast` |
+| `tdigest.merge` | `tdigest` | `deferred` | `v0.9.2` | `-3` | `tdigest` | `no` | `@tdigest, @write, @slow` |
+| `tdigest.min` | `tdigest` | `deferred` | `v0.9.2` | `2` | `tdigest` | `no` | `@tdigest, @read, @fast` |
+| `tdigest.quantile` | `tdigest` | `deferred` | `v0.9.2` | `-2` | `tdigest` | `no` | `@tdigest, @read` |
+| `tdigest.rank` | `tdigest` | `deferred` | `v0.9.2` | `-2` | `tdigest` | `no` | `@tdigest, @read` |
+| `tdigest.reset` | `tdigest` | `deferred` | `v0.9.2` | `2` | `tdigest` | `no` | `@tdigest, @write, @fast` |
+| `tdigest.revrank` | `tdigest` | `deferred` | `v0.9.2` | `-2` | `tdigest` | `no` | `@tdigest, @read` |
+| `tdigest.trimmed_mean` | `tdigest` | `deferred` | `v0.9.2` | `4` | `tdigest` | `no` | `@tdigest, @read` |
+| `time` | `server` | `deferred` | `v0.9.1` | `1` | `-` | `no` | `@fast` |
+| `topk.add` | `topk` | `deferred` | `v0.9.2` | `-2` | `topk` | `no` | `@topk, @write, @slow` |
+| `topk.count` | `topk` | `deferred` | `v0.9.2` | `-2` | `topk` | `no` | `@topk, @read, @slow` |
+| `topk.incrby` | `topk` | `deferred` | `v0.9.2` | `-2` | `topk` | `no` | `@topk, @write, @slow` |
+| `topk.info` | `topk` | `deferred` | `v0.9.2` | `2` | `topk` | `no` | `@topk, @read, @fast` |
+| `topk.list` | `topk` | `deferred` | `v0.9.2` | `-2` | `topk` | `no` | `@topk, @read, @slow` |
+| `topk.query` | `topk` | `deferred` | `v0.9.2` | `-2` | `topk` | `no` | `@topk, @read, @slow` |
+| `topk.reserve` | `topk` | `deferred` | `v0.9.2` | `-3` | `topk` | `no` | `@topk, @write, @fast` |
+| `touch` | `generic` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@keyspace, @read, @fast` |
+| `ts.add` | `timeseries` | `deferred` | `v0.9.2` | `-4` | `ts` | `no` | `@timeseries, @write, @slow` |
+| `ts.alter` | `timeseries` | `deferred` | `v0.9.2` | `-2` | `ts` | `no` | `@timeseries, @write, @slow` |
+| `ts.create` | `timeseries` | `deferred` | `v0.9.2` | `-2` | `ts` | `no` | `@timeseries, @write, @fast` |
+| `ts.createrule` | `timeseries` | `deferred` | `v0.9.2` | `-6` | `ts` | `no` | `@timeseries, @write, @fast` |
+| `ts.decrby` | `timeseries` | `deferred` | `v0.9.2` | `-3` | `ts` | `no` | `@timeseries, @write, @slow` |
+| `ts.del` | `timeseries` | `deferred` | `v0.9.2` | `4` | `ts` | `no` | `@timeseries, @write, @slow` |
+| `ts.deleterule` | `timeseries` | `deferred` | `v0.9.2` | `3` | `ts` | `no` | `@timeseries, @write, @fast` |
+| `ts.get` | `timeseries` | `deferred` | `v0.9.2` | `-2` | `ts` | `no` | `@timeseries, @read, @fast` |
+| `ts.incrby` | `timeseries` | `deferred` | `v0.9.2` | `-3` | `ts` | `no` | `@timeseries, @write, @slow` |
+| `ts.info` | `timeseries` | `deferred` | `v0.9.2` | `-2` | `ts` | `no` | `@timeseries, @read, @fast` |
+| `ts.madd` | `timeseries` | `deferred` | `v0.9.2` | `-1` | `ts` | `no` | `@timeseries, @write, @slow` |
+| `ts.mget` | `timeseries` | `deferred` | `v0.9.2` | `-1` | `ts` | `no` | `@timeseries, @read, @slow` |
+| `ts.mrange` | `timeseries` | `deferred` | `v0.9.2` | `-3` | `ts` | `no` | `@timeseries, @read, @slow` |
+| `ts.mrevrange` | `timeseries` | `deferred` | `v0.9.2` | `-3` | `ts` | `no` | `@timeseries, @read, @slow` |
+| `ts.queryindex` | `timeseries` | `deferred` | `v0.9.2` | `-1` | `ts` | `no` | `@timeseries, @read, @slow` |
+| `ts.range` | `timeseries` | `deferred` | `v0.9.2` | `-4` | `ts` | `no` | `@timeseries, @read, @slow` |
+| `ts.revrange` | `timeseries` | `deferred` | `v0.9.2` | `-4` | `ts` | `no` | `@timeseries, @read, @slow` |
+| `ttl` | `generic` | `full` | `-` | `2` | `-` | `no` | `@keyspace, @read, @fast` |
+| `type` | `generic` | `full` | `-` | `2` | `-` | `no` | `@keyspace, @read, @fast` |
+| `unlink` | `generic` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@keyspace, @write, @fast` |
+| `unsubscribe` | `pubsub` | `partial` | `-` | `-1` | `-` | `no` | `@pubsub, @slow` |
+| `unwatch` | `transactions` | `full` | `-` | `1` | `-` | `no` | `@fast, @transaction` |
+| `vadd` | `vector_set` | `deferred` | `v0.9.2` | `0` | `vector_set` | `no` | `-` |
+| `vcard` | `vector_set` | `deferred` | `v0.9.2` | `0` | `vector_set` | `no` | `-` |
+| `vdim` | `vector_set` | `deferred` | `v0.9.2` | `0` | `vector_set` | `no` | `-` |
+| `vemb` | `vector_set` | `deferred` | `v0.9.2` | `0` | `vector_set` | `no` | `-` |
+| `vgetattr` | `vector_set` | `deferred` | `v0.9.2` | `0` | `vector_set` | `no` | `-` |
+| `vinfo` | `vector_set` | `deferred` | `v0.9.2` | `0` | `vector_set` | `no` | `-` |
+| `vismember` | `vector_set` | `deferred` | `v0.9.2` | `3` | `vector_set` | `no` | `-` |
+| `vlinks` | `vector_set` | `deferred` | `v0.9.2` | `0` | `vector_set` | `no` | `-` |
+| `vrandmember` | `vector_set` | `deferred` | `v0.9.2` | `0` | `vector_set` | `no` | `-` |
+| `vrange` | `vector_set` | `deferred` | `v0.9.2` | `-4` | `vector_set` | `no` | `-` |
+| `vrem` | `vector_set` | `deferred` | `v0.9.2` | `0` | `vector_set` | `no` | `-` |
+| `vsetattr` | `vector_set` | `deferred` | `v0.9.2` | `0` | `vector_set` | `no` | `-` |
+| `vsim` | `vector_set` | `deferred` | `v0.9.2` | `0` | `vector_set` | `no` | `-` |
+| `wait` | `generic` | `partial` | `-` | `3` | `-` | `no` | `@slow, @blocking, @connection` |
+| `waitaof` | `generic` | `deferred` | `v0.9.1` | `4` | `-` | `no` | `@slow, @blocking, @connection` |
+| `watch` | `transactions` | `full` | `-` | `-2` | `-` | `no` | `@fast, @transaction` |
+| `xack` | `stream` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@write, @stream, @fast` |
+| `xackdel` | `stream` | `deferred` | `v0.9.1` | `-6` | `-` | `no` | `@write, @stream, @fast` |
+| `xadd` | `stream` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@write, @stream, @fast` |
+| `xautoclaim` | `stream` | `deferred` | `v0.9.1` | `-6` | `-` | `no` | `@write, @stream, @fast` |
+| `xcfgset` | `stream` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@write, @stream, @fast` |
+| `xclaim` | `stream` | `deferred` | `v0.9.1` | `-6` | `-` | `no` | `@write, @stream, @fast` |
+| `xdel` | `stream` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@write, @stream, @fast` |
+| `xdelex` | `stream` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@write, @stream, @fast` |
+| `xgroup` | `stream` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@slow` |
+| `xgroup|create` | `stream` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@write, @stream, @slow` |
+| `xgroup|createconsumer` | `stream` | `deferred` | `v0.9.1` | `5` | `-` | `no` | `@write, @stream, @slow` |
+| `xgroup|delconsumer` | `stream` | `deferred` | `v0.9.1` | `5` | `-` | `no` | `@write, @stream, @slow` |
+| `xgroup|destroy` | `stream` | `deferred` | `v0.9.1` | `4` | `-` | `no` | `@write, @stream, @slow` |
+| `xgroup|help` | `stream` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@stream, @slow` |
+| `xgroup|setid` | `stream` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@write, @stream, @slow` |
+| `xinfo` | `stream` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@slow` |
+| `xinfo|consumers` | `stream` | `deferred` | `v0.9.1` | `4` | `-` | `no` | `@read, @stream, @slow` |
+| `xinfo|groups` | `stream` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@read, @stream, @slow` |
+| `xinfo|help` | `stream` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@stream, @slow` |
+| `xinfo|stream` | `stream` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @stream, @slow` |
+| `xlen` | `stream` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@read, @stream, @fast` |
+| `xpending` | `stream` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @stream, @slow` |
+| `xrange` | `stream` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@read, @stream, @slow` |
+| `xread` | `stream` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@read, @stream, @slow, @blocking` |
+| `xreadgroup` | `stream` | `deferred` | `v0.9.1` | `-7` | `-` | `no` | `@write, @stream, @slow, @blocking` |
+| `xrevrange` | `stream` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@read, @stream, @slow` |
+| `xsetid` | `stream` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@write, @stream, @fast` |
+| `xtrim` | `stream` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@write, @stream, @slow` |
+| `zadd` | `sorted-set` | `full` | `-` | `-4` | `-` | `no` | `@write, @sortedset, @fast` |
+| `zcard` | `sorted-set` | `full` | `-` | `2` | `-` | `no` | `@read, @sortedset, @fast` |
+| `zcount` | `sorted-set` | `full` | `-` | `4` | `-` | `no` | `@read, @sortedset, @fast` |
+| `zdiff` | `sorted-set` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @sortedset, @slow` |
+| `zdiffstore` | `sorted-set` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@write, @sortedset, @slow` |
+| `zincrby` | `sorted-set` | `full` | `-` | `4` | `-` | `no` | `@write, @sortedset, @fast` |
+| `zinter` | `sorted-set` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @sortedset, @slow` |
+| `zintercard` | `sorted-set` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @sortedset, @slow` |
+| `zinterstore` | `sorted-set` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@write, @sortedset, @slow` |
+| `zlexcount` | `sorted-set` | `deferred` | `v0.9.1` | `4` | `-` | `no` | `@read, @sortedset, @fast` |
+| `zmpop` | `sorted-set` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@write, @sortedset, @slow` |
+| `zmscore` | `sorted-set` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @sortedset, @fast` |
+| `zpopmax` | `sorted-set` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@write, @sortedset, @fast` |
+| `zpopmin` | `sorted-set` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@write, @sortedset, @fast` |
+| `zrandmember` | `sorted-set` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@read, @sortedset, @slow` |
+| `zrange` | `sorted-set` | `full` | `-` | `-4` | `-` | `no` | `@read, @sortedset, @slow` |
+| `zrangebylex` | `sorted-set` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@read, @sortedset, @slow` |
+| `zrangebyscore` | `sorted-set` | `full` | `-` | `-4` | `-` | `no` | `@read, @sortedset, @slow` |
+| `zrangestore` | `sorted-set` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@write, @sortedset, @slow` |
+| `zrank` | `sorted-set` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @sortedset, @fast` |
+| `zrem` | `sorted-set` | `full` | `-` | `-3` | `-` | `no` | `@write, @sortedset, @fast` |
+| `zremrangebylex` | `sorted-set` | `deferred` | `v0.9.1` | `4` | `-` | `no` | `@write, @sortedset, @slow` |
+| `zremrangebyrank` | `sorted-set` | `full` | `-` | `4` | `-` | `no` | `@write, @sortedset, @slow` |
+| `zremrangebyscore` | `sorted-set` | `full` | `-` | `4` | `-` | `no` | `@write, @sortedset, @slow` |
+| `zrevrange` | `sorted-set` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@read, @sortedset, @slow` |
+| `zrevrangebylex` | `sorted-set` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@read, @sortedset, @slow` |
+| `zrevrangebyscore` | `sorted-set` | `full` | `-` | `-4` | `-` | `no` | `@read, @sortedset, @slow` |
+| `zrevrank` | `sorted-set` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @sortedset, @fast` |
+| `zscan` | `sorted-set` | `full` | `-` | `-3` | `-` | `yes` | `@read, @sortedset, @slow` |
+| `zscore` | `sorted-set` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@read, @sortedset, @fast` |
+| `zunion` | `sorted-set` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @sortedset, @slow` |
+| `zunionstore` | `sorted-set` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@write, @sortedset, @slow` |

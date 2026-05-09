@@ -47,6 +47,10 @@
 - Transactions
 - Vector set
 
+当前主线实现说明：
+
+- 运行时目录当前由 `src/command/catalog_generated*` 提供，并通过 `docs/redis-uya-command-matrix.md` 暴露人类可读矩阵
+
 ## 3. 兼容矩阵状态
 
 每个官方命令名必须在兼容矩阵中有且只有一个状态：

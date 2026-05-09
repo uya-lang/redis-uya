@@ -1294,6 +1294,7 @@ fn connection_transaction_execute_at(
     rewrite_failed: &bool,
     protocol_version: i32,
 ) CommandReply {
+    runtime.protocol_version = protocol_version;
     var raw: Sds = sds_empty() catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
@@ -1885,6 +1886,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_in
     rewrite_failed: &bool,
     zero_copy_bulk: bool,
 ) !ConnectionProcessResult {
+    runtime.protocol_version = tx.protocol_version;
     const parsed_result: !RespParseResult = connection_parse_input_for_protocol(tx, input);
     const parsed: RespParseResult = parsed_result catch |err| {
         if err == error.RespIncomplete {

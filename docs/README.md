@@ -1,7 +1,7 @@
 # redis-uya 文档
 
-> 版本: v0.8.1
-> 日期: 2026-04-30
+> 版本: v0.9.0
+> 日期: 2026-05-09
 
 ## 文档索引
 
@@ -25,11 +25,13 @@
 - [release-v0.7.0](./redis-uya-release-v0.7.0.md)
 - [release-v0.8.0](./redis-uya-release-v0.8.0.md)
 - [release-v0.8.1](./redis-uya-release-v0.8.1.md)
+- [release-v0.9.0](./redis-uya-release-v0.9.0.md)
 - [test-report-v0.1.0](./redis-uya-test-report-v0.1.0.md)
 - [test-report-v0.6.0](./redis-uya-test-report-v0.6.0.md)
 - [test-report-v0.7.0](./redis-uya-test-report-v0.7.0.md)
 - [test-report-v0.8.0](./redis-uya-test-report-v0.8.0.md)
 - [test-report-v0.8.1](./redis-uya-test-report-v0.8.1.md)
+- [test-report-v0.9.0](./redis-uya-test-report-v0.9.0.md)
 
 ## 文档关系
 
@@ -45,9 +47,9 @@
 10. `redis-uya-api.md` 记录当前命令与错误语义。
 11. `redis-uya-architecture.md` 记录当前实现架构与数据路径。
 12. `redis-uya-release-v0.1.0.md` 固化 `v0.1.0` 的发布边界、验证入口与已知限制。
-13. `redis-uya-release-v0.2.0.md`、`redis-uya-release-v0.3.0.md`、`redis-uya-release-v0.4.0.md`、`redis-uya-release-v0.5.0.md`、`redis-uya-release-v0.6.0.md`、`redis-uya-release-v0.7.0.md`、`redis-uya-release-v0.8.0.md`、`redis-uya-release-v0.8.1.md` 固化各阶段收口时的版本边界。
-14. `redis-uya-test-report-v0.1.0.md`、`redis-uya-test-report-v0.6.0.md`、`redis-uya-test-report-v0.7.0.md`、`redis-uya-test-report-v0.8.0.md`、`redis-uya-test-report-v0.8.1.md` 固化对应阶段实际执行的测试和基准结果。
+13. `redis-uya-release-v0.2.0.md`、`redis-uya-release-v0.3.0.md`、`redis-uya-release-v0.4.0.md`、`redis-uya-release-v0.5.0.md`、`redis-uya-release-v0.6.0.md`、`redis-uya-release-v0.7.0.md`、`redis-uya-release-v0.8.0.md`、`redis-uya-release-v0.8.1.md`、`redis-uya-release-v0.9.0.md` 固化各阶段收口时的版本边界。
+14. `redis-uya-test-report-v0.1.0.md`、`redis-uya-test-report-v0.6.0.md`、`redis-uya-test-report-v0.7.0.md`、`redis-uya-test-report-v0.8.0.md`、`redis-uya-test-report-v0.8.1.md`、`redis-uya-test-report-v0.9.0.md` 固化对应阶段实际执行的测试和基准结果。
 
 ## 当前阶段
 
-项目当前已完成 `v0.8.1` 写路径性能修复：在 `v0.8.0` 核心路径性能基线之上，新增 `make benchmark-v0.8.1` 和 `benchmarks/v0.8.1-performance.md`，固定相对 `v0.8.0` 基线的回归验证；本版落地 WATCH 版本懒维护、Dict 覆盖写单次探测、AOF 小命令缓冲和大命令直写策略，保持协议、持久化、复制和历史集群基础语义不变。后续 `v0.9.0` 起主线只迭代单机版完整功能、兼容性、性能和稳定性；单机版达标后封版 `v1.0.0`，之后才重新规划集群版开发。
+项目当前已完成 `v0.9.0` 单机核心命令补齐：String / Hash / List / Set / ZSet / Key / Server / Security 计划内命令批次已经全部收口，并补齐发布说明、测试报告和 DoD 验证证据。后续进入 `v0.9.1`，继续推进单机命令全集矩阵和管理/连接面补齐。

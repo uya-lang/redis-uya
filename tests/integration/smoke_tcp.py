@@ -109,8 +109,11 @@ def run_smoke() -> None:
 
     port = find_free_port()
     aof_path = ROOT / "build" / f"smoke-{port}.aof"
+    auth_port = find_free_port()
+    auth_aof_path = ROOT / "build" / f"smoke-auth-{auth_port}.aof"
     rdb_path = ROOT / "build" / "dump.rdb"
     aof_path.unlink(missing_ok=True)
+    auth_aof_path.unlink(missing_ok=True)
     rdb_path.unlink(missing_ok=True)
     proc = subprocess.Popen(
         [str(BIN), str(port), "8", str(aof_path)],
@@ -119,6 +122,7 @@ def run_smoke() -> None:
         stderr=subprocess.PIPE,
         text=True,
     )
+    auth_proc: subprocess.Popen[str] | None = None
     try:
         with connect_with_retry(port, time.monotonic() + 5.0) as sock:
             sock.settimeout(2.0)
@@ -393,9 +397,38 @@ def run_smoke() -> None:
             raise RuntimeError(
                 f"redis-uya exited with {proc.returncode}\nstdout:\n{stdout}\nstderr:\n{stderr}"
             )
+
+        auth_proc = subprocess.Popen(
+            [str(BIN), str(auth_port), "8", str(auth_aof_path), "0", "noeviction", "secret"],
+            cwd=ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        with connect_with_retry(auth_port, time.monotonic() + 5.0) as auth_sock:
+            auth_sock.settimeout(2.0)
+            roundtrip(auth_sock, b"*1\r\n$4\r\nPING\r\n", b"-NOAUTH Authentication required.\r\n")
+            roundtrip(auth_sock, b"*2\r\n$4\r\nAUTH\r\n$5\r\nwrong\r\n", b"-WRONGPASS invalid username-password pair or user is disabled.\r\n")
+            roundtrip(auth_sock, b"*3\r\n$4\r\nAUTH\r\n$7\r\ndefault\r\n$6\r\nsecret\r\n", b"+OK\r\n")
+            roundtrip(auth_sock, b"*1\r\n$4\r\nPING\r\n", b"+PONG\r\n")
+            roundtrip(auth_sock, b"*3\r\n$6\r\nCONFIG\r\n$3\r\nGET\r\n$11\r\nrequirepass\r\n", b"*2\r\n$11\r\nrequirepass\r\n$6\r\nsecret\r\n")
+            auth_sock.sendall(b"*2\r\n$8\r\nSHUTDOWN\r\n$6\r\nNOSAVE\r\n")
+            closed = auth_sock.recv(1)
+            if closed != b"":
+                raise AssertionError(f"expected SHUTDOWN connection close, got {closed!r}")
+
+        stop_process(auth_proc)
+        if auth_proc.returncode not in (0, -15):
+            stdout, stderr = auth_proc.communicate()
+            raise RuntimeError(
+                f"auth redis-uya exited with {auth_proc.returncode}\nstdout:\n{stdout}\nstderr:\n{stderr}"
+            )
     finally:
         stop_process(proc)
+        if auth_proc is not None:
+            stop_process(auth_proc)
         aof_path.unlink(missing_ok=True)
+        auth_aof_path.unlink(missing_ok=True)
         rdb_path.unlink(missing_ok=True)
 
 

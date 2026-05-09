@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 106);
+    try assert_eq_i32(command_router_count(&router) as i32, 108);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -322,6 +322,14 @@ export fn test_command_router_lookup_and_case() !void {
     const sort_info: CommandInfo = try command_router_lookup(&router, &"SORT"[0: 4]);
     try assert_eq_i32(sort_info.cmd_type as i32, CommandType.command_sort as i32);
     try assert_eq_i32(sort_info.arity, -2);
+
+    const auth_info: CommandInfo = try command_router_lookup(&router, &"AUTH"[0: 4]);
+    try assert_eq_i32(auth_info.cmd_type as i32, CommandType.command_auth as i32);
+    try assert_eq_i32(auth_info.arity, -2);
+
+    const shutdown_info: CommandInfo = try command_router_lookup(&router, &"shutdown"[0: 8]);
+    try assert_eq_i32(shutdown_info.cmd_type as i32, CommandType.command_shutdown as i32);
+    try assert_eq_i32(shutdown_info.arity, -1);
 
     const smembers: CommandInfo = try command_router_lookup(&router, &"SMEMBERS"[0: 8]);
     try assert_eq_i32(smembers.cmd_type as i32, CommandType.command_smembers as i32);

@@ -5588,6 +5588,12 @@ fn command_executor_config(runtime: &CommandRuntimeInfo, command: &Command) Comm
             return command_executor_oom();
         };
     }
+    if command_executor_keyword_match(pattern, &"requirepass"[0: 11]) {
+        _ = command_executor_config_append_pair(reply_list, &"requirepass"[0: 11], command_executor_cstring_slice(runtime.config.requirepass[0: 128])) catch {
+            object_free(reply_list);
+            return command_executor_oom();
+        };
+    }
     if command_executor_keyword_match(pattern, &"maxmemory"[0: 9]) {
         _ = command_executor_config_append_u64(reply_list, &"maxmemory"[0: 9], runtime.config.maxmemory as u64) catch {
             object_free(reply_list);

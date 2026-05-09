@@ -13,6 +13,7 @@ use src.network.connection.connection_encode_reply;
 use src.network.connection.connection_process_input_at;
 use src.network.connection.connection_process_input_zero_copy_for_test_at;
 use src.network.connection.connection_process_input_with_runtime_at;
+use src.network.connection.connection_process_input_with_runtime_with_transaction_at;
 use src.network.connection.connection_process_input_with_transaction_at;
 use src.network.connection.connection_transaction_new;
 use src.network.connection.connection_transaction_reset;
@@ -590,6 +591,77 @@ export fn test_connection_process_client_commands() !void {
 
     const discard: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$7\r\nDISCARD\r\n"[0: 17], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: discard.response_len], &"+OK\r\n"[0: 5]));
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_connection_process_auth_requirepass_shutdown() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var runtime: CommandRuntimeInfo = command_runtime_default();
+    runtime.config.requirepass[0] = 115 as byte; // s
+    runtime.config.requirepass[1] = 101 as byte; // e
+    runtime.config.requirepass[2] = 99 as byte;  // c
+    runtime.config.requirepass[3] = 114 as byte; // r
+    runtime.config.requirepass[4] = 101 as byte; // e
+    runtime.config.requirepass[5] = 116 as byte; // t
+    runtime.config.requirepass[6] = 0 as byte;
+    var tx: ConnectionTransaction = connection_transaction_new();
+    defer {
+        connection_transaction_reset(&tx);
+    }
+    var out: [byte: 512] = [];
+
+    const ping_noauth: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*1\r\n$4\r\nPING\r\n"[0: 14], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: ping_noauth.response_len], &"-NOAUTH Authentication required.\r\n"[0: 34]));
+
+    var quit_tx: ConnectionTransaction = connection_transaction_new();
+    defer {
+        connection_transaction_reset(&quit_tx);
+    }
+    const quit_before_auth: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &quit_tx, &"*1\r\n$4\r\nQUIT\r\n"[0: 14], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: quit_before_auth.response_len], &"+OK\r\n"[0: 5]));
+    try assert_eq_i32(quit_before_auth.close_after as i32, 1);
+
+    const hello_noauth: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*2\r\n$5\r\nHELLO\r\n$1\r\n3\r\n"[0: 22], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: hello_noauth.response_len], &"-NOAUTH Authentication required.\r\n"[0: 34]));
+
+    const auth_wrong: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*2\r\n$4\r\nAUTH\r\n$5\r\nwrong\r\n"[0: 25], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: auth_wrong.response_len], &"-WRONGPASS invalid username-password pair or user is disabled.\r\n"[0: 64]));
+
+    const auth_ok: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*3\r\n$4\r\nAUTH\r\n$7\r\ndefault\r\n$6\r\nsecret\r\n"[0: 39], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: auth_ok.response_len], &"+OK\r\n"[0: 5]));
+
+    const ping_after_auth: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*1\r\n$4\r\nPING\r\n"[0: 14], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: ping_after_auth.response_len], &"+PONG\r\n"[0: 7]));
+
+    const config_requirepass: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*3\r\n$6\r\nCONFIG\r\n$3\r\nGET\r\n$11\r\nrequirepass\r\n"[0: 43], &out[0], 512, 1000u64);
+    try assert_true(network_connection_contains(out[0: config_requirepass.response_len], &"requirepass"[0: 11]));
+    try assert_true(network_connection_contains(out[0: config_requirepass.response_len], &"secret"[0: 6]));
+
+    const multi_auth: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*1\r\n$5\r\nMULTI\r\n"[0: 15], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: multi_auth.response_len], &"+OK\r\n"[0: 5]));
+
+    const shutdown_in_multi: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*2\r\n$8\r\nSHUTDOWN\r\n$6\r\nNOSAVE\r\n"[0: 30], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: shutdown_in_multi.response_len], &"-ERR Command not allowed inside a transaction\r\n"[0: 47]));
+
+    const discard_after_shutdown_err: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*1\r\n$7\r\nDISCARD\r\n"[0: 17], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: discard_after_shutdown_err.response_len], &"+OK\r\n"[0: 5]));
+
+    const shutdown_ok: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*2\r\n$8\r\nSHUTDOWN\r\n$6\r\nNOSAVE\r\n"[0: 30], &out[0], 512, 1000u64);
+    try assert_eq_i32(shutdown_ok.response_len as i32, 0);
+    try assert_eq_i32(shutdown_ok.close_after as i32, 1);
+    try assert_eq_i32(shutdown_ok.request_shutdown as i32, 1);
+
+    var no_pass_runtime: CommandRuntimeInfo = command_runtime_default();
+    var no_pass_tx: ConnectionTransaction = connection_transaction_new();
+    defer {
+        connection_transaction_reset(&no_pass_tx);
+    }
+    const auth_no_pass: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &no_pass_runtime, &router, &no_pass_tx, &"*2\r\n$4\r\nAUTH\r\n$6\r\nsecret\r\n"[0: 26], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: auth_no_pass.response_len], &"-ERR AUTH <password> called without any password configured for the default user. Are you sure your configuration is correct?\r\n"[0: 127]));
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

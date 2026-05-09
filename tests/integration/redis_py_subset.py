@@ -96,6 +96,11 @@ class RedisPySubsetClient:
     def ping(self) -> bool:
         return self._request(b"PING") == "PONG"
 
+    def auth(self, password: str, username: str | None = None) -> bool:
+        if username is None:
+            return self._request(b"AUTH", password.encode()) == "OK"
+        return self._request(b"AUTH", username.encode(), password.encode()) == "OK"
+
     def set(self, key: str, value: str) -> bool:
         return self._request(b"SET", key.encode(), value.encode()) == "OK"
 
@@ -482,6 +487,15 @@ class RedisPySubsetClient:
     def quit(self) -> bool:
         return self._request(b"QUIT") == "OK"
 
+    def shutdown_nosave(self) -> None:
+        self._sock.sendall(b"*2\r\n$8\r\nSHUTDOWN\r\n$6\r\nNOSAVE\r\n")
+        try:
+            chunk = self._sock.recv(1)
+        except OSError:
+            return
+        if chunk not in (b"",):
+            raise RuntimeError(f"expected connection close on SHUTDOWN, got {chunk!r}")
+
 
 def run_smoke() -> None:
     if not BIN.exists():
@@ -490,8 +504,11 @@ def run_smoke() -> None:
     port = find_free_port()
     aof_path = ROOT / "build" / f"redis-py-subset-{port}.aof"
     rdb_path = ROOT / "build" / "dump.rdb"
+    auth_port = find_free_port()
+    auth_aof_path = ROOT / "build" / f"redis-py-auth-{auth_port}.aof"
     aof_path.unlink(missing_ok=True)
     rdb_path.unlink(missing_ok=True)
+    auth_aof_path.unlink(missing_ok=True)
     proc = subprocess.Popen(
         [str(BIN), str(port), "8", str(aof_path)],
         cwd=ROOT,
@@ -499,6 +516,7 @@ def run_smoke() -> None:
         stderr=subprocess.PIPE,
         text=True,
     )
+    auth_proc: subprocess.Popen[str] | None = None
     try:
         deadline = time.monotonic() + 5.0
         client: RedisPySubsetClient | None = None
@@ -760,10 +778,61 @@ def run_smoke() -> None:
             raise RuntimeError(
                 f"redis-uya exited with {proc.returncode}\nstdout:\n{stdout}\nstderr:\n{stderr}"
             )
+
+        auth_proc = subprocess.Popen(
+            [str(BIN), str(auth_port), "8", str(auth_aof_path), "0", "noeviction", "secret"],
+            cwd=ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        auth_deadline = time.monotonic() + 5.0
+        auth_client: RedisPySubsetClient | None = None
+        while time.monotonic() < auth_deadline:
+            try:
+                auth_client = RedisPySubsetClient("127.0.0.1", auth_port)
+                break
+            except OSError:
+                time.sleep(0.05)
+        if auth_client is None:
+            raise RuntimeError("auth redis-uya did not start in time")
+
+        try:
+            try:
+                auth_client.ping()
+                raise AssertionError("expected PING before AUTH to fail")
+            except RespError as exc:
+                if str(exc) != "NOAUTH Authentication required.":
+                    raise AssertionError(f"unexpected NOAUTH reply: {exc}") from exc
+            try:
+                auth_client.auth("wrong")
+                raise AssertionError("expected AUTH wrong to fail")
+            except RespError as exc:
+                if str(exc) != "WRONGPASS invalid username-password pair or user is disabled.":
+                    raise AssertionError(f"unexpected WRONGPASS reply: {exc}") from exc
+            assert auth_client.auth("secret", username="default")
+            assert auth_client.ping()
+            auth_config = auth_client.config_get("requirepass")
+            if auth_config.get("requirepass") != "secret":
+                raise AssertionError(f"unexpected requirepass config: {auth_config!r}")
+            auth_client.shutdown_nosave()
+        finally:
+            if auth_client is not None:
+                auth_client.close()
+
+        stop_process(auth_proc)
+        if auth_proc.returncode not in (0, -15):
+            stdout, stderr = auth_proc.communicate()
+            raise RuntimeError(
+                f"auth redis-uya exited with {auth_proc.returncode}\nstdout:\n{stdout}\nstderr:\n{stderr}"
+            )
     finally:
         stop_process(proc)
+        if auth_proc is not None:
+            stop_process(auth_proc)
         aof_path.unlink(missing_ok=True)
         rdb_path.unlink(missing_ok=True)
+        auth_aof_path.unlink(missing_ok=True)
 
 
 def main() -> int:

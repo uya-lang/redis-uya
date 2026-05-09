@@ -39,7 +39,7 @@
 - RESP2 最小子集解析：Simple String、Error、Integer、Bulk String、Array、Incomplete、非法输入
 - RESP3 最小协议闭环：`HELLO 2/3` 连接级协议切换，支持 Null、Boolean、Map 等常用 RESP3 类型解析和 RESP3 Null 回复
 - 命令路由：最小命令表、大小写匹配、参数数量校验、未知命令错误、RESP Array 转命令
-- String/Key/Control 命令执行：`PING`、`GET`、`SET`、`DEL`、`EXISTS`、`EXPIRE`、`TTL`、`INFO` 多 section、`CONFIG GET/HELP/RESETSTAT`、`CLIENT` 兼容子集、`SAVE`
+- String/Key/Control 命令执行：`PING`、`GET`、`SET`、`DEL`、`EXISTS`、`EXPIRE`、`TTL`、`INFO` 多 section、`CONFIG GET/HELP/RESETSTAT`、`CLIENT` 兼容子集、`AUTH`、`SAVE`
 - Hash 最小对象：基于项目内 `Dict` 的最小 hash value 容器
 - Hash 命令子集：`HSET`、`HGET`
 - List 最小对象：基于双向链表的最小 list value 容器
@@ -66,6 +66,7 @@
 - 事务控制最小子集：连接级 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`，支持 `QUEUED`、`EXEC` 数组回复、观察键变更后的 Null Array 中止和 `DISCARD` 丢弃
 - Pub/Sub 最小子集：`SUBSCRIBE` 注册连接订阅、`PUBLISH` 跨连接推送 message 并返回订阅者数量、`UNSUBSCRIBE` 取消订阅
 - 控制面兼容子集：`CLIENT ID/GETNAME/SETNAME/INFO/LIST/SETINFO/HELP`、`HELLO SETNAME`、`CONFIG GET/HELP/RESETSTAT`
+- 安全基线：`requirepass`、`AUTH`、`SHUTDOWN`
 - v0.5 兼容性回归：覆盖 RESP3 Null、WATCH 中止、事务内控制命令错误、RESP3 Pub/Sub Push、CLIENT/CONFIG 组合路径
 - `maxmemory` noeviction 基线：启动参数可设置最大内存，超预算增量写命令返回 OOM 且不落库
 - `allkeys-lru` 淘汰基线：对象记录最近访问时间，超预算写入可淘汰最久未访问 key 后继续执行

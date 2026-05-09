@@ -47,7 +47,28 @@ HELLO 3 SETNAME name
 说明：
 
 - 当前 `HELLO` 支持 `SETNAME` 扩展参数，不支持 `AUTH`
+- 启用 `requirepass` 后，当前实现要求先单独执行 `AUTH`；未认证时 `HELLO` 返回 `-NOAUTH Authentication required.`
 - RESP3 模式下，不存在的 bulk 值返回 RESP3 Null：`_\r\n`
+
+### `AUTH`
+
+格式：
+
+```text
+AUTH password
+AUTH default password
+```
+
+返回：
+
+- 成功：`+OK`
+- 密码错误 / 用户不匹配：`-WRONGPASS invalid username-password pair or user is disabled.`
+- 未配置 `requirepass` 时，单参数 `AUTH` 返回错误
+
+说明：
+
+- 当前安全基线只支持默认用户 `default`
+- 启用 `requirepass` 后，除 `AUTH` / `QUIT` 外的普通命令在认证前返回 `-NOAUTH Authentication required.`
 
 ### `PING`
 
@@ -1152,7 +1173,7 @@ CONFIG RESETSTAT
 返回：
 
 - 返回 RESP Array，按 `name`、`value` 成对展开
-- 当前支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`replicaof`、`masterauth`、`maxmemory`、`maxmemory-policy`、`maxclients`、`databases`、`save`
+- 当前支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`replicaof`、`masterauth`、`maxmemory`、`maxmemory-policy`、`maxclients`、`databases`、`save`
 - 支持最小 `*` 通配模式
 - `CONFIG HELP` 返回当前支持的 CONFIG 子命令列表
 - `CONFIG RESETSTAT` 当前返回 `+OK`，用于客户端兼容；统计重置仍是最小占位语义
@@ -1449,6 +1470,27 @@ QUIT
 返回：
 
 - `+OK`
+
+### `SHUTDOWN`
+
+格式：
+
+```text
+SHUTDOWN
+SHUTDOWN NOSAVE
+SHUTDOWN SAVE
+```
+
+返回：
+
+- 成功时不返回 RESP 内容，服务端直接关闭当前连接并退出进程
+- 参数非法：`-ERR syntax error`
+- 未认证：`-NOAUTH Authentication required.`
+
+说明：
+
+- 当前实现支持最小 `SHUTDOWN` / `NOSAVE` / `SAVE` 形状
+- `SHUTDOWN` 不能在事务中使用；事务内返回 `-ERR Command not allowed inside a transaction`
 
 ## 3. 错误
 

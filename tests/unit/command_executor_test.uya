@@ -267,6 +267,11 @@ export fn test_command_info_and_config() !void {
     runtime.config.masterauth[4] = 101 as byte; // e
     runtime.config.masterauth[5] = 116 as byte; // t
     runtime.config.masterauth[6] = 0 as byte;
+    runtime.config.requirepass[0] = 108 as byte; // l
+    runtime.config.requirepass[1] = 111 as byte; // o
+    runtime.config.requirepass[2] = 99 as byte;  // c
+    runtime.config.requirepass[3] = 107 as byte; // k
+    runtime.config.requirepass[4] = 0 as byte;
 
     var info_repl_replica_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nINFO\r\n$11\r\nreplication\r\n"[0: 32]);
     const info_repl_replica_command: Command = try command_executor_test_command(&router, &info_repl_replica_parsed);
@@ -293,6 +298,15 @@ export fn test_command_info_and_config() !void {
     try assert_eq_i32(out[0] as i32, 42);
     command_reply_cleanup(&config_masterauth_reply);
     resp_value_free(&config_masterauth_parsed.value);
+
+    var config_requirepass_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nCONFIG\r\n$3\r\nGET\r\n$11\r\nrequirepass\r\n"[0: 43]);
+    const config_requirepass_command: Command = try command_executor_test_command(&router, &config_requirepass_parsed);
+    var config_requirepass_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_requirepass_command, 5000u64);
+    const config_requirepass_len: usize = try connection_encode_reply(&config_requirepass_reply, &out[0], 512);
+    try assert_true(config_requirepass_len > 0);
+    try assert_eq_i32(out[0] as i32, 42);
+    command_reply_cleanup(&config_requirepass_reply);
+    resp_value_free(&config_requirepass_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

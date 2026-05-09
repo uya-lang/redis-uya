@@ -32,7 +32,12 @@ cleanup() {
         kill "$SERVER_PID" >/dev/null 2>&1 || true
         wait "$SERVER_PID" >/dev/null 2>&1 || true
     fi
+    if [[ -n "${AUTH_SERVER_PID:-}" ]]; then
+        kill "$AUTH_SERVER_PID" >/dev/null 2>&1 || true
+        wait "$AUTH_SERVER_PID" >/dev/null 2>&1 || true
+    fi
     rm -f "$AOF_PATH"
+    rm -f "${AUTH_AOF_PATH:-}"
     rm -f "$RDB_PATH"
 }
 trap cleanup EXIT
@@ -954,5 +959,61 @@ if [[ "$QUIT_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected OK on QUIT, got '$QUIT_RESULT'" >&2
     exit 1
 fi
+
+AUTH_PORT="$(python3 - <<'PY'
+import socket
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+    sock.bind(("127.0.0.1", 0))
+    print(sock.getsockname()[1])
+PY
+)"
+
+AUTH_AOF_PATH="$ROOT/build/redis-cli-auth-${AUTH_PORT}.aof"
+rm -f "$AUTH_AOF_PATH"
+"$BIN" "$AUTH_PORT" "8" "$AUTH_AOF_PATH" "0" "noeviction" "secret" >/tmp/redis-uya-redis-cli-auth.out 2>/tmp/redis-uya-redis-cli-auth.err &
+AUTH_SERVER_PID="$!"
+
+AUTH_DEADLINE=$((SECONDS + 5))
+until redis-cli --raw -h 127.0.0.1 -p "$AUTH_PORT" ping >/dev/null 2>&1; do
+    if (( SECONDS >= AUTH_DEADLINE )); then
+        echo "[FAIL] integration/redis_cli_smoke: auth redis-uya did not start in time" >&2
+        exit 1
+    fi
+    sleep 0.1
+done
+
+AUTH_NOAUTH_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$AUTH_PORT" ping 2>&1 || true)"
+if [[ "$AUTH_NOAUTH_RESULT" != "NOAUTH Authentication required." ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected NOAUTH on unauthenticated ping, got '$AUTH_NOAUTH_RESULT'" >&2
+    exit 1
+fi
+
+AUTH_WRONG_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$AUTH_PORT" auth wrong 2>&1 || true)"
+if [[ "$AUTH_WRONG_RESULT" != "WRONGPASS invalid username-password pair or user is disabled." ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected WRONGPASS on bad AUTH, got '$AUTH_WRONG_RESULT'" >&2
+    exit 1
+fi
+
+AUTH_OK_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$AUTH_PORT" auth secret)"
+if [[ "$AUTH_OK_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected AUTH OK, got '$AUTH_OK_RESULT'" >&2
+    exit 1
+fi
+
+AUTH_PING_RESULT="$(redis-cli -a secret --raw -h 127.0.0.1 -p "$AUTH_PORT" ping 2>/dev/null)"
+if [[ "$AUTH_PING_RESULT" != "PONG" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected authenticated PONG, got '$AUTH_PING_RESULT'" >&2
+    exit 1
+fi
+
+AUTH_CONFIG_RESULT="$(redis-cli -a secret --raw -h 127.0.0.1 -p "$AUTH_PORT" config get requirepass 2>/dev/null)"
+if [[ "$AUTH_CONFIG_RESULT" != $'requirepass\nsecret' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: unexpected CONFIG GET requirepass output: '$AUTH_CONFIG_RESULT'" >&2
+    exit 1
+fi
+
+redis-cli -a secret --raw -h 127.0.0.1 -p "$AUTH_PORT" shutdown nosave >/dev/null 2>&1 || true
+wait "$AUTH_SERVER_PID" >/dev/null 2>&1 || true
+AUTH_SERVER_PID=""
 
 echo "[PASS] integration/redis_cli_smoke"

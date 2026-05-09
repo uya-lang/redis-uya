@@ -6,6 +6,7 @@ use src.server.server_default_aof_path;
 use src.server.server_run;
 use src.server.server_close;
 use src.config.MaxmemoryPolicy;
+use src.config.config_copy_bytes;
 use std.runtime.get_argc;
 use std.runtime.get_argv;
 use libc.atoi;
@@ -103,18 +104,37 @@ fn main_maxmemory_policy_arg() MaxmemoryPolicy {
     return MaxmemoryPolicy.maxmemory_noeviction;
 }
 
+fn main_requirepass_arg() &[byte] {
+    if get_argc() <= 6 {
+        return (null as &byte)[0: 0];
+    }
+    const arg: &byte = get_argv(6);
+    if arg == null {
+        return (null as &byte)[0: 0];
+    }
+    var len: usize = 0;
+    while arg[len] != 0 as byte {
+        len = len + 1;
+    }
+    return arg[0: len];
+}
+
 export fn main() i32 {
     const port: u16 = main_port_arg();
     const maxclients: i32 = main_maxclients_arg();
     const aof_path: &const byte = main_aof_path_arg();
     const maxmemory: usize = main_maxmemory_arg();
     const maxmemory_policy: MaxmemoryPolicy = main_maxmemory_policy_arg();
+    const requirepass: &[byte] = main_requirepass_arg();
     var server: RedisServer = server_open_with_aof_and_memory_policy(port, maxclients, aof_path, maxmemory, maxmemory_policy) catch |err| {
         @println("redis-uya failed to listen: ${@error_id(err)}");
         return 1;
     };
     defer {
         server_close(&server);
+    }
+    if requirepass.len > 0 {
+        config_copy_bytes(server.config.requirepass[0: 128], requirepass);
     }
 
     @println("redis-uya v0.1.0-dev listening on 127.0.0.1:${server.listener.port}");

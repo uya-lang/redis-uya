@@ -438,7 +438,7 @@
 - [x] Key/Server 第八批：`MOVE`
 - [x] Key/Server 第九批：`WAIT`
 - [x] Key/Server 第十批：`SORT`
-- [ ] Security baseline：`AUTH`、`requirepass`、`SHUTDOWN`
+- [x] Security baseline：`AUTH`、`requirepass`、`SHUTDOWN`
 
 验收项：
 

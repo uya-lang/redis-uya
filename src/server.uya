@@ -167,6 +167,7 @@ export struct RedisServer {
     aof_rewrite_buf: Sds,
     aof_rewrite_tmp_path: [byte: 512],
     cluster_topology: ClusterTopology,
+    shutdown_requested: bool,
 }
 
 export fn server_default_aof_path() &const byte {
@@ -1288,6 +1289,9 @@ fn server_async_writev_all_future(fd: i32, head: &const byte, head_len: usize, b
             if result.request_aof_rewrite || rewrite_requested {
                 server.aof_rewrite_requested = true;
             }
+            if result.request_shutdown {
+                server.shutdown_requested = true;
+            }
             if rewrite_failed {
                 server_reset_rewrite_state(server);
             }
@@ -1531,6 +1535,7 @@ export fn server_open_with_aof_and_memory_policy(
         aof_rewrite_buf: rewrite_buf,
         aof_rewrite_tmp_path: [],
         cluster_topology: cluster_topology,
+        shutdown_requested: false,
     };
     if server_config_replicaof_enabled(&server.config) {
         server.replication_role = ReplicationRole.role_replica;
@@ -1788,6 +1793,9 @@ export fn server_run(server: &RedisServer) !void {
 
     var events: [EpollEvent: SERVER_EVENT_CAP] = [];
     while true {
+        if server.shutdown_requested {
+            return;
+        }
         const now_ms: u64 = now_ms_safe();
         server_run_cron_due_at(server, now_ms);
         _ = server_replication_try_full_sync_at(server, now_ms) catch {};
@@ -1813,6 +1821,9 @@ export fn server_run(server: &RedisServer) !void {
                 _ = server_accept_once(server) catch {};
             } else {
                 server_handle_client_fd(server, fd);
+            }
+            if server.shutdown_requested {
+                return;
             }
             i = i + 1;
         }

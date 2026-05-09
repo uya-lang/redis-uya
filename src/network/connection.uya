@@ -74,6 +74,7 @@ export struct ConnectionProcessResult {
     replicaof_promote: bool,
     request_bgsave: bool,
     request_aof_rewrite: bool,
+    request_shutdown: bool,
 }
 
 export struct ConnectionTransaction {
@@ -92,6 +93,7 @@ export struct ConnectionTransaction {
     client_lib_ver_len: usize,
     client_lib_ver: [byte: 64],
     pubsub_count: usize,
+    authenticated: bool,
 }
 
 struct ConnectionSendProgress {
@@ -132,6 +134,7 @@ fn connection_transaction_empty() ConnectionTransaction {
         client_lib_ver_len: 0,
         client_lib_ver: [],
         pubsub_count: 0,
+        authenticated: false,
     };
 }
 
@@ -241,6 +244,7 @@ fn connection_zero_copy_process_result(
         replicaof_promote: replicaof_promote,
         request_bgsave: request_bgsave,
         request_aof_rewrite: request_aof_rewrite,
+        request_shutdown: false,
     };
 }
 
@@ -571,6 +575,121 @@ fn connection_client_copy_bytes(dst: &[byte], src: &[byte]) !void {
         dst.ptr[i] = 0 as byte;
         i = i + 1;
     }
+}
+
+fn connection_cstring_slice(data: &[byte]) &[byte] {
+    var len: usize = 0;
+    while len < data.len && data.ptr[len] != 0 as byte {
+        len = len + 1;
+    }
+    return data[0: len];
+}
+
+fn connection_requirepass(runtime: &CommandRuntimeInfo) &[byte] {
+    return connection_cstring_slice(runtime.config.requirepass[0: 128]);
+}
+
+fn connection_auth_required(runtime: &CommandRuntimeInfo) bool {
+    return connection_requirepass(runtime).len > 0;
+}
+
+fn connection_auth_ok(tx: &ConnectionTransaction, runtime: &CommandRuntimeInfo) bool {
+    if !connection_auth_required(runtime) {
+        return true;
+    }
+    return tx != null && tx.authenticated;
+}
+
+fn connection_noauth_reply() CommandReply {
+    return connection_error_reply(&"NOAUTH Authentication required."[0: 31]);
+}
+
+fn connection_wrongpass_reply() CommandReply {
+    return connection_error_reply(&"WRONGPASS invalid username-password pair or user is disabled."[0: 61]);
+}
+
+fn connection_auth_no_password_reply() CommandReply {
+    return connection_error_reply(&"ERR AUTH <password> called without any password configured for the default user. Are you sure your configuration is correct?"[0: 124]);
+}
+
+fn connection_handle_auth(tx: &ConnectionTransaction, runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
+    if command.argc != 2 && command.argc != 3 {
+        return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+    }
+
+    const requirepass: &[byte] = connection_requirepass(runtime);
+    if requirepass.len == 0 {
+        if command.argc == 3 {
+            const username_no_pass: &[byte] = command_arg_data(command, 1) catch {
+                return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+            };
+            if !connection_keyword_eq(username_no_pass, &"default"[0: 7]) {
+                return connection_wrongpass_reply();
+            }
+            tx.authenticated = true;
+            return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+        }
+        return connection_auth_no_password_reply();
+    }
+
+    var password: &[byte] = connection_reply_empty_slice();
+    if command.argc == 2 {
+        password = command_arg_data(command, 1) catch {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        };
+    } else {
+        const username: &[byte] = command_arg_data(command, 1) catch {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        };
+        if !connection_keyword_eq(username, &"default"[0: 7]) {
+            return connection_wrongpass_reply();
+        }
+        password = command_arg_data(command, 2) catch {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        };
+    }
+
+    if password.len != requirepass.len {
+        tx.authenticated = false;
+        return connection_wrongpass_reply();
+    }
+    var i: usize = 0;
+    while i < password.len {
+        if password.ptr[i] != requirepass.ptr[i] {
+            tx.authenticated = false;
+            return connection_wrongpass_reply();
+        }
+        i = i + 1;
+    }
+    tx.authenticated = true;
+    return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+}
+
+fn connection_handle_shutdown(command: &Command) !ConnectionProcessResult {
+    if command.argc > 2 {
+        return error.CommandInvalidRequest;
+    }
+    if command.argc == 2 {
+        const option: &[byte] = command_arg_data(command, 1) catch {
+            return error.CommandInvalidRequest;
+        };
+        if !connection_keyword_eq(option, &"NOSAVE"[0: 6]) && !connection_keyword_eq(option, &"SAVE"[0: 4]) {
+            return error.CommandInvalidRequest;
+        }
+    }
+    return ConnectionProcessResult{
+        response_len: 0,
+        response_head_len: 0,
+        zero_copy_body: connection_reply_empty_slice(),
+        zero_copy_tail_len: 0,
+        consumed: 0,
+        close_after: true,
+        request_replicaof: false,
+        replicaof_promote: false,
+        request_bgsave: false,
+        request_aof_rewrite: false,
+        request_shutdown: true,
+    };
 }
 
 fn connection_client_store_name(tx: &ConnectionTransaction, name: &[byte]) !void {
@@ -1223,7 +1342,12 @@ fn connection_transaction_execute_at(
             continue;
         }
 
-        var reply: CommandReply = command_execute_with_runtime_at(engine, runtime, &command, now_ms);
+        var reply: CommandReply = connection_empty_reply();
+        if command.info.cmd_type == CommandType.command_auth {
+            reply = connection_handle_auth(tx, runtime, &command);
+        } else {
+            reply = command_execute_with_runtime_at(engine, runtime, &command, now_ms);
+        }
         if command.info.cmd_type == CommandType.command_save &&
             reply.typ == CommandReplyType.reply_simple_string &&
             reply.data.len == 2 &&
@@ -1736,6 +1860,7 @@ export fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transac
         replicaof_promote: result.replicaof_promote,
         request_bgsave: result.request_bgsave,
         request_aof_rewrite: result.request_aof_rewrite,
+        request_shutdown: result.request_shutdown,
     };
 }
 
@@ -1767,7 +1892,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_in
         }
         const reply: CommandReply = connection_error_reply(&"ERR protocol error"[0: 18]);
         const n: usize = try connection_encode_reply_with_protocol(&reply, out, out_cap, tx.protocol_version);
-        return ConnectionProcessResult{ response_len: n, consumed: input.len, close_after: true, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+        return ConnectionProcessResult{ response_len: n, consumed: input.len, close_after: true, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
     };
 
     const command_result: !Command = command_from_resp(router, &parsed.value);
@@ -1781,7 +1906,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_in
         }
         const n: usize = try connection_encode_reply_with_protocol(&reply, out, out_cap, tx.protocol_version);
         resp_value_free(&parsed.value);
-        return ConnectionProcessResult{ response_len: n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+        return ConnectionProcessResult{ response_len: n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
     };
 
     if tx.active {
@@ -1789,44 +1914,50 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_in
             const nested_reply: CommandReply = connection_error_reply(&"ERR MULTI calls can not be nested"[0: 33]);
             const nested_n: usize = try connection_encode_reply_with_protocol(&nested_reply, out, out_cap, tx.protocol_version);
             resp_value_free(&parsed.value);
-            return ConnectionProcessResult{ response_len: nested_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+            return ConnectionProcessResult{ response_len: nested_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
         }
         if command.info.cmd_type == CommandType.command_watch {
             const watch_reply: CommandReply = connection_error_reply(&"ERR WATCH inside MULTI is not allowed"[0: 37]);
             const watch_n: usize = try connection_encode_reply_with_protocol(&watch_reply, out, out_cap, tx.protocol_version);
             resp_value_free(&parsed.value);
-            return ConnectionProcessResult{ response_len: watch_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+            return ConnectionProcessResult{ response_len: watch_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
         }
         if command.info.cmd_type == CommandType.command_unwatch {
             const unwatch_reply: CommandReply = connection_error_reply(&"ERR UNWATCH inside MULTI is not allowed"[0: 39]);
             const unwatch_n: usize = try connection_encode_reply_with_protocol(&unwatch_reply, out, out_cap, tx.protocol_version);
             resp_value_free(&parsed.value);
-            return ConnectionProcessResult{ response_len: unwatch_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+            return ConnectionProcessResult{ response_len: unwatch_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
         }
         if command.info.cmd_type == CommandType.command_hello {
             const hello_reply: CommandReply = connection_error_reply(&"ERR HELLO inside MULTI is not allowed"[0: 37]);
             const hello_n: usize = try connection_encode_reply_with_protocol(&hello_reply, out, out_cap, tx.protocol_version);
             resp_value_free(&parsed.value);
-            return ConnectionProcessResult{ response_len: hello_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+            return ConnectionProcessResult{ response_len: hello_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
         }
         if command.info.cmd_type == CommandType.command_client {
             const client_tx_reply: CommandReply = connection_error_reply(&"ERR CLIENT command inside MULTI is not allowed"[0: 46]);
             const client_tx_n: usize = try connection_encode_reply_with_protocol(&client_tx_reply, out, out_cap, tx.protocol_version);
             resp_value_free(&parsed.value);
-            return ConnectionProcessResult{ response_len: client_tx_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+            return ConnectionProcessResult{ response_len: client_tx_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
         }
         if command.info.cmd_type == CommandType.command_subscribe || command.info.cmd_type == CommandType.command_unsubscribe || command.info.cmd_type == CommandType.command_publish {
             const pubsub_tx_reply: CommandReply = connection_error_reply(&"ERR pubsub command inside MULTI is not allowed"[0: 46]);
             const pubsub_tx_n: usize = try connection_encode_reply_with_protocol(&pubsub_tx_reply, out, out_cap, tx.protocol_version);
             resp_value_free(&parsed.value);
-            return ConnectionProcessResult{ response_len: pubsub_tx_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+            return ConnectionProcessResult{ response_len: pubsub_tx_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
         }
         if command.info.cmd_type == CommandType.command_discard {
             connection_transaction_reset(tx);
             const discard_reply: CommandReply = connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
             const discard_n: usize = try connection_encode_reply_with_protocol(&discard_reply, out, out_cap, tx.protocol_version);
             resp_value_free(&parsed.value);
-            return ConnectionProcessResult{ response_len: discard_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+            return ConnectionProcessResult{ response_len: discard_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
+        }
+        if command.info.cmd_type == CommandType.command_shutdown {
+            const shutdown_tx_reply: CommandReply = connection_error_reply(&"ERR Command not allowed inside a transaction"[0: 44]);
+            const shutdown_tx_n: usize = try connection_encode_reply_with_protocol(&shutdown_tx_reply, out, out_cap, tx.protocol_version);
+            resp_value_free(&parsed.value);
+            return ConnectionProcessResult{ response_len: shutdown_tx_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
         }
         if command.info.cmd_type == CommandType.command_exec {
             if !connection_transaction_watches_match(tx, engine) {
@@ -1835,7 +1966,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_in
                 const aborted_n: usize = try connection_encode_reply_with_protocol(&aborted_reply, out, out_cap, tx.protocol_version);
                 command_reply_cleanup(&aborted_reply);
                 resp_value_free(&parsed.value);
-                return ConnectionProcessResult{ response_len: aborted_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+                return ConnectionProcessResult{ response_len: aborted_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
             }
             var exec_close_after: bool = false;
             var exec_replicaof_requested: bool = false;
@@ -1875,6 +2006,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_in
                 replicaof_promote: exec_replicaof_promote,
                 request_bgsave: exec_bgsave_requested,
                 request_aof_rewrite: exec_rewrite_requested,
+                request_shutdown: false,
             };
         }
 
@@ -1882,46 +2014,81 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_in
             const oom_reply: CommandReply = connection_error_reply(&"ERR out of memory"[0: 17]);
             const oom_n: usize = try connection_encode_reply_with_protocol(&oom_reply, out, out_cap, tx.protocol_version);
             resp_value_free(&parsed.value);
-            return ConnectionProcessResult{ response_len: oom_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+            return ConnectionProcessResult{ response_len: oom_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
         };
         const queued_reply: CommandReply = connection_make_reply(CommandReplyType.reply_simple_string, &"QUEUED"[0: 6], 0);
         const queued_n: usize = try connection_encode_reply_with_protocol(&queued_reply, out, out_cap, tx.protocol_version);
         resp_value_free(&parsed.value);
-        return ConnectionProcessResult{ response_len: queued_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+        return ConnectionProcessResult{ response_len: queued_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
+    }
+
+    if command.info.cmd_type == CommandType.command_auth {
+        const auth_reply: CommandReply = connection_handle_auth(tx, runtime, &command);
+        const auth_n: usize = try connection_encode_reply_with_protocol(&auth_reply, out, out_cap, tx.protocol_version);
+        resp_value_free(&parsed.value);
+        return ConnectionProcessResult{ response_len: auth_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
+    }
+    if !connection_auth_ok(tx, runtime) && command.info.cmd_type != CommandType.command_quit {
+        const noauth_reply: CommandReply = connection_noauth_reply();
+        const noauth_n: usize = try connection_encode_reply_with_protocol(&noauth_reply, out, out_cap, tx.protocol_version);
+        resp_value_free(&parsed.value);
+        return ConnectionProcessResult{ response_len: noauth_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
+    }
+    if command.info.cmd_type == CommandType.command_shutdown {
+        _ = connection_handle_shutdown(&command) catch {
+            const shutdown_err: CommandReply = connection_error_reply(&"ERR syntax error"[0: 16]);
+            const shutdown_err_n: usize = try connection_encode_reply_with_protocol(&shutdown_err, out, out_cap, tx.protocol_version);
+            resp_value_free(&parsed.value);
+            return ConnectionProcessResult{ response_len: shutdown_err_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
+        };
+        resp_value_free(&parsed.value);
+        return ConnectionProcessResult{
+            response_len: 0,
+            response_head_len: 0,
+            zero_copy_body: connection_reply_empty_slice(),
+            zero_copy_tail_len: 0,
+            consumed: parsed.consumed,
+            close_after: true,
+            request_replicaof: false,
+            replicaof_promote: false,
+            request_bgsave: false,
+            request_aof_rewrite: false,
+            request_shutdown: true,
+        };
     }
 
     if command.info.cmd_type == CommandType.command_hello {
         const hello_reply: CommandReply = connection_handle_hello(tx, &command);
         const hello_n: usize = try connection_encode_reply_with_protocol(&hello_reply, out, out_cap, tx.protocol_version);
         resp_value_free(&parsed.value);
-        return ConnectionProcessResult{ response_len: hello_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+        return ConnectionProcessResult{ response_len: hello_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
     }
     if command.info.cmd_type == CommandType.command_client {
         var client_reply: CommandReply = connection_handle_client(tx, &command);
         const client_n: usize = try connection_encode_reply_with_protocol(&client_reply, out, out_cap, tx.protocol_version);
         command_reply_cleanup(&client_reply);
         resp_value_free(&parsed.value);
-        return ConnectionProcessResult{ response_len: client_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+        return ConnectionProcessResult{ response_len: client_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
     }
     if command.info.cmd_type == CommandType.command_subscribe {
         var subscribe_reply: CommandReply = connection_handle_subscribe(tx, &command);
         const subscribe_n: usize = try connection_encode_reply_with_protocol(&subscribe_reply, out, out_cap, tx.protocol_version);
         command_reply_cleanup(&subscribe_reply);
         resp_value_free(&parsed.value);
-        return ConnectionProcessResult{ response_len: subscribe_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+        return ConnectionProcessResult{ response_len: subscribe_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
     }
     if command.info.cmd_type == CommandType.command_unsubscribe {
         var unsubscribe_reply: CommandReply = connection_handle_unsubscribe(tx, &command);
         const unsubscribe_n: usize = try connection_encode_reply_with_protocol(&unsubscribe_reply, out, out_cap, tx.protocol_version);
         command_reply_cleanup(&unsubscribe_reply);
         resp_value_free(&parsed.value);
-        return ConnectionProcessResult{ response_len: unsubscribe_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+        return ConnectionProcessResult{ response_len: unsubscribe_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
     }
     if command.info.cmd_type == CommandType.command_publish {
         const publish_reply: CommandReply = connection_handle_publish(&command);
         const publish_n: usize = try connection_encode_reply_with_protocol(&publish_reply, out, out_cap, tx.protocol_version);
         resp_value_free(&parsed.value);
-        return ConnectionProcessResult{ response_len: publish_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+        return ConnectionProcessResult{ response_len: publish_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
     }
     if command.info.cmd_type == CommandType.command_multi {
         connection_transaction_clear_queue(tx);
@@ -1929,7 +2096,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_in
         const multi_reply: CommandReply = connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
         const multi_n: usize = try connection_encode_reply_with_protocol(&multi_reply, out, out_cap, tx.protocol_version);
         resp_value_free(&parsed.value);
-        return ConnectionProcessResult{ response_len: multi_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+        return ConnectionProcessResult{ response_len: multi_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
     }
     if command.info.cmd_type == CommandType.command_watch {
         var watch_index: usize = 1;
@@ -1938,39 +2105,39 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_in
                 const watch_wrong_arity: CommandReply = connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
                 const watch_wrong_n: usize = try connection_encode_reply_with_protocol(&watch_wrong_arity, out, out_cap, tx.protocol_version);
                 resp_value_free(&parsed.value);
-                return ConnectionProcessResult{ response_len: watch_wrong_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+                return ConnectionProcessResult{ response_len: watch_wrong_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
             };
             _ = connection_transaction_watch_key(tx, engine, key) catch {
                 const watch_oom: CommandReply = connection_error_reply(&"ERR out of memory"[0: 17]);
                 const watch_oom_n: usize = try connection_encode_reply_with_protocol(&watch_oom, out, out_cap, tx.protocol_version);
                 resp_value_free(&parsed.value);
-                return ConnectionProcessResult{ response_len: watch_oom_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+                return ConnectionProcessResult{ response_len: watch_oom_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
             };
             watch_index = watch_index + 1;
         }
         const watch_ok: CommandReply = connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
         const watch_ok_n: usize = try connection_encode_reply_with_protocol(&watch_ok, out, out_cap, tx.protocol_version);
         resp_value_free(&parsed.value);
-        return ConnectionProcessResult{ response_len: watch_ok_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+        return ConnectionProcessResult{ response_len: watch_ok_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
     }
     if command.info.cmd_type == CommandType.command_unwatch {
         connection_transaction_clear_watches(tx);
         const unwatch_ok: CommandReply = connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
         const unwatch_ok_n: usize = try connection_encode_reply_with_protocol(&unwatch_ok, out, out_cap, tx.protocol_version);
         resp_value_free(&parsed.value);
-        return ConnectionProcessResult{ response_len: unwatch_ok_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+        return ConnectionProcessResult{ response_len: unwatch_ok_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
     }
     if command.info.cmd_type == CommandType.command_exec {
         const exec_without_multi: CommandReply = connection_error_reply(&"ERR EXEC without MULTI"[0: 22]);
         const exec_without_multi_n: usize = try connection_encode_reply_with_protocol(&exec_without_multi, out, out_cap, tx.protocol_version);
         resp_value_free(&parsed.value);
-        return ConnectionProcessResult{ response_len: exec_without_multi_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+        return ConnectionProcessResult{ response_len: exec_without_multi_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
     }
     if command.info.cmd_type == CommandType.command_discard {
         const discard_without_multi: CommandReply = connection_error_reply(&"ERR DISCARD without MULTI"[0: 25]);
         const discard_without_multi_n: usize = try connection_encode_reply_with_protocol(&discard_without_multi, out, out_cap, tx.protocol_version);
         resp_value_free(&parsed.value);
-        return ConnectionProcessResult{ response_len: discard_without_multi_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+        return ConnectionProcessResult{ response_len: discard_without_multi_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
     }
 
     var reply: CommandReply = command_execute_with_runtime_at(engine, runtime, &command, now_ms);
@@ -1987,7 +2154,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_in
             const aof_n: usize = try connection_encode_reply_with_protocol(&aof_reply, out, out_cap, tx.protocol_version);
             command_reply_cleanup(&reply);
             resp_value_free(&parsed.value);
-            return ConnectionProcessResult{ response_len: aof_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
+            return ConnectionProcessResult{ response_len: aof_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
         };
         if rewrite_buf != null && runtime.aof_rewrite_in_progress {
             _ = aof_append_command_to_sds_at(rewrite_buf, &command, input[0: parsed.consumed], now_ms) catch {
@@ -2055,6 +2222,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_in
         replicaof_promote: promote_replicaof,
         request_bgsave: request_bgsave,
         request_aof_rewrite: request_aof_rewrite,
+        request_shutdown: false,
     };
 }
 

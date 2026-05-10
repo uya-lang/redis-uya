@@ -453,6 +453,8 @@
 
 - [x] 官方命令全集矩阵第一批落地：`531` 个官方命令名进入共享目录，生成 `docs/redis-uya-command-matrix.md` 并由 `src/command/catalog_generated*` 提供运行时数据
 - [x] `COMMAND` 控制面第一批落地：`COMMAND` / `COMMAND COUNT` / `COMMAND LIST` / `COMMAND INFO` / `COMMAND DOCS` 共享官方目录，覆盖 RESP2/RESP3 基础返回形态与过滤/未知命令边界
+- [x] `redis-cli` stdin/pipeline 兼容第一批：连接层单次读入可批量消费多帧，`redis-cli` 通过 `COMMAND DOCS` 探测后的事务管线 smoke 可稳定完成
+- [ ] `COMMAND DOCS` 无参数全量 docs 输出与大响应流式发送路径继续补齐
 - [ ] `COMMAND GETKEYS` / `COMMAND GETKEYSANDFLAGS`、其余 standalone 兼容错误与命令家族补齐继续推进
 - [ ] Streams 完整化：消费者组、pending、claim、trim、阻塞读取和持久化恢复
 - [ ] Pub/Sub 完整化：pattern 订阅、订阅态命令限制、背压和断开清理

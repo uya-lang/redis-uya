@@ -449,6 +449,28 @@ export fn test_connection_process_multi_exec_discard() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_connection_process_pipeline_batch() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var tx: ConnectionTransaction = connection_transaction_new();
+    defer {
+        connection_transaction_reset(&tx);
+    }
+    var out: [byte: 512] = [];
+
+    const pipeline: &[byte] = &"*1\r\n$5\r\nMULTI\r\n*3\r\n$3\r\nSET\r\n$4\r\nmkey\r\n$4\r\nmval\r\n*2\r\n$3\r\nGET\r\n$4\r\nmkey\r\n*1\r\n$4\r\nEXEC\r\n"[0: 85];
+    const result: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, pipeline, &out[0], 512, 1000u64);
+    try assert_eq_i32(result.consumed as i32, pipeline.len as i32);
+    try assert_true(network_connection_slice_eq(out[0: result.response_len], &"+OK\r\n+QUEUED\r\n+QUEUED\r\n*2\r\n+OK\r\n$4\r\nmval\r\n"[0: 42]));
+
+    const get_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$3\r\nGET\r\n$4\r\nmkey\r\n"[0: 23], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: get_result.response_len], &"$4\r\nmval\r\n"[0: 10]));
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_connection_process_watch_unwatch() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();

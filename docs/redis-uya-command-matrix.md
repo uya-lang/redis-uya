@@ -1,8 +1,8 @@
 # redis-uya command matrix
 
-> version: v0.9.1-dev  
-> date: 2026-05-09  
-> source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`  
+> version: v0.9.1-dev
+> date: 2026-05-10
+> source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`
 > runtime source: `src/command/catalog_generated.uya`
 
 ## Summary
@@ -15,8 +15,8 @@
 
 | status | count |
 |--------|-------|
-| `full` | `98` |
-| `partial` | `36` |
+| `full` | `97` |
+| `partial` | `37` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
 | `deferred` | `368` |
@@ -168,7 +168,7 @@
 | `cms.query` | `cms` | `deferred` | `v0.9.2` | `-2` | `cms` | `no` | `@cms, @read` |
 | `command` | `server` | `partial` | `-` | `-1` | `-` | `no` | `@slow, @connection` |
 | `command|count` | `server` | `full` | `-` | `2` | `-` | `no` | `@slow, @connection` |
-| `command|docs` | `server` | `full` | `-` | `-2` | `-` | `no` | `@slow, @connection` |
+| `command|docs` | `server` | `partial` | `-` | `-2` | `-` | `no` | `@slow, @connection` |
 | `command|getkeys` | `server` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@slow, @connection` |
 | `command|getkeysandflags` | `server` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@slow, @connection` |
 | `command|help` | `server` | `full` | `-` | `2` | `-` | `no` | `@slow, @connection` |

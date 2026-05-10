@@ -208,6 +208,7 @@ PARTIAL_NAMES = {
     "cluster|slots",
     "command",
     "command|list",
+    "command|docs",
     "config",
     "config|get",
     "flushall",

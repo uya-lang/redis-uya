@@ -94,6 +94,7 @@ server open
 - `output_len` / `output_sent`：发送进度
 - `GET` 命中且 bulk body 不小于 64B 时，连接层会把 RESP header 写入 `output`，再用 `writev` 直接发送对象 value body 与 CRLF；若非阻塞写发生部分发送，剩余字节会退回到 `pending` 缓冲
 - RESP 批量解析 API 会对读缓冲中的顶层帧做完整前缀扫描，半包尾部保留在输入缓冲，错误尾包释放已解析前缀后返回协议错误
+- 连接层当前会在一次读入中批量消费多个完整 RESP 顶层帧；这条路径用于 `redis-cli` stdin/pipeline、事务管线和后续多命令批处理
 - `close_after_write`：`QUIT` 等命令的延迟关闭标志
 - `transaction`：连接级事务队列、WATCH 集合、RESP 协议版本、CLIENT 名称/库信息与 Pub/Sub 订阅计数状态
 
@@ -110,6 +111,7 @@ server open
 - `CONFIG` 仍由 `command/executor.uya` 执行，当前覆盖 `GET`、`HELP`、`RESETSTAT`
 - `CONFIG GET` 从 `CommandRuntimeInfo` 暴露运行时配置快照，支持 `maxclients`、`databases` 等兼容字段
 - `COMMAND` 由 `command/executor.uya` 执行，当前覆盖 `COMMAND`、`COUNT`、`LIST`、`INFO`、`DOCS`，运行时数据统一来自 `catalog_generated*`
+- `COMMAND DOCS` 当前命令名定向查询可用；无参数全量 docs 查询先返回空集合，避免在当前固定连接输出缓冲下生成超大回复而卡住 `redis-cli`
 - `CLUSTER` 由 `command/executor.uya` 执行，当前通过服务端最小拓扑提供 `KEYSLOT/INFO/NODES/SLOTS/HELP/MEET/SETSLOT`
 - `CLIENT` 在 `connection.uya` 处理，因为 `SETNAME/GETNAME/SETINFO/INFO/LIST` 依赖连接级状态
 - `HELLO 2/3 SETNAME name` 与 `CLIENT SETNAME` 共享同一份连接级客户端名

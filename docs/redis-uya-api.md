@@ -89,12 +89,13 @@ COMMAND DOCS [command-name [command-name ...]]
 - `COMMAND COUNT`：返回当前目录里的顶层官方命令数量，Integer
 - `COMMAND LIST`：返回命令名数组；支持 `FILTERBY MODULE`、`FILTERBY ACLCAT`、`FILTERBY PATTERN`
 - `COMMAND INFO`：返回命令元数据数组；未知命令在 RESP2 下返回 Null Bulk，占位于原请求位置；RESP3 下返回 Null
-- `COMMAND DOCS`：RESP2 下返回 flatten map array，RESP3 下返回 map；未知命令会被忽略
+- `COMMAND DOCS`：带命令名时，RESP2 下返回 flatten map array，RESP3 下返回 map；未知命令会被忽略
 
 说明：
 
 - 当前 `COMMAND` 家族与 `docs/redis-uya-command-matrix.md` 共用 `src/command/catalog_generated*` 生成目录
 - 目录基线当前覆盖 Redis 8.6 官方命令页中的 `531` 个官方命令名
+- `COMMAND DOCS` 当前命令名定向查询可用；无参数全量 docs 查询先返回空集合，以兼容 `redis-cli` 基于 `COMMAND DOCS` 的 stdin/pipeline 客户端路径；完整全量 docs 输出待后续大响应流式发送路径补齐
 - `COMMAND GETKEYS` 与 `COMMAND GETKEYSANDFLAGS` 当前已显式识别，但返回 deferred 错误：`ERR COMMAND <subcommand> not supported yet`
 
 ### `PING`

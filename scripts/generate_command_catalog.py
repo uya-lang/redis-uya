@@ -207,6 +207,8 @@ PARTIAL_NAMES = {
     "cluster|setslot",
     "cluster|slots",
     "command",
+    "command|getkeys",
+    "command|getkeysandflags",
     "command|list",
     "command|docs",
     "config",

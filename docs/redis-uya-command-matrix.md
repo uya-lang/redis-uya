@@ -1,7 +1,7 @@
 # redis-uya command matrix
 
 > version: v0.9.1-dev
-> date: 2026-05-10
+> date: 2026-05-11
 > source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`
 > runtime source: `src/command/catalog_generated.uya`
 
@@ -16,10 +16,10 @@
 | status | count |
 |--------|-------|
 | `full` | `97` |
-| `partial` | `37` |
+| `partial` | `39` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `368` |
+| `deferred` | `366` |
 
 ## Group counts
 
@@ -169,8 +169,8 @@
 | `command` | `server` | `partial` | `-` | `-1` | `-` | `no` | `@slow, @connection` |
 | `command|count` | `server` | `full` | `-` | `2` | `-` | `no` | `@slow, @connection` |
 | `command|docs` | `server` | `partial` | `-` | `-2` | `-` | `no` | `@slow, @connection` |
-| `command|getkeys` | `server` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@slow, @connection` |
-| `command|getkeysandflags` | `server` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@slow, @connection` |
+| `command|getkeys` | `server` | `partial` | `-` | `-3` | `-` | `no` | `@slow, @connection` |
+| `command|getkeysandflags` | `server` | `partial` | `-` | `-3` | `-` | `no` | `@slow, @connection` |
 | `command|help` | `server` | `full` | `-` | `2` | `-` | `no` | `@slow, @connection` |
 | `command|info` | `server` | `full` | `-` | `-2` | `-` | `no` | `@slow, @connection` |
 | `command|list` | `server` | `partial` | `-` | `-2` | `-` | `yes` | `@slow, @connection` |

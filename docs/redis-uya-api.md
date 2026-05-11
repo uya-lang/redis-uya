@@ -96,7 +96,8 @@ COMMAND DOCS [command-name [command-name ...]]
 - 当前 `COMMAND` 家族与 `docs/redis-uya-command-matrix.md` 共用 `src/command/catalog_generated*` 生成目录
 - 目录基线当前覆盖 Redis 8.6 官方命令页中的 `531` 个官方命令名
 - `COMMAND DOCS` 当前命令名定向查询可用；无参数全量 docs 查询先返回空集合，以兼容 `redis-cli` 基于 `COMMAND DOCS` 的 stdin/pipeline 客户端路径；完整全量 docs 输出待后续大响应流式发送路径补齐
-- `COMMAND GETKEYS` 与 `COMMAND GETKEYSANDFLAGS` 当前已显式识别，但返回 deferred 错误：`ERR COMMAND <subcommand> not supported yet`
+- `COMMAND GETKEYS` 当前支持当前运行时命令表里的 key 提取，覆盖多 key、成对 key、`RENAME` 双 key、`SORT ... STORE` movablekeys 和错误路径
+- `COMMAND GETKEYSANDFLAGS` 当前支持当前运行时命令表里的 key/flag 提取，覆盖 `RO/OW/RW/RM` 及 `access/update/insert/delete` 基础组合
 
 ### `PING`
 

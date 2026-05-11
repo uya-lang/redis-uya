@@ -175,13 +175,35 @@ def run_smoke() -> None:
             if not isinstance(get_docs, dict) or get_docs.get(b"group") != b"string":
                 raise AssertionError(f"unexpected RESP3 COMMAND DOCS GET payload: {resp3_docs!r}")
 
-            getkeys_error = None
+            docs_all = send_command(sock, b"COMMAND", b"DOCS")
+            if docs_all != {}:
+                raise AssertionError(f"expected empty COMMAND DOCS compatibility response, got: {docs_all!r}")
+
+            getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"SORT", b"mylist", b"ALPHA", b"STORE", b"out")
+            if getkeys != [b"mylist", b"out"]:
+                raise AssertionError(f"unexpected COMMAND GETKEYS result: {getkeys!r}")
+
+            getkeysandflags = send_command(sock, b"COMMAND", b"GETKEYSANDFLAGS", b"RENAME", b"src", b"dst")
+            if not isinstance(getkeysandflags, list) or len(getkeysandflags) != 2:
+                raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS shape: {getkeysandflags!r}")
+            if getkeysandflags[0][0] != b"src" or getkeysandflags[1][0] != b"dst":
+                raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS keys: {getkeysandflags!r}")
+
+            bad_arity_error = None
             try:
-                send_command(sock, b"COMMAND", b"GETKEYS", b"SET", b"key", b"value")
+                send_command(sock, b"COMMAND", b"GETKEYS", b"GET")
             except RespError as exc:
-                getkeys_error = str(exc)
-            if getkeys_error is None or "not supported yet" not in getkeys_error:
-                raise AssertionError(f"unexpected COMMAND GETKEYS result: {getkeys_error!r}")
+                bad_arity_error = str(exc)
+            if bad_arity_error is None or "Invalid number of arguments" not in bad_arity_error:
+                raise AssertionError(f"unexpected COMMAND GETKEYS arity result: {bad_arity_error!r}")
+
+            missing_error = None
+            try:
+                send_command(sock, b"COMMAND", b"GETKEYS")
+            except RespError as exc:
+                missing_error = str(exc)
+            if missing_error is None or "wrong number of arguments" not in missing_error:
+                raise AssertionError(f"unexpected COMMAND GETKEYS missing-args result: {missing_error!r}")
 
             if send_command(sock, b"QUIT") != "OK":
                 raise AssertionError("QUIT failed")

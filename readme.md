@@ -90,7 +90,7 @@
 
 下一阶段：
 
-- `v0.9.1`：继续推进单机命令全集矩阵、连接/管理面补齐和兼容边界收敛；当前已完成官方命令全集矩阵、`COMMAND*` 第一批和 `COMMAND GETKEYS*` 当前命令表支持，待续 `COMMAND DOCS` 全量输出、`CLIENT/CONFIG` 缺口、pattern Pub/Sub、Scripting/Stream 命令族与 standalone 错误边界。
+- `v0.9.1`：继续推进单机命令全集矩阵、连接/管理面补齐和兼容边界收敛；当前已完成官方命令全集矩阵、`COMMAND*` 第一批、`COMMAND GETKEYS*` 当前命令表支持、全局 `CLIENT LIST` 和 `CONFIG SET` 运行时子集，待续 `COMMAND DOCS` 全量输出、`CONFIG REWRITE`、`CLIENT KILL/PAUSE/TRACKING`、pattern Pub/Sub、Scripting/Stream 命令族与 standalone 错误边界。
 
 当前阶段尚未生产可用。
 
@@ -300,7 +300,7 @@ build/redis-uya 6380 1
 - 完整 Redis RDB 二进制兼容
 - Redis 风格长连接流式复制
 - Pub/Sub 模式下的完整命令限制、pattern 订阅与背压处理
-- 完整 `CONFIG SET/REWRITE` 与 `CLIENT KILL/PAUSE/TRACKING`
+- 完整 `CONFIG REWRITE`、`CONFIG SET` 其余字段与 `CLIENT KILL/PAUSE/TRACKING`
 - LFU 衰减、采样池与正式内存 benchmark
 - 完整 Redis Cluster gossip、failover、resharding、`ASKING` 一次性放行和多 key 同槽校验；这些能力在 `v1.0.0` 之后重新规划
 - Lua 脚本

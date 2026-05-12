@@ -7,6 +7,8 @@ use src.command.executor.command_runtime_default;
 use src.command.executor.command_execute_at;
 use src.command.executor.command_execute_with_runtime_at;
 use src.command.executor.command_reply_cleanup;
+use src.config.ServerConfig;
+use src.config.default_config;
 use src.command.router.Command;
 use src.command.router.CommandInfo;
 use src.command.router.CommandRouter;
@@ -80,6 +82,8 @@ export struct ConnectionProcessResult {
     request_bgsave: bool,
     request_aof_rewrite: bool,
     request_shutdown: bool,
+    request_config_set: bool,
+    config_after: ServerConfig,
 }
 
 export struct ConnectionTransaction {
@@ -271,6 +275,8 @@ fn connection_zero_copy_process_result(
         request_bgsave: request_bgsave,
         request_aof_rewrite: request_aof_rewrite,
         request_shutdown: false,
+        request_config_set: false,
+        config_after: default_config(),
     };
 }
 
@@ -289,6 +295,8 @@ fn connection_make_reply(typ: CommandReplyType, data: &[byte], integer: i64) Com
         replicaof_port: 0,
         request_bgsave: false,
         request_aof_rewrite: false,
+        request_config_set: false,
+        config_after: default_config(),
     };
 }
 
@@ -2104,6 +2112,8 @@ export fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transac
         request_bgsave: result.request_bgsave,
         request_aof_rewrite: result.request_aof_rewrite,
         request_shutdown: result.request_shutdown,
+        request_config_set: result.request_config_set,
+        config_after: result.config_after,
     };
 }
 
@@ -2591,11 +2601,15 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
     }
     const request_bgsave: bool = reply.request_bgsave;
     const request_aof_rewrite: bool = reply.request_aof_rewrite;
+    const request_config_set: bool = reply.request_config_set;
     if request_bgsave && bgsave_requested != null {
         *bgsave_requested = true;
     }
     if request_aof_rewrite && rewrite_requested != null {
         *rewrite_requested = true;
+    }
+    if request_config_set && connection_cstring_slice(reply.config_after.requirepass[0: 128]).len > 0 {
+        tx.authenticated = true;
     }
     var n: usize = 0;
     var psync_reply: CommandReply = connection_make_reply(CommandReplyType.reply_simple_string, connection_reply_empty_slice(), 0);
@@ -2637,6 +2651,8 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
         request_bgsave: request_bgsave,
         request_aof_rewrite: request_aof_rewrite,
         request_shutdown: false,
+        request_config_set: request_config_set,
+        config_after: reply.config_after,
     };
 }
 

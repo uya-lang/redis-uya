@@ -252,6 +252,7 @@ export fn test_command_info_and_config() !void {
     var config_help_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_help_command, 5000u64);
     const config_help_len: usize = try connection_encode_reply(&config_help_reply, &out[0], 512);
     try assert_true(command_executor_test_contains(out[0: config_help_len], &"$20\r\nCONFIG GET <pattern>\r\n"[0: 27]));
+    try assert_true(command_executor_test_contains(out[0: config_help_len], &"CONFIG SET <parameter> <value> [<parameter> <value> ...]"[0: 56]));
     command_reply_cleanup(&config_help_reply);
     resp_value_free(&config_help_parsed.value);
 
@@ -261,6 +262,54 @@ export fn test_command_info_and_config() !void {
     try assert_eq_i32(config_resetstat_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
     try assert_true(command_executor_test_slice_eq(config_resetstat_reply.data, &"OK"[0: 2]));
     resp_value_free(&config_resetstat_parsed.value);
+
+    var config_set_max_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$9\r\nmaxmemory\r\n$3\r\n1mb\r\n"[0: 49]);
+    const config_set_max_command: Command = try command_executor_test_command(&router, &config_set_max_parsed);
+    const config_set_max_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_set_max_command, 5000u64);
+    try assert_eq_i32(config_set_max_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(config_set_max_reply.data, &"OK"[0: 2]));
+    try assert_eq_i32(config_set_max_reply.request_config_set as i32, 1);
+    try assert_eq_i32(config_set_max_reply.config_after.maxmemory as i32, 1048576);
+    resp_value_free(&config_set_max_parsed.value);
+
+    var config_set_policy_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$16\r\nmaxmemory-policy\r\n$11\r\nallkeys-lru\r\n"[0: 73]);
+    const config_set_policy_command: Command = try command_executor_test_command(&router, &config_set_policy_parsed);
+    const config_set_policy_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_set_policy_command, 5000u64);
+    try assert_eq_i32(config_set_policy_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_eq_i32(config_set_policy_reply.request_config_set as i32, 1);
+    try assert_eq_i32(config_set_policy_reply.config_after.maxmemory_policy as i32, MaxmemoryPolicy.maxmemory_allkeys_lru as i32);
+    resp_value_free(&config_set_policy_parsed.value);
+
+    var config_set_save_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$4\r\nsave\r\n$5\r\n60 10\r\n"[0: 46]);
+    const config_set_save_command: Command = try command_executor_test_command(&router, &config_set_save_parsed);
+    const config_set_save_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_set_save_command, 5000u64);
+    try assert_eq_i32(config_set_save_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_eq_i32(config_set_save_reply.request_config_set as i32, 1);
+    try assert_eq_i32(config_set_save_reply.config_after.save_seconds, 60);
+    try assert_eq_i32(config_set_save_reply.config_after.save_changes, 10);
+    resp_value_free(&config_set_save_parsed.value);
+
+    var config_set_requirepass_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$11\r\nrequirepass\r\n$4\r\nnext\r\n"[0: 56]);
+    const config_set_requirepass_command: Command = try command_executor_test_command(&router, &config_set_requirepass_parsed);
+    const config_set_requirepass_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_set_requirepass_command, 5000u64);
+    try assert_eq_i32(config_set_requirepass_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_eq_i32(config_set_requirepass_reply.request_config_set as i32, 1);
+    try assert_true(command_executor_test_slice_eq(config_set_requirepass_reply.config_after.requirepass[0: 4], &"next"[0: 4]));
+    resp_value_free(&config_set_requirepass_parsed.value);
+
+    var config_set_bad_value_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$9\r\nmaxmemory\r\n$5\r\nbogus\r\n"[0: 51]);
+    const config_set_bad_value_command: Command = try command_executor_test_command(&router, &config_set_bad_value_parsed);
+    const config_set_bad_value_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_set_bad_value_command, 5000u64);
+    try assert_eq_i32(config_set_bad_value_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(config_set_bad_value_reply.data, &"ERR Invalid argument for CONFIG SET"[0: 35]));
+    resp_value_free(&config_set_bad_value_parsed.value);
+
+    var config_set_unknown_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$6\r\nfoobar\r\n$1\r\n1\r\n"[0: 44]);
+    const config_set_unknown_command: Command = try command_executor_test_command(&router, &config_set_unknown_parsed);
+    const config_set_unknown_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_set_unknown_command, 5000u64);
+    try assert_eq_i32(config_set_unknown_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(config_set_unknown_reply.data, &"ERR Unsupported CONFIG parameter"[0: 32]));
+    resp_value_free(&config_set_unknown_parsed.value);
 
     runtime.replication_role = ReplicationRole.role_replica;
     runtime.replication_state = ReplicationState.repl_state_configured;

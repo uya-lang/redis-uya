@@ -179,7 +179,7 @@
 | `config|help` | `server` | `full` | `-` | `2` | `-` | `no` | `@slow` |
 | `config|resetstat` | `server` | `full` | `-` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `config|rewrite` | `server` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `config|set` | `server` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `config|set` | `server` | `partial` | `-` | `-4` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `copy` | `generic` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@keyspace, @write, @slow` |
 | `dbsize` | `server` | `full` | `-` | `1` | `-` | `no` | `@keyspace, @read, @fast` |
 | `debug` | `server` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@admin, @slow, @dangerous` |

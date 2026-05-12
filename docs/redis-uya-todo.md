@@ -464,7 +464,7 @@
 - [ ] Bitmap/Bitfield/HyperLogLog/Geo 命令族
 - [ ] JSON、Search、Time Series、概率结构和 Vector 的项目内实现方案与分阶段命令覆盖
 - [ ] ACL 与 TLS：用户、权限、命令类别、key pattern、证书配置和认证错误兼容
-- [ ] 管理与诊断：`CONFIG SET/REWRITE`、`CLIENT KILL/PAUSE/TRACKING`、`SLOWLOG`、`LATENCY`、`MEMORY`、`MONITOR`、`COMMAND`
+- [ ] 管理与诊断：`CONFIG REWRITE`、`CONFIG SET` 其余字段、`CLIENT KILL/PAUSE/TRACKING`、`SLOWLOG`、`LATENCY`、`MEMORY`、`MONITOR`、`COMMAND`
 - [ ] 持久化与复制收敛：RDB 二进制兼容推进、AOF rewrite 压测、复制断线重连、`WAIT` 语义、只读副本限制
 
 验收项：

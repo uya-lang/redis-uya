@@ -154,6 +154,39 @@ export fn maxmemory_policy_name(policy: MaxmemoryPolicy) &[byte] {
     return &"noeviction"[0: 10];
 }
 
+export fn config_apply_runtime_set(cfg: &ServerConfig, key: &[byte], value: &[byte]) !bool {
+    if token_eq(key, &"requirepass"[0: 11]) {
+        copy_literal(cfg.requirepass[0: 128], value);
+        return true;
+    }
+    if token_eq(key, &"maxmemory"[0: 9]) {
+        cfg.maxmemory = try parse_memory_token(value);
+        return true;
+    }
+    if token_eq(key, &"maxmemory-policy"[0: 16]) {
+        cfg.maxmemory_policy = try parse_maxmemory_policy(value);
+        return true;
+    }
+    if token_eq(key, &"save"[0: 4]) {
+        if value.len == 0 {
+            cfg.save_seconds = 0;
+            cfg.save_changes = 0;
+            return true;
+        }
+        var pos: usize = 0;
+        const seconds_token: &[byte] = next_token(value, &pos);
+        const changes_token: &[byte] = next_token(value, &pos);
+        const extra_token: &[byte] = next_token(value, &pos);
+        if seconds_token.len == 0 || changes_token.len == 0 || extra_token.len != 0 {
+            return error.ConfigInvalidValue;
+        }
+        cfg.save_seconds = try parse_i32_token(seconds_token);
+        cfg.save_changes = try parse_i32_token(changes_token);
+        return true;
+    }
+    return false;
+}
+
 fn next_token(line: &[byte], pos: &usize) &[byte] {
     while *pos < line.len && is_space(line.ptr[*pos]) {
         *pos = *pos + 1;

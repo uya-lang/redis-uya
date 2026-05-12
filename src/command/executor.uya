@@ -3,6 +3,7 @@
 use src.config.ServerConfig;
 use src.config.MaxmemoryPolicy;
 use src.config.default_config;
+use src.config.config_apply_runtime_set;
 use src.config.config_copy_bytes;
 use src.config.maxmemory_policy_name;
 use src.cluster.node.CLUSTER_NODE_FLAG_MASTER;
@@ -170,6 +171,8 @@ export struct CommandReply {
     replicaof_port: i32,
     request_bgsave: bool,
     request_aof_rewrite: bool,
+    request_config_set: bool,
+    config_after: ServerConfig,
 }
 
 export struct CommandRuntimeInfo {
@@ -270,6 +273,8 @@ fn command_executor_reply(typ: CommandReplyType, data: &[byte], integer: i64) Co
         replicaof_port: 0,
         request_bgsave: false,
         request_aof_rewrite: false,
+        request_config_set: false,
+        config_after: default_config(),
     };
 }
 
@@ -1465,6 +1470,10 @@ fn command_executor_config_help() CommandReply {
         return command_executor_oom();
     };
     _ = list_object_push_tail(reply_list, &"CONFIG GET <pattern>"[0: 20]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"CONFIG SET <parameter> <value> [<parameter> <value> ...]"[0: 56]) catch {
         object_free(reply_list);
         return command_executor_oom();
     };
@@ -5544,6 +5553,33 @@ fn command_executor_config(runtime: &CommandRuntimeInfo, command: &Command) Comm
             return command_executor_wrong_arity();
         }
         return command_executor_simple(&"OK"[0: 2]);
+    }
+
+    if command_executor_keyword_eq(subcommand, &"SET"[0: 3]) {
+        if command.argc < 4 || ((command.argc - 2) % (2 as usize)) != 0 {
+            return command_executor_wrong_arity();
+        }
+        var next_config: ServerConfig = runtime.config;
+        var index: usize = 2;
+        while index + 1 < command.argc {
+            const key: &[byte] = command_executor_arg(command, index) catch {
+                return command_executor_wrong_arity();
+            };
+            const value: &[byte] = command_executor_arg(command, index + 1) catch {
+                return command_executor_wrong_arity();
+            };
+            const applied: bool = config_apply_runtime_set(&next_config, key, value) catch {
+                return command_executor_error(&"ERR Invalid argument for CONFIG SET"[0: 35]);
+            };
+            if !applied {
+                return command_executor_error(&"ERR Unsupported CONFIG parameter"[0: 32]);
+            }
+            index = index + 2;
+        }
+        var reply: CommandReply = command_executor_simple(&"OK"[0: 2]);
+        reply.request_config_set = true;
+        reply.config_after = next_config;
+        return reply;
     }
 
     if !command_executor_keyword_eq(subcommand, &"GET"[0: 3]) {

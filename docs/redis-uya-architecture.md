@@ -184,5 +184,5 @@ server open
 - 事务当前已覆盖连接级最小 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`，但仍没有更完整的 Redis 事务中止传播、脚本联动和控制面扩展
 - RESP3 当前是 `HELLO 2/3` 驱动的最小闭环，仍不是完整 RESP3 类型输出与客户端兼容矩阵
 - Pub/Sub 当前是固定容量最小闭环，仍没有 pattern 订阅、完整 subscribed-mode 命令限制和背压缓冲
-- 控制面当前覆盖 `CLIENT` / `CONFIG` 的兼容子集，仍没有 `CONFIG SET/REWRITE`、`CLIENT KILL/PAUSE/TRACKING`
+- 控制面当前覆盖 `CLIENT` / `CONFIG` 的兼容子集，`CONFIG SET` 已支持 `requirepass/maxmemory/maxmemory-policy/save` 运行时子集；仍没有 `CONFIG REWRITE`、其余 `CONFIG SET` 热更新，以及 `CLIENT KILL/PAUSE/TRACKING`
 - `maxmemory` 当前已覆盖 noeviction、allkeys-* 与 volatile-* 基线，并补齐 allocator 统计观测、Slab 小对象缓存和压力回归；仍没有 LFU 衰减、采样池、淘汰事件持久化优化和正式内存 benchmark

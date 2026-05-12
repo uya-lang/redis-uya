@@ -190,10 +190,37 @@ def run_smoke() -> None:
                     raise AssertionError(f"unexpected CONFIG GET databases: {db_config_raw!r}")
 
                 help_reply = send_command(sock, b"CONFIG", b"HELP")
-                if not isinstance(help_reply, list) or b"CONFIG RESETSTAT" not in help_reply:
+                if not isinstance(help_reply, list) or b"CONFIG RESETSTAT" not in help_reply or b"CONFIG SET <parameter> <value> [<parameter> <value> ...]" not in help_reply:
                     raise AssertionError(f"unexpected CONFIG HELP: {help_reply!r}")
                 if send_command(sock, b"CONFIG", b"RESETSTAT") != "OK":
                     raise AssertionError("CONFIG RESETSTAT failed")
+
+                if send_command(sock, b"CONFIG", b"SET", b"maxmemory", b"1mb") != "OK":
+                    raise AssertionError("CONFIG SET maxmemory failed")
+                maxmemory_raw = send_command(sock, b"CONFIG", b"GET", b"maxmemory")
+                if array_pairs_to_dict(maxmemory_raw).get("maxmemory") != "1048576":
+                    raise AssertionError(f"unexpected CONFIG GET maxmemory after SET: {maxmemory_raw!r}")
+
+                if send_command(sock, b"CONFIG", b"SET", b"maxmemory-policy", b"allkeys-lru") != "OK":
+                    raise AssertionError("CONFIG SET maxmemory-policy failed")
+                policy_raw = send_command(sock, b"CONFIG", b"GET", b"maxmemory-policy")
+                if array_pairs_to_dict(policy_raw).get("maxmemory-policy") != "allkeys-lru":
+                    raise AssertionError(f"unexpected CONFIG GET maxmemory-policy after SET: {policy_raw!r}")
+
+                if send_command(sock, b"CONFIG", b"SET", b"save", b"60 10") != "OK":
+                    raise AssertionError("CONFIG SET save failed")
+                save_raw = send_command(sock, b"CONFIG", b"GET", b"save")
+                if array_pairs_to_dict(save_raw).get("save") != "60 10":
+                    raise AssertionError(f"unexpected CONFIG GET save after SET: {save_raw!r}")
+
+                if send_command(sock, b"CONFIG", b"SET", b"requirepass", b"runtime-secret") != "OK":
+                    raise AssertionError("CONFIG SET requirepass failed")
+                requirepass_raw = send_command(sock, b"CONFIG", b"GET", b"requirepass")
+                if array_pairs_to_dict(requirepass_raw).get("requirepass") != "runtime-secret":
+                    raise AssertionError(f"unexpected CONFIG GET requirepass after SET: {requirepass_raw!r}")
+                if send_command(sock, b"PING") != "PONG":
+                    raise AssertionError("current connection lost access after CONFIG SET requirepass")
+
                 if send_command(sock, b"QUIT") != "OK":
                     raise AssertionError("QUIT failed")
     finally:

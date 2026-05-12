@@ -15,6 +15,7 @@ use src.network.connection.connection_process_input_zero_copy_for_test_at;
 use src.network.connection.connection_process_input_with_runtime_at;
 use src.network.connection.connection_process_input_with_runtime_with_transaction_at;
 use src.network.connection.connection_process_input_with_transaction_at;
+use src.network.connection.connection_client_registry_reset_for_test;
 use src.network.connection.connection_transaction_new;
 use src.network.connection.connection_transaction_reset;
 use src.network.connection.connection_pubsub_reset_for_test;
@@ -566,6 +567,10 @@ export fn test_connection_process_resp3_hello() !void {
 
 export fn test_connection_process_client_commands() !void {
     reset_memory_stats_for_test();
+    connection_client_registry_reset_for_test();
+    defer {
+        connection_client_registry_reset_for_test();
+    }
     const router: CommandRouter = command_router_new();
     var engine: Engine = engine_new();
     var tx: ConnectionTransaction = connection_transaction_new();
@@ -576,7 +581,7 @@ export fn test_connection_process_client_commands() !void {
     var out: [byte: 512] = [];
 
     const client_id: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$2\r\nID\r\n"[0: 24], &out[0], 512, 1000u64);
-    try assert_true(network_connection_slice_eq(out[0: client_id.response_len], &":42\r\n"[0: 5]));
+    try assert_true(network_connection_slice_eq(out[0: client_id.response_len], &":1\r\n"[0: 4]));
 
     const get_empty: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$7\r\nGETNAME\r\n"[0: 29], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: get_empty.response_len], &"$-1\r\n"[0: 5]));
@@ -594,10 +599,24 @@ export fn test_connection_process_client_commands() !void {
     try assert_true(network_connection_slice_eq(out[0: set_lib_ver.response_len], &"+OK\r\n"[0: 5]));
 
     const client_info: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$4\r\nINFO\r\n"[0: 26], &out[0], 512, 1000u64);
-    try assert_true(network_connection_contains(out[0: client_info.response_len], &"id=42"[0: 5]));
+    try assert_true(network_connection_contains(out[0: client_info.response_len], &"id=1"[0: 4]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"name=worker"[0: 11]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"lib-name=redis-uya-test"[0: 23]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"lib-ver=0.5.0"[0: 13]));
+
+    var tx2: ConnectionTransaction = connection_transaction_new();
+    tx2.client_fd = 43;
+    defer {
+        connection_transaction_reset(&tx2);
+    }
+    const second_name: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx2, &"*3\r\n$6\r\nCLIENT\r\n$7\r\nSETNAME\r\n$5\r\npeer2\r\n"[0: 40], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: second_name.response_len], &"+OK\r\n"[0: 5]));
+
+    const client_list: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$4\r\nLIST\r\n"[0: 26], &out[0], 512, 1000u64);
+    try assert_true(network_connection_contains(out[0: client_list.response_len], &"id=1"[0: 4]));
+    try assert_true(network_connection_contains(out[0: client_list.response_len], &"name=worker"[0: 11]));
+    try assert_true(network_connection_contains(out[0: client_list.response_len], &"id=2"[0: 4]));
+    try assert_true(network_connection_contains(out[0: client_list.response_len], &"name=peer2"[0: 10]));
 
     const hello_setname: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$5\r\nHELLO\r\n$1\r\n3\r\n$7\r\nSETNAME\r\n$12\r\nhello-client\r\n"[0: 54], &out[0], 512, 1000u64);
     try assert_true(out[0] == 37 as byte);

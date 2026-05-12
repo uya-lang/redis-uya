@@ -115,7 +115,7 @@ server open
 - `CLUSTER` 由 `command/executor.uya` 执行，当前通过服务端最小拓扑提供 `KEYSLOT/INFO/NODES/SLOTS/HELP/MEET/SETSLOT`
 - `CLIENT` 在 `connection.uya` 处理，因为 `SETNAME/GETNAME/SETINFO/INFO/LIST` 依赖连接级状态
 - `HELLO 2/3 SETNAME name` 与 `CLIENT SETNAME` 共享同一份连接级客户端名
-- `CLIENT LIST` 当前只返回当前连接的信息行，不扫描 `RedisServer.clients`
+- `CLIENT LIST` 通过连接级注册表返回当前活跃连接的信息行快照，连接关闭时由 `server.uya` 注销
 - `CommandRuntimeInfo.protocol_version` 由连接层注入，供 `COMMAND DOCS` 等控制面在 RESP2/RESP3 下切换集合和 map 形态
 
 ## 5. Pub/Sub 最小闭环
@@ -184,5 +184,5 @@ server open
 - 事务当前已覆盖连接级最小 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`，但仍没有更完整的 Redis 事务中止传播、脚本联动和控制面扩展
 - RESP3 当前是 `HELLO 2/3` 驱动的最小闭环，仍不是完整 RESP3 类型输出与客户端兼容矩阵
 - Pub/Sub 当前是固定容量最小闭环，仍没有 pattern 订阅、完整 subscribed-mode 命令限制和背压缓冲
-- 控制面当前覆盖 `CLIENT` / `CONFIG` 的兼容子集，仍没有 `CONFIG SET/REWRITE`、全局 `CLIENT LIST`、`CLIENT KILL/PAUSE/TRACKING`
+- 控制面当前覆盖 `CLIENT` / `CONFIG` 的兼容子集，仍没有 `CONFIG SET/REWRITE`、`CLIENT KILL/PAUSE/TRACKING`
 - `maxmemory` 当前已覆盖 noeviction、allkeys-* 与 volatile-* 基线，并补齐 allocator 统计观测、Slab 小对象缓存和压力回归；仍没有 LFU 衰减、采样池、淘汰事件持久化优化和正式内存 benchmark

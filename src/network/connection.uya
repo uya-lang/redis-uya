@@ -112,6 +112,7 @@ const CONNECTION_CLIENT_NAME_MAX: usize = 64;
 const CONNECTION_CLIENT_INFO_MAX: usize = 64;
 const CONNECTION_ZERO_COPY_BULK_MIN: usize = 64;
 const CONNECTION_BATCH_MAX_COUNT: usize = 64;
+const CONNECTION_CLIENT_REGISTRY_MAX: usize = 128;
 
 struct ConnectionPubSubSubscription {
     active: bool,
@@ -122,6 +123,25 @@ struct ConnectionPubSubSubscription {
 }
 
 var connection_pubsub_subscriptions: [ConnectionPubSubSubscription: CONNECTION_PUBSUB_MAX_SUBSCRIPTIONS] = [];
+
+struct ConnectionClientRegistryEntry {
+    active: bool,
+    tx_addr: usize,
+    client_id: i64,
+    fd: i32,
+    protocol_version: i32,
+    client_name_len: usize,
+    client_name: [byte: CONNECTION_CLIENT_NAME_MAX],
+    client_lib_name_len: usize,
+    client_lib_name: [byte: CONNECTION_CLIENT_INFO_MAX],
+    client_lib_ver_len: usize,
+    client_lib_ver: [byte: CONNECTION_CLIENT_INFO_MAX],
+    pubsub_count: usize,
+    multi_active: bool,
+}
+
+var connection_client_registry: [ConnectionClientRegistryEntry: CONNECTION_CLIENT_REGISTRY_MAX] = [];
+var connection_client_registry_next_id: i64 = 1;
 
 fn connection_transaction_empty() ConnectionTransaction {
     return ConnectionTransaction{
@@ -550,8 +570,18 @@ fn connection_keyword_eq(a: &[byte], b: &[byte]) bool {
 }
 
 fn connection_client_id(tx: &ConnectionTransaction) i64 {
-    if tx != null && tx.client_fd >= 0 {
-        return tx.client_fd as i64;
+    if tx != null {
+        const tx_addr: usize = @usize_from_ptr(tx as &void);
+        const slot_idx: i32 = connection_client_registry_find_slot(tx_addr);
+        if slot_idx >= 0 && slot_idx < CONNECTION_CLIENT_REGISTRY_MAX as i32 {
+            const slot_usize: usize = slot_idx as usize;
+            if slot_usize < CONNECTION_CLIENT_REGISTRY_MAX {
+                return connection_client_registry[slot_usize].client_id;
+            }
+        }
+        if tx.client_fd >= 0 {
+            return tx.client_fd as i64;
+        }
     }
     return 0;
 }
@@ -589,6 +619,194 @@ fn connection_cstring_slice(data: &[byte]) &[byte] {
         len = len + 1;
     }
     return data[0: len];
+}
+
+fn connection_client_registry_copy_bytes(dst: &[byte], src: &[byte], src_len: usize) void {
+    var i: usize = 0;
+    while i < src_len && i < dst.len {
+        dst.ptr[i] = src.ptr[i];
+        i = i + 1;
+    }
+    while i < dst.len {
+        dst.ptr[i] = 0 as byte;
+        i = i + 1;
+    }
+}
+
+fn connection_client_registry_clear_slot(slot: &ConnectionClientRegistryEntry) void {
+    slot.active = false;
+    slot.tx_addr = 0 as usize;
+    slot.client_id = 0;
+    slot.fd = -1;
+    slot.protocol_version = 2;
+    slot.client_name_len = 0;
+    slot.client_lib_name_len = 0;
+    slot.client_lib_ver_len = 0;
+    slot.pubsub_count = 0;
+    slot.multi_active = false;
+    connection_client_registry_copy_bytes(slot.client_name[0: CONNECTION_CLIENT_NAME_MAX], connection_reply_empty_slice(), 0);
+    connection_client_registry_copy_bytes(slot.client_lib_name[0: CONNECTION_CLIENT_INFO_MAX], connection_reply_empty_slice(), 0);
+    connection_client_registry_copy_bytes(slot.client_lib_ver[0: CONNECTION_CLIENT_INFO_MAX], connection_reply_empty_slice(), 0);
+}
+
+fn connection_client_registry_tx_addr(tx: &ConnectionTransaction) usize {
+    if tx == null {
+        return 0 as usize;
+    }
+    return @usize_from_ptr(tx as &void);
+}
+
+fn connection_client_registry_find_slot(tx_addr: usize) i32 {
+    var i: usize = 0;
+    while i < CONNECTION_CLIENT_REGISTRY_MAX {
+        if connection_client_registry[i].active && connection_client_registry[i].tx_addr == tx_addr {
+            return i as i32;
+        }
+        i = i + 1;
+    }
+    return -1;
+}
+
+fn connection_client_registry_ensure_slot(tx_addr: usize) i32 {
+    if tx_addr == 0 as usize {
+        return -1;
+    }
+    const existing: i32 = connection_client_registry_find_slot(tx_addr);
+    if existing >= 0 {
+        return existing;
+    }
+    var i: usize = 0;
+    while i < CONNECTION_CLIENT_REGISTRY_MAX {
+        if !connection_client_registry[i].active {
+            connection_client_registry_clear_slot(&connection_client_registry[i]);
+            connection_client_registry[i].active = true;
+            connection_client_registry[i].tx_addr = tx_addr;
+            connection_client_registry[i].client_id = connection_client_registry_next_id;
+            connection_client_registry_next_id = connection_client_registry_next_id + 1;
+            return i as i32;
+        }
+        i = i + 1;
+    }
+    return -1;
+}
+
+fn connection_client_registry_sync(tx: &ConnectionTransaction) void {
+    if tx == null {
+        return;
+    }
+    const tx_addr: usize = connection_client_registry_tx_addr(tx);
+    const slot_idx: i32 = connection_client_registry_ensure_slot(tx_addr);
+    if slot_idx < 0 || slot_idx >= CONNECTION_CLIENT_REGISTRY_MAX as i32 {
+        return;
+    }
+    const slot_usize: usize = slot_idx as usize;
+    if slot_usize >= CONNECTION_CLIENT_REGISTRY_MAX {
+        return;
+    }
+    const slot: &ConnectionClientRegistryEntry = &connection_client_registry[slot_usize];
+    slot.active = true;
+    slot.tx_addr = tx_addr;
+    slot.fd = tx.client_fd;
+    slot.protocol_version = tx.protocol_version;
+    slot.client_name_len = tx.client_name_len;
+    slot.client_lib_name_len = tx.client_lib_name_len;
+    slot.client_lib_ver_len = tx.client_lib_ver_len;
+    slot.pubsub_count = tx.pubsub_count;
+    slot.multi_active = tx.active;
+    connection_client_registry_copy_bytes(slot.client_name[0: CONNECTION_CLIENT_NAME_MAX], tx.client_name[0: CONNECTION_CLIENT_NAME_MAX], tx.client_name_len);
+    connection_client_registry_copy_bytes(slot.client_lib_name[0: CONNECTION_CLIENT_INFO_MAX], tx.client_lib_name[0: CONNECTION_CLIENT_INFO_MAX], tx.client_lib_name_len);
+    connection_client_registry_copy_bytes(slot.client_lib_ver[0: CONNECTION_CLIENT_INFO_MAX], tx.client_lib_ver[0: CONNECTION_CLIENT_INFO_MAX], tx.client_lib_ver_len);
+}
+
+fn connection_client_registry_info_line(client_id: i64, protocol_version: i32, name: &[byte], lib_name: &[byte], lib_ver: &[byte], sub_count: usize, multi_active: bool) !&RedisObject {
+    var raw: Sds = sds_empty() catch {
+        return error.AllocOutOfMemory;
+    };
+    defer {
+        sds_free(&raw);
+    }
+
+    _ = sds_cat(&raw, &"id="[0: 3]) catch { return error.AllocOutOfMemory; };
+    _ = connection_sds_append_i64(&raw, client_id) catch { return error.AllocOutOfMemory; };
+    _ = sds_cat(&raw, &" name="[0: 6]) catch { return error.AllocOutOfMemory; };
+    if name.len > 0 {
+        _ = sds_cat(&raw, name) catch { return error.AllocOutOfMemory; };
+    }
+    _ = sds_cat(&raw, &" resp="[0: 6]) catch { return error.AllocOutOfMemory; };
+    _ = connection_sds_append_i64(&raw, protocol_version as i64) catch { return error.AllocOutOfMemory; };
+    _ = sds_cat(&raw, &" multi="[0: 7]) catch { return error.AllocOutOfMemory; };
+    if multi_active {
+        _ = sds_cat(&raw, &"1"[0: 1]) catch { return error.AllocOutOfMemory; };
+    } else {
+        _ = sds_cat(&raw, &"0"[0: 1]) catch { return error.AllocOutOfMemory; };
+    }
+    _ = sds_cat(&raw, &" sub="[0: 5]) catch { return error.AllocOutOfMemory; };
+    _ = connection_sds_append_u64(&raw, sub_count as u64) catch { return error.AllocOutOfMemory; };
+    _ = sds_cat(&raw, &" lib-name="[0: 10]) catch { return error.AllocOutOfMemory; };
+    if lib_name.len > 0 {
+        _ = sds_cat(&raw, lib_name) catch { return error.AllocOutOfMemory; };
+    }
+    _ = sds_cat(&raw, &" lib-ver="[0: 9]) catch { return error.AllocOutOfMemory; };
+    if lib_ver.len > 0 {
+        _ = sds_cat(&raw, lib_ver) catch { return error.AllocOutOfMemory; };
+    }
+    _ = sds_cat(&raw, &"\r\n"[0: 2]) catch { return error.AllocOutOfMemory; };
+    return create_string_object(raw.buf[0: raw.len]);
+}
+
+fn connection_client_list_reply() CommandReply {
+    var raw: Sds = sds_empty() catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    defer {
+        sds_free(&raw);
+    }
+
+    var i: usize = 0;
+    while i < CONNECTION_CLIENT_REGISTRY_MAX {
+        if connection_client_registry[i].active {
+            const line_obj: &RedisObject = connection_client_registry_info_line(
+                connection_client_registry[i].client_id,
+                connection_client_registry[i].protocol_version,
+                connection_client_registry[i].client_name[0: connection_client_registry[i].client_name_len],
+                connection_client_registry[i].client_lib_name[0: connection_client_registry[i].client_lib_name_len],
+                connection_client_registry[i].client_lib_ver[0: connection_client_registry[i].client_lib_ver_len],
+                connection_client_registry[i].pubsub_count,
+                connection_client_registry[i].multi_active,
+            ) catch {
+                return connection_error_reply(&"ERR out of memory"[0: 17]);
+            };
+            _ = sds_cat(&raw, line_obj.value.buf[0: line_obj.value.len]) catch {
+                object_free(line_obj);
+                return connection_error_reply(&"ERR out of memory"[0: 17]);
+            };
+            object_free(line_obj);
+        }
+        i = i + 1;
+    }
+    return connection_bulk_reply_owned(raw.buf[0: raw.len]);
+}
+
+export fn connection_client_registry_unregister_tx(tx: &ConnectionTransaction) void {
+    const tx_addr: usize = connection_client_registry_tx_addr(tx);
+    const slot_idx: i32 = connection_client_registry_find_slot(tx_addr);
+    if slot_idx < 0 || slot_idx >= CONNECTION_CLIENT_REGISTRY_MAX as i32 {
+        return;
+    }
+    const slot_usize: usize = slot_idx as usize;
+    if slot_usize >= CONNECTION_CLIENT_REGISTRY_MAX {
+        return;
+    }
+    connection_client_registry_clear_slot(&connection_client_registry[slot_usize]);
+}
+
+export fn connection_client_registry_reset_for_test() void {
+    var i: usize = 0;
+    while i < CONNECTION_CLIENT_REGISTRY_MAX {
+        connection_client_registry_clear_slot(&connection_client_registry[i]);
+        i = i + 1;
+    }
+    connection_client_registry_next_id = 1;
 }
 
 fn connection_requirepass(runtime: &CommandRuntimeInfo) &[byte] {
@@ -798,6 +1016,7 @@ fn connection_handle_client(tx: &ConnectionTransaction, command: &Command) Comma
     if command.argc < 2 {
         return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
     }
+    connection_client_registry_sync(tx);
     const subcommand: &[byte] = command_arg_data(command, 1) catch {
         return connection_error_reply(&"ERR invalid request"[0: 19]);
     };
@@ -827,6 +1046,7 @@ fn connection_handle_client(tx: &ConnectionTransaction, command: &Command) Comma
         _ = connection_client_store_name(tx, name) catch {
             return connection_error_reply(&"ERR invalid client name"[0: 23]);
         };
+        connection_client_registry_sync(tx);
         return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
     }
     if connection_keyword_eq(subcommand, &"SETINFO"[0: 7]) {
@@ -842,13 +1062,20 @@ fn connection_handle_client(tx: &ConnectionTransaction, command: &Command) Comma
         _ = connection_client_store_info(tx, target, value) catch {
             return connection_error_reply(&"ERR syntax error"[0: 16]);
         };
+        connection_client_registry_sync(tx);
         return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
     }
-    if connection_keyword_eq(subcommand, &"INFO"[0: 4]) || connection_keyword_eq(subcommand, &"LIST"[0: 4]) {
+    if connection_keyword_eq(subcommand, &"INFO"[0: 4]) {
         if command.argc != 2 {
             return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
         }
         return connection_client_info_reply(tx);
+    }
+    if connection_keyword_eq(subcommand, &"LIST"[0: 4]) {
+        if command.argc != 2 {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        }
+        return connection_client_list_reply();
     }
     if connection_keyword_eq(subcommand, &"HELP"[0: 4]) {
         if command.argc != 2 {
@@ -1473,6 +1700,7 @@ fn connection_hello_reply(protocol_version: i32) CommandReply {
 
 fn connection_handle_hello(tx: &ConnectionTransaction, command: &Command) CommandReply {
     if command.argc == 1 {
+        connection_client_registry_sync(tx);
         return connection_hello_reply(tx.protocol_version);
     }
     if command.argc != 2 && command.argc != 4 {
@@ -1502,6 +1730,7 @@ fn connection_handle_hello(tx: &ConnectionTransaction, command: &Command) Comman
             return connection_error_reply(&"ERR invalid client name"[0: 23]);
         };
     }
+    connection_client_registry_sync(tx);
     return connection_hello_reply(tx.protocol_version);
 }
 

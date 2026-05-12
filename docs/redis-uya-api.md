@@ -1225,11 +1225,11 @@ CLIENT HELP
 
 返回：
 
-- `CLIENT ID`：当前连接的整数 ID；真实 TCP 连接使用 fd，单元测试中的无 fd 事务返回 `0`
+- `CLIENT ID`：当前连接的整数 ID；服务端按连接事务分配递增 ID，测试重置后的首个连接从 `1` 开始
 - `CLIENT GETNAME`：未设置时返回 Null Bulk，已设置时返回 Bulk String
 - `CLIENT SETNAME`：保存连接级客户端名，成功返回 `+OK`
 - `CLIENT INFO`：返回当前连接的最小客户端信息行，包含 `id/name/resp/multi/sub/lib-name/lib-ver`
-- `CLIENT LIST`：当前为最小兼容实现，只返回当前连接的信息行
+- `CLIENT LIST`：返回当前活跃连接的最小信息行快照，每行包含 `id/name/resp/multi/sub/lib-name/lib-ver`
 - `CLIENT SETINFO`：保存客户端库名/版本元数据，成功返回 `+OK`
 - `CLIENT HELP`：返回当前支持的 CLIENT 子命令列表
 

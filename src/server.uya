@@ -16,6 +16,7 @@ use src.network.listener.listener_close;
 use src.network.connection.ConnectionProcessResult;
 use src.network.connection.ConnectionTransaction;
 use src.network.connection.connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_zero_copy_close_at;
+use src.network.connection.connection_client_registry_unregister_tx;
 use src.network.connection.connection_shift_buffer;
 use src.network.connection.connection_transaction_new;
 use src.network.connection.connection_transaction_reset;
@@ -851,6 +852,7 @@ fn server_close_client_slot(server: &RedisServer, slot: usize) void {
     }
     _ = sys_epoll_ctl(server.listener.poll_fd, EPOLL_CTL_DEL, fd, null as &EpollEvent) catch {};
     connection_pubsub_unregister_fd(fd);
+    connection_client_registry_unregister_tx(&server.clients[slot].transaction);
     _ = aof_flush(&server.aof) catch {};
     _ = sys_shutdown(fd, SHUT_WR) catch {};
     _ = sys_close(fd) catch {};
@@ -1744,6 +1746,7 @@ export fn server_accept_once(server: &RedisServer) !void {
     server.clients[slot].output_sent = 0;
     server.clients[slot].close_after_write = false;
     server.clients[slot].transaction = connection_transaction_new();
+    server.clients[slot].transaction.client_fd = fd;
     server.clients[slot].async_epoll_interest = 1;
     server.clients[slot].async_waker = Waker{};
     server_client_clear_async_replicaof_host(&server.clients[slot]);

@@ -142,57 +142,60 @@ def run_smoke() -> None:
     )
     try:
         with connect_with_retry(port, time.monotonic() + 5.0) as sock:
-            client_id = send_command(sock, b"CLIENT", b"ID")
-            if not isinstance(client_id, int) or client_id <= 0:
-                raise AssertionError(f"unexpected CLIENT ID: {client_id!r}")
+            with connect_with_retry(port, time.monotonic() + 5.0) as peer_sock:
+                client_id = send_command(sock, b"CLIENT", b"ID")
+                if not isinstance(client_id, int) or client_id <= 0:
+                    raise AssertionError(f"unexpected CLIENT ID: {client_id!r}")
 
-            if send_command(sock, b"CLIENT", b"GETNAME") is not None:
-                raise AssertionError("new connection should not have a client name")
-            if send_command(sock, b"CLIENT", b"SETNAME", b"smoke-client") != "OK":
-                raise AssertionError("CLIENT SETNAME failed")
-            if send_command(sock, b"CLIENT", b"GETNAME") != b"smoke-client":
-                raise AssertionError("CLIENT GETNAME did not return the stored name")
+                if send_command(sock, b"CLIENT", b"GETNAME") is not None:
+                    raise AssertionError("new connection should not have a client name")
+                if send_command(sock, b"CLIENT", b"SETNAME", b"smoke-client") != "OK":
+                    raise AssertionError("CLIENT SETNAME failed")
+                if send_command(sock, b"CLIENT", b"GETNAME") != b"smoke-client":
+                    raise AssertionError("CLIENT GETNAME did not return the stored name")
+                if send_command(peer_sock, b"CLIENT", b"SETNAME", b"peer-client") != "OK":
+                    raise AssertionError("peer CLIENT SETNAME failed")
 
-            if send_command(sock, b"CLIENT", b"SETINFO", b"LIB-NAME", b"redis-uya-test") != "OK":
-                raise AssertionError("CLIENT SETINFO LIB-NAME failed")
-            if send_command(sock, b"CLIENT", b"SETINFO", b"LIB-VER", b"0.5.0") != "OK":
-                raise AssertionError("CLIENT SETINFO LIB-VER failed")
+                if send_command(sock, b"CLIENT", b"SETINFO", b"LIB-NAME", b"redis-uya-test") != "OK":
+                    raise AssertionError("CLIENT SETINFO LIB-NAME failed")
+                if send_command(sock, b"CLIENT", b"SETINFO", b"LIB-VER", b"0.5.0") != "OK":
+                    raise AssertionError("CLIENT SETINFO LIB-VER failed")
 
-            info = send_command(sock, b"CLIENT", b"INFO")
-            if not isinstance(info, bytes):
-                raise AssertionError(f"CLIENT INFO returned non-bulk value: {info!r}")
-            for needle in (b"name=smoke-client", b"lib-name=redis-uya-test", b"lib-ver=0.5.0"):
-                if needle not in info:
-                    raise AssertionError(f"missing {needle!r} in CLIENT INFO: {info!r}")
+                info = send_command(sock, b"CLIENT", b"INFO")
+                if not isinstance(info, bytes):
+                    raise AssertionError(f"CLIENT INFO returned non-bulk value: {info!r}")
+                for needle in (b"name=smoke-client", b"lib-name=redis-uya-test", b"lib-ver=0.5.0"):
+                    if needle not in info:
+                        raise AssertionError(f"missing {needle!r} in CLIENT INFO: {info!r}")
 
-            listed = send_command(sock, b"CLIENT", b"LIST")
-            if not isinstance(listed, bytes) or b"name=smoke-client" not in listed:
-                raise AssertionError(f"unexpected CLIENT LIST: {listed!r}")
+                listed = send_command(sock, b"CLIENT", b"LIST")
+                if not isinstance(listed, bytes) or b"name=smoke-client" not in listed or b"name=peer-client" not in listed:
+                    raise AssertionError(f"unexpected CLIENT LIST: {listed!r}")
 
-            hello = send_command(sock, b"HELLO", b"3", b"SETNAME", b"resp3-client")
-            if not isinstance(hello, dict) or hello.get(b"proto") != 3:
-                raise AssertionError(f"unexpected HELLO 3 response: {hello!r}")
-            if send_command(sock, b"CLIENT", b"GETNAME") != b"resp3-client":
-                raise AssertionError("HELLO SETNAME did not update client name")
+                hello = send_command(sock, b"HELLO", b"3", b"SETNAME", b"resp3-client")
+                if not isinstance(hello, dict) or hello.get(b"proto") != 3:
+                    raise AssertionError(f"unexpected HELLO 3 response: {hello!r}")
+                if send_command(sock, b"CLIENT", b"GETNAME") != b"resp3-client":
+                    raise AssertionError("HELLO SETNAME did not update client name")
 
-            max_config_raw = send_command(sock, b"CONFIG", b"GET", b"max*")
-            if not isinstance(max_config_raw, list):
-                raise AssertionError(f"CONFIG GET max* returned non-array: {max_config_raw!r}")
-            max_config = array_pairs_to_dict(max_config_raw)
-            if max_config.get("maxclients") != "8" or max_config.get("maxmemory") != "0":
-                raise AssertionError(f"unexpected CONFIG GET max*: {max_config!r}")
+                max_config_raw = send_command(sock, b"CONFIG", b"GET", b"max*")
+                if not isinstance(max_config_raw, list):
+                    raise AssertionError(f"CONFIG GET max* returned non-array: {max_config_raw!r}")
+                max_config = array_pairs_to_dict(max_config_raw)
+                if max_config.get("maxclients") != "8" or max_config.get("maxmemory") != "0":
+                    raise AssertionError(f"unexpected CONFIG GET max*: {max_config!r}")
 
-            db_config_raw = send_command(sock, b"CONFIG", b"GET", b"databases")
-            if array_pairs_to_dict(db_config_raw).get("databases") != "1":
-                raise AssertionError(f"unexpected CONFIG GET databases: {db_config_raw!r}")
+                db_config_raw = send_command(sock, b"CONFIG", b"GET", b"databases")
+                if array_pairs_to_dict(db_config_raw).get("databases") != "1":
+                    raise AssertionError(f"unexpected CONFIG GET databases: {db_config_raw!r}")
 
-            help_reply = send_command(sock, b"CONFIG", b"HELP")
-            if not isinstance(help_reply, list) or b"CONFIG RESETSTAT" not in help_reply:
-                raise AssertionError(f"unexpected CONFIG HELP: {help_reply!r}")
-            if send_command(sock, b"CONFIG", b"RESETSTAT") != "OK":
-                raise AssertionError("CONFIG RESETSTAT failed")
-            if send_command(sock, b"QUIT") != "OK":
-                raise AssertionError("QUIT failed")
+                help_reply = send_command(sock, b"CONFIG", b"HELP")
+                if not isinstance(help_reply, list) or b"CONFIG RESETSTAT" not in help_reply:
+                    raise AssertionError(f"unexpected CONFIG HELP: {help_reply!r}")
+                if send_command(sock, b"CONFIG", b"RESETSTAT") != "OK":
+                    raise AssertionError("CONFIG RESETSTAT failed")
+                if send_command(sock, b"QUIT") != "OK":
+                    raise AssertionError("QUIT failed")
     finally:
         stop_process(proc)
         aof_path.unlink(missing_ok=True)

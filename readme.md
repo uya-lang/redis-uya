@@ -300,7 +300,7 @@ build/redis-uya 6380 1
 - 完整 Redis RDB 二进制兼容
 - Redis 风格长连接流式复制
 - Pub/Sub 模式下的完整命令限制、pattern 订阅与背压处理
-- 完整 `CONFIG SET/REWRITE` 与全局 `CLIENT LIST/KILL/PAUSE/TRACKING`
+- 完整 `CONFIG SET/REWRITE` 与 `CLIENT KILL/PAUSE/TRACKING`
 - LFU 衰减、采样池与正式内存 benchmark
 - 完整 Redis Cluster gossip、failover、resharding、`ASKING` 一次性放行和多 key 同槽校验；这些能力在 `v1.0.0` 之后重新规划
 - Lua 脚本

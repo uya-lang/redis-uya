@@ -15,6 +15,7 @@ use src.network.listener.listener_accept;
 use src.network.listener.listener_close;
 use src.network.connection.ConnectionProcessResult;
 use src.network.connection.ConnectionTransaction;
+use src.network.connection.connection_client_registry_client_id;
 use src.network.connection.connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_zero_copy_close_at;
 use src.network.connection.connection_client_registry_unregister_tx;
 use src.network.connection.connection_shift_buffer;
@@ -169,6 +170,9 @@ export struct RedisServer {
     aof_rewrite_tmp_path: [byte: 512],
     cluster_topology: ClusterTopology,
     shutdown_requested: bool,
+    client_pause_until_ms: u64,
+    client_pause_write_only: bool,
+    client_pause_owner_id: i64,
 }
 
 export fn server_default_aof_path() &const byte {
@@ -909,6 +913,44 @@ fn server_can_accept_client(server: &RedisServer) bool {
     return true;
 }
 
+fn server_client_pause_clear(server: &RedisServer) void {
+    server.client_pause_until_ms = 0u64;
+    server.client_pause_write_only = false;
+    server.client_pause_owner_id = 0;
+}
+
+fn server_client_pause_active_at(server: &RedisServer, now_ms: u64) bool {
+    if server.client_pause_until_ms == 0u64 {
+        return false;
+    }
+    if now_ms >= server.client_pause_until_ms {
+        server_client_pause_clear(server);
+        return false;
+    }
+    return true;
+}
+
+fn server_client_pause_slot_exempt(server: &RedisServer, slot: usize) bool {
+    if slot >= SERVER_MAX_CLIENTS || server.client_pause_owner_id <= 0 {
+        return false;
+    }
+    return connection_client_registry_client_id(&server.clients[slot].transaction) == server.client_pause_owner_id;
+}
+
+fn server_find_client_slot_by_client_id(server: &RedisServer, client_id: i64) i32 {
+    if client_id <= 0 {
+        return -1;
+    }
+    var i: usize = 0;
+    while i < SERVER_MAX_CLIENTS {
+        if server.clients[i].fd >= 0 && connection_client_registry_client_id(&server.clients[i].transaction) == client_id {
+            return i as i32;
+        }
+        i = i + 1;
+    }
+    return -1;
+}
+
 fn server_has_pending_client_output(server: &RedisServer) bool {
     var i: usize = 0;
     while i < SERVER_MAX_CLIENTS {
@@ -1217,6 +1259,9 @@ fn server_async_writev_all_future(fd: i32, head: &const byte, head_len: usize, b
     const client: &RedisClient = &server.clients[slot];
 
     while true {
+        if server_client_pause_active_at(server, now_ms_safe()) && !server_client_pause_slot_exempt(server, slot) {
+            return true;
+        }
         const fd: i32 = client.fd;
         if fd < 0 {
             return false;
@@ -1294,6 +1339,23 @@ fn server_async_writev_all_future(fd: i32, head: &const byte, head_len: usize, b
             }
             if result.request_config_set {
                 server.config = result.config_after;
+            }
+            if result.request_client_unpause {
+                server_client_pause_clear(server);
+            }
+            if result.request_client_pause {
+                server.client_pause_until_ms = now_ms_safe() + result.client_pause_timeout_ms;
+                server.client_pause_write_only = result.client_pause_write_only;
+                server.client_pause_owner_id = result.client_pause_owner_id;
+            }
+            if result.request_client_kill {
+                const kill_slot_i32: i32 = server_find_client_slot_by_client_id(server, result.client_kill_id);
+                if kill_slot_i32 >= 0 {
+                    const kill_slot: usize = kill_slot_i32 as usize;
+                    if kill_slot < SERVER_MAX_CLIENTS && kill_slot != slot {
+                        server_close_client_slot(server, kill_slot);
+                    }
+                }
             }
             if result.request_shutdown {
                 server.shutdown_requested = true;
@@ -1542,6 +1604,9 @@ export fn server_open_with_aof_and_memory_policy(
         aof_rewrite_tmp_path: [],
         cluster_topology: cluster_topology,
         shutdown_requested: false,
+        client_pause_until_ms: 0u64,
+        client_pause_write_only: false,
+        client_pause_owner_id: 0,
     };
     if server_config_replicaof_enabled(&server.config) {
         server.replication_role = ReplicationRole.role_replica;
@@ -1771,6 +1836,9 @@ fn server_handle_client_fd(server: &RedisServer, fd: i32) void {
     const slot: usize = slot_i32 as usize;
     if slot >= SERVER_MAX_CLIENTS {
         _ = sys_close(fd) catch {};
+        return;
+    }
+    if server_client_pause_active_at(server, now_ms_safe()) && !server_client_pause_slot_exempt(server, slot) && !server_client_pending_write(server, slot) {
         return;
     }
     const keep_result: !bool = server_poll_client_async_slot(server, slot);

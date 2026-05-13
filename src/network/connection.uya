@@ -84,6 +84,13 @@ export struct ConnectionProcessResult {
     request_shutdown: bool,
     request_config_set: bool,
     config_after: ServerConfig,
+    request_client_kill: bool,
+    client_kill_id: i64,
+    request_client_pause: bool,
+    client_pause_timeout_ms: u64,
+    client_pause_write_only: bool,
+    client_pause_owner_id: i64,
+    request_client_unpause: bool,
 }
 
 export struct ConnectionTransaction {
@@ -103,6 +110,12 @@ export struct ConnectionTransaction {
     client_lib_ver: [byte: 64],
     pubsub_count: usize,
     authenticated: bool,
+    tracking_enabled: bool,
+    tracking_redirect_id: i64,
+    tracking_bcast: bool,
+    tracking_optin: bool,
+    tracking_optout: bool,
+    tracking_noloop: bool,
 }
 
 struct ConnectionSendProgress {
@@ -165,6 +178,12 @@ fn connection_transaction_empty() ConnectionTransaction {
         client_lib_ver: [],
         pubsub_count: 0,
         authenticated: false,
+        tracking_enabled: false,
+        tracking_redirect_id: -1,
+        tracking_bcast: false,
+        tracking_optin: false,
+        tracking_optout: false,
+        tracking_noloop: false,
     };
 }
 
@@ -277,6 +296,13 @@ fn connection_zero_copy_process_result(
         request_shutdown: false,
         request_config_set: false,
         config_after: default_config(),
+        request_client_kill: false,
+        client_kill_id: 0,
+        request_client_pause: false,
+        client_pause_timeout_ms: 0u64,
+        client_pause_write_only: false,
+        client_pause_owner_id: 0,
+        request_client_unpause: false,
     };
 }
 
@@ -297,6 +323,13 @@ fn connection_make_reply(typ: CommandReplyType, data: &[byte], integer: i64) Com
         request_aof_rewrite: false,
         request_config_set: false,
         config_after: default_config(),
+        request_client_kill: false,
+        client_kill_id: 0,
+        request_client_pause: false,
+        client_pause_timeout_ms: 0u64,
+        client_pause_write_only: false,
+        client_pause_owner_id: 0,
+        request_client_unpause: false,
     };
 }
 
@@ -592,6 +625,21 @@ fn connection_client_id(tx: &ConnectionTransaction) i64 {
         }
     }
     return 0;
+}
+
+export fn connection_client_registry_client_id(tx: &ConnectionTransaction) i64 {
+    return connection_client_id(tx);
+}
+
+fn connection_client_registry_has_client_id(client_id: i64) bool {
+    var i: usize = 0;
+    while i < CONNECTION_CLIENT_REGISTRY_MAX {
+        if connection_client_registry[i].active && connection_client_registry[i].client_id == client_id {
+            return true;
+        }
+        i = i + 1;
+    }
+    return false;
 }
 
 fn connection_client_name_valid(name: &[byte]) bool {
@@ -949,6 +997,80 @@ fn connection_client_store_info(tx: &ConnectionTransaction, target: &[byte], val
     return error.ConnectionInputTooLarge;
 }
 
+fn connection_client_tracking_clear(tx: &ConnectionTransaction) void {
+    tx.tracking_enabled = false;
+    tx.tracking_redirect_id = -1;
+    tx.tracking_bcast = false;
+    tx.tracking_optin = false;
+    tx.tracking_optout = false;
+    tx.tracking_noloop = false;
+}
+
+fn connection_sds_append_resp_array_header(buf: &Sds, count: usize) !void {
+    try sds_cat(buf, &"*"[0: 1]);
+    try connection_sds_append_u64(buf, count as u64);
+    try sds_cat(buf, &"\r\n"[0: 2]);
+}
+
+fn connection_sds_append_resp_map_header(buf: &Sds, count: usize) !void {
+    try sds_cat(buf, &"%"[0: 1]);
+    try connection_sds_append_u64(buf, count as u64);
+    try sds_cat(buf, &"\r\n"[0: 2]);
+}
+
+fn connection_sds_append_resp_bulk(buf: &Sds, data: &[byte]) !void {
+    try sds_cat(buf, &"$"[0: 1]);
+    try connection_sds_append_u64(buf, data.len as u64);
+    try sds_cat(buf, &"\r\n"[0: 2]);
+    try sds_cat(buf, data);
+    try sds_cat(buf, &"\r\n"[0: 2]);
+}
+
+fn connection_sds_append_resp_integer(buf: &Sds, value: i64) !void {
+    try sds_cat(buf, &":"[0: 1]);
+    try connection_sds_append_i64(buf, value);
+    try sds_cat(buf, &"\r\n"[0: 2]);
+}
+
+fn connection_client_tracking_flag_count(tx: &ConnectionTransaction) usize {
+    var count: usize = 0;
+    if tx.tracking_enabled {
+        count = count + 1;
+    }
+    if tx.tracking_bcast {
+        count = count + 1;
+    }
+    if tx.tracking_optin {
+        count = count + 1;
+    }
+    if tx.tracking_optout {
+        count = count + 1;
+    }
+    if tx.tracking_noloop {
+        count = count + 1;
+    }
+    return count;
+}
+
+fn connection_client_tracking_append_flags(buf: &Sds, tx: &ConnectionTransaction) !void {
+    try connection_sds_append_resp_array_header(buf, connection_client_tracking_flag_count(tx));
+    if tx.tracking_enabled {
+        try connection_sds_append_resp_bulk(buf, &"on"[0: 2]);
+    }
+    if tx.tracking_bcast {
+        try connection_sds_append_resp_bulk(buf, &"bcast"[0: 5]);
+    }
+    if tx.tracking_optin {
+        try connection_sds_append_resp_bulk(buf, &"optin"[0: 5]);
+    }
+    if tx.tracking_optout {
+        try connection_sds_append_resp_bulk(buf, &"optout"[0: 6]);
+    }
+    if tx.tracking_noloop {
+        try connection_sds_append_resp_bulk(buf, &"noloop"[0: 6]);
+    }
+}
+
 fn connection_client_help_reply() CommandReply {
     const reply_list: &RedisObject = create_list_object() catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
@@ -973,6 +1095,26 @@ fn connection_client_help_reply() CommandReply {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
+    _ = list_object_push_tail(reply_list, &"CLIENT KILL ID <id>"[0: 19]) catch {
+        object_free(reply_list);
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = list_object_push_tail(reply_list, &"CLIENT PAUSE <timeout-ms> [WRITE|ALL]"[0: 37]) catch {
+        object_free(reply_list);
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = list_object_push_tail(reply_list, &"CLIENT UNPAUSE"[0: 14]) catch {
+        object_free(reply_list);
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = list_object_push_tail(reply_list, &"CLIENT TRACKING <ON|OFF> [REDIRECT <id>] [BCAST] [OPTIN] [OPTOUT] [NOLOOP]"[0: 74]) catch {
+        object_free(reply_list);
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = list_object_push_tail(reply_list, &"CLIENT TRACKINGINFO"[0: 19]) catch {
+        object_free(reply_list);
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
     _ = list_object_push_tail(reply_list, &"CLIENT SETINFO LIB-NAME <value>"[0: 31]) catch {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
@@ -981,7 +1123,7 @@ fn connection_client_help_reply() CommandReply {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
-    return connection_array_reply_owned(reply_list, 7);
+    return connection_array_reply_owned(reply_list, 12);
 }
 
 fn connection_client_info_reply(tx: &ConnectionTransaction) CommandReply {
@@ -1020,7 +1162,112 @@ fn connection_client_info_reply(tx: &ConnectionTransaction) CommandReply {
     return connection_bulk_reply_owned(raw.buf[0: raw.len]);
 }
 
-fn connection_handle_client(tx: &ConnectionTransaction, command: &Command) CommandReply {
+fn connection_client_trackinginfo_reply(tx: &ConnectionTransaction) CommandReply {
+    var raw: Sds = sds_empty() catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    defer {
+        sds_free(&raw);
+    }
+
+    if tx.protocol_version == 3 {
+        _ = connection_sds_append_resp_map_header(&raw, 3) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    } else {
+        _ = connection_sds_append_resp_array_header(&raw, 6) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    }
+    _ = connection_sds_append_resp_bulk(&raw, &"flags"[0: 5]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_client_tracking_append_flags(&raw, tx) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_sds_append_resp_bulk(&raw, &"redirect"[0: 8]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_sds_append_resp_integer(&raw, tx.tracking_redirect_id) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_sds_append_resp_bulk(&raw, &"prefixes"[0: 8]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_sds_append_resp_array_header(&raw, 0) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    return connection_raw_reply_owned(raw.buf[0: raw.len]);
+}
+
+fn connection_handle_client_tracking(tx: &ConnectionTransaction, command: &Command) CommandReply {
+    if command.argc < 3 {
+        return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+    }
+    const state: &[byte] = command_arg_data(command, 2) catch {
+        return connection_error_reply(&"ERR invalid request"[0: 19]);
+    };
+    if connection_keyword_eq(state, &"OFF"[0: 3]) {
+        if command.argc != 3 {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        }
+        connection_client_tracking_clear(tx);
+        return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+    }
+    if !connection_keyword_eq(state, &"ON"[0: 2]) {
+        return connection_error_reply(&"ERR syntax error"[0: 16]);
+    }
+
+    var tracking_redirect_id: i64 = -1;
+    var tracking_bcast: bool = false;
+    var tracking_optin: bool = false;
+    var tracking_optout: bool = false;
+    var tracking_noloop: bool = false;
+
+    var index: usize = 3;
+    while index < command.argc {
+        const option: &[byte] = command_arg_data(command, index) catch {
+            return connection_error_reply(&"ERR invalid request"[0: 19]);
+        };
+        if connection_keyword_eq(option, &"REDIRECT"[0: 8]) {
+            if index + 1 >= command.argc {
+                return connection_error_reply(&"ERR syntax error"[0: 16]);
+            }
+            const id_arg: &[byte] = command_arg_data(command, index + 1) catch {
+                return connection_error_reply(&"ERR invalid request"[0: 19]);
+            };
+            const redirect_id_u64: u64 = connection_parse_u64(id_arg) catch {
+                return connection_error_reply(&"ERR invalid client ID"[0: 21]);
+            };
+            tracking_redirect_id = redirect_id_u64 as i64;
+            if tracking_redirect_id > 0 && !connection_client_registry_has_client_id(tracking_redirect_id) {
+                return connection_error_reply(&"ERR invalid client ID"[0: 21]);
+            }
+            index = index + 2;
+            continue;
+        }
+        if connection_keyword_eq(option, &"BCAST"[0: 5]) {
+            tracking_bcast = true;
+            index = index + 1;
+            continue;
+        }
+        if connection_keyword_eq(option, &"OPTIN"[0: 5]) {
+            if tracking_optout {
+                return connection_error_reply(&"ERR syntax error"[0: 16]);
+            }
+            tracking_optin = true;
+            index = index + 1;
+            continue;
+        }
+        if connection_keyword_eq(option, &"OPTOUT"[0: 6]) {
+            if tracking_optin {
+                return connection_error_reply(&"ERR syntax error"[0: 16]);
+            }
+            tracking_optout = true;
+            index = index + 1;
+            continue;
+        }
+        if connection_keyword_eq(option, &"NOLOOP"[0: 6]) {
+            tracking_noloop = true;
+            index = index + 1;
+            continue;
+        }
+        return connection_error_reply(&"ERR syntax error"[0: 16]);
+    }
+    tx.tracking_enabled = true;
+    tx.tracking_redirect_id = tracking_redirect_id;
+    tx.tracking_bcast = tracking_bcast;
+    tx.tracking_optin = tracking_optin;
+    tx.tracking_optout = tracking_optout;
+    tx.tracking_noloop = tracking_noloop;
+    return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+}
+
+fn connection_handle_client(tx: &ConnectionTransaction, command: &Command, now_ms: u64) CommandReply {
     if command.argc < 2 {
         return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
     }
@@ -1084,6 +1331,77 @@ fn connection_handle_client(tx: &ConnectionTransaction, command: &Command) Comma
             return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
         }
         return connection_client_list_reply();
+    }
+    if connection_keyword_eq(subcommand, &"KILL"[0: 4]) {
+        if command.argc != 4 {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        }
+        const selector: &[byte] = command_arg_data(command, 2) catch {
+            return connection_error_reply(&"ERR invalid request"[0: 19]);
+        };
+        if !connection_keyword_eq(selector, &"ID"[0: 2]) {
+            return connection_error_reply(&"ERR syntax error"[0: 16]);
+        }
+        const id_arg: &[byte] = command_arg_data(command, 3) catch {
+            return connection_error_reply(&"ERR invalid request"[0: 19]);
+        };
+        const target_id_u64: u64 = connection_parse_u64(id_arg) catch {
+            return connection_error_reply(&"ERR invalid client ID"[0: 21]);
+        };
+        const target_id: i64 = target_id_u64 as i64;
+        if target_id == connection_client_id(tx) || !connection_client_registry_has_client_id(target_id) {
+            return connection_make_reply(CommandReplyType.reply_integer, connection_reply_empty_slice(), 0);
+        }
+        var reply: CommandReply = connection_make_reply(CommandReplyType.reply_integer, connection_reply_empty_slice(), 1);
+        reply.request_client_kill = true;
+        reply.client_kill_id = target_id;
+        return reply;
+    }
+    if connection_keyword_eq(subcommand, &"PAUSE"[0: 5]) {
+        if command.argc != 3 && command.argc != 4 {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        }
+        const timeout_arg: &[byte] = command_arg_data(command, 2) catch {
+            return connection_error_reply(&"ERR invalid request"[0: 19]);
+        };
+        const timeout_ms: u64 = connection_parse_u64(timeout_arg) catch {
+            return connection_error_reply(&"ERR timeout is not an integer or out of range"[0: 43]);
+        };
+        var write_only: bool = false;
+        if command.argc == 4 {
+            const mode: &[byte] = command_arg_data(command, 3) catch {
+                return connection_error_reply(&"ERR invalid request"[0: 19]);
+            };
+            if connection_keyword_eq(mode, &"WRITE"[0: 5]) {
+                write_only = true;
+            } else if !connection_keyword_eq(mode, &"ALL"[0: 3]) {
+                return connection_error_reply(&"ERR syntax error"[0: 16]);
+            }
+        }
+        var reply: CommandReply = connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+        reply.request_client_pause = true;
+        reply.client_pause_timeout_ms = timeout_ms;
+        reply.client_pause_write_only = write_only;
+        reply.client_pause_owner_id = connection_client_id(tx);
+        _ = now_ms;
+        return reply;
+    }
+    if connection_keyword_eq(subcommand, &"UNPAUSE"[0: 7]) {
+        if command.argc != 2 {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        }
+        var reply: CommandReply = connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+        reply.request_client_unpause = true;
+        return reply;
+    }
+    if connection_keyword_eq(subcommand, &"TRACKING"[0: 8]) {
+        return connection_handle_client_tracking(tx, command);
+    }
+    if connection_keyword_eq(subcommand, &"TRACKINGINFO"[0: 12]) {
+        if command.argc != 2 {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        }
+        return connection_client_trackinginfo_reply(tx);
     }
     if connection_keyword_eq(subcommand, &"HELP"[0: 4]) {
         if command.argc != 2 {
@@ -2114,6 +2432,13 @@ export fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transac
         request_shutdown: result.request_shutdown,
         request_config_set: result.request_config_set,
         config_after: result.config_after,
+        request_client_kill: result.request_client_kill,
+        client_kill_id: result.client_kill_id,
+        request_client_pause: result.request_client_pause,
+        client_pause_timeout_ms: result.client_pause_timeout_ms,
+        client_pause_write_only: result.client_pause_write_only,
+        client_pause_owner_id: result.client_pause_owner_id,
+        request_client_unpause: result.request_client_unpause,
     };
 }
 
@@ -2219,6 +2544,15 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_in
     var batch_index: usize = 0;
     var close_after: bool = false;
     var request_shutdown: bool = false;
+    var request_config_set: bool = false;
+    var config_after: ServerConfig = default_config();
+    var request_client_kill: bool = false;
+    var client_kill_id: i64 = 0;
+    var request_client_pause: bool = false;
+    var client_pause_timeout_ms: u64 = 0u64;
+    var client_pause_write_only: bool = false;
+    var client_pause_owner_id: i64 = 0;
+    var request_client_unpause: bool = false;
     while batch_index < batch.count && offset < input.len {
         const frame_len: usize = resp_batch_value_consumed(&batch, batch_index);
         const frame: &[byte] = input[offset: frame_len];
@@ -2264,7 +2598,24 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_in
         offset = offset + result.consumed;
         close_after = result.close_after;
         request_shutdown = result.request_shutdown;
-        if close_after || request_shutdown {
+        if result.request_config_set {
+            request_config_set = true;
+            config_after = result.config_after;
+        }
+        if result.request_client_kill {
+            request_client_kill = true;
+            client_kill_id = result.client_kill_id;
+        }
+        if result.request_client_pause {
+            request_client_pause = true;
+            client_pause_timeout_ms = result.client_pause_timeout_ms;
+            client_pause_write_only = result.client_pause_write_only;
+            client_pause_owner_id = result.client_pause_owner_id;
+        }
+        if result.request_client_unpause {
+            request_client_unpause = true;
+        }
+        if close_after || request_shutdown || request_client_pause {
             break;
         }
         batch_index = batch_index + 1;
@@ -2284,6 +2635,15 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_in
         request_bgsave: *bgsave_requested,
         request_aof_rewrite: *rewrite_requested,
         request_shutdown: request_shutdown,
+        request_config_set: request_config_set,
+        config_after: config_after,
+        request_client_kill: request_client_kill,
+        client_kill_id: client_kill_id,
+        request_client_pause: request_client_pause,
+        client_pause_timeout_ms: client_pause_timeout_ms,
+        client_pause_write_only: client_pause_write_only,
+        client_pause_owner_id: client_pause_owner_id,
+        request_client_unpause: request_client_unpause,
     };
 }
 
@@ -2488,11 +2848,34 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
         return ConnectionProcessResult{ response_len: hello_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
     }
     if command.info.cmd_type == CommandType.command_client {
-        var client_reply: CommandReply = connection_handle_client(tx, &command);
+        var client_reply: CommandReply = connection_handle_client(tx, &command, now_ms);
+        const client_request_kill: bool = client_reply.request_client_kill;
+        const client_kill_id: i64 = client_reply.client_kill_id;
+        const client_request_pause: bool = client_reply.request_client_pause;
+        const client_pause_timeout_ms: u64 = client_reply.client_pause_timeout_ms;
+        const client_pause_write_only: bool = client_reply.client_pause_write_only;
+        const client_pause_owner_id: i64 = client_reply.client_pause_owner_id;
+        const client_request_unpause: bool = client_reply.request_client_unpause;
         const client_n: usize = try connection_encode_reply_with_protocol(&client_reply, out, out_cap, tx.protocol_version);
         command_reply_cleanup(&client_reply);
         resp_value_free(&parsed.value);
-        return ConnectionProcessResult{ response_len: client_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
+        return ConnectionProcessResult{
+            response_len: client_n,
+            consumed: parsed.consumed,
+            close_after: false,
+            request_replicaof: false,
+            replicaof_promote: false,
+            request_bgsave: false,
+            request_aof_rewrite: false,
+            request_shutdown: false,
+            request_client_kill: client_request_kill,
+            client_kill_id: client_kill_id,
+            request_client_pause: client_request_pause,
+            client_pause_timeout_ms: client_pause_timeout_ms,
+            client_pause_write_only: client_pause_write_only,
+            client_pause_owner_id: client_pause_owner_id,
+            request_client_unpause: client_request_unpause,
+        };
     }
     if command.info.cmd_type == CommandType.command_subscribe {
         var subscribe_reply: CommandReply = connection_handle_subscribe(tx, &command);
@@ -2602,6 +2985,13 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
     const request_bgsave: bool = reply.request_bgsave;
     const request_aof_rewrite: bool = reply.request_aof_rewrite;
     const request_config_set: bool = reply.request_config_set;
+    const request_client_kill: bool = reply.request_client_kill;
+    const client_kill_id: i64 = reply.client_kill_id;
+    const request_client_pause: bool = reply.request_client_pause;
+    const client_pause_timeout_ms: u64 = reply.client_pause_timeout_ms;
+    const client_pause_write_only: bool = reply.client_pause_write_only;
+    const client_pause_owner_id: i64 = reply.client_pause_owner_id;
+    const request_client_unpause: bool = reply.request_client_unpause;
     if request_bgsave && bgsave_requested != null {
         *bgsave_requested = true;
     }
@@ -2653,6 +3043,13 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
         request_shutdown: false,
         request_config_set: request_config_set,
         config_after: reply.config_after,
+        request_client_kill: request_client_kill,
+        client_kill_id: client_kill_id,
+        request_client_pause: request_client_pause,
+        client_pause_timeout_ms: client_pause_timeout_ms,
+        client_pause_write_only: client_pause_write_only,
+        client_pause_owner_id: client_pause_owner_id,
+        request_client_unpause: request_client_unpause,
     };
 }
 

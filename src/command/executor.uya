@@ -173,6 +173,13 @@ export struct CommandReply {
     request_aof_rewrite: bool,
     request_config_set: bool,
     config_after: ServerConfig,
+    request_client_kill: bool,
+    client_kill_id: i64,
+    request_client_pause: bool,
+    client_pause_timeout_ms: u64,
+    client_pause_write_only: bool,
+    client_pause_owner_id: i64,
+    request_client_unpause: bool,
 }
 
 export struct CommandRuntimeInfo {
@@ -275,6 +282,13 @@ fn command_executor_reply(typ: CommandReplyType, data: &[byte], integer: i64) Co
         request_aof_rewrite: false,
         request_config_set: false,
         config_after: default_config(),
+        request_client_kill: false,
+        client_kill_id: 0,
+        request_client_pause: false,
+        client_pause_timeout_ms: 0u64,
+        client_pause_write_only: false,
+        client_pause_owner_id: 0,
+        request_client_unpause: false,
     };
 }
 

@@ -117,18 +117,18 @@
 | `client|help` | `connection` | `full` | `-` | `2` | `-` | `no` | `@slow, @connection` |
 | `client|id` | `connection` | `full` | `-` | `2` | `-` | `no` | `@slow, @connection` |
 | `client|info` | `connection` | `partial` | `-` | `2` | `-` | `no` | `@slow, @connection` |
-| `client|kill` | `connection` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
+| `client|kill` | `connection` | `partial` | `-` | `-3` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
 | `client|list` | `connection` | `partial` | `-` | `-2` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
 | `client|no-evict` | `connection` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
 | `client|no-touch` | `connection` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@slow, @connection` |
-| `client|pause` | `connection` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
+| `client|pause` | `connection` | `partial` | `-` | `-3` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
 | `client|reply` | `connection` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@slow, @connection` |
 | `client|setinfo` | `connection` | `full` | `-` | `4` | `-` | `no` | `@slow, @connection` |
 | `client|setname` | `connection` | `partial` | `-` | `3` | `-` | `no` | `@slow, @connection` |
-| `client|tracking` | `connection` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@slow, @connection` |
-| `client|trackinginfo` | `connection` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@slow, @connection` |
+| `client|tracking` | `connection` | `partial` | `-` | `-3` | `-` | `no` | `@slow, @connection` |
+| `client|trackinginfo` | `connection` | `partial` | `-` | `2` | `-` | `no` | `@slow, @connection` |
 | `client|unblock` | `connection` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
-| `client|unpause` | `connection` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
+| `client|unpause` | `connection` | `partial` | `-` | `2` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
 | `cluster` | `cluster` | `partial` | `-` | `-2` | `-` | `no` | `@slow` |
 | `cluster|addslots` | `cluster` | `standalone-error` | `v1.1.0` | `-3` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `cluster|addslotsrange` | `cluster` | `standalone-error` | `v1.1.0` | `-4` | `-` | `no` | `@admin, @slow, @dangerous` |

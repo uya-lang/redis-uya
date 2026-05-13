@@ -1220,6 +1220,12 @@ CLIENT GETNAME
 CLIENT SETNAME name
 CLIENT INFO
 CLIENT LIST
+CLIENT KILL ID id
+CLIENT PAUSE timeout-ms [WRITE|ALL]
+CLIENT UNPAUSE
+CLIENT TRACKING ON [REDIRECT id] [BCAST] [OPTIN] [OPTOUT] [NOLOOP]
+CLIENT TRACKING OFF
+CLIENT TRACKINGINFO
 CLIENT SETINFO LIB-NAME value
 CLIENT SETINFO LIB-VER value
 CLIENT HELP
@@ -1232,13 +1238,20 @@ CLIENT HELP
 - `CLIENT SETNAME`：保存连接级客户端名，成功返回 `+OK`
 - `CLIENT INFO`：返回当前连接的最小客户端信息行，包含 `id/name/resp/multi/sub/lib-name/lib-ver`
 - `CLIENT LIST`：返回当前活跃连接的最小信息行快照，每行包含 `id/name/resp/multi/sub/lib-name/lib-ver`
+- `CLIENT KILL ID id`：按连接 ID 关闭其他活跃连接；当前只支持 `ID` 过滤，返回整数 `0/1`
+- `CLIENT PAUSE timeout-ms [WRITE|ALL]`：暂停其他连接的命令处理；当前 `WRITE`/`ALL` 都按全局暂停处理，返回 `+OK`
+- `CLIENT UNPAUSE`：提前解除当前 pause 状态，返回 `+OK`
+- `CLIENT TRACKING`：当前支持连接级 `ON/OFF`、`REDIRECT`、`BCAST`、`OPTIN`、`OPTOUT`、`NOLOOP` 标志存储，返回 `+OK`
+- `CLIENT TRACKINGINFO`：RESP2 下返回 flatten array，RESP3 下返回 map，暴露当前连接的 tracking flags、redirect 和 prefixes
 - `CLIENT SETINFO`：保存客户端库名/版本元数据，成功返回 `+OK`
 - `CLIENT HELP`：返回当前支持的 CLIENT 子命令列表
 
 说明：
 
 - 客户端名和 `SETINFO` 元数据存放在连接级 `ConnectionTransaction`
-- 当前不支持 `CLIENT KILL`、`PAUSE`、`TRACKING` 等全局控制命令
+- `CLIENT KILL` 当前只支持 `ID <id>` 过滤，不支持更完整的 addr/type/user/maxage/skipme 组合
+- `CLIENT PAUSE` 当前保留发起暂停的控制连接可继续发送 `CLIENT UNPAUSE`；`WRITE` 语义还没有细分成仅写命令暂停
+- `CLIENT TRACKING` 当前只保存连接级状态，不发送 invalidation push，也不支持 `PREFIX`
 
 ### `CLUSTER`
 

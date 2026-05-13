@@ -146,6 +146,9 @@ def run_smoke() -> None:
                 client_id = send_command(sock, b"CLIENT", b"ID")
                 if not isinstance(client_id, int) or client_id <= 0:
                     raise AssertionError(f"unexpected CLIENT ID: {client_id!r}")
+                peer_id = send_command(peer_sock, b"CLIENT", b"ID")
+                if not isinstance(peer_id, int) or peer_id <= 0:
+                    raise AssertionError(f"unexpected peer CLIENT ID: {peer_id!r}")
 
                 if send_command(sock, b"CLIENT", b"GETNAME") is not None:
                     raise AssertionError("new connection should not have a client name")
@@ -194,6 +197,54 @@ def run_smoke() -> None:
                     raise AssertionError(f"unexpected CONFIG HELP: {help_reply!r}")
                 if send_command(sock, b"CONFIG", b"RESETSTAT") != "OK":
                     raise AssertionError("CONFIG RESETSTAT failed")
+
+                if send_command(sock, b"CLIENT", b"TRACKING", b"ON", b"REDIRECT", str(peer_id).encode(), b"NOLOOP") != "OK":
+                    raise AssertionError("CLIENT TRACKING ON failed")
+                tracking_info = send_command(sock, b"CLIENT", b"TRACKINGINFO")
+                if (
+                    not isinstance(tracking_info, dict)
+                    or not isinstance(tracking_info.get(b"flags"), list)
+                    or b"on" not in tracking_info[b"flags"]
+                    or b"noloop" not in tracking_info[b"flags"]
+                    or tracking_info.get(b"redirect") != peer_id
+                    or tracking_info.get(b"prefixes") != []
+                ):
+                    raise AssertionError(f"unexpected CLIENT TRACKINGINFO: {tracking_info!r}")
+                if send_command(sock, b"CLIENT", b"TRACKING", b"OFF") != "OK":
+                    raise AssertionError("CLIENT TRACKING OFF failed")
+
+                if send_command(sock, b"CLIENT", b"PAUSE", b"1000", b"ALL") != "OK":
+                    raise AssertionError("CLIENT PAUSE failed")
+                peer_sock.settimeout(0.1)
+                peer_sock.sendall(b"*1\r\n$4\r\nPING\r\n")
+                try:
+                    paused_reply = read_resp(peer_sock)
+                except TimeoutError:
+                    paused_reply = None
+                except socket.timeout:
+                    paused_reply = None
+                if paused_reply is not None:
+                    raise AssertionError(f"CLIENT PAUSE did not block peer command: {paused_reply!r}")
+                if send_command(sock, b"CLIENT", b"UNPAUSE") != "OK":
+                    raise AssertionError("CLIENT UNPAUSE failed")
+                peer_sock.settimeout(2.0)
+                if read_resp(peer_sock) != "PONG":
+                    raise AssertionError("peer command did not resume after CLIENT UNPAUSE")
+
+                with connect_with_retry(port, time.monotonic() + 5.0) as victim_sock:
+                    victim_id = send_command(victim_sock, b"CLIENT", b"ID")
+                    if not isinstance(victim_id, int) or victim_id <= 0:
+                        raise AssertionError(f"unexpected victim CLIENT ID: {victim_id!r}")
+                    killed = send_command(sock, b"CLIENT", b"KILL", b"ID", str(victim_id).encode())
+                    if killed != 1:
+                        raise AssertionError(f"unexpected CLIENT KILL result: {killed!r}")
+                    victim_failed = False
+                    try:
+                        send_command(victim_sock, b"PING")
+                    except Exception:
+                        victim_failed = True
+                    if not victim_failed:
+                        raise AssertionError("victim connection stayed alive after CLIENT KILL")
 
                 if send_command(sock, b"CONFIG", b"SET", b"maxmemory", b"1mb") != "OK":
                     raise AssertionError("CONFIG SET maxmemory failed")

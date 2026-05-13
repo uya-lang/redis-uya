@@ -209,3 +209,9 @@ bash scripts/verify_definition_of_done.sh
 |--------|------|
 | `CONFIG SET` 第二批运行时字段可用：支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`masterauth`、`replicaof`、`maxclients`、`databases`，覆盖非法参数、`REPLICAOF NO ONE` 提升、运行时 `maxclients` 更新与 `CONFIG GET` 回读 | `src/config.uya`、`src/command/executor.uya`、`src/network/connection.uya`、`src/server.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/test_runner.uya`、`tests/integration/client_config_smoke.py` |
 | `CONFIG REWRITE` 对应落盘第一批可用：运行时改写后的 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`masterauth` 与内存策略可写回到重写配置文件 | `src/config.uya`、`src/command/executor.uya`、`tests/unit/command_executor_test.uya`、`tests/integration/client_config_smoke.py` |
+
+## 16. `v0.9.1` 第三批
+
+| DoD 项 | 证据 |
+|--------|------|
+| Pub/Sub pattern 第一批可用：`PSUBSCRIBE`、`PUNSUBSCRIBE`、`PUBLISH` 对 pattern 订阅推送 `pmessage`，并把直连/模式匹配接收者一起计入返回值 | `src/command/router.uya`、`src/network/connection.uya`、`tests/unit/command_router_test.uya`、`tests/unit/network_connection_test.uya`、`tests/unit/test_runner.uya`、`tests/integration/pubsub_smoke.py` |

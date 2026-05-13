@@ -15,11 +15,11 @@
 
 | status | count |
 |--------|-------|
-| `full` | `97` |
+| `full` | `99` |
 | `partial` | `39` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `366` |
+| `deferred` | `364` |
 
 ## Group counts
 
@@ -389,7 +389,7 @@
 | `pfselftest` | `hyperloglog` | `deferred` | `v0.9.2` | `1` | `-` | `no` | `@hyperloglog, @admin, @slow, @dangerous` |
 | `ping` | `connection` | `deferred` | `v0.9.1` | `-1` | `-` | `no` | `@fast, @connection` |
 | `psetex` | `string` | `deferred` | `v0.9.1` | `4` | `-` | `no` | `@write, @string, @slow` |
-| `psubscribe` | `pubsub` | `deferred` | `v0.9.1` | `-2` | `-` | `yes` | `@pubsub, @slow` |
+| `psubscribe` | `pubsub` | `full` | `-` | `-2` | `-` | `yes` | `@pubsub, @slow` |
 | `psync` | `server` | `partial` | `-` | `-3` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `pttl` | `generic` | `full` | `-` | `2` | `-` | `no` | `@keyspace, @read, @fast` |
 | `publish` | `pubsub` | `partial` | `-` | `3` | `-` | `no` | `@pubsub, @fast` |
@@ -400,7 +400,7 @@
 | `pubsub|numsub` | `pubsub` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@pubsub, @slow` |
 | `pubsub|shardchannels` | `pubsub` | `deferred` | `v0.9.1` | `-2` | `-` | `yes` | `@pubsub, @slow` |
 | `pubsub|shardnumsub` | `pubsub` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@pubsub, @slow` |
-| `punsubscribe` | `pubsub` | `deferred` | `v0.9.1` | `-1` | `-` | `yes` | `@pubsub, @slow` |
+| `punsubscribe` | `pubsub` | `full` | `-` | `-1` | `-` | `yes` | `@pubsub, @slow` |
 | `quit` | `connection` | `partial` | `-` | `-1` | `-` | `no` | `@fast, @connection` |
 | `randomkey` | `generic` | `deferred` | `v0.9.1` | `1` | `-` | `no` | `@keyspace, @read, @slow` |
 | `readonly` | `cluster` | `standalone-error` | `v1.1.0` | `1` | `-` | `no` | `@fast, @connection` |

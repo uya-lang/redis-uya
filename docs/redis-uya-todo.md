@@ -457,9 +457,10 @@
 - [ ] `COMMAND DOCS` 无参数全量 docs 输出与大响应流式发送路径继续补齐
 - [x] `COMMAND GETKEYS` / `COMMAND GETKEYSANDFLAGS` 当前命令表支持已落地：覆盖 range key spec、多 key/成对 key、`RENAME` 双 key、`SORT ... STORE` movablekeys 和基础 key flags
 - [x] 管理面第二批运行时配置已落地：`CONFIG SET` 支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`masterauth`、`replicaof`、`maxclients`、`databases`，并覆盖 `CONFIG GET/REWRITE` 验证与运行时 `maxclients` 生效
+- [x] Pub/Sub 第一批 pattern 订阅已落地：`PSUBSCRIBE`、`PUNSUBSCRIBE`、`pmessage` fanout 与接收者计数已覆盖 unit/integration
 - [ ] 其余 standalone 兼容错误与命令家族补齐继续推进
 - [ ] Streams 完整化：消费者组、pending、claim、trim、阻塞读取和持久化恢复
-- [ ] Pub/Sub 完整化：pattern 订阅、订阅态命令限制、背压和断开清理
+- [ ] Pub/Sub 完整化：订阅态命令限制、背压和断开清理
 - [ ] Lua 与 Functions：`EVAL/EVALSHA`、脚本缓存、只读脚本、原子边界、函数加载和调用
 - [ ] RESP3 与客户端兼容矩阵：push、map、set、attribute、null、HELLO/AUTH/SETNAME 组合路径
 - [ ] Bitmap/Bitfield/HyperLogLog/Geo 命令族

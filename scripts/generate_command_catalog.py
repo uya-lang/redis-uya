@@ -142,6 +142,8 @@ FULL_NAMES = {
     "psync",
     "pttl",
     "publish",
+    "psubscribe",
+    "punsubscribe",
     "quit",
     "rename",
     "renamenx",
@@ -813,7 +815,7 @@ def render_uya_part(entries: list[CommandEntry], part_index: int, start: int, en
     for index, entry in enumerate(entries):
         if index < start or index >= end:
             continue
-        include_runtime_details = entry.status in {"full", "partial"}
+        include_runtime_details = entry.status == "full"
         acl_tags = "|".join(category.lstrip("@").lower() for category in entry.acl_categories) if include_runtime_details else ""
         flag_tags = "|".join(flag.lower() for flag in entry.flags) if include_runtime_details else ""
         summary = entry.summary if include_runtime_details else ""

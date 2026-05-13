@@ -79,39 +79,78 @@ def run_smoke() -> None:
                 b"*3\r\n$9\r\nsubscribe\r\n$5\r\nchan1\r\n:1\r\n",
             )
 
-            with connect_with_retry(port, time.monotonic() + 5.0) as pub_sock:
-                pub_sock.settimeout(2.0)
+            with connect_with_retry(port, time.monotonic() + 5.0) as pattern_sock:
+                pattern_sock.settimeout(2.0)
                 roundtrip(
-                    pub_sock,
-                    b"*3\r\n$7\r\nPUBLISH\r\n$5\r\nchan1\r\n$5\r\nhello\r\n",
-                    b":1\r\n",
+                    pattern_sock,
+                    b"*2\r\n$10\r\nPSUBSCRIBE\r\n$5\r\nchan*\r\n",
+                    b"*3\r\n$10\r\npsubscribe\r\n$5\r\nchan*\r\n:1\r\n",
                 )
 
-            actual = recv_exact(sub_sock, len(b"*3\r\n$7\r\nmessage\r\n$5\r\nchan1\r\n$5\r\nhello\r\n"))
-            if actual != b"*3\r\n$7\r\nmessage\r\n$5\r\nchan1\r\n$5\r\nhello\r\n":
-                raise AssertionError(f"unexpected pubsub message: {actual!r}")
+                with connect_with_retry(port, time.monotonic() + 5.0) as pub_sock:
+                    pub_sock.settimeout(2.0)
+                    roundtrip(
+                        pub_sock,
+                        b"*3\r\n$7\r\nPUBLISH\r\n$5\r\nchan1\r\n$5\r\nhello\r\n",
+                        b":2\r\n",
+                    )
 
-            roundtrip(
-                sub_sock,
-                b"*2\r\n$11\r\nUNSUBSCRIBE\r\n$5\r\nchan1\r\n",
-                b"*3\r\n$11\r\nunsubscribe\r\n$5\r\nchan1\r\n:0\r\n",
-            )
+                actual = recv_exact(sub_sock, len(b"*3\r\n$7\r\nmessage\r\n$5\r\nchan1\r\n$5\r\nhello\r\n"))
+                if actual != b"*3\r\n$7\r\nmessage\r\n$5\r\nchan1\r\n$5\r\nhello\r\n":
+                    raise AssertionError(f"unexpected pubsub message: {actual!r}")
 
-            with connect_with_retry(port, time.monotonic() + 5.0) as pub_sock:
-                pub_sock.settimeout(2.0)
+                pattern_actual = recv_exact(pattern_sock, len(b"*4\r\n$8\r\npmessage\r\n$5\r\nchan*\r\n$5\r\nchan1\r\n$5\r\nhello\r\n"))
+                if pattern_actual != b"*4\r\n$8\r\npmessage\r\n$5\r\nchan*\r\n$5\r\nchan1\r\n$5\r\nhello\r\n":
+                    raise AssertionError(f"unexpected pattern pubsub message: {pattern_actual!r}")
+
                 roundtrip(
-                    pub_sock,
-                    b"*3\r\n$7\r\nPUBLISH\r\n$5\r\nchan1\r\n$5\r\nagain\r\n",
-                    b":0\r\n",
+                    pattern_sock,
+                    b"*2\r\n$12\r\nPUNSUBSCRIBE\r\n$5\r\nchan*\r\n",
+                    b"*3\r\n$12\r\npunsubscribe\r\n$5\r\nchan*\r\n:0\r\n",
                 )
 
-            sub_sock.settimeout(0.2)
-            try:
-                extra = sub_sock.recv(1)
-            except socket.timeout:
-                extra = b""
-            if extra != b"":
-                raise AssertionError(f"unexpected message after unsubscribe: {extra!r}")
+                with connect_with_retry(port, time.monotonic() + 5.0) as pub_sock:
+                    pub_sock.settimeout(2.0)
+                    roundtrip(
+                        pub_sock,
+                        b"*3\r\n$7\r\nPUBLISH\r\n$5\r\nchan1\r\n$5\r\nagain\r\n",
+                        b":1\r\n",
+                    )
+
+                sub_sock.settimeout(2.0)
+                actual_again = recv_exact(sub_sock, len(b"*3\r\n$7\r\nmessage\r\n$5\r\nchan1\r\n$5\r\nagain\r\n"))
+                if actual_again != b"*3\r\n$7\r\nmessage\r\n$5\r\nchan1\r\n$5\r\nagain\r\n":
+                    raise AssertionError(f"unexpected pubsub message after punsubscribe: {actual_again!r}")
+
+                pattern_sock.settimeout(0.2)
+                try:
+                    extra_pattern = pattern_sock.recv(1)
+                except socket.timeout:
+                    extra_pattern = b""
+                if extra_pattern != b"":
+                    raise AssertionError(f"unexpected pattern message after punsubscribe: {extra_pattern!r}")
+
+                roundtrip(
+                    sub_sock,
+                    b"*2\r\n$11\r\nUNSUBSCRIBE\r\n$5\r\nchan1\r\n",
+                    b"*3\r\n$11\r\nunsubscribe\r\n$5\r\nchan1\r\n:0\r\n",
+                )
+
+                with connect_with_retry(port, time.monotonic() + 5.0) as pub_sock:
+                    pub_sock.settimeout(2.0)
+                    roundtrip(
+                        pub_sock,
+                        b"*3\r\n$7\r\nPUBLISH\r\n$5\r\nchan1\r\n$5\r\nfinal\r\n",
+                        b":0\r\n",
+                    )
+
+                sub_sock.settimeout(0.2)
+                try:
+                    extra = sub_sock.recv(1)
+                except socket.timeout:
+                    extra = b""
+                if extra != b"":
+                    raise AssertionError(f"unexpected message after unsubscribe: {extra!r}")
     finally:
         stop_process(proc)
         aof_path.unlink(missing_ok=True)

@@ -22,6 +22,8 @@ use src.cluster.topology.cluster_topology_add_node;
 use src.cluster.topology.cluster_topology_single_node;
 use src.config.MaxmemoryPolicy;
 use src.config.config_copy_bytes;
+use src.config.config_rewrite_path;
+use src.config.parse_config_file;
 use src.network.connection.connection_encode_reply;
 use src.persistence.rdb.rdb_load_file_at;
 use src.replication.state.ReplicationRole;
@@ -253,6 +255,7 @@ export fn test_command_info_and_config() !void {
     const config_help_len: usize = try connection_encode_reply(&config_help_reply, &out[0], 512);
     try assert_true(command_executor_test_contains(out[0: config_help_len], &"$20\r\nCONFIG GET <pattern>\r\n"[0: 27]));
     try assert_true(command_executor_test_contains(out[0: config_help_len], &"CONFIG SET <parameter> <value> [<parameter> <value> ...]"[0: 56]));
+    try assert_true(command_executor_test_contains(out[0: config_help_len], &"CONFIG REWRITE"[0: 14]));
     command_reply_cleanup(&config_help_reply);
     resp_value_free(&config_help_parsed.value);
 
@@ -310,6 +313,34 @@ export fn test_command_info_and_config() !void {
     try assert_eq_i32(config_set_unknown_reply.typ as i32, CommandReplyType.reply_error as i32);
     try assert_true(command_executor_test_slice_eq(config_set_unknown_reply.data, &"ERR Unsupported CONFIG parameter"[0: 32]));
     resp_value_free(&config_set_unknown_parsed.value);
+
+    config_copy_bytes(runtime.config.dir[0: 256], &"build/"[0: 6]);
+    config_copy_bytes(runtime.config.appendfilename[0: 128], &"build/test-command-config-rewrite.aof"[0: 37]);
+    runtime.config.maxmemory = 1048576;
+    runtime.config.maxmemory_policy = MaxmemoryPolicy.maxmemory_allkeys_lru;
+    runtime.config.save_seconds = 60;
+    runtime.config.save_changes = 10;
+    config_copy_bytes(runtime.config.requirepass[0: 128], &"next"[0: 4]);
+
+    var rewrite_path_buf: [byte: 512] = [];
+    try config_rewrite_path(rewrite_path_buf[0: 512], &runtime.config);
+    _ = unlink(&rewrite_path_buf[0] as &const byte);
+
+    var config_rewrite_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nCONFIG\r\n$7\r\nREWRITE\r\n"[0: 29]);
+    const config_rewrite_command: Command = try command_executor_test_command(&router, &config_rewrite_parsed);
+    const config_rewrite_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_rewrite_command, 5000u64);
+    try assert_eq_i32(config_rewrite_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(config_rewrite_reply.data, &"OK"[0: 2]));
+    resp_value_free(&config_rewrite_parsed.value);
+
+    const rewritten_cfg: ServerConfig = try parse_config_file(&rewrite_path_buf[0] as &const byte);
+    try assert_eq_i32(rewritten_cfg.port, runtime.config.port);
+    try assert_eq_i32(rewritten_cfg.maxmemory as i32, 1048576);
+    try assert_eq_i32(rewritten_cfg.maxmemory_policy as i32, MaxmemoryPolicy.maxmemory_allkeys_lru as i32);
+    try assert_eq_i32(rewritten_cfg.save_seconds, 60);
+    try assert_eq_i32(rewritten_cfg.save_changes, 10);
+    try assert_true(command_executor_test_slice_eq(rewritten_cfg.requirepass[0: 4], &"next"[0: 4]));
+    _ = unlink(&rewrite_path_buf[0] as &const byte);
 
     runtime.replication_role = ReplicationRole.role_replica;
     runtime.replication_state = ReplicationState.repl_state_configured;

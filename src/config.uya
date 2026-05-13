@@ -5,13 +5,29 @@ export error ConfigInvalidValue;
 export error ConfigOpenFailed;
 export error ConfigReadFailed;
 export error ConfigFileTooLarge;
+export error ConfigPathTooLong;
+export error ConfigWriteFailed;
+export error ConfigRenameFailed;
 
 use std.io.file.File;
 use std.io.file.file_open;
 use std.io.file.file_close;
 use std.io.file.file_read;
+use std.io.file.file_write;
 use libc.O_RDONLY;
+use libc.O_WRONLY;
+use libc.O_CREAT;
+use libc.O_TRUNC;
+use libc.rename;
 use src.util.bytes.bytes_ascii_case_eq;
+use src.storage.sds.Sds;
+use src.storage.sds.SdsFmtArg;
+use src.storage.sds.sds_empty;
+use src.storage.sds.sds_free;
+use src.storage.sds.sds_cat;
+use src.storage.sds.sds_cat_fmt;
+use src.storage.sds.sds_fmt_i64;
+use src.storage.sds.sds_fmt_u64;
 
 export enum MaxmemoryPolicy {
     maxmemory_noeviction,
@@ -185,6 +201,172 @@ export fn config_apply_runtime_set(cfg: &ServerConfig, key: &[byte], value: &[by
         return true;
     }
     return false;
+}
+
+fn config_cstring_slice(data: &[byte]) &[byte] {
+    var len: usize = 0;
+    while len < data.len && data.ptr[len] != 0 as byte {
+        len = len + 1;
+    }
+    return data[0: len];
+}
+
+fn config_path_has_sep(data: &[byte]) bool {
+    var i: usize = 0;
+    while i < data.len {
+        if data.ptr[i] == 47 as byte {
+            return true;
+        }
+        i = i + 1;
+    }
+    return false;
+}
+
+fn config_append_path_part(dst: &[byte], pos: &usize, part: &[byte]) !void {
+    if *pos + part.len + 1 > dst.len {
+        return error.ConfigPathTooLong;
+    }
+    var i: usize = 0;
+    while i < part.len {
+        dst.ptr[*pos + i] = part.ptr[i];
+        i = i + 1;
+    }
+    *pos = *pos + part.len;
+}
+
+fn config_append_tmp_suffix(dst: &[byte], pos: &usize) !void {
+    try config_append_path_part(dst, pos, &".tmp"[0: 4]);
+}
+
+export fn config_rewrite_path(out: &[byte], cfg: &ServerConfig) !void {
+    const appendfilename: &[byte] = config_cstring_slice(cfg.appendfilename[0: 128]);
+    const dir: &[byte] = config_cstring_slice(cfg.dir[0: 256]);
+    var pos: usize = 0;
+    if config_path_has_sep(appendfilename) {
+        try config_append_path_part(out, &pos, appendfilename);
+    } else {
+        try config_append_path_part(out, &pos, dir);
+        if pos > 0 && out.ptr[pos - 1] != 47 as byte {
+            try config_append_path_part(out, &pos, &"/"[0: 1]);
+        }
+        try config_append_path_part(out, &pos, appendfilename);
+    }
+    try config_append_path_part(out, &pos, &".conf"[0: 5]);
+    out.ptr[pos] = 0 as byte;
+}
+
+fn config_write_all(file: &File, data: &[byte]) !void {
+    var written: usize = 0;
+    while written < data.len {
+        const ptr: &const byte = @ptr_from_usize(@usize_from_ptr(data.ptr as &void) + written) as &const byte;
+        const n: usize = file_write(file, ptr, data.len - written) catch {
+            return error.ConfigWriteFailed;
+        };
+        if n == 0 {
+            return error.ConfigWriteFailed;
+        }
+        written = written + n;
+    }
+}
+
+fn config_append_line(buf: &Sds, key: &[byte], value: &[byte]) !void {
+    try sds_cat(buf, key);
+    try sds_cat(buf, &" "[0: 1]);
+    try sds_cat(buf, value);
+    try sds_cat(buf, &"\n"[0: 1]);
+}
+
+fn config_append_i32_line(buf: &Sds, key: &[byte], value: i32) !void {
+    var args: [SdsFmtArg: 1] = [];
+    args[0] = sds_fmt_i64(value as i64);
+    try sds_cat(buf, key);
+    try sds_cat(buf, &" "[0: 1]);
+    try sds_cat_fmt(buf, &"%i"[0: 2], args[0: 1]);
+    try sds_cat(buf, &"\n"[0: 1]);
+}
+
+fn config_append_u64_line(buf: &Sds, key: &[byte], value: u64) !void {
+    var args: [SdsFmtArg: 1] = [];
+    args[0] = sds_fmt_u64(value);
+    try sds_cat(buf, key);
+    try sds_cat(buf, &" "[0: 1]);
+    try sds_cat_fmt(buf, &"%u"[0: 2], args[0: 1]);
+    try sds_cat(buf, &"\n"[0: 1]);
+}
+
+fn config_append_pair_i32_line(buf: &Sds, key: &[byte], value1: i32, value2: i32) !void {
+    var args: [SdsFmtArg: 2] = [];
+    args[0] = sds_fmt_i64(value1 as i64);
+    args[1] = sds_fmt_i64(value2 as i64);
+    try sds_cat(buf, key);
+    try sds_cat(buf, &" "[0: 1]);
+    try sds_cat_fmt(buf, &"%i %i"[0: 5], args[0: 2]);
+    try sds_cat(buf, &"\n"[0: 1]);
+}
+
+fn config_append_replicaof_line(buf: &Sds, host: &[byte], port: i32) !void {
+    var args: [SdsFmtArg: 1] = [];
+    args[0] = sds_fmt_i64(port as i64);
+    try sds_cat(buf, &"replicaof"[0: 9]);
+    try sds_cat(buf, &" "[0: 1]);
+    try sds_cat(buf, host);
+    try sds_cat(buf, &" "[0: 1]);
+    try sds_cat_fmt(buf, &"%i"[0: 2], args[0: 1]);
+    try sds_cat(buf, &"\n"[0: 1]);
+}
+
+fn config_rewrite_payload(cfg: &ServerConfig) !Sds {
+    var buf: Sds = sds_empty() catch {
+        return error.ConfigWriteFailed;
+    };
+    try config_append_i32_line(&buf, &"port"[0: 4], cfg.port);
+    try config_append_line(&buf, &"bind"[0: 4], config_cstring_slice(cfg.bind[0: 64]));
+    try config_append_line(&buf, &"dir"[0: 3], config_cstring_slice(cfg.dir[0: 256]));
+    try config_append_line(&buf, &"dbfilename"[0: 10], config_cstring_slice(cfg.dbfilename[0: 128]));
+    try config_append_line(&buf, &"appendfilename"[0: 14], config_cstring_slice(cfg.appendfilename[0: 128]));
+    try config_append_u64_line(&buf, &"maxmemory"[0: 9], cfg.maxmemory as u64);
+    try config_append_line(&buf, &"maxmemory-policy"[0: 16], maxmemory_policy_name(cfg.maxmemory_policy));
+    try config_append_pair_i32_line(&buf, &"save"[0: 4], cfg.save_seconds, cfg.save_changes);
+    const requirepass: &[byte] = config_cstring_slice(cfg.requirepass[0: 128]);
+    if requirepass.len > 0 {
+        try config_append_line(&buf, &"requirepass"[0: 11], requirepass);
+    }
+    const replicaof_host: &[byte] = config_cstring_slice(cfg.replicaof_host[0: 64]);
+    if replicaof_host.len > 0 && cfg.replicaof_port > 0 {
+        try config_append_replicaof_line(&buf, replicaof_host, cfg.replicaof_port);
+    }
+    const masterauth: &[byte] = config_cstring_slice(cfg.masterauth[0: 128]);
+    if masterauth.len > 0 {
+        try config_append_line(&buf, &"masterauth"[0: 10], masterauth);
+    }
+    return buf;
+}
+
+export fn config_rewrite_file(cfg: &ServerConfig) !void {
+    var path_buf: [byte: 512] = [];
+    try config_rewrite_path(path_buf[0: 512], cfg);
+    var tmp_path_buf: [byte: 512] = [];
+    var tmp_pos: usize = 0;
+    try config_append_path_part(tmp_path_buf[0: 512], &tmp_pos, config_cstring_slice(path_buf[0: 512]));
+    try config_append_tmp_suffix(tmp_path_buf[0: 512], &tmp_pos);
+    tmp_path_buf[tmp_pos] = 0 as byte;
+
+    var payload: Sds = try config_rewrite_payload(cfg);
+    defer {
+        sds_free(&payload);
+    }
+
+    const mode: u32 = 0o644u32;
+    var file: File = file_open(&tmp_path_buf[0] as &const byte, (O_WRONLY | O_CREAT | O_TRUNC) as i32, mode) catch {
+        return error.ConfigWriteFailed;
+    };
+    defer {
+        _ = file_close(&file) catch {};
+    }
+    try config_write_all(&file, payload.buf[0: payload.len]);
+    if rename(&tmp_path_buf[0] as &const byte, &path_buf[0] as &const byte) != 0 {
+        return error.ConfigRenameFailed;
+    }
 }
 
 fn next_token(line: &[byte], pos: &usize) &[byte] {

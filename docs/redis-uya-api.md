@@ -1196,6 +1196,7 @@ INFO keyspace
 ```text
 CONFIG GET pattern
 CONFIG SET parameter value [parameter value ...]
+CONFIG REWRITE
 CONFIG HELP
 CONFIG RESETSTAT
 ```
@@ -1206,9 +1207,10 @@ CONFIG RESETSTAT
 - 当前支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`replicaof`、`masterauth`、`maxmemory`、`maxmemory-policy`、`maxclients`、`databases`、`save`
 - 支持最小 `*` 通配模式
 - `CONFIG SET` 当前支持运行时子集：`requirepass`、`maxmemory`、`maxmemory-policy`、`save`
+- `CONFIG REWRITE` 当前会把运行时有效配置写到 `<appendfilename>.conf`，成功返回 `+OK`
 - `CONFIG HELP` 返回当前支持的 CONFIG 子命令列表
 - `CONFIG RESETSTAT` 当前返回 `+OK`，用于客户端兼容；统计重置仍是最小占位语义
-- 当前仍不支持 `CONFIG REWRITE`，也不支持其余更高风险的 `CONFIG SET` 字段热更新
+- `CONFIG REWRITE` 当前是最小实现：目标文件路径按当前 AOF 路径派生，不保留原始配置文件注释/顺序；其余更高风险的 `CONFIG SET` 字段热更新仍不支持
 
 ### `CLIENT`
 

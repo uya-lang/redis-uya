@@ -132,7 +132,9 @@ def run_smoke() -> None:
 
     port = find_free_port()
     aof_path = ROOT / "build" / f"client-config-{port}.aof"
+    rewrite_path = ROOT / "build" / f"client-config-{port}.aof.conf"
     aof_path.unlink(missing_ok=True)
+    rewrite_path.unlink(missing_ok=True)
     proc = subprocess.Popen(
         [str(BIN), str(port), "8", str(aof_path)],
         cwd=ROOT,
@@ -271,12 +273,21 @@ def run_smoke() -> None:
                     raise AssertionError(f"unexpected CONFIG GET requirepass after SET: {requirepass_raw!r}")
                 if send_command(sock, b"PING") != "PONG":
                     raise AssertionError("current connection lost access after CONFIG SET requirepass")
+                if send_command(sock, b"CONFIG", b"REWRITE") != "OK":
+                    raise AssertionError("CONFIG REWRITE failed")
+                rewritten = rewrite_path.read_text(encoding="utf-8")
+                if f"appendfilename {aof_path}" not in rewritten:
+                    raise AssertionError(f"missing rewritten appendfilename in config: {rewritten!r}")
+                for needle in ("maxmemory 1048576", "maxmemory-policy allkeys-lru", "save 60 10", "requirepass runtime-secret"):
+                    if needle not in rewritten:
+                        raise AssertionError(f"missing {needle!r} in rewritten config: {rewritten!r}")
 
                 if send_command(sock, b"QUIT") != "OK":
                     raise AssertionError("QUIT failed")
     finally:
         stop_process(proc)
         aof_path.unlink(missing_ok=True)
+        rewrite_path.unlink(missing_ok=True)
 
 
 def main() -> int:

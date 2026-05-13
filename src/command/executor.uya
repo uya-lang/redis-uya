@@ -5,6 +5,7 @@ use src.config.MaxmemoryPolicy;
 use src.config.default_config;
 use src.config.config_apply_runtime_set;
 use src.config.config_copy_bytes;
+use src.config.config_rewrite_file;
 use src.config.maxmemory_policy_name;
 use src.cluster.node.CLUSTER_NODE_FLAG_MASTER;
 use src.cluster.node.ClusterNode;
@@ -1488,6 +1489,10 @@ fn command_executor_config_help() CommandReply {
         return command_executor_oom();
     };
     _ = list_object_push_tail(reply_list, &"CONFIG SET <parameter> <value> [<parameter> <value> ...]"[0: 56]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"CONFIG REWRITE"[0: 14]) catch {
         object_free(reply_list);
         return command_executor_oom();
     };
@@ -5594,6 +5599,16 @@ fn command_executor_config(runtime: &CommandRuntimeInfo, command: &Command) Comm
         reply.request_config_set = true;
         reply.config_after = next_config;
         return reply;
+    }
+
+    if command_executor_keyword_eq(subcommand, &"REWRITE"[0: 7]) {
+        if command.argc != 2 {
+            return command_executor_wrong_arity();
+        }
+        _ = config_rewrite_file(&runtime.config) catch {
+            return command_executor_error(&"ERR failed to rewrite config file"[0: 33]);
+        };
+        return command_executor_simple(&"OK"[0: 2]);
     }
 
     if !command_executor_keyword_eq(subcommand, &"GET"[0: 3]) {

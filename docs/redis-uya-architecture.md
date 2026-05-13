@@ -108,7 +108,7 @@ server open
 
 ## 4. 控制面最小闭环
 
-- `CONFIG` 仍由 `command/executor.uya` 执行，当前覆盖 `GET`、`HELP`、`RESETSTAT`
+- `CONFIG` 仍由 `command/executor.uya` 执行，当前覆盖 `GET`、`SET` 运行时子集、`REWRITE`、`HELP`、`RESETSTAT`
 - `CONFIG GET` 从 `CommandRuntimeInfo` 暴露运行时配置快照，支持 `maxclients`、`databases` 等兼容字段
 - `COMMAND` 由 `command/executor.uya` 执行，当前覆盖 `COMMAND`、`COUNT`、`LIST`、`INFO`、`DOCS`，运行时数据统一来自 `catalog_generated*`
 - `COMMAND DOCS` 当前命令名定向查询可用；无参数全量 docs 查询先返回空集合，避免在当前固定连接输出缓冲下生成超大回复而卡住 `redis-cli`
@@ -186,5 +186,5 @@ server open
 - 事务当前已覆盖连接级最小 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`，但仍没有更完整的 Redis 事务中止传播、脚本联动和控制面扩展
 - RESP3 当前是 `HELLO 2/3` 驱动的最小闭环，仍不是完整 RESP3 类型输出与客户端兼容矩阵
 - Pub/Sub 当前是固定容量最小闭环，仍没有 pattern 订阅、完整 subscribed-mode 命令限制和背压缓冲
-- 控制面当前覆盖 `CLIENT` / `CONFIG` 的兼容子集，`CONFIG SET` 已支持 `requirepass/maxmemory/maxmemory-policy/save` 运行时子集，`CLIENT KILL/PAUSE/TRACKING` 已有最小闭环；仍没有 `CONFIG REWRITE`、其余 `CONFIG SET` 热更新，以及更完整的 tracking invalidation 和 richer client filters
+- 控制面当前覆盖 `CLIENT` / `CONFIG` 的兼容子集，`CONFIG SET` 已支持 `requirepass/maxmemory/maxmemory-policy/save` 运行时子集，`CONFIG REWRITE` 已支持把当前有效配置写到 `<appendfilename>.conf`，`CLIENT KILL/PAUSE/TRACKING` 已有最小闭环；仍没有其余 `CONFIG SET` 热更新、更完整的 rewrite 保真度，以及 tracking invalidation 和 richer client filters
 - `maxmemory` 当前已覆盖 noeviction、allkeys-* 与 volatile-* 基线，并补齐 allocator 统计观测、Slab 小对象缓存和压力回归；仍没有 LFU 衰减、采样池、淘汰事件持久化优化和正式内存 benchmark

@@ -813,8 +813,12 @@ def render_uya_part(entries: list[CommandEntry], part_index: int, start: int, en
     for index, entry in enumerate(entries):
         if index < start or index >= end:
             continue
-        acl_tags = "|".join(category.lstrip("@").lower() for category in entry.acl_categories)
-        flag_tags = "|".join(flag.lower() for flag in entry.flags)
+        include_runtime_details = entry.status in {"full", "partial"}
+        acl_tags = "|".join(category.lstrip("@").lower() for category in entry.acl_categories) if include_runtime_details else ""
+        flag_tags = "|".join(flag.lower() for flag in entry.flags) if include_runtime_details else ""
+        summary = entry.summary if include_runtime_details else ""
+        since = entry.since if include_runtime_details else ""
+        complexity = entry.complexity if include_runtime_details else ""
         lines.append(f"    if index == {index} {{\n")
         lines.append("        return CommandCatalogEntry{\n")
         lines.append(f"            name: {uya_string_literal(entry.name.encode('utf-8'))},\n")
@@ -824,9 +828,9 @@ def render_uya_part(entries: list[CommandEntry], part_index: int, start: int, en
         lines.append(f"            flag_tags: {uya_string_literal(flag_tags.encode('utf-8'))},\n")
         lines.append(f"            status: CommandCatalogStatus.{status_enum_name(entry.status)},\n")
         lines.append(f"            target_version: {uya_string_literal(entry.target_version.encode('utf-8'))},\n")
-        lines.append(f"            summary: {uya_string_literal(entry.summary.encode('utf-8'))},\n")
-        lines.append(f"            since: {uya_string_literal(entry.since.encode('utf-8'))},\n")
-        lines.append(f"            complexity: {uya_string_literal(entry.complexity.encode('utf-8'))},\n")
+        lines.append(f"            summary: {uya_string_literal(summary.encode('utf-8'))},\n")
+        lines.append(f"            since: {uya_string_literal(since.encode('utf-8'))},\n")
+        lines.append(f"            complexity: {uya_string_literal(complexity.encode('utf-8'))},\n")
         lines.append(f"            is_pattern: {'true' if entry.is_pattern else 'false'},\n")
         lines.append(f"            is_top_level: {'true' if entry.is_top_level else 'false'},\n")
         lines.append(f"            arity: {entry.arity},\n")

@@ -266,6 +266,41 @@ def run_smoke() -> None:
                 if array_pairs_to_dict(save_raw).get("save") != "60 10":
                     raise AssertionError(f"unexpected CONFIG GET save after SET: {save_raw!r}")
 
+                if send_command(sock, b"CONFIG", b"SET", b"port", b"6391") != "OK":
+                    raise AssertionError("CONFIG SET port failed")
+                if array_pairs_to_dict(send_command(sock, b"CONFIG", b"GET", b"port")).get("port") != "6391":
+                    raise AssertionError("CONFIG GET port did not reflect CONFIG SET")
+
+                if send_command(sock, b"CONFIG", b"SET", b"bind", b"0.0.0.0") != "OK":
+                    raise AssertionError("CONFIG SET bind failed")
+                if array_pairs_to_dict(send_command(sock, b"CONFIG", b"GET", b"bind")).get("bind") != "0.0.0.0":
+                    raise AssertionError("CONFIG GET bind did not reflect CONFIG SET")
+
+                if send_command(sock, b"CONFIG", b"SET", b"dir", b"build/runtime-dir") != "OK":
+                    raise AssertionError("CONFIG SET dir failed")
+                if array_pairs_to_dict(send_command(sock, b"CONFIG", b"GET", b"dir")).get("dir") != "build/runtime-dir":
+                    raise AssertionError("CONFIG GET dir did not reflect CONFIG SET")
+
+                if send_command(sock, b"CONFIG", b"SET", b"dbfilename", b"runtime.rdb") != "OK":
+                    raise AssertionError("CONFIG SET dbfilename failed")
+                if array_pairs_to_dict(send_command(sock, b"CONFIG", b"GET", b"dbfilename")).get("dbfilename") != "runtime.rdb":
+                    raise AssertionError("CONFIG GET dbfilename did not reflect CONFIG SET")
+
+                if send_command(sock, b"CONFIG", b"SET", b"masterauth", b"upstream-pass") != "OK":
+                    raise AssertionError("CONFIG SET masterauth failed")
+                if array_pairs_to_dict(send_command(sock, b"CONFIG", b"GET", b"masterauth")).get("masterauth") != "upstream-pass":
+                    raise AssertionError("CONFIG GET masterauth did not reflect CONFIG SET")
+
+                if send_command(sock, b"CONFIG", b"SET", b"maxclients", b"16") != "OK":
+                    raise AssertionError("CONFIG SET maxclients failed")
+                if array_pairs_to_dict(send_command(sock, b"CONFIG", b"GET", b"maxclients")).get("maxclients") != "16":
+                    raise AssertionError("CONFIG GET maxclients did not reflect CONFIG SET")
+
+                if send_command(sock, b"CONFIG", b"SET", b"databases", b"1") != "OK":
+                    raise AssertionError("CONFIG SET databases failed")
+                if array_pairs_to_dict(send_command(sock, b"CONFIG", b"GET", b"databases")).get("databases") != "1":
+                    raise AssertionError("CONFIG GET databases did not reflect CONFIG SET")
+
                 if send_command(sock, b"CONFIG", b"SET", b"requirepass", b"runtime-secret") != "OK":
                     raise AssertionError("CONFIG SET requirepass failed")
                 requirepass_raw = send_command(sock, b"CONFIG", b"GET", b"requirepass")
@@ -278,9 +313,25 @@ def run_smoke() -> None:
                 rewritten = rewrite_path.read_text(encoding="utf-8")
                 if f"appendfilename {aof_path}" not in rewritten:
                     raise AssertionError(f"missing rewritten appendfilename in config: {rewritten!r}")
-                for needle in ("maxmemory 1048576", "maxmemory-policy allkeys-lru", "save 60 10", "requirepass runtime-secret"):
+                for needle in (
+                    "port 6391",
+                    "bind 0.0.0.0",
+                    "dir build/runtime-dir",
+                    "dbfilename runtime.rdb",
+                    "maxmemory 1048576",
+                    "maxmemory-policy allkeys-lru",
+                    "save 60 10",
+                    "requirepass runtime-secret",
+                    "masterauth upstream-pass",
+                ):
                     if needle not in rewritten:
                         raise AssertionError(f"missing {needle!r} in rewritten config: {rewritten!r}")
+
+                next_aof = ROOT / "build" / f"client-config-next-{port}.aof"
+                if send_command(sock, b"CONFIG", b"SET", b"appendfilename", str(next_aof).encode()) != "OK":
+                    raise AssertionError("CONFIG SET appendfilename failed")
+                if array_pairs_to_dict(send_command(sock, b"CONFIG", b"GET", b"appendfilename")).get("appendfilename") != str(next_aof):
+                    raise AssertionError("CONFIG GET appendfilename did not reflect CONFIG SET")
 
                 if send_command(sock, b"QUIT") != "OK":
                     raise AssertionError("QUIT failed")

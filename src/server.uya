@@ -1343,6 +1343,9 @@ fn server_async_writev_all_future(fd: i32, head: &const byte, head_len: usize, b
             if result.request_client_unpause {
                 server_client_pause_clear(server);
             }
+            if result.request_maxclients_set {
+                server.maxclients = result.maxclients_after;
+            }
             if result.request_client_pause {
                 server.client_pause_until_ms = now_ms_safe() + result.client_pause_timeout_ms;
                 server.client_pause_write_only = result.client_pause_write_only;

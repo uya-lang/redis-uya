@@ -65,7 +65,7 @@
 - 主从一致性：当前五类对象已有 full sync + incremental smoke
 - 事务控制最小子集：连接级 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`，支持 `QUEUED`、`EXEC` 数组回复、观察键变更后的 Null Array 中止和 `DISCARD` 丢弃
 - Pub/Sub 最小子集：`SUBSCRIBE` 注册连接订阅、`PUBLISH` 跨连接推送 message 并返回订阅者数量、`UNSUBSCRIBE` 取消订阅
-- 控制面兼容子集：`CLIENT ID/GETNAME/SETNAME/INFO/LIST/SETINFO/HELP`、`HELLO SETNAME`、`CONFIG GET/HELP/RESETSTAT`
+- 控制面兼容子集：`CLIENT ID/GETNAME/SETNAME/INFO/LIST/SETINFO/HELP/KILL/PAUSE/UNPAUSE/TRACKING/TRACKINGINFO`、`HELLO SETNAME`、`CONFIG GET/HELP/RESETSTAT/SET/REWRITE`
 - 安全基线：`requirepass`、`AUTH`、`SHUTDOWN`
 - `v0.9.1` 命令全集矩阵第一批：基于 Redis 8.6 官方命令页生成 `531` 个官方命令名目录，落地 `docs/redis-uya-command-matrix.md` 与 `src/command/catalog_generated*`
 - `COMMAND` 控制面推进中：`COMMAND`、`COMMAND COUNT`、`COMMAND LIST`、`COMMAND INFO`、`COMMAND DOCS` 共用同一份运行时目录；`COMMAND GETKEYS` / `COMMAND GETKEYSANDFLAGS` 已支持当前运行时命令表，`COMMAND DOCS` 无参数全量输出仍走兼容空集路径
@@ -90,7 +90,7 @@
 
 下一阶段：
 
-- `v0.9.1`：继续推进单机命令全集矩阵、连接/管理面补齐和兼容边界收敛；当前已完成官方命令全集矩阵、`COMMAND*` 第一批、`COMMAND GETKEYS*` 当前命令表支持、全局 `CLIENT LIST`、`CONFIG SET` 运行时子集、`CONFIG REWRITE` 最小闭环，以及 `CLIENT KILL/PAUSE/TRACKING` 最小闭环，待续 `COMMAND DOCS` 全量输出、rewrite 保真度、tracking invalidation、pattern Pub/Sub、Scripting/Stream 命令族与 standalone 错误边界。
+- `v0.9.1`：继续推进单机命令全集矩阵、连接/管理面补齐和兼容边界收敛；当前已完成官方命令全集矩阵、`COMMAND*` 第一批、`COMMAND GETKEYS*` 当前命令表支持、全局 `CLIENT LIST`、`CONFIG SET` 第二批运行时字段（`port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`masterauth`、`replicaof`、`maxclients`、`databases`）、`CONFIG REWRITE` 对应落盘第一批，以及 `CLIENT KILL/PAUSE/TRACKING` 最小闭环，待续 `COMMAND DOCS` 全量输出、rewrite 保真度、tracking invalidation、pattern Pub/Sub、Scripting/Stream 命令族与 standalone 错误边界。
 
 当前阶段尚未生产可用。
 

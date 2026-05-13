@@ -2,7 +2,7 @@
 
 > 版本: v0.9.1-dev
 > 日期: 2026-05-09
-> 状态: `v0.9.1` 第一批命令矩阵与 `COMMAND*` 控制面已完成
+> 状态: `v0.9.1` 第一批命令矩阵与 `COMMAND*` 控制面已完成，`CONFIG SET` 第二批运行时字段已完成
 
 ## 1. 目标
 
@@ -202,3 +202,10 @@ bash scripts/verify_definition_of_done.sh
 | `COMMAND` 控制面第一批可用：`COMMAND`、`COMMAND COUNT`、`COMMAND LIST`、`COMMAND INFO`、`COMMAND DOCS` 覆盖 RESP2/RESP3 基础返回、`LIST FILTERBY PATTERN/ACLCAT/MODULE`、`INFO` 未知命令占位和 `DOCS` 未知命令忽略边界 | `src/command/router.uya`、`src/command/executor.uya`、`tests/unit/command_router_test.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/test_runner.uya`、`tests/integration/command_introspection.py` |
 | `COMMAND GETKEYS` / `COMMAND GETKEYSANDFLAGS` 当前命令表支持可用：覆盖 range key spec、多 key/成对 key、`RENAME` 双 key、`SORT ... STORE` movablekeys、`RO/OW/RW/RM` 与 `access/update/insert/delete` 基础 flags 组合 | `src/command/executor.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/test_runner.uya`、`tests/integration/command_introspection.py` |
 | 单次读入批量执行可用：连接层会在一次读入中消费多个完整 RESP 顶层帧，覆盖 `MULTI/SET/GET/EXEC` 管线与 `redis-cli` stdin/pipeline 客户端路径 | `src/network/protocol.uya`、`src/network/connection.uya`、`tests/unit/network_connection_test.uya`、`tests/unit/test_runner.uya`、`tests/integration/redis_cli_smoke.sh` |
+
+## 15. `v0.9.1` 第二批
+
+| DoD 项 | 证据 |
+|--------|------|
+| `CONFIG SET` 第二批运行时字段可用：支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`masterauth`、`replicaof`、`maxclients`、`databases`，覆盖非法参数、`REPLICAOF NO ONE` 提升、运行时 `maxclients` 更新与 `CONFIG GET` 回读 | `src/config.uya`、`src/command/executor.uya`、`src/network/connection.uya`、`src/server.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/test_runner.uya`、`tests/integration/client_config_smoke.py` |
+| `CONFIG REWRITE` 对应落盘第一批可用：运行时改写后的 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`masterauth` 与内存策略可写回到重写配置文件 | `src/config.uya`、`src/command/executor.uya`、`tests/unit/command_executor_test.uya`、`tests/integration/client_config_smoke.py` |

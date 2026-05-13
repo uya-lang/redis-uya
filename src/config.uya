@@ -171,8 +171,56 @@ export fn maxmemory_policy_name(policy: MaxmemoryPolicy) &[byte] {
 }
 
 export fn config_apply_runtime_set(cfg: &ServerConfig, key: &[byte], value: &[byte]) !bool {
+    if token_eq(key, &"port"[0: 4]) {
+        const port: i32 = try parse_i32_token(value);
+        if port <= 0 || port > 65535 {
+            return error.ConfigInvalidValue;
+        }
+        cfg.port = port;
+        return true;
+    }
+    if token_eq(key, &"bind"[0: 4]) {
+        copy_literal(cfg.bind[0: 64], value);
+        return true;
+    }
+    if token_eq(key, &"dir"[0: 3]) {
+        copy_literal(cfg.dir[0: 256], value);
+        return true;
+    }
+    if token_eq(key, &"dbfilename"[0: 10]) {
+        copy_literal(cfg.dbfilename[0: 128], value);
+        return true;
+    }
+    if token_eq(key, &"appendfilename"[0: 14]) {
+        copy_literal(cfg.appendfilename[0: 128], value);
+        return true;
+    }
     if token_eq(key, &"requirepass"[0: 11]) {
         copy_literal(cfg.requirepass[0: 128], value);
+        return true;
+    }
+    if token_eq(key, &"replicaof"[0: 9]) {
+        var pos: usize = 0;
+        const first: &[byte] = next_token(value, &pos);
+        const second: &[byte] = next_token(value, &pos);
+        const third: &[byte] = next_token(value, &pos);
+        if first.len == 0 {
+            return error.ConfigInvalidValue;
+        }
+        if token_eq(first, &"NO"[0: 2]) && token_eq(second, &"ONE"[0: 3]) && third.len == 0 {
+            copy_literal(cfg.replicaof_host[0: 64], &""[0: 0]);
+            cfg.replicaof_port = 0;
+            return true;
+        }
+        if second.len == 0 || third.len != 0 {
+            return error.ConfigInvalidValue;
+        }
+        copy_literal(cfg.replicaof_host[0: 64], first);
+        cfg.replicaof_port = try parse_i32_token(second);
+        return true;
+    }
+    if token_eq(key, &"masterauth"[0: 10]) {
+        copy_literal(cfg.masterauth[0: 128], value);
         return true;
     }
     if token_eq(key, &"maxmemory"[0: 9]) {

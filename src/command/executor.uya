@@ -181,6 +181,8 @@ export struct CommandReply {
     client_pause_write_only: bool,
     client_pause_owner_id: i64,
     request_client_unpause: bool,
+    request_maxclients_set: bool,
+    maxclients_after: i32,
 }
 
 export struct CommandRuntimeInfo {
@@ -290,6 +292,8 @@ fn command_executor_reply(typ: CommandReplyType, data: &[byte], integer: i64) Co
         client_pause_write_only: false,
         client_pause_owner_id: 0,
         request_client_unpause: false,
+        request_maxclients_set: false,
+        maxclients_after: 0,
     };
 }
 
@@ -5579,6 +5583,12 @@ fn command_executor_config(runtime: &CommandRuntimeInfo, command: &Command) Comm
             return command_executor_wrong_arity();
         }
         var next_config: ServerConfig = runtime.config;
+        var request_replicaof: bool = false;
+        var replicaof_promote: bool = false;
+        var replicaof_host: [byte: 64] = [];
+        var replicaof_port: i32 = 0;
+        var request_maxclients_set: bool = false;
+        var maxclients_after: i32 = runtime.maxclients;
         var index: usize = 2;
         while index + 1 < command.argc {
             const key: &[byte] = command_executor_arg(command, index) catch {
@@ -5587,17 +5597,55 @@ fn command_executor_config(runtime: &CommandRuntimeInfo, command: &Command) Comm
             const value: &[byte] = command_executor_arg(command, index + 1) catch {
                 return command_executor_wrong_arity();
             };
+            if command_executor_keyword_eq(key, &"maxclients"[0: 10]) {
+                const parsed_maxclients: i64 = command_executor_parse_i64(value) catch {
+                    return command_executor_error(&"ERR Invalid argument for CONFIG SET"[0: 35]);
+                };
+                if parsed_maxclients < 0 || parsed_maxclients > 2147483647 {
+                    return command_executor_error(&"ERR Invalid argument for CONFIG SET"[0: 35]);
+                }
+                request_maxclients_set = true;
+                maxclients_after = parsed_maxclients as i32;
+                index = index + 2;
+                continue;
+            }
+            if command_executor_keyword_eq(key, &"databases"[0: 9]) {
+                const parsed_databases: i64 = command_executor_parse_i64(value) catch {
+                    return command_executor_error(&"ERR Invalid argument for CONFIG SET"[0: 35]);
+                };
+                if parsed_databases != 1 {
+                    return command_executor_error(&"ERR Unsupported CONFIG parameter"[0: 32]);
+                }
+                index = index + 2;
+                continue;
+            }
             const applied: bool = config_apply_runtime_set(&next_config, key, value) catch {
                 return command_executor_error(&"ERR Invalid argument for CONFIG SET"[0: 35]);
             };
             if !applied {
                 return command_executor_error(&"ERR Unsupported CONFIG parameter"[0: 32]);
             }
+            if command_executor_keyword_eq(key, &"replicaof"[0: 9]) {
+                request_replicaof = true;
+                if next_config.replicaof_port <= 0 || next_config.replicaof_host[0] == 0 as byte {
+                    replicaof_promote = true;
+                } else {
+                    replicaof_promote = false;
+                    config_copy_bytes(replicaof_host[0: 64], next_config.replicaof_host[0: 64]);
+                    replicaof_port = next_config.replicaof_port;
+                }
+            }
             index = index + 2;
         }
         var reply: CommandReply = command_executor_simple(&"OK"[0: 2]);
         reply.request_config_set = true;
         reply.config_after = next_config;
+        reply.request_replicaof = request_replicaof;
+        reply.replicaof_promote = replicaof_promote;
+        reply.replicaof_port = replicaof_port;
+        config_copy_bytes(reply.replicaof_host[0: 64], replicaof_host[0: 64]);
+        reply.request_maxclients_set = request_maxclients_set;
+        reply.maxclients_after = maxclients_after;
         return reply;
     }
 

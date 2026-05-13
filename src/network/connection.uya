@@ -91,6 +91,8 @@ export struct ConnectionProcessResult {
     client_pause_write_only: bool,
     client_pause_owner_id: i64,
     request_client_unpause: bool,
+    request_maxclients_set: bool,
+    maxclients_after: i32,
 }
 
 export struct ConnectionTransaction {
@@ -303,6 +305,8 @@ fn connection_zero_copy_process_result(
         client_pause_write_only: false,
         client_pause_owner_id: 0,
         request_client_unpause: false,
+        request_maxclients_set: false,
+        maxclients_after: 0,
     };
 }
 
@@ -330,6 +334,8 @@ fn connection_make_reply(typ: CommandReplyType, data: &[byte], integer: i64) Com
         client_pause_write_only: false,
         client_pause_owner_id: 0,
         request_client_unpause: false,
+        request_maxclients_set: false,
+        maxclients_after: 0,
     };
 }
 
@@ -2439,6 +2445,8 @@ export fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transac
         client_pause_write_only: result.client_pause_write_only,
         client_pause_owner_id: result.client_pause_owner_id,
         request_client_unpause: result.request_client_unpause,
+        request_maxclients_set: result.request_maxclients_set,
+        maxclients_after: result.maxclients_after,
     };
 }
 
@@ -2553,6 +2561,8 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_in
     var client_pause_write_only: bool = false;
     var client_pause_owner_id: i64 = 0;
     var request_client_unpause: bool = false;
+    var request_maxclients_set: bool = false;
+    var maxclients_after: i32 = 0;
     while batch_index < batch.count && offset < input.len {
         const frame_len: usize = resp_batch_value_consumed(&batch, batch_index);
         const frame: &[byte] = input[offset: frame_len];
@@ -2615,6 +2625,10 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_in
         if result.request_client_unpause {
             request_client_unpause = true;
         }
+        if result.request_maxclients_set {
+            request_maxclients_set = true;
+            maxclients_after = result.maxclients_after;
+        }
         if close_after || request_shutdown || request_client_pause {
             break;
         }
@@ -2644,6 +2658,8 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_in
         client_pause_write_only: client_pause_write_only,
         client_pause_owner_id: client_pause_owner_id,
         request_client_unpause: request_client_unpause,
+        request_maxclients_set: request_maxclients_set,
+        maxclients_after: maxclients_after,
     };
 }
 
@@ -2992,6 +3008,8 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
     const client_pause_write_only: bool = reply.client_pause_write_only;
     const client_pause_owner_id: i64 = reply.client_pause_owner_id;
     const request_client_unpause: bool = reply.request_client_unpause;
+    const request_maxclients_set: bool = reply.request_maxclients_set;
+    const maxclients_after: i32 = reply.maxclients_after;
     if request_bgsave && bgsave_requested != null {
         *bgsave_requested = true;
     }
@@ -3050,6 +3068,8 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
         client_pause_write_only: client_pause_write_only,
         client_pause_owner_id: client_pause_owner_id,
         request_client_unpause: request_client_unpause,
+        request_maxclients_set: request_maxclients_set,
+        maxclients_after: maxclients_after,
     };
 }
 

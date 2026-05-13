@@ -57,7 +57,7 @@
 当前进行中：
 
 - [x] `v0.9.0`：单机核心命令补齐与安全基线收口完成
-- [ ] `v0.9.1` 起：单机命令全集矩阵、连接/管理面补齐与兼容边界继续收敛（第一批命令矩阵与 `COMMAND*` 已完成）
+- [ ] `v0.9.1` 起：单机命令全集矩阵、连接/管理面补齐与兼容边界继续收敛（第一批命令矩阵与 `COMMAND*` 已完成，`CONFIG SET` 第二批运行时字段已收口）
 
 ## 3. 全版本路线图
 
@@ -456,6 +456,7 @@
 - [x] `redis-cli` stdin/pipeline 兼容第一批：连接层单次读入可批量消费多帧，`redis-cli` 通过 `COMMAND DOCS` 探测后的事务管线 smoke 可稳定完成
 - [ ] `COMMAND DOCS` 无参数全量 docs 输出与大响应流式发送路径继续补齐
 - [x] `COMMAND GETKEYS` / `COMMAND GETKEYSANDFLAGS` 当前命令表支持已落地：覆盖 range key spec、多 key/成对 key、`RENAME` 双 key、`SORT ... STORE` movablekeys 和基础 key flags
+- [x] 管理面第二批运行时配置已落地：`CONFIG SET` 支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`masterauth`、`replicaof`、`maxclients`、`databases`，并覆盖 `CONFIG GET/REWRITE` 验证与运行时 `maxclients` 生效
 - [ ] 其余 standalone 兼容错误与命令家族补齐继续推进
 - [ ] Streams 完整化：消费者组、pending、claim、trim、阻塞读取和持久化恢复
 - [ ] Pub/Sub 完整化：pattern 订阅、订阅态命令限制、背压和断开清理

@@ -15,11 +15,11 @@
 
 | status | count |
 |--------|-------|
-| `full` | `103` |
+| `full` | `104` |
 | `partial` | `42` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `357` |
+| `deferred` | `356` |
 
 ## Group counts
 
@@ -113,7 +113,7 @@
 | `client` | `connection` | `partial` | `-` | `-2` | `-` | `no` | `@slow` |
 | `client|caching` | `connection` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@slow, @connection` |
 | `client|getname` | `connection` | `partial` | `-` | `2` | `-` | `no` | `@slow, @connection` |
-| `client|getredir` | `connection` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@slow, @connection` |
+| `client|getredir` | `connection` | `full` | `-` | `2` | `-` | `no` | `@slow, @connection` |
 | `client|help` | `connection` | `full` | `-` | `2` | `-` | `no` | `@slow, @connection` |
 | `client|id` | `connection` | `full` | `-` | `2` | `-` | `no` | `@slow, @connection` |
 | `client|info` | `connection` | `partial` | `-` | `2` | `-` | `no` | `@slow, @connection` |

@@ -202,6 +202,8 @@ def run_smoke() -> None:
 
                 if send_command(sock, b"CLIENT", b"TRACKING", b"ON", b"REDIRECT", str(peer_id).encode(), b"NOLOOP") != "OK":
                     raise AssertionError("CLIENT TRACKING ON failed")
+                if send_command(sock, b"CLIENT", b"GETREDIR") != peer_id:
+                    raise AssertionError("CLIENT GETREDIR did not expose redirect target")
                 tracking_info = send_command(sock, b"CLIENT", b"TRACKINGINFO")
                 if (
                     not isinstance(tracking_info, dict)
@@ -214,6 +216,8 @@ def run_smoke() -> None:
                     raise AssertionError(f"unexpected CLIENT TRACKINGINFO: {tracking_info!r}")
                 if send_command(sock, b"CLIENT", b"TRACKING", b"OFF") != "OK":
                     raise AssertionError("CLIENT TRACKING OFF failed")
+                if send_command(sock, b"CLIENT", b"GETREDIR") != -1:
+                    raise AssertionError("CLIENT GETREDIR should reset to -1 after TRACKING OFF")
 
                 if send_command(sock, b"CLIENT", b"PAUSE", b"1000", b"ALL") != "OK":
                     raise AssertionError("CLIENT PAUSE failed")

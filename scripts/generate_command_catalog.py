@@ -78,6 +78,7 @@ FULL_NAMES = {
     "bgsave",
     "client|help",
     "client|id",
+    "client|getredir",
     "client|setinfo",
     "cluster|help",
     "command|count",

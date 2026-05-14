@@ -1219,6 +1219,7 @@ CONFIG RESETSTAT
 ```text
 CLIENT ID
 CLIENT GETNAME
+CLIENT GETREDIR
 CLIENT SETNAME name
 CLIENT INFO
 CLIENT LIST
@@ -1237,6 +1238,7 @@ CLIENT HELP
 
 - `CLIENT ID`：当前连接的整数 ID；服务端按连接事务分配递增 ID，测试重置后的首个连接从 `1` 开始
 - `CLIENT GETNAME`：未设置时返回 Null Bulk，已设置时返回 Bulk String
+- `CLIENT GETREDIR`：返回当前连接 tracking redirect 客户端 ID；未设置时返回 `-1`
 - `CLIENT SETNAME`：保存连接级客户端名，成功返回 `+OK`
 - `CLIENT INFO`：返回当前连接的最小客户端信息行，包含 `id/name/resp/multi/sub/lib-name/lib-ver`
 - `CLIENT LIST`：返回当前活跃连接的最小信息行快照，每行包含 `id/name/resp/multi/sub/lib-name/lib-ver`
@@ -1251,6 +1253,7 @@ CLIENT HELP
 说明：
 
 - 客户端名和 `SETINFO` 元数据存放在连接级 `ConnectionTransaction`
+- `CLIENT GETREDIR` 直接读取当前连接的 `tracking_redirect_id`
 - `CLIENT KILL` 当前只支持 `ID <id>` 过滤，不支持更完整的 addr/type/user/maxage/skipme 组合
 - `CLIENT PAUSE` 当前保留发起暂停的控制连接可继续发送 `CLIENT UNPAUSE`；`WRITE` 语义还没有细分成仅写命令暂停
 - `CLIENT TRACKING` 当前只保存连接级状态，不发送 invalidation push，也不支持 `PREFIX`

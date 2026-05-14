@@ -1156,6 +1156,10 @@ fn connection_client_help_reply() CommandReply {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
+    _ = list_object_push_tail(reply_list, &"CLIENT GETREDIR"[0: 15]) catch {
+        object_free(reply_list);
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
     _ = list_object_push_tail(reply_list, &"CLIENT SETNAME <name>"[0: 21]) catch {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
@@ -1196,7 +1200,7 @@ fn connection_client_help_reply() CommandReply {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
-    return connection_array_reply_owned(reply_list, 12);
+    return connection_array_reply_owned(reply_list, 13);
 }
 
 fn connection_client_info_reply(tx: &ConnectionTransaction) CommandReply {
@@ -1363,6 +1367,12 @@ fn connection_handle_client(tx: &ConnectionTransaction, command: &Command, now_m
             return connection_make_reply(CommandReplyType.reply_null_bulk, connection_reply_empty_slice(), 0);
         }
         return connection_make_reply(CommandReplyType.reply_bulk_string, tx.client_name[0: tx.client_name_len], 0);
+    }
+    if connection_keyword_eq(subcommand, &"GETREDIR"[0: 8]) {
+        if command.argc != 2 {
+            return connection_error_reply(&"ERR wrong number of arguments for 'client|getredir' command"[0: 59]);
+        }
+        return connection_make_reply(CommandReplyType.reply_integer, connection_reply_empty_slice(), tx.tracking_redirect_id);
     }
     if connection_keyword_eq(subcommand, &"SETNAME"[0: 7]) {
         if command.argc != 3 {

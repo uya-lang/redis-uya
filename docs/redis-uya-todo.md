@@ -447,9 +447,9 @@
 - 新增写命令必须覆盖 AOF、RDB、复制 backlog、WATCH 版本推进和 maxmemory 边界
 - 现有 `make test`、`make test-integration`、`make benchmark-v0.8.1` 回归护栏不退化
 
-## 17. `v0.9.1-v0.9.3`：单机完整功能面
+## 17. `v0.9.1`：命令矩阵、连接与兼容边界收口
 
-### U. 语义、数据结构与运维面
+### U1. 当前已完成
 
 - [x] 官方命令全集矩阵第一批落地：`531` 个官方命令名进入共享目录，生成 `docs/redis-uya-command-matrix.md` 并由 `src/command/catalog_generated*` 提供运行时数据
 - [x] `COMMAND` 控制面第一批落地：`COMMAND` / `COMMAND COUNT` / `COMMAND LIST` / `COMMAND INFO` / `COMMAND DOCS` 共享官方目录，覆盖 RESP2/RESP3 基础返回形态与过滤/未知命令边界
@@ -457,27 +457,53 @@
 - [x] `COMMAND DOCS` 无参数全量 docs 输出与大响应发送路径第一批已收口
 - [x] `COMMAND GETKEYS` / `COMMAND GETKEYSANDFLAGS` 当前命令表支持已落地：覆盖 range key spec、多 key/成对 key、`RENAME` 双 key、`SORT ... STORE` movablekeys 和基础 key flags
 - [x] 管理面第二批运行时配置已落地：`CONFIG SET` 支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`masterauth`、`replicaof`、`maxclients`、`databases`，并覆盖 `CONFIG GET/REWRITE` 验证、运行时 `maxclients` 生效与 rewrite 落盘
+- [x] `CLIENT` 管理面最小闭环已落地：`LIST/KILL/PAUSE/UNPAUSE/TRACKING/TRACKINGINFO/GETREDIR` 已覆盖当前连接注册、pause 控制和 tracking redirect 查询的 unit/integration 闭环
 - [x] 连接管理 `RESET` 已落地：覆盖 RESP3/PubSub/MULTI/WATCH/TRACKING/AUTH 连接上下文重置，并把 RESP2 订阅态允许命令扩展到 `RESET`
 - [x] Pub/Sub 第一批 pattern 订阅已落地：`PSUBSCRIBE`、`PUNSUBSCRIBE`、`pmessage` fanout 与接收者计数已覆盖 unit/integration
 - [x] Pub/Sub 管理面第一批已落地：`PUBSUB HELP/CHANNELS/NUMPAT/NUMSUB` 已接入共享订阅注册表，`PUBSUB SHARDCHANNELS/SHARDNUMSUB` 固定当前 shard 空结果边界，并覆盖 unit/integration
+
+### U2. 当前版本待续
+
 - [ ] 其余 standalone 兼容错误与命令家族补齐继续推进
 - [ ] Streams 完整化：消费者组、pending、claim、trim、阻塞读取和持久化恢复
 - [ ] Pub/Sub 完整化：订阅态命令限制和断开清理已落地，背压待继续收敛
 - [ ] Lua 与 Functions：`EVAL/EVALSHA`、脚本缓存、只读脚本、原子边界、函数加载和调用
 - [ ] RESP3 与客户端兼容矩阵：push、map、set、attribute、null、HELLO/AUTH/SETNAME 组合路径
-- [ ] Bitmap/Bitfield/HyperLogLog/Geo 命令族
-- [ ] JSON、Search、Time Series、概率结构和 Vector 的项目内实现方案与分阶段命令覆盖
-- [ ] ACL 与 TLS：用户、权限、命令类别、key pattern、证书配置和认证错误兼容
-- [ ] 管理与诊断：`CONFIG REWRITE` 保真度提升、`CONFIG SET` 其余字段、`CLIENT KILL/PAUSE/TRACKING` 深化语义（含 `GETREDIR` 已补齐）、`SLOWLOG`、`LATENCY`、`MEMORY`、`MONITOR`、`COMMAND`
 - [ ] 持久化与复制收敛：RDB 二进制兼容推进、AOF rewrite 压测、复制断线重连、`WAIT` 语义、只读副本限制
 
 验收项：
 
 - 按命令族建立兼容矩阵，明确已实现、部分实现、暂不支持的语义差异
-- 每个数据类型必须覆盖正常路径、空 key、错类型、过期、持久化恢复、复制恢复、内存淘汰边界
-- 高级数据结构必须先完成项目内设计评审，再进入实现，避免一次性堆入不可维护的半成品
+- Connection / Server / Transaction / Pub/Sub / Scripting / Stream 相关增量必须覆盖 unit、redis-py/redis-cli smoke，以及必要的 AOF/RDB/复制边界
+- 不把 `v0.9.2` / `v0.9.3` 的高级数据能力或运维能力提前塞回 `v0.9.1`
 
-## 18. `v0.9.4` 起：单机性能与稳定性封版候选
+## 18. `v0.9.2`：单机高级数据能力
+
+### U3. 高级数据类型与模块化能力
+
+- [ ] Bitmap / Bitfield / HyperLogLog / Geo 命令族
+- [ ] JSON / Search / Time Series / 概率结构 / Vector 的项目内实现方案与分阶段命令覆盖
+
+验收项：
+
+- 高级数据结构必须先完成项目内设计评审，再进入实现，避免一次性堆入不可维护的半成品
+- 每个新数据类型都要覆盖正常路径、空 key、错类型、过期、持久化恢复、复制恢复、内存淘汰边界
+- 命令矩阵中进入 `v0.9.2` 的高级数据命令族，不允许只改目录状态不落测试证据
+
+## 19. `v0.9.3`：单机运维、安全与可观测
+
+### U4. 运维与诊断面
+
+- [ ] ACL 与 TLS：用户、权限、命令类别、key pattern、证书配置和认证错误兼容
+- [ ] 管理与诊断：`CONFIG REWRITE` 保真度提升、`CONFIG SET` 其余字段、`CLIENT KILL/PAUSE/TRACKING` 深化语义、`SLOWLOG`、`LATENCY`、`MEMORY`、`MONITOR`、`COMMAND`
+
+验收项：
+
+- 运维命令必须同时明确“当前支持什么”和“当前还缺什么”，不能只给最小 happy path
+- 安全与观测能力必须覆盖错误路径、权限边界、配置边界和 redis-cli/redis-py 兼容 smoke
+- `v0.9.3` 收口前，README / TODO / DoD / API 必须把生产运维可用边界写清楚，不能与 `v0.9.1` 的当前能力混写
+
+## 20. `v0.9.4` 起：单机性能与稳定性封版候选
 
 ### V. v1.0.0 前置收敛
 
@@ -497,7 +523,7 @@
 - [ ] 性能达到当前 target，且没有 P0/P1 稳定性缺陷
 - [ ] 发布说明、DoD、benchmark 和测试报告齐全
 
-## 19. `v1.1.0+`：集群版规划与开发
+## 21. `v1.1.0+`：集群版规划与开发
 
 `v1.0.0` 发布前不启动新的集群主线。发布后再基于稳定单机内核重新评审集群架构，规划以下方向：
 
@@ -506,7 +532,7 @@
 - [ ] 集群故障转移：replica 归属、config epoch、failover 选择、旧 master 恢复处理
 - [ ] 集群重分片：`ADDSLOTS/DELSLOTS`、迁移状态机、key 迁移闭环、正式集群 benchmark
 
-## 20. 风险登记
+## 22. 风险登记
 
 | 风险 ID | 描述 | 可能性 | 影响 | 缓解措施 |
 |---------|------|--------|------|---------|

@@ -10,7 +10,7 @@
 
 `redis-uya` 是一个使用 **Uya 编程语言** 从零实现的生产级高性能内存数据库系统。项目长期目标是兼容 Redis Open Source，先在单机版覆盖官方命令参考中的全部命令名，以及数据结构、持久化、复制、脚本、安全、运维、高级数据能力与性能工程；单机版功能和性能达标后封版为 `v1.0.0`，之后才重新规划集群版开发。
 
-当前项目已完成 `v0.9.0` 单机核心命令补齐：按计划补齐 String / Hash / List / Set / ZSet / Key / Server / Security 核心命令批次，收口 `SORT`、`AUTH`、`requirepass`、`SHUTDOWN`。当前主线已进入 `v0.9.1`，新增官方命令全集矩阵、共享运行时目录和 `COMMAND` / `COMMAND COUNT` / `COMMAND LIST` / `COMMAND INFO` / `COMMAND DOCS` 控制面，并补齐 `PUBSUB` 管理面第一批。
+当前项目已完成 `v0.9.0` 单机核心命令补齐：按计划补齐 String / Hash / List / Set / ZSet / Key / Server / Security 核心命令批次，收口 `SORT`、`AUTH`、`requirepass`、`SHUTDOWN`。当前主线执行版本是 `v0.9.1`，重点收口官方命令全集矩阵、连接/管理面和兼容边界；`v0.9.2` 预留高级数据能力，`v0.9.3` 预留运维、安全与可观测。
 
 ## 核心目标
 
@@ -92,7 +92,9 @@
 
 下一阶段：
 
-- `v0.9.1`：继续推进单机命令全集矩阵、连接/管理面补齐和兼容边界收敛；当前已完成官方命令全集矩阵、`COMMAND*` 第一批与 `COMMAND DOCS` 全量输出、`COMMAND GETKEYS*` 当前命令表支持、全局 `CLIENT LIST`、`CONFIG SET` 第二批运行时字段（`port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`masterauth`、`replicaof`、`maxclients`、`databases`）、`CONFIG REWRITE` 对应第二批核心字段落盘、`CLIENT KILL/PAUSE/TRACKING/GETREDIR` 最小闭环，以及 pattern Pub/Sub 第一批、`PUBSUB` 管理面第一批、RESP2/RESP3 订阅态命令限制边界与断开清理，待续 rewrite 保真度、tracking invalidation、Pub/Sub 背压、Scripting/Stream 命令族与 standalone 错误边界。
+- `v0.9.1`：继续推进单机命令全集矩阵、连接/管理面补齐和兼容边界收敛；当前已完成官方命令全集矩阵、`COMMAND*` 第一批与 `COMMAND DOCS` 全量输出、`COMMAND GETKEYS*` 当前命令表支持、全局 `CLIENT LIST`、`CONFIG SET` 第二批运行时字段（`port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`masterauth`、`replicaof`、`maxclients`、`databases`）、`CONFIG REWRITE` 对应第二批核心字段落盘、`CLIENT KILL/PAUSE/TRACKING/GETREDIR` 最小闭环，以及 pattern Pub/Sub 第一批、`PUBSUB` 管理面第一批、RESP2/RESP3 订阅态命令限制边界与断开清理；待续 standalone 错误边界、Streams、Lua/Functions、RESP3 兼容矩阵和复制/持久化收敛。
+- `v0.9.2`：进入高级数据能力阶段，覆盖 Bitmap、Bitfield、HyperLogLog、Geo、JSON、Search、Time Series、概率结构和 Vector。
+- `v0.9.3`：进入运维、安全与可观测阶段，覆盖 ACL、TLS、`CLIENT/CONFIG/INFO/SLOWLOG/LATENCY/MEMORY/MONITOR` 等管理面深化。
 
 当前阶段尚未生产可用。
 

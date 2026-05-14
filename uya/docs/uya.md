@@ -1,4 +1,4 @@
-# Uya 语言规范 0.49.48（完整版 · 2026-04-26）
+# Uya 语言规范 0.49.49（完整版 · 2026-05-12）
 
 > 零GC · 默认高级安全 · 单页纸可读完  
 > 无lifetime符号 · 无隐式控制 · 编译期证明（本函数内）
@@ -53,6 +53,12 @@
 ---
 
 ## 规范变更
+
+### 0.49.49（2026-05-12）
+
+- **`drop` 手动调用禁令落地**：`drop` 仍只能定义为 `fn drop(self: T) void`，但现在进一步明确为**仅供编译器在离开作用域时自动插入**；用户代码中的 `drop(x)`、`T.drop(x)`、`x.drop()` 都应在类型检查阶段报错。
+- **联合体 drop 递归清理补齐**：联合体自定义 `drop` 在执行用户函数体前，会先对**当前活跃变体**自动执行递归 `drop`；无需、也不允许在用户体内手动调用内层 `drop`。
+- **回归测试**：新增 `tests/error_drop_manual_call.uya`、`tests/error_drop_manual_type_call.uya`、`tests/test_union_drop_auto_variant.uya`。
 
 ### 0.49.48（2026-04-26）
 
@@ -2302,7 +2308,7 @@ fn move_example() void {
 
 ### 4.5.10 drop 机制
 
-联合体支持 `drop` 函数，仅对当前活跃变体调用清理。drop 只能在联合体内部或方法块中定义：
+联合体支持 `drop` 函数。对联合体值离开作用域时，编译器会先对**当前活跃变体**执行递归清理，再执行联合体自身的 `drop` 函数体。`drop` 只能在联合体内部或方法块中定义，且**不能手动调用**：
 
 ```uya
 union FileOrBuffer {
@@ -2312,15 +2318,8 @@ union FileOrBuffer {
 
 FileOrBuffer {
     fn drop(self: FileOrBuffer) void {
-        match self {
-            .file(f) => {
-                // 调用 File 的 drop
-                drop(f);
-            },
-            .buffer(_) => {
-                // 缓冲区无需清理
-            }
-        }
+        // `self.file` 为活跃变体时，其 `drop` 会在此函数体之前由编译器自动执行。
+        // `.buffer` 变体无额外清理需求时，这里可以留空或只写统计/日志逻辑。
     }
 }
 ```
@@ -4115,7 +4114,8 @@ Uya 提供两种类型转换语法：
    - 允许用户为自定义类型定义清理逻辑，实现真正的 RAII 模式（文件自动关闭、内存自动释放等）。
    - 每个类型只能有一个 drop 函数。
    - 参数必须是 `self: T`（按值传递），返回类型必须是 `void`。
-   - 递归调用：结构体的 drop 会先调用字段的 drop，再调用自身的 drop。
+   - **禁止手动调用**：`drop(x)`、`T.drop(x)`、`x.drop()` 均为编译错误；`drop` 只由编译器在离开作用域时自动插入。
+   - 递归调用：结构体会先自动 drop 字段；联合体会先自动 drop 当前活跃变体；然后再执行用户编写的 `drop` 函数体。
 
 **drop 使用示例**：
 
@@ -4130,7 +4130,7 @@ Uya 提供两种类型转换语法：
 [examples/example_basic.uya](./examples/example_basic.uya)
 
 **重要说明**：
-- `drop` 是**自动调用**的，无需手动调用
+- `drop` 是**自动调用**的；手写 `drop(x)`、`T.drop(x)`、`x.drop()` 都会报编译错误
 - 对于基本类型（`i32`, `f64`, `bool` 等），`drop` 是空函数，无运行时开销
 - 用户可以为自定义类型定义 `drop` 函数，实现 RAII 模式
 - 编译器自动插入 drop 调用，确保资源正确释放
@@ -6536,7 +6536,10 @@ mc vector_type(T: type, name: ident) type {
                     // 如果T有drop，需要调用每个元素的drop
                     if ${info.has_drop} {
                         for 0..self.len |i| {
-                            self.data[i].drop();
+                            {
+                                const elem: T = self.data[i];
+                                _ = elem;
+                            }
                         }
                     }
                     @free(self.data);

@@ -1,6 +1,6 @@
 # Uya 语言正式语法规范（Formal BNF）
 
-> **版本**：与 [uya.md](./uya.md) 0.49.48 同步（2026-04-26）
+> **版本**：与 [uya.md](./uya.md) 0.49.49 同步（2026-05-12）
 
 本文档包含 Uya 语言的完整、无歧义的 BNF 语法定义，用于：
 - 编译器/解析器实现
@@ -57,7 +57,11 @@ struct_body    = ( field_list | method_list | field_list method_list )
 field_list     = field { ',' field }
 field          = ID ':' type
 method_list    = method_decl { method_decl }
-method_decl    = [ async_fn_attr ] 'fn' ID [ '<' type_param_list '>' ] '(' [ param_list ] ')' type '{' statements '}'  # 若首参类型为 &Self / &StructName（联合体为 &UnionName），则视为实例方法；否则为静态方法
+method_decl    = [ async_fn_attr ] 'fn' ID [ '<' type_param_list '>' ] '(' [ param_list ] ')' type '{' statements '}'  # 若首参类型为 &Self / &StructName（联合体为 &UnionName），则视为实例方法；否则为静态方法；特例：drop 必须为 fn drop(self: T) void
+
+**补充规则**：
+- `drop` 只能在结构体 / 联合体内部或对应方法块中声明为 `fn drop(self: T) void { ... }`。
+- `drop` 不是用户可显式调用的普通函数；`drop(x)`、`T.drop(x)`、`x.drop()` 都是编译错误。
 
 # 结构体外部方法定义（方式2）
 struct_method_block = ID '{' method_list '}'

@@ -1,6 +1,6 @@
 # Uya 语法速查手册（Quick Reference）
 
-> **版本**：与 [uya.md](./uya.md) 0.49.48 同步（2026-04-26）
+> **版本**：与 [uya.md](./uya.md) 0.49.49 同步（2026-05-12）
 
 本文档是 Uya 语言的快速参考手册，包含精简语法定义、常用代码模式和速查表。
 
@@ -970,8 +970,8 @@ struct File : IWriter {
         return len;
     }
 
-    fn drop(self: &Self) void {
-        // 清理资源
+    fn close(self: &Self) void {
+        // 普通显式清理方法
     }
 }
 
@@ -990,7 +990,7 @@ fn open_file(path: *byte) !File {
 // 使用
 fn main() i32 {
     const file = try open_file("test.txt");
-    defer file.drop();
+    defer file.close();
 
     const data = "Hello";
     file.write(data, 5);
@@ -998,6 +998,8 @@ fn main() i32 {
     return 0;
 }
 ```
+
+`drop` 是特殊的 RAII 清理函数：只能声明为 `fn drop(self: T) void`，并且只能由编译器在离开作用域时自动插入；`drop(x)`、`T.drop(x)`、`x.drop()` 都是编译错误。
 
 ---
 

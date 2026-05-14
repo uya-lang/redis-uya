@@ -1399,6 +1399,35 @@ SUBSCRIBE channel [channel ...]
 - RESP3 订阅态下，非 Pub/Sub 命令仍可继续执行
 - 连接关闭后会自动清理该连接持有的频道订阅项
 
+### `PUBSUB`
+
+格式：
+
+```text
+PUBSUB HELP
+PUBSUB CHANNELS [pattern]
+PUBSUB NUMPAT
+PUBSUB NUMSUB [channel ...]
+PUBSUB SHARDCHANNELS [pattern]
+PUBSUB SHARDNUMSUB [shardchannel ...]
+```
+
+返回：
+
+- `HELP`：帮助文本数组
+- `CHANNELS`：当前存在直连订阅的频道数组；带 `pattern` 时按 glob 过滤
+- `NUMPAT`：当前 pattern 订阅总数，Integer
+- `NUMSUB`：扁平数组 `[channel, subscriber_count, ...]`，不计 pattern 订阅
+- `SHARDCHANNELS`：当前返回空数组
+- `SHARDNUMSUB`：当前对每个请求 shard channel 返回 `0`
+
+说明：
+
+- `CHANNELS` 只统计直连频道订阅，不把 pattern 订阅投影为频道
+- `NUMPAT` 统计当前连接注册表里的 pattern 订阅项总数
+- 当前尚未实现 `SSUBSCRIBE/SPUBLISH`，因此 `SHARDCHANNELS/SHARDNUMSUB` 只固化空结果边界
+- RESP2 订阅态下 `PUBSUB` 仍不在允许命令集合内
+
 ### `PSUBSCRIBE`
 
 格式：

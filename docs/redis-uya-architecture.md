@@ -125,10 +125,11 @@ server open
 - `connection.uya` 维护固定容量订阅注册表，记录 `fd -> channel/pattern` 与连接协议版本
 - `SUBSCRIBE` / `UNSUBSCRIBE` / `PSUBSCRIBE` / `PUNSUBSCRIBE` 在连接层更新注册表并返回确认消息
 - `PUBLISH` 在连接层按频道和 pattern 扫描订阅表，向匹配 fd 推送 `message` / `pmessage` 事件，并向发布者返回接收者数量
+- `PUBSUB HELP/CHANNELS/NUMPAT/NUMSUB` 直接复用同一份订阅注册表；`SHARDCHANNELS/SHARDNUMSUB` 当前返回空结果边界，不额外维护 shard 订阅状态
 - RESP2 订阅态在连接层限制为 `SUBSCRIBE` / `PSUBSCRIBE` / `UNSUBSCRIBE` / `PUNSUBSCRIBE` / `PING` / `QUIT` / `RESET`；RESP3 订阅态保持普通命令可继续执行
 - 客户端关闭时，`server.uya` 会清理该 fd 的订阅项
 
-当前 Pub/Sub 已覆盖直连订阅、pattern 订阅与 RESP2/RESP3 订阅态限制第一批，但仍不包含高水位背压队列。
+当前 Pub/Sub 已覆盖直连订阅、pattern 订阅、`PUBSUB` 管理面第一批与 RESP2/RESP3 订阅态限制，但仍不包含高水位背压队列。
 
 ## 6. 过期策略
 

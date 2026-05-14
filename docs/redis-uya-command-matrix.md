@@ -15,11 +15,11 @@
 
 | status | count |
 |--------|-------|
-| `full` | `99` |
-| `partial` | `39` |
+| `full` | `103` |
+| `partial` | `42` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `364` |
+| `deferred` | `357` |
 
 ## Group counts
 
@@ -393,13 +393,13 @@
 | `psync` | `server` | `partial` | `-` | `-3` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `pttl` | `generic` | `full` | `-` | `2` | `-` | `no` | `@keyspace, @read, @fast` |
 | `publish` | `pubsub` | `partial` | `-` | `3` | `-` | `no` | `@pubsub, @fast` |
-| `pubsub` | `pubsub` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@slow` |
-| `pubsub|channels` | `pubsub` | `deferred` | `v0.9.1` | `-2` | `-` | `yes` | `@pubsub, @slow` |
-| `pubsub|help` | `pubsub` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@slow` |
-| `pubsub|numpat` | `pubsub` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@pubsub, @slow` |
-| `pubsub|numsub` | `pubsub` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@pubsub, @slow` |
-| `pubsub|shardchannels` | `pubsub` | `deferred` | `v0.9.1` | `-2` | `-` | `yes` | `@pubsub, @slow` |
-| `pubsub|shardnumsub` | `pubsub` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@pubsub, @slow` |
+| `pubsub` | `pubsub` | `partial` | `-` | `-2` | `-` | `no` | `@slow` |
+| `pubsub|channels` | `pubsub` | `full` | `-` | `-2` | `-` | `yes` | `@pubsub, @slow` |
+| `pubsub|help` | `pubsub` | `full` | `-` | `2` | `-` | `no` | `@slow` |
+| `pubsub|numpat` | `pubsub` | `full` | `-` | `2` | `-` | `no` | `@pubsub, @slow` |
+| `pubsub|numsub` | `pubsub` | `full` | `-` | `-2` | `-` | `no` | `@pubsub, @slow` |
+| `pubsub|shardchannels` | `pubsub` | `partial` | `-` | `-2` | `-` | `yes` | `@pubsub, @slow` |
+| `pubsub|shardnumsub` | `pubsub` | `partial` | `-` | `-2` | `-` | `no` | `@pubsub, @slow` |
 | `punsubscribe` | `pubsub` | `full` | `-` | `-1` | `-` | `yes` | `@pubsub, @slow` |
 | `quit` | `connection` | `partial` | `-` | `-1` | `-` | `no` | `@fast, @connection` |
 | `randomkey` | `generic` | `deferred` | `v0.9.1` | `1` | `-` | `no` | `@keyspace, @read, @slow` |

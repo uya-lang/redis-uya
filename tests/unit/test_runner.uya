@@ -143,6 +143,7 @@ use tests.unit.network_connection_test.test_connection_process_reset;
 use tests.unit.network_connection_test.test_connection_process_command_docs_all_large_reply;
 use tests.unit.network_connection_test.test_connection_process_auth_requirepass_shutdown;
 use tests.unit.network_connection_test.test_connection_process_pubsub_commands;
+use tests.unit.network_connection_test.test_connection_process_pubsub_introspection;
 use tests.unit.network_connection_test.test_connection_process_error_paths;
 use tests.unit.persistence_aof_test.test_aof_connection_append_and_replay_set;
 use tests.unit.persistence_aof_test.test_aof_replay_set_then_del;
@@ -747,6 +748,10 @@ export fn main() i32 {
     const before_conn_pubsub: i32 = failed;
     _ = test_connection_process_pubsub_commands() catch { printf("[FAIL] network_connection/pubsub\n" as *byte); failed = failed + 1; };
     if failed == before_conn_pubsub { printf("[PASS] network_connection/pubsub\n" as *byte); }
+
+    const before_conn_pubsub_introspection: i32 = failed;
+    _ = test_connection_process_pubsub_introspection() catch { printf("[FAIL] network_connection/pubsub_introspection\n" as *byte); failed = failed + 1; };
+    if failed == before_conn_pubsub_introspection { printf("[PASS] network_connection/pubsub_introspection\n" as *byte); }
 
     const before_conn_errors: i32 = failed;
     _ = test_connection_process_error_paths() catch { printf("[FAIL] network_connection/errors\n" as *byte); failed = failed + 1; };

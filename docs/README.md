@@ -53,4 +53,4 @@
 
 ## 当前阶段
 
-项目当前已完成 `v0.9.0` 单机核心命令补齐：String / Hash / List / Set / ZSet / Key / Server / Security 计划内命令批次已经全部收口，并补齐发布说明、测试报告和 DoD 验证证据。当前已进入 `v0.9.1`，已落地官方命令全集矩阵、共享运行时目录和 `COMMAND*` 控制面，补齐 `CONFIG SET` 第二批运行时字段与 `CONFIG REWRITE` 对应落盘验证，并完成 pattern Pub/Sub 第一批；后续继续推进连接/管理面和命令族补齐。
+项目当前已完成 `v0.9.0` 单机核心命令补齐：String / Hash / List / Set / ZSet / Key / Server / Security 计划内命令批次已经全部收口，并补齐发布说明、测试报告和 DoD 验证证据。当前已进入 `v0.9.1`，已落地官方命令全集矩阵、共享运行时目录和 `COMMAND*` 控制面，补齐 `CONFIG SET` 第二批运行时字段与 `CONFIG REWRITE` 对应落盘验证，并完成 pattern Pub/Sub 第一批和 `PUBSUB` 管理面第一批；后续继续推进连接/管理面和命令族补齐。

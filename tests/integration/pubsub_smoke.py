@@ -98,6 +98,47 @@ def run_smoke() -> None:
                     b"*3\r\n$10\r\npsubscribe\r\n$5\r\nchan*\r\n:1\r\n",
                 )
 
+                with connect_with_retry(port, time.monotonic() + 5.0) as chan2_sock:
+                    chan2_sock.settimeout(2.0)
+                    roundtrip(
+                        chan2_sock,
+                        b"*2\r\n$9\r\nSUBSCRIBE\r\n$5\r\nchan2\r\n",
+                        b"*3\r\n$9\r\nsubscribe\r\n$5\r\nchan2\r\n:1\r\n",
+                    )
+
+                    with connect_with_retry(port, time.monotonic() + 5.0) as info_sock:
+                        info_sock.settimeout(2.0)
+                        roundtrip(
+                            info_sock,
+                            b"*2\r\n$6\r\nPUBSUB\r\n$6\r\nNUMPAT\r\n",
+                            b":1\r\n",
+                        )
+                        roundtrip(
+                            info_sock,
+                            b"*2\r\n$6\r\nPUBSUB\r\n$8\r\nCHANNELS\r\n",
+                            b"*2\r\n$5\r\nchan1\r\n$5\r\nchan2\r\n",
+                        )
+                        roundtrip(
+                            info_sock,
+                            b"*3\r\n$6\r\nPUBSUB\r\n$8\r\nCHANNELS\r\n$5\r\nchan2\r\n",
+                            b"*1\r\n$5\r\nchan2\r\n",
+                        )
+                        roundtrip(
+                            info_sock,
+                            b"*5\r\n$6\r\nPUBSUB\r\n$6\r\nNUMSUB\r\n$5\r\nchan1\r\n$5\r\nchan2\r\n$5\r\nghost\r\n",
+                            b"*6\r\n$5\r\nchan1\r\n:1\r\n$5\r\nchan2\r\n:1\r\n$5\r\nghost\r\n:0\r\n",
+                        )
+                        roundtrip(
+                            info_sock,
+                            b"*2\r\n$6\r\nPUBSUB\r\n$13\r\nSHARDCHANNELS\r\n",
+                            b"*0\r\n",
+                        )
+                        roundtrip(
+                            info_sock,
+                            b"*3\r\n$6\r\nPUBSUB\r\n$11\r\nSHARDNUMSUB\r\n$6\r\nshard1\r\n",
+                            b"*2\r\n$6\r\nshard1\r\n:0\r\n",
+                        )
+
                 with connect_with_retry(port, time.monotonic() + 5.0) as pub_sock:
                     pub_sock.settimeout(2.0)
                     roundtrip(

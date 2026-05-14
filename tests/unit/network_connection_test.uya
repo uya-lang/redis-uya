@@ -939,3 +939,65 @@ export fn test_connection_process_pubsub_commands() !void {
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);
 }
+
+export fn test_connection_process_pubsub_introspection() !void {
+    reset_memory_stats_for_test();
+    connection_pubsub_reset_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var sub_tx: ConnectionTransaction = connection_transaction_new();
+    sub_tx.client_fd = 21;
+    var direct_tx: ConnectionTransaction = connection_transaction_new();
+    direct_tx.client_fd = 22;
+    var info_tx: ConnectionTransaction = connection_transaction_new();
+    info_tx.client_fd = 23;
+    defer {
+        connection_transaction_reset(&sub_tx);
+        connection_transaction_reset(&direct_tx);
+        connection_transaction_reset(&info_tx);
+        connection_pubsub_reset_for_test();
+    }
+    var out: [byte: 2048] = [];
+
+    _ = try connection_process_input_with_transaction_at(&engine, &router, &sub_tx, &"*2\r\n$9\r\nSUBSCRIBE\r\n$5\r\nchan1\r\n"[0: 30], &out[0], 2048, 1000u64);
+    _ = try connection_process_input_with_transaction_at(&engine, &router, &sub_tx, &"*2\r\n$10\r\nPSUBSCRIBE\r\n$5\r\nchan*\r\n"[0: 32], &out[0], 2048, 1000u64);
+    _ = try connection_process_input_with_transaction_at(&engine, &router, &direct_tx, &"*2\r\n$9\r\nSUBSCRIBE\r\n$5\r\nchan1\r\n"[0: 30], &out[0], 2048, 1000u64);
+    _ = try connection_process_input_with_transaction_at(&engine, &router, &direct_tx, &"*2\r\n$9\r\nSUBSCRIBE\r\n$3\r\nzed\r\n"[0: 28], &out[0], 2048, 1000u64);
+
+    const channels: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &info_tx, &"*2\r\n$6\r\nPUBSUB\r\n$8\r\nCHANNELS\r\n"[0: 30], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: channels.response_len], &"*2\r\n$5\r\nchan1\r\n$3\r\nzed\r\n"[0: 24]));
+
+    const channels_pattern: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &info_tx, &"*3\r\n$6\r\nPUBSUB\r\n$8\r\nCHANNELS\r\n$5\r\nchan?\r\n"[0: 41], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: channels_pattern.response_len], &"*1\r\n$5\r\nchan1\r\n"[0: 15]));
+
+    const numpat: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &info_tx, &"*2\r\n$6\r\nPUBSUB\r\n$6\r\nNUMPAT\r\n"[0: 28], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: numpat.response_len], &":1\r\n"[0: 4]));
+
+    const numsub: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &info_tx, &"*5\r\n$6\r\nPUBSUB\r\n$6\r\nNUMSUB\r\n$5\r\nchan1\r\n$3\r\nzed\r\n$5\r\nghost\r\n"[0: 59], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: numsub.response_len], &"*6\r\n$5\r\nchan1\r\n:2\r\n$3\r\nzed\r\n:1\r\n$5\r\nghost\r\n:0\r\n"[0: 47]));
+
+    const numsub_empty: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &info_tx, &"*2\r\n$6\r\nPUBSUB\r\n$6\r\nNUMSUB\r\n"[0: 28], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: numsub_empty.response_len], &"*0\r\n"[0: 4]));
+
+    const shardchannels: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &info_tx, &"*2\r\n$6\r\nPUBSUB\r\n$13\r\nSHARDCHANNELS\r\n"[0: 36], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: shardchannels.response_len], &"*0\r\n"[0: 4]));
+
+    const shardnumsub: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &info_tx, &"*4\r\n$6\r\nPUBSUB\r\n$11\r\nSHARDNUMSUB\r\n$6\r\nshard1\r\n$6\r\nshard2\r\n"[0: 58], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: shardnumsub.response_len], &"*4\r\n$6\r\nshard1\r\n:0\r\n$6\r\nshard2\r\n:0\r\n"[0: 36]));
+
+    const help: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &info_tx, &"*2\r\n$6\r\nPUBSUB\r\n$4\r\nHELP\r\n"[0: 26], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_contains(out[0: help.response_len], &"PUBSUB <subcommand> [<arg> [value] [opt] ...]. Subcommands are:"[0: 63]));
+    try assert_true(network_connection_contains(out[0: help.response_len], &"SHARDCHANNELS [<pattern>]"[0: 25]));
+
+    const missing_subcommand: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &info_tx, &"*1\r\n$6\r\nPUBSUB\r\n"[0: 16], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: missing_subcommand.response_len], &"-ERR wrong number of arguments for 'pubsub' command\r\n"[0: 53]));
+
+    const bad_subcommand: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &info_tx, &"*2\r\n$6\r\nPUBSUB\r\n$4\r\nNOPE\r\n"[0: 26], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: bad_subcommand.response_len], &"-ERR unknown subcommand 'nope'. Try PUBSUB HELP.\r\n"[0: 50]));
+
+    const bad_channels_arity: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &info_tx, &"*4\r\n$6\r\nPUBSUB\r\n$8\r\nCHANNELS\r\n$1\r\na\r\n$1\r\nb\r\n"[0: 44], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: bad_channels_arity.response_len], &"-ERR unknown subcommand or wrong number of arguments for 'channels'. Try PUBSUB HELP.\r\n"[0: 87]));
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}

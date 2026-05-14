@@ -590,6 +590,15 @@ fn connection_bulk_reply_owned(data: &[byte]) CommandReply {
     return reply;
 }
 
+fn connection_owned_error(data: &[byte]) CommandReply {
+    const obj: &RedisObject = create_string_object(data) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    var reply: CommandReply = connection_error_reply(obj.value.buf[0: obj.value.len]);
+    reply.owned_object = obj;
+    return reply;
+}
+
 fn connection_array_reply_owned(list: &RedisObject, count: usize) CommandReply {
     var reply: CommandReply = connection_make_reply(CommandReplyType.reply_array_bulk, connection_reply_empty_slice(), 0);
     reply.array_head = list.list_head;
@@ -617,6 +626,16 @@ fn connection_keyword_eq(a: &[byte], b: &[byte]) bool {
         i = i + 1;
     }
     return true;
+}
+
+fn connection_sds_append_ascii_lower(buf: &Sds, data: &[byte]) !void {
+    var tmp: [byte: 1] = [];
+    var i: usize = 0;
+    while i < data.len {
+        tmp[0] = connection_ascii_lower(data.ptr[i]);
+        try sds_cat(buf, tmp[0: 1]);
+        i = i + 1;
+    }
 }
 
 fn connection_resp2_pubsub_mode_active(tx: &ConnectionTransaction) bool {
@@ -1622,6 +1641,60 @@ fn connection_pubsub_count_channel(channel: &[byte]) usize {
     return count;
 }
 
+fn connection_pubsub_count_patterns() usize {
+    var count: usize = 0;
+    var i: usize = 0;
+    while i < CONNECTION_PUBSUB_MAX_SUBSCRIPTIONS {
+        if connection_pubsub_subscriptions[i].active && connection_pubsub_subscriptions[i].is_pattern {
+            count = count + 1;
+        }
+        i = i + 1;
+    }
+    return count;
+}
+
+fn connection_pubsub_is_unique_direct_channel(index: usize) bool {
+    if index >= CONNECTION_PUBSUB_MAX_SUBSCRIPTIONS {
+        return false;
+    }
+    if !connection_pubsub_subscriptions[index].active || connection_pubsub_subscriptions[index].is_pattern {
+        return false;
+    }
+    const channel: &[byte] = connection_pubsub_subscriptions[index].channel[0: connection_pubsub_subscriptions[index].channel_len];
+    var scan: usize = 0;
+    while scan < index {
+        if connection_pubsub_subscriptions[scan].active &&
+            !connection_pubsub_subscriptions[scan].is_pattern &&
+            connection_pubsub_channel_eq(&connection_pubsub_subscriptions[scan], channel) {
+            return false;
+        }
+        scan = scan + 1;
+    }
+    return true;
+}
+
+fn connection_pubsub_channel_matches_pattern(channel: &[byte], pattern: &[byte], has_pattern: bool) bool {
+    if !has_pattern {
+        return true;
+    }
+    return connection_pubsub_pattern_match(pattern, 0, channel, 0);
+}
+
+fn connection_pubsub_count_matching_direct_channels(pattern: &[byte], has_pattern: bool) usize {
+    var count: usize = 0;
+    var i: usize = 0;
+    while i < CONNECTION_PUBSUB_MAX_SUBSCRIPTIONS {
+        if connection_pubsub_is_unique_direct_channel(i) {
+            const channel: &[byte] = connection_pubsub_subscriptions[i].channel[0: connection_pubsub_subscriptions[i].channel_len];
+            if connection_pubsub_channel_matches_pattern(channel, pattern, has_pattern) {
+                count = count + 1;
+            }
+        }
+        i = i + 1;
+    }
+    return count;
+}
+
 fn connection_pubsub_append_bulk(buf: &Sds, data: &[byte]) !void {
     try sds_cat(buf, &"$"[0: 1]);
     try connection_sds_append_u64(buf, data.len as u64);
@@ -1757,6 +1830,206 @@ fn connection_pubsub_publish(channel: &[byte], message: &[byte]) usize {
         i = i + 1;
     }
     return receivers;
+}
+
+fn connection_pubsub_help_reply() CommandReply {
+    var raw: Sds = sds_empty() catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    defer {
+        sds_free(&raw);
+    }
+    _ = sds_cat(&raw, &"*14\r\n"[0: 5]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_pubsub_append_bulk(&raw, &"PUBSUB <subcommand> [<arg> [value] [opt] ...]. Subcommands are:"[0: 63]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_pubsub_append_bulk(&raw, &"CHANNELS [<pattern>]"[0: 20]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_pubsub_append_bulk(&raw, &"    Return the currently active channels matching a <pattern> (default: '*')."[0: 77]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_pubsub_append_bulk(&raw, &"NUMPAT"[0: 6]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_pubsub_append_bulk(&raw, &"    Return number of subscriptions to patterns."[0: 47]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_pubsub_append_bulk(&raw, &"NUMSUB [<channel> ...]"[0: 22]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_pubsub_append_bulk(&raw, &"    Return the number of subscribers for the specified channels, excluding"[0: 74]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_pubsub_append_bulk(&raw, &"    pattern subscriptions(default: no channels)."[0: 48]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_pubsub_append_bulk(&raw, &"SHARDCHANNELS [<pattern>]"[0: 25]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_pubsub_append_bulk(&raw, &"    Return the currently active shard level channels matching a <pattern> (default: '*')."[0: 89]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_pubsub_append_bulk(&raw, &"SHARDNUMSUB [<shardchannel> ...]"[0: 32]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_pubsub_append_bulk(&raw, &"    Return the number of subscribers for the specified shard level channel(s)"[0: 77]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_pubsub_append_bulk(&raw, &"HELP"[0: 4]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_pubsub_append_bulk(&raw, &"    Prints this help."[0: 21]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    return connection_raw_reply_owned(raw.buf[0: raw.len]);
+}
+
+fn connection_pubsub_wrong_arity_reply(name: &[byte]) CommandReply {
+    var raw: Sds = sds_empty() catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    defer {
+        sds_free(&raw);
+    }
+    _ = sds_cat(&raw, &"ERR wrong number of arguments for '"[0: 35]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = sds_cat(&raw, name) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = sds_cat(&raw, &"' command"[0: 9]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    return connection_owned_error(raw.buf[0: raw.len]);
+}
+
+fn connection_pubsub_unknown_subcommand_reply(subcommand: &[byte]) CommandReply {
+    var raw: Sds = sds_empty() catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    defer {
+        sds_free(&raw);
+    }
+    _ = sds_cat(&raw, &"ERR unknown subcommand '"[0: 24]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = connection_sds_append_ascii_lower(&raw, subcommand) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = sds_cat(&raw, &"'. Try PUBSUB HELP."[0: 19]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    return connection_owned_error(raw.buf[0: raw.len]);
+}
+
+fn connection_pubsub_subcommand_wrong_arity_reply(subcommand: &[byte]) CommandReply {
+    var raw: Sds = sds_empty() catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    defer {
+        sds_free(&raw);
+    }
+    _ = sds_cat(&raw, &"ERR wrong number of arguments for 'pubsub|"[0: 42]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = connection_sds_append_ascii_lower(&raw, subcommand) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = sds_cat(&raw, &"' command"[0: 9]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    return connection_owned_error(raw.buf[0: raw.len]);
+}
+
+fn connection_pubsub_channels_arity_reply(subcommand: &[byte]) CommandReply {
+    var raw: Sds = sds_empty() catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    defer {
+        sds_free(&raw);
+    }
+    _ = sds_cat(&raw, &"ERR unknown subcommand or wrong number of arguments for '"[0: 57]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = connection_sds_append_ascii_lower(&raw, subcommand) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = sds_cat(&raw, &"'. Try PUBSUB HELP."[0: 19]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    return connection_owned_error(raw.buf[0: raw.len]);
+}
+
+fn connection_pubsub_channels_reply(pattern: &[byte], has_pattern: bool) CommandReply {
+    var raw: Sds = sds_empty() catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    defer {
+        sds_free(&raw);
+    }
+    const count: usize = connection_pubsub_count_matching_direct_channels(pattern, has_pattern);
+    _ = sds_cat(&raw, &"*"[0: 1]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_sds_append_u64(&raw, count as u64) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = sds_cat(&raw, &"\r\n"[0: 2]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    var i: usize = 0;
+    while i < CONNECTION_PUBSUB_MAX_SUBSCRIPTIONS {
+        if connection_pubsub_is_unique_direct_channel(i) {
+            const channel: &[byte] = connection_pubsub_subscriptions[i].channel[0: connection_pubsub_subscriptions[i].channel_len];
+            if connection_pubsub_channel_matches_pattern(channel, pattern, has_pattern) {
+                _ = connection_pubsub_append_bulk(&raw, channel) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+            }
+        }
+        i = i + 1;
+    }
+    return connection_raw_reply_owned(raw.buf[0: raw.len]);
+}
+
+fn connection_pubsub_numsub_reply(command: &Command, always_zero: bool) CommandReply {
+    var raw: Sds = sds_empty() catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    defer {
+        sds_free(&raw);
+    }
+    const pairs: usize = command.argc - 2;
+    _ = sds_cat(&raw, &"*"[0: 1]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_sds_append_u64(&raw, (pairs * 2) as u64) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = sds_cat(&raw, &"\r\n"[0: 2]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    var index: usize = 2;
+    while index < command.argc {
+        const channel: &[byte] = command_arg_data(command, index) catch {
+            return connection_error_reply(&"ERR invalid request"[0: 19]);
+        };
+        _ = connection_pubsub_append_bulk(&raw, channel) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+        _ = sds_cat(&raw, &":"[0: 1]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+        var count: usize = 0;
+        if !always_zero {
+            count = connection_pubsub_count_channel(channel);
+        }
+        _ = connection_sds_append_u64(&raw, count as u64) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+        _ = sds_cat(&raw, &"\r\n"[0: 2]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+        index = index + 1;
+    }
+    return connection_raw_reply_owned(raw.buf[0: raw.len]);
+}
+
+fn connection_handle_pubsub(command: &Command) CommandReply {
+    if command.argc < 2 {
+        return connection_pubsub_wrong_arity_reply(&"pubsub"[0: 6]);
+    }
+    const subcommand: &[byte] = command_arg_data(command, 1) catch {
+        return connection_error_reply(&"ERR invalid request"[0: 19]);
+    };
+    if connection_keyword_eq(subcommand, &"HELP"[0: 4]) {
+        if command.argc != 2 {
+            return connection_pubsub_subcommand_wrong_arity_reply(subcommand);
+        }
+        return connection_pubsub_help_reply();
+    }
+    if connection_keyword_eq(subcommand, &"CHANNELS"[0: 8]) {
+        if command.argc > 3 {
+            return connection_pubsub_channels_arity_reply(subcommand);
+        }
+        if command.argc == 3 {
+            const pattern: &[byte] = command_arg_data(command, 2) catch {
+                return connection_error_reply(&"ERR invalid request"[0: 19]);
+            };
+            return connection_pubsub_channels_reply(pattern, true);
+        }
+        return connection_pubsub_channels_reply(connection_reply_empty_slice(), false);
+    }
+    if connection_keyword_eq(subcommand, &"NUMPAT"[0: 6]) {
+        if command.argc != 2 {
+            return connection_pubsub_subcommand_wrong_arity_reply(subcommand);
+        }
+        return connection_make_reply(CommandReplyType.reply_integer, connection_reply_empty_slice(), connection_pubsub_count_patterns() as i64);
+    }
+    if connection_keyword_eq(subcommand, &"NUMSUB"[0: 6]) {
+        return connection_pubsub_numsub_reply(command, false);
+    }
+    if connection_keyword_eq(subcommand, &"SHARDCHANNELS"[0: 13]) {
+        if command.argc > 3 {
+            return connection_pubsub_channels_arity_reply(subcommand);
+        }
+        return connection_raw_reply_owned(&"*0\r\n"[0: 4]);
+    }
+    if connection_keyword_eq(subcommand, &"SHARDNUMSUB"[0: 11]) {
+        return connection_pubsub_numsub_reply(command, true);
+    }
+    return connection_pubsub_unknown_subcommand_reply(subcommand);
 }
 
 fn connection_should_append_aof(command: &Command, reply: &CommandReply) bool {
@@ -2965,7 +3238,8 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
             command.info.cmd_type == CommandType.command_unsubscribe ||
             command.info.cmd_type == CommandType.command_psubscribe ||
             command.info.cmd_type == CommandType.command_punsubscribe ||
-            command.info.cmd_type == CommandType.command_publish {
+            command.info.cmd_type == CommandType.command_publish ||
+            command.info.cmd_type == CommandType.command_pubsub {
             const pubsub_tx_reply: CommandReply = connection_error_reply(&"ERR pubsub command inside MULTI is not allowed"[0: 46]);
             const pubsub_tx_n: usize = try connection_encode_reply_with_protocol(&pubsub_tx_reply, out, out_cap, tx.protocol_version);
             resp_value_free(&parsed.value);
@@ -3171,6 +3445,13 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
         const publish_n: usize = try connection_encode_reply_with_protocol(&publish_reply, out, out_cap, tx.protocol_version);
         resp_value_free(&parsed.value);
         return ConnectionProcessResult{ response_len: publish_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
+    }
+    if command.info.cmd_type == CommandType.command_pubsub {
+        var pubsub_reply: CommandReply = connection_handle_pubsub(&command);
+        const pubsub_n: usize = try connection_encode_reply_with_protocol(&pubsub_reply, out, out_cap, tx.protocol_version);
+        command_reply_cleanup(&pubsub_reply);
+        resp_value_free(&parsed.value);
+        return ConnectionProcessResult{ response_len: pubsub_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
     }
     if command.info.cmd_type == CommandType.command_multi {
         connection_transaction_clear_queue(tx);

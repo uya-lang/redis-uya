@@ -459,6 +459,7 @@
 - [x] 管理面第二批运行时配置已落地：`CONFIG SET` 支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`masterauth`、`replicaof`、`maxclients`、`databases`，并覆盖 `CONFIG GET/REWRITE` 验证、运行时 `maxclients` 生效与 rewrite 落盘
 - [x] 连接管理 `RESET` 已落地：覆盖 RESP3/PubSub/MULTI/WATCH/TRACKING/AUTH 连接上下文重置，并把 RESP2 订阅态允许命令扩展到 `RESET`
 - [x] Pub/Sub 第一批 pattern 订阅已落地：`PSUBSCRIBE`、`PUNSUBSCRIBE`、`pmessage` fanout 与接收者计数已覆盖 unit/integration
+- [x] Pub/Sub 管理面第一批已落地：`PUBSUB HELP/CHANNELS/NUMPAT/NUMSUB` 已接入共享订阅注册表，`PUBSUB SHARDCHANNELS/SHARDNUMSUB` 固定当前 shard 空结果边界，并覆盖 unit/integration
 - [ ] 其余 standalone 兼容错误与命令家族补齐继续推进
 - [ ] Streams 完整化：消费者组、pending、claim、trim、阻塞读取和持久化恢复
 - [ ] Pub/Sub 完整化：订阅态命令限制和断开清理已落地，背压待继续收敛

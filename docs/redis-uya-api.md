@@ -1395,7 +1395,24 @@ SUBSCRIBE channel [channel ...]
 说明：
 
 - 当前实现为固定容量连接级订阅注册表
-- 当前不支持 pattern 订阅
+- RESP2 订阅态下只允许继续执行 `SUBSCRIBE/PSUBSCRIBE/UNSUBSCRIBE/PUNSUBSCRIBE/PING/QUIT`
+- RESP3 订阅态下，非 Pub/Sub 命令仍可继续执行
+
+### `PSUBSCRIBE`
+
+格式：
+
+```text
+PSUBSCRIBE pattern [pattern ...]
+```
+
+返回：
+
+- 每个 pattern 返回一个订阅确认：`["psubscribe", pattern, count]`
+
+说明：
+
+- 匹配发布时会向订阅者推送 `["pmessage", pattern, channel, message]`
 
 ### `UNSUBSCRIBE`
 
@@ -1413,6 +1430,19 @@ UNSUBSCRIBE channel [channel ...]
 说明：
 
 - 显式频道取消订阅后，后续 `PUBLISH` 不再向该连接推送对应消息
+
+### `PUNSUBSCRIBE`
+
+格式：
+
+```text
+PUNSUBSCRIBE
+PUNSUBSCRIBE pattern [pattern ...]
+```
+
+返回：
+
+- 每个 pattern 返回一个取消订阅确认：`["punsubscribe", pattern, remaining_count]`
 
 ### `PUBLISH`
 

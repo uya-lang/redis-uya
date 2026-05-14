@@ -8,6 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 BIN = ROOT / "build" / "redis-uya"
+RESP2_PUBSUB_RESTRICTED = b"-ERR only SUBSCRIBE / PSUBSCRIBE / UNSUBSCRIBE / PUNSUBSCRIBE / PING / QUIT are allowed in this context\r\n"
 
 
 def find_free_port() -> int:
@@ -77,6 +78,16 @@ def run_smoke() -> None:
                 sub_sock,
                 b"*2\r\n$9\r\nSUBSCRIBE\r\n$5\r\nchan1\r\n",
                 b"*3\r\n$9\r\nsubscribe\r\n$5\r\nchan1\r\n:1\r\n",
+            )
+            roundtrip(
+                sub_sock,
+                b"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n",
+                RESP2_PUBSUB_RESTRICTED,
+            )
+            roundtrip(
+                sub_sock,
+                b"*1\r\n$4\r\nPING\r\n",
+                b"+PONG\r\n",
             )
 
             with connect_with_retry(port, time.monotonic() + 5.0) as pattern_sock:

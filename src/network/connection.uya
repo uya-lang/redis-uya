@@ -619,6 +619,23 @@ fn connection_keyword_eq(a: &[byte], b: &[byte]) bool {
     return true;
 }
 
+fn connection_resp2_pubsub_mode_active(tx: &ConnectionTransaction) bool {
+    return tx != null && tx.pubsub_count > 0 && tx.protocol_version != 3;
+}
+
+fn connection_command_allowed_in_resp2_pubsub_mode(cmd_type: CommandType) bool {
+    return cmd_type == CommandType.command_subscribe ||
+        cmd_type == CommandType.command_unsubscribe ||
+        cmd_type == CommandType.command_psubscribe ||
+        cmd_type == CommandType.command_punsubscribe ||
+        cmd_type == CommandType.command_ping ||
+        cmd_type == CommandType.command_quit;
+}
+
+fn connection_pubsub_mode_error() CommandReply {
+    return connection_error_reply(&"ERR only SUBSCRIBE / PSUBSCRIBE / UNSUBSCRIBE / PUNSUBSCRIBE / PING / QUIT are allowed in this context"[0: 102]);
+}
+
 fn connection_client_id(tx: &ConnectionTransaction) i64 {
     if tx != null {
         const tx_addr: usize = @usize_from_ptr(tx as &void);
@@ -3013,6 +3030,12 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
         const noauth_n: usize = try connection_encode_reply_with_protocol(&noauth_reply, out, out_cap, tx.protocol_version);
         resp_value_free(&parsed.value);
         return ConnectionProcessResult{ response_len: noauth_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
+    }
+    if connection_resp2_pubsub_mode_active(tx) && !connection_command_allowed_in_resp2_pubsub_mode(command.info.cmd_type) {
+        const restricted_reply: CommandReply = connection_pubsub_mode_error();
+        const restricted_n: usize = try connection_encode_reply_with_protocol(&restricted_reply, out, out_cap, tx.protocol_version);
+        resp_value_free(&parsed.value);
+        return ConnectionProcessResult{ response_len: restricted_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
     }
     if command.info.cmd_type == CommandType.command_shutdown {
         _ = connection_handle_shutdown(&command) catch {

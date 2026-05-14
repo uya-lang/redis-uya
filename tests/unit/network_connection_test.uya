@@ -785,6 +785,7 @@ export fn test_connection_process_pubsub_commands() !void {
     const router: CommandRouter = command_router_new();
     var engine: Engine = engine_new();
     var tx: ConnectionTransaction = connection_transaction_new();
+    tx.client_fd = 11;
     defer {
         connection_transaction_reset(&tx);
         connection_pubsub_reset_for_test();
@@ -801,8 +802,14 @@ export fn test_connection_process_pubsub_commands() !void {
     try assert_true(network_connection_contains(out[0: psubscribe.response_len], &"chan*"[0: 5]));
     try assert_true(network_connection_contains(out[0: psubscribe.response_len], &":2\r\n"[0: 4]));
 
-    const publish: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$7\r\nPUBLISH\r\n$5\r\nchan1\r\n$5\r\nhello\r\n"[0: 39], &out[0], 256, 1000u64);
-    try assert_true(network_connection_slice_eq(out[0: publish.response_len], &":0\r\n"[0: 4]));
+    const blocked_get: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n"[0: 22], &out[0], 256, 1000u64);
+    try assert_true(network_connection_contains(out[0: blocked_get.response_len], &"only SUBSCRIBE / PSUBSCRIBE / UNSUBSCRIBE / PUNSUBSCRIBE / PING / QUIT are allowed in this context"[0: 98]));
+
+    const blocked_publish: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$7\r\nPUBLISH\r\n$5\r\nchan1\r\n$5\r\nhello\r\n"[0: 39], &out[0], 256, 1000u64);
+    try assert_true(network_connection_contains(out[0: blocked_publish.response_len], &"only SUBSCRIBE / PSUBSCRIBE / UNSUBSCRIBE / PUNSUBSCRIBE / PING / QUIT are allowed in this context"[0: 98]));
+
+    const ping_subscribed: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$4\r\nPING\r\n"[0: 14], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: ping_subscribed.response_len], &"+PONG\r\n"[0: 7]));
 
     const punsubscribe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$12\r\nPUNSUBSCRIBE\r\n$5\r\nchan*\r\n"[0: 34], &out[0], 256, 1000u64);
     try assert_true(network_connection_contains(out[0: punsubscribe.response_len], &"punsubscribe"[0: 12]));
@@ -823,6 +830,22 @@ export fn test_connection_process_pubsub_commands() !void {
     try assert_true(network_connection_contains(out[0: punsubscribe_all.response_len], &"punsubscribe"[0: 12]));
     try assert_true(network_connection_contains(out[0: punsubscribe_all.response_len], &"$-1\r\n"[0: 5]));
     try assert_true(network_connection_contains(out[0: punsubscribe_all.response_len], &":0\r\n"[0: 4]));
+
+    var resp3_tx: ConnectionTransaction = connection_transaction_new();
+    resp3_tx.client_fd = 13;
+    defer {
+        connection_transaction_reset(&resp3_tx);
+    }
+    var resp3_out: [byte: 512] = [];
+    const hello3: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &resp3_tx, &"*2\r\n$5\r\nHELLO\r\n$1\r\n3\r\n"[0: 22], &resp3_out[0], 512, 1000u64);
+    try assert_true(resp3_out[0] == 37 as byte);
+    _ = hello3;
+
+    const subscribe_resp3: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &resp3_tx, &"*2\r\n$9\r\nSUBSCRIBE\r\n$5\r\nchan1\r\n"[0: 30], &resp3_out[0], 512, 1000u64);
+    try assert_true(network_connection_contains(resp3_out[0: subscribe_resp3.response_len], &"subscribe"[0: 9]));
+
+    const get_resp3_subscribed: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &resp3_tx, &"*2\r\n$3\r\nGET\r\n$7\r\nmissing\r\n"[0: 26], &resp3_out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(resp3_out[0: get_resp3_subscribed.response_len], &"_\r\n"[0: 3]));
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

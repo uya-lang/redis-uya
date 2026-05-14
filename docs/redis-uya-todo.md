@@ -457,6 +457,7 @@
 - [x] `COMMAND DOCS` 无参数全量 docs 输出与大响应发送路径第一批已收口
 - [x] `COMMAND GETKEYS` / `COMMAND GETKEYSANDFLAGS` 当前命令表支持已落地：覆盖 range key spec、多 key/成对 key、`RENAME` 双 key、`SORT ... STORE` movablekeys 和基础 key flags
 - [x] 管理面第二批运行时配置已落地：`CONFIG SET` 支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`masterauth`、`replicaof`、`maxclients`、`databases`，并覆盖 `CONFIG GET/REWRITE` 验证、运行时 `maxclients` 生效与 rewrite 落盘
+- [x] 连接管理 `RESET` 已落地：覆盖 RESP3/PubSub/MULTI/WATCH/TRACKING/AUTH 连接上下文重置，并把 RESP2 订阅态允许命令扩展到 `RESET`
 - [x] Pub/Sub 第一批 pattern 订阅已落地：`PSUBSCRIBE`、`PUNSUBSCRIBE`、`pmessage` fanout 与接收者计数已覆盖 unit/integration
 - [ ] 其余 standalone 兼容错误与命令家族补齐继续推进
 - [ ] Streams 完整化：消费者组、pending、claim、trim、阻塞读取和持久化恢复

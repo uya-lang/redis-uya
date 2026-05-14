@@ -68,7 +68,7 @@ AUTH default password
 说明：
 
 - 当前安全基线只支持默认用户 `default`
-- 启用 `requirepass` 后，除 `AUTH` / `QUIT` 外的普通命令在认证前返回 `-NOAUTH Authentication required.`
+- 启用 `requirepass` 后，除 `AUTH` / `QUIT` / `RESET` 外的普通命令在认证前返回 `-NOAUTH Authentication required.`
 
 ### `COMMAND`
 
@@ -1395,7 +1395,7 @@ SUBSCRIBE channel [channel ...]
 说明：
 
 - 当前实现为固定容量连接级订阅注册表
-- RESP2 订阅态下只允许继续执行 `SUBSCRIBE/PSUBSCRIBE/UNSUBSCRIBE/PUNSUBSCRIBE/PING/QUIT`
+- RESP2 订阅态下只允许继续执行 `SUBSCRIBE/PSUBSCRIBE/UNSUBSCRIBE/PUNSUBSCRIBE/PING/QUIT/RESET`
 - RESP3 订阅态下，非 Pub/Sub 命令仍可继续执行
 - 连接关闭后会自动清理该连接持有的频道订阅项
 
@@ -1548,6 +1548,24 @@ QUIT
 返回：
 
 - `+OK`
+
+### `RESET`
+
+格式：
+
+```text
+RESET
+```
+
+返回：
+
+- `+RESET`
+
+说明：
+
+- 清空当前连接的事务队列、WATCH、Pub/Sub 订阅、CLIENT TRACKING 状态和客户端名称/库信息
+- 把 RESP3 连接切回 RESP2
+- 启用 `requirepass` 时，`RESET` 后当前连接需要重新 `AUTH`
 
 ### `SHUTDOWN`
 

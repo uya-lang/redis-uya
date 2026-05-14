@@ -686,6 +686,95 @@ export fn test_connection_process_client_commands() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_connection_process_reset() !void {
+    reset_memory_stats_for_test();
+    connection_pubsub_reset_for_test();
+    connection_client_registry_reset_for_test();
+    defer {
+        connection_pubsub_reset_for_test();
+        connection_client_registry_reset_for_test();
+    }
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var runtime: CommandRuntimeInfo = command_runtime_default();
+    runtime.config.requirepass[0] = 115 as byte; // s
+    runtime.config.requirepass[1] = 101 as byte; // e
+    runtime.config.requirepass[2] = 99 as byte;  // c
+    runtime.config.requirepass[3] = 114 as byte; // r
+    runtime.config.requirepass[4] = 101 as byte; // e
+    runtime.config.requirepass[5] = 116 as byte; // t
+    runtime.config.requirepass[6] = 0 as byte;
+    var tx: ConnectionTransaction = connection_transaction_new();
+    tx.client_fd = 41;
+    defer {
+        connection_transaction_reset(&tx);
+    }
+    var out: [byte: 512] = [];
+
+    const auth_ok: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*3\r\n$4\r\nAUTH\r\n$7\r\ndefault\r\n$6\r\nsecret\r\n"[0: 39], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: auth_ok.response_len], &"+OK\r\n"[0: 5]));
+
+    const watch_ok: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*2\r\n$5\r\nWATCH\r\n$3\r\nkey\r\n"[0: 24], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: watch_ok.response_len], &"+OK\r\n"[0: 5]));
+    try assert_eq_i32(engine_watch_client_count(&engine) as i32, 1);
+
+    const hello3: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*2\r\n$5\r\nHELLO\r\n$1\r\n3\r\n"[0: 22], &out[0], 512, 1000u64);
+    try assert_true(out[0] == 37 as byte);
+
+    const setname: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*3\r\n$6\r\nCLIENT\r\n$7\r\nSETNAME\r\n$12\r\nreset-client\r\n"[0: 48], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: setname.response_len], &"+OK\r\n"[0: 5]));
+
+    const setinfo: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$7\r\nSETINFO\r\n$8\r\nLIB-NAME\r\n$9\r\nreset-lib\r\n"[0: 58], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: setinfo.response_len], &"+OK\r\n"[0: 5]));
+
+    const tracking_on: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$8\r\nTRACKING\r\n$2\r\nON\r\n$6\r\nNOLOOP\r\n"[0: 50], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: tracking_on.response_len], &"+OK\r\n"[0: 5]));
+
+    const subscribe_resp3: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*2\r\n$9\r\nSUBSCRIBE\r\n$3\r\nfoo\r\n"[0: 28], &out[0], 512, 1000u64);
+    try assert_true(network_connection_contains(out[0: subscribe_resp3.response_len], &"subscribe"[0: 9]));
+
+    const get_resp3_subscribed: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*2\r\n$3\r\nGET\r\n$7\r\nmissing\r\n"[0: 26], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: get_resp3_subscribed.response_len], &"_\r\n"[0: 3]));
+
+    const multi_ok: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*1\r\n$5\r\nMULTI\r\n"[0: 15], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: multi_ok.response_len], &"+OK\r\n"[0: 5]));
+
+    const queued_get: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n"[0: 22], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: queued_get.response_len], &"+QUEUED\r\n"[0: 9]));
+
+    const reset_reply: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*1\r\n$5\r\nRESET\r\n"[0: 15], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: reset_reply.response_len], &"+RESET\r\n"[0: 8]));
+    try assert_eq_i32(tx.active as i32, 0);
+    try assert_eq_i32(tx.protocol_version, 2);
+    try assert_eq_i32(tx.pubsub_count as i32, 0);
+    try assert_eq_i32(tx.client_name_len as i32, 0);
+    try assert_eq_i32(tx.client_lib_name_len as i32, 0);
+    try assert_eq_i32(tx.tracking_enabled as i32, 0);
+    try assert_eq_i32(tx.authenticated as i32, 0);
+    try assert_eq_i32(engine_watch_client_count(&engine) as i32, 0);
+
+    const ping_after_reset: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*1\r\n$4\r\nPING\r\n"[0: 14], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: ping_after_reset.response_len], &"-NOAUTH Authentication required.\r\n"[0: 34]));
+
+    const reset_unauthed: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*1\r\n$5\r\nRESET\r\n"[0: 15], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: reset_unauthed.response_len], &"+RESET\r\n"[0: 8]));
+
+    const auth_again: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*3\r\n$4\r\nAUTH\r\n$7\r\ndefault\r\n$6\r\nsecret\r\n"[0: 39], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: auth_again.response_len], &"+OK\r\n"[0: 5]));
+
+    const get_resp2_after_reset: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*2\r\n$3\r\nGET\r\n$7\r\nmissing\r\n"[0: 26], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: get_resp2_after_reset.response_len], &"$-1\r\n"[0: 5]));
+
+    const client_getname: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$7\r\nGETNAME\r\n"[0: 29], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_getname.response_len], &"$-1\r\n"[0: 5]));
+
+    const exec_after_reset: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*1\r\n$4\r\nEXEC\r\n"[0: 14], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: exec_after_reset.response_len], &"-ERR EXEC without MULTI\r\n"[0: 25]));
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_connection_process_command_docs_all_large_reply() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();

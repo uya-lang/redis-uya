@@ -65,8 +65,8 @@
 - 主从一致性：当前五类对象已有 full sync + incremental smoke
 - 事务控制最小子集：连接级 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`，支持 `QUEUED`、`EXEC` 数组回复、观察键变更后的 Null Array 中止和 `DISCARD` 丢弃
 - Pub/Sub 第一批子集：`SUBSCRIBE/UNSUBSCRIBE` 直连订阅、`PSUBSCRIBE/PUNSUBSCRIBE` pattern 订阅、`PUBLISH` 跨连接推送 `message/pmessage` 并返回匹配接收者数量，连接关闭后会清理订阅项
-- Pub/Sub 订阅态兼容边界：RESP2 订阅态下只允许 `SUBSCRIBE/PSUBSCRIBE/UNSUBSCRIBE/PUNSUBSCRIBE/PING/QUIT`，RESP3 订阅态可继续执行非 Pub/Sub 命令
-- 控制面兼容子集：`CLIENT ID/GETNAME/SETNAME/INFO/LIST/SETINFO/HELP/KILL/PAUSE/UNPAUSE/TRACKING/TRACKINGINFO`、`HELLO SETNAME`、`CONFIG GET/HELP/RESETSTAT/SET/REWRITE`
+- Pub/Sub 订阅态兼容边界：RESP2 订阅态下只允许 `SUBSCRIBE/PSUBSCRIBE/UNSUBSCRIBE/PUNSUBSCRIBE/PING/QUIT/RESET`，RESP3 订阅态可继续执行非 Pub/Sub 命令
+- 控制面兼容子集：`CLIENT ID/GETNAME/SETNAME/INFO/LIST/SETINFO/HELP/KILL/PAUSE/UNPAUSE/TRACKING/TRACKINGINFO`、`HELLO SETNAME`、`RESET`、`CONFIG GET/HELP/RESETSTAT/SET/REWRITE`
 - 安全基线：`requirepass`、`AUTH`、`SHUTDOWN`
 - `v0.9.1` 命令全集矩阵第一批：基于 Redis 8.6 官方命令页生成 `531` 个官方命令名目录，落地 `docs/redis-uya-command-matrix.md` 与 `src/command/catalog_generated*`
 - `COMMAND` 控制面第一批已收口：`COMMAND`、`COMMAND COUNT`、`COMMAND LIST`、`COMMAND INFO`、`COMMAND DOCS`、`COMMAND GETKEYS`、`COMMAND GETKEYSANDFLAGS` 共用同一份运行时目录；`COMMAND DOCS` 无参数时已支持全量 docs 输出，并打通 RESP2/RESP3 大响应发送第一批闭环

@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 111);
+    try assert_eq_i32(command_router_count(&router) as i32, 112);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -42,6 +42,10 @@ export fn test_command_router_lookup_and_case() !void {
     const hello: CommandInfo = try command_router_lookup(&router, &"HELLO"[0: 5]);
     try assert_eq_i32(hello.cmd_type as i32, CommandType.command_hello as i32);
     try assert_eq_i32(hello.arity, -1);
+
+    const reset: CommandInfo = try command_router_lookup(&router, &"RESET"[0: 5]);
+    try assert_eq_i32(reset.cmd_type as i32, CommandType.command_reset as i32);
+    try assert_eq_i32(reset.arity, 1);
 
     const subscribe: CommandInfo = try command_router_lookup(&router, &"SUBSCRIBE"[0: 9]);
     try assert_eq_i32(subscribe.cmd_type as i32, CommandType.command_subscribe as i32);

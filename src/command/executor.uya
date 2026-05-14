@@ -5597,33 +5597,15 @@ fn command_executor_config(runtime: &CommandRuntimeInfo, command: &Command) Comm
             const value: &[byte] = command_executor_arg(command, index + 1) catch {
                 return command_executor_wrong_arity();
             };
-            if command_executor_keyword_eq(key, &"maxclients"[0: 10]) {
-                const parsed_maxclients: i64 = command_executor_parse_i64(value) catch {
-                    return command_executor_error(&"ERR Invalid argument for CONFIG SET"[0: 35]);
-                };
-                if parsed_maxclients < 0 || parsed_maxclients > 2147483647 {
-                    return command_executor_error(&"ERR Invalid argument for CONFIG SET"[0: 35]);
-                }
-                request_maxclients_set = true;
-                maxclients_after = parsed_maxclients as i32;
-                index = index + 2;
-                continue;
-            }
-            if command_executor_keyword_eq(key, &"databases"[0: 9]) {
-                const parsed_databases: i64 = command_executor_parse_i64(value) catch {
-                    return command_executor_error(&"ERR Invalid argument for CONFIG SET"[0: 35]);
-                };
-                if parsed_databases != 1 {
-                    return command_executor_error(&"ERR Unsupported CONFIG parameter"[0: 32]);
-                }
-                index = index + 2;
-                continue;
-            }
             const applied: bool = config_apply_runtime_set(&next_config, key, value) catch {
                 return command_executor_error(&"ERR Invalid argument for CONFIG SET"[0: 35]);
             };
             if !applied {
                 return command_executor_error(&"ERR Unsupported CONFIG parameter"[0: 32]);
+            }
+            if command_executor_keyword_eq(key, &"maxclients"[0: 10]) {
+                request_maxclients_set = true;
+                maxclients_after = next_config.maxclients;
             }
             if command_executor_keyword_eq(key, &"replicaof"[0: 9]) {
                 request_replicaof = true;

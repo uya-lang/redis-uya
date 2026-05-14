@@ -387,12 +387,14 @@ export fn test_command_info_and_config() !void {
     try assert_eq_i32(config_set_maxclients_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
     try assert_eq_i32(config_set_maxclients_reply.request_maxclients_set as i32, 1);
     try assert_eq_i32(config_set_maxclients_reply.maxclients_after, 16);
+    try assert_eq_i32(config_set_maxclients_reply.config_after.maxclients, 16);
     resp_value_free(&config_set_maxclients_parsed.value);
 
     var config_set_databases_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$9\r\ndatabases\r\n$1\r\n1\r\n"[0: 47]);
     const config_set_databases_command: Command = try command_executor_test_command(&router, &config_set_databases_parsed);
     const config_set_databases_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_set_databases_command, 5000u64);
     try assert_eq_i32(config_set_databases_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_eq_i32(config_set_databases_reply.config_after.databases, 1);
     resp_value_free(&config_set_databases_parsed.value);
 
     var config_set_replicaof_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$9\r\nreplicaof\r\n$14\r\n127.0.0.1 6381\r\n"[0: 61]);
@@ -435,6 +437,8 @@ export fn test_command_info_and_config() !void {
 
     const rewritten_cfg: ServerConfig = try parse_config_file(&rewrite_path_buf[0] as &const byte);
     try assert_eq_i32(rewritten_cfg.port, runtime.config.port);
+    try assert_eq_i32(rewritten_cfg.maxclients, runtime.config.maxclients);
+    try assert_eq_i32(rewritten_cfg.databases, runtime.config.databases);
     try assert_eq_i32(rewritten_cfg.maxmemory as i32, 1048576);
     try assert_eq_i32(rewritten_cfg.maxmemory_policy as i32, MaxmemoryPolicy.maxmemory_allkeys_lru as i32);
     try assert_eq_i32(rewritten_cfg.save_seconds, 60);

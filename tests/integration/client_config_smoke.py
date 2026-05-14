@@ -318,6 +318,8 @@ def run_smoke() -> None:
                     "bind 0.0.0.0",
                     "dir build/runtime-dir",
                     "dbfilename runtime.rdb",
+                    "maxclients 16",
+                    "databases 1",
                     "maxmemory 1048576",
                     "maxmemory-policy allkeys-lru",
                     "save 60 10",

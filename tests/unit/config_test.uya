@@ -32,6 +32,8 @@ fn config_test_slice_eq(a: &[byte], b: &[byte]) bool {
 export fn test_config_defaults() !void {
     const cfg: ServerConfig = default_config();
     try assert_eq_i32(cfg.port, 6379);
+    try assert_eq_i32(cfg.maxclients, 0);
+    try assert_eq_i32(cfg.databases, 1);
     try assert_eq_i32(cfg.maxmemory as i32, 0);
     try assert_eq_i32(cfg.maxmemory_policy as i32, MaxmemoryPolicy.maxmemory_noeviction as i32);
     try assert_eq_i32(cfg.replicaof_port, 0);
@@ -41,9 +43,11 @@ export fn test_config_defaults() !void {
 }
 
 export fn test_config_parse_core_fields() !void {
-    const text: &[byte] = &"# sample\nport 6380\nbind 127.0.0.1\ndir /data\ndbfilename redis.rdb\nappendfilename redis.aof\nrequirepass lock\nreplicaof 10.0.0.8 6381\nmasterauth secret\nmaxmemory 64mb\nmaxmemory-policy allkeys-lru\nsave 60 1000\n"[0: 206];
+    const text: &[byte] = &"# sample\nport 6380\nmaxclients 64\ndatabases 1\nbind 127.0.0.1\ndir /data\ndbfilename redis.rdb\nappendfilename redis.aof\nrequirepass lock\nreplicaof 10.0.0.8 6381\nmasterauth secret\nmaxmemory 64mb\nmaxmemory-policy allkeys-lru\nsave 60 1000\n"[0: 232];
     const cfg: ServerConfig = try parse_config_text(text);
     try assert_eq_i32(cfg.port, 6380);
+    try assert_eq_i32(cfg.maxclients, 64);
+    try assert_eq_i32(cfg.databases, 1);
     try assert_true(cstr_eq(cfg.bind[0: 64], &"127.0.0.1"[0: 9]));
     try assert_true(cstr_eq(cfg.dir[0: 256], &"/data"[0: 5]));
     try assert_true(cstr_eq(cfg.dbfilename[0: 128], &"redis.rdb"[0: 9]));
@@ -98,9 +102,22 @@ export fn test_config_parse_invalid_policy() !void {
     try assert_true(saw_error);
 }
 
+export fn test_config_parse_invalid_databases() !void {
+    var saw_error: bool = false;
+    _ = parse_config_text(&"databases 2\n"[0: 12]) catch |err| {
+        if err == error.ConfigInvalidValue {
+            saw_error = true;
+        }
+        return;
+    };
+    try assert_true(saw_error);
+}
+
 export fn test_config_parse_file() !void {
     const cfg: ServerConfig = try parse_config_file("tests/unit/fixtures/sample_redis.conf");
     try assert_eq_i32(cfg.port, 6391);
+    try assert_eq_i32(cfg.maxclients, 32);
+    try assert_eq_i32(cfg.databases, 1);
     try assert_true(cstr_eq(cfg.bind[0: 64], &"127.0.0.1"[0: 9]));
     try assert_true(cstr_eq(cfg.dir[0: 256], &"/var/lib/redis-uya"[0: 18]));
     try assert_true(cstr_eq(cfg.dbfilename[0: 128], &"dump-test.rdb"[0: 13]));

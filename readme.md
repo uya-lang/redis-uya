@@ -91,7 +91,7 @@
 
 下一阶段：
 
-- `v0.9.1`：继续推进单机命令全集矩阵、连接/管理面补齐和兼容边界收敛；当前已完成官方命令全集矩阵、`COMMAND*` 第一批与 `COMMAND DOCS` 全量输出、`COMMAND GETKEYS*` 当前命令表支持、全局 `CLIENT LIST`、`CONFIG SET` 第二批运行时字段（`port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`masterauth`、`replicaof`、`maxclients`、`databases`）、`CONFIG REWRITE` 对应落盘第一批、`CLIENT KILL/PAUSE/TRACKING` 最小闭环，以及 pattern Pub/Sub 第一批、RESP2/RESP3 订阅态命令限制边界与断开清理，待续 rewrite 保真度、tracking invalidation、Pub/Sub 背压、Scripting/Stream 命令族与 standalone 错误边界。
+- `v0.9.1`：继续推进单机命令全集矩阵、连接/管理面补齐和兼容边界收敛；当前已完成官方命令全集矩阵、`COMMAND*` 第一批与 `COMMAND DOCS` 全量输出、`COMMAND GETKEYS*` 当前命令表支持、全局 `CLIENT LIST`、`CONFIG SET` 第二批运行时字段（`port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`masterauth`、`replicaof`、`maxclients`、`databases`）、`CONFIG REWRITE` 对应第二批核心字段落盘、`CLIENT KILL/PAUSE/TRACKING` 最小闭环，以及 pattern Pub/Sub 第一批、RESP2/RESP3 订阅态命令限制边界与断开清理，待续 rewrite 保真度、tracking invalidation、Pub/Sub 背压、Scripting/Stream 命令族与 standalone 错误边界。
 
 当前阶段尚未生产可用。
 

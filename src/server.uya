@@ -1543,6 +1543,8 @@ export fn server_open_with_aof_and_memory_policy(
     const router: CommandRouter = command_router_new();
     var config: ServerConfig = default_config();
     config.port = port as i32;
+    config.maxclients = maxclients;
+    config.databases = 1;
     config.maxmemory = maxmemory;
     config.maxmemory_policy = maxmemory_policy;
     config_copy_bytes(config.bind[0: 64], &"127.0.0.1"[0: 9]);

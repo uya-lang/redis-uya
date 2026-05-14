@@ -209,7 +209,7 @@ bash scripts/verify_definition_of_done.sh
 | DoD 项 | 证据 |
 |--------|------|
 | `CONFIG SET` 第二批运行时字段可用：支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`masterauth`、`replicaof`、`maxclients`、`databases`，覆盖非法参数、`REPLICAOF NO ONE` 提升、运行时 `maxclients` 更新与 `CONFIG GET` 回读 | `src/config.uya`、`src/command/executor.uya`、`src/network/connection.uya`、`src/server.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/test_runner.uya`、`tests/integration/client_config_smoke.py` |
-| `CONFIG REWRITE` 对应落盘第一批可用：运行时改写后的 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`masterauth` 与内存策略可写回到重写配置文件 | `src/config.uya`、`src/command/executor.uya`、`tests/unit/command_executor_test.uya`、`tests/integration/client_config_smoke.py` |
+| `CONFIG REWRITE` 对应第二批核心字段落盘可用：运行时改写后的 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`masterauth`、`maxclients`、`databases` 与内存策略可写回到重写配置文件 | `src/config.uya`、`src/command/executor.uya`、`src/server.uya`、`tests/unit/config_test.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/test_runner.uya`、`tests/integration/client_config_smoke.py` |
 
 ## 16. `v0.9.1` 第三批
 

@@ -212,6 +212,51 @@ def run_smoke() -> None:
             roundtrip(sock, b"*2\r\n$7\r\nPERSIST\r\n$4\r\nkeep\r\n", b":1\r\n")
             roundtrip(sock, b"*2\r\n$4\r\nPTTL\r\n$4\r\nkeep\r\n", b":-1\r\n")
             roundtrip(sock, b"*2\r\n$3\r\nDEL\r\n$4\r\nkeep\r\n", b":1\r\n")
+            roundtrip(sock, b"*3\r\n$3\r\nSET\r\n$3\r\nsec\r\n$5\r\nvalue\r\n", b"+OK\r\n")
+            sec_deadline = int(time.time()) + 4
+            sec_deadline_bytes = str(sec_deadline).encode()
+            sec_request = (
+                b"*3\r\n$8\r\nEXPIREAT\r\n$3\r\nsec\r\n$"
+                + str(len(sec_deadline_bytes)).encode()
+                + b"\r\n"
+                + sec_deadline_bytes
+                + b"\r\n"
+            )
+            roundtrip(sock, sec_request, b":1\r\n")
+            roundtrip(sock, b"*2\r\n$10\r\nEXPIRETIME\r\n$3\r\nsec\r\n", f":{sec_deadline}\r\n".encode())
+            roundtrip(sock, b"*2\r\n$11\r\nPEXPIRETIME\r\n$3\r\nsec\r\n", f":{sec_deadline * 1000}\r\n".encode())
+            roundtrip(sock, b"*2\r\n$5\r\nGETEX\r\n$3\r\nsec\r\n", b"$5\r\nvalue\r\n")
+            roundtrip(sock, b"*3\r\n$5\r\nGETEX\r\n$3\r\nsec\r\n$7\r\nPERSIST\r\n", b"$5\r\nvalue\r\n")
+            roundtrip(sock, b"*2\r\n$10\r\nEXPIRETIME\r\n$3\r\nsec\r\n", b":-1\r\n")
+            roundtrip(sock, b"*3\r\n$3\r\nSET\r\n$5\r\npxkey\r\n$5\r\nvalue\r\n", b"+OK\r\n")
+            roundtrip(sock, b"*4\r\n$5\r\nGETEX\r\n$5\r\npxkey\r\n$2\r\nPX\r\n$4\r\n1200\r\n", b"$5\r\nvalue\r\n")
+            sock.sendall(b"*2\r\n$4\r\nPTTL\r\n$5\r\npxkey\r\n")
+            pxkey_pttl_reply = recv_line(sock)
+            if not pxkey_pttl_reply.startswith(b":"):
+                raise AssertionError(f"unexpected pxkey PTTL reply: {pxkey_pttl_reply!r}")
+            pxkey_pttl = int(pxkey_pttl_reply[1:-2])
+            if pxkey_pttl <= 0 or pxkey_pttl > 1200:
+                raise AssertionError(f"unexpected pxkey PTTL value: {pxkey_pttl}")
+            roundtrip(sock, b"*3\r\n$3\r\nSET\r\n$5\r\naxkey\r\n$5\r\nvalue\r\n", b"+OK\r\n")
+            ax_deadline = int(time.time() * 1000) + 2500
+            ax_deadline_bytes = str(ax_deadline).encode()
+            ax_request = (
+                b"*4\r\n$5\r\nGETEX\r\n$5\r\naxkey\r\n$4\r\nPXAT\r\n$"
+                + str(len(ax_deadline_bytes)).encode()
+                + b"\r\n"
+                + ax_deadline_bytes
+                + b"\r\n"
+            )
+            roundtrip(sock, ax_request, b"$5\r\nvalue\r\n")
+            roundtrip(sock, b"*2\r\n$11\r\nPEXPIRETIME\r\n$5\r\naxkey\r\n", f":{ax_deadline}\r\n".encode())
+            roundtrip(sock, b"*4\r\n$6\r\nPSETEX\r\n$6\r\nps-key\r\n$4\r\n1500\r\n$5\r\nvalue\r\n", b"+OK\r\n")
+            sock.sendall(b"*2\r\n$4\r\nPTTL\r\n$6\r\nps-key\r\n")
+            ps_key_pttl_reply = recv_line(sock)
+            if not ps_key_pttl_reply.startswith(b":"):
+                raise AssertionError(f"unexpected ps-key PTTL reply: {ps_key_pttl_reply!r}")
+            ps_key_pttl = int(ps_key_pttl_reply[1:-2])
+            if ps_key_pttl <= 0 or ps_key_pttl > 1500:
+                raise AssertionError(f"unexpected ps-key PTTL value: {ps_key_pttl}")
             roundtrip(sock, b"*3\r\n$3\r\nSET\r\n$3\r\nabs\r\n$5\r\nvalue\r\n", b"+OK\r\n")
             abs_deadline = int(time.time() * 1000) + 4500
             abs_deadline_bytes = str(abs_deadline).encode()
@@ -227,7 +272,7 @@ def run_smoke() -> None:
             abs_ttl_reply = recv_line(sock)
             if abs_ttl_reply not in (b":3\r\n", b":4\r\n", b":5\r\n"):
                 raise AssertionError(f"unexpected abs TTL reply: {abs_ttl_reply!r}")
-            roundtrip(sock, b"*2\r\n$3\r\nDEL\r\n$3\r\nabs\r\n", b":1\r\n")
+            roundtrip(sock, b"*6\r\n$3\r\nDEL\r\n$3\r\nabs\r\n$3\r\nsec\r\n$5\r\npxkey\r\n$5\r\naxkey\r\n$6\r\nps-key\r\n", b":5\r\n")
             roundtrip(sock, b"*1\r\n$5\r\nMULTI\r\n", b"+OK\r\n")
             roundtrip(sock, b"*3\r\n$3\r\nSET\r\n$4\r\nmkey\r\n$4\r\nmval\r\n", b"+QUEUED\r\n")
             roundtrip(sock, b"*2\r\n$3\r\nGET\r\n$4\r\nmkey\r\n", b"+QUEUED\r\n")

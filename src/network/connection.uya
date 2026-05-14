@@ -2046,6 +2046,9 @@ fn connection_should_append_aof(command: &Command, reply: &CommandReply) bool {
     if reply.typ == CommandReplyType.reply_error {
         return false;
     }
+    if command.info.cmd_type == CommandType.command_getex {
+        return command.argc > 2;
+    }
     if command.info.cmd_type == CommandType.command_sort {
         if command.argc < 4 {
             return false;

@@ -156,6 +156,27 @@ fn aof_parse_u64(data: &[byte]) !u64 {
     return value;
 }
 
+fn aof_ascii_lower(ch: byte) byte {
+    if ch >= 65 as byte && ch <= 90 as byte {
+        return ch + 32 as byte;
+    }
+    return ch;
+}
+
+fn aof_keyword_eq(a: &[byte], b: &[byte]) bool {
+    if a.len != b.len {
+        return false;
+    }
+    var i: usize = 0;
+    while i < a.len {
+        if aof_ascii_lower(a.ptr[i]) != aof_ascii_lower(b.ptr[i]) {
+            return false;
+        }
+        i = i + 1;
+    }
+    return true;
+}
+
 fn aof_append_u64(aof: &AofWriter, value: u64) !void {
     if value == 0u64 {
         try aof_append_raw(aof, &"0"[0: 1]);
@@ -273,6 +294,18 @@ fn aof_sds_append_set_command(s: &Sds, key: &[byte], value: &[byte]) !void {
     try aof_sds_append_bulk(s, value);
 }
 
+fn aof_append_persist_command(aof: &AofWriter, key: &[byte]) !void {
+    try aof_append_raw(aof, &"*2\r\n"[0: 4]);
+    try aof_append_bulk(aof, &"PERSIST"[0: 7]);
+    try aof_append_bulk(aof, key);
+}
+
+fn aof_sds_append_persist_command(s: &Sds, key: &[byte]) !void {
+    try aof_sds_append(s, &"*2\r\n"[0: 4]);
+    try aof_sds_append_bulk(s, &"PERSIST"[0: 7]);
+    try aof_sds_append_bulk(s, key);
+}
+
 fn aof_append_expire_as_pexpireat(aof: &AofWriter, command: &Command, now_ms: u64) !void {
     const key: &[byte] = command_arg_data(command, 1) catch {
         return error.AofInvalidCommand;
@@ -295,6 +328,28 @@ fn aof_sds_append_expire_as_pexpireat(s: &Sds, command: &Command, now_ms: u64) !
     const seconds: u64 = try aof_parse_u64(seconds_data);
     const expire_at_ms: u64 = now_ms + seconds * 1000u64;
     try aof_sds_append_absolute_pexpireat(s, key, expire_at_ms);
+}
+
+fn aof_append_expireat_as_pexpireat(aof: &AofWriter, command: &Command) !void {
+    const key: &[byte] = command_arg_data(command, 1) catch {
+        return error.AofInvalidCommand;
+    };
+    const seconds_data: &[byte] = command_arg_data(command, 2) catch {
+        return error.AofInvalidCommand;
+    };
+    const seconds: u64 = try aof_parse_u64(seconds_data);
+    try aof_append_absolute_pexpireat(aof, key, seconds * 1000u64);
+}
+
+fn aof_sds_append_expireat_as_pexpireat(s: &Sds, command: &Command) !void {
+    const key: &[byte] = command_arg_data(command, 1) catch {
+        return error.AofInvalidCommand;
+    };
+    const seconds_data: &[byte] = command_arg_data(command, 2) catch {
+        return error.AofInvalidCommand;
+    };
+    const seconds: u64 = try aof_parse_u64(seconds_data);
+    try aof_sds_append_absolute_pexpireat(s, key, seconds * 1000u64);
 }
 
 fn aof_append_relative_pexpire_as_pexpireat(aof: &AofWriter, command: &Command, now_ms: u64) !void {
@@ -349,9 +404,137 @@ fn aof_sds_append_setex_as_set_and_pexpireat(s: &Sds, command: &Command, now_ms:
     try aof_sds_append_absolute_pexpireat(s, key, now_ms + seconds * 1000u64);
 }
 
+fn aof_append_psetex_as_set_and_pexpireat(aof: &AofWriter, command: &Command, now_ms: u64) !void {
+    const key: &[byte] = command_arg_data(command, 1) catch {
+        return error.AofInvalidCommand;
+    };
+    const milliseconds_data: &[byte] = command_arg_data(command, 2) catch {
+        return error.AofInvalidCommand;
+    };
+    const value: &[byte] = command_arg_data(command, 3) catch {
+        return error.AofInvalidCommand;
+    };
+    const milliseconds: u64 = try aof_parse_u64(milliseconds_data);
+    try aof_append_set_command(aof, key, value);
+    try aof_append_absolute_pexpireat(aof, key, now_ms + milliseconds);
+}
+
+fn aof_sds_append_psetex_as_set_and_pexpireat(s: &Sds, command: &Command, now_ms: u64) !void {
+    const key: &[byte] = command_arg_data(command, 1) catch {
+        return error.AofInvalidCommand;
+    };
+    const milliseconds_data: &[byte] = command_arg_data(command, 2) catch {
+        return error.AofInvalidCommand;
+    };
+    const value: &[byte] = command_arg_data(command, 3) catch {
+        return error.AofInvalidCommand;
+    };
+    const milliseconds: u64 = try aof_parse_u64(milliseconds_data);
+    try aof_sds_append_set_command(s, key, value);
+    try aof_sds_append_absolute_pexpireat(s, key, now_ms + milliseconds);
+}
+
+fn aof_append_getex_state_change(aof: &AofWriter, command: &Command, now_ms: u64) !void {
+    const key: &[byte] = command_arg_data(command, 1) catch {
+        return error.AofInvalidCommand;
+    };
+    if command.argc == 2 {
+        return;
+    }
+    if command.argc == 3 {
+        const option: &[byte] = command_arg_data(command, 2) catch {
+            return error.AofInvalidCommand;
+        };
+        if aof_keyword_eq(option, &"PERSIST"[0: 7]) {
+            try aof_append_persist_command(aof, key);
+            return;
+        }
+        return error.AofInvalidCommand;
+    }
+
+    const option: &[byte] = command_arg_data(command, 2) catch {
+        return error.AofInvalidCommand;
+    };
+    const expire_data: &[byte] = command_arg_data(command, 3) catch {
+        return error.AofInvalidCommand;
+    };
+    if aof_keyword_eq(option, &"EX"[0: 2]) {
+        const seconds: u64 = try aof_parse_u64(expire_data);
+        try aof_append_absolute_pexpireat(aof, key, now_ms + seconds * 1000u64);
+        return;
+    }
+    if aof_keyword_eq(option, &"PX"[0: 2]) {
+        const milliseconds: u64 = try aof_parse_u64(expire_data);
+        try aof_append_absolute_pexpireat(aof, key, now_ms + milliseconds);
+        return;
+    }
+    if aof_keyword_eq(option, &"EXAT"[0: 4]) {
+        const seconds_at: u64 = try aof_parse_u64(expire_data);
+        try aof_append_absolute_pexpireat(aof, key, seconds_at * 1000u64);
+        return;
+    }
+    if aof_keyword_eq(option, &"PXAT"[0: 4]) {
+        const milliseconds_at: u64 = try aof_parse_u64(expire_data);
+        try aof_append_absolute_pexpireat(aof, key, milliseconds_at);
+        return;
+    }
+    return error.AofInvalidCommand;
+}
+
+fn aof_sds_append_getex_state_change(s: &Sds, command: &Command, now_ms: u64) !void {
+    const key: &[byte] = command_arg_data(command, 1) catch {
+        return error.AofInvalidCommand;
+    };
+    if command.argc == 2 {
+        return;
+    }
+    if command.argc == 3 {
+        const option: &[byte] = command_arg_data(command, 2) catch {
+            return error.AofInvalidCommand;
+        };
+        if aof_keyword_eq(option, &"PERSIST"[0: 7]) {
+            try aof_sds_append_persist_command(s, key);
+            return;
+        }
+        return error.AofInvalidCommand;
+    }
+
+    const option: &[byte] = command_arg_data(command, 2) catch {
+        return error.AofInvalidCommand;
+    };
+    const expire_data: &[byte] = command_arg_data(command, 3) catch {
+        return error.AofInvalidCommand;
+    };
+    if aof_keyword_eq(option, &"EX"[0: 2]) {
+        const seconds: u64 = try aof_parse_u64(expire_data);
+        try aof_sds_append_absolute_pexpireat(s, key, now_ms + seconds * 1000u64);
+        return;
+    }
+    if aof_keyword_eq(option, &"PX"[0: 2]) {
+        const milliseconds: u64 = try aof_parse_u64(expire_data);
+        try aof_sds_append_absolute_pexpireat(s, key, now_ms + milliseconds);
+        return;
+    }
+    if aof_keyword_eq(option, &"EXAT"[0: 4]) {
+        const seconds_at: u64 = try aof_parse_u64(expire_data);
+        try aof_sds_append_absolute_pexpireat(s, key, seconds_at * 1000u64);
+        return;
+    }
+    if aof_keyword_eq(option, &"PXAT"[0: 4]) {
+        const milliseconds_at: u64 = try aof_parse_u64(expire_data);
+        try aof_sds_append_absolute_pexpireat(s, key, milliseconds_at);
+        return;
+    }
+    return error.AofInvalidCommand;
+}
+
 export fn aof_append_command_at(aof: &AofWriter, command: &Command, raw: &[byte], now_ms: u64) !void {
     if command.info.cmd_type == CommandType.command_expire {
         try aof_append_expire_as_pexpireat(aof, command, now_ms);
+        return;
+    }
+    if command.info.cmd_type == CommandType.command_expireat {
+        try aof_append_expireat_as_pexpireat(aof, command);
         return;
     }
     if command.info.cmd_type == CommandType.command_pexpire {
@@ -362,6 +545,14 @@ export fn aof_append_command_at(aof: &AofWriter, command: &Command, raw: &[byte]
         try aof_append_setex_as_set_and_pexpireat(aof, command, now_ms);
         return;
     }
+    if command.info.cmd_type == CommandType.command_psetex {
+        try aof_append_psetex_as_set_and_pexpireat(aof, command, now_ms);
+        return;
+    }
+    if command.info.cmd_type == CommandType.command_getex {
+        try aof_append_getex_state_change(aof, command, now_ms);
+        return;
+    }
     try aof_append_raw(aof, raw);
 }
 
@@ -370,12 +561,24 @@ export fn aof_append_command_to_sds_at(buf: &Sds, command: &Command, raw: &[byte
         try aof_sds_append_expire_as_pexpireat(buf, command, now_ms);
         return;
     }
+    if command.info.cmd_type == CommandType.command_expireat {
+        try aof_sds_append_expireat_as_pexpireat(buf, command);
+        return;
+    }
     if command.info.cmd_type == CommandType.command_pexpire {
         try aof_sds_append_relative_pexpire_as_pexpireat(buf, command, now_ms);
         return;
     }
     if command.info.cmd_type == CommandType.command_setex {
         try aof_sds_append_setex_as_set_and_pexpireat(buf, command, now_ms);
+        return;
+    }
+    if command.info.cmd_type == CommandType.command_psetex {
+        try aof_sds_append_psetex_as_set_and_pexpireat(buf, command, now_ms);
+        return;
+    }
+    if command.info.cmd_type == CommandType.command_getex {
+        try aof_sds_append_getex_state_change(buf, command, now_ms);
         return;
     }
     try aof_sds_append(buf, raw);

@@ -456,6 +456,7 @@
 - [x] `redis-cli` stdin/pipeline 兼容第一批：连接层单次读入可批量消费多帧，`redis-cli` 通过 `COMMAND DOCS` 探测后的事务管线 smoke 可稳定完成
 - [x] `COMMAND DOCS` 无参数全量 docs 输出与大响应发送路径第一批已收口
 - [x] `COMMAND GETKEYS` / `COMMAND GETKEYSANDFLAGS` 当前命令表支持已落地：覆盖 range key spec、多 key/成对 key、`RENAME` 双 key、`SORT ... STORE` movablekeys 和基础 key flags
+- [x] String/Generic TTL 扩展已落地：`GETEX`、`PSETEX`、`EXPIREAT`、`EXPIRETIME`、`PEXPIRETIME` 已覆盖 unit、AOF absolute replay、TCP、redis-py 与 redis-cli smoke
 - [x] 管理面第二批运行时配置已落地：`CONFIG SET` 支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`masterauth`、`replicaof`、`maxclients`、`databases`，并覆盖 `CONFIG GET/REWRITE` 验证、运行时 `maxclients` 生效与 rewrite 落盘
 - [x] `CLIENT` 管理面最小闭环已落地：`LIST/KILL/PAUSE/UNPAUSE/TRACKING/TRACKINGINFO/GETREDIR` 已覆盖当前连接注册、pause 控制和 tracking redirect 查询的 unit/integration 闭环
 - [x] 连接管理 `RESET` 已落地：覆盖 RESP3/PubSub/MULTI/WATCH/TRACKING/AUTH 连接上下文重置，并把 RESP2 订阅态允许命令扩展到 `RESET`

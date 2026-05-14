@@ -15,11 +15,11 @@
 
 | status | count |
 |--------|-------|
-| `full` | `104` |
+| `full` | `109` |
 | `partial` | `42` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `356` |
+| `deferred` | `351` |
 
 ## Group counts
 
@@ -198,8 +198,8 @@
 | `exec` | `transactions` | `full` | `-` | `1` | `-` | `no` | `@slow, @transaction` |
 | `exists` | `generic` | `full` | `-` | `-2` | `-` | `no` | `@keyspace, @read, @fast` |
 | `expire` | `generic` | `full` | `-` | `-3` | `-` | `no` | `@keyspace, @write, @fast` |
-| `expireat` | `generic` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@keyspace, @write, @fast` |
-| `expiretime` | `generic` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@keyspace, @read, @fast` |
+| `expireat` | `generic` | `full` | `-` | `-3` | `-` | `no` | `@keyspace, @write, @fast` |
+| `expiretime` | `generic` | `full` | `-` | `2` | `-` | `no` | `@keyspace, @read, @fast` |
 | `failover` | `server` | `deferred` | `v0.9.1` | `-1` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `fcall` | `scripting` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@slow, @scripting` |
 | `fcall_ro` | `scripting` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@slow, @scripting` |
@@ -258,7 +258,7 @@
 | `get` | `string` | `full` | `-` | `2` | `-` | `no` | `@read, @string, @fast` |
 | `getbit` | `bitmap` | `deferred` | `v0.9.2` | `3` | `-` | `no` | `@read, @bitmap, @fast` |
 | `getdel` | `string` | `full` | `-` | `2` | `-` | `no` | `@write, @string, @fast` |
-| `getex` | `string` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@write, @string, @fast` |
+| `getex` | `string` | `full` | `-` | `-2` | `-` | `no` | `@write, @string, @fast` |
 | `getrange` | `string` | `full` | `-` | `4` | `-` | `no` | `@read, @string, @slow` |
 | `getset` | `string` | `full` | `-` | `3` | `-` | `no` | `@write, @string, @fast` |
 | `hdel` | `hash` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@write, @hash, @fast` |
@@ -381,14 +381,14 @@
 | `persist` | `generic` | `full` | `-` | `2` | `-` | `no` | `@keyspace, @write, @fast` |
 | `pexpire` | `generic` | `full` | `-` | `-3` | `-` | `no` | `@keyspace, @write, @fast` |
 | `pexpireat` | `generic` | `full` | `-` | `-3` | `-` | `no` | `@keyspace, @write, @fast` |
-| `pexpiretime` | `generic` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@keyspace, @read, @fast` |
+| `pexpiretime` | `generic` | `full` | `-` | `2` | `-` | `no` | `@keyspace, @read, @fast` |
 | `pfadd` | `hyperloglog` | `deferred` | `v0.9.2` | `-2` | `-` | `no` | `@write, @hyperloglog, @fast` |
 | `pfcount` | `hyperloglog` | `deferred` | `v0.9.2` | `-2` | `-` | `no` | `@read, @hyperloglog, @slow` |
 | `pfdebug` | `hyperloglog` | `deferred` | `v0.9.2` | `3` | `-` | `no` | `@write, @hyperloglog, @admin, @slow, @dangerous` |
 | `pfmerge` | `hyperloglog` | `deferred` | `v0.9.2` | `-2` | `-` | `no` | `@write, @hyperloglog, @slow` |
 | `pfselftest` | `hyperloglog` | `deferred` | `v0.9.2` | `1` | `-` | `no` | `@hyperloglog, @admin, @slow, @dangerous` |
 | `ping` | `connection` | `deferred` | `v0.9.1` | `-1` | `-` | `no` | `@fast, @connection` |
-| `psetex` | `string` | `deferred` | `v0.9.1` | `4` | `-` | `no` | `@write, @string, @slow` |
+| `psetex` | `string` | `full` | `-` | `4` | `-` | `no` | `@write, @string, @slow` |
 | `psubscribe` | `pubsub` | `full` | `-` | `-2` | `-` | `yes` | `@pubsub, @slow` |
 | `psync` | `server` | `partial` | `-` | `-3` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `pttl` | `generic` | `full` | `-` | `2` | `-` | `no` | `@keyspace, @read, @fast` |

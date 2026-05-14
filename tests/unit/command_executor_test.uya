@@ -642,6 +642,13 @@ export fn test_command_command_getkeys() !void {
     command_reply_cleanup(&getkeys_watch_reply);
     resp_value_free(&getkeys_watch_parsed.value);
 
+    var getkeys_getex_parsed: RespParseResult = try parse_resp2(&"*5\r\n$7\r\nCOMMAND\r\n$15\r\nGETKEYSANDFLAGS\r\n$5\r\nGETEX\r\n$3\r\nkey\r\n$7\r\nPERSIST\r\n"[0: 72]);
+    const getkeys_getex_command: Command = try command_executor_test_command(&router, &getkeys_getex_parsed);
+    var getkeys_getex_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &getkeys_getex_command, 1000u64);
+    try assert_true(command_executor_test_contains(getkeys_getex_reply.data, &"$3\r\nkey\r\n*3\r\n$2\r\nRW\r\n$6\r\naccess\r\n$6\r\nupdate\r\n"[0: 45]));
+    command_reply_cleanup(&getkeys_getex_reply);
+    resp_value_free(&getkeys_getex_parsed.value);
+
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);
 }
@@ -2294,6 +2301,55 @@ export fn test_command_expire_and_ttl() !void {
     try assert_eq_i32(abs_ttl_reply.integer as i32, 4);
     resp_value_free(&abs_ttl_parsed.value);
 
+    var set_sec_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$3\r\nsec\r\n$5\r\nvalue\r\n"[0: 33]);
+    const set_sec_command: Command = try command_executor_test_command(&router, &set_sec_parsed);
+    _ = command_execute_at(&engine, &set_sec_command, 10000u64);
+    resp_value_free(&set_sec_parsed.value);
+
+    var expireat_parsed: RespParseResult = try parse_resp2(&"*3\r\n$8\r\nEXPIREAT\r\n$3\r\nsec\r\n$2\r\n11\r\n"[0: 35]);
+    const expireat_command: Command = try command_executor_test_command(&router, &expireat_parsed);
+    const expireat_reply: CommandReply = command_execute_at(&engine, &expireat_command, 10000u64);
+    try assert_eq_i32(expireat_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(expireat_reply.integer as i32, 1);
+    resp_value_free(&expireat_parsed.value);
+
+    var expiretime_parsed: RespParseResult = try parse_resp2(&"*2\r\n$10\r\nEXPIRETIME\r\n$3\r\nsec\r\n"[0: 30]);
+    const expiretime_command: Command = try command_executor_test_command(&router, &expiretime_parsed);
+    const expiretime_reply: CommandReply = command_execute_at(&engine, &expiretime_command, 10000u64);
+    try assert_eq_i32(expiretime_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(expiretime_reply.integer as i32, 11);
+    resp_value_free(&expiretime_parsed.value);
+
+    var pexpiretime_sec_parsed: RespParseResult = try parse_resp2(&"*2\r\n$11\r\nPEXPIRETIME\r\n$3\r\nsec\r\n"[0: 31]);
+    const pexpiretime_sec_command: Command = try command_executor_test_command(&router, &pexpiretime_sec_parsed);
+    const pexpiretime_sec_reply: CommandReply = command_execute_at(&engine, &pexpiretime_sec_command, 10000u64);
+    try assert_eq_i32(pexpiretime_sec_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(pexpiretime_sec_reply.integer as i32, 11000);
+    resp_value_free(&pexpiretime_sec_parsed.value);
+
+    var getex_noopt_parsed: RespParseResult = try parse_resp2(&"*2\r\n$5\r\nGETEX\r\n$3\r\nsec\r\n"[0: 24]);
+    const getex_noopt_command: Command = try command_executor_test_command(&router, &getex_noopt_parsed);
+    var getex_noopt_reply: CommandReply = command_execute_at(&engine, &getex_noopt_command, 10000u64);
+    try assert_eq_i32(getex_noopt_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(getex_noopt_reply.data, &"value"[0: 5]));
+    command_reply_cleanup(&getex_noopt_reply);
+    resp_value_free(&getex_noopt_parsed.value);
+
+    var getex_persist_sec_parsed: RespParseResult = try parse_resp2(&"*3\r\n$5\r\nGETEX\r\n$3\r\nsec\r\n$7\r\nPERSIST\r\n"[0: 37]);
+    const getex_persist_sec_command: Command = try command_executor_test_command(&router, &getex_persist_sec_parsed);
+    var getex_persist_sec_reply: CommandReply = command_execute_at(&engine, &getex_persist_sec_command, 10000u64);
+    try assert_eq_i32(getex_persist_sec_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(getex_persist_sec_reply.data, &"value"[0: 5]));
+    command_reply_cleanup(&getex_persist_sec_reply);
+    resp_value_free(&getex_persist_sec_parsed.value);
+
+    var persist_expiretime_parsed: RespParseResult = try parse_resp2(&"*2\r\n$10\r\nEXPIRETIME\r\n$3\r\nsec\r\n"[0: 30]);
+    const persist_expiretime_command: Command = try command_executor_test_command(&router, &persist_expiretime_parsed);
+    const persist_expiretime_reply: CommandReply = command_execute_at(&engine, &persist_expiretime_command, 10000u64);
+    try assert_eq_i32(persist_expiretime_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(persist_expiretime_reply.integer as i32, -1);
+    resp_value_free(&persist_expiretime_parsed.value);
+
     var set_ms_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$2\r\nms\r\n$5\r\nvalue\r\n"[0: 32]);
     const set_ms_command: Command = try command_executor_test_command(&router, &set_ms_parsed);
     _ = command_execute_at(&engine, &set_ms_command, 6000u64);
@@ -2327,6 +2383,46 @@ export fn test_command_expire_and_ttl() !void {
     try assert_eq_i32(persisted_pttl_reply.integer as i32, -1);
     resp_value_free(&persisted_pttl_parsed.value);
 
+    var set_pxkey_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$5\r\npxkey\r\n$5\r\nvalue\r\n"[0: 35]);
+    const set_pxkey_command: Command = try command_executor_test_command(&router, &set_pxkey_parsed);
+    _ = command_execute_at(&engine, &set_pxkey_command, 12000u64);
+    resp_value_free(&set_pxkey_parsed.value);
+
+    var getex_px_parsed: RespParseResult = try parse_resp2(&"*4\r\n$5\r\nGETEX\r\n$5\r\npxkey\r\n$2\r\nPX\r\n$4\r\n1200\r\n"[0: 44]);
+    const getex_px_command: Command = try command_executor_test_command(&router, &getex_px_parsed);
+    var getex_px_reply: CommandReply = command_execute_at(&engine, &getex_px_command, 12000u64);
+    try assert_eq_i32(getex_px_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(getex_px_reply.data, &"value"[0: 5]));
+    command_reply_cleanup(&getex_px_reply);
+    resp_value_free(&getex_px_parsed.value);
+
+    var pttl_pxkey_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nPTTL\r\n$5\r\npxkey\r\n"[0: 25]);
+    const pttl_pxkey_command: Command = try command_executor_test_command(&router, &pttl_pxkey_parsed);
+    const pttl_pxkey_reply: CommandReply = command_execute_at(&engine, &pttl_pxkey_command, 12000u64);
+    try assert_eq_i32(pttl_pxkey_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(pttl_pxkey_reply.integer as i32, 1200);
+    resp_value_free(&pttl_pxkey_parsed.value);
+
+    var set_axkey_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$5\r\naxkey\r\n$5\r\nvalue\r\n"[0: 35]);
+    const set_axkey_command: Command = try command_executor_test_command(&router, &set_axkey_parsed);
+    _ = command_execute_at(&engine, &set_axkey_command, 13000u64);
+    resp_value_free(&set_axkey_parsed.value);
+
+    var getex_pxat_parsed: RespParseResult = try parse_resp2(&"*4\r\n$5\r\nGETEX\r\n$5\r\naxkey\r\n$4\r\nPXAT\r\n$5\r\n15500\r\n"[0: 47]);
+    const getex_pxat_command: Command = try command_executor_test_command(&router, &getex_pxat_parsed);
+    var getex_pxat_reply: CommandReply = command_execute_at(&engine, &getex_pxat_command, 13000u64);
+    try assert_eq_i32(getex_pxat_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(getex_pxat_reply.data, &"value"[0: 5]));
+    command_reply_cleanup(&getex_pxat_reply);
+    resp_value_free(&getex_pxat_parsed.value);
+
+    var pexpiretime_axkey_parsed: RespParseResult = try parse_resp2(&"*2\r\n$11\r\nPEXPIRETIME\r\n$5\r\naxkey\r\n"[0: 33]);
+    const pexpiretime_axkey_command: Command = try command_executor_test_command(&router, &pexpiretime_axkey_parsed);
+    const pexpiretime_axkey_reply: CommandReply = command_execute_at(&engine, &pexpiretime_axkey_command, 13000u64);
+    try assert_eq_i32(pexpiretime_axkey_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(pexpiretime_axkey_reply.integer as i32, 15500);
+    resp_value_free(&pexpiretime_axkey_parsed.value);
+
     var setex_parsed: RespParseResult = try parse_resp2(&"*4\r\n$5\r\nSETEX\r\n$6\r\nsx-key\r\n$1\r\n2\r\n$5\r\nvalue\r\n"[0: 45]);
     const setex_command: Command = try command_executor_test_command(&router, &setex_parsed);
     const setex_reply: CommandReply = command_execute_at(&engine, &setex_command, 7000u64);
@@ -2341,11 +2437,31 @@ export fn test_command_expire_and_ttl() !void {
     try assert_eq_i32(setex_ttl_reply.integer as i32, 2);
     resp_value_free(&setex_ttl_parsed.value);
 
+    var psetex_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nPSETEX\r\n$6\r\nps-key\r\n$4\r\n1500\r\n$5\r\nvalue\r\n"[0: 49]);
+    const psetex_command: Command = try command_executor_test_command(&router, &psetex_parsed);
+    const psetex_reply: CommandReply = command_execute_at(&engine, &psetex_command, 14000u64);
+    try assert_eq_i32(psetex_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(psetex_reply.data, &"OK"[0: 2]));
+    resp_value_free(&psetex_parsed.value);
+
+    var psetex_pttl_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nPTTL\r\n$6\r\nps-key\r\n"[0: 26]);
+    const psetex_pttl_command: Command = try command_executor_test_command(&router, &psetex_pttl_parsed);
+    const psetex_pttl_reply: CommandReply = command_execute_at(&engine, &psetex_pttl_command, 14000u64);
+    try assert_eq_i32(psetex_pttl_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(psetex_pttl_reply.integer as i32, 1500);
+    resp_value_free(&psetex_pttl_parsed.value);
+
     var sx_expired_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nGET\r\n$6\r\nsx-key\r\n"[0: 25]);
     const sx_expired_command: Command = try command_executor_test_command(&router, &sx_expired_parsed);
     const sx_expired_reply: CommandReply = command_execute_at(&engine, &sx_expired_command, 9000u64);
     try assert_eq_i32(sx_expired_reply.typ as i32, CommandReplyType.reply_null_bulk as i32);
     resp_value_free(&sx_expired_parsed.value);
+
+    var ps_expired_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nGET\r\n$6\r\nps-key\r\n"[0: 25]);
+    const ps_expired_command: Command = try command_executor_test_command(&router, &ps_expired_parsed);
+    const ps_expired_reply: CommandReply = command_execute_at(&engine, &ps_expired_command, 15600u64);
+    try assert_eq_i32(ps_expired_reply.typ as i32, CommandReplyType.reply_null_bulk as i32);
+    resp_value_free(&ps_expired_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);
@@ -2970,6 +3086,24 @@ export fn test_command_error_paths() !void {
     const setex_bad_reply: CommandReply = command_execute_at(&engine, &setex_bad_command, 1000u64);
     try assert_eq_i32(setex_bad_reply.typ as i32, CommandReplyType.reply_error as i32);
     resp_value_free(&setex_bad_parsed.value);
+
+    var psetex_bad_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nPSETEX\r\n$3\r\nkey\r\n$3\r\nbad\r\n$5\r\nvalue\r\n"[0: 45]);
+    const psetex_bad_command: Command = try command_executor_test_command(&router, &psetex_bad_parsed);
+    const psetex_bad_reply: CommandReply = command_execute_at(&engine, &psetex_bad_command, 1000u64);
+    try assert_eq_i32(psetex_bad_reply.typ as i32, CommandReplyType.reply_error as i32);
+    resp_value_free(&psetex_bad_parsed.value);
+
+    var expireat_bad_parsed: RespParseResult = try parse_resp2(&"*3\r\n$8\r\nEXPIREAT\r\n$3\r\nkey\r\n$3\r\nbad\r\n"[0: 36]);
+    const expireat_bad_command: Command = try command_executor_test_command(&router, &expireat_bad_parsed);
+    const expireat_bad_reply: CommandReply = command_execute_at(&engine, &expireat_bad_command, 1000u64);
+    try assert_eq_i32(expireat_bad_reply.typ as i32, CommandReplyType.reply_error as i32);
+    resp_value_free(&expireat_bad_parsed.value);
+
+    var getex_bad_parsed: RespParseResult = try parse_resp2(&"*3\r\n$5\r\nGETEX\r\n$3\r\nkey\r\n$3\r\nBAD\r\n"[0: 33]);
+    const getex_bad_command: Command = try command_executor_test_command(&router, &getex_bad_parsed);
+    const getex_bad_reply: CommandReply = command_execute_at(&engine, &getex_bad_command, 1000u64);
+    try assert_eq_i32(getex_bad_reply.typ as i32, CommandReplyType.reply_error as i32);
+    resp_value_free(&getex_bad_parsed.value);
 
     var incrbyfloat_bad_arg_parsed: RespParseResult = try parse_resp2(&"*3\r\n$11\r\nINCRBYFLOAT\r\n$3\r\nkey\r\n$3\r\nbad\r\n"[0: 42]);
     const incrbyfloat_bad_arg_command: Command = try command_executor_test_command(&router, &incrbyfloat_bad_arg_parsed);

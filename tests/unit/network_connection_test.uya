@@ -177,6 +177,9 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const setex_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$5\r\nSETEX\r\n$6\r\nsx-key\r\n$1\r\n2\r\n$5\r\nvalue\r\n"[0: 45], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: setex_result.response_len], &"+OK\r\n"[0: 5]));
 
+    const psetex_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$6\r\nPSETEX\r\n$6\r\nps-key\r\n$4\r\n1500\r\n$5\r\nvalue\r\n"[0: 49], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: psetex_result.response_len], &"+OK\r\n"[0: 5]));
+
     const strlen_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$6\r\nSTRLEN\r\n$3\r\nkey\r\n"[0: 25], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: strlen_result.response_len], &":5\r\n"[0: 4]));
 
@@ -198,6 +201,12 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const getdel_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$6\r\nGETDEL\r\n$6\r\ngd-key\r\n"[0: 28], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: getdel_result.response_len], &"$4\r\nonce\r\n"[0: 10]));
 
+    const getex_noopt_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$5\r\nGETEX\r\n$3\r\nkey\r\n"[0: 24], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: getex_noopt_result.response_len], &"$7\r\nvalue__\r\n"[0: 13]));
+
+    const getex_persist_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$5\r\nGETEX\r\n$6\r\nsx-key\r\n$7\r\nPERSIST\r\n"[0: 40], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: getex_persist_result.response_len], &"$5\r\nvalue\r\n"[0: 11]));
+
     const counter_del_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$3\r\nDEL\r\n$7\r\ncounter\r\n"[0: 26], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: counter_del_result.response_len], &":1\r\n"[0: 4]));
 
@@ -212,6 +221,9 @@ export fn test_connection_process_ping_set_get_quit() !void {
 
     const sx_del_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$3\r\nDEL\r\n$6\r\nsx-key\r\n"[0: 25], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: sx_del_result.response_len], &":1\r\n"[0: 4]));
+
+    const ps_del_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$3\r\nDEL\r\n$6\r\nps-key\r\n"[0: 25], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: ps_del_result.response_len], &":1\r\n"[0: 4]));
 
     const echo_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$4\r\nECHO\r\n$2\r\nhi\r\n"[0: 22], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: echo_result.response_len], &"$2\r\nhi\r\n"[0: 8]));
@@ -278,6 +290,39 @@ export fn test_connection_process_ping_set_get_quit() !void {
 
     const persisted_pttl_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$4\r\nPTTL\r\n$3\r\nkey\r\n"[0: 23], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: persisted_pttl_result.response_len], &":-1\r\n"[0: 5]));
+
+    const expireat_seed_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$3\r\nSET\r\n$3\r\nabs\r\n$5\r\nvalue\r\n"[0: 33], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: expireat_seed_result.response_len], &"+OK\r\n"[0: 5]));
+
+    const expireat_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$8\r\nEXPIREAT\r\n$3\r\nabs\r\n$1\r\n3\r\n"[0: 34], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: expireat_result.response_len], &":1\r\n"[0: 4]));
+
+    const expiretime_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$10\r\nEXPIRETIME\r\n$3\r\nabs\r\n"[0: 30], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: expiretime_result.response_len], &":3\r\n"[0: 4]));
+
+    const pexpiretime_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$11\r\nPEXPIRETIME\r\n$3\r\nabs\r\n"[0: 31], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: pexpiretime_result.response_len], &":3000\r\n"[0: 7]));
+
+    const getex_px_seed_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$3\r\nSET\r\n$5\r\npxkey\r\n$5\r\nvalue\r\n"[0: 35], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: getex_px_seed_result.response_len], &"+OK\r\n"[0: 5]));
+
+    const getex_px_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$5\r\nGETEX\r\n$5\r\npxkey\r\n$2\r\nPX\r\n$4\r\n1200\r\n"[0: 44], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: getex_px_result.response_len], &"$5\r\nvalue\r\n"[0: 11]));
+
+    const pxkey_pttl_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$4\r\nPTTL\r\n$5\r\npxkey\r\n"[0: 25], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: pxkey_pttl_result.response_len], &":1200\r\n"[0: 7]));
+
+    const getex_pxat_seed_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$3\r\nSET\r\n$5\r\naxkey\r\n$5\r\nvalue\r\n"[0: 35], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: getex_pxat_seed_result.response_len], &"+OK\r\n"[0: 5]));
+
+    const getex_pxat_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$5\r\nGETEX\r\n$5\r\naxkey\r\n$4\r\nPXAT\r\n$5\r\n15500\r\n"[0: 47], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: getex_pxat_result.response_len], &"$5\r\nvalue\r\n"[0: 11]));
+
+    const axkey_pexpiretime_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$11\r\nPEXPIRETIME\r\n$5\r\naxkey\r\n"[0: 33], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: axkey_pexpiretime_result.response_len], &":15500\r\n"[0: 8]));
+
+    const ttl_cleanup_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$3\r\nDEL\r\n$3\r\nabs\r\n$5\r\npxkey\r\n$5\r\naxkey\r\n"[0: 44], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: ttl_cleanup_result.response_len], &":3\r\n"[0: 4]));
 
     const bgsave_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*1\r\n$6\r\nBGSAVE\r\n"[0: 16], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: bgsave_result.response_len], &"+Background saving scheduled\r\n"[0: 30]));

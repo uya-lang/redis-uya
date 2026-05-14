@@ -39,7 +39,8 @@
 - RESP2 最小子集解析：Simple String、Error、Integer、Bulk String、Array、Incomplete、非法输入
 - RESP3 最小协议闭环：`HELLO 2/3` 连接级协议切换，支持 Null、Boolean、Map 等常用 RESP3 类型解析和 RESP3 Null 回复
 - 命令路由：最小命令表、大小写匹配、参数数量校验、未知命令错误、RESP Array 转命令
-- String/Key/Control 命令执行：`PING`、`GET`、`SET`、`DEL`、`EXISTS`、`EXPIRE`、`TTL`、`INFO` 多 section、`CONFIG GET/HELP/RESETSTAT`、`CLIENT` 兼容子集、`AUTH`、`SAVE`
+- String/Key/Control 命令执行：`PING`、`GET`、`SET`、`DEL`、`EXISTS`、`EXPIRE`、`EXPIREAT`、`EXPIRETIME`、`PEXPIRE`、`PEXPIREAT`、`PEXPIRETIME`、`PERSIST`、`TTL`、`PTTL`、`INFO` 多 section、`CONFIG GET/HELP/RESETSTAT`、`CLIENT` 兼容子集、`AUTH`、`SAVE`
+- String TTL 扩展：`GETEX`、`SETEX`、`PSETEX`
 - Hash 最小对象：基于项目内 `Dict` 的最小 hash value 容器
 - Hash 命令子集：`HSET`、`HGET`
 - List 最小对象：基于双向链表的最小 list value 容器
@@ -55,7 +56,7 @@
 - `BGSAVE`：真实 `fork/waitpid` 子进程落盘，支持去掉 AOF 后仅靠 RDB 恢复
 - AOF 最小闭环：写命令追加、启动回放、截断损坏安全失败、SET/DEL 重启恢复 smoke
 - 启动恢复顺序：先加载最小 RDB，再回放 AOF
-- AOF TTL 语义：`EXPIRE` 追加时转换为 `PEXPIREAT`，回放保持绝对过期时间
+- AOF TTL 语义：`EXPIRE`、`EXPIREAT`、`PEXPIRE`、`SETEX`、`PSETEX` 追加时会规范化为绝对 `PEXPIREAT`；`GETEX` 在带 TTL/PERSIST 选项时只落对应状态变更，回放保持绝对过期时间
 - `BGREWRITEAOF`：真实子进程后台 rewrite + 父进程增量缓冲合并，可把当前内存态规范化重写为可回放 AOF
 - 复制角色与状态机：支持 master/slave 角色切换、`REPLICAOF` 控制入口、`INFO replication` 与复制配置可观测
 - `PSYNC / backlog`：master 维护复制积压缓冲区，支持 `FULLRESYNC` / `CONTINUE` 最小握手判断
@@ -92,7 +93,7 @@
 
 下一阶段：
 
-- `v0.9.1`：继续推进单机命令全集矩阵、连接/管理面补齐和兼容边界收敛；当前已完成官方命令全集矩阵、`COMMAND*` 第一批与 `COMMAND DOCS` 全量输出、`COMMAND GETKEYS*` 当前命令表支持、全局 `CLIENT LIST`、`CONFIG SET` 第二批运行时字段（`port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`masterauth`、`replicaof`、`maxclients`、`databases`）、`CONFIG REWRITE` 对应第二批核心字段落盘、`CLIENT KILL/PAUSE/TRACKING/GETREDIR` 最小闭环，以及 pattern Pub/Sub 第一批、`PUBSUB` 管理面第一批、RESP2/RESP3 订阅态命令限制边界与断开清理；待续 standalone 错误边界、Streams、Lua/Functions、RESP3 兼容矩阵和复制/持久化收敛。
+- `v0.9.1`：继续推进单机命令全集矩阵、连接/管理面补齐和兼容边界收敛；当前已完成官方命令全集矩阵、`COMMAND*` 第一批与 `COMMAND DOCS` 全量输出、`COMMAND GETKEYS*` 当前命令表支持、String/Generic TTL 扩展（`GETEX`、`PSETEX`、`EXPIREAT`、`EXPIRETIME`、`PEXPIRETIME`）、全局 `CLIENT LIST`、`CONFIG SET` 第二批运行时字段（`port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`masterauth`、`replicaof`、`maxclients`、`databases`）、`CONFIG REWRITE` 对应第二批核心字段落盘、`CLIENT KILL/PAUSE/TRACKING/GETREDIR` 最小闭环，以及 pattern Pub/Sub 第一批、`PUBSUB` 管理面第一批、RESP2/RESP3 订阅态命令限制边界与断开清理；待续 standalone 错误边界、Streams、Lua/Functions、RESP3 兼容矩阵和复制/持久化收敛。
 - `v0.9.2`：进入高级数据能力阶段，覆盖 Bitmap、Bitfield、HyperLogLog、Geo、JSON、Search、Time Series、概率结构和 Vector。
 - `v0.9.3`：进入运维、安全与可观测阶段，覆盖 ACL、TLS、`CLIENT/CONFIG/INFO/SLOWLOG/LATENCY/MEMORY/MONITOR` 等管理面深化。
 

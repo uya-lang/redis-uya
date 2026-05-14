@@ -805,6 +805,98 @@ if [[ "$KEEP_DEL_RESULT" != "1" ]]; then
     exit 1
 fi
 
+SEC_SET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" set sec value)"
+if [[ "$SEC_SET_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected OK on sec SET, got '$SEC_SET_RESULT'" >&2
+    exit 1
+fi
+
+SEC_DEADLINE="$(( $(date +%s) + 4 ))"
+EXPIREAT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" expireat sec "$SEC_DEADLINE")"
+if [[ "$EXPIREAT_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected EXPIREAT 1, got '$EXPIREAT_RESULT'" >&2
+    exit 1
+fi
+
+EXPIRETIME_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" expiretime sec)"
+if [[ "$EXPIRETIME_RESULT" != "$SEC_DEADLINE" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected EXPIRETIME $SEC_DEADLINE, got '$EXPIRETIME_RESULT'" >&2
+    exit 1
+fi
+
+PEXPIRETIME_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" pexpiretime sec)"
+if [[ "$PEXPIRETIME_RESULT" != "$(( SEC_DEADLINE * 1000 ))" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected PEXPIRETIME $(( SEC_DEADLINE * 1000 )), got '$PEXPIRETIME_RESULT'" >&2
+    exit 1
+fi
+
+GETEX_NOOPT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" getex sec)"
+if [[ "$GETEX_NOOPT_RESULT" != "value" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected GETEX sec value, got '$GETEX_NOOPT_RESULT'" >&2
+    exit 1
+fi
+
+GETEX_PERSIST_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" getex sec persist)"
+if [[ "$GETEX_PERSIST_RESULT" != "value" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected GETEX sec persist value, got '$GETEX_PERSIST_RESULT'" >&2
+    exit 1
+fi
+
+SEC_EXPIRETIME_PERSISTED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" expiretime sec)"
+if [[ "$SEC_EXPIRETIME_PERSISTED_RESULT" != "-1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected persisted EXPIRETIME -1, got '$SEC_EXPIRETIME_PERSISTED_RESULT'" >&2
+    exit 1
+fi
+
+PXKEY_SET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" set pxkey value)"
+if [[ "$PXKEY_SET_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected OK on pxkey SET, got '$PXKEY_SET_RESULT'" >&2
+    exit 1
+fi
+
+GETEX_PX_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" getex pxkey px 1200)"
+if [[ "$GETEX_PX_RESULT" != "value" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected GETEX pxkey px value, got '$GETEX_PX_RESULT'" >&2
+    exit 1
+fi
+
+PXKEY_PTTL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" pttl pxkey)"
+if ! [[ "$PXKEY_PTTL_RESULT" =~ ^[0-9]+$ ]] || [[ "$PXKEY_PTTL_RESULT" -le 0 ]] || [[ "$PXKEY_PTTL_RESULT" -gt 1200 ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected pxkey PTTL in (0,1200], got '$PXKEY_PTTL_RESULT'" >&2
+    exit 1
+fi
+
+AXKEY_SET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" set axkey value)"
+if [[ "$AXKEY_SET_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected OK on axkey SET, got '$AXKEY_SET_RESULT'" >&2
+    exit 1
+fi
+
+AX_DEADLINE_MS="$(( $(date +%s) * 1000 + 2500 ))"
+GETEX_PXAT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" getex axkey pxat "$AX_DEADLINE_MS")"
+if [[ "$GETEX_PXAT_RESULT" != "value" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected GETEX axkey pxat value, got '$GETEX_PXAT_RESULT'" >&2
+    exit 1
+fi
+
+AXKEY_PEXPIRETIME_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" pexpiretime axkey)"
+if [[ "$AXKEY_PEXPIRETIME_RESULT" != "$AX_DEADLINE_MS" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected axkey PEXPIRETIME $AX_DEADLINE_MS, got '$AXKEY_PEXPIRETIME_RESULT'" >&2
+    exit 1
+fi
+
+PSETEX_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" psetex ps-key 1500 value)"
+if [[ "$PSETEX_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected PSETEX OK, got '$PSETEX_RESULT'" >&2
+    exit 1
+fi
+
+PS_KEY_PTTL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" pttl ps-key)"
+if ! [[ "$PS_KEY_PTTL_RESULT" =~ ^[0-9]+$ ]] || [[ "$PS_KEY_PTTL_RESULT" -le 0 ]] || [[ "$PS_KEY_PTTL_RESULT" -gt 1500 ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ps-key PTTL in (0,1500], got '$PS_KEY_PTTL_RESULT'" >&2
+    exit 1
+fi
+
 ABS_SET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" set abs value)"
 if [[ "$ABS_SET_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected OK on abs SET, got '$ABS_SET_RESULT'" >&2
@@ -827,6 +919,12 @@ fi
 ABS_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del abs)"
 if [[ "$ABS_DEL_RESULT" != "1" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected abs DEL 1, got '$ABS_DEL_RESULT'" >&2
+    exit 1
+fi
+
+TTL_EXTRA_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del sec pxkey axkey ps-key)"
+if [[ "$TTL_EXTRA_DEL_RESULT" != "4" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected TTL extra DEL 4, got '$TTL_EXTRA_DEL_RESULT'" >&2
     exit 1
 fi
 

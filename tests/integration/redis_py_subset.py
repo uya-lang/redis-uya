@@ -133,6 +133,9 @@ class RedisPySubsetClient:
     def setex(self, key: str, seconds: int, value: str) -> bool:
         return self._request(b"SETEX", key.encode(), str(seconds).encode(), value.encode()) == "OK"
 
+    def psetex(self, key: str, milliseconds: int, value: str) -> bool:
+        return self._request(b"PSETEX", key.encode(), str(milliseconds).encode(), value.encode()) == "OK"
+
     def mget(self, *keys: str) -> list[bytes | None]:
         result = self._request(b"MGET", *(key.encode() for key in keys))
         assert isinstance(result, list)
@@ -179,6 +182,12 @@ class RedisPySubsetClient:
 
     def getdel(self, key: str) -> bytes | None:
         return self._request(b"GETDEL", key.encode())
+
+    def getex(self, key: str, *parts: str) -> bytes | None:
+        encoded: list[bytes] = [b"GETEX", key.encode()]
+        for part in parts:
+            encoded.append(part.encode())
+        return self._request(*encoded)
 
     def key_type(self, key: str) -> str:
         result = self._request(b"TYPE", key.encode())
@@ -247,6 +256,15 @@ class RedisPySubsetClient:
 
     def pexpireat(self, key: str, unix_ms: int) -> bool:
         return int(self._request(b"PEXPIREAT", key.encode(), str(unix_ms).encode())) == 1
+
+    def expireat(self, key: str, unix_s: int) -> bool:
+        return int(self._request(b"EXPIREAT", key.encode(), str(unix_s).encode())) == 1
+
+    def expiretime(self, key: str) -> int:
+        return int(self._request(b"EXPIRETIME", key.encode()))
+
+    def pexpiretime(self, key: str) -> int:
+        return int(self._request(b"PEXPIRETIME", key.encode()))
 
     def hset(self, key: str, field: str, value: str) -> int:
         return int(self._request(b"HSET", key.encode(), field.encode(), value.encode()))
@@ -632,13 +650,34 @@ def run_smoke() -> None:
             assert client.persist("ms")
             assert client.pttl("ms") == -1
             assert client.delete("ms") == 1
+            assert client.set("sec", "value")
+            sec_deadline = int(time.time()) + 4
+            assert client.expireat("sec", sec_deadline)
+            assert client.expiretime("sec") == sec_deadline
+            assert client.pexpiretime("sec") == sec_deadline * 1000
+            assert client.getex("sec") == b"value"
+            assert client.getex("sec", "PERSIST") == b"value"
+            assert client.expiretime("sec") == -1
+            assert client.set("pxkey", "value")
+            assert client.getex("pxkey", "PX", "1200") == b"value"
+            pxkey_pttl = client.pttl("pxkey")
+            if pxkey_pttl <= 0 or pxkey_pttl > 1200:
+                raise AssertionError(f"unexpected pxkey pttl: {pxkey_pttl}")
+            assert client.set("axkey", "value")
+            axkey_deadline = int(time.time() * 1000) + 2500
+            assert client.getex("axkey", "PXAT", str(axkey_deadline)) == b"value"
+            assert client.pexpiretime("axkey") == axkey_deadline
+            assert client.psetex("ps-key", 1500, "value")
+            ps_key_pttl = client.pttl("ps-key")
+            if ps_key_pttl <= 0 or ps_key_pttl > 1500:
+                raise AssertionError(f"unexpected ps-key pttl: {ps_key_pttl}")
             assert client.set("abs", "value")
             abs_deadline = int(time.time() * 1000) + 4500
             assert client.pexpireat("abs", abs_deadline)
             abs_ttl = client.ttl("abs")
             if abs_ttl < 3 or abs_ttl > 5:
                 raise AssertionError(f"unexpected abs ttl: {abs_ttl}")
-            assert client.delete("abs") == 1
+            assert client.delete("abs", "sec", "pxkey", "axkey", "ps-key") == 5
             assert client.save()
             if client.lastsave() <= 0:
                 raise AssertionError("expected LASTSAVE > 0")

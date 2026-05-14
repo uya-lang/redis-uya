@@ -551,4 +551,65 @@ export fn test_aof_expire_replays_absolute_deadline() !void {
     engine_free(&replay_setex_engine);
     _ = unlink(setex_path);
     try assert_eq_i32(used_memory() as i32, 0);
+
+    const psetex_path: &const byte = "build/test-aof-psetex.aof";
+    _ = unlink(psetex_path);
+
+    var psetex_writer: AofWriter = try aof_open_truncate(psetex_path);
+    var psetex_engine: Engine = engine_new();
+    _ = try connection_process_input_with_aof_at(
+        &psetex_engine,
+        &router,
+        &psetex_writer,
+        &"*4\r\n$6\r\nPSETEX\r\n$6\r\nps-key\r\n$4\r\n1500\r\n$5\r\nvalue\r\n"[0: 49],
+        &out[0],
+        256,
+        1000u64,
+    );
+    aof_close(&psetex_writer);
+    engine_free(&psetex_engine);
+
+    var replay_psetex_engine: Engine = engine_new();
+    try aof_replay_file_at(psetex_path, &replay_psetex_engine, &router, 2000u64);
+    const live_psetex: &RedisObject = try lookup_key_at(&replay_psetex_engine, &"ps-key"[0: 6], 2000u64);
+    try assert_true(aof_test_slice_eq(live_psetex.value.buf[0: live_psetex.value.len], &"value"[0: 5]));
+    try assert_true(aof_key_missing_at(&replay_psetex_engine, &"ps-key"[0: 6], 2600u64));
+    engine_free(&replay_psetex_engine);
+    _ = unlink(psetex_path);
+    try assert_eq_i32(used_memory() as i32, 0);
+
+    const getex_path: &const byte = "build/test-aof-getex-px.aof";
+    _ = unlink(getex_path);
+
+    var getex_writer: AofWriter = try aof_open_truncate(getex_path);
+    var getex_engine: Engine = engine_new();
+    _ = try connection_process_input_with_aof_at(
+        &getex_engine,
+        &router,
+        &getex_writer,
+        &"*3\r\n$3\r\nSET\r\n$5\r\npxkey\r\n$5\r\nvalue\r\n"[0: 35],
+        &out[0],
+        256,
+        1000u64,
+    );
+    _ = try connection_process_input_with_aof_at(
+        &getex_engine,
+        &router,
+        &getex_writer,
+        &"*4\r\n$5\r\nGETEX\r\n$5\r\npxkey\r\n$2\r\nPX\r\n$4\r\n1200\r\n"[0: 44],
+        &out[0],
+        256,
+        1000u64,
+    );
+    aof_close(&getex_writer);
+    engine_free(&getex_engine);
+
+    var replay_getex_engine: Engine = engine_new();
+    try aof_replay_file_at(getex_path, &replay_getex_engine, &router, 2000u64);
+    const live_getex: &RedisObject = try lookup_key_at(&replay_getex_engine, &"pxkey"[0: 5], 2000u64);
+    try assert_true(aof_test_slice_eq(live_getex.value.buf[0: live_getex.value.len], &"value"[0: 5]));
+    try assert_true(aof_key_missing_at(&replay_getex_engine, &"pxkey"[0: 5], 2300u64));
+    engine_free(&replay_getex_engine);
+    _ = unlink(getex_path);
+    try assert_eq_i32(used_memory() as i32, 0);
 }

@@ -295,6 +295,49 @@ SETEX key seconds value
 - 当前实现要求 `seconds > 0`
 - AOF 中会展开为 `SET` + 绝对 `PEXPIREAT`
 
+### `PSETEX`
+
+格式：
+
+```text
+PSETEX key milliseconds value
+```
+
+返回：
+
+- 成功：`+OK`
+
+说明：
+
+- 当前实现要求 `milliseconds > 0`
+- AOF 中会展开为 `SET` + 绝对 `PEXPIREAT`
+
+### `GETEX`
+
+格式：
+
+```text
+GETEX key
+GETEX key PERSIST
+GETEX key EX seconds
+GETEX key PX milliseconds
+GETEX key EXAT unix-time-seconds
+GETEX key PXAT unix-time-milliseconds
+```
+
+返回：
+
+- 命中：返回 Bulk String
+- 不存在：Null Bulk
+
+说明：
+
+- 无附加选项时只返回当前值，不改变 TTL
+- `PERSIST` 会移除当前 TTL
+- `EX` / `PX` 要求值大于 `0`
+- `EXAT` / `PXAT` 使用绝对时间；若时间点已到或已过，会在返回当前值后删除 key
+- AOF 中只写入 TTL / `PERSIST` 状态变更；相对 TTL 选项会折算成绝对 `PEXPIREAT`
+
 ### `HINCRBY`
 
 格式：
@@ -1095,6 +1138,25 @@ EXPIRE key seconds
 - 秒数为 `0` 立即删除
 - AOF 中会转换为绝对时间 `PEXPIREAT`
 
+### `EXPIREAT`
+
+格式：
+
+```text
+EXPIREAT key unix_s
+```
+
+返回：
+
+- 设置成功：`1`
+- 键不存在：`0`
+
+说明：
+
+- 使用 Unix 秒级绝对时间
+- 若目标时间点已到或已过，会立即删除 key
+- AOF 中会转换为绝对时间 `PEXPIREAT`
+
 ### `PEXPIRE`
 
 格式：
@@ -1142,6 +1204,34 @@ PEXPIREAT key unix_ms
 说明：
 
 - 当前主要用于 AOF 回放保持绝对过期时间
+
+### `EXPIRETIME`
+
+格式：
+
+```text
+EXPIRETIME key
+```
+
+返回：
+
+- 键不存在：`-2`
+- 无过期时间：`-1`
+- 否则返回 Unix 秒级绝对过期时间
+
+### `PEXPIRETIME`
+
+格式：
+
+```text
+PEXPIRETIME key
+```
+
+返回：
+
+- 键不存在：`-2`
+- 无过期时间：`-1`
+- 否则返回 Unix 毫秒级绝对过期时间
 
 ### `TTL`
 

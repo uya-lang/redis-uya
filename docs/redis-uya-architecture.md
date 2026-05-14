@@ -159,7 +159,8 @@ server open
 ## 8. AOF 语义
 
 - 写命令直接追加 RESP2 原始请求
-- `EXPIRE` 追加时重写成绝对时间 `PEXPIREAT`
+- `EXPIRE`、`EXPIREAT`、`PEXPIRE`、`SETEX`、`PSETEX` 会在 AOF 里规范化为绝对时间 `PEXPIREAT`
+- `GETEX` 在带 TTL / `PERSIST` 选项时只把状态变更写入 AOF；相对 TTL 选项同样折算成绝对 `PEXPIREAT`
 - 回放按流式解析逐条执行
 - `BGREWRITEAOF` 使用子进程写出规范化 AOF 快照，父进程继续追加旧 AOF 并记录 rewrite 增量缓冲，子进程结束后合并并原子替换
 - 截断、非法协议、非法命令、执行错误都会安全失败

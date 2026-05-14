@@ -1397,6 +1397,7 @@ SUBSCRIBE channel [channel ...]
 - 当前实现为固定容量连接级订阅注册表
 - RESP2 订阅态下只允许继续执行 `SUBSCRIBE/PSUBSCRIBE/UNSUBSCRIBE/PUNSUBSCRIBE/PING/QUIT`
 - RESP3 订阅态下，非 Pub/Sub 命令仍可继续执行
+- 连接关闭后会自动清理该连接持有的频道订阅项
 
 ### `PSUBSCRIBE`
 
@@ -1430,6 +1431,7 @@ UNSUBSCRIBE channel [channel ...]
 说明：
 
 - 显式频道取消订阅后，后续 `PUBLISH` 不再向该连接推送对应消息
+- 连接关闭后也会自动移除该连接持有的频道订阅项
 
 ### `PUNSUBSCRIBE`
 

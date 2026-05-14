@@ -217,3 +217,4 @@ bash scripts/verify_definition_of_done.sh
 |--------|------|
 | Pub/Sub pattern 第一批可用：`PSUBSCRIBE`、`PUNSUBSCRIBE`、`PUBLISH` 对 pattern 订阅推送 `pmessage`，并把直连/模式匹配接收者一起计入返回值 | `src/command/router.uya`、`src/network/connection.uya`、`tests/unit/command_router_test.uya`、`tests/unit/network_connection_test.uya`、`tests/unit/test_runner.uya`、`tests/integration/pubsub_smoke.py` |
 | Pub/Sub 订阅态命令限制第一批可用：RESP2 订阅态仅允许 `SUBSCRIBE/PSUBSCRIBE/UNSUBSCRIBE/PUNSUBSCRIBE/PING/QUIT`，RESP3 订阅态保持非 Pub/Sub 命令可用 | `src/network/connection.uya`、`tests/unit/network_connection_test.uya`、`tests/unit/test_runner.uya`、`tests/integration/pubsub_smoke.py` |
+| Pub/Sub 断开清理可用：连接关闭后会移除其频道/模式订阅项，后续 `PUBLISH` 不再把已断开连接计入接收者数量 | `src/server.uya`、`src/network/connection.uya`、`tests/integration/pubsub_smoke.py` |

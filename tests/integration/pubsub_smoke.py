@@ -162,6 +162,23 @@ def run_smoke() -> None:
                     extra = b""
                 if extra != b"":
                     raise AssertionError(f"unexpected message after unsubscribe: {extra!r}")
+
+                with connect_with_retry(port, time.monotonic() + 5.0) as ghost_sock:
+                    ghost_sock.settimeout(2.0)
+                    roundtrip(
+                        ghost_sock,
+                        b"*2\r\n$9\r\nSUBSCRIBE\r\n$5\r\nghost\r\n",
+                        b"*3\r\n$9\r\nsubscribe\r\n$5\r\nghost\r\n:1\r\n",
+                    )
+                time.sleep(0.2)
+
+                with connect_with_retry(port, time.monotonic() + 5.0) as pub_sock:
+                    pub_sock.settimeout(2.0)
+                    roundtrip(
+                        pub_sock,
+                        b"*3\r\n$7\r\nPUBLISH\r\n$5\r\nghost\r\n$4\r\npost\r\n",
+                        b":0\r\n",
+                    )
     finally:
         stop_process(proc)
         aof_path.unlink(missing_ok=True)

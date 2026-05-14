@@ -109,11 +109,17 @@ FULL_NAMES = {
     "hello",
     "hget",
     "hgetall",
+    "hdel",
+    "hexists",
     "hincrby",
     "hincrbyfloat",
     "hkeys",
+    "hlen",
+    "hmget",
     "hscan",
     "hset",
+    "hsetnx",
+    "hstrlen",
     "hvals",
     "incr",
     "incrby",
@@ -913,9 +919,9 @@ def render_docs(entries: list[CommandEntry]) -> str:
     group_counter = Counter(entry.group for entry in entries)
     lines: list[str] = []
     lines.append("# redis-uya command matrix\n\n")
-    lines.append("> version: v0.9.1-dev  \n")
-    lines.append(f"> date: {today}  \n")
-    lines.append("> source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`  \n")
+    lines.append("> version: v0.9.1-dev\n")
+    lines.append(f"> date: {today}\n")
+    lines.append("> source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`\n")
     lines.append("> runtime source: `src/command/catalog_generated.uya`\n\n")
     lines.append("## Summary\n\n")
     lines.append(f"- tracked official command names: `{total}`\n")

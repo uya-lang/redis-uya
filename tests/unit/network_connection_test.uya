@@ -340,6 +340,33 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const hincrbyfloat_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$12\r\nHINCRBYFLOAT\r\n$4\r\nhash\r\n$5\r\nratio\r\n$3\r\n1.5\r\n"[0: 53], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: hincrbyfloat_result.response_len], &"$3\r\n1.5\r\n"[0: 9]));
 
+    const hexists_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$7\r\nHEXISTS\r\n$4\r\nhash\r\n$5\r\nfield\r\n"[0: 38], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: hexists_result.response_len], &":1\r\n"[0: 4]));
+
+    const hlen_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$4\r\nHLEN\r\n$4\r\nhash\r\n"[0: 24], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: hlen_result.response_len], &":3\r\n"[0: 4]));
+
+    const hstrlen_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$7\r\nHSTRLEN\r\n$4\r\nhash\r\n$5\r\nfield\r\n"[0: 38], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: hstrlen_result.response_len], &":5\r\n"[0: 4]));
+
+    const hmget_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$5\r\nHMGET\r\n$4\r\nhash\r\n$5\r\nfield\r\n$7\r\nmissing\r\n$7\r\ncounter\r\n"[0: 62], &out[0], 256, 1000u64);
+    try assert_true(network_connection_contains(out[0: hmget_result.response_len], &"*3\r\n"[0: 4]));
+    try assert_true(network_connection_contains(out[0: hmget_result.response_len], &"$5\r\nvalue\r\n"[0: 11]));
+    try assert_true(network_connection_contains(out[0: hmget_result.response_len], &"$-1\r\n"[0: 5]));
+    try assert_true(network_connection_contains(out[0: hmget_result.response_len], &"$1\r\n2\r\n"[0: 7]));
+
+    const hsetnx_new_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$6\r\nHSETNX\r\n$4\r\nhash\r\n$5\r\nextra\r\n$5\r\nvalue\r\n"[0: 48], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: hsetnx_new_result.response_len], &":1\r\n"[0: 4]));
+
+    const hsetnx_dup_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$6\r\nHSETNX\r\n$4\r\nhash\r\n$5\r\nfield\r\n$4\r\nnext\r\n"[0: 47], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: hsetnx_dup_result.response_len], &":0\r\n"[0: 4]));
+
+    const hdel_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$4\r\nHDEL\r\n$4\r\nhash\r\n$5\r\nfield\r\n$7\r\ncounter\r\n$5\r\nextra\r\n"[0: 59], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: hdel_result.response_len], &":3\r\n"[0: 4]));
+
+    const hlen_after_hdel_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$4\r\nHLEN\r\n$4\r\nhash\r\n"[0: 24], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: hlen_after_hdel_result.response_len], &":1\r\n"[0: 4]));
+
     const lpush_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$5\r\nLPUSH\r\n$4\r\nlist\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\nc\r\n"[0: 46], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: lpush_result.response_len], &":3\r\n"[0: 4]));
 

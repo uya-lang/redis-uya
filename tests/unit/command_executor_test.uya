@@ -1554,6 +1554,132 @@ export fn test_command_hkeys_hvals_hgetall() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_command_hdel_hexists_hlen_hmget_hsetnx_hstrlen() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var out: [byte: 256] = [];
+
+    var hset_field_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nHSET\r\n$4\r\nhash\r\n$5\r\nfield\r\n$5\r\nvalue\r\n"[0: 46]);
+    const hset_field_command: Command = try command_executor_test_command(&router, &hset_field_parsed);
+    _ = command_execute_at(&engine, &hset_field_command, 1000u64);
+    resp_value_free(&hset_field_parsed.value);
+
+    var hincrby_counter_parsed: RespParseResult = try parse_resp2(&"*4\r\n$7\r\nHINCRBY\r\n$4\r\nhash\r\n$7\r\ncounter\r\n$1\r\n2\r\n"[0: 47]);
+    const hincrby_counter_command: Command = try command_executor_test_command(&router, &hincrby_counter_parsed);
+    _ = command_execute_at(&engine, &hincrby_counter_command, 1000u64);
+    resp_value_free(&hincrby_counter_parsed.value);
+
+    var hexists_field_parsed: RespParseResult = try parse_resp2(&"*3\r\n$7\r\nHEXISTS\r\n$4\r\nhash\r\n$5\r\nfield\r\n"[0: 38]);
+    const hexists_field_command: Command = try command_executor_test_command(&router, &hexists_field_parsed);
+    const hexists_field_reply: CommandReply = command_execute_at(&engine, &hexists_field_command, 1000u64);
+    try assert_eq_i32(hexists_field_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(hexists_field_reply.integer as i32, 1);
+    resp_value_free(&hexists_field_parsed.value);
+
+    var hexists_missing_parsed: RespParseResult = try parse_resp2(&"*3\r\n$7\r\nHEXISTS\r\n$4\r\nhash\r\n$7\r\nmissing\r\n"[0: 40]);
+    const hexists_missing_command: Command = try command_executor_test_command(&router, &hexists_missing_parsed);
+    const hexists_missing_reply: CommandReply = command_execute_at(&engine, &hexists_missing_command, 1000u64);
+    try assert_eq_i32(hexists_missing_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(hexists_missing_reply.integer as i32, 0);
+    resp_value_free(&hexists_missing_parsed.value);
+
+    var hlen_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nHLEN\r\n$4\r\nhash\r\n"[0: 24]);
+    const hlen_command: Command = try command_executor_test_command(&router, &hlen_parsed);
+    const hlen_reply: CommandReply = command_execute_at(&engine, &hlen_command, 1000u64);
+    try assert_eq_i32(hlen_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(hlen_reply.integer as i32, 2);
+    resp_value_free(&hlen_parsed.value);
+
+    var hstrlen_field_parsed: RespParseResult = try parse_resp2(&"*3\r\n$7\r\nHSTRLEN\r\n$4\r\nhash\r\n$5\r\nfield\r\n"[0: 38]);
+    const hstrlen_field_command: Command = try command_executor_test_command(&router, &hstrlen_field_parsed);
+    const hstrlen_field_reply: CommandReply = command_execute_at(&engine, &hstrlen_field_command, 1000u64);
+    try assert_eq_i32(hstrlen_field_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(hstrlen_field_reply.integer as i32, 5);
+    resp_value_free(&hstrlen_field_parsed.value);
+
+    var hstrlen_missing_parsed: RespParseResult = try parse_resp2(&"*3\r\n$7\r\nHSTRLEN\r\n$4\r\nhash\r\n$7\r\nmissing\r\n"[0: 40]);
+    const hstrlen_missing_command: Command = try command_executor_test_command(&router, &hstrlen_missing_parsed);
+    const hstrlen_missing_reply: CommandReply = command_execute_at(&engine, &hstrlen_missing_command, 1000u64);
+    try assert_eq_i32(hstrlen_missing_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(hstrlen_missing_reply.integer as i32, 0);
+    resp_value_free(&hstrlen_missing_parsed.value);
+
+    var hmget_parsed: RespParseResult = try parse_resp2(&"*5\r\n$5\r\nHMGET\r\n$4\r\nhash\r\n$5\r\nfield\r\n$7\r\nmissing\r\n$7\r\ncounter\r\n"[0: 62]);
+    const hmget_command: Command = try command_executor_test_command(&router, &hmget_parsed);
+    var hmget_reply: CommandReply = command_execute_at(&engine, &hmget_command, 1000u64);
+    const hmget_len: usize = try connection_encode_reply(&hmget_reply, &out[0], 256);
+    try assert_true(command_executor_test_contains(out[0: hmget_len], &"*3\r\n"[0: 4]));
+    try assert_true(command_executor_test_contains(out[0: hmget_len], &"$5\r\nvalue\r\n"[0: 11]));
+    try assert_true(command_executor_test_contains(out[0: hmget_len], &"$-1\r\n"[0: 5]));
+    try assert_true(command_executor_test_contains(out[0: hmget_len], &"$1\r\n2\r\n"[0: 7]));
+    command_reply_cleanup(&hmget_reply);
+    resp_value_free(&hmget_parsed.value);
+
+    var hsetnx_new_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nHSETNX\r\n$4\r\nhash\r\n$5\r\nextra\r\n$5\r\nvalue\r\n"[0: 48]);
+    const hsetnx_new_command: Command = try command_executor_test_command(&router, &hsetnx_new_parsed);
+    const hsetnx_new_reply: CommandReply = command_execute_at(&engine, &hsetnx_new_command, 1000u64);
+    try assert_eq_i32(hsetnx_new_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(hsetnx_new_reply.integer as i32, 1);
+    resp_value_free(&hsetnx_new_parsed.value);
+
+    var hsetnx_dup_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nHSETNX\r\n$4\r\nhash\r\n$5\r\nfield\r\n$4\r\nnext\r\n"[0: 47]);
+    const hsetnx_dup_command: Command = try command_executor_test_command(&router, &hsetnx_dup_parsed);
+    const hsetnx_dup_reply: CommandReply = command_execute_at(&engine, &hsetnx_dup_command, 1000u64);
+    try assert_eq_i32(hsetnx_dup_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(hsetnx_dup_reply.integer as i32, 0);
+    resp_value_free(&hsetnx_dup_parsed.value);
+
+    var hget_field_parsed: RespParseResult = try parse_resp2(&"*3\r\n$4\r\nHGET\r\n$4\r\nhash\r\n$5\r\nfield\r\n"[0: 35]);
+    const hget_field_command: Command = try command_executor_test_command(&router, &hget_field_parsed);
+    const hget_field_reply: CommandReply = command_execute_at(&engine, &hget_field_command, 1000u64);
+    try assert_eq_i32(hget_field_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_contains(hget_field_reply.data, &"value"[0: 5]));
+    resp_value_free(&hget_field_parsed.value);
+
+    var hdel_two_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nHDEL\r\n$4\r\nhash\r\n$5\r\nfield\r\n$7\r\ncounter\r\n"[0: 48]);
+    const hdel_two_command: Command = try command_executor_test_command(&router, &hdel_two_parsed);
+    const hdel_two_reply: CommandReply = command_execute_at(&engine, &hdel_two_command, 1000u64);
+    try assert_eq_i32(hdel_two_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(hdel_two_reply.integer as i32, 2);
+    resp_value_free(&hdel_two_parsed.value);
+
+    var hlen_after_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nHLEN\r\n$4\r\nhash\r\n"[0: 24]);
+    const hlen_after_command: Command = try command_executor_test_command(&router, &hlen_after_parsed);
+    const hlen_after_reply: CommandReply = command_execute_at(&engine, &hlen_after_command, 1000u64);
+    try assert_eq_i32(hlen_after_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(hlen_after_reply.integer as i32, 1);
+    resp_value_free(&hlen_after_parsed.value);
+
+    var hdel_extra_parsed: RespParseResult = try parse_resp2(&"*3\r\n$4\r\nHDEL\r\n$4\r\nhash\r\n$5\r\nextra\r\n"[0: 35]);
+    const hdel_extra_command: Command = try command_executor_test_command(&router, &hdel_extra_parsed);
+    const hdel_extra_reply: CommandReply = command_execute_at(&engine, &hdel_extra_command, 1000u64);
+    try assert_eq_i32(hdel_extra_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(hdel_extra_reply.integer as i32, 1);
+    resp_value_free(&hdel_extra_parsed.value);
+
+    var hlen_empty_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nHLEN\r\n$4\r\nhash\r\n"[0: 24]);
+    const hlen_empty_command: Command = try command_executor_test_command(&router, &hlen_empty_parsed);
+    const hlen_empty_reply: CommandReply = command_execute_at(&engine, &hlen_empty_command, 1000u64);
+    try assert_eq_i32(hlen_empty_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(hlen_empty_reply.integer as i32, 0);
+    resp_value_free(&hlen_empty_parsed.value);
+
+    var set_str_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$3\r\nstr\r\n$5\r\nvalue\r\n"[0: 33]);
+    const set_str_command: Command = try command_executor_test_command(&router, &set_str_parsed);
+    _ = command_execute_at(&engine, &set_str_command, 1000u64);
+    resp_value_free(&set_str_parsed.value);
+
+    var hlen_wrongtype_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nHLEN\r\n$3\r\nstr\r\n"[0: 23]);
+    const hlen_wrongtype_command: Command = try command_executor_test_command(&router, &hlen_wrongtype_parsed);
+    const hlen_wrongtype_reply: CommandReply = command_execute_at(&engine, &hlen_wrongtype_command, 1000u64);
+    try assert_eq_i32(hlen_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    resp_value_free(&hlen_wrongtype_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_command_lpush_lpop_lrange() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();

@@ -12,8 +12,10 @@ use src.storage.dict.dict_new;
 use src.storage.dict.dict_free;
 use src.storage.dict.dict_lookup;
 use src.storage.dict.dict_insert;
+use src.storage.dict.dict_delete;
 use src.storage.dict.dict_iter_new;
 use src.storage.dict.dict_iter_next;
+use src.storage.dict.dict_len;
 use src.storage.sds.Sds;
 use src.storage.sds.sds_empty;
 use src.storage.sds.sds_new;
@@ -402,6 +404,36 @@ export fn hash_object_get_field(obj: &RedisObject, field: &[byte]) !&RedisObject
         return error.ObjectFieldNotFound;
     };
     return object_usize_to_object(value);
+}
+
+export fn hash_object_delete_field(obj: &RedisObject, field: &[byte]) !bool {
+    if obj == null || obj.obj_type != ObjectType.object_hash {
+        return error.ObjectWrongType;
+    }
+    const value_result: !usize = dict_lookup(&obj.hash_dict, field);
+    const value: usize = value_result catch {
+        return false;
+    };
+    object_free(object_usize_to_object(value));
+    return dict_delete(&obj.hash_dict, field);
+}
+
+export fn hash_object_exists_field(obj: &RedisObject, field: &[byte]) !bool {
+    if obj == null || obj.obj_type != ObjectType.object_hash {
+        return error.ObjectWrongType;
+    }
+    const value_result: !usize = dict_lookup(&obj.hash_dict, field);
+    _ = value_result catch {
+        return false;
+    };
+    return true;
+}
+
+export fn hash_object_len(obj: &RedisObject) !usize {
+    if obj == null || obj.obj_type != ObjectType.object_hash {
+        return error.ObjectWrongType;
+    }
+    return dict_len(&obj.hash_dict);
 }
 
 export fn list_object_push_head(obj: &RedisObject, data: &[byte]) !usize {

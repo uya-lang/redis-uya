@@ -107,6 +107,7 @@ use tests.unit.command_executor_test.test_command_maxmemory_allkeys_lfu;
 use tests.unit.command_executor_test.test_command_hset_hget;
 use tests.unit.command_executor_test.test_command_hincrby_hincrbyfloat;
 use tests.unit.command_executor_test.test_command_hkeys_hvals_hgetall;
+use tests.unit.command_executor_test.test_command_hdel_hexists_hlen_hmget_hsetnx_hstrlen;
 use tests.unit.command_executor_test.test_command_lpush_lpop_lrange;
 use tests.unit.command_executor_test.test_command_linsert_ltrim_lrem;
 use tests.unit.command_executor_test.test_command_lpushx_rpushx_lpos;
@@ -147,6 +148,7 @@ use tests.unit.network_connection_test.test_connection_process_pubsub_introspect
 use tests.unit.network_connection_test.test_connection_process_error_paths;
 use tests.unit.persistence_aof_test.test_aof_connection_append_and_replay_set;
 use tests.unit.persistence_aof_test.test_aof_replay_set_then_del;
+use tests.unit.persistence_aof_test.test_aof_replay_hash_commands;
 use tests.unit.persistence_aof_test.test_aof_flush_persists_buffer_without_close;
 use tests.unit.persistence_aof_test.test_aof_large_append_bypasses_buffer;
 use tests.unit.persistence_aof_test.test_aof_replay_truncated_file_fails;
@@ -605,6 +607,10 @@ export fn main() i32 {
     _ = test_command_hkeys_hvals_hgetall() catch { printf("[FAIL] command_executor/hash_views\n" as *byte); failed = failed + 1; };
     if failed == before_exec_hash_views { printf("[PASS] command_executor/hash_views\n" as *byte); }
 
+    const before_exec_hash_field_ops: i32 = failed;
+    _ = test_command_hdel_hexists_hlen_hmget_hsetnx_hstrlen() catch { printf("[FAIL] command_executor/hash_field_ops\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_hash_field_ops { printf("[PASS] command_executor/hash_field_ops\n" as *byte); }
+
     const before_exec_list: i32 = failed;
     _ = test_command_lpush_lpop_lrange() catch { printf("[FAIL] command_executor/list\n" as *byte); failed = failed + 1; };
     if failed == before_exec_list { printf("[PASS] command_executor/list\n" as *byte); }
@@ -764,6 +770,10 @@ export fn main() i32 {
     const before_aof_del: i32 = failed;
     _ = test_aof_replay_set_then_del() catch { printf("[FAIL] persistence_aof/replay_del\n" as *byte); failed = failed + 1; };
     if failed == before_aof_del { printf("[PASS] persistence_aof/replay_del\n" as *byte); }
+
+    const before_aof_hash: i32 = failed;
+    _ = test_aof_replay_hash_commands() catch { printf("[FAIL] persistence_aof/replay_hash\n" as *byte); failed = failed + 1; };
+    if failed == before_aof_hash { printf("[PASS] persistence_aof/replay_hash\n" as *byte); }
 
     const before_aof_rename: i32 = failed;
     _ = test_aof_replay_rename_commands() catch { printf("[FAIL] persistence_aof/replay_rename\n" as *byte); failed = failed + 1; };

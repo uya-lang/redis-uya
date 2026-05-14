@@ -20,6 +20,7 @@ use src.storage.engine.set_key_at;
 use src.storage.object.RedisObject;
 use src.storage.object.ObjectType;
 use src.storage.object.create_string_object;
+use src.storage.object.hash_object_get_field;
 use src.storage.object.list_object_index_value;
 use src.storage.object.object_free;
 use src.memory.allocator.used_memory;
@@ -206,6 +207,80 @@ export fn test_aof_replay_set_then_del() !void {
     try assert_true(aof_key_missing_at(&engine, &"key"[0: 3], 1000u64));
     engine_free(&engine);
     _ = unlink(path);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_aof_replay_hash_commands() !void {
+    reset_memory_stats_for_test();
+    const path: &const byte = "build/test-aof-hash.aof";
+    _ = unlink(path);
+
+    var writer: AofWriter = try aof_open_truncate(path);
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var out: [byte: 256] = [];
+
+    const hsetnx_result: ConnectionProcessResult = try connection_process_input_with_aof_at(
+        &engine,
+        &router,
+        &writer,
+        &"*4\r\n$6\r\nHSETNX\r\n$4\r\nhash\r\n$5\r\nfield\r\n$5\r\nvalue\r\n"[0: 48],
+        &out[0],
+        256,
+        1000u64,
+    );
+    try assert_true(aof_test_slice_eq(out[0: hsetnx_result.response_len], &":1\r\n"[0: 4]));
+    const hsetnx_dup_result: ConnectionProcessResult = try connection_process_input_with_aof_at(
+        &engine,
+        &router,
+        &writer,
+        &"*4\r\n$6\r\nHSETNX\r\n$4\r\nhash\r\n$5\r\nfield\r\n$4\r\nnext\r\n"[0: 47],
+        &out[0],
+        256,
+        1000u64,
+    );
+    try assert_true(aof_test_slice_eq(out[0: hsetnx_dup_result.response_len], &":0\r\n"[0: 4]));
+    const hset_result: ConnectionProcessResult = try connection_process_input_with_aof_at(
+        &engine,
+        &router,
+        &writer,
+        &"*4\r\n$4\r\nHSET\r\n$4\r\nhash\r\n$6\r\nsecond\r\n$3\r\ntwo\r\n"[0: 45],
+        &out[0],
+        256,
+        1000u64,
+    );
+    try assert_true(aof_test_slice_eq(out[0: hset_result.response_len], &":1\r\n"[0: 4]));
+    const hdel_result: ConnectionProcessResult = try connection_process_input_with_aof_at(
+        &engine,
+        &router,
+        &writer,
+        &"*3\r\n$4\r\nHDEL\r\n$4\r\nhash\r\n$5\r\nfield\r\n"[0: 35],
+        &out[0],
+        256,
+        1000u64,
+    );
+    try assert_true(aof_test_slice_eq(out[0: hdel_result.response_len], &":1\r\n"[0: 4]));
+    aof_close(&writer);
+    engine_free(&engine);
+
+    var replay_engine: Engine = engine_new();
+    try aof_replay_file_at(path, &replay_engine, &router, 2000u64);
+    const hash_obj: &RedisObject = try lookup_key_at(&replay_engine, &"hash"[0: 4], 2000u64);
+    try assert_eq_i32(hash_obj.obj_type as i32, ObjectType.object_hash as i32);
+    const second_obj: &RedisObject = try hash_object_get_field(hash_obj, &"second"[0: 6]);
+    try assert_true(aof_test_slice_eq(second_obj.value.buf[0: second_obj.value.len], &"two"[0: 3]));
+    var missing_not_found: bool = false;
+    var unexpected_missing_error: bool = false;
+    const maybe_missing_result: !&RedisObject = hash_object_get_field(hash_obj, &"field"[0: 5]);
+    if maybe_missing_result.error_id == 0 {
+        unexpected_missing_error = true;
+    } else {
+        missing_not_found = true;
+    }
+    engine_free(&replay_engine);
+    _ = unlink(path);
+    try assert_eq_i32(unexpected_missing_error as i32, 0);
+    try assert_eq_i32(missing_not_found as i32, 1);
     try assert_eq_i32(used_memory() as i32, 0);
 }
 

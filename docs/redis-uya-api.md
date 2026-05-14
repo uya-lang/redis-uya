@@ -412,6 +412,93 @@ HGETALL key
 - 返回 `field, value, field, value...` 交替展开的 RESP Array
 - key 不存在时返回空 Array
 
+### `HDEL`
+
+格式：
+
+```text
+HDEL key field [field ...]
+```
+
+返回：
+
+- 返回实际删除的 field 数量，Integer
+
+说明：
+
+- key 不存在时返回 `0`
+- 删除最后一个 field 后，当前实现会直接删除整个 hash key
+
+### `HEXISTS`
+
+格式：
+
+```text
+HEXISTS key field
+```
+
+返回：
+
+- field 存在：`1`
+- field 不存在或 key 不存在：`0`
+
+### `HLEN`
+
+格式：
+
+```text
+HLEN key
+```
+
+返回：
+
+- key 不存在：`0`
+- 否则返回 field 数量
+
+### `HMGET`
+
+格式：
+
+```text
+HMGET key field [field ...]
+```
+
+返回：
+
+- 返回与请求 field 顺序一致的 RESP Array
+- 缺失 field 返回 Null Bulk
+- key 不存在时，所有请求 field 都返回 Null Bulk
+
+### `HSETNX`
+
+格式：
+
+```text
+HSETNX key field value
+```
+
+返回：
+
+- 新 field 写入成功：`1`
+- field 已存在：`0`
+
+说明：
+
+- key 不存在时会创建 hash
+
+### `HSTRLEN`
+
+格式：
+
+```text
+HSTRLEN key field
+```
+
+返回：
+
+- field 或 key 不存在：`0`
+- 否则返回对应 value 的字节长度
+
 ### `HSCAN`
 
 格式：

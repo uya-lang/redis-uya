@@ -42,7 +42,7 @@
 - String/Key/Control 命令执行：`PING`、`GET`、`SET`、`DEL`、`EXISTS`、`EXPIRE`、`EXPIREAT`、`EXPIRETIME`、`PEXPIRE`、`PEXPIREAT`、`PEXPIRETIME`、`PERSIST`、`TTL`、`PTTL`、`INFO` 多 section、`CONFIG GET/HELP/RESETSTAT`、`CLIENT` 兼容子集、`AUTH`、`SAVE`
 - String TTL 扩展：`GETEX`、`SETEX`、`PSETEX`
 - Hash 最小对象：基于项目内 `Dict` 的最小 hash value 容器
-- Hash 命令子集：`HSET`、`HGET`
+- Hash 命令子集：`HSET`、`HGET`、`HDEL`、`HEXISTS`、`HLEN`、`HMGET`、`HSETNX`、`HSTRLEN`
 - List 最小对象：基于双向链表的最小 list value 容器
 - List 命令子集：`LPUSH`、`LPOP`、`LRANGE`
 - Set 最小对象：基于项目内 `Dict` 的最小 set value 容器
@@ -93,7 +93,7 @@
 
 下一阶段：
 
-- `v0.9.1`：继续推进单机命令全集矩阵、连接/管理面补齐和兼容边界收敛；当前已完成官方命令全集矩阵、`COMMAND*` 第一批与 `COMMAND DOCS` 全量输出、`COMMAND GETKEYS*` 当前命令表支持、String/Generic TTL 扩展（`GETEX`、`PSETEX`、`EXPIREAT`、`EXPIRETIME`、`PEXPIRETIME`）、全局 `CLIENT LIST`、`CONFIG SET` 第二批运行时字段（`port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`masterauth`、`replicaof`、`maxclients`、`databases`）、`CONFIG REWRITE` 对应第二批核心字段落盘、`CLIENT KILL/PAUSE/TRACKING/GETREDIR` 最小闭环，以及 pattern Pub/Sub 第一批、`PUBSUB` 管理面第一批、RESP2/RESP3 订阅态命令限制边界与断开清理；待续 standalone 错误边界、Streams、Lua/Functions、RESP3 兼容矩阵和复制/持久化收敛。
+- `v0.9.1`：继续推进单机命令全集矩阵、连接/管理面补齐和兼容边界收敛；当前已完成官方命令全集矩阵、`COMMAND*` 第一批与 `COMMAND DOCS` 全量输出、`COMMAND GETKEYS*` 当前命令表支持、String/Generic TTL 扩展（`GETEX`、`PSETEX`、`EXPIREAT`、`EXPIRETIME`、`PEXPIRETIME`）、Hash 字段基础扩展（`HDEL`、`HEXISTS`、`HLEN`、`HMGET`、`HSETNX`、`HSTRLEN`）、全局 `CLIENT LIST`、`CONFIG SET` 第二批运行时字段（`port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`masterauth`、`replicaof`、`maxclients`、`databases`）、`CONFIG REWRITE` 对应第二批核心字段落盘、`CLIENT KILL/PAUSE/TRACKING/GETREDIR` 最小闭环，以及 pattern Pub/Sub 第一批、`PUBSUB` 管理面第一批、RESP2/RESP3 订阅态命令限制边界与断开清理；待续 standalone 错误边界、Streams、Lua/Functions、RESP3 兼容矩阵和复制/持久化收敛。
 - `v0.9.2`：进入高级数据能力阶段，覆盖 Bitmap、Bitfield、HyperLogLog、Geo、JSON、Search、Time Series、概率结构和 Vector。
 - `v0.9.3`：进入运维、安全与可观测阶段，覆盖 ACL、TLS、`CLIENT/CONFIG/INFO/SLOWLOG/LATENCY/MEMORY/MONITOR` 等管理面深化。
 

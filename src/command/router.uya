@@ -129,6 +129,12 @@ export enum CommandType {
     command_expireat,
     command_expiretime,
     command_pexpiretime,
+    command_hdel,
+    command_hexists,
+    command_hlen,
+    command_hmget,
+    command_hsetnx,
+    command_hstrlen,
 }
 
 export struct CommandInfo {
@@ -155,7 +161,7 @@ export const COMMAND_FLAG_READONLY: u64 = 1u64;
 export const COMMAND_FLAG_WRITE: u64 = 2u64;
 export const COMMAND_FLAG_FAST: u64 = 4u64;
 
-const MIN_COMMAND_COUNT: usize = 118;
+const MIN_COMMAND_COUNT: usize = 124;
 
 fn command_router_name_eq(a: &[byte], b: &[byte]) bool {
     return bytes_ascii_case_eq(a, b);
@@ -535,6 +541,24 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
     }
     if index == 117 {
         return command_router_info(CommandType.command_pexpiretime, &"PEXPIRETIME"[0: 11], 2, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 118 {
+        return command_router_info(CommandType.command_hdel, &"HDEL"[0: 4], -3, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 119 {
+        return command_router_info(CommandType.command_hexists, &"HEXISTS"[0: 7], 3, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 120 {
+        return command_router_info(CommandType.command_hlen, &"HLEN"[0: 4], 2, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 121 {
+        return command_router_info(CommandType.command_hmget, &"HMGET"[0: 5], -3, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 122 {
+        return command_router_info(CommandType.command_hsetnx, &"HSETNX"[0: 6], 4, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 123 {
+        return command_router_info(CommandType.command_hstrlen, &"HSTRLEN"[0: 7], 3, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     return error.CommandUnknown;
 }

@@ -1,8 +1,8 @@
 # redis-uya command matrix
 
-> version: v0.9.1-dev  
-> date: 2026-05-14  
-> source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`  
+> version: v0.9.1-dev
+> date: 2026-05-15
+> source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`
 > runtime source: `src/command/catalog_generated.uya`
 
 ## Summary
@@ -15,11 +15,11 @@
 
 | status | count |
 |--------|-------|
-| `full` | `109` |
+| `full` | `115` |
 | `partial` | `42` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `351` |
+| `deferred` | `345` |
 
 ## Group counts
 
@@ -261,9 +261,9 @@
 | `getex` | `string` | `full` | `-` | `-2` | `-` | `no` | `@write, @string, @fast` |
 | `getrange` | `string` | `full` | `-` | `4` | `-` | `no` | `@read, @string, @slow` |
 | `getset` | `string` | `full` | `-` | `3` | `-` | `no` | `@write, @string, @fast` |
-| `hdel` | `hash` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@write, @hash, @fast` |
+| `hdel` | `hash` | `full` | `-` | `-3` | `-` | `no` | `@write, @hash, @fast` |
 | `hello` | `connection` | `partial` | `-` | `-1` | `-` | `no` | `@fast, @connection` |
-| `hexists` | `hash` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@read, @hash, @fast` |
+| `hexists` | `hash` | `full` | `-` | `3` | `-` | `no` | `@read, @hash, @fast` |
 | `hexpire` | `hash` | `deferred` | `v0.9.1` | `-6` | `-` | `no` | `@write, @hash, @fast` |
 | `hexpireat` | `hash` | `deferred` | `v0.9.1` | `-6` | `-` | `no` | `@write, @hash, @fast` |
 | `hexpiretime` | `hash` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@read, @hash, @fast` |
@@ -274,8 +274,8 @@
 | `hincrby` | `hash` | `full` | `-` | `4` | `-` | `no` | `@write, @hash, @fast` |
 | `hincrbyfloat` | `hash` | `full` | `-` | `4` | `-` | `no` | `@write, @hash, @fast` |
 | `hkeys` | `hash` | `full` | `-` | `2` | `-` | `no` | `@read, @hash, @slow` |
-| `hlen` | `hash` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@read, @hash, @fast` |
-| `hmget` | `hash` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @hash, @fast` |
+| `hlen` | `hash` | `full` | `-` | `2` | `-` | `no` | `@read, @hash, @fast` |
+| `hmget` | `hash` | `full` | `-` | `-3` | `-` | `no` | `@read, @hash, @fast` |
 | `hmset` | `hash` | `alias` | `-` | `-4` | `-` | `no` | `@write, @hash, @fast` |
 | `hotkeys` | `server` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@slow` |
 | `hotkeys|get` | `server` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
@@ -292,8 +292,8 @@
 | `hscan` | `hash` | `full` | `-` | `-3` | `-` | `yes` | `@read, @hash, @slow` |
 | `hset` | `hash` | `full` | `-` | `-4` | `-` | `no` | `@write, @hash, @fast` |
 | `hsetex` | `hash` | `deferred` | `v0.9.1` | `-6` | `-` | `no` | `@write, @hash, @fast` |
-| `hsetnx` | `hash` | `deferred` | `v0.9.1` | `4` | `-` | `no` | `@write, @hash, @fast` |
-| `hstrlen` | `hash` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@read, @hash, @fast` |
+| `hsetnx` | `hash` | `full` | `-` | `4` | `-` | `no` | `@write, @hash, @fast` |
+| `hstrlen` | `hash` | `full` | `-` | `3` | `-` | `no` | `@read, @hash, @fast` |
 | `httl` | `hash` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@read, @hash, @fast` |
 | `hvals` | `hash` | `full` | `-` | `2` | `-` | `no` | `@read, @hash, @slow` |
 | `incr` | `string` | `full` | `-` | `2` | `-` | `no` | `@write, @string, @fast` |

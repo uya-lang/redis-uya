@@ -498,9 +498,57 @@ if [[ "$HGETALL_RESULT" != "6" ]]; then
     exit 1
 fi
 
+HEXISTS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hexists hash field)"
+if [[ "$HEXISTS_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HEXISTS 1, got '$HEXISTS_RESULT'" >&2
+    exit 1
+fi
+
+HLEN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hlen hash)"
+if [[ "$HLEN_RESULT" != "3" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HLEN 3, got '$HLEN_RESULT'" >&2
+    exit 1
+fi
+
+HMGET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hmget hash field missing counter)"
+if [[ "$HMGET_RESULT" != $'value\n\n2' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HMGET value/null/2, got '$HMGET_RESULT'" >&2
+    exit 1
+fi
+
+HSETNX_NEW_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hsetnx hash extra value)"
+if [[ "$HSETNX_NEW_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HSETNX new 1, got '$HSETNX_NEW_RESULT'" >&2
+    exit 1
+fi
+
+HSETNX_DUP_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hsetnx hash field next)"
+if [[ "$HSETNX_DUP_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HSETNX duplicate 0, got '$HSETNX_DUP_RESULT'" >&2
+    exit 1
+fi
+
+HSTRLEN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hstrlen hash field)"
+if [[ "$HSTRLEN_RESULT" != "5" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HSTRLEN 5, got '$HSTRLEN_RESULT'" >&2
+    exit 1
+fi
+
+HDEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hdel hash field counter extra)"
+if [[ "$HDEL_RESULT" != "3" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HDEL 3, got '$HDEL_RESULT'" >&2
+    exit 1
+fi
+
+HLEN_AFTER_HDEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hlen hash)"
+if [[ "$HLEN_AFTER_HDEL_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HLEN after HDEL 1, got '$HLEN_AFTER_HDEL_RESULT'" >&2
+    exit 1
+fi
+
 HSCAN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hscan hash 0 count 16 | wc -l | tr -d ' ')"
-if [[ "$HSCAN_RESULT" != "7" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected HSCAN 7 lines, got '$HSCAN_RESULT'" >&2
+if [[ "$HSCAN_RESULT" != "3" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HSCAN 3 lines, got '$HSCAN_RESULT'" >&2
     exit 1
 fi
 

@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 118);
+    try assert_eq_i32(command_router_count(&router) as i32, 124);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -439,6 +439,30 @@ export fn test_command_router_lookup_and_case() !void {
     try assert_eq_i32(hgetall.cmd_type as i32, CommandType.command_hgetall as i32);
     try assert_eq_i32(hgetall.arity, 2);
 
+    const hdel: CommandInfo = try command_router_lookup(&router, &"HDEL"[0: 4]);
+    try assert_eq_i32(hdel.cmd_type as i32, CommandType.command_hdel as i32);
+    try assert_eq_i32(hdel.arity, -3);
+
+    const hexists: CommandInfo = try command_router_lookup(&router, &"HEXISTS"[0: 7]);
+    try assert_eq_i32(hexists.cmd_type as i32, CommandType.command_hexists as i32);
+    try assert_eq_i32(hexists.arity, 3);
+
+    const hlen: CommandInfo = try command_router_lookup(&router, &"HLEN"[0: 4]);
+    try assert_eq_i32(hlen.cmd_type as i32, CommandType.command_hlen as i32);
+    try assert_eq_i32(hlen.arity, 2);
+
+    const hmget: CommandInfo = try command_router_lookup(&router, &"HMGET"[0: 5]);
+    try assert_eq_i32(hmget.cmd_type as i32, CommandType.command_hmget as i32);
+    try assert_eq_i32(hmget.arity, -3);
+
+    const hsetnx: CommandInfo = try command_router_lookup(&router, &"HSETNX"[0: 6]);
+    try assert_eq_i32(hsetnx.cmd_type as i32, CommandType.command_hsetnx as i32);
+    try assert_eq_i32(hsetnx.arity, 4);
+
+    const hstrlen: CommandInfo = try command_router_lookup(&router, &"HSTRLEN"[0: 7]);
+    try assert_eq_i32(hstrlen.cmd_type as i32, CommandType.command_hstrlen as i32);
+    try assert_eq_i32(hstrlen.arity, 3);
+
     const exists: CommandInfo = try command_router_lookup(&router, &"ExIsTs"[0: 6]);
     try assert_eq_i32(exists.cmd_type as i32, CommandType.command_exists as i32);
     try assert_eq_i32(exists.arity, -2);
@@ -538,6 +562,12 @@ export fn test_command_router_arity_validation() !void {
     const hkeys: CommandInfo = try command_router_lookup(&router, &"HKEYS"[0: 5]);
     const hvals: CommandInfo = try command_router_lookup(&router, &"HVALS"[0: 5]);
     const hgetall: CommandInfo = try command_router_lookup(&router, &"HGETALL"[0: 7]);
+    const hdel: CommandInfo = try command_router_lookup(&router, &"HDEL"[0: 4]);
+    const hexists: CommandInfo = try command_router_lookup(&router, &"HEXISTS"[0: 7]);
+    const hlen: CommandInfo = try command_router_lookup(&router, &"HLEN"[0: 4]);
+    const hmget: CommandInfo = try command_router_lookup(&router, &"HMGET"[0: 5]);
+    const hsetnx: CommandInfo = try command_router_lookup(&router, &"HSETNX"[0: 6]);
+    const hstrlen: CommandInfo = try command_router_lookup(&router, &"HSTRLEN"[0: 7]);
     const set: CommandInfo = try command_router_lookup(&router, &"SET"[0: 3]);
     const del: CommandInfo = try command_router_lookup(&router, &"DEL"[0: 3]);
     const dbsize: CommandInfo = try command_router_lookup(&router, &"DBSIZE"[0: 6]);
@@ -622,6 +652,14 @@ export fn test_command_router_arity_validation() !void {
     try command_validate_arity(&hkeys, 2);
     try command_validate_arity(&hvals, 2);
     try command_validate_arity(&hgetall, 2);
+    try command_validate_arity(&hdel, 3);
+    try command_validate_arity(&hdel, 4);
+    try command_validate_arity(&hexists, 3);
+    try command_validate_arity(&hlen, 2);
+    try command_validate_arity(&hmget, 3);
+    try command_validate_arity(&hmget, 5);
+    try command_validate_arity(&hsetnx, 4);
+    try command_validate_arity(&hstrlen, 3);
     try command_validate_arity(&set, 3);
     try command_validate_arity(&set, 5);
     try command_validate_arity(&del, 2);

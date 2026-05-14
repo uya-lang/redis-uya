@@ -295,6 +295,26 @@ class RedisPySubsetClient:
         assert isinstance(result, list)
         return result
 
+    def hdel(self, key: str, *fields: str) -> int:
+        return int(self._request(b"HDEL", key.encode(), *(field.encode() for field in fields)))
+
+    def hexists(self, key: str, field: str) -> int:
+        return int(self._request(b"HEXISTS", key.encode(), field.encode()))
+
+    def hlen(self, key: str) -> int:
+        return int(self._request(b"HLEN", key.encode()))
+
+    def hmget(self, key: str, *fields: str) -> list[bytes | None]:
+        result = self._request(b"HMGET", key.encode(), *(field.encode() for field in fields))
+        assert isinstance(result, list)
+        return result
+
+    def hsetnx(self, key: str, field: str, value: str) -> int:
+        return int(self._request(b"HSETNX", key.encode(), field.encode(), value.encode()))
+
+    def hstrlen(self, key: str, field: str) -> int:
+        return int(self._request(b"HSTRLEN", key.encode(), field.encode()))
+
     def hscan(self, key: str, cursor: int = 0, count: int | None = None) -> tuple[int, list[bytes]]:
         parts: list[bytes] = [b"HSCAN", key.encode(), str(cursor).encode()]
         if count is not None:
@@ -691,8 +711,18 @@ def run_smoke() -> None:
             hgetall = client.hgetall("hash")
             if len(hgetall) != 6:
                 raise AssertionError(f"unexpected hgetall size: {hgetall!r}")
+            assert client.hexists("hash", "field") == 1
+            assert client.hexists("hash", "missing") == 0
+            assert client.hlen("hash") == 3
+            assert client.hmget("hash", "field", "missing", "counter") == [b"value", None, b"2"]
+            assert client.hsetnx("hash", "extra", "value") == 1
+            assert client.hsetnx("hash", "field", "next") == 0
+            assert client.hstrlen("hash", "field") == 5
+            assert client.hstrlen("hash", "missing") == 0
+            assert client.hdel("hash", "field", "counter", "extra") == 3
+            assert client.hlen("hash") == 1
             cursor, hscan_items = client.hscan("hash", 0, count=16)
-            if cursor != 0 or len(hscan_items) != 6:
+            if cursor != 0 or len(hscan_items) != 2:
                 raise AssertionError(f"unexpected hscan result: cursor={cursor} items={hscan_items!r}")
 
             assert client.lpush("list", "a", "b", "c") == 3

@@ -1,8 +1,8 @@
 # redis-uya Definition of Done
 
 > 版本: v0.9.1-dev
-> 日期: 2026-05-09
-> 状态: `v0.9.1` 第一批命令矩阵与 `COMMAND*` 控制面已完成，`CONFIG SET` 第二批运行时字段已完成
+> 日期: 2026-05-14
+> 状态: `v0.9.1` 第一批命令矩阵与 `COMMAND*` 控制面已完成（含 `COMMAND DOCS` 全量输出），`CONFIG SET` 第二批运行时字段已完成
 
 ## 1. 目标
 
@@ -200,6 +200,7 @@ bash scripts/verify_definition_of_done.sh
 | 官方命令全集矩阵可追踪：基于 Redis 8.6 命令页生成 `531` 个官方命令名、状态、目标版本与基础元数据，并落盘为命令矩阵文档 | `scripts/generate_command_catalog.py`、`docs/redis-uya-command-matrix.md` |
 | 运行时共享目录可用：`src/command/catalog_generated*` 提供统一命令目录，`COMMAND` 家族与文档矩阵不再各维护一份命令名清单 | `src/command/catalog.uya`、`src/command/catalog_generated_base.uya`、`src/command/catalog_generated.uya`、`src/command/catalog_generated_part_*.uya` |
 | `COMMAND` 控制面第一批可用：`COMMAND`、`COMMAND COUNT`、`COMMAND LIST`、`COMMAND INFO`、`COMMAND DOCS` 覆盖 RESP2/RESP3 基础返回、`LIST FILTERBY PATTERN/ACLCAT/MODULE`、`INFO` 未知命令占位和 `DOCS` 未知命令忽略边界 | `src/command/router.uya`、`src/command/executor.uya`、`tests/unit/command_router_test.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/test_runner.uya`、`tests/integration/command_introspection.py` |
+| `COMMAND DOCS` 无参数全量输出可用：覆盖 `531` 个目录项的 RESP2/RESP3 全量 docs 返回，以及服务端大响应发送第一批闭环 | `src/command/executor.uya`、`src/network/connection.uya`、`src/server.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/network_connection_test.uya`、`tests/unit/test_runner.uya`、`tests/integration/command_introspection.py` |
 | `COMMAND GETKEYS` / `COMMAND GETKEYSANDFLAGS` 当前命令表支持可用：覆盖 range key spec、多 key/成对 key、`RENAME` 双 key、`SORT ... STORE` movablekeys、`RO/OW/RW/RM` 与 `access/update/insert/delete` 基础 flags 组合 | `src/command/executor.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/test_runner.uya`、`tests/integration/command_introspection.py` |
 | 单次读入批量执行可用：连接层会在一次读入中消费多个完整 RESP 顶层帧，覆盖 `MULTI/SET/GET/EXEC` 管线与 `redis-cli` stdin/pipeline 客户端路径 | `src/network/protocol.uya`、`src/network/connection.uya`、`tests/unit/network_connection_test.uya`、`tests/unit/test_runner.uya`、`tests/integration/redis_cli_smoke.sh` |
 

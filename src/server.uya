@@ -53,6 +53,8 @@ use src.storage.engine.engine_new;
 use src.storage.engine.engine_free;
 use src.storage.engine.engine_active_expire_cycle_at;
 use src.storage.engine.engine_scan_keys_at;
+use src.memory.allocator.redis_malloc;
+use src.memory.allocator.redis_free;
 use src.storage.object.RedisObject;
 use src.storage.object.ListNode;
 use src.storage.object.object_free;
@@ -101,7 +103,8 @@ const SERVER_CRON_EXPIRE_LIMIT: usize = 20;
 const SERVER_CRON_EXPIRE_MAX_ROUNDS: usize = 4;
 const SERVER_AOF_REWRITE_KEYS_PER_STEP: usize = 4;
 const SERVER_MAX_CLIENTS: usize = 64;
-const SERVER_IO_CAP: usize = 8192;
+const SERVER_INPUT_CAP: usize = 8192;
+const SERVER_OUTPUT_CAP: usize = 81920;
 const SERVER_EVENT_CAP: usize = 16;
 const SERVER_WAITPID_WNOHANG: i32 = 1;
 const SERVER_REPL_BACKLOG_BYTES: usize = 16384;
@@ -120,9 +123,9 @@ export error ServerBgsaveFailed;
 
 export struct RedisClient {
     fd: i32,
-    input: [byte: SERVER_IO_CAP],
+    input: [byte: SERVER_INPUT_CAP],
     input_len: usize,
-    output: [byte: SERVER_IO_CAP],
+    output: &byte,
     output_len: usize,
     output_sent: usize,
     close_after_write: bool,
@@ -192,6 +195,7 @@ fn server_init_clients(server: &RedisServer) void {
     while i < SERVER_MAX_CLIENTS {
         server.clients[i].fd = -1;
         server.clients[i].input_len = 0;
+        server.clients[i].output = null as &byte;
         server.clients[i].output_len = 0;
         server.clients[i].output_sent = 0;
         server.clients[i].close_after_write = false;
@@ -862,8 +866,12 @@ fn server_close_client_slot(server: &RedisServer, slot: usize) void {
     _ = sys_close(fd) catch {};
     server_client_async_release(&server.clients[slot]);
     connection_transaction_reset(&server.clients[slot].transaction);
+    if server.clients[slot].output != null {
+        redis_free(server.clients[slot].output);
+    }
     server.clients[slot].fd = -1;
     server.clients[slot].input_len = 0;
+    server.clients[slot].output = null as &byte;
     server.clients[slot].output_len = 0;
     server.clients[slot].output_sent = 0;
     server.clients[slot].close_after_write = false;
@@ -1289,8 +1297,8 @@ fn server_async_writev_all_future(fd: i32, head: &const byte, head_len: usize, b
                 &server.repl_backlog,
                 &client.transaction,
                 client.input[0: client.input_len],
-                &client.output[0],
-                SERVER_IO_CAP,
+                client.output,
+                SERVER_OUTPUT_CAP,
                 now_ms_safe(),
                 &replicaof_requested,
                 &replicaof_promote,
@@ -1373,7 +1381,7 @@ fn server_async_writev_all_future(fd: i32, head: &const byte, head_len: usize, b
                     client.output_sent = 0;
                     _ = server_send_zero_copy_immediate(
                         fd,
-                        &client.output[0] as &const byte,
+                        client.output as &const byte,
                         response_head_len,
                         zero_copy_body,
                         zero_copy_tail_len,
@@ -1382,7 +1390,7 @@ fn server_async_writev_all_future(fd: i32, head: &const byte, head_len: usize, b
                     client.output_len = response_len;
                     client.output_sent = 0;
                     if client.output_len > 0 {
-                        _ = server_send_all_immediate(fd, &client.output[0] as &const byte, client.output_len);
+                        _ = server_send_all_immediate(fd, client.output as &const byte, client.output_len);
                     }
                 }
                 return false;
@@ -1394,7 +1402,7 @@ fn server_async_writev_all_future(fd: i32, head: &const byte, head_len: usize, b
 
                 const zc_written: usize = try @await server_async_writev_all_future(
                     fd,
-                    &client.output[0] as &const byte,
+                    client.output as &const byte,
                     response_head_len,
                     zero_copy_body,
                     zero_copy_tail_len,
@@ -1408,13 +1416,13 @@ fn server_async_writev_all_future(fd: i32, head: &const byte, head_len: usize, b
                 client.output_sent = 0;
                 if client.output_len > 0 {
                     var sent_now: usize = 0;
-                    const send_status: i32 = server_send_progress_nonblocking(fd, &client.output[0] as &const byte, client.output_len, 0, &sent_now);
+                    const send_status: i32 = server_send_progress_nonblocking(fd, client.output as &const byte, client.output_len, 0, &sent_now);
                     if send_status < 0 {
                         return false;
                     }
                     var written: usize = sent_now;
                     if send_status > 0 {
-                        written = try @await server_async_send_all_from_future(fd, &client.output[0] as &const byte, client.output_len, sent_now);
+                        written = try @await server_async_send_all_from_future(fd, client.output as &const byte, client.output_len, sent_now);
                     }
                     if written < client.output_len {
                         return false;
@@ -1428,11 +1436,11 @@ fn server_async_writev_all_future(fd: i32, head: &const byte, head_len: usize, b
             client.close_after_write = false;
         }
 
-        if client.input_len >= SERVER_IO_CAP {
+        if client.input_len >= SERVER_INPUT_CAP {
             return error.ServerAofReplayFailed;
         }
         const read_ptr: &byte = @ptr_from_usize(@usize_from_ptr(&client.input[0] as &void) + client.input_len) as &byte;
-        const rn: usize = try @await server_async_read_future(fd, read_ptr, SERVER_IO_CAP - client.input_len);
+        const rn: usize = try @await server_async_read_future(fd, read_ptr, SERVER_INPUT_CAP - client.input_len);
         if rn == 0 {
             return false;
         }
@@ -1811,8 +1819,13 @@ export fn server_accept_once(server: &RedisServer) !void {
         _ = sys_close(fd) catch {};
         return;
     }
+    const output_buf: &byte = redis_malloc(SERVER_OUTPUT_CAP) catch {
+        _ = sys_close(fd) catch {};
+        return;
+    };
     server.clients[slot].fd = fd;
     server.clients[slot].input_len = 0;
+    server.clients[slot].output = output_buf;
     server.clients[slot].output_len = 0;
     server.clients[slot].output_sent = 0;
     server.clients[slot].close_after_write = false;

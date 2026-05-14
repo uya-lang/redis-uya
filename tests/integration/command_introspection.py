@@ -160,6 +160,15 @@ def run_smoke() -> None:
             if not isinstance(docs[1], list) or b"summary" not in docs[1]:
                 raise AssertionError(f"missing COMMAND DOCS summary: {docs!r}")
 
+            docs_all_resp2 = send_command(sock, b"COMMAND", b"DOCS")
+            if (
+                not isinstance(docs_all_resp2, list)
+                or len(docs_all_resp2) <= count * 2
+                or b"get" not in docs_all_resp2
+                or b"client|id" not in docs_all_resp2
+            ):
+                raise AssertionError(f"unexpected COMMAND DOCS all RESP2 payload: {docs_all_resp2!r}")
+
             help_reply = send_command(sock, b"COMMAND", b"HELP")
             if not isinstance(help_reply, list) or b"GETKEYS <full-command>" not in help_reply:
                 raise AssertionError(f"unexpected COMMAND HELP: {help_reply!r}")
@@ -176,8 +185,13 @@ def run_smoke() -> None:
                 raise AssertionError(f"unexpected RESP3 COMMAND DOCS GET payload: {resp3_docs!r}")
 
             docs_all = send_command(sock, b"COMMAND", b"DOCS")
-            if docs_all != {}:
-                raise AssertionError(f"expected empty COMMAND DOCS compatibility response, got: {docs_all!r}")
+            if (
+                not isinstance(docs_all, dict)
+                or len(docs_all) <= count
+                or not isinstance(docs_all.get(b"get"), dict)
+                or not isinstance(docs_all.get(b"client|id"), dict)
+            ):
+                raise AssertionError(f"unexpected COMMAND DOCS all RESP3 payload: {docs_all!r}")
 
             getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"SORT", b"mylist", b"ALPHA", b"STORE", b"out")
             if getkeys != [b"mylist", b"out"]:

@@ -4,7 +4,7 @@
 > 零 GC 路线 · 显式错误处理 · 可测试演进 · 长期性能目标超过 Redis
 
 > 版本: v0.9.1-dev
-> 日期: 2026-05-09
+> 日期: 2026-05-14
 
 ## 简介
 
@@ -68,7 +68,7 @@
 - 控制面兼容子集：`CLIENT ID/GETNAME/SETNAME/INFO/LIST/SETINFO/HELP/KILL/PAUSE/UNPAUSE/TRACKING/TRACKINGINFO`、`HELLO SETNAME`、`CONFIG GET/HELP/RESETSTAT/SET/REWRITE`
 - 安全基线：`requirepass`、`AUTH`、`SHUTDOWN`
 - `v0.9.1` 命令全集矩阵第一批：基于 Redis 8.6 官方命令页生成 `531` 个官方命令名目录，落地 `docs/redis-uya-command-matrix.md` 与 `src/command/catalog_generated*`
-- `COMMAND` 控制面推进中：`COMMAND`、`COMMAND COUNT`、`COMMAND LIST`、`COMMAND INFO`、`COMMAND DOCS` 共用同一份运行时目录；`COMMAND GETKEYS` / `COMMAND GETKEYSANDFLAGS` 已支持当前运行时命令表，`COMMAND DOCS` 无参数全量输出仍走兼容空集路径
+- `COMMAND` 控制面第一批已收口：`COMMAND`、`COMMAND COUNT`、`COMMAND LIST`、`COMMAND INFO`、`COMMAND DOCS`、`COMMAND GETKEYS`、`COMMAND GETKEYSANDFLAGS` 共用同一份运行时目录；`COMMAND DOCS` 无参数时已支持全量 docs 输出，并打通 RESP2/RESP3 大响应发送第一批闭环
 - v0.5 兼容性回归：覆盖 RESP3 Null、WATCH 中止、事务内控制命令错误、RESP3 Pub/Sub Push、CLIENT/CONFIG 组合路径
 - `maxmemory` noeviction 基线：启动参数可设置最大内存，超预算增量写命令返回 OOM 且不落库
 - `allkeys-lru` 淘汰基线：对象记录最近访问时间，超预算写入可淘汰最久未访问 key 后继续执行
@@ -90,7 +90,7 @@
 
 下一阶段：
 
-- `v0.9.1`：继续推进单机命令全集矩阵、连接/管理面补齐和兼容边界收敛；当前已完成官方命令全集矩阵、`COMMAND*` 第一批、`COMMAND GETKEYS*` 当前命令表支持、全局 `CLIENT LIST`、`CONFIG SET` 第二批运行时字段（`port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`masterauth`、`replicaof`、`maxclients`、`databases`）、`CONFIG REWRITE` 对应落盘第一批、`CLIENT KILL/PAUSE/TRACKING` 最小闭环，以及 pattern Pub/Sub 第一批（`PSUBSCRIBE/PUNSUBSCRIBE` 与 `pmessage` fanout），待续 `COMMAND DOCS` 全量输出、rewrite 保真度、tracking invalidation、订阅态命令限制、Scripting/Stream 命令族与 standalone 错误边界。
+- `v0.9.1`：继续推进单机命令全集矩阵、连接/管理面补齐和兼容边界收敛；当前已完成官方命令全集矩阵、`COMMAND*` 第一批与 `COMMAND DOCS` 全量输出、`COMMAND GETKEYS*` 当前命令表支持、全局 `CLIENT LIST`、`CONFIG SET` 第二批运行时字段（`port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`masterauth`、`replicaof`、`maxclients`、`databases`）、`CONFIG REWRITE` 对应落盘第一批、`CLIENT KILL/PAUSE/TRACKING` 最小闭环，以及 pattern Pub/Sub 第一批（`PSUBSCRIBE/PUNSUBSCRIBE` 与 `pmessage` fanout），待续 rewrite 保真度、tracking invalidation、订阅态命令限制、Scripting/Stream 命令族与 standalone 错误边界。
 
 当前阶段尚未生产可用。
 

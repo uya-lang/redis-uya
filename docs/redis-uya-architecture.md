@@ -111,7 +111,7 @@ server open
 - `CONFIG` 仍由 `command/executor.uya` 执行，当前覆盖 `GET`、`SET` 运行时子集、`REWRITE`、`HELP`、`RESETSTAT`
 - `CONFIG GET` 从 `CommandRuntimeInfo` 暴露运行时配置快照，支持 `maxclients`、`databases` 等兼容字段
 - `COMMAND` 由 `command/executor.uya` 执行，当前覆盖 `COMMAND`、`COUNT`、`LIST`、`INFO`、`DOCS`，运行时数据统一来自 `catalog_generated*`
-- `COMMAND DOCS` 当前命令名定向查询可用；无参数全量 docs 查询先返回空集合，避免在当前固定连接输出缓冲下生成超大回复而卡住 `redis-cli`
+- `COMMAND DOCS` 已支持命令名定向查询和无参数全量 docs 查询；连接/服务端当前使用扩大的输出缓冲完成 RESP2/RESP3 大响应发送第一批闭环
 - `CLUSTER` 由 `command/executor.uya` 执行，当前通过服务端最小拓扑提供 `KEYSLOT/INFO/NODES/SLOTS/HELP/MEET/SETSLOT`
 - `CLIENT` 在 `connection.uya` 处理，因为 `SETNAME/GETNAME/SETINFO/INFO/LIST` 依赖连接级状态
 - `HELLO 2/3 SETNAME name` 与 `CLIENT SETNAME` 共享同一份连接级客户端名
@@ -122,12 +122,12 @@ server open
 
 ## 5. Pub/Sub 最小闭环
 
-- `connection.uya` 维护固定容量订阅注册表，记录 `fd -> channel` 与连接协议版本
-- `SUBSCRIBE` / `UNSUBSCRIBE` 在连接层更新注册表并返回确认消息
-- `PUBLISH` 在连接层按频道扫描订阅表，向匹配 fd 推送 `message` 事件，并向发布者返回订阅者数量
+- `connection.uya` 维护固定容量订阅注册表，记录 `fd -> channel/pattern` 与连接协议版本
+- `SUBSCRIBE` / `UNSUBSCRIBE` / `PSUBSCRIBE` / `PUNSUBSCRIBE` 在连接层更新注册表并返回确认消息
+- `PUBLISH` 在连接层按频道和 pattern 扫描订阅表，向匹配 fd 推送 `message` / `pmessage` 事件，并向发布者返回接收者数量
 - 客户端关闭时，`server.uya` 会清理该 fd 的订阅项
 
-当前 Pub/Sub 是最小闭环，不包含 pattern 订阅、完整 subscribed-mode 命令限制和高水位背压队列。
+当前 Pub/Sub 已覆盖直连订阅和 pattern 订阅第一批，但仍不包含完整 subscribed-mode 命令限制和高水位背压队列。
 
 ## 6. 过期策略
 

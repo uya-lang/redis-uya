@@ -6105,7 +6105,9 @@ fn command_executor_command_info(runtime: &CommandRuntimeInfo, command: &Command
 
 fn command_executor_command_docs(runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
     var pair_count: usize = 0;
-    if command.argc > 2 {
+    if command.argc == 2 {
+        pair_count = command_catalog_total_count();
+    } else if command.argc > 2 {
         pair_count = command_executor_command_selected_docs_count(command);
     }
 
@@ -6127,6 +6129,16 @@ fn command_executor_command_docs(runtime: &CommandRuntimeInfo, command: &Command
     }
 
     if command.argc == 2 {
+        var all_index: usize = 0;
+        while all_index < command_catalog_total_count() {
+            const entry: CommandCatalogEntry = command_catalog_entry(all_index) catch {
+                return command_executor_error(&"ERR command catalog error"[0: 25]);
+            };
+            _ = command_executor_command_append_docs_payload(&buf, runtime, &entry) catch {
+                return command_executor_oom();
+            };
+            all_index = all_index + 1;
+        }
         return command_executor_owned_raw(buf.buf[0: buf.len]);
     }
 

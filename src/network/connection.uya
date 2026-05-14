@@ -132,6 +132,8 @@ const CONNECTION_CLIENT_INFO_MAX: usize = 64;
 const CONNECTION_ZERO_COPY_BULK_MIN: usize = 64;
 const CONNECTION_BATCH_MAX_COUNT: usize = 64;
 const CONNECTION_CLIENT_REGISTRY_MAX: usize = 128;
+const CONNECTION_BLOCKING_INPUT_CAP: usize = 8192;
+const CONNECTION_BLOCKING_OUTPUT_CAP: usize = 81920;
 
 struct ConnectionPubSubSubscription {
     active: bool,
@@ -3745,8 +3747,8 @@ export fn connection_handle_fd(engine: &Engine, router: &CommandRouter, fd: i32)
 }
 
 export fn connection_handle_fd_with_aof(engine: &Engine, router: &CommandRouter, aof: &AofWriter, fd: i32) !void {
-    var input: [byte: 8192] = [];
-    var output: [byte: 8192] = [];
+    var input: [byte: CONNECTION_BLOCKING_INPUT_CAP] = [];
+    var output: [byte: CONNECTION_BLOCKING_OUTPUT_CAP] = [];
     var filled: usize = 0;
     var close_after: bool = false;
     var tx: ConnectionTransaction = connection_transaction_new();
@@ -3756,11 +3758,11 @@ export fn connection_handle_fd_with_aof(engine: &Engine, router: &CommandRouter,
     }
 
     while !close_after {
-        if filled >= 8192 {
+        if filled >= CONNECTION_BLOCKING_INPUT_CAP {
             return error.ConnectionInputTooLarge;
         }
 
-        const n: isize = sys_recv(fd, &input[filled] as *byte, 8192 - filled, 0) catch {
+        const n: isize = sys_recv(fd, &input[filled] as *byte, CONNECTION_BLOCKING_INPUT_CAP - filled, 0) catch {
             return error.ConnectionIoFailed;
         };
         if n <= 0 {
@@ -3788,7 +3790,7 @@ export fn connection_handle_fd_with_aof(engine: &Engine, router: &CommandRouter,
                 &tx,
                 input[0: filled],
                 &output[0],
-                8192,
+                CONNECTION_BLOCKING_OUTPUT_CAP,
                 now_ms_safe(),
                 &replicaof_requested,
                 &replicaof_promote,

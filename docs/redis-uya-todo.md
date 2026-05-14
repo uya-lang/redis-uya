@@ -2,7 +2,7 @@
 # redis-uya 开发 TODO 文档
 
 > 版本: v0.9.1-dev
-> 日期: 2026-05-09
+> 日期: 2026-05-14
 > 配套设计文档: `redis-uya-design.md`
 > 配套评审文档: `redis-uya-review.md`
 > 开发规范: `redis-uya-development.md`
@@ -57,7 +57,7 @@
 当前进行中：
 
 - [x] `v0.9.0`：单机核心命令补齐与安全基线收口完成
-- [ ] `v0.9.1` 起：单机命令全集矩阵、连接/管理面补齐与兼容边界继续收敛（第一批命令矩阵与 `COMMAND*` 已完成，`CONFIG SET` 第二批运行时字段已收口）
+- [ ] `v0.9.1` 起：单机命令全集矩阵、连接/管理面补齐与兼容边界继续收敛（第一批命令矩阵、`COMMAND*` 与 `COMMAND DOCS` 全量输出已完成，`CONFIG SET` 第二批运行时字段已收口）
 
 ## 3. 全版本路线图
 
@@ -454,7 +454,7 @@
 - [x] 官方命令全集矩阵第一批落地：`531` 个官方命令名进入共享目录，生成 `docs/redis-uya-command-matrix.md` 并由 `src/command/catalog_generated*` 提供运行时数据
 - [x] `COMMAND` 控制面第一批落地：`COMMAND` / `COMMAND COUNT` / `COMMAND LIST` / `COMMAND INFO` / `COMMAND DOCS` 共享官方目录，覆盖 RESP2/RESP3 基础返回形态与过滤/未知命令边界
 - [x] `redis-cli` stdin/pipeline 兼容第一批：连接层单次读入可批量消费多帧，`redis-cli` 通过 `COMMAND DOCS` 探测后的事务管线 smoke 可稳定完成
-- [ ] `COMMAND DOCS` 无参数全量 docs 输出与大响应流式发送路径继续补齐
+- [x] `COMMAND DOCS` 无参数全量 docs 输出与大响应发送路径第一批已收口
 - [x] `COMMAND GETKEYS` / `COMMAND GETKEYSANDFLAGS` 当前命令表支持已落地：覆盖 range key spec、多 key/成对 key、`RENAME` 双 key、`SORT ... STORE` movablekeys 和基础 key flags
 - [x] 管理面第二批运行时配置已落地：`CONFIG SET` 支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`masterauth`、`replicaof`、`maxclients`、`databases`，并覆盖 `CONFIG GET/REWRITE` 验证与运行时 `maxclients` 生效
 - [x] Pub/Sub 第一批 pattern 订阅已落地：`PSUBSCRIBE`、`PUNSUBSCRIBE`、`pmessage` fanout 与接收者计数已覆盖 unit/integration

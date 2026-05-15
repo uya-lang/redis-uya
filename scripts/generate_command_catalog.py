@@ -187,6 +187,7 @@ FULL_NAMES = {
     "sismember",
     "shutdown",
     "sinter",
+    "sintercard",
     "sinterstore",
     "smove",
     "smismember",

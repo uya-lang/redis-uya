@@ -395,6 +395,8 @@ def run_smoke() -> None:
             roundtrip(sock, b"*4\r\n$5\r\nSMOVE\r\n$3\r\nset\r\n$4\r\nmove\r\n$1\r\nb\r\n", b":1\r\n")
             roundtrip(sock, b"*2\r\n$8\r\nSMEMBERS\r\n$4\r\nmove\r\n", b"*1\r\n$1\r\nb\r\n")
             roundtrip(sock, b"*2\r\n$5\r\nSCARD\r\n$3\r\nset\r\n", b":1\r\n")
+            roundtrip(sock, b"*4\r\n$10\r\nSINTERCARD\r\n$1\r\n2\r\n$3\r\nset\r\n$3\r\nset\r\n", b":1\r\n")
+            roundtrip(sock, b"*6\r\n$10\r\nSINTERCARD\r\n$1\r\n2\r\n$3\r\nset\r\n$3\r\nset\r\n$5\r\nLIMIT\r\n$1\r\n1\r\n", b":1\r\n")
             roundtrip(sock, b"*2\r\n$3\r\nDEL\r\n$4\r\nmove\r\n", b":1\r\n")
             roundtrip(sock, b"*4\r\n$4\r\nSADD\r\n$4\r\nspin\r\n$1\r\na\r\n$1\r\nb\r\n", b":2\r\n")
             sock.sendall(b"*2\r\n$11\r\nSRANDMEMBER\r\n$4\r\nspin\r\n")

@@ -437,6 +437,12 @@ class RedisPySubsetClient:
         assert isinstance(result, list)
         return set(result)
 
+    def sintercard(self, *keys: str, limit: int | None = None) -> int:
+        parts: list[bytes] = [b"SINTERCARD", str(len(keys)).encode(), *(key.encode() for key in keys)]
+        if limit is not None:
+            parts.extend([b"LIMIT", str(limit).encode()])
+        return int(self._request(*parts))
+
     def sdiff(self, *keys: str) -> set[bytes]:
         result = self._request(b"SDIFF", *(key.encode() for key in keys))
         assert isinstance(result, list)
@@ -851,6 +857,8 @@ def run_smoke() -> None:
             assert client.sadd("s2", "b", "c") == 2
             assert client.sadd("s3", "c", "d") == 2
             assert client.sinter("s1", "s2", "s3") == {b"c"}
+            assert client.sintercard("s1", "s2", "s3") == 1
+            assert client.sintercard("s1", "s2", "s3", limit=1) == 1
             assert client.sdiff("s1", "s2") == {b"a", b"d"}
             assert client.sunion("s1", "s2", "s3") == {b"a", b"b", b"c", b"d"}
             assert client.sinterstore("si", "s1", "s2", "s3") == 1

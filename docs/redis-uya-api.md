@@ -697,6 +697,20 @@ SINTER key [key ...]
 
 - 返回多个 set 的交集 RESP Array
 
+### `SINTERCARD`
+
+格式：
+
+```text
+SINTERCARD numkeys key [key ...] [LIMIT limit]
+```
+
+返回：
+
+- 返回交集成员个数，Integer
+- `LIMIT` 为正时，达到上限后直接返回上限值
+- `LIMIT 0` 视为不限制
+
 ### `SDIFF`
 
 格式：

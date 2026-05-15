@@ -415,6 +415,12 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const set_after_smove_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$5\r\nSCARD\r\n$3\r\nset\r\n"[0: 24], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: set_after_smove_result.response_len], &":1\r\n"[0: 4]));
 
+    const sintercard_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$10\r\nSINTERCARD\r\n$1\r\n2\r\n$3\r\nset\r\n$3\r\nset\r\n"[0: 46], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: sintercard_result.response_len], &":1\r\n"[0: 4]));
+
+    const sintercard_limit_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*6\r\n$10\r\nSINTERCARD\r\n$1\r\n2\r\n$3\r\nset\r\n$3\r\nset\r\n$5\r\nLIMIT\r\n$1\r\n1\r\n"[0: 64], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: sintercard_limit_result.response_len], &":1\r\n"[0: 4]));
+
     const move_delete_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$3\r\nDEL\r\n$4\r\nmove\r\n"[0: 24], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: move_delete_result.response_len], &":1\r\n"[0: 4]));
 

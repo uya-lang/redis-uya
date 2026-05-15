@@ -726,6 +726,18 @@ if [[ "$SINTER_RESULT" != "c" ]]; then
     exit 1
 fi
 
+SINTERCARD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" sintercard 3 s1 s2 s3)"
+if [[ "$SINTERCARD_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SINTERCARD 1, got '$SINTERCARD_RESULT'" >&2
+    exit 1
+fi
+
+SINTERCARD_LIMIT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" sintercard 3 s1 s2 s3 limit 1)"
+if [[ "$SINTERCARD_LIMIT_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SINTERCARD LIMIT 1, got '$SINTERCARD_LIMIT_RESULT'" >&2
+    exit 1
+fi
+
 SDIFF_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" sdiff s1 s2)"
 if [[ "$SDIFF_RESULT" != $'a\nd' ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected SDIFF a/d, got '$SDIFF_RESULT'" >&2

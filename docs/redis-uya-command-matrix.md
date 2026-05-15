@@ -15,11 +15,11 @@
 
 | status | count |
 |--------|-------|
-| `full` | `130` |
+| `full` | `131` |
 | `partial` | `42` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `330` |
+| `deferred` | `329` |
 
 ## Group counts
 
@@ -438,7 +438,7 @@
 | `setrange` | `string` | `full` | `-` | `4` | `-` | `no` | `@write, @string, @slow` |
 | `shutdown` | `server` | `full` | `-` | `-1` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `sinter` | `set` | `full` | `-` | `-2` | `-` | `no` | `@read, @set, @slow` |
-| `sintercard` | `set` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @set, @slow` |
+| `sintercard` | `set` | `full` | `-` | `-3` | `-` | `no` | `@read, @set, @slow` |
 | `sinterstore` | `set` | `full` | `-` | `-3` | `-` | `no` | `@write, @set, @slow` |
 | `sismember` | `set` | `full` | `-` | `3` | `-` | `no` | `@read, @set, @fast` |
 | `slaveof` | `server` | `alias` | `-` | `3` | `-` | `no` | `@admin, @slow, @dangerous` |

@@ -39,7 +39,7 @@
 - RESP2 最小子集解析：Simple String、Error、Integer、Bulk String、Array、Incomplete、非法输入
 - RESP3 最小协议闭环：`HELLO 2/3` 连接级协议切换，支持 Null、Boolean、Map 等常用 RESP3 类型解析和 RESP3 Null 回复
 - 命令路由：最小命令表、大小写匹配、参数数量校验、未知命令错误、RESP Array 转命令
-- String/Key/Control 命令执行：`PING`、`GET`、`SET`、`DEL`、`EXISTS`、`RANDOMKEY`、`EXPIRE`、`EXPIREAT`、`EXPIRETIME`、`PEXPIRE`、`PEXPIREAT`、`PEXPIRETIME`、`PERSIST`、`TTL`、`PTTL`、`TIME`、`ROLE`、`INFO` 多 section、`CONFIG GET/HELP/RESETSTAT`、`CLIENT` 兼容子集、`AUTH`、`SAVE`
+- String/Key/Control 命令执行：`PING`、`GET`、`SET`、`DEL`、`EXISTS`、`KEYS`、`RANDOMKEY`、`EXPIRE`、`EXPIREAT`、`EXPIRETIME`、`PEXPIRE`、`PEXPIREAT`、`PEXPIRETIME`、`PERSIST`、`TTL`、`PTTL`、`TIME`、`ROLE`、`INFO` 多 section、`CONFIG GET/HELP/RESETSTAT`、`CLIENT` 兼容子集、`AUTH`、`SAVE`
 - String TTL 扩展：`GETEX`、`SETEX`、`PSETEX`
 - Hash 最小对象：基于项目内 `Dict` 的最小 hash value 容器
 - Hash 命令子集：`HSET`、`HGET`、`HDEL`、`HEXISTS`、`HLEN`、`HMGET`、`HSETNX`、`HSTRLEN`

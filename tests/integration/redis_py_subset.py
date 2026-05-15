@@ -200,6 +200,14 @@ class RedisPySubsetClient:
     def dbsize(self) -> int:
         return int(self._request(b"DBSIZE"))
 
+    def randomkey(self) -> bytes | None:
+        return self._request(b"RANDOMKEY")
+
+    def time(self) -> tuple[int, int]:
+        result = self._request(b"TIME")
+        assert isinstance(result, list) and len(result) == 2
+        return int(result[0]), int(result[1])
+
     def select(self, db: int) -> bool:
         return self._request(b"SELECT", str(db).encode()) == "OK"
 
@@ -569,7 +577,11 @@ def run_smoke() -> None:
 
         try:
             assert client.ping()
+            server_sec, server_usec = client.time()
+            if server_sec <= 0 or server_usec < 0 or server_usec >= 1_000_000:
+                raise AssertionError(f"unexpected TIME reply: {(server_sec, server_usec)}")
             assert client.set("key", "value")
+            assert client.randomkey() == b"key"
             assert client.get("key") == b"value"
             assert client.incr("counter") == 1
             assert client.incrby("counter", 4) == 5

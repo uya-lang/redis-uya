@@ -1195,6 +1195,23 @@ DBSIZE
 
 - 当前数据库中的非过期 key 数量，Integer
 
+### `RANDOMKEY`
+
+格式：
+
+```text
+RANDOMKEY
+```
+
+返回：
+
+- 空库：Null Bulk
+- 非空：返回一个 key 的 Bulk String
+
+说明：
+
+- 当前实现基于有序 key 列表和请求时间做确定性选择，用于 standalone 兼容和测试闭环；尚未追求 Redis 的随机分布特性
+
 ### `EXISTS`
 
 格式：
@@ -1347,6 +1364,23 @@ PTTL key
 - 键不存在：`-2`
 - 无过期时间：`-1`
 - 否则返回剩余毫秒数
+
+### `TIME`
+
+格式：
+
+```text
+TIME
+```
+
+返回：
+
+- 两元素 RESP Array：`[unix-seconds, microseconds]`
+
+说明：
+
+- 当前实现由命令执行时传入的毫秒时间戳换算秒和微秒部分
+- 微秒部分固定是当前毫秒余数乘以 `1000`
 
 ### `INFO`
 

@@ -132,7 +132,16 @@ def run_smoke() -> None:
             roundtrip(sock, b"*2\r\n$5\r\nHELLO\r\n$1\r\n2\r\n", HELLO2_REPLY)
             roundtrip(sock, b"*2\r\n$3\r\nGET\r\n$7\r\nmissing\r\n", b"$-1\r\n")
             roundtrip(sock, b"*2\r\n$5\r\nHELLO\r\n$1\r\n4\r\n", b"-NOPROTO unsupported protocol version\r\n")
+            sock.sendall(b"*1\r\n$4\r\nTIME\r\n")
+            time_header = recv_line(sock)
+            if time_header != b"*2\r\n":
+                raise AssertionError(f"unexpected TIME header: {time_header!r}")
+            time_sec = recv_bulk(sock)
+            time_usec = recv_bulk(sock)
+            if not time_sec.isdigit() or not time_usec.isdigit():
+                raise AssertionError(f"unexpected TIME payload: {(time_sec, time_usec)!r}")
             roundtrip(sock, b"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n", b"+OK\r\n")
+            roundtrip(sock, b"*1\r\n$9\r\nRANDOMKEY\r\n", b"$3\r\nkey\r\n")
             roundtrip(sock, b"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n", b"$5\r\nvalue\r\n")
             roundtrip(sock, b"*2\r\n$4\r\nINCR\r\n$7\r\ncounter\r\n", b":1\r\n")
             roundtrip(sock, b"*3\r\n$6\r\nINCRBY\r\n$7\r\ncounter\r\n$1\r\n4\r\n", b":5\r\n")

@@ -2357,6 +2357,53 @@ export fn test_command_scan() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_command_randomkey_and_time() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var out: [byte: 256] = [];
+
+    var randomkey_empty_parsed: RespParseResult = try parse_resp2(&"*1\r\n$9\r\nRANDOMKEY\r\n"[0: 19]);
+    const randomkey_empty_command: Command = try command_executor_test_command(&router, &randomkey_empty_parsed);
+    const randomkey_empty_reply: CommandReply = command_execute_at(&engine, &randomkey_empty_command, 1000u64);
+    try assert_eq_i32(randomkey_empty_reply.typ as i32, CommandReplyType.reply_null_bulk as i32);
+    resp_value_free(&randomkey_empty_parsed.value);
+
+    var set_a_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$1\r\na\r\n$1\r\n1\r\n"[0: 29]);
+    const set_a_command: Command = try command_executor_test_command(&router, &set_a_parsed);
+    _ = command_execute_at(&engine, &set_a_command, 1000u64);
+    resp_value_free(&set_a_parsed.value);
+
+    var set_b_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$1\r\nb\r\n$1\r\n2\r\n"[0: 29]);
+    const set_b_command: Command = try command_executor_test_command(&router, &set_b_parsed);
+    _ = command_execute_at(&engine, &set_b_command, 1000u64);
+    resp_value_free(&set_b_parsed.value);
+
+    var set_c_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$1\r\nc\r\n$1\r\n3\r\n"[0: 29]);
+    const set_c_command: Command = try command_executor_test_command(&router, &set_c_parsed);
+    _ = command_execute_at(&engine, &set_c_command, 1000u64);
+    resp_value_free(&set_c_parsed.value);
+
+    var randomkey_parsed: RespParseResult = try parse_resp2(&"*1\r\n$9\r\nRANDOMKEY\r\n"[0: 19]);
+    const randomkey_command: Command = try command_executor_test_command(&router, &randomkey_parsed);
+    var randomkey_reply: CommandReply = command_execute_at(&engine, &randomkey_command, 1001u64);
+    try assert_eq_i32(randomkey_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(randomkey_reply.data, &"c"[0: 1]));
+    command_reply_cleanup(&randomkey_reply);
+    resp_value_free(&randomkey_parsed.value);
+
+    var time_parsed: RespParseResult = try parse_resp2(&"*1\r\n$4\r\nTIME\r\n"[0: 14]);
+    const time_command: Command = try command_executor_test_command(&router, &time_parsed);
+    var time_reply: CommandReply = command_execute_at(&engine, &time_command, 123456789u64);
+    const time_len: usize = try connection_encode_reply(&time_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: time_len], &"*2\r\n$6\r\n123456\r\n$6\r\n789000\r\n"[0: 28]));
+    command_reply_cleanup(&time_reply);
+    resp_value_free(&time_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_command_expire_and_ttl() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();

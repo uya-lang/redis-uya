@@ -122,6 +122,7 @@ use tests.unit.command_executor_test.test_command_zrangebyscore_zrevrangebyscore
 use tests.unit.command_executor_test.test_command_zremrangebyrank_zremrangebyscore_zscan;
 use tests.unit.command_executor_test.test_command_scan;
 use tests.unit.command_executor_test.test_command_hscan;
+use tests.unit.command_executor_test.test_command_randomkey_and_time;
 use tests.unit.command_executor_test.test_command_expire_and_ttl;
 use tests.unit.command_executor_test.test_command_rename_renamenx_lastsave;
 use tests.unit.command_executor_test.test_command_flushdb_flushall;
@@ -666,6 +667,10 @@ export fn main() i32 {
     const before_exec_hscan: i32 = failed;
     _ = test_command_hscan() catch { printf("[FAIL] command_executor/hscan\n" as *byte); failed = failed + 1; };
     if failed == before_exec_hscan { printf("[PASS] command_executor/hscan\n" as *byte); }
+
+    const before_exec_randomkey_time: i32 = failed;
+    _ = test_command_randomkey_and_time() catch { printf("[FAIL] command_executor/randomkey_time\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_randomkey_time { printf("[PASS] command_executor/randomkey_time\n" as *byte); }
 
     const before_exec_expire: i32 = failed;
     _ = test_command_expire_and_ttl() catch { printf("[FAIL] command_executor/expire_ttl\n" as *byte); failed = failed + 1; };

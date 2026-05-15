@@ -5401,6 +5401,73 @@ fn command_executor_dbsize(engine: &Engine, command: &Command) CommandReply {
     return command_executor_integer(engine_len(engine) as i64);
 }
 
+fn command_executor_randomkey(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 1 {
+        return command_executor_wrong_arity();
+    }
+    const keys_obj: &RedisObject = engine_scan_keys_at(engine, now_ms) catch {
+        return command_executor_oom();
+    };
+    defer {
+        object_free(keys_obj);
+    }
+    const key_count: usize = list_object_len(keys_obj) catch {
+        return command_executor_wrongtype();
+    };
+    if key_count == 0 {
+        return command_executor_null_bulk();
+    }
+    const index: i64 = (now_ms % (key_count as u64)) as i64;
+    const key_obj: &RedisObject = list_object_index_value(keys_obj, index) catch {
+        return command_executor_wrongtype();
+    };
+    const data: &[byte] = command_executor_string_value(key_obj) catch {
+        return command_executor_wrongtype();
+    };
+    return command_executor_owned_bulk_copy(data);
+}
+
+fn command_executor_time(command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 1 {
+        return command_executor_wrong_arity();
+    }
+    var seconds_buf: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&seconds_buf);
+    }
+    var micros_buf: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&micros_buf);
+    }
+    var raw: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&raw);
+    }
+
+    _ = command_executor_info_append_u64(&seconds_buf, &"%u"[0: 2], now_ms / 1000u64) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append_u64(&micros_buf, &"%u"[0: 2], (now_ms % 1000u64) * 1000u64) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_resp_collection_prefix(&raw, &"*"[0: 1], 2) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_command_append_bulk(&raw, seconds_buf.buf[0: seconds_buf.len]) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_command_append_bulk(&raw, micros_buf.buf[0: micros_buf.len]) catch {
+        return command_executor_oom();
+    };
+    return command_executor_owned_raw(raw.buf[0: raw.len]);
+}
+
 fn command_executor_expire(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
     if command.argc != 3 {
         return command_executor_wrong_arity();
@@ -7735,6 +7802,12 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_dbsize {
         return command_executor_dbsize(engine, command);
+    }
+    if command.info.cmd_type == CommandType.command_randomkey {
+        return command_executor_randomkey(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_time {
+        return command_executor_time(command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_expire {
         return command_executor_expire(engine, command, now_ms);

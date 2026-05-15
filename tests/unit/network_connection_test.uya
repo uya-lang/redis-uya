@@ -123,8 +123,14 @@ export fn test_connection_process_ping_set_get_quit() !void {
     try assert_true(network_connection_slice_eq(out[0: ping.response_len], &"+PONG\r\n"[0: 7]));
     try assert_eq_i32(ping.close_after as i32, 0);
 
+    const time_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*1\r\n$4\r\nTIME\r\n"[0: 14], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: time_result.response_len], &"*2\r\n$1\r\n1\r\n$1\r\n0\r\n"[0: 18]));
+
     const set_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 33], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: set_result.response_len], &"+OK\r\n"[0: 5]));
+
+    const randomkey_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*1\r\n$9\r\nRANDOMKEY\r\n"[0: 19], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: randomkey_result.response_len], &"$3\r\nkey\r\n"[0: 9]));
 
     const get_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n"[0: 22], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: get_result.response_len], &"$5\r\nvalue\r\n"[0: 11]));

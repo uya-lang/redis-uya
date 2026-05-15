@@ -53,4 +53,4 @@
 
 ## 当前阶段
 
-项目当前已完成 `v0.9.0` 单机核心命令补齐：String / Hash / List / Set / ZSet / Key / Server / Security 计划内命令批次已经全部收口，并补齐发布说明、测试报告和 DoD 验证证据。当前主线执行版本是 `v0.9.1`，已落地官方命令全集矩阵、共享运行时目录和 `COMMAND*` 控制面，补齐 String/Generic TTL 扩展（`GETEX`、`PSETEX`、`EXPIREAT`、`EXPIRETIME`、`PEXPIRETIME`）、Hash 字段基础扩展（`HDEL`、`HEXISTS`、`HLEN`、`HMGET`、`HSETNX`、`HSTRLEN`）、`CONFIG SET` 第二批运行时字段与 `CONFIG REWRITE` 对应落盘验证，并完成 pattern Pub/Sub 第一批和 `PUBSUB` 管理面第一批；`v0.9.2` 预留高级数据能力，`v0.9.3` 预留运维、安全与可观测。
+项目当前已完成 `v0.9.0` 单机核心命令补齐：String / Hash / List / Set / ZSet / Key / Server / Security 计划内命令批次已经全部收口，并补齐发布说明、测试报告和 DoD 验证证据。当前主线执行版本是 `v0.9.1`，已落地官方命令全集矩阵、共享运行时目录和 `COMMAND*` 控制面，补齐 String/Generic TTL 扩展（`GETEX`、`PSETEX`、`EXPIREAT`、`EXPIRETIME`、`PEXPIRETIME`）、Hash 字段基础扩展（`HDEL`、`HEXISTS`、`HLEN`、`HMGET`、`HSETNX`、`HSTRLEN`）、读路径补齐（`RANDOMKEY`、`TIME`）、`CONFIG SET` 第二批运行时字段与 `CONFIG REWRITE` 对应落盘验证，并完成 pattern Pub/Sub 第一批和 `PUBSUB` 管理面第一批；`v0.9.2` 预留高级数据能力，`v0.9.3` 预留运维、安全与可观测。

@@ -15,11 +15,11 @@
 
 | status | count |
 |--------|-------|
-| `full` | `115` |
+| `full` | `117` |
 | `partial` | `42` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `345` |
+| `deferred` | `343` |
 
 ## Group counts
 
@@ -402,7 +402,7 @@
 | `pubsub|shardnumsub` | `pubsub` | `partial` | `-` | `-2` | `-` | `no` | `@pubsub, @slow` |
 | `punsubscribe` | `pubsub` | `full` | `-` | `-1` | `-` | `yes` | `@pubsub, @slow` |
 | `quit` | `connection` | `partial` | `-` | `-1` | `-` | `no` | `@fast, @connection` |
-| `randomkey` | `generic` | `deferred` | `v0.9.1` | `1` | `-` | `no` | `@keyspace, @read, @slow` |
+| `randomkey` | `generic` | `full` | `-` | `1` | `-` | `no` | `@keyspace, @read, @slow` |
 | `readonly` | `cluster` | `standalone-error` | `v1.1.0` | `1` | `-` | `no` | `@fast, @connection` |
 | `readwrite` | `cluster` | `standalone-error` | `v1.1.0` | `1` | `-` | `no` | `@fast, @connection` |
 | `rename` | `generic` | `full` | `-` | `3` | `-` | `no` | `@keyspace, @write, @slow` |
@@ -480,7 +480,7 @@
 | `tdigest.reset` | `tdigest` | `deferred` | `v0.9.2` | `2` | `tdigest` | `no` | `@tdigest, @write, @fast` |
 | `tdigest.revrank` | `tdigest` | `deferred` | `v0.9.2` | `-2` | `tdigest` | `no` | `@tdigest, @read` |
 | `tdigest.trimmed_mean` | `tdigest` | `deferred` | `v0.9.2` | `4` | `tdigest` | `no` | `@tdigest, @read` |
-| `time` | `server` | `deferred` | `v0.9.1` | `1` | `-` | `no` | `@fast` |
+| `time` | `server` | `full` | `-` | `1` | `-` | `no` | `@fast` |
 | `topk.add` | `topk` | `deferred` | `v0.9.2` | `-2` | `topk` | `no` | `@topk, @write, @slow` |
 | `topk.count` | `topk` | `deferred` | `v0.9.2` | `-2` | `topk` | `no` | `@topk, @read, @slow` |
 | `topk.incrby` | `topk` | `deferred` | `v0.9.2` | `-2` | `topk` | `no` | `@topk, @write, @slow` |

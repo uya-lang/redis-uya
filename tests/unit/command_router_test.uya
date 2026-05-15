@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 124);
+    try assert_eq_i32(command_router_count(&router) as i32, 126);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -471,6 +471,12 @@ export fn test_command_router_lookup_and_case() !void {
     try assert_eq_i32(dbsize.cmd_type as i32, CommandType.command_dbsize as i32);
     try assert_eq_i32(dbsize.arity, 1);
 
+    const randomkey: CommandInfo = try command_router_lookup(&router, &"RANDOMKEY"[0: 9]);
+    try assert_eq_i32(randomkey.arity, 1);
+
+    const time_info: CommandInfo = try command_router_lookup(&router, &"TIME"[0: 4]);
+    try assert_eq_i32(time_info.arity, 1);
+
     const pexpire: CommandInfo = try command_router_lookup(&router, &"pexpire"[0: 7]);
     try assert_eq_i32(pexpire.cmd_type as i32, CommandType.command_pexpire as i32);
     try assert_eq_i32(pexpire.arity, 3);
@@ -571,6 +577,8 @@ export fn test_command_router_arity_validation() !void {
     const set: CommandInfo = try command_router_lookup(&router, &"SET"[0: 3]);
     const del: CommandInfo = try command_router_lookup(&router, &"DEL"[0: 3]);
     const dbsize: CommandInfo = try command_router_lookup(&router, &"DBSIZE"[0: 6]);
+    const randomkey: CommandInfo = try command_router_lookup(&router, &"RANDOMKEY"[0: 9]);
+    const time_info: CommandInfo = try command_router_lookup(&router, &"TIME"[0: 4]);
     const pexpire: CommandInfo = try command_router_lookup(&router, &"PEXPIRE"[0: 7]);
     const persist: CommandInfo = try command_router_lookup(&router, &"PERSIST"[0: 7]);
     const pexpireat: CommandInfo = try command_router_lookup(&router, &"PEXPIREAT"[0: 9]);
@@ -665,6 +673,8 @@ export fn test_command_router_arity_validation() !void {
     try command_validate_arity(&del, 2);
     try command_validate_arity(&del, 4);
     try command_validate_arity(&dbsize, 1);
+    try command_validate_arity(&randomkey, 1);
+    try command_validate_arity(&time_info, 1);
     try command_validate_arity(&pexpire, 3);
     try command_validate_arity(&persist, 2);
     try command_validate_arity(&pexpireat, 3);

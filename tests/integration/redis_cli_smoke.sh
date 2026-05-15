@@ -66,6 +66,18 @@ if [[ "$SET_RESULT" != "OK" ]]; then
     exit 1
 fi
 
+TIME_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" time)"
+if ! [[ "$TIME_RESULT" =~ ^[0-9]+$'\n'[0-9]+$ ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: unexpected TIME output '$TIME_RESULT'" >&2
+    exit 1
+fi
+
+RANDOMKEY_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" randomkey)"
+if [[ "$RANDOMKEY_RESULT" != "key" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected RANDOMKEY key, got '$RANDOMKEY_RESULT'" >&2
+    exit 1
+fi
+
 GET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" get key)"
 if [[ "$GET_RESULT" != "value" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected value, got '$GET_RESULT'" >&2

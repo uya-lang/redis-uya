@@ -814,6 +814,21 @@ SSCAN key cursor [COUNT count]
 
 当前实现支持 `COUNT`
 
+### `SMOVE`
+
+格式：
+
+```text
+SMOVE source destination member
+```
+
+返回：
+
+- 成员存在于 `source` 时返回 `1`，并把成员原子地从 `source` 搬到 `destination`
+- `source` 不存在时返回 `0`
+- `source == destination` 且成员存在时返回 `1`，集合内容保持不变
+- `source` 清空后会删除源 key
+
 ### `ZINCRBY`
 
 格式：

@@ -22,6 +22,8 @@ use src.storage.object.ObjectType;
 use src.storage.object.create_string_object;
 use src.storage.object.hash_object_get_field;
 use src.storage.object.list_object_index_value;
+use src.storage.object.set_object_len;
+use src.storage.object.set_object_members_reply;
 use src.storage.object.object_free;
 use src.memory.allocator.used_memory;
 use src.memory.allocator.reset_memory_stats_for_test;
@@ -385,6 +387,32 @@ export fn test_aof_replay_sort_store_command() !void {
     try assert_true(aof_test_slice_eq(first.value.buf[0: first.value.len], &"1"[0: 1]));
     try assert_true(aof_test_slice_eq(second.value.buf[0: second.value.len], &"2"[0: 1]));
     try assert_true(aof_test_slice_eq(third.value.buf[0: third.value.len], &"3"[0: 1]));
+    engine_free(&engine);
+    _ = unlink(path);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_aof_replay_smove_command() !void {
+    reset_memory_stats_for_test();
+    const path: &const byte = "build/test-aof-smove.aof";
+    _ = unlink(path);
+
+    var writer: AofWriter = try aof_open_truncate(path);
+    try aof_append_raw(&writer, &"*3\r\n$4\r\nSADD\r\n$3\r\nsrc\r\n$1\r\na\r\n"[0: 30]);
+    try aof_append_raw(&writer, &"*4\r\n$5\r\nSMOVE\r\n$3\r\nsrc\r\n$3\r\ndst\r\n$1\r\na\r\n"[0: 40]);
+    aof_close(&writer);
+
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    try aof_replay_file_at(path, &engine, &router, 1000u64);
+    try assert_true(aof_key_missing_at(&engine, &"src"[0: 3], 1000u64));
+    const dst_obj: &RedisObject = try lookup_key_at(&engine, &"dst"[0: 3], 1000u64);
+    try assert_eq_i32(dst_obj.obj_type as i32, ObjectType.object_set as i32);
+    try assert_eq_i32((try set_object_len(dst_obj)) as i32, 1);
+    const dst_members: &RedisObject = try set_object_members_reply(dst_obj);
+    const first: &RedisObject = try list_object_index_value(dst_members, 0);
+    try assert_true(aof_test_slice_eq(first.value.buf[0: first.value.len], &"a"[0: 1]));
+    object_free(dst_members);
     engine_free(&engine);
     _ = unlink(path);
     try assert_eq_i32(used_memory() as i32, 0);

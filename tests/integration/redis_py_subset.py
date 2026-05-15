@@ -423,6 +423,9 @@ class RedisPySubsetClient:
     def srem(self, key: str, *members: str) -> int:
         return int(self._request(b"SREM", key.encode(), *(member.encode() for member in members)))
 
+    def smove(self, source: str, destination: str, member: str) -> int:
+        return int(self._request(b"SMOVE", source.encode(), destination.encode(), member.encode()))
+
     def spop(self, key: str) -> bytes | None:
         return self._request(b"SPOP", key.encode())
 
@@ -828,6 +831,11 @@ def run_smoke() -> None:
             cursor, sscan_items = client.sscan("set", 0, count=16)
             if cursor != 0 or sscan_items != [b"a", b"b"]:
                 raise AssertionError(f"unexpected sscan result: cursor={cursor} items={sscan_items!r}")
+            assert client.smove("set", "set", "a") == 1
+            assert client.smove("set", "move", "b") == 1
+            assert client.smembers("move") == {b"b"}
+            assert client.scard("set") == 1
+            assert client.delete("move") == 1
             assert client.srem("set", "a") == 1
             assert client.sadd("spin", "a", "b") == 2
             srand = client.srandmember("spin")

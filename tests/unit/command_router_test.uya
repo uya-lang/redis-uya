@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 135);
+    try assert_eq_i32(command_router_count(&router) as i32, 136);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -383,6 +383,10 @@ export fn test_command_router_lookup_and_case() !void {
     try assert_eq_i32(sscan.cmd_type as i32, CommandType.command_sscan as i32);
     try assert_eq_i32(sscan.arity, -3);
 
+    const smove: CommandInfo = try command_router_lookup(&router, &"SMOVE"[0: 5]);
+    try assert_eq_i32(smove.cmd_type as i32, CommandType.command_smove as i32);
+    try assert_eq_i32(smove.arity, 4);
+
     const zadd: CommandInfo = try command_router_lookup(&router, &"ZADD"[0: 4]);
     try assert_eq_i32(zadd.cmd_type as i32, CommandType.command_zadd as i32);
     try assert_eq_i32(zadd.arity, -4);
@@ -577,6 +581,7 @@ export fn test_command_router_arity_validation() !void {
     const sadd: CommandInfo = try command_router_lookup(&router, &"SADD"[0: 4]);
     const smembers: CommandInfo = try command_router_lookup(&router, &"SMEMBERS"[0: 8]);
     const srem: CommandInfo = try command_router_lookup(&router, &"SREM"[0: 4]);
+    const smove: CommandInfo = try command_router_lookup(&router, &"SMOVE"[0: 5]);
     const zadd: CommandInfo = try command_router_lookup(&router, &"ZADD"[0: 4]);
     const zrange: CommandInfo = try command_router_lookup(&router, &"ZRANGE"[0: 6]);
     const zrem: CommandInfo = try command_router_lookup(&router, &"ZREM"[0: 4]);
@@ -661,6 +666,7 @@ export fn test_command_router_arity_validation() !void {
     try command_validate_arity(&sadd, 6);
     try command_validate_arity(&smembers, 2);
     try command_validate_arity(&srem, 3);
+    try command_validate_arity(&smove, 4);
     try command_validate_arity(&zadd, 4);
     try command_validate_arity(&zadd, 6);
     try command_validate_arity(&zrange, 4);

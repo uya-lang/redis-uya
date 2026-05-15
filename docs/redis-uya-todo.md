@@ -463,6 +463,7 @@
 - [x] String/Generic TTL 扩展已落地：`GETEX`、`PSETEX`、`EXPIREAT`、`EXPIRETIME`、`PEXPIRETIME` 已覆盖 unit、AOF absolute replay、TCP、redis-py 与 redis-cli smoke
 - [x] Hash 字段基础扩展已落地：`HDEL`、`HEXISTS`、`HLEN`、`HMGET`、`HSETNX`、`HSTRLEN` 已覆盖 object helper、unit、AOF replay、TCP、redis-py 与 redis-cli smoke
 - [x] Set 读路径扩展已落地：`SCARD`、`SISMEMBER`、`SMISMEMBER`、`SSCAN` 已覆盖 unit、TCP、redis-py 与 redis-cli smoke，并进入共享命令目录
+- [x] Set 写路径补齐已落地：`SMOVE` 已覆盖同 key 搬移、错类型、空源、源清空删除、AOF replay、TCP、redis-py 与 redis-cli smoke，并进入共享命令目录
 - [x] Key 通用管理扩展已落地：`TOUCH`、`UNLINK` 已覆盖 unit、TCP、redis-py 与 redis-cli smoke，并进入共享命令目录
 - [x] Key 模式读取扩展已落地：`KEYS` 已覆盖 unit、TCP、redis-py 与 redis-cli smoke，并进入共享命令目录
 - [x] 只读排序扩展已落地：`SORT_RO` 已覆盖 unit、TCP、redis-py 与 redis-cli smoke，并进入共享命令目录

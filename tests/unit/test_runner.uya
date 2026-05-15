@@ -117,6 +117,7 @@ use tests.unit.command_executor_test.test_command_sinter_sdiff_sunion;
 use tests.unit.command_executor_test.test_command_sinterstore_sdiffstore_sunionstore;
 use tests.unit.command_executor_test.test_command_scard_sismember_smismember_sscan;
 use tests.unit.command_executor_test.test_command_spop_srandmember;
+use tests.unit.command_executor_test.test_command_smove;
 use tests.unit.command_executor_test.test_command_zadd_zrem_zrange;
 use tests.unit.command_executor_test.test_command_zincrby_zcard_zcount;
 use tests.unit.command_executor_test.test_command_zrangebyscore_zrevrangebyscore;
@@ -168,6 +169,7 @@ use tests.unit.persistence_aof_test.test_aof_replay_rename_commands;
 use tests.unit.persistence_aof_test.test_aof_replay_flush_commands;
 use tests.unit.persistence_aof_test.test_aof_replay_restore_command;
 use tests.unit.persistence_aof_test.test_aof_replay_sort_store_command;
+use tests.unit.persistence_aof_test.test_aof_replay_smove_command;
 use tests.unit.persistence_rdb_test.test_rdb_save_and_load_string_subset;
 use tests.unit.persistence_rdb_test.test_rdb_dump_and_load_bytes_string_subset;
 use tests.unit.persistence_rdb_test.test_rdb_dump_and_load_bytes_current_types;
@@ -656,6 +658,10 @@ export fn main() i32 {
     _ = test_command_scard_sismember_smismember_sscan() catch { printf("[FAIL] command_executor/set_reads\n" as *byte); failed = failed + 1; };
     if failed == before_exec_set_reads { printf("[PASS] command_executor/set_reads\n" as *byte); }
 
+    const before_exec_set_move: i32 = failed;
+    _ = test_command_smove() catch { printf("[FAIL] command_executor/set_move\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_set_move { printf("[PASS] command_executor/set_move\n" as *byte); }
+
     const before_exec_zset: i32 = failed;
     _ = test_command_zadd_zrem_zrange() catch { printf("[FAIL] command_executor/zset\n" as *byte); failed = failed + 1; };
     if failed == before_exec_zset { printf("[PASS] command_executor/zset\n" as *byte); }
@@ -835,6 +841,10 @@ export fn main() i32 {
     const before_aof_sort_store_cmd: i32 = failed;
     _ = test_aof_replay_sort_store_command() catch { printf("[FAIL] persistence_aof/replay_sort_store\n" as *byte); failed = failed + 1; };
     if failed == before_aof_sort_store_cmd { printf("[PASS] persistence_aof/replay_sort_store\n" as *byte); }
+
+    const before_aof_smove_cmd: i32 = failed;
+    _ = test_aof_replay_smove_command() catch { printf("[FAIL] persistence_aof/replay_smove\n" as *byte); failed = failed + 1; };
+    if failed == before_aof_smove_cmd { printf("[PASS] persistence_aof/replay_smove\n" as *byte); }
 
     const before_aof_flush: i32 = failed;
     _ = test_aof_flush_persists_buffer_without_close() catch { printf("[FAIL] persistence_aof/flush\n" as *byte); failed = failed + 1; };

@@ -63,7 +63,7 @@ server open
 
 - `sds.uya`：动态字符串
 - `dict.uya`：项目内专用字典，支持渐进 rehash；key 比较复用 `util/bytes.uya` 的 16 字节块比较，key hash 使用表驱动 CRC64
-- `object.uya`：最小 `RedisObject`
+- `object.uya`：最小 `RedisObject`，Set/ZSet 当前都基于项目内 `Dict` 容器；`SMOVE` 这类成员搬移命令在现有对象上原地修改成员集，空源集合由执行器负责删 key
 - `engine.uya`：键空间、TTL、主动/惰性过期
 
 ### `src/util/`

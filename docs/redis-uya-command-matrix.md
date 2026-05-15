@@ -15,11 +15,11 @@
 
 | status | count |
 |--------|-------|
-| `full` | `126` |
+| `full` | `130` |
 | `partial` | `42` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `334` |
+| `deferred` | `330` |
 
 ## Group counts
 
@@ -387,7 +387,7 @@
 | `pfdebug` | `hyperloglog` | `deferred` | `v0.9.2` | `3` | `-` | `no` | `@write, @hyperloglog, @admin, @slow, @dangerous` |
 | `pfmerge` | `hyperloglog` | `deferred` | `v0.9.2` | `-2` | `-` | `no` | `@write, @hyperloglog, @slow` |
 | `pfselftest` | `hyperloglog` | `deferred` | `v0.9.2` | `1` | `-` | `no` | `@hyperloglog, @admin, @slow, @dangerous` |
-| `ping` | `connection` | `deferred` | `v0.9.1` | `-1` | `-` | `no` | `@fast, @connection` |
+| `ping` | `connection` | `full` | `-` | `-1` | `-` | `no` | `@fast, @connection` |
 | `psetex` | `string` | `full` | `-` | `4` | `-` | `no` | `@write, @string, @slow` |
 | `psubscribe` | `pubsub` | `full` | `-` | `-2` | `-` | `yes` | `@pubsub, @slow` |
 | `psync` | `server` | `partial` | `-` | `-3` | `-` | `no` | `@admin, @slow, @dangerous` |
@@ -409,7 +409,7 @@
 | `renamenx` | `generic` | `full` | `-` | `3` | `-` | `no` | `@keyspace, @write, @fast` |
 | `replconf` | `server` | `deferred` | `v0.9.1` | `-1` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `replicaof` | `server` | `partial` | `-` | `3` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `reset` | `connection` | `deferred` | `v0.9.1` | `1` | `-` | `no` | `@fast, @connection` |
+| `reset` | `connection` | `full` | `-` | `1` | `-` | `no` | `@fast, @connection` |
 | `restore` | `generic` | `partial` | `-` | `-4` | `-` | `no` | `@keyspace, @write, @slow, @dangerous` |
 | `restore-asking` | `server` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@keyspace, @write, @slow, @dangerous` |
 | `role` | `server` | `full` | `-` | `1` | `-` | `no` | `@admin, @fast, @dangerous` |
@@ -449,7 +449,7 @@
 | `slowlog|reset` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `smembers` | `set` | `full` | `-` | `2` | `-` | `no` | `@read, @set, @slow` |
 | `smismember` | `set` | `full` | `-` | `-3` | `-` | `no` | `@read, @set, @fast` |
-| `smove` | `set` | `deferred` | `v0.9.1` | `4` | `-` | `no` | `@write, @set, @fast` |
+| `smove` | `set` | `full` | `-` | `4` | `-` | `no` | `@write, @set, @fast` |
 | `sort` | `generic` | `partial` | `-` | `-2` | `-` | `yes` | `@write, @set, @sortedset, @list, @slow, @dangerous` |
 | `sort_ro` | `generic` | `full` | `-` | `-2` | `-` | `yes` | `@read, @set, @sortedset, @list, @slow, @dangerous` |
 | `spop` | `set` | `full` | `-` | `-2` | `-` | `no` | `@write, @set, @fast` |
@@ -458,7 +458,7 @@
 | `srem` | `set` | `full` | `-` | `-3` | `-` | `no` | `@write, @set, @fast` |
 | `sscan` | `set` | `full` | `-` | `-3` | `-` | `yes` | `@read, @set, @slow` |
 | `ssubscribe` | `pubsub` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@pubsub, @slow` |
-| `strlen` | `string` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@read, @string, @fast` |
+| `strlen` | `string` | `full` | `-` | `2` | `-` | `no` | `@read, @string, @fast` |
 | `subscribe` | `pubsub` | `partial` | `-` | `-2` | `-` | `no` | `@pubsub, @slow` |
 | `substr` | `string` | `alias` | `-` | `4` | `-` | `no` | `@read, @string, @slow` |
 | `sunion` | `set` | `full` | `-` | `-2` | `-` | `no` | `@read, @set, @slow` |

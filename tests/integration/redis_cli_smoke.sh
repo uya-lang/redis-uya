@@ -642,6 +642,36 @@ if [[ "$SPIN_SSCAN_RESULT" != $'0\na\nb' ]]; then
     exit 1
 fi
 
+SMOVE_SAME_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" smove spin spin a)"
+if [[ "$SMOVE_SAME_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected same-key SMOVE 1, got '$SMOVE_SAME_RESULT'" >&2
+    exit 1
+fi
+
+SMOVE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" smove spin move b)"
+if [[ "$SMOVE_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SMOVE 1, got '$SMOVE_RESULT'" >&2
+    exit 1
+fi
+
+MOVE_MEMBERS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" smembers move)"
+if [[ "$MOVE_MEMBERS_RESULT" != "b" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected move members b, got '$MOVE_MEMBERS_RESULT'" >&2
+    exit 1
+fi
+
+SPIN_SCARD_AFTER_SMOVE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" scard spin)"
+if [[ "$SPIN_SCARD_AFTER_SMOVE_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected spin SCARD 1 after SMOVE, got '$SPIN_SCARD_AFTER_SMOVE_RESULT'" >&2
+    exit 1
+fi
+
+MOVE_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del move)"
+if [[ "$MOVE_DEL_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected move DEL 1, got '$MOVE_DEL_RESULT'" >&2
+    exit 1
+fi
+
 SRANDMEMBER_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" srandmember spin)"
 case "$SRANDMEMBER_RESULT" in
     a|b) ;;
@@ -667,8 +697,8 @@ if [[ "$SPIN_MEMBERS_RESULT" != "1" ]]; then
 fi
 
 SPIN_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del spin)"
-if [[ "$SPIN_DEL_RESULT" != "1" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected spin DEL 1, got '$SPIN_DEL_RESULT'" >&2
+if [[ "$SPIN_DEL_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected spin DEL 0 after SPOP emptied key, got '$SPIN_DEL_RESULT'" >&2
     exit 1
 fi
 

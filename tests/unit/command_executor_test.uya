@@ -2517,6 +2517,63 @@ export fn test_command_touch_and_unlink() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_command_keys() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var out: [byte: 256] = [];
+
+    var set_key_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 33]);
+    const set_key_command: Command = try command_executor_test_command(&router, &set_key_parsed);
+    _ = command_execute_at(&engine, &set_key_command, 1000u64);
+    resp_value_free(&set_key_parsed.value);
+
+    var set_foo_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$3\r\nfoo\r\n$5\r\nvalue\r\n"[0: 33]);
+    const set_foo_command: Command = try command_executor_test_command(&router, &set_foo_parsed);
+    _ = command_execute_at(&engine, &set_foo_command, 1000u64);
+    resp_value_free(&set_foo_parsed.value);
+
+    var set_bar_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$3\r\nbar\r\n$5\r\nvalue\r\n"[0: 33]);
+    const set_bar_command: Command = try command_executor_test_command(&router, &set_bar_parsed);
+    _ = command_execute_at(&engine, &set_bar_command, 1000u64);
+    resp_value_free(&set_bar_parsed.value);
+
+    var keys_all_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nKEYS\r\n$1\r\n*\r\n"[0: 21]);
+    const keys_all_command: Command = try command_executor_test_command(&router, &keys_all_parsed);
+    var keys_all_reply: CommandReply = command_execute_at(&engine, &keys_all_command, 1000u64);
+    const keys_all_len: usize = try connection_encode_reply(&keys_all_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: keys_all_len], &"*3\r\n$3\r\nbar\r\n$3\r\nfoo\r\n$3\r\nkey\r\n"[0: 31]));
+    command_reply_cleanup(&keys_all_reply);
+    resp_value_free(&keys_all_parsed.value);
+
+    var keys_k_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nKEYS\r\n$2\r\nk*\r\n"[0: 22]);
+    const keys_k_command: Command = try command_executor_test_command(&router, &keys_k_parsed);
+    var keys_k_reply: CommandReply = command_execute_at(&engine, &keys_k_command, 1000u64);
+    const keys_k_len: usize = try connection_encode_reply(&keys_k_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: keys_k_len], &"*1\r\n$3\r\nkey\r\n"[0: 13]));
+    command_reply_cleanup(&keys_k_reply);
+    resp_value_free(&keys_k_parsed.value);
+
+    var keys_q_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nKEYS\r\n$1\r\n?\r\n"[0: 21]);
+    const keys_q_command: Command = try command_executor_test_command(&router, &keys_q_parsed);
+    var keys_q_reply: CommandReply = command_execute_at(&engine, &keys_q_command, 1000u64);
+    const keys_q_len: usize = try connection_encode_reply(&keys_q_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: keys_q_len], &"*0\r\n"[0: 4]));
+    command_reply_cleanup(&keys_q_reply);
+    resp_value_free(&keys_q_parsed.value);
+
+    var keys_empty_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nKEYS\r\n$5\r\nnope*\r\n"[0: 25]);
+    const keys_empty_command: Command = try command_executor_test_command(&router, &keys_empty_parsed);
+    var keys_empty_reply: CommandReply = command_execute_at(&engine, &keys_empty_command, 1000u64);
+    const keys_empty_len: usize = try connection_encode_reply(&keys_empty_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: keys_empty_len], &"*0\r\n"[0: 4]));
+    command_reply_cleanup(&keys_empty_reply);
+    resp_value_free(&keys_empty_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_command_role() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();

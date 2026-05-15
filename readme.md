@@ -93,7 +93,7 @@
 
 下一阶段：
 
-- `v0.9.1`：继续推进单机命令全集矩阵、连接/管理面补齐和兼容边界收敛；当前已完成官方命令全集矩阵、`COMMAND*` 第一批与 `COMMAND DOCS` 全量输出、`COMMAND GETKEYS*` 当前命令表支持、String/Generic TTL 扩展（`GETEX`、`PSETEX`、`EXPIREAT`、`EXPIRETIME`、`PEXPIRETIME`）、Hash 字段基础扩展（`HDEL`、`HEXISTS`、`HLEN`、`HMGET`、`HSETNX`、`HSTRLEN`）、Set 读路径扩展（`SCARD`、`SISMEMBER`、`SMISMEMBER`、`SSCAN`）、Key 通用读写补齐（`TOUCH`、`UNLINK`）、读路径补齐（`RANDOMKEY`、`TIME`）、复制可观测读命令（`ROLE`）、全局 `CLIENT LIST`、`CONFIG SET` 第二批运行时字段（`port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`masterauth`、`replicaof`、`maxclients`、`databases`）、`CONFIG REWRITE` 对应第二批核心字段落盘、`CLIENT KILL/PAUSE/TRACKING/GETREDIR` 最小闭环，以及 pattern Pub/Sub 第一批、`PUBSUB` 管理面第一批、RESP2/RESP3 订阅态命令限制边界与断开清理；待续 standalone 错误边界、Streams、Lua/Functions、RESP3 兼容矩阵和复制/持久化收敛。
+- `v0.9.1`：继续推进单机命令全集矩阵、连接/管理面补齐和兼容边界收敛；当前已完成官方命令全集矩阵、`COMMAND*` 第一批与 `COMMAND DOCS` 全量输出、`COMMAND GETKEYS*` 当前命令表支持、String/Generic TTL 扩展（`GETEX`、`PSETEX`、`EXPIREAT`、`EXPIRETIME`、`PEXPIRETIME`）、Hash 字段基础扩展（`HDEL`、`HEXISTS`、`HLEN`、`HMGET`、`HSETNX`、`HSTRLEN`）、Set 读路径扩展（`SCARD`、`SISMEMBER`、`SMISMEMBER`、`SSCAN`）、Key 通用读写补齐（`TOUCH`、`UNLINK`）、Key 模式读取补齐（`KEYS`）、读路径补齐（`RANDOMKEY`、`TIME`）、复制可观测读命令（`ROLE`）、全局 `CLIENT LIST`、`CONFIG SET` 第二批运行时字段（`port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`masterauth`、`replicaof`、`maxclients`、`databases`）、`CONFIG REWRITE` 对应第二批核心字段落盘、`CLIENT KILL/PAUSE/TRACKING/GETREDIR` 最小闭环，以及 pattern Pub/Sub 第一批、`PUBSUB` 管理面第一批、RESP2/RESP3 订阅态命令限制边界与断开清理；待续 standalone 错误边界、Streams、Lua/Functions、RESP3 兼容矩阵和复制/持久化收敛。
 - `v0.9.2`：进入高级数据能力阶段，覆盖 Bitmap、Bitfield、HyperLogLog、Geo、JSON、Search、Time Series、概率结构和 Vector。
 - `v0.9.3`：进入运维、安全与可观测阶段，覆盖 ACL、TLS、`CLIENT/CONFIG/INFO/SLOWLOG/LATENCY/MEMORY/MONITOR` 等管理面深化。
 
@@ -285,6 +285,7 @@ build/redis-uya 6380 1
 - Key/Server 第八批：`MOVE`
 - Key/Server 第九批：`WAIT`
 - Key/Server 第十批通用 key 管理：`TOUCH`、`UNLINK`
+- Key/Server 第十一批模式读取：`KEYS`
 - Key/Server 第十批：`SORT`
 - Key/Server 第一批：`ECHO`、`TYPE`、`DBSIZE`
 - Key/Server 第二批：`PEXPIRE`、`PERSIST`、`PTTL`

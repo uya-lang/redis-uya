@@ -15,11 +15,11 @@
 
 | status | count |
 |--------|-------|
-| `full` | `124` |
+| `full` | `125` |
 | `partial` | `42` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `336` |
+| `deferred` | `335` |
 
 ## Group counts
 
@@ -326,7 +326,7 @@
 | `json.strlen` | `json` | `deferred` | `v0.9.2` | `-2` | `json` | `no` | `@json, @read, @slow` |
 | `json.toggle` | `json` | `deferred` | `v0.9.2` | `3` | `json` | `no` | `@json, @write, @slow` |
 | `json.type` | `json` | `deferred` | `v0.9.2` | `-2` | `json` | `no` | `@json, @read, @slow` |
-| `keys` | `generic` | `deferred` | `v0.9.1` | `2` | `-` | `yes` | `@keyspace, @read, @slow, @dangerous` |
+| `keys` | `generic` | `full` | `-` | `2` | `-` | `yes` | `@keyspace, @read, @slow, @dangerous` |
 | `lastsave` | `server` | `full` | `-` | `1` | `-` | `no` | `@admin, @fast, @dangerous` |
 | `latency` | `server` | `deferred` | `v0.9.3` | `-2` | `-` | `no` | `@slow` |
 | `latency|doctor` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |

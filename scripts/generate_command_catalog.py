@@ -124,6 +124,7 @@ FULL_NAMES = {
     "incr",
     "incrby",
     "incrbyfloat",
+    "keys",
     "lastsave",
     "lindex",
     "linsert",

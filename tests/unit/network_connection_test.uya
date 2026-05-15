@@ -468,6 +468,31 @@ export fn test_connection_process_touch_unlink() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_connection_process_keys() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var out: [byte: 128] = [];
+
+    const set_key: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 33], &out[0], 128, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: set_key.response_len], &"+OK\r\n"[0: 5]));
+
+    const set_foo: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$3\r\nSET\r\n$3\r\nfoo\r\n$5\r\nvalue\r\n"[0: 33], &out[0], 128, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: set_foo.response_len], &"+OK\r\n"[0: 5]));
+
+    const set_bar: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$3\r\nSET\r\n$3\r\nbar\r\n$5\r\nvalue\r\n"[0: 33], &out[0], 128, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: set_bar.response_len], &"+OK\r\n"[0: 5]));
+
+    const keys_all: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$4\r\nKEYS\r\n$1\r\n*\r\n"[0: 21], &out[0], 128, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: keys_all.response_len], &"*3\r\n$3\r\nbar\r\n$3\r\nfoo\r\n$3\r\nkey\r\n"[0: 31]));
+
+    const keys_k: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$4\r\nKEYS\r\n$2\r\nk*\r\n"[0: 22], &out[0], 128, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: keys_k.response_len], &"*1\r\n$3\r\nkey\r\n"[0: 13]));
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_connection_zero_copy_get_reply_metadata() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();

@@ -440,6 +440,7 @@
 - [x] Key/Server 第八批：`MOVE`
 - [x] Key/Server 第九批：`WAIT`
 - [x] Key/Server 第十批通用 key 管理：`TOUCH`、`UNLINK`
+- [x] Key/Server 第十一批模式读取：`KEYS`
 - [x] Key/Server 第十批：`SORT`
 - [x] Security baseline：`AUTH`、`requirepass`、`SHUTDOWN`
 
@@ -462,6 +463,7 @@
 - [x] Hash 字段基础扩展已落地：`HDEL`、`HEXISTS`、`HLEN`、`HMGET`、`HSETNX`、`HSTRLEN` 已覆盖 object helper、unit、AOF replay、TCP、redis-py 与 redis-cli smoke
 - [x] Set 读路径扩展已落地：`SCARD`、`SISMEMBER`、`SMISMEMBER`、`SSCAN` 已覆盖 unit、TCP、redis-py 与 redis-cli smoke，并进入共享命令目录
 - [x] Key 通用管理扩展已落地：`TOUCH`、`UNLINK` 已覆盖 unit、TCP、redis-py 与 redis-cli smoke，并进入共享命令目录
+- [x] Key 模式读取扩展已落地：`KEYS` 已覆盖 unit、TCP、redis-py 与 redis-cli smoke，并进入共享命令目录
 - [x] 读路径补齐已落地：`RANDOMKEY`、`TIME` 已覆盖 unit、TCP、redis-py 与 redis-cli smoke，并进入共享命令目录
 - [x] 复制可观测读命令已落地：`ROLE` 已覆盖 master/replica 两种返回形态，并通过 unit、TCP、redis-py 与 redis-cli smoke 固化
 - [x] 管理面第二批运行时配置已落地：`CONFIG SET` 支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`masterauth`、`replicaof`、`maxclients`、`databases`，并覆盖 `CONFIG GET/REWRITE` 验证、运行时 `maxclients` 生效与 rewrite 落盘

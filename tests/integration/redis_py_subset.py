@@ -203,6 +203,11 @@ class RedisPySubsetClient:
     def randomkey(self) -> bytes | None:
         return self._request(b"RANDOMKEY")
 
+    def keys(self, pattern: str) -> list[bytes]:
+        result = self._request(b"KEYS", pattern.encode())
+        assert isinstance(result, list)
+        return result
+
     def touch(self, *keys: str) -> int:
         return int(self._request(b"TOUCH", *(key.encode() for key in keys)))
 
@@ -857,6 +862,13 @@ def run_smoke() -> None:
             assert client.touch("touchme", "missing") == 1
             assert client.unlink("missing", "touchme") == 1
             assert client.exists("touchme") == 0
+
+            keys_all = client.keys("*")
+            if keys_all != [b"hash", b"key", b"list", b"set", b"zset"]:
+                raise AssertionError(f"unexpected KEYS * result: {keys_all!r}")
+            keys_k = client.keys("k*")
+            if keys_k != [b"key"]:
+                raise AssertionError(f"unexpected KEYS k* result: {keys_k!r}")
 
             cursor, keys = client.scan(0, count=16)
             if cursor != 0:

@@ -727,6 +727,45 @@ fn command_executor_keyword_match(pattern: &[byte], value: &[byte]) bool {
     return command_executor_keyword_match(pattern[1: pattern.len - 1], value[1: value.len - 1]);
 }
 
+fn command_executor_glob_match(pattern: &[byte], pattern_index: usize, value: &[byte], value_index: usize) bool {
+    if pattern_index == pattern.len {
+        return value_index == value.len;
+    }
+
+    const current: byte = pattern.ptr[pattern_index];
+    if current == 42 as byte {
+        var next_index: usize = pattern_index;
+        while next_index < pattern.len && pattern.ptr[next_index] == 42 as byte {
+            next_index = next_index + 1;
+        }
+        if next_index == pattern.len {
+            return true;
+        }
+        var scan: usize = value_index;
+        while scan <= value.len {
+            if command_executor_glob_match(pattern, next_index, value, scan) {
+                return true;
+            }
+            if scan == value.len {
+                break;
+            }
+            scan = scan + 1;
+        }
+        return false;
+    }
+
+    if value_index >= value.len {
+        return false;
+    }
+
+    if current == 63 as byte {
+        return command_executor_glob_match(pattern, pattern_index + 1, value, value_index + 1);
+    }
+
+    return command_executor_ascii_lower(current) == command_executor_ascii_lower(value.ptr[value_index]) &&
+        command_executor_glob_match(pattern, pattern_index + 1, value, value_index + 1);
+}
+
 fn command_executor_sort_options_default() SortOptions {
     return SortOptions{
         alpha: false,
@@ -5647,6 +5686,44 @@ fn command_executor_randomkey(engine: &Engine, command: &Command, now_ms: u64) C
     return command_executor_owned_bulk_copy(data);
 }
 
+fn command_executor_keys(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 2 {
+        return command_executor_wrong_arity();
+    }
+    const pattern: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const keys_obj: &RedisObject = engine_scan_keys_at(engine, now_ms) catch {
+        return command_executor_oom();
+    };
+    defer {
+        object_free(keys_obj);
+    }
+
+    const matched: &RedisObject = create_list_object() catch {
+        return command_executor_oom();
+    };
+    var node: &ListNode = keys_obj.list_head;
+    while node != null {
+        const key: &[byte] = node.value.value.buf[0: node.value.value.len];
+        if command_executor_glob_match(pattern, 0, key, 0) {
+            _ = list_object_push_tail(matched, key) catch {
+                object_free(matched);
+                return command_executor_oom();
+            };
+        }
+        node = node.next;
+    }
+
+    const count: usize = list_object_len(matched) catch {
+        object_free(matched);
+        return command_executor_wrongtype();
+    };
+    var reply: CommandReply = command_executor_array_bulk(matched.list_head, count);
+    reply.owned_object = matched;
+    return reply;
+}
+
 fn command_executor_time(command: &Command, now_ms: u64) CommandReply {
     if command.argc != 1 {
         return command_executor_wrong_arity();
@@ -8075,6 +8152,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_unlink {
         return command_executor_unlink(engine, command);
+    }
+    if command.info.cmd_type == CommandType.command_keys {
+        return command_executor_keys(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_exists {
         return command_executor_exists(engine, command, now_ms);

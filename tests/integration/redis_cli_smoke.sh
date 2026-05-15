@@ -462,6 +462,18 @@ if [[ "$KEY_EXISTS_AFTER_UNLINK_RESULT" != "0" ]]; then
     exit 1
 fi
 
+KEYS_ALL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" keys '*' )"
+if ! grep -qx 'key' <<<"$KEYS_ALL_RESULT"; then
+    echo "[FAIL] integration/redis_cli_smoke: expected KEYS * to include key, got '$KEYS_ALL_RESULT'" >&2
+    exit 1
+fi
+
+KEYS_K_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" keys 'k*' )"
+if [[ "$KEYS_K_RESULT" != "key" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected KEYS k* to return key, got '$KEYS_K_RESULT'" >&2
+    exit 1
+fi
+
 ZWORK_ADD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zadd zwork 2 b 1 a 3 c)"
 if [[ "$ZWORK_ADD_RESULT" != "3" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected zwork ZADD 3, got '$ZWORK_ADD_RESULT'" >&2

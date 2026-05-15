@@ -428,6 +428,7 @@ def run_smoke() -> None:
             roundtrip(sock, b"*3\r\n$5\r\nTOUCH\r\n$7\r\ntouchme\r\n$7\r\nmissing\r\n", b":1\r\n")
             roundtrip(sock, b"*3\r\n$6\r\nUNLINK\r\n$7\r\nmissing\r\n$7\r\ntouchme\r\n", b":1\r\n")
             roundtrip(sock, b"*2\r\n$6\r\nEXISTS\r\n$7\r\ntouchme\r\n", b":0\r\n")
+            roundtrip(sock, b"*2\r\n$4\r\nKEYS\r\n$2\r\nk*\r\n", b"*1\r\n$3\r\nkey\r\n")
             roundtrip(
                 sock,
                 b"*4\r\n$4\r\nSCAN\r\n$1\r\n0\r\n$5\r\nCOUNT\r\n$2\r\n10\r\n",

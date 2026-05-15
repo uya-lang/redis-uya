@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 127);
+    try assert_eq_i32(command_router_count(&router) as i32, 131);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -366,6 +366,22 @@ export fn test_command_router_lookup_and_case() !void {
     const srem: CommandInfo = try command_router_lookup(&router, &"srem"[0: 4]);
     try assert_eq_i32(srem.cmd_type as i32, CommandType.command_srem as i32);
     try assert_eq_i32(srem.arity, -3);
+
+    const scard: CommandInfo = try command_router_lookup(&router, &"SCARD"[0: 5]);
+    try assert_eq_i32(scard.cmd_type as i32, CommandType.command_scard as i32);
+    try assert_eq_i32(scard.arity, 2);
+
+    const sismember: CommandInfo = try command_router_lookup(&router, &"SISMEMBER"[0: 9]);
+    try assert_eq_i32(sismember.cmd_type as i32, CommandType.command_sismember as i32);
+    try assert_eq_i32(sismember.arity, 3);
+
+    const smismember: CommandInfo = try command_router_lookup(&router, &"SMISMEMBER"[0: 10]);
+    try assert_eq_i32(smismember.cmd_type as i32, CommandType.command_smismember as i32);
+    try assert_eq_i32(smismember.arity, -3);
+
+    const sscan: CommandInfo = try command_router_lookup(&router, &"SSCAN"[0: 5]);
+    try assert_eq_i32(sscan.cmd_type as i32, CommandType.command_sscan as i32);
+    try assert_eq_i32(sscan.arity, -3);
 
     const zadd: CommandInfo = try command_router_lookup(&router, &"ZADD"[0: 4]);
     try assert_eq_i32(zadd.cmd_type as i32, CommandType.command_zadd as i32);

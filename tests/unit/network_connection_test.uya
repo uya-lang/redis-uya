@@ -391,6 +391,18 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const smembers_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$8\r\nSMEMBERS\r\n$3\r\nset\r\n"[0: 27], &out[0], 256, 1000u64);
     try assert_true(out[0] == 42 as byte);
 
+    const scard_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$5\r\nSCARD\r\n$3\r\nset\r\n"[0: 24], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: scard_result.response_len], &":2\r\n"[0: 4]));
+
+    const sismember_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$9\r\nSISMEMBER\r\n$3\r\nset\r\n$1\r\na\r\n"[0: 35], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: sismember_result.response_len], &":1\r\n"[0: 4]));
+
+    const smismember_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$10\r\nSMISMEMBER\r\n$3\r\nset\r\n$1\r\na\r\n$1\r\nz\r\n$1\r\nb\r\n"[0: 51], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: smismember_result.response_len], &"*3\r\n:1\r\n:0\r\n:1\r\n"[0: 16]));
+
+    const sscan_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$5\r\nSSCAN\r\n$3\r\nset\r\n$1\r\n0\r\n$5\r\nCOUNT\r\n$1\r\n1\r\n"[0: 49], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: sscan_result.response_len], &"*2\r\n$1\r\n1\r\n*1\r\n$1\r\na\r\n"[0: 22]));
+
     const zadd_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*6\r\n$4\r\nZADD\r\n$4\r\nzset\r\n$1\r\n2\r\n$1\r\nb\r\n$1\r\n1\r\n$1\r\na\r\n"[0: 52], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: zadd_result.response_len], &":2\r\n"[0: 4]));
 

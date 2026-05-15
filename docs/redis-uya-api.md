@@ -760,6 +760,60 @@ SUNIONSTORE destination key [key ...]
 - 把并集写入 `destination`
 - 返回写入后的成员个数，Integer
 
+### `SCARD`
+
+格式：
+
+```text
+SCARD key
+```
+
+返回：
+
+- key 不存在时返回 `0`
+- 否则返回 set 成员个数，Integer
+
+### `SISMEMBER`
+
+格式：
+
+```text
+SISMEMBER key member
+```
+
+返回：
+
+- 命中成员返回 `1`
+- key 不存在或成员不存在返回 `0`
+
+### `SMISMEMBER`
+
+格式：
+
+```text
+SMISMEMBER key member [member ...]
+```
+
+返回：
+
+- 返回与请求成员顺序一致的 RESP Array
+- 每个元素都是 Integer：存在返回 `1`，否则返回 `0`
+
+### `SSCAN`
+
+格式：
+
+```text
+SSCAN key cursor [COUNT count]
+```
+
+返回：
+
+- 返回 `[cursor, members-array]`
+- key 不存在时返回 cursor `0` 和空数组
+
+当前实现支持 `COUNT`
+
 ### `ZINCRBY`
 
 格式：

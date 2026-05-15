@@ -426,6 +426,7 @@
 - [x] Set 第一批随机取值：`SPOP`、`SRANDMEMBER`
 - [x] Set 第二批集合运算：`SINTER`、`SDIFF`、`SUNION`
 - [x] Set 第三批集合写回：`SINTERSTORE`、`SDIFFSTORE`、`SUNIONSTORE`
+- [x] Set 第四批读路径：`SCARD`、`SISMEMBER`、`SMISMEMBER`、`SSCAN`
 - [x] ZSet 第一批数值与计数：`ZINCRBY`、`ZCARD`、`ZCOUNT`
 - [x] ZSet 第二批范围读取：`ZRANGEBYSCORE`、`ZREVRANGEBYSCORE`
 - [x] ZSet 第三批范围删除与扫描：`ZREMRANGEBYRANK`、`ZREMRANGEBYSCORE`、`ZSCAN`
@@ -458,6 +459,7 @@
 - [x] `COMMAND GETKEYS` / `COMMAND GETKEYSANDFLAGS` 当前命令表支持已落地：覆盖 range key spec、多 key/成对 key、`RENAME` 双 key、`SORT ... STORE` movablekeys 和基础 key flags
 - [x] String/Generic TTL 扩展已落地：`GETEX`、`PSETEX`、`EXPIREAT`、`EXPIRETIME`、`PEXPIRETIME` 已覆盖 unit、AOF absolute replay、TCP、redis-py 与 redis-cli smoke
 - [x] Hash 字段基础扩展已落地：`HDEL`、`HEXISTS`、`HLEN`、`HMGET`、`HSETNX`、`HSTRLEN` 已覆盖 object helper、unit、AOF replay、TCP、redis-py 与 redis-cli smoke
+- [x] Set 读路径扩展已落地：`SCARD`、`SISMEMBER`、`SMISMEMBER`、`SSCAN` 已覆盖 unit、TCP、redis-py 与 redis-cli smoke，并进入共享命令目录
 - [x] 读路径补齐已落地：`RANDOMKEY`、`TIME` 已覆盖 unit、TCP、redis-py 与 redis-cli smoke，并进入共享命令目录
 - [x] 复制可观测读命令已落地：`ROLE` 已覆盖 master/replica 两种返回形态，并通过 unit、TCP、redis-py 与 redis-cli smoke 固化
 - [x] 管理面第二批运行时配置已落地：`CONFIG SET` 支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`masterauth`、`replicaof`、`maxclients`、`databases`，并覆盖 `CONFIG GET/REWRITE` 验证、运行时 `maxclients` 生效与 rewrite 落盘

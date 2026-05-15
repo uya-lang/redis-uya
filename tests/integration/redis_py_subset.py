@@ -392,6 +392,17 @@ class RedisPySubsetClient:
         assert isinstance(result, list)
         return set(result)
 
+    def scard(self, key: str) -> int:
+        return int(self._request(b"SCARD", key.encode()))
+
+    def sismember(self, key: str, member: str) -> int:
+        return int(self._request(b"SISMEMBER", key.encode(), member.encode()))
+
+    def smismember(self, key: str, *members: str) -> list[int]:
+        result = self._request(b"SMISMEMBER", key.encode(), *(member.encode() for member in members))
+        assert isinstance(result, list)
+        return [int(item) for item in result]
+
     def srem(self, key: str, *members: str) -> int:
         return int(self._request(b"SREM", key.encode(), *(member.encode() for member in members)))
 
@@ -424,6 +435,17 @@ class RedisPySubsetClient:
 
     def sunionstore(self, dest: str, *keys: str) -> int:
         return int(self._request(b"SUNIONSTORE", dest.encode(), *(key.encode() for key in keys)))
+
+    def sscan(self, key: str, cursor: int = 0, count: int | None = None) -> tuple[int, list[bytes]]:
+        parts: list[bytes] = [b"SSCAN", key.encode(), str(cursor).encode()]
+        if count is not None:
+            parts.extend([b"COUNT", str(count).encode()])
+        result = self._request(*parts)
+        assert isinstance(result, list) and len(result) == 2
+        next_cursor = int(result[0])
+        items = result[1]
+        assert isinstance(items, list)
+        return next_cursor, items
 
     def zadd(self, key: str, mapping: dict[str, int]) -> int:
         parts: list[bytes] = [b"ZADD", key.encode()]
@@ -773,6 +795,14 @@ def run_smoke() -> None:
 
             assert client.sadd("set", "a", "b") == 2
             assert client.smembers("set") == {b"a", b"b"}
+            assert client.scard("set") == 2
+            assert client.sismember("set", "a") == 1
+            assert client.sismember("set", "z") == 0
+            if client.smismember("set", "a", "z", "b") != [1, 0, 1]:
+                raise AssertionError("unexpected smismember result")
+            cursor, sscan_items = client.sscan("set", 0, count=16)
+            if cursor != 0 or sscan_items != [b"a", b"b"]:
+                raise AssertionError(f"unexpected sscan result: cursor={cursor} items={sscan_items!r}")
             assert client.srem("set", "a") == 1
             assert client.sadd("spin", "a", "b") == 2
             srand = client.srandmember("spin")

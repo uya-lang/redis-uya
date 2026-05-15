@@ -384,6 +384,11 @@ def run_smoke() -> None:
             actual = recv_exact(sock, len(b"*2\r\n$1\r\nb\r\n$1\r\na\r\n"))
             if actual not in (b"*2\r\n$1\r\na\r\n$1\r\nb\r\n", b"*2\r\n$1\r\nb\r\n$1\r\na\r\n"):
                 raise AssertionError(f"unexpected SMEMBERS reply: {actual!r}")
+            roundtrip(sock, b"*2\r\n$5\r\nSCARD\r\n$3\r\nset\r\n", b":2\r\n")
+            roundtrip(sock, b"*3\r\n$9\r\nSISMEMBER\r\n$3\r\nset\r\n$1\r\na\r\n", b":1\r\n")
+            roundtrip(sock, b"*3\r\n$9\r\nSISMEMBER\r\n$3\r\nset\r\n$1\r\nz\r\n", b":0\r\n")
+            roundtrip(sock, b"*5\r\n$10\r\nSMISMEMBER\r\n$3\r\nset\r\n$1\r\na\r\n$1\r\nz\r\n$1\r\nb\r\n", b"*3\r\n:1\r\n:0\r\n:1\r\n")
+            roundtrip(sock, b"*5\r\n$5\r\nSSCAN\r\n$3\r\nset\r\n$1\r\n0\r\n$5\r\nCOUNT\r\n$2\r\n16\r\n", b"*2\r\n$1\r\n0\r\n*2\r\n$1\r\na\r\n$1\r\nb\r\n")
             roundtrip(sock, b"*4\r\n$4\r\nSADD\r\n$4\r\nspin\r\n$1\r\na\r\n$1\r\nb\r\n", b":2\r\n")
             sock.sendall(b"*2\r\n$11\r\nSRANDMEMBER\r\n$4\r\nspin\r\n")
             srand_actual = recv_exact(sock, len(b"$1\r\na\r\n"))

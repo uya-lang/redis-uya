@@ -576,6 +576,36 @@ if [[ "$SPIN_SADD_RESULT" != "2" ]]; then
     exit 1
 fi
 
+SPIN_SCARD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" scard spin)"
+if [[ "$SPIN_SCARD_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected spin SCARD 2, got '$SPIN_SCARD_RESULT'" >&2
+    exit 1
+fi
+
+SPIN_SISMEMBER_YES_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" sismember spin a)"
+if [[ "$SPIN_SISMEMBER_YES_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected spin SISMEMBER yes 1, got '$SPIN_SISMEMBER_YES_RESULT'" >&2
+    exit 1
+fi
+
+SPIN_SISMEMBER_NO_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" sismember spin z)"
+if [[ "$SPIN_SISMEMBER_NO_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected spin SISMEMBER no 0, got '$SPIN_SISMEMBER_NO_RESULT'" >&2
+    exit 1
+fi
+
+SPIN_SMISMEMBER_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" smismember spin a z b)"
+if [[ "$SPIN_SMISMEMBER_RESULT" != $'1\n0\n1' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected spin SMISMEMBER 1/0/1, got '$SPIN_SMISMEMBER_RESULT'" >&2
+    exit 1
+fi
+
+SPIN_SSCAN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" sscan spin 0 count 16)"
+if [[ "$SPIN_SSCAN_RESULT" != $'0\na\nb' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected spin SSCAN payload, got '$SPIN_SSCAN_RESULT'" >&2
+    exit 1
+fi
+
 SRANDMEMBER_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" srandmember spin)"
 case "$SRANDMEMBER_RESULT" in
     a|b) ;;

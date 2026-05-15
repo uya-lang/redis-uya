@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 131);
+    try assert_eq_i32(command_router_count(&router) as i32, 133);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -495,6 +495,14 @@ export fn test_command_router_lookup_and_case() !void {
 
     const role_info: CommandInfo = try command_router_lookup(&router, &"ROLE"[0: 4]);
     try assert_eq_i32(role_info.arity, 1);
+
+    const touch_info: CommandInfo = try command_router_lookup(&router, &"TOUCH"[0: 5]);
+    try assert_eq_i32(touch_info.cmd_type as i32, CommandType.command_touch as i32);
+    try assert_eq_i32(touch_info.arity, -2);
+
+    const unlink_info: CommandInfo = try command_router_lookup(&router, &"UNLINK"[0: 6]);
+    try assert_eq_i32(unlink_info.cmd_type as i32, CommandType.command_unlink as i32);
+    try assert_eq_i32(unlink_info.arity, -2);
 
     const pexpire: CommandInfo = try command_router_lookup(&router, &"pexpire"[0: 7]);
     try assert_eq_i32(pexpire.cmd_type as i32, CommandType.command_pexpire as i32);

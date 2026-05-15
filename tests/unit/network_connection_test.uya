@@ -446,6 +446,28 @@ export fn test_connection_process_ping_set_get_quit() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_connection_process_touch_unlink() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var out: [byte: 128] = [];
+
+    const set_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$3\r\nSET\r\n$7\r\ntouchme\r\n$5\r\nvalue\r\n"[0: 37], &out[0], 128, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: set_result.response_len], &"+OK\r\n"[0: 5]));
+
+    const touch_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$5\r\nTOUCH\r\n$7\r\ntouchme\r\n$7\r\nmissing\r\n"[0: 41], &out[0], 128, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: touch_result.response_len], &":1\r\n"[0: 4]));
+
+    const unlink_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$6\r\nUNLINK\r\n$7\r\ntouchme\r\n$7\r\nmissing\r\n"[0: 42], &out[0], 128, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: unlink_result.response_len], &":1\r\n"[0: 4]));
+
+    const exists_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$6\r\nEXISTS\r\n$7\r\ntouchme\r\n"[0: 29], &out[0], 128, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: exists_result.response_len], &":0\r\n"[0: 4]));
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_connection_zero_copy_get_reply_metadata() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();

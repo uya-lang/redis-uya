@@ -5559,6 +5559,43 @@ fn command_executor_del(engine: &Engine, command: &Command) CommandReply {
     return command_executor_integer(deleted);
 }
 
+fn command_executor_touch(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 2 {
+        return command_executor_wrong_arity();
+    }
+    var touched: i64 = 0;
+    var index: usize = 1;
+    while index < command.argc {
+        const key: &[byte] = command_executor_arg(command, index) catch {
+            return command_executor_wrong_arity();
+        };
+        const obj_result: !&RedisObject = lookup_key_at(engine, key, now_ms);
+        if obj_result.error_id == 0 {
+            touched = touched + 1;
+        }
+        index = index + 1;
+    }
+    return command_executor_integer(touched);
+}
+
+fn command_executor_unlink(engine: &Engine, command: &Command) CommandReply {
+    if command.argc < 2 {
+        return command_executor_wrong_arity();
+    }
+    var deleted: i64 = 0;
+    var index: usize = 1;
+    while index < command.argc {
+        const key: &[byte] = command_executor_arg(command, index) catch {
+            return command_executor_wrong_arity();
+        };
+        if delete_key(engine, key) {
+            deleted = deleted + 1;
+        }
+        index = index + 1;
+    }
+    return command_executor_integer(deleted);
+}
+
 fn command_executor_exists(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
     if command.argc < 2 {
         return command_executor_wrong_arity();
@@ -7109,10 +7146,14 @@ fn command_executor_command_key_flags(info: &CommandInfo, key_ordinal: usize) &[
         info.cmd_type == CommandType.command_watch ||
         info.cmd_type == CommandType.command_scard ||
         info.cmd_type == CommandType.command_sismember ||
-        info.cmd_type == CommandType.command_smismember {
+        info.cmd_type == CommandType.command_smismember ||
+        info.cmd_type == CommandType.command_touch {
         return &"RO"[0: 2];
     }
     if info.cmd_type == CommandType.command_del {
+        return &"RM|delete"[0: 9];
+    }
+    if info.cmd_type == CommandType.command_unlink {
         return &"RM|delete"[0: 9];
     }
     if info.cmd_type == CommandType.command_rename || info.cmd_type == CommandType.command_renamenx {
@@ -8028,6 +8069,12 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_del {
         return command_executor_del(engine, command);
+    }
+    if command.info.cmd_type == CommandType.command_touch {
+        return command_executor_touch(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_unlink {
+        return command_executor_unlink(engine, command);
     }
     if command.info.cmd_type == CommandType.command_exists {
         return command_executor_exists(engine, command, now_ms);

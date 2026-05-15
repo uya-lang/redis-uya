@@ -1237,6 +1237,35 @@ DEL key [key ...]
 
 - 删除成功的键数量，Integer
 
+### `TOUCH`
+
+格式：
+
+```text
+TOUCH key [key ...]
+```
+
+返回：
+
+- 返回本次请求中存在且被访问到的 key 数量，Integer
+
+### `UNLINK`
+
+格式：
+
+```text
+UNLINK key [key ...]
+```
+
+返回：
+
+- 返回成功移除的 key 数量，Integer
+
+说明：
+
+- 当前实现先提供 standalone 兼容返回值与删除闭环
+- 现阶段仍按单线程同步删除完成，不做后台异步释放
+
 ### `DBSIZE`
 
 格式：

@@ -124,6 +124,7 @@ use tests.unit.command_executor_test.test_command_zremrangebyrank_zremrangebysco
 use tests.unit.command_executor_test.test_command_scan;
 use tests.unit.command_executor_test.test_command_hscan;
 use tests.unit.command_executor_test.test_command_randomkey_and_time;
+use tests.unit.command_executor_test.test_command_touch_and_unlink;
 use tests.unit.command_executor_test.test_command_role;
 use tests.unit.command_executor_test.test_command_expire_and_ttl;
 use tests.unit.command_executor_test.test_command_rename_renamenx_lastsave;
@@ -136,6 +137,7 @@ use tests.unit.command_executor_test.test_command_sort;
 use tests.unit.command_executor_test.test_command_error_paths;
 use tests.unit.network_connection_test.test_connection_encode_resp_replies;
 use tests.unit.network_connection_test.test_connection_process_ping_set_get_quit;
+use tests.unit.network_connection_test.test_connection_process_touch_unlink;
 use tests.unit.network_connection_test.test_connection_zero_copy_get_reply_metadata;
 use tests.unit.network_connection_test.test_connection_process_maxmemory;
 use tests.unit.network_connection_test.test_connection_process_multi_exec_discard;
@@ -678,6 +680,10 @@ export fn main() i32 {
     _ = test_command_randomkey_and_time() catch { printf("[FAIL] command_executor/randomkey_time\n" as *byte); failed = failed + 1; };
     if failed == before_exec_randomkey_time { printf("[PASS] command_executor/randomkey_time\n" as *byte); }
 
+    const before_exec_touch_unlink: i32 = failed;
+    _ = test_command_touch_and_unlink() catch { printf("[FAIL] command_executor/touch_unlink\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_touch_unlink { printf("[PASS] command_executor/touch_unlink\n" as *byte); }
+
     const before_exec_role: i32 = failed;
     _ = test_command_role() catch { printf("[FAIL] command_executor/role\n" as *byte); failed = failed + 1; };
     if failed == before_exec_role { printf("[PASS] command_executor/role\n" as *byte); }
@@ -725,6 +731,10 @@ export fn main() i32 {
     const before_conn_process: i32 = failed;
     _ = test_connection_process_ping_set_get_quit() catch { printf("[FAIL] network_connection/process\n" as *byte); failed = failed + 1; };
     if failed == before_conn_process { printf("[PASS] network_connection/process\n" as *byte); }
+
+    const before_conn_touch_unlink: i32 = failed;
+    _ = test_connection_process_touch_unlink() catch { printf("[FAIL] network_connection/touch_unlink\n" as *byte); failed = failed + 1; };
+    if failed == before_conn_touch_unlink { printf("[PASS] network_connection/touch_unlink\n" as *byte); }
 
     const before_conn_zero_copy: i32 = failed;
     _ = test_connection_zero_copy_get_reply_metadata() catch { printf("[FAIL] network_connection/zero_copy_get\n" as *byte); failed = failed + 1; };

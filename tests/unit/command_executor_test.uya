@@ -2481,6 +2481,42 @@ export fn test_command_randomkey_and_time() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_command_touch_and_unlink() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+
+    var set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$5\r\ntouch\r\n$5\r\nvalue\r\n"[0: 35]);
+    const set_command: Command = try command_executor_test_command(&router, &set_parsed);
+    _ = command_execute_at(&engine, &set_command, 1000u64);
+    resp_value_free(&set_parsed.value);
+
+    var set_two_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$6\r\nunlink\r\n$5\r\nvalue\r\n"[0: 36]);
+    const set_two_command: Command = try command_executor_test_command(&router, &set_two_parsed);
+    _ = command_execute_at(&engine, &set_two_command, 1000u64);
+    resp_value_free(&set_two_parsed.value);
+
+    var touch_parsed: RespParseResult = try parse_resp2(&"*4\r\n$5\r\nTOUCH\r\n$5\r\ntouch\r\n$7\r\nmissing\r\n$6\r\nunlink\r\n"[0: 51]);
+    const touch_command: Command = try command_executor_test_command(&router, &touch_parsed);
+    const touch_reply: CommandReply = command_execute_at(&engine, &touch_command, 1000u64);
+    try assert_eq_i32(touch_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(touch_reply.integer as i32, 2);
+    resp_value_free(&touch_parsed.value);
+
+    var unlink_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nUNLINK\r\n$6\r\nunlink\r\n$7\r\nmissing\r\n$5\r\ntouch\r\n"[0: 52]);
+    const unlink_command: Command = try command_executor_test_command(&router, &unlink_parsed);
+    const unlink_reply: CommandReply = command_execute_at(&engine, &unlink_command, 1000u64);
+    try assert_eq_i32(unlink_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(unlink_reply.integer as i32, 2);
+    resp_value_free(&unlink_parsed.value);
+
+    try assert_true(command_executor_test_key_missing_at(&engine, &"touch"[0: 5], 1000u64));
+    try assert_true(command_executor_test_key_missing_at(&engine, &"unlink"[0: 6], 1000u64));
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_command_role() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();
@@ -3434,6 +3470,13 @@ export fn test_command_error_paths() !void {
     const scan_bad_option_reply: CommandReply = command_execute_at(&engine, &scan_bad_option_command, 1000u64);
     try assert_eq_i32(scan_bad_option_reply.typ as i32, CommandReplyType.reply_error as i32);
     resp_value_free(&scan_bad_option_parsed.value);
+
+    var touch_wrongtype_parsed: RespParseResult = try parse_resp2(&"*2\r\n$5\r\nTOUCH\r\n$3\r\nkey\r\n"[0: 24]);
+    const touch_wrongtype_command: Command = try command_executor_test_command(&router, &touch_wrongtype_parsed);
+    const touch_wrongtype_reply: CommandReply = command_execute_at(&engine, &touch_wrongtype_command, 1000u64);
+    try assert_eq_i32(touch_wrongtype_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(touch_wrongtype_reply.integer as i32, 1);
+    resp_value_free(&touch_wrongtype_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

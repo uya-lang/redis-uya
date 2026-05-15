@@ -203,6 +203,12 @@ class RedisPySubsetClient:
     def randomkey(self) -> bytes | None:
         return self._request(b"RANDOMKEY")
 
+    def touch(self, *keys: str) -> int:
+        return int(self._request(b"TOUCH", *(key.encode() for key in keys)))
+
+    def unlink(self, *keys: str) -> int:
+        return int(self._request(b"UNLINK", *(key.encode() for key in keys)))
+
     def time(self) -> tuple[int, int]:
         result = self._request(b"TIME")
         assert isinstance(result, list) and len(result) == 2
@@ -846,6 +852,11 @@ def run_smoke() -> None:
             assert client.zremrangebyscore("zwork", 3, 3) == 1
             assert client.zcard("zwork") == 0
             assert client.delete("zwork") == 0
+
+            assert client.set("touchme", "value")
+            assert client.touch("touchme", "missing") == 1
+            assert client.unlink("missing", "touchme") == 1
+            assert client.exists("touchme") == 0
 
             cursor, keys = client.scan(0, count=16)
             if cursor != 0:

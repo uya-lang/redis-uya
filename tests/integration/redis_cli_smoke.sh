@@ -438,6 +438,30 @@ if [[ "$ZSET_DEL_RESULT" != "1" ]]; then
     exit 1
 fi
 
+TOUCH_SEED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" set touchme value)"
+if [[ "$TOUCH_SEED_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected touchme SET OK, got '$TOUCH_SEED_RESULT'" >&2
+    exit 1
+fi
+
+TOUCH_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" touch touchme missing)"
+if [[ "$TOUCH_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected TOUCH 1, got '$TOUCH_RESULT'" >&2
+    exit 1
+fi
+
+UNLINK_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" unlink missing touchme)"
+if [[ "$UNLINK_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected UNLINK 1, got '$UNLINK_RESULT'" >&2
+    exit 1
+fi
+
+KEY_EXISTS_AFTER_UNLINK_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" exists touchme)"
+if [[ "$KEY_EXISTS_AFTER_UNLINK_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected touchme to be removed by UNLINK, got '$KEY_EXISTS_AFTER_UNLINK_RESULT'" >&2
+    exit 1
+fi
+
 ZWORK_ADD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zadd zwork 2 b 1 a 3 c)"
 if [[ "$ZWORK_ADD_RESULT" != "3" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected zwork ZADD 3, got '$ZWORK_ADD_RESULT'" >&2

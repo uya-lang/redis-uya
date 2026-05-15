@@ -15,11 +15,11 @@
 
 | status | count |
 |--------|-------|
-| `full` | `122` |
+| `full` | `124` |
 | `partial` | `42` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `338` |
+| `deferred` | `336` |
 
 ## Group counts
 
@@ -488,7 +488,7 @@
 | `topk.list` | `topk` | `deferred` | `v0.9.2` | `-2` | `topk` | `no` | `@topk, @read, @slow` |
 | `topk.query` | `topk` | `deferred` | `v0.9.2` | `-2` | `topk` | `no` | `@topk, @read, @slow` |
 | `topk.reserve` | `topk` | `deferred` | `v0.9.2` | `-3` | `topk` | `no` | `@topk, @write, @fast` |
-| `touch` | `generic` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@keyspace, @read, @fast` |
+| `touch` | `generic` | `full` | `-` | `-2` | `-` | `no` | `@keyspace, @read, @fast` |
 | `ts.add` | `timeseries` | `deferred` | `v0.9.2` | `-4` | `ts` | `no` | `@timeseries, @write, @slow` |
 | `ts.alter` | `timeseries` | `deferred` | `v0.9.2` | `-2` | `ts` | `no` | `@timeseries, @write, @slow` |
 | `ts.create` | `timeseries` | `deferred` | `v0.9.2` | `-2` | `ts` | `no` | `@timeseries, @write, @fast` |
@@ -508,7 +508,7 @@
 | `ts.revrange` | `timeseries` | `deferred` | `v0.9.2` | `-4` | `ts` | `no` | `@timeseries, @read, @slow` |
 | `ttl` | `generic` | `full` | `-` | `2` | `-` | `no` | `@keyspace, @read, @fast` |
 | `type` | `generic` | `full` | `-` | `2` | `-` | `no` | `@keyspace, @read, @fast` |
-| `unlink` | `generic` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@keyspace, @write, @fast` |
+| `unlink` | `generic` | `full` | `-` | `-2` | `-` | `no` | `@keyspace, @write, @fast` |
 | `unsubscribe` | `pubsub` | `partial` | `-` | `-1` | `-` | `no` | `@pubsub, @slow` |
 | `unwatch` | `transactions` | `full` | `-` | `1` | `-` | `no` | `@fast, @transaction` |
 | `vadd` | `vector_set` | `deferred` | `v0.9.2` | `0` | `vector_set` | `no` | `-` |

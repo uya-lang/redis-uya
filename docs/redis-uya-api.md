@@ -1382,6 +1382,25 @@ TIME
 - 当前实现由命令执行时传入的毫秒时间戳换算秒和微秒部分
 - 微秒部分固定是当前毫秒余数乘以 `1000`
 
+### `ROLE`
+
+格式：
+
+```text
+ROLE
+```
+
+返回：
+
+- master：`[master, replication-offset, []]`
+- replica：`[slave, master-host, master-port, replication-state, replication-offset]`
+
+说明：
+
+- 当前 standalone 路径只覆盖 `master` / `slave` 两种返回形态，不包含 Sentinel 角色
+- master 形态里的第三个元素当前固定为空数组，表示没有额外下游副本明细
+- replica 形态里的 host/port/state 来自当前运行时复制配置与状态机
+
 ### `INFO`
 
 格式：

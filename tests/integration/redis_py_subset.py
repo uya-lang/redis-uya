@@ -208,6 +208,9 @@ class RedisPySubsetClient:
         assert isinstance(result, list) and len(result) == 2
         return int(result[0]), int(result[1])
 
+    def role(self):
+        return self._request(b"ROLE")
+
     def select(self, db: int) -> bool:
         return self._request(b"SELECT", str(db).encode()) == "OK"
 
@@ -580,6 +583,9 @@ def run_smoke() -> None:
             server_sec, server_usec = client.time()
             if server_sec <= 0 or server_usec < 0 or server_usec >= 1_000_000:
                 raise AssertionError(f"unexpected TIME reply: {(server_sec, server_usec)}")
+            role = client.role()
+            if role != [b"master", 0, []]:
+                raise AssertionError(f"unexpected ROLE reply: {role!r}")
             assert client.set("key", "value")
             assert client.randomkey() == b"key"
             assert client.get("key") == b"value"

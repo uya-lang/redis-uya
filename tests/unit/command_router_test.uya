@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 126);
+    try assert_eq_i32(command_router_count(&router) as i32, 127);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -477,6 +477,9 @@ export fn test_command_router_lookup_and_case() !void {
     const time_info: CommandInfo = try command_router_lookup(&router, &"TIME"[0: 4]);
     try assert_eq_i32(time_info.arity, 1);
 
+    const role_info: CommandInfo = try command_router_lookup(&router, &"ROLE"[0: 4]);
+    try assert_eq_i32(role_info.arity, 1);
+
     const pexpire: CommandInfo = try command_router_lookup(&router, &"pexpire"[0: 7]);
     try assert_eq_i32(pexpire.cmd_type as i32, CommandType.command_pexpire as i32);
     try assert_eq_i32(pexpire.arity, 3);
@@ -579,6 +582,7 @@ export fn test_command_router_arity_validation() !void {
     const dbsize: CommandInfo = try command_router_lookup(&router, &"DBSIZE"[0: 6]);
     const randomkey: CommandInfo = try command_router_lookup(&router, &"RANDOMKEY"[0: 9]);
     const time_info: CommandInfo = try command_router_lookup(&router, &"TIME"[0: 4]);
+    const role_info: CommandInfo = try command_router_lookup(&router, &"ROLE"[0: 4]);
     const pexpire: CommandInfo = try command_router_lookup(&router, &"PEXPIRE"[0: 7]);
     const persist: CommandInfo = try command_router_lookup(&router, &"PERSIST"[0: 7]);
     const pexpireat: CommandInfo = try command_router_lookup(&router, &"PEXPIREAT"[0: 9]);
@@ -675,6 +679,7 @@ export fn test_command_router_arity_validation() !void {
     try command_validate_arity(&dbsize, 1);
     try command_validate_arity(&randomkey, 1);
     try command_validate_arity(&time_info, 1);
+    try command_validate_arity(&role_info, 1);
     try command_validate_arity(&pexpire, 3);
     try command_validate_arity(&persist, 2);
     try command_validate_arity(&pexpireat, 3);

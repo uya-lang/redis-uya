@@ -140,6 +140,7 @@ def run_smoke() -> None:
             time_usec = recv_bulk(sock)
             if not time_sec.isdigit() or not time_usec.isdigit():
                 raise AssertionError(f"unexpected TIME payload: {(time_sec, time_usec)!r}")
+            roundtrip(sock, b"*1\r\n$4\r\nROLE\r\n", b"*3\r\n$6\r\nmaster\r\n:0\r\n*0\r\n")
             roundtrip(sock, b"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n", b"+OK\r\n")
             roundtrip(sock, b"*1\r\n$9\r\nRANDOMKEY\r\n", b"$3\r\nkey\r\n")
             roundtrip(sock, b"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n", b"$5\r\nvalue\r\n")

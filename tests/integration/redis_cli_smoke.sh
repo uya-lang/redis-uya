@@ -72,6 +72,12 @@ if ! [[ "$TIME_RESULT" =~ ^[0-9]+$'\n'[0-9]+$ ]]; then
     exit 1
 fi
 
+ROLE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" role)"
+if ! [[ "$ROLE_RESULT" =~ ^master$'\n'[0-9]+$ ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: unexpected ROLE output '$ROLE_RESULT'" >&2
+    exit 1
+fi
+
 RANDOMKEY_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" randomkey)"
 if [[ "$RANDOMKEY_RESULT" != "key" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected RANDOMKEY key, got '$RANDOMKEY_RESULT'" >&2

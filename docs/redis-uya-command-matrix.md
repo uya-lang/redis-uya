@@ -15,11 +15,11 @@
 
 | status | count |
 |--------|-------|
-| `full` | `117` |
+| `full` | `118` |
 | `partial` | `42` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `343` |
+| `deferred` | `342` |
 
 ## Group counts
 
@@ -412,7 +412,7 @@
 | `reset` | `connection` | `deferred` | `v0.9.1` | `1` | `-` | `no` | `@fast, @connection` |
 | `restore` | `generic` | `partial` | `-` | `-4` | `-` | `no` | `@keyspace, @write, @slow, @dangerous` |
 | `restore-asking` | `server` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@keyspace, @write, @slow, @dangerous` |
-| `role` | `server` | `deferred` | `v0.9.1` | `1` | `-` | `no` | `@admin, @fast, @dangerous` |
+| `role` | `server` | `full` | `-` | `1` | `-` | `no` | `@admin, @fast, @dangerous` |
 | `rpop` | `list` | `full` | `-` | `-2` | `-` | `no` | `@write, @list, @fast` |
 | `rpoplpush` | `list` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@write, @list, @slow` |
 | `rpush` | `list` | `full` | `-` | `-3` | `-` | `no` | `@write, @list, @fast` |

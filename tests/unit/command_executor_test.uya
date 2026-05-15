@@ -2404,6 +2404,39 @@ export fn test_command_randomkey_and_time() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_command_role() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var runtime: CommandRuntimeInfo = command_runtime_default();
+    var out: [byte: 256] = [];
+
+    var role_master_parsed: RespParseResult = try parse_resp2(&"*1\r\n$4\r\nROLE\r\n"[0: 14]);
+    const role_master_command: Command = try command_executor_test_command(&router, &role_master_parsed);
+    var role_master_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &role_master_command, 1000u64);
+    const role_master_len: usize = try connection_encode_reply(&role_master_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: role_master_len], &"*3\r\n$6\r\nmaster\r\n:0\r\n*0\r\n"[0: 24]));
+    command_reply_cleanup(&role_master_reply);
+    resp_value_free(&role_master_parsed.value);
+
+    runtime.replication_role = ReplicationRole.role_replica;
+    runtime.replication_state = ReplicationState.repl_state_connected;
+    config_copy_bytes(runtime.config.replicaof_host[0: 64], &"127.0.0.1"[0: 9]);
+    runtime.config.replicaof_port = 6381;
+    runtime.replication_master_offset = 128u64;
+
+    var role_replica_parsed: RespParseResult = try parse_resp2(&"*1\r\n$4\r\nROLE\r\n"[0: 14]);
+    const role_replica_command: Command = try command_executor_test_command(&router, &role_replica_parsed);
+    var role_replica_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &role_replica_command, 1000u64);
+    const role_replica_len: usize = try connection_encode_reply(&role_replica_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: role_replica_len], &"*5\r\n$5\r\nslave\r\n$9\r\n127.0.0.1\r\n:6381\r\n$9\r\nconnected\r\n:128\r\n"[0: 58]));
+    command_reply_cleanup(&role_replica_reply);
+    resp_value_free(&role_replica_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_command_expire_and_ttl() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();

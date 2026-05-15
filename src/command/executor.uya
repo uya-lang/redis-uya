@@ -5468,6 +5468,40 @@ fn command_executor_time(command: &Command, now_ms: u64) CommandReply {
     return command_executor_owned_raw(raw.buf[0: raw.len]);
 }
 
+fn command_executor_role(runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
+    if command.argc != 1 {
+        return command_executor_wrong_arity();
+    }
+    var raw: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&raw);
+    }
+
+    if runtime.replication_role == ReplicationRole.role_master {
+        _ = sds_cat(&raw, &"*3\r\n$6\r\nmaster\r\n"[0: 16]) catch { return command_executor_oom(); };
+        _ = command_executor_info_append_u64(&raw, &":%u\r\n"[0: 5], runtime.replication_master_offset) catch {
+            return command_executor_oom();
+        };
+        _ = sds_cat(&raw, &"*0\r\n"[0: 4]) catch { return command_executor_oom(); };
+        return command_executor_owned_raw(raw.buf[0: raw.len]);
+    }
+
+    const host: &[byte] = command_executor_cstring_slice(runtime.config.replicaof_host[0: 64]);
+    const state: &[byte] = replication_state_name(runtime.replication_state);
+    _ = sds_cat(&raw, &"*5\r\n$5\r\nslave\r\n"[0: 15]) catch { return command_executor_oom(); };
+    _ = command_executor_command_append_bulk(&raw, host) catch { return command_executor_oom(); };
+    _ = command_executor_info_append_i64(&raw, &":%i\r\n"[0: 5], runtime.config.replicaof_port as i64) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_command_append_bulk(&raw, state) catch { return command_executor_oom(); };
+    _ = command_executor_info_append_u64(&raw, &":%u\r\n"[0: 5], runtime.replication_master_offset) catch {
+        return command_executor_oom();
+    };
+    return command_executor_owned_raw(raw.buf[0: raw.len]);
+}
+
 fn command_executor_expire(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
     if command.argc != 3 {
         return command_executor_wrong_arity();
@@ -7808,6 +7842,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_time {
         return command_executor_time(command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_role {
+        return command_executor_role(runtime, command);
     }
     if command.info.cmd_type == CommandType.command_expire {
         return command_executor_expire(engine, command, now_ms);

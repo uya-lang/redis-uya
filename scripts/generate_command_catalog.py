@@ -166,6 +166,7 @@ FULL_NAMES = {
     "renamenx",
     "replicaof",
     "restore",
+    "role",
     "rpop",
     "rpush",
     "rpushx",

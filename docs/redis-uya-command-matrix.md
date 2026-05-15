@@ -15,11 +15,11 @@
 
 | status | count |
 |--------|-------|
-| `full` | `125` |
+| `full` | `126` |
 | `partial` | `42` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `335` |
+| `deferred` | `334` |
 
 ## Group counts
 
@@ -451,7 +451,7 @@
 | `smismember` | `set` | `full` | `-` | `-3` | `-` | `no` | `@read, @set, @fast` |
 | `smove` | `set` | `deferred` | `v0.9.1` | `4` | `-` | `no` | `@write, @set, @fast` |
 | `sort` | `generic` | `partial` | `-` | `-2` | `-` | `yes` | `@write, @set, @sortedset, @list, @slow, @dangerous` |
-| `sort_ro` | `generic` | `deferred` | `v0.9.1` | `-2` | `-` | `yes` | `@read, @set, @sortedset, @list, @slow, @dangerous` |
+| `sort_ro` | `generic` | `full` | `-` | `-2` | `-` | `yes` | `@read, @set, @sortedset, @list, @slow, @dangerous` |
 | `spop` | `set` | `full` | `-` | `-2` | `-` | `no` | `@write, @set, @fast` |
 | `spublish` | `pubsub` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@pubsub, @fast` |
 | `srandmember` | `set` | `full` | `-` | `-2` | `-` | `no` | `@read, @set, @slow` |

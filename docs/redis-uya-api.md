@@ -1124,6 +1124,28 @@ SORT key [ASC|DESC] [ALPHA] [LIMIT offset count] [BY pattern] [GET pattern ...] 
 - `LIMIT` 中 `offset < 0` 按 `0` 处理，`count < 0` 表示取到尾部
 - `SORT STORE` 在当前实现中会覆盖目标 key 并清除其 TTL；结果为空时删除目标 key
 
+### `SORT_RO`
+
+格式：
+
+```text
+SORT_RO key [ASC|DESC] [ALPHA] [LIMIT offset count] [BY pattern] [GET pattern ...]
+```
+
+返回：
+
+- 返回排序后的 RESP Array
+- 非数值排序且未指定 `ALPHA`：`-ERR One or more scores can't be converted into double`
+- 带 `STORE` 或未知/缺失选项：`-ERR syntax error`
+
+说明：
+
+- 当前实现复用 `SORT` 的只读路径
+- 支持 `list` / `set` / `zset` 作为源集合
+- 支持 `BY nosort`
+- 支持字符串 key pattern 与 hash field pattern
+- 不支持 `STORE destination`
+
 ### `MGET`
 
 格式：

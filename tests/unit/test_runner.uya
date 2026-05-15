@@ -126,6 +126,7 @@ use tests.unit.command_executor_test.test_command_hscan;
 use tests.unit.command_executor_test.test_command_randomkey_and_time;
 use tests.unit.command_executor_test.test_command_touch_and_unlink;
 use tests.unit.command_executor_test.test_command_keys;
+use tests.unit.command_executor_test.test_command_sort_ro;
 use tests.unit.command_executor_test.test_command_role;
 use tests.unit.command_executor_test.test_command_expire_and_ttl;
 use tests.unit.command_executor_test.test_command_rename_renamenx_lastsave;
@@ -140,6 +141,7 @@ use tests.unit.network_connection_test.test_connection_encode_resp_replies;
 use tests.unit.network_connection_test.test_connection_process_ping_set_get_quit;
 use tests.unit.network_connection_test.test_connection_process_touch_unlink;
 use tests.unit.network_connection_test.test_connection_process_keys;
+use tests.unit.network_connection_test.test_connection_process_sort_ro;
 use tests.unit.network_connection_test.test_connection_zero_copy_get_reply_metadata;
 use tests.unit.network_connection_test.test_connection_process_maxmemory;
 use tests.unit.network_connection_test.test_connection_process_multi_exec_discard;
@@ -690,6 +692,10 @@ export fn main() i32 {
     _ = test_command_keys() catch { printf("[FAIL] command_executor/keys\n" as *byte); failed = failed + 1; };
     if failed == before_exec_keys { printf("[PASS] command_executor/keys\n" as *byte); }
 
+    const before_exec_sort_ro: i32 = failed;
+    _ = test_command_sort_ro() catch { printf("[FAIL] command_executor/sort_ro\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_sort_ro { printf("[PASS] command_executor/sort_ro\n" as *byte); }
+
     const before_exec_role: i32 = failed;
     _ = test_command_role() catch { printf("[FAIL] command_executor/role\n" as *byte); failed = failed + 1; };
     if failed == before_exec_role { printf("[PASS] command_executor/role\n" as *byte); }
@@ -745,6 +751,10 @@ export fn main() i32 {
     const before_conn_keys: i32 = failed;
     _ = test_connection_process_keys() catch { printf("[FAIL] network_connection/keys\n" as *byte); failed = failed + 1; };
     if failed == before_conn_keys { printf("[PASS] network_connection/keys\n" as *byte); }
+
+    const before_conn_sort_ro: i32 = failed;
+    _ = test_connection_process_sort_ro() catch { printf("[FAIL] network_connection/sort_ro\n" as *byte); failed = failed + 1; };
+    if failed == before_conn_sort_ro { printf("[PASS] network_connection/sort_ro\n" as *byte); }
 
     const before_conn_zero_copy: i32 = failed;
     _ = test_connection_zero_copy_get_reply_metadata() catch { printf("[FAIL] network_connection/zero_copy_get\n" as *byte); failed = failed + 1; };

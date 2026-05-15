@@ -864,6 +864,12 @@ if [[ "$SORT_RESULT" != $'1\n2\n3' ]]; then
     exit 1
 fi
 
+SORT_RO_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" sort_ro sortnums)"
+if [[ "$SORT_RO_RESULT" != $'1\n2\n3' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SORT_RO default 1/2/3, got '$SORT_RO_RESULT'" >&2
+    exit 1
+fi
+
 redis-cli --raw -h 127.0.0.1 -p "$PORT" set sortw_1 20 >/dev/null
 redis-cli --raw -h 127.0.0.1 -p "$PORT" set sortw_2 10 >/dev/null
 redis-cli --raw -h 127.0.0.1 -p "$PORT" set sortw_3 30 >/dev/null
@@ -886,6 +892,12 @@ fi
 SORT_STORE_LRANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lrange sortout 0 -1)"
 if [[ "$SORT_STORE_LRANGE_RESULT" != $'1\n2\n3' ]]; then
     echo "[FAIL] integration/redis_cli_smoke: unexpected SORT STORE LRANGE output: '$SORT_STORE_LRANGE_RESULT'" >&2
+    exit 1
+fi
+
+SORT_RO_STORE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" sort_ro sortnums store sortout 2>&1 || true)"
+if [[ "$SORT_RO_STORE_RESULT" != "ERR syntax error" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SORT_RO STORE syntax error, got '$SORT_RO_STORE_RESULT'" >&2
     exit 1
 fi
 

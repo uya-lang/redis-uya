@@ -493,6 +493,25 @@ export fn test_connection_process_keys() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_connection_process_sort_ro() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var out: [byte: 128] = [];
+
+    const seed: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$5\r\nRPUSH\r\n$7\r\nsortnum\r\n$1\r\n3\r\n$1\r\n1\r\n$1\r\n2\r\n"[0: 49], &out[0], 128, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: seed.response_len], &":3\r\n"[0: 4]));
+
+    const sort_ro: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$7\r\nSORT_RO\r\n$7\r\nsortnum\r\n"[0: 30], &out[0], 128, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: sort_ro.response_len], &"*3\r\n$1\r\n1\r\n$1\r\n2\r\n$1\r\n3\r\n"[0: 25]));
+
+    const sort_ro_store: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$7\r\nSORT_RO\r\n$7\r\nsortnum\r\n$5\r\nSTORE\r\n$7\r\nsortout\r\n"[0: 56], &out[0], 128, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: sort_ro_store.response_len], &"-ERR syntax error\r\n"[0: 19]));
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_connection_zero_copy_get_reply_metadata() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();

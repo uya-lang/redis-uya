@@ -3998,6 +3998,56 @@ fn command_executor_sort(engine: &Engine, command: &Command, now_ms: u64) Comman
     return command_executor_sort_reply_from_members(engine, ordered, &options, now_ms);
 }
 
+fn command_executor_sort_ro(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 2 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+
+    var options: SortOptions = command_executor_sort_parse_options(command) catch |err| {
+        if err == error.AllocOutOfMemory {
+            return command_executor_oom();
+        }
+        if err == error.CommandInvalidInteger {
+            return command_executor_invalid_integer();
+        }
+        return command_executor_syntax_error();
+    };
+    defer {
+        command_executor_sort_cleanup_options(&options);
+    }
+    if options.store_enabled {
+        return command_executor_syntax_error();
+    }
+
+    const source: &RedisObject = command_executor_sort_collect_source(engine, key, now_ms) catch |err| {
+        if err == error.AllocOutOfMemory {
+            return command_executor_oom();
+        }
+        return command_executor_wrongtype();
+    };
+    defer {
+        object_free(source);
+    }
+
+    const ordered: &RedisObject = command_executor_sort_order_members(engine, source, &options, now_ms) catch |err| {
+        if err == error.AllocOutOfMemory {
+            return command_executor_oom();
+        }
+        if err == error.CommandInvalidFloat {
+            return command_executor_sort_numeric_error();
+        }
+        return command_executor_wrongtype();
+    };
+    defer {
+        object_free(ordered);
+    }
+
+    return command_executor_sort_reply_from_members(engine, ordered, &options, now_ms);
+}
+
 fn command_executor_flushdb(engine: &Engine, command: &Command) CommandReply {
     if command.argc != 1 {
         return command_executor_wrong_arity();
@@ -8044,6 +8094,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_sort {
         return command_executor_sort(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_sort_ro {
+        return command_executor_sort_ro(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_flushdb {
         return command_executor_flushdb(engine, command);

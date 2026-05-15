@@ -258,6 +258,12 @@ class RedisPySubsetClient:
             encoded.append(part.encode())
         return self._request(*encoded)
 
+    def sort_ro(self, key: str, *parts: str):
+        encoded: list[bytes] = [b"SORT_RO", key.encode()]
+        for part in parts:
+            encoded.append(part.encode())
+        return self._request(*encoded)
+
     def exists(self, *keys: str) -> int:
         return int(self._request(b"EXISTS", *(key.encode() for key in keys)))
 
@@ -707,6 +713,14 @@ def run_smoke() -> None:
             assert client.sort("sortnums", "BY", "sortw_*", "GET", "obj_*", "GET", "#") == [b"two", b"2", b"one", b"1", b"three", b"3"]
             assert client.sort("sortnums", "STORE", "sortout") == 3
             assert client.lrange("sortout", 0, -1) == [b"1", b"2", b"3"]
+            assert client.sort_ro("sortnums") == [b"1", b"2", b"3"]
+            try:
+                client.sort_ro("sortnums", "STORE", "sortout")
+            except RespError as exc:
+                if "syntax error" not in str(exc):
+                    raise AssertionError(f"unexpected SORT_RO STORE error: {exc}") from exc
+            else:
+                raise AssertionError("expected SORT_RO STORE to fail")
             assert client.delete("sortnums", "sortout", "sortw_1", "sortw_2", "sortw_3", "obj_1", "obj_2", "obj_3") == 8
             assert client.exists("key", "missing") == 1
             assert client.expire("key", 2)

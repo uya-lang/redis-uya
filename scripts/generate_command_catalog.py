@@ -189,6 +189,7 @@ FULL_NAMES = {
     "smismember",
     "smembers",
     "sort",
+    "sort_ro",
     "spop",
     "srandmember",
     "srem",

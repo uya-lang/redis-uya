@@ -212,6 +212,8 @@ def run_smoke() -> None:
             roundtrip(sock, b"*3\r\n$3\r\nSET\r\n$5\r\nobj_3\r\n$5\r\nthree\r\n", b"+OK\r\n")
             roundtrip(sock, b"*8\r\n$4\r\nSORT\r\n$8\r\nsortnums\r\n$2\r\nBY\r\n$7\r\nsortw_*\r\n$3\r\nGET\r\n$5\r\nobj_*\r\n$3\r\nGET\r\n$1\r\n#\r\n", b"*6\r\n$3\r\ntwo\r\n$1\r\n2\r\n$3\r\none\r\n$1\r\n1\r\n$5\r\nthree\r\n$1\r\n3\r\n")
             roundtrip(sock, b"*4\r\n$4\r\nSORT\r\n$8\r\nsortnums\r\n$5\r\nSTORE\r\n$7\r\nsortout\r\n", b":3\r\n")
+            roundtrip(sock, b"*2\r\n$7\r\nSORT_RO\r\n$8\r\nsortnums\r\n", b"*3\r\n$1\r\n1\r\n$1\r\n2\r\n$1\r\n3\r\n")
+            roundtrip(sock, b"*4\r\n$7\r\nSORT_RO\r\n$8\r\nsortnums\r\n$5\r\nSTORE\r\n$7\r\nsortout\r\n", b"-ERR syntax error\r\n")
             roundtrip(sock, b"*4\r\n$6\r\nLRANGE\r\n$7\r\nsortout\r\n$1\r\n0\r\n$2\r\n-1\r\n", b"*3\r\n$1\r\n1\r\n$1\r\n2\r\n$1\r\n3\r\n")
             roundtrip(sock, b"*9\r\n$3\r\nDEL\r\n$8\r\nsortnums\r\n$7\r\nsortout\r\n$7\r\nsortw_1\r\n$7\r\nsortw_2\r\n$7\r\nsortw_3\r\n$5\r\nobj_1\r\n$5\r\nobj_2\r\n$5\r\nobj_3\r\n", b":8\r\n")
             roundtrip(sock, b"*3\r\n$3\r\nSET\r\n$3\r\nttl\r\n$5\r\nvalue\r\n", b"+OK\r\n")

@@ -98,6 +98,34 @@ def send_command(sock: socket.socket, *parts: bytes):
     return read_resp(sock)
 
 
+def parse_info_memory(raw: bytes) -> dict[str, int | str]:
+    result: dict[str, int | str] = {}
+    for line in raw.decode().splitlines():
+        if not line or line.startswith("#") or ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        result[key] = int(value) if value.isdigit() else value
+    return result
+
+
+def used_memory(sock: socket.socket) -> int:
+    info = send_command(sock, b"INFO", b"memory")
+    if not isinstance(info, bytes):
+        raise AssertionError(f"unexpected INFO memory: {info!r}")
+    parsed = parse_info_memory(info)
+    return int(parsed["used_memory"])
+
+
+def configure_maxmemory(sock: socket.socket, headroom: int) -> int:
+    effective = used_memory(sock) + headroom
+    if send_command(sock, b"CONFIG", b"SET", b"maxmemory", str(effective).encode()) != "OK":
+        raise AssertionError("CONFIG SET maxmemory failed")
+    config = send_command(sock, b"CONFIG", b"GET", b"maxmemory")
+    if not isinstance(config, list) or config != [b"maxmemory", str(effective).encode()]:
+        raise AssertionError(f"unexpected CONFIG GET maxmemory: {config!r}")
+    return effective
+
+
 def run_server(policy: str, maxmemory: int):
     port = find_free_port()
     aof_path = ROOT / "build" / f"{policy}-{port}.aof"
@@ -125,7 +153,7 @@ def assert_policy(sock: socket.socket, policy: str) -> None:
 
 
 def check_volatile_lru() -> None:
-    port, aof_path, rdb_paths, proc = run_server("volatile-lru", 5500)
+    port, aof_path, rdb_paths, proc = run_server("volatile-lru", 0)
     try:
         with connect_with_retry(port, time.monotonic() + 5.0) as sock:
             assert_policy(sock, "volatile-lru")
@@ -143,6 +171,7 @@ def check_volatile_lru() -> None:
             if send_command(sock, b"GET", b"hot") != value:
                 raise AssertionError("GET hot failed before volatile-lru eviction")
             time.sleep(0.05)
+            _ = configure_maxmemory(sock, 4000)
             if send_command(sock, b"SET", b"new", new_value) != "OK":
                 raise AssertionError("SET new should evict an expiring LRU key")
             old_value = send_command(sock, b"GET", b"old")
@@ -163,7 +192,7 @@ def check_volatile_lru() -> None:
 
 
 def check_volatile_lfu() -> None:
-    port, aof_path, rdb_paths, proc = run_server("volatile-lfu", 5000)
+    port, aof_path, rdb_paths, proc = run_server("volatile-lfu", 0)
     try:
         with connect_with_retry(port, time.monotonic() + 5.0) as sock:
             assert_policy(sock, "volatile-lfu")
@@ -178,6 +207,7 @@ def check_volatile_lfu() -> None:
                 raise AssertionError("GET hot failed before volatile-lfu eviction")
             if send_command(sock, b"GET", b"hot") != value:
                 raise AssertionError("second GET hot failed before volatile-lfu eviction")
+            _ = configure_maxmemory(sock, 4000)
             if send_command(sock, b"SET", b"new", new_value) != "OK":
                 raise AssertionError("SET new should evict a low-frequency volatile key")
             if send_command(sock, b"GET", b"cold") is not None:
@@ -192,7 +222,7 @@ def check_volatile_lfu() -> None:
 
 
 def check_volatile_ttl() -> None:
-    port, aof_path, rdb_paths, proc = run_server("volatile-ttl", 5000)
+    port, aof_path, rdb_paths, proc = run_server("volatile-ttl", 0)
     try:
         with connect_with_retry(port, time.monotonic() + 5.0) as sock:
             assert_policy(sock, "volatile-ttl")
@@ -206,6 +236,7 @@ def check_volatile_ttl() -> None:
                 raise AssertionError("SET later failed")
             if send_command(sock, b"EXPIRE", b"later", b"120") != 1:
                 raise AssertionError("EXPIRE later failed")
+            _ = configure_maxmemory(sock, 4000)
             if send_command(sock, b"SET", b"new", new_value) != "OK":
                 raise AssertionError("SET new should evict the nearest-expiry volatile key")
             if send_command(sock, b"GET", b"soon") is not None:

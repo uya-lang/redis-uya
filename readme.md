@@ -4,28 +4,38 @@
 > 零 GC 路线 · 显式错误处理 · 可测试演进 · 长期性能目标超过 Redis
 
 > 版本: v0.9.1-dev
-> 日期: 2026-05-14
+> 日期: 2026-05-16
 
 ## 简介
 
-`redis-uya` 是一个使用 **Uya 编程语言** 从零实现的生产级高性能内存数据库系统。项目长期目标是兼容 Redis Open Source，先在单机版覆盖官方命令参考中的全部命令名，以及数据结构、持久化、复制、脚本、安全、运维、高级数据能力与性能工程；单机版功能和性能达标后封版为 `v1.0.0`，之后才重新规划集群版开发。
+`redis-uya` 是一个使用 **Uya 编程语言** 从零实现的内存数据库系统。项目长期目标是兼容 Redis Open Source；当前主线先收敛单机版，优先补齐 Redis Open Source 单机核心命令、持久化、复制、脚本、安全、运维与性能工程，单机版功能和性能达标后再考虑 `v1.0.0` 封版以及后续集群规划。
 
-当前项目已完成 `v0.9.0` 单机核心命令补齐：按计划补齐 String / Hash / List / Set / ZSet / Key / Server / Security 核心命令批次，收口 `SORT`、`AUTH`、`requirepass`、`SHUTDOWN`。当前主线执行版本是 `v0.9.1`，重点收口官方命令全集矩阵、连接/管理面和兼容边界；`v0.9.2` 预留高级数据能力，`v0.9.3` 预留运维、安全与可观测。
+`v1.0.0` 的版本目标不是提前兑现“全面超过 Redis”，而是先把单机核心做真、做稳、做快：功能边界真实、兼容语义真实、测试和 benchmark 结果真实，并在这一前提下持续缩小与 Redis 的性能差距。长期性能目标仍然是超过 Redis，但那是 `v1.0.0` 之后继续迭代的方向，不是拿来包装当前完成度的口号。
+
+历史上，项目已经完成 `v0.9.0` 单机核心命令补齐，并在 `v0.9.1` 主线落地共享命令目录、`COMMAND*` 第一批和若干连接/管理面扩展。但截至 2026-05-16 审计，当前 `HEAD` 还不能宣称“已实锤到 v0.9.1”：`make test` 通过，`make test-integration` 和 `make benchmark-v0.8.1` 仍未恢复为全绿，`COMMAND` 控制面也还存在目录面大于真实执行面的裂缝。当前第一优先级是修复真实性问题，再继续补单机核心缺口。
 
 ## 核心目标
 
 - **协议兼容**：从 RESP2 子集起步，逐步扩展到 RESP3 与更完整的 Redis 命令语义。
-- **命令全集**：以 Redis 官方 Commands Reference 为基线，单机版 `v1.0.0` 前覆盖全部官方命令名；模式相关命令在单机版至少提供 standalone 兼容行为。
+- **命令全集**：以 Redis 官方 Commands Reference 为总目录基线；单机版 `v1.0.0` 先收敛 Redis Open Source 单机核心命令，模式相关命令至少提供 standalone 兼容行为，模块命令继续追踪但不与当前封版门槛混算。
 - **数据结构完整**：按版本推进 String、Hash、List、Set、ZSet、Bitmap、Bitfield、HyperLogLog、Geo、Stream、JSON、Search、Time Series、概率结构和 Vector。
 - **可靠持久化**：首版优先 AOF append/replay，后续补齐 RDB、AOF rewrite、BGSAVE/BGREWRITEAOF。
 - **高性能路线**：建立 Redis 同机对照基线，再优化解析、字典、内存分配、零拷贝、批处理和事件循环。
 - **单机先行**：`v0.9.0` 起只收敛单机版，`v1.0.0` 单机封版后才重新规划集群版。
-- **小步版本**：后续最小迭代按最后一位递增，例如 `v0.9.0`、`v0.9.1`、`v0.9.2`；`v0.9.4` 未达封版条件时继续 `v0.9.5`、`v0.9.6`。
+- **小步版本**：后续最小迭代按最后一位递增，例如 `v0.9.0`、`v0.9.1`、`v0.9.2`；`v0.9.4` 先做性能与稳定性收敛，`v0.9.5` 起进入首个封版候选阶段，未达标时继续 `v0.9.6`。
 - **工程可控**：所有能力必须有测试、错误路径、释放路径、恢复路径或 benchmark 证据。
 
 ## 当前状态
 
-已完成：
+2026-05-16 审计结论：
+
+- 当前 `HEAD` 不能宣称已达到“可与 Redis 单机版掰手腕”的状态。
+- 当前 `HEAD` 的第一优先级是修复 `COMMAND*` 真值、版本号一致性、`maxmemory` 测试口径和 benchmark guard。
+- `v1.0.0` 的封版门槛先收敛 Redis Open Source 单机核心，不再把模块命令数量当作当前完成度包装。
+
+下方列表主要记录历史里程碑沉淀与当前代码库已落地模块，不等价于“当前 `HEAD` 已重新全量复核通过”。
+
+历史沉淀与已落地模块：
 
 - 工程骨架、内置 Uya 工具链、`Makefile`
 - 基础测试框架与 `make test`
@@ -89,13 +99,13 @@
 - v0.8.0 `io_uring` 评估：`make evaluate-io-uring-v0.8.0` 生成主机能力报告，记录 syscall、sysctl、liburing 探测和 `production_binding=no` 边界
 - v0.8.0 专用对象池与布局观测：`RedisObject` / `ListNode` 释放后进入专用 freelist，复用时绕过通用 Slab；`INFO memory` 暴露缓存、复用计数和布局大小
 - v0.8.0 Redis 对照差距报告：`make report-v0.8.0-gaps` 生成吞吐、p99、RSS 比例矩阵与 P0/P1/P2 后续优化队列
-- v0.8.1 写路径性能修复：WATCH 版本表仅在存在 WATCH 客户端时维护，`SET` 覆盖写使用 Dict 单次探测返回旧值，AOF 512B 以下命令缓冲写、较大命令直写，`make benchmark-v0.8.1` 相对 `v0.8.0` 基线 guard 通过
+- v0.8.1 写路径性能修复：WATCH 版本表仅在存在 WATCH 客户端时维护，`SET` 覆盖写使用 Dict 单次探测返回旧值，AOF 512B 以下命令缓冲写、较大命令直写；该能力历史上曾建立 guard，但当前 `HEAD` 需要重新通过 `make benchmark-v0.8.1`
 
 下一阶段：
 
-- `v0.9.1`：继续推进单机命令全集矩阵、连接/管理面补齐和兼容边界收敛；当前已完成官方命令全集矩阵、`COMMAND*` 第一批与 `COMMAND DOCS` 全量输出、`COMMAND GETKEYS*` 当前命令表支持、String/Generic TTL 扩展（`GETEX`、`PSETEX`、`EXPIREAT`、`EXPIRETIME`、`PEXPIRETIME`）、Hash 字段基础扩展（`HDEL`、`HEXISTS`、`HLEN`、`HMGET`、`HSETNX`、`HSTRLEN`）、Set 读路径扩展（`SCARD`、`SISMEMBER`、`SMISMEMBER`、`SSCAN`、`SINTERCARD`）与成员搬移写路径（`SMOVE`）、Key 通用读写补齐（`TOUCH`、`UNLINK`）、Key 模式读取补齐（`KEYS`）、只读排序补齐（`SORT_RO`）、读路径补齐（`RANDOMKEY`、`TIME`）、复制可观测读命令（`ROLE`）、全局 `CLIENT LIST`、`CONFIG SET` 第二批运行时字段（`port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`masterauth`、`replicaof`、`maxclients`、`databases`）、`CONFIG REWRITE` 对应第二批核心字段落盘、`CLIENT KILL/PAUSE/TRACKING/GETREDIR` 最小闭环，以及 pattern Pub/Sub 第一批、`PUBSUB` 管理面第一批、RESP2/RESP3 订阅态命令限制边界与断开清理；待续 standalone 错误边界、Streams、Lua/Functions、RESP3 兼容矩阵和复制/持久化收敛。
-- `v0.9.2`：进入高级数据能力阶段，覆盖 Bitmap、Bitfield、HyperLogLog、Geo、JSON、Search、Time Series、概率结构和 Vector。
-- `v0.9.3`：进入运维、安全与可观测阶段，覆盖 ACL、TLS、`CLIENT/CONFIG/INFO/SLOWLOG/LATENCY/MEMORY/MONITOR` 等管理面深化。
+- `v0.9.1`：先完成审计整改，修复 `COMMAND` 真值、版本号一致性、`maxmemory` 集成测试口径和 benchmark guard。
+- `v0.9.2`：继续补 Redis Open Source 单机核心缺口，优先 blocking list/zset、bitmap/bitfield、HLL/GEO、脚本第一批。
+- `v0.9.3`：收口 Streams、Functions/Script、ACL 与运维诊断第一批，再推进持久化/复制边界深化。
 
 当前阶段尚未生产可用。
 
@@ -131,7 +141,7 @@ TCP 集成 smoke：
 make test-integration
 ```
 
-`make test-integration` 当前覆盖基础 TCP smoke、空闲连接不阻塞其他客户端、持久化/复制/事务/Pub/Sub/控制面兼容路径，v0.6.0 的 `maxmemory`、淘汰策略、内存统计和压力回归，以及 v0.7.0 历史集群基础 smoke 与一致性 smoke。
+`make test-integration` 当前覆盖基础 TCP smoke、空闲连接不阻塞其他客户端、持久化/复制/事务/Pub/Sub/控制面兼容路径，`maxmemory` / 淘汰策略 / 内存统计 / 压力回归，以及历史集群基础 smoke。注意：截至 2026-05-16 审计，当前 `HEAD` 该目标仍未全绿，详见 `docs/redis-uya-audit-2026-05-16.md`。
 
 v0.8.0 核心性能基线：
 
@@ -144,6 +154,8 @@ v0.8.1 写路径性能回归验证：
 ```bash
 make benchmark-v0.8.1
 ```
+
+注意：截至 2026-05-16 审计，当前 `HEAD` 的 `make benchmark-v0.8.1` 仍会因 regression guard miss 失败；`benchmarks/v0.8.1-performance.md` 需要结合生成日期解读，不能默认视为“当前主线已通过”。
 
 v0.8.0 Redis 对照差距报告：
 
@@ -330,13 +342,13 @@ build/redis-uya 6380 1
 | `v0.8.0` | 核心路径性能基线 | 零拷贝、批量解析、SIMD、对象布局、回归护栏 |
 | `v0.8.1` | 写路径性能修复 | WATCH 懒维护、Dict 单次探测、AOF 分层写入 |
 | `v0.9.0` | 单机核心命令补齐 | String/Hash/List/Set/ZSet/Key/Server/Security 核心命令 |
-| `v0.9.1` | 单机命令全集矩阵 | Redis 官方命令全集建表，补齐 Connection/Generic/Server/Transaction/Pub/Sub/Scripting/Stream 命令族 |
-| `v0.9.2` | 单机高级数据能力 | Bitmap、Bitfield、HyperLogLog、Geo、JSON、Search、Time Series、概率结构、Vector |
-| `v0.9.3` | 单机运维、安全与可观测 | ACL、TLS、CLIENT/CONFIG/INFO/SLOWLOG/LATENCY/MEMORY 等管理面 |
-| `v0.9.4` | 首个单机性能与稳定性封版候选 | benchmark target、长时运行、故障恢复、兼容矩阵 |
-| `v0.9.5`, `v0.9.6`, ... | 后续封版候选迭代 | 未达 v1.0.0 条件时继续 patch 位递增 |
-| `v1.0.0` | 单机版封版 | 单机功能完整、性能达标、文档齐全 |
-| `v1.1.0+` | 集群版规划与开发 | 集群语义、gossip、failover、resharding |
+| `v0.9.1` | 审计整改与真实性修复 | 修正文档/控制面/测试/benchmark 口径，统一版本号 |
+| `v0.9.2` | 单机核心缺口补齐 I | blocking list/zset、bitmap/bitfield、HLL/GEO、脚本第一批 |
+| `v0.9.3` | 单机核心缺口补齐 II | Streams、Functions/Script、ACL、运维诊断第一批 |
+| `v0.9.4` | 性能与稳定性收敛 | benchmark guard 恢复、release build 基线、长时运行、故障恢复 |
+| `v0.9.5`, `v0.9.6`, ... | 单机封版候选迭代 | 核心命令矩阵、文档、性能、运维边界综合收口 |
+| `v1.0.0` | 单机版封版 | Redis Open Source 单机核心功能完整、性能达标、文档齐全 |
+| `v1.1.0+` | 模块与集群后续规划 | 模块命令、集群语义、gossip、failover、resharding |
 
 完整计划见 [开发 TODO](docs/redis-uya-todo.md)。
 

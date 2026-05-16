@@ -1,12 +1,12 @@
 # redis-uya Command Scope
 
-> 版本: v0.9.0-planning
-> 日期: 2026-04-30
+> 版本: v0.9.1-dev
+> 日期: 2026-05-16
 > 基线: Redis 8.6 Commands Reference
 
 ## 1. 目标
 
-`redis-uya` 单机版 `v1.0.0` 的命令目标是覆盖 Redis Open Source 官方命令参考中的全部命令名。
+`redis-uya` 单机版 `v1.0.0` 的命令目标是覆盖 Redis Open Source 单机部署下的核心命令面，并对模式相关命令给出兼容的 standalone 行为。
 
 实现要求分两层：
 
@@ -15,41 +15,50 @@
 
 ## 2. 命令全集基线
 
-命令全集以 Redis 官方当前命令参考为准，并在每个 redis-uya 规划版本开始时重新核对。
+命令全集仍以 Redis 官方当前命令参考为总目录来源，但 `v1.0.0` 的封版门槛必须区分三个层次，避免把模块命令数量当作单机完成度。
 
-当前基线功能组：
+### 2.1 Tier A: `v1.0.0` 必须完成的 Redis Open Source 单机核心
 
 - ACL / Security
-- Bloom filter
-- Bitmap
-- Cuckoo filter
-- Cluster management
-- Count-min sketch
+- Bitmap / Bitfield
 - Connection management
 - Generic
 - Geospatial indices
 - Hash
 - HyperLogLog
-- JSON
 - List
 - Pub/Sub
-- Redis Search
 - Scripting and functions
 - Server management
 - Set
 - Sorted set
 - Stream
 - String
+- Transactions
+
+### 2.2 Tier B: `v1.0.0` 前可保持 standalone-error 的模式命令
+
+- Cluster management
+- Sentinel
+
+### 2.3 Tier C: 当前继续追踪，但不作为 `v1.0.0` 单机封版门槛的模块命令
+
+- Bloom filter
+- Cuckoo filter
+- Count-min sketch
+- JSON
+- Redis Search
 - Auto-suggest
 - T-digest
 - Time series
 - Top-k
-- Transactions
 - Vector set
 
-当前主线实现说明：
+### 2.4 当前主线实现说明
 
-- 运行时目录当前由 `src/command/catalog_generated*` 提供，并通过 `docs/redis-uya-command-matrix.md` 暴露人类可读矩阵
+- 运行时目录当前由 `src/command/catalog_generated*` 提供，并通过 `docs/redis-uya-command-matrix.md` 暴露人类可读矩阵。
+- 该矩阵当前跟踪的是“总目录”，不是“当前 `HEAD` 已可执行命令面”。
+- `v1.0.0` 的完成度评估必须以 Tier A + Tier B 为主，不能拿 Tier C 的条目总数包装当前单机进度。
 
 ## 3. 兼容矩阵状态
 
@@ -61,7 +70,11 @@
 - `alias`: deprecated 或别名命令映射到 canonical 命令。
 - `deferred`: 已进入计划但尚未实现，不能作为 `v1.0.0` 封版状态。
 
-`v1.0.0` 封版时，除模式相关命令可保持 `standalone-error` 外，不允许存在 `deferred`。
+`v1.0.0` 封版时：
+
+- Tier A 中不允许存在 `deferred`。
+- Tier B 可保持 `standalone-error`，但必须有稳定、兼容、可测试的错误语义。
+- Tier C 可以继续保留 `deferred`，但必须与 Tier A/B 的完成度分开统计。
 
 ## 4. 单机命令验收
 
@@ -78,14 +91,15 @@
 - `maxmemory`、淘汰策略和 OOM 边界。
 - RESP2 / RESP3 响应形态。
 - redis-cli 或 redis-py 兼容 smoke。
+- `COMMAND*`、README、DoD 与测试报告不得夸大该命令的当前支持状态。
 
 ## 5. 非命令范围
 
-以下不计入“Redis 命令全集”：
+以下不计入 `v1.0.0` 单机封版的必需命令范围：
 
 - `redis-cli`、`redis-benchmark` 等客户端/工具命令。
 - Redis Cloud / Redis Software 企业平台管理 API。
-- 非 Redis Open Source 官方命令参考中的第三方模块命令。
+- 仅属于 Redis Stack / 模块分发的命令家族，即使它们被总目录继续追踪。
 
 ## 6. 来源
 

@@ -131,6 +131,7 @@ const CONNECTION_CLIENT_NAME_MAX: usize = 64;
 const CONNECTION_CLIENT_INFO_MAX: usize = 64;
 const CONNECTION_ZERO_COPY_BULK_MIN: usize = 64;
 const CONNECTION_BATCH_MAX_COUNT: usize = 64;
+const CONNECTION_BATCH_PARSE_MIN_INPUT: usize = 64;
 const CONNECTION_CLIENT_REGISTRY_MAX: usize = 128;
 const CONNECTION_BLOCKING_INPUT_CAP: usize = 8192;
 const CONNECTION_BLOCKING_OUTPUT_CAP: usize = 81920;
@@ -2450,6 +2451,138 @@ fn connection_build_continue_reply(backlog: &ReplicationBacklog, offset: u64) Co
     return connection_raw_reply_owned(raw.buf[0: raw.len]);
 }
 
+fn connection_execute_standard_command_at(
+    engine: &Engine,
+    runtime: &CommandRuntimeInfo,
+    aof: &AofWriter,
+    rewrite_buf: &Sds,
+    backlog: &ReplicationBacklog,
+    tx: &ConnectionTransaction,
+    parsed: &RespParseResult,
+    command: &Command,
+    input: &[byte],
+    out: &byte,
+    out_cap: usize,
+    now_ms: u64,
+    replicaof_requested: &bool,
+    replicaof_promote: &bool,
+    replicaof_host: &[byte],
+    replicaof_port: &i32,
+    bgsave_requested: &bool,
+    rewrite_requested: &bool,
+    rewrite_failed: &bool,
+    zero_copy_bulk: bool,
+) !ConnectionProcessResult {
+    var reply: CommandReply = command_execute_with_runtime_at(engine, runtime, command, now_ms);
+    if command.info.cmd_type == CommandType.command_save &&
+        reply.typ == CommandReplyType.reply_simple_string &&
+        reply.data.len == 2 &&
+        reply.data.ptr[0] == 79 as byte &&
+        reply.data.ptr[1] == 75 as byte {
+        runtime.lastsave_ms = now_ms;
+    }
+    if aof != null && connection_should_append_aof(command, &reply) {
+        _ = aof_append_command_at(aof, command, input[0: parsed.consumed], now_ms) catch {
+            const aof_reply: CommandReply = connection_error_reply(&"ERR AOF append failed"[0: 21]);
+            const aof_n: usize = try connection_encode_reply_with_protocol(&aof_reply, out, out_cap, tx.protocol_version);
+            command_reply_cleanup(&reply);
+            resp_value_free(&parsed.value);
+            return ConnectionProcessResult{ response_len: aof_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
+        };
+        if rewrite_buf != null && runtime.aof_rewrite_in_progress {
+            _ = aof_append_command_to_sds_at(rewrite_buf, command, input[0: parsed.consumed], now_ms) catch {
+                if rewrite_failed != null {
+                    *rewrite_failed = true;
+                }
+            };
+        }
+        if backlog != null && runtime.replication_role == ReplicationRole.role_master {
+            _ = replication_backlog_append_command_at(backlog, command, input[0: parsed.consumed], now_ms) catch {};
+        }
+    }
+    const request_replicaof: bool = reply.request_replicaof;
+    const promote_replicaof: bool = reply.replicaof_promote;
+    if request_replicaof {
+        *replicaof_requested = true;
+        *replicaof_promote = promote_replicaof;
+        *replicaof_port = reply.replicaof_port;
+        connection_copy_replica_host(replicaof_host, reply.replicaof_host);
+    }
+    const request_bgsave: bool = reply.request_bgsave;
+    const request_aof_rewrite: bool = reply.request_aof_rewrite;
+    const request_config_set: bool = reply.request_config_set;
+    const request_client_kill: bool = reply.request_client_kill;
+    const client_kill_id: i64 = reply.client_kill_id;
+    const request_client_pause: bool = reply.request_client_pause;
+    const client_pause_timeout_ms: u64 = reply.client_pause_timeout_ms;
+    const client_pause_write_only: bool = reply.client_pause_write_only;
+    const client_pause_owner_id: i64 = reply.client_pause_owner_id;
+    const request_client_unpause: bool = reply.request_client_unpause;
+    const request_maxclients_set: bool = reply.request_maxclients_set;
+    const maxclients_after: i32 = reply.maxclients_after;
+    if request_bgsave && bgsave_requested != null {
+        *bgsave_requested = true;
+    }
+    if request_aof_rewrite && rewrite_requested != null {
+        *rewrite_requested = true;
+    }
+    if request_config_set && connection_cstring_slice(reply.config_after.requirepass[0: 128]).len > 0 {
+        tx.authenticated = true;
+    }
+    var n: usize = 0;
+    var psync_reply: CommandReply = connection_make_reply(CommandReplyType.reply_simple_string, connection_reply_empty_slice(), 0);
+    var use_psync_reply: bool = false;
+    if command.info.cmd_type == CommandType.command_psync && reply.typ == CommandReplyType.reply_simple_string {
+        if reply.data.len >= 10 && reply.data.ptr[0] == 70 as byte {
+            psync_reply = connection_build_fullresync_reply(engine, reply.data, now_ms);
+            use_psync_reply = true;
+        } else if reply.data.len == 8 && reply.data.ptr[0] == 67 as byte && backlog != null {
+            psync_reply = connection_build_continue_reply(backlog, reply.integer as u64);
+            use_psync_reply = true;
+        }
+    }
+    if use_psync_reply {
+        n = try connection_encode_reply_with_protocol(&psync_reply, out, out_cap, tx.protocol_version);
+    } else {
+        if zero_copy_bulk && command.info.cmd_type == CommandType.command_get && reply.typ == CommandReplyType.reply_bulk_string && reply.data.len >= CONNECTION_ZERO_COPY_BULK_MIN {
+            n = try connection_encode_bulk_header(out, out_cap, reply.data.len);
+            const body: &[byte] = reply.data;
+            command_reply_cleanup(&reply);
+            const should_close_zero_copy: bool = command.info.cmd_type == CommandType.command_quit;
+            resp_value_free(&parsed.value);
+            return connection_zero_copy_process_result(n, body, 2, parsed.consumed, should_close_zero_copy, request_replicaof, promote_replicaof, request_bgsave, request_aof_rewrite);
+        }
+        n = try connection_encode_reply_with_protocol(&reply, out, out_cap, tx.protocol_version);
+    }
+    command_reply_cleanup(&reply);
+    if use_psync_reply {
+        command_reply_cleanup(&psync_reply);
+    }
+    const should_close: bool = command.info.cmd_type == CommandType.command_quit;
+    resp_value_free(&parsed.value);
+    return ConnectionProcessResult{
+        response_len: n,
+        consumed: parsed.consumed,
+        close_after: should_close,
+        request_replicaof: request_replicaof,
+        replicaof_promote: promote_replicaof,
+        request_bgsave: request_bgsave,
+        request_aof_rewrite: request_aof_rewrite,
+        request_shutdown: false,
+        request_config_set: request_config_set,
+        config_after: reply.config_after,
+        request_client_kill: request_client_kill,
+        client_kill_id: client_kill_id,
+        request_client_pause: request_client_pause,
+        client_pause_timeout_ms: client_pause_timeout_ms,
+        client_pause_write_only: client_pause_write_only,
+        client_pause_owner_id: client_pause_owner_id,
+        request_client_unpause: request_client_unpause,
+        request_maxclients_set: request_maxclients_set,
+        maxclients_after: maxclients_after,
+    };
+}
+
 fn connection_hello_reply(protocol_version: i32) CommandReply {
     if protocol_version == 3 {
         return connection_make_reply(
@@ -2978,6 +3111,29 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_in
     rewrite_failed: &bool,
     zero_copy_bulk: bool,
 ) !ConnectionProcessResult {
+    if input.len <= CONNECTION_BATCH_PARSE_MIN_INPUT {
+        return connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_single_at(
+            engine,
+            runtime,
+            router,
+            aof,
+            rewrite_buf,
+            backlog,
+            tx,
+            input,
+            out,
+            out_cap,
+            now_ms,
+            replicaof_requested,
+            replicaof_promote,
+            replicaof_host,
+            replicaof_port,
+            bgsave_requested,
+            rewrite_requested,
+            rewrite_failed,
+            zero_copy_bulk,
+        );
+    }
     const batch_result: !RespBatchParseResult = connection_parse_batch_for_protocol(tx, input, CONNECTION_BATCH_MAX_COUNT);
     const batch: RespBatchParseResult = batch_result catch |err| {
         if err == error.RespIncomplete {
@@ -3360,6 +3516,32 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
         resp_value_free(&parsed.value);
         return ConnectionProcessResult{ response_len: restricted_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
     }
+    if command.info.cmd_type == CommandType.command_ping ||
+        command.info.cmd_type == CommandType.command_get ||
+        command.info.cmd_type == CommandType.command_set {
+        return connection_execute_standard_command_at(
+            engine,
+            runtime,
+            aof,
+            rewrite_buf,
+            backlog,
+            tx,
+            &parsed,
+            &command,
+            input,
+            out,
+            out_cap,
+            now_ms,
+            replicaof_requested,
+            replicaof_promote,
+            replicaof_host,
+            replicaof_port,
+            bgsave_requested,
+            rewrite_requested,
+            rewrite_failed,
+            zero_copy_bulk,
+        );
+    }
     if command.info.cmd_type == CommandType.command_shutdown {
         _ = connection_handle_shutdown(&command) catch {
             const shutdown_err: CommandReply = connection_error_reply(&"ERR syntax error"[0: 16]);
@@ -3516,114 +3698,28 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
         return ConnectionProcessResult{ response_len: discard_without_multi_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
     }
 
-    var reply: CommandReply = command_execute_with_runtime_at(engine, runtime, &command, now_ms);
-    if command.info.cmd_type == CommandType.command_save &&
-        reply.typ == CommandReplyType.reply_simple_string &&
-        reply.data.len == 2 &&
-        reply.data.ptr[0] == 79 as byte &&
-        reply.data.ptr[1] == 75 as byte {
-        runtime.lastsave_ms = now_ms;
-    }
-    if aof != null && connection_should_append_aof(&command, &reply) {
-        _ = aof_append_command_at(aof, &command, input[0: parsed.consumed], now_ms) catch {
-            const aof_reply: CommandReply = connection_error_reply(&"ERR AOF append failed"[0: 21]);
-            const aof_n: usize = try connection_encode_reply_with_protocol(&aof_reply, out, out_cap, tx.protocol_version);
-            command_reply_cleanup(&reply);
-            resp_value_free(&parsed.value);
-            return ConnectionProcessResult{ response_len: aof_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
-        };
-        if rewrite_buf != null && runtime.aof_rewrite_in_progress {
-            _ = aof_append_command_to_sds_at(rewrite_buf, &command, input[0: parsed.consumed], now_ms) catch {
-                if rewrite_failed != null {
-                    *rewrite_failed = true;
-                }
-            };
-        }
-        if backlog != null && runtime.replication_role == ReplicationRole.role_master {
-            _ = replication_backlog_append_command_at(backlog, &command, input[0: parsed.consumed], now_ms) catch {};
-        }
-    }
-    const request_replicaof: bool = reply.request_replicaof;
-    const promote_replicaof: bool = reply.replicaof_promote;
-    if request_replicaof {
-        *replicaof_requested = true;
-        *replicaof_promote = promote_replicaof;
-        *replicaof_port = reply.replicaof_port;
-        connection_copy_replica_host(replicaof_host, reply.replicaof_host);
-    }
-    const request_bgsave: bool = reply.request_bgsave;
-    const request_aof_rewrite: bool = reply.request_aof_rewrite;
-    const request_config_set: bool = reply.request_config_set;
-    const request_client_kill: bool = reply.request_client_kill;
-    const client_kill_id: i64 = reply.client_kill_id;
-    const request_client_pause: bool = reply.request_client_pause;
-    const client_pause_timeout_ms: u64 = reply.client_pause_timeout_ms;
-    const client_pause_write_only: bool = reply.client_pause_write_only;
-    const client_pause_owner_id: i64 = reply.client_pause_owner_id;
-    const request_client_unpause: bool = reply.request_client_unpause;
-    const request_maxclients_set: bool = reply.request_maxclients_set;
-    const maxclients_after: i32 = reply.maxclients_after;
-    if request_bgsave && bgsave_requested != null {
-        *bgsave_requested = true;
-    }
-    if request_aof_rewrite && rewrite_requested != null {
-        *rewrite_requested = true;
-    }
-    if request_config_set && connection_cstring_slice(reply.config_after.requirepass[0: 128]).len > 0 {
-        tx.authenticated = true;
-    }
-    var n: usize = 0;
-    var psync_reply: CommandReply = connection_make_reply(CommandReplyType.reply_simple_string, connection_reply_empty_slice(), 0);
-    var use_psync_reply: bool = false;
-    if command.info.cmd_type == CommandType.command_psync && reply.typ == CommandReplyType.reply_simple_string {
-        if reply.data.len >= 10 && reply.data.ptr[0] == 70 as byte {
-            psync_reply = connection_build_fullresync_reply(engine, reply.data, now_ms);
-            use_psync_reply = true;
-        } else if reply.data.len == 8 && reply.data.ptr[0] == 67 as byte && backlog != null {
-            psync_reply = connection_build_continue_reply(backlog, reply.integer as u64);
-            use_psync_reply = true;
-        }
-    }
-    if use_psync_reply {
-        n = try connection_encode_reply_with_protocol(&psync_reply, out, out_cap, tx.protocol_version);
-    } else {
-        if zero_copy_bulk && command.info.cmd_type == CommandType.command_get && reply.typ == CommandReplyType.reply_bulk_string && reply.data.len >= CONNECTION_ZERO_COPY_BULK_MIN {
-            n = try connection_encode_bulk_header(out, out_cap, reply.data.len);
-            const body: &[byte] = reply.data;
-            command_reply_cleanup(&reply);
-            const should_close_zero_copy: bool = command.info.cmd_type == CommandType.command_quit;
-            resp_value_free(&parsed.value);
-            return connection_zero_copy_process_result(n, body, 2, parsed.consumed, should_close_zero_copy, request_replicaof, promote_replicaof, request_bgsave, request_aof_rewrite);
-        }
-        n = try connection_encode_reply_with_protocol(&reply, out, out_cap, tx.protocol_version);
-    }
-    command_reply_cleanup(&reply);
-    if use_psync_reply {
-        command_reply_cleanup(&psync_reply);
-    }
-    const should_close: bool = command.info.cmd_type == CommandType.command_quit;
-    resp_value_free(&parsed.value);
-    return ConnectionProcessResult{
-        response_len: n,
-        consumed: parsed.consumed,
-        close_after: should_close,
-        request_replicaof: request_replicaof,
-        replicaof_promote: promote_replicaof,
-        request_bgsave: request_bgsave,
-        request_aof_rewrite: request_aof_rewrite,
-        request_shutdown: false,
-        request_config_set: request_config_set,
-        config_after: reply.config_after,
-        request_client_kill: request_client_kill,
-        client_kill_id: client_kill_id,
-        request_client_pause: request_client_pause,
-        client_pause_timeout_ms: client_pause_timeout_ms,
-        client_pause_write_only: client_pause_write_only,
-        client_pause_owner_id: client_pause_owner_id,
-        request_client_unpause: request_client_unpause,
-        request_maxclients_set: request_maxclients_set,
-        maxclients_after: maxclients_after,
-    };
+    return connection_execute_standard_command_at(
+        engine,
+        runtime,
+        aof,
+        rewrite_buf,
+        backlog,
+        tx,
+        &parsed,
+        &command,
+        input,
+        out,
+        out_cap,
+        now_ms,
+        replicaof_requested,
+        replicaof_promote,
+        replicaof_host,
+        replicaof_port,
+        bgsave_requested,
+        rewrite_requested,
+        rewrite_failed,
+        zero_copy_bulk,
+    );
 }
 
 export fn connection_empty_reply() CommandReply {

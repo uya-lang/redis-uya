@@ -200,6 +200,19 @@ fn command_router_info(
     };
 }
 
+fn command_router_hot_lookup(name: &[byte]) !CommandInfo {
+    if command_router_name_eq(name, &"PING"[0: 4]) {
+        return command_router_info(CommandType.command_ping, &"PING"[0: 4], -1, COMMAND_FLAG_FAST, 0, 0, 0);
+    }
+    if command_router_name_eq(name, &"GET"[0: 3]) {
+        return command_router_info(CommandType.command_get, &"GET"[0: 3], 2, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if command_router_name_eq(name, &"SET"[0: 3]) {
+        return command_router_info(CommandType.command_set, &"SET"[0: 3], -3, COMMAND_FLAG_WRITE, 1, 1, 1);
+    }
+    return error.CommandUnknown;
+}
+
 fn command_router_info_by_index(index: usize) !CommandInfo {
     if index == 0 {
         return command_router_info(CommandType.command_ping, &"PING"[0: 4], -1, COMMAND_FLAG_FAST, 0, 0, 0);
@@ -636,15 +649,18 @@ export fn command_router_count(router: &CommandRouter) usize {
 }
 
 export fn command_router_lookup(router: &CommandRouter, name: &[byte]) !CommandInfo {
-    var index: usize = 0;
-    while index < router.command_count {
-        const info: CommandInfo = try command_router_info_by_index(index);
-        if command_router_name_eq(name, info.name) {
-            return info;
+    const hot_info: CommandInfo = command_router_hot_lookup(name) catch {
+        var index: usize = 0;
+        while index < router.command_count {
+            const info: CommandInfo = try command_router_info_by_index(index);
+            if command_router_name_eq(name, info.name) {
+                return info;
+            }
+            index = index + 1;
         }
-        index = index + 1;
-    }
-    return error.CommandUnknown;
+        return error.CommandUnknown;
+    };
+    return hot_info;
 }
 
 export fn command_validate_arity(info: &CommandInfo, argc: usize) !void {

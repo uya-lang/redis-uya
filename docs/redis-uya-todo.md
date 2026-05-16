@@ -2,9 +2,10 @@
 # redis-uya 开发 TODO 文档
 
 > 版本: v0.9.1-dev
-> 日期: 2026-05-14
+> 日期: 2026-05-16
 > 配套设计文档: `redis-uya-design.md`
 > 配套评审文档: `redis-uya-review.md`
+> 审计基线: `redis-uya-audit-2026-05-16.md`
 > 开发规范: `redis-uya-development.md`
 
 ## 1. 规划原则
@@ -21,8 +22,9 @@
 - 任何阶段都必须满足技术可行性和完整性约束，不能因为规划全面而牺牲收敛。
 - 最小迭代默认递增版本号最后一位：`v0.9.0`、`v0.9.1`、`v0.9.2` 依次推进；不为普通小阶段抬高第二位版本号。
 - `v0.9.0` 起后续主线只迭代单机版：补齐 Redis Open Source 单机功能、兼容性、性能和稳定性。
-- `v0.9.4` 是首个单机封版候选；如未达到 `v1.0.0` 封版条件，继续使用 `v0.9.5`、`v0.9.6` 等 patch 版本顺序迭代。
-- 单机版必须覆盖 Redis 官方命令参考中的全部命令名；命令全集、状态定义和封版标准见 `redis-uya-command-scope.md`。
+- 当前 `HEAD` 的真实性高于历史报告：`README`、`DoD`、`COMMAND*`、测试结果和 benchmark 结果必须互相一致。
+- `v0.9.4` 用于性能与稳定性收敛；`v0.9.5` 是首个单机封版候选，如未达到 `v1.0.0` 封版条件，继续使用 `v0.9.6` 等 patch 版本顺序迭代。
+- 单机版必须先覆盖 Redis Open Source 单机核心命令面；模块命令可以继续追踪，但不能与 `v1.0.0` 单机封版门槛混算。命令全集、状态定义和封版标准见 `redis-uya-command-scope.md`。
 - `v1.0.0` 是单机版封版发布点；只有单机版功能和性能达标后才发布。
 - `v1.0.0` 之后才重新规划集群版；`v0.7.0` 已有集群基础作为历史实验能力保留，但不作为 `v0.9.0` 起的后续主线继续扩展。
 
@@ -57,7 +59,8 @@
 当前进行中：
 
 - [x] `v0.9.0`：单机核心命令补齐与安全基线收口完成
-- [ ] `v0.9.1` 起：单机命令全集矩阵、连接/管理面补齐与兼容边界继续收敛（第一批命令矩阵、`COMMAND*` 与 `COMMAND DOCS` 全量输出已完成，`CONFIG SET` 第二批运行时字段已收口）
+- [ ] `v0.9.1`：审计整改与真实性修复，先恢复“文档、控制面、测试、benchmark”之间的一致性
+- [ ] `v0.9.2` 起：在真实性问题收敛后，继续补 Redis Open Source 单机核心缺口，而不是先扩模块命令
 
 ## 3. 全版本路线图
 
@@ -75,13 +78,14 @@
 | `v0.8.0` | 核心路径性能基线 | 零拷贝、批量解析、SIMD、对象布局、回归护栏 | 热路径可度量、不退化 |
 | `v0.8.1` | 写路径性能修复 | WATCH 懒维护、Dict 单次探测、AOF 分层写入 | 写路径首批 P0 债务收敛 |
 | `v0.9.0` | 单机核心命令补齐 | String/Hash/List/Set/ZSet/Key/Server/Security 核心命令 | redis-cli/redis-py 常用命令兼容 |
-| `v0.9.1` | 单机命令全集矩阵 | Redis 官方命令全集建表，补齐 Connection/Generic/Server/Transaction/Pub/Sub/Scripting/Stream 命令族 | 所有官方命令名可追踪 |
-| `v0.9.2` | 单机高级数据能力 | Bitmap、Bitfield、HyperLogLog、Geo、JSON、Search、Time Series、概率结构、Vector | Redis Open Source 单机功能面覆盖 |
-| `v0.9.3` | 单机运维、安全与可观测 | ACL、TLS、CLIENT/CONFIG/INFO/SLOWLOG/LATENCY/MEMORY 等管理面 | 生产运维可用 |
-| `v0.9.4` | 首个单机性能与稳定性封版候选 | benchmark target、长时运行、故障恢复、兼容矩阵 | v1.0.0 发布候选 |
-| `v0.9.5`, `v0.9.6`, ... | 后续封版候选迭代 | 未达 v1.0.0 条件时继续 patch 位递增 | 补缺口、不扩范围 |
-| `v1.0.0` | 单机版封版 | 单机功能完整、性能达标、文档齐全 | 可发布、可生产评估 |
-| `v1.1.0+` | 集群版规划与开发 | 集群语义、gossip、failover、resharding | v1.0.0 之后启动 |
+| `v0.9.1` | 审计整改与真实性修复 | 修正文档/控制面/测试/benchmark 口径，统一版本号，恢复当前 `HEAD` 可复核性 | 讲真话、能复核 |
+| `v0.9.2` | 单机核心缺口补齐 I | blocking list/zset、常用 server/connection 缺口、脚本基础、命令真值模型 | 核心命令不再“有名无实” |
+| `v0.9.3` | 单机核心缺口补齐 II | Streams、Functions/Script 收口、ACL/运维面第一批、复制/持久化边界深化 | Redis Open Source 单机功能面继续收敛 |
+| `v0.9.4` | 性能与稳定性收敛 | benchmark guard 恢复、release build 基线、长时运行、故障恢复 | 当前 `HEAD` 再次可量化 |
+| `v0.9.5` | 首个单机封版候选 | 核心命令矩阵、文档、性能、运维边界综合收口 | v1.0.0 发布候选 |
+| `v0.9.6`, ... | 后续封版候选迭代 | 未达 v1.0.0 条件时继续 patch 位递增 | 补缺口、不扩范围 |
+| `v1.0.0` | 单机版封版 | Redis Open Source 单机核心功能完整、性能达标、文档齐全 | 可发布、可生产评估 |
+| `v1.1.0+` | 模块与集群后续规划 | 模块命令、集群语义、gossip、failover、resharding | `v1.0.0` 之后启动 |
 
 ## 4. 当前主线：`v0.1.0-alpha`
 
@@ -451,96 +455,91 @@
 - 新增写命令必须覆盖 AOF、RDB、复制 backlog、WATCH 版本推进和 maxmemory 边界
 - 现有 `make test`、`make test-integration`、`make benchmark-v0.8.1` 回归护栏不退化
 
-## 17. `v0.9.1`：命令矩阵、连接与兼容边界收口
+## 17. `v0.9.1`：审计整改与真实性修复
 
-### U1. 当前已完成
+### U1. 审计确认的历史沉淀
 
-- [x] 官方命令全集矩阵第一批落地：`531` 个官方命令名进入共享目录，生成 `docs/redis-uya-command-matrix.md` 并由 `src/command/catalog_generated*` 提供运行时数据
-- [x] `COMMAND` 控制面第一批落地：`COMMAND` / `COMMAND COUNT` / `COMMAND LIST` / `COMMAND INFO` / `COMMAND DOCS` 共享官方目录，覆盖 RESP2/RESP3 基础返回形态与过滤/未知命令边界
-- [x] `redis-cli` stdin/pipeline 兼容第一批：连接层单次读入可批量消费多帧，`redis-cli` 通过 `COMMAND DOCS` 探测后的事务管线 smoke 可稳定完成
-- [x] `COMMAND DOCS` 无参数全量 docs 输出与大响应发送路径第一批已收口
-- [x] `COMMAND GETKEYS` / `COMMAND GETKEYSANDFLAGS` 当前命令表支持已落地：覆盖 range key spec、多 key/成对 key、`RENAME` 双 key、`SORT ... STORE` movablekeys 和基础 key flags
-- [x] String/Generic TTL 扩展已落地：`GETEX`、`PSETEX`、`EXPIREAT`、`EXPIRETIME`、`PEXPIRETIME` 已覆盖 unit、AOF absolute replay、TCP、redis-py 与 redis-cli smoke
-- [x] Hash 字段基础扩展已落地：`HDEL`、`HEXISTS`、`HLEN`、`HMGET`、`HSETNX`、`HSTRLEN` 已覆盖 object helper、unit、AOF replay、TCP、redis-py 与 redis-cli smoke
-- [x] Set 读路径扩展已落地：`SCARD`、`SISMEMBER`、`SMISMEMBER`、`SSCAN` 已覆盖 unit、TCP、redis-py 与 redis-cli smoke，并进入共享命令目录
-- [x] Set 交集计数扩展已落地：`SINTERCARD` 已覆盖 `numkeys`、`LIMIT`、空 key、错类型与参数错误边界，并进入共享命令目录
-- [x] Set 写路径补齐已落地：`SMOVE` 已覆盖同 key 搬移、错类型、空源、源清空删除、AOF replay、TCP、redis-py 与 redis-cli smoke，并进入共享命令目录
-- [x] Key 通用管理扩展已落地：`TOUCH`、`UNLINK` 已覆盖 unit、TCP、redis-py 与 redis-cli smoke，并进入共享命令目录
-- [x] Key 模式读取扩展已落地：`KEYS` 已覆盖 unit、TCP、redis-py 与 redis-cli smoke，并进入共享命令目录
-- [x] 只读排序扩展已落地：`SORT_RO` 已覆盖 unit、TCP、redis-py 与 redis-cli smoke，并进入共享命令目录
-- [x] 读路径补齐已落地：`RANDOMKEY`、`TIME` 已覆盖 unit、TCP、redis-py 与 redis-cli smoke，并进入共享命令目录
-- [x] 复制可观测读命令已落地：`ROLE` 已覆盖 master/replica 两种返回形态，并通过 unit、TCP、redis-py 与 redis-cli smoke 固化
-- [x] 管理面第二批运行时配置已落地：`CONFIG SET` 支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`masterauth`、`replicaof`、`maxclients`、`databases`，并覆盖 `CONFIG GET/REWRITE` 验证、运行时 `maxclients` 生效与 rewrite 落盘
-- [x] `CLIENT` 管理面最小闭环已落地：`LIST/KILL/PAUSE/UNPAUSE/TRACKING/TRACKINGINFO/GETREDIR` 已覆盖当前连接注册、pause 控制和 tracking redirect 查询的 unit/integration 闭环
-- [x] 连接管理 `RESET` 已落地：覆盖 RESP3/PubSub/MULTI/WATCH/TRACKING/AUTH 连接上下文重置，并把 RESP2 订阅态允许命令扩展到 `RESET`
-- [x] Pub/Sub 第一批 pattern 订阅已落地：`PSUBSCRIBE`、`PUNSUBSCRIBE`、`pmessage` fanout 与接收者计数已覆盖 unit/integration
-- [x] Pub/Sub 管理面第一批已落地：`PUBSUB HELP/CHANNELS/NUMPAT/NUMSUB` 已接入共享订阅注册表，`PUBSUB SHARDCHANNELS/SHARDNUMSUB` 固定当前 shard 空结果边界，并覆盖 unit/integration
+- [x] 共享命令目录、`COMMAND*` 第一批、TTL 扩展、Hash/Set/Key/ROLE/PubSub/CONFIG/CLIENT/RESET 等代码已经在主线落地
+- [x] `v0.9.0` 与 `v0.9.1` 前三批的历史里程碑文档和测试脚本已经积累起来
+- [x] 当前工程仍有可复用的 unit / integration / benchmark 基础设施
 
-### U2. 当前版本待续
+### U2. 当前必须先修的 P0 问题
 
-- [ ] 其余 standalone 兼容错误与命令家族补齐继续推进
-- [ ] Streams 完整化：消费者组、pending、claim、trim、阻塞读取和持久化恢复
-- [ ] Pub/Sub 完整化：订阅态命令限制和断开清理已落地，背压待继续收敛
-- [ ] Lua 与 Functions：`EVAL/EVALSHA`、脚本缓存、只读脚本、原子边界、函数加载和调用
-- [ ] RESP3 与客户端兼容矩阵：push、map、set、attribute、null、HELLO/AUTH/SETNAME 组合路径
-- [ ] 持久化与复制收敛：RDB 二进制兼容推进、AOF rewrite 压测、复制断线重连、`WAIT` 语义、只读副本限制
+- [ ] `COMMAND` 真值修复：`COMMAND` / `INFO` / `DOCS` / `LIST` 不再把 `deferred` 命令包装成可执行支持面
+- [ ] 目录统计分层：把 Redis Open Source 单机核心、模式命令、模块命令分开统计，不再用总条目数代表当前单机完成度
+- [ ] 版本统一：banner、`INFO server`、README、DoD、测试断言统一到同一主线版本口径
+- [ ] `make test-integration` 恢复：修正 `maxmemory` 相关测试口径，使其与 Redis startup memory 语义对齐
+- [ ] `make benchmark-v0.8.1` 恢复：重新建立当前 `HEAD` 的性能 guard，或明确它处于回归状态而非“已通过”
+- [ ] `verify_definition_of_done.sh` 重新转绿，确保一键验证再次可用
+- [x] README / TODO / DoD / 审计报告交叉引用完成，停止继续沿用“当前已实锤到 v0.9.1”的旧表述
 
 验收项：
 
-- 按命令族建立兼容矩阵，明确已实现、部分实现、暂不支持的语义差异
-- Connection / Server / Transaction / Pub/Sub / Scripting / Stream 相关增量必须覆盖 unit、redis-py/redis-cli smoke，以及必要的 AOF/RDB/复制边界
-- 不把 `v0.9.2` / `v0.9.3` 的高级数据能力或运维能力提前塞回 `v0.9.1`
+- 审计报告中的 P0 问题全部转为有代码/测试/文档证据的已关闭项
+- `COMMAND INFO <deferred-command>` 与真实执行结果不再互相矛盾
+- 当前 `HEAD` 的测试和 benchmark 结果能被 README 与 DoD 原样复述，不需要靠历史报告兜底
 
-## 18. `v0.9.2`：单机高级数据能力
+## 18. `v0.9.2`：单机核心缺口补齐 I
 
-### U3. 高级数据类型与模块化能力
+### U3. 先补 Redis Open Source 核心，而不是先扩模块
 
-- [ ] Bitmap / Bitfield / HyperLogLog / Geo 命令族
-- [ ] JSON / Search / Time Series / 概率结构 / Vector 的项目内实现方案与分阶段命令覆盖
-
-验收项：
-
-- 高级数据结构必须先完成项目内设计评审，再进入实现，避免一次性堆入不可维护的半成品
-- 每个新数据类型都要覆盖正常路径、空 key、错类型、过期、持久化恢复、复制恢复、内存淘汰边界
-- 命令矩阵中进入 `v0.9.2` 的高级数据命令族，不允许只改目录状态不落测试证据
-
-## 19. `v0.9.3`：单机运维、安全与可观测
-
-### U4. 运维与诊断面
-
-- [ ] ACL 与 TLS：用户、权限、命令类别、key pattern、证书配置和认证错误兼容
-- [ ] 管理与诊断：`CONFIG REWRITE` 保真度提升、`CONFIG SET` 其余字段、`CLIENT KILL/PAUSE/TRACKING` 深化语义、`SLOWLOG`、`LATENCY`、`MEMORY`、`MONITOR`、`COMMAND`
+- [ ] Blocking list / zset：`BLPOP`、`BRPOP`、`BRPOPLPUSH`、`BZMPOP`、`BZPOPMIN`、`BZPOPMAX`
+- [ ] 常用 list / zset 缺口：`LMOVE`、`LMPOP`、`RPOPLPUSH`、`ZPOPMIN`、`ZPOPMAX`、`ZRANK`、`ZSCORE`、`ZMSCORE`
+- [ ] 常用 bitmap / bitfield：`SETBIT`、`GETBIT`、`BITCOUNT`、`BITPOS`、`BITOP`、`BITFIELD`
+- [ ] 常用 HLL / GEO：`PFADD`、`PFCOUNT`、`PFMERGE`、`GEOADD`、`GEODIST`、`GEOSEARCH`
+- [ ] Scripting 第一批：`EVAL`、`EVALSHA`、`SCRIPT LOAD/EXISTS/FLUSH`
+- [ ] Server / Connection 缺口第一批：`SLOWLOG`、`MEMORY`、`LATENCY`、`MONITOR` 的最小可验证实现方案
 
 验收项：
 
-- 运维命令必须同时明确“当前支持什么”和“当前还缺什么”，不能只给最小 happy path
-- 安全与观测能力必须覆盖错误路径、权限边界、配置边界和 redis-cli/redis-py 兼容 smoke
-- `v0.9.3` 收口前，README / TODO / DoD / API 必须把生产运维可用边界写清楚，不能与 `v0.9.1` 的当前能力混写
+- 每个新增命令都要覆盖正常路径、参数错误、错类型、空结果、TTL、AOF/RDB、复制、事务和 `maxmemory` 边界
+- 新命令必须进入“真实可执行面”统计；不允许只改命令目录状态
+- 新命令默认先做 Redis Open Source 单机核心，不把 JSON/Search/Time Series/Vector 等模块命令插队到当前主线
 
-## 20. `v0.9.4` 起：单机性能与稳定性封版候选
+## 19. `v0.9.3`：单机核心缺口补齐 II 与运维第一批
 
-### V. v1.0.0 前置收敛
+### U4. Streams、Functions、安全与运维面
+
+- [ ] Streams 第一批：`XADD`、`XLEN`、`XRANGE`、`XREVRANGE`、`XREAD`
+- [ ] Streams 第二批：`XGROUP`、`XACK`、`XPENDING`、`XCLAIM`、`XTRIM`
+- [ ] Functions / Script 收口：只读脚本、脚本缓存、错误中止、传播边界
+- [ ] ACL 第一批：用户、密码、命令分类、最小权限拒绝路径
+- [ ] 运维与诊断第一批：`CONFIG` 余量、`CLIENT` 余量、`MEMORY` 观测、`SLOWLOG`、`LATENCY`、`MONITOR`
+- [ ] 复制/持久化深化：RDB 二进制兼容推进、AOF rewrite 压测、复制断线重连、`WAIT` 语义、只读副本限制
+
+验收项：
+
+- Streams / Script / ACL / 运维命令必须给出清楚的“当前支持边界”与“不支持边界”
+- 不允许只做 happy path；必须补错误语义、持久化、复制和权限边界
+- 完成后，Redis Open Source 单机核心缺口应显著收敛，模块能力继续后置
+
+## 20. `v0.9.4` 起：性能、稳定性收敛与后续封版候选
+
+### V. `v1.0.0` 前置收敛
 
 - [ ] release build benchmark 模式，固定硬件、Redis 对照版本、持久化配置、并发、pipeline 和数据集
-- [ ] 核心命令吞吐、p95/p99、RSS 达到 floor/target，关键路径持续向 Redis 对照靠近
-- [ ] SET/写路径、RDB/AOF rewrite、复制增量、Streams、Search/Vector 等重路径单独 benchmark
+- [ ] 核心命令吞吐、p95/p99、RSS 至少恢复到当前 guard 要求之上，并持续向 Redis 对照靠近
+- [ ] `SET`/写路径、RDB/AOF rewrite、复制增量、Streams 等重路径单独 benchmark
 - [ ] 长时间运行、内存泄漏、慢客户端、半包/粘包、崩溃恢复和磁盘损坏矩阵
 - [ ] API、部署、运维、安全、性能、已知限制和迁移指南文档齐全
+- [ ] Redis Open Source 单机核心矩阵中不再存在“文档说有、执行没有、测试没覆盖”的真值裂缝
 
-如果 `v0.9.4` 未达到 `v1.0.0` 封版条件，继续按最后一位顺序增加版本号，使用 `v0.9.5`、`v0.9.6` 等版本补齐缺口；这些版本不新增集群主线和新的大范围目标。
+如果 `v0.9.4` 未达到 `v1.0.0` 封版条件，继续按最后一位顺序增加版本号，使用 `v0.9.5`、`v0.9.6` 等版本补齐缺口；这些版本不新增集群主线，也不把模块能力重新塞回当前核心封版门槛。
 
 `v1.0.0` 封版条件：
 
 - [ ] 单机计划内功能已完成并有测试证据
-- [ ] Redis 官方命令全集兼容矩阵无 `deferred`；非模式相关命令达到 `full`，模式相关命令达到 `full` 或 `standalone-error`
+- [ ] Redis Open Source 单机核心兼容矩阵无 `deferred`；模式相关命令达到 `full` 或 `standalone-error`
+- [ ] 模块命令若仍处于 `deferred`，必须与单机封版结论分开统计和说明
 - [ ] 兼容矩阵清楚标记所有 Redis 差异，不存在未说明的核心语义缺口
 - [ ] 性能达到当前 target，且没有 P0/P1 稳定性缺陷
 - [ ] 发布说明、DoD、benchmark 和测试报告齐全
 
-## 21. `v1.1.0+`：集群版规划与开发
+## 21. `v1.1.0+`：模块与集群后续规划
 
-`v1.0.0` 发布前不启动新的集群主线。发布后再基于稳定单机内核重新评审集群架构，规划以下方向：
+`v1.0.0` 发布前不启动新的集群主线，也不把模块能力重新塞回当前单机封版门槛。发布后再基于稳定单机内核重新评审以下方向：
 
+- [ ] 模块能力：JSON / Search / Time Series / Bloom / Cuckoo / CMS / Top-K / t-digest / Vector 的独立设计与实现
 - [ ] 集群语义：多 key 同槽校验、`CROSSSLOT`、`ASKING`、`MOVED/ASK` 完整边界
 - [ ] 集群成员：cluster bus、节点握手、gossip、拓扑传播、`PFAIL/FAIL`
 - [ ] 集群故障转移：replica 归属、config epoch、failover 选择、旧 master 恢复处理
@@ -558,3 +557,4 @@
 | R6 | 后续版本规划过粗导致执行断档 | 中 | 中 | 所有版本先保留完整任务框架，进入执行前再细化实现步骤 |
 | R7 | 单机功能范围扩大导致封版失控 | 中 | 高 | 所有 Redis 功能按命令族和数据类型分批验收，未进入当前版本的能力只保留范围，不提前实现 |
 | R8 | 完整 Cluster 协议过早铺开导致状态机失控 | 中 | 高 | `v1.0.0` 前冻结集群扩展，只做现有基础能力维护；`v1.0.0` 后重新评审并分阶段实现 |
+| R9 | 文档、`COMMAND*`、测试与 benchmark 再次脱节 | 高 | 高 | 把真实性检查纳入默认回归，任何“当前状态”表述都以当前 `HEAD` 实测结果为准 |

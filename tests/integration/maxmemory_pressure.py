@@ -141,6 +141,14 @@ def memory_info(sock: socket.socket) -> dict[str, int | str]:
     return info
 
 
+def configure_maxmemory(sock: socket.socket, headroom: int) -> int:
+    info = memory_info(sock)
+    effective = int(info["used_memory"]) + headroom
+    if send_command(sock, b"CONFIG", b"SET", b"maxmemory", str(effective).encode()) != "OK":
+        raise AssertionError("CONFIG SET maxmemory failed")
+    return effective
+
+
 def run_server(policy: str, maxmemory: int):
     port = find_free_port()
     aof_path = ROOT / "build" / f"pressure-{policy}-{port}.aof"
@@ -149,7 +157,7 @@ def run_server(policy: str, maxmemory: int):
     for rdb_path in rdb_paths:
         rdb_path.unlink(missing_ok=True)
     proc = subprocess.Popen(
-        [str(BIN), str(port), "16", str(aof_path), str(maxmemory), policy],
+        [str(BIN), str(port), "16", str(aof_path), "0", policy],
         cwd=ROOT,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -166,11 +174,12 @@ def assert_policy(info: dict[str, int | str], policy: str, maxmemory: int) -> No
 
 
 def check_noeviction_pressure() -> None:
-    maxmemory = 3200
-    port, aof_path, rdb_paths, proc = run_server("noeviction", maxmemory)
+    maxmemory_headroom = 5000
+    port, aof_path, rdb_paths, proc = run_server("noeviction", maxmemory_headroom)
     try:
         with connect_with_retry(port, time.monotonic() + 5.0) as sock:
-            assert_policy(memory_info(sock), "noeviction", maxmemory)
+            effective_maxmemory = configure_maxmemory(sock, maxmemory_headroom)
+            assert_policy(memory_info(sock), "noeviction", effective_maxmemory)
             ok_count = 0
             oom_count = 0
             value = b"n" * 256
@@ -194,11 +203,12 @@ def check_noeviction_pressure() -> None:
 
 
 def check_allkeys_lru_pressure() -> None:
-    maxmemory = 24000
-    port, aof_path, rdb_paths, proc = run_server("allkeys-lru", maxmemory)
+    maxmemory_headroom = 24000
+    port, aof_path, rdb_paths, proc = run_server("allkeys-lru", maxmemory_headroom)
     try:
         with connect_with_retry(port, time.monotonic() + 5.0) as sock:
-            assert_policy(memory_info(sock), "allkeys-lru", maxmemory)
+            effective_maxmemory = configure_maxmemory(sock, maxmemory_headroom)
+            assert_policy(memory_info(sock), "allkeys-lru", effective_maxmemory)
             value = b"l" * 512
             for index in range(36):
                 if send_command(sock, b"SET", f"l{index:02d}".encode(), value) != "OK":
@@ -217,11 +227,12 @@ def check_allkeys_lru_pressure() -> None:
 
 
 def check_allkeys_lfu_pressure() -> None:
-    maxmemory = 24000
-    port, aof_path, rdb_paths, proc = run_server("allkeys-lfu", maxmemory)
+    maxmemory_headroom = 24000
+    port, aof_path, rdb_paths, proc = run_server("allkeys-lfu", maxmemory_headroom)
     try:
         with connect_with_retry(port, time.monotonic() + 5.0) as sock:
-            assert_policy(memory_info(sock), "allkeys-lfu", maxmemory)
+            effective_maxmemory = configure_maxmemory(sock, maxmemory_headroom)
+            assert_policy(memory_info(sock), "allkeys-lfu", effective_maxmemory)
             value = b"f" * 512
             if send_command(sock, b"SET", b"hot", value) != "OK":
                 raise AssertionError("SET hot failed")
@@ -247,11 +258,12 @@ def check_allkeys_lfu_pressure() -> None:
 
 
 def check_volatile_ttl_pressure() -> None:
-    maxmemory = 40000
-    port, aof_path, rdb_paths, proc = run_server("volatile-ttl", maxmemory)
+    maxmemory_headroom = 40000
+    port, aof_path, rdb_paths, proc = run_server("volatile-ttl", maxmemory_headroom)
     try:
         with connect_with_retry(port, time.monotonic() + 5.0) as sock:
-            assert_policy(memory_info(sock), "volatile-ttl", maxmemory)
+            effective_maxmemory = configure_maxmemory(sock, maxmemory_headroom)
+            assert_policy(memory_info(sock), "volatile-ttl", effective_maxmemory)
             value = b"v" * 384
             if send_command(sock, b"SET", b"persistent", value) != "OK":
                 raise AssertionError("SET persistent failed")

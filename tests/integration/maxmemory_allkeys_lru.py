@@ -107,6 +107,34 @@ def array_pairs_to_dict(raw: list[bytes]) -> dict[str, str]:
     return result
 
 
+def parse_info_memory(raw: bytes) -> dict[str, int | str]:
+    result: dict[str, int | str] = {}
+    for line in raw.decode().splitlines():
+        if not line or line.startswith("#") or ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        result[key] = int(value) if value.isdigit() else value
+    return result
+
+
+def used_memory(sock: socket.socket) -> int:
+    info = send_command(sock, b"INFO", b"memory")
+    if not isinstance(info, bytes):
+        raise AssertionError(f"unexpected INFO memory: {info!r}")
+    parsed = parse_info_memory(info)
+    return int(parsed["used_memory"])
+
+
+def configure_maxmemory(sock: socket.socket, headroom: int) -> int:
+    effective = used_memory(sock) + headroom
+    if send_command(sock, b"CONFIG", b"SET", b"maxmemory", str(effective).encode()) != "OK":
+        raise AssertionError("CONFIG SET maxmemory failed")
+    config = send_command(sock, b"CONFIG", b"GET", b"maxmemory")
+    if not isinstance(config, list) or array_pairs_to_dict(config).get("maxmemory") != str(effective):
+        raise AssertionError(f"unexpected CONFIG GET maxmemory: {config!r}")
+    return effective
+
+
 def run_smoke() -> None:
     if not BIN.exists():
         raise RuntimeError("build/redis-uya is missing; run `make build` first")
@@ -115,7 +143,7 @@ def run_smoke() -> None:
     aof_path = ROOT / "build" / f"allkeys-lru-{port}.aof"
     aof_path.unlink(missing_ok=True)
     proc = subprocess.Popen(
-        [str(BIN), str(port), "8", str(aof_path), "5000", "allkeys-lru"],
+        [str(BIN), str(port), "8", str(aof_path), "0", "allkeys-lru"],
         cwd=ROOT,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -143,6 +171,7 @@ def run_smoke() -> None:
             if send_command(sock, b"GET", b"hot") != hot_value:
                 raise AssertionError("GET hot failed before eviction")
             time.sleep(0.02)
+            _ = configure_maxmemory(sock, 5000)
             if send_command(sock, b"SET", b"new", new_value) != "OK":
                 raise AssertionError("SET new should evict the oldest key")
 

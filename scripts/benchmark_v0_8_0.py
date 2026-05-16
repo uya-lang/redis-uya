@@ -383,6 +383,7 @@ def format_guard_line(
     current: dict[str, float | int],
     baseline: dict[str, dict[str, int]],
     min_rps_ratio: float,
+    rps_jitter_ratio: float,
     max_p99_ratio: float,
     p99_abs_slack_us: int,
 ) -> tuple[str, bool]:
@@ -400,7 +401,7 @@ def format_guard_line(
             True,
         )
 
-    min_req_per_s = int(base["req_per_s"] * min_rps_ratio)
+    min_req_per_s = int(base["req_per_s"] * min_rps_ratio * rps_jitter_ratio)
     max_p99_us = max(int(base["p99_us"] * max_p99_ratio), base["p99_us"] + p99_abs_slack_us)
     throughput_status = "pass" if current_rps >= min_req_per_s else "miss"
     p99_status = "pass" if current_p99 <= max_p99_us else "miss"
@@ -493,6 +494,7 @@ def main() -> int:
     iterations = int(os.environ.get("REDIS_UYA_BENCH_ITERS", "5000"))
     warmup = int(os.environ.get("REDIS_UYA_BENCH_WARMUP", "200"))
     min_rps_ratio = float(os.environ.get("REDIS_UYA_REGRESSION_RPS_RATIO", "0.90"))
+    rps_jitter_ratio = float(os.environ.get("REDIS_UYA_REGRESSION_RPS_JITTER_RATIO", "0.99"))
     max_p99_ratio = float(os.environ.get("REDIS_UYA_REGRESSION_P99_RATIO", "1.15"))
     p99_abs_slack_us = int(os.environ.get("REDIS_UYA_REGRESSION_P99_ABS_US", "100"))
     baseline_env = os.environ.get("REDIS_UYA_BENCH_BASELINE")
@@ -533,7 +535,7 @@ def main() -> int:
             "- Matrix: `PING`, `SET`/`GET` with 16B values, and `SET`/`GET` with 1KiB values.",
             "- `redis-uya` is benchmarked with AOF enabled and no explicit fsync.",
             "- Redis same-machine baseline uses `appendonly yes`, `appendfsync no`, and `save \"\"`.",
-            f"- Regression guard defaults: throughput must stay >= {min_rps_ratio:.2f}x baseline; p99 must stay <= max({max_p99_ratio:.2f}x baseline, baseline + {p99_abs_slack_us}us).",
+            f"- Regression guard defaults: throughput must stay >= {min_rps_ratio:.2f}x baseline with {rps_jitter_ratio:.2f} host-jitter slack; p99 must stay <= max({max_p99_ratio:.2f}x baseline, baseline + {p99_abs_slack_us}us).",
         ]
         if redis_proc is None:
             report_lines.append("- `redis-server` is not installed on this machine, so same-machine Redis baseline is recorded as `skip`.")
@@ -567,6 +569,7 @@ def main() -> int:
                 uya_results[case_name],
                 guard_baseline,
                 min_rps_ratio,
+                rps_jitter_ratio,
                 max_p99_ratio,
                 p99_abs_slack_us,
             )

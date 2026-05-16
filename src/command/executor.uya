@@ -7832,6 +7832,9 @@ fn command_executor_cluster_redirect(runtime: &CommandRuntimeInfo, command: &Com
     if runtime.cluster_topology == null {
         return false;
     }
+    if runtime.cluster_topology.node_count == 1 && runtime.cluster_topology.local_index == 0 {
+        return false;
+    }
     if command.info.first_key <= 0 {
         return false;
     }
@@ -8175,6 +8178,15 @@ export fn command_reply_cleanup(reply: &CommandReply) void {
 }
 
 export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRuntimeInfo, command: &Command, now_ms: u64) CommandReply {
+    const default_single_node: bool = runtime.cluster_topology == null ||
+        (runtime.cluster_topology.node_count == 1 && runtime.cluster_topology.local_index == 0);
+    if command.info.cmd_type == CommandType.command_ping {
+        return command_executor_ping(command);
+    }
+    if command.info.cmd_type == CommandType.command_get && default_single_node {
+        return command_executor_get(engine, command, now_ms);
+    }
+
     var redirect_reply: CommandReply = command_executor_error(command_executor_empty_slice());
     if command_executor_cluster_redirect(runtime, command, &redirect_reply) {
         return redirect_reply;
@@ -8184,9 +8196,6 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
         return command_executor_maxmemory();
     }
 
-    if command.info.cmd_type == CommandType.command_ping {
-        return command_executor_ping(command);
-    }
     if command.info.cmd_type == CommandType.command_echo {
         return command_executor_echo(command);
     }

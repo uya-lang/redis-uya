@@ -31,6 +31,7 @@ use src.replication.state.ReplicationState;
 use src.storage.engine.Engine;
 use src.storage.engine.engine_new;
 use src.storage.engine.engine_free;
+use src.storage.engine.get_key_expire_at;
 use src.storage.engine.lookup_key_at;
 use src.storage.engine.set_key_at;
 use src.storage.object.RedisObject;
@@ -1228,6 +1229,48 @@ export fn test_command_set_get_del_exists() !void {
     try assert_true(command_executor_test_slice_eq(getrange_reply.data, &"alu"[0: 3]));
     resp_value_free(&getrange_parsed.value);
 
+    var getbit_missing_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nGETBIT\r\n$7\r\nmissing\r\n$1\r\n0\r\n"[0: 36]);
+    const getbit_missing_command: Command = try command_executor_test_command(&router, &getbit_missing_parsed);
+    const getbit_missing_reply: CommandReply = command_execute_at(&engine, &getbit_missing_command, 1000u64);
+    try assert_eq_i32(getbit_missing_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(getbit_missing_reply.integer as i32, 0);
+    resp_value_free(&getbit_missing_parsed.value);
+
+    var getbit_existing_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nGETBIT\r\n$3\r\nkey\r\n$1\r\n0\r\n"[0: 32]);
+    const getbit_existing_command: Command = try command_executor_test_command(&router, &getbit_existing_parsed);
+    const getbit_existing_reply: CommandReply = command_execute_at(&engine, &getbit_existing_command, 1000u64);
+    try assert_eq_i32(getbit_existing_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(getbit_existing_reply.integer as i32, 0);
+    resp_value_free(&getbit_existing_parsed.value);
+
+    var setbit_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nSETBIT\r\n$3\r\nkey\r\n$1\r\n1\r\n$1\r\n1\r\n"[0: 39]);
+    const setbit_command: Command = try command_executor_test_command(&router, &setbit_parsed);
+    const setbit_reply: CommandReply = command_execute_at(&engine, &setbit_command, 1000u64);
+    try assert_eq_i32(setbit_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(setbit_reply.integer as i32, 1);
+    resp_value_free(&setbit_parsed.value);
+
+    var bitcount_parsed: RespParseResult = try parse_resp2(&"*2\r\n$8\r\nBITCOUNT\r\n$3\r\nkey\r\n"[0: 27]);
+    const bitcount_command: Command = try command_executor_test_command(&router, &bitcount_parsed);
+    const bitcount_reply: CommandReply = command_execute_at(&engine, &bitcount_command, 1000u64);
+    try assert_eq_i32(bitcount_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(bitcount_reply.integer as i32, 29);
+    resp_value_free(&bitcount_parsed.value);
+
+    var bitcount_range_parsed: RespParseResult = try parse_resp2(&"*4\r\n$8\r\nBITCOUNT\r\n$3\r\nkey\r\n$1\r\n0\r\n$1\r\n0\r\n"[0: 41]);
+    const bitcount_range_command: Command = try command_executor_test_command(&router, &bitcount_range_parsed);
+    const bitcount_range_reply: CommandReply = command_execute_at(&engine, &bitcount_range_command, 1000u64);
+    try assert_eq_i32(bitcount_range_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(bitcount_range_reply.integer as i32, 5);
+    resp_value_free(&bitcount_range_parsed.value);
+
+    var bitcount_bits_parsed: RespParseResult = try parse_resp2(&"*5\r\n$8\r\nBITCOUNT\r\n$3\r\nkey\r\n$1\r\n0\r\n$1\r\n7\r\n$3\r\nBIT\r\n"[0: 50]);
+    const bitcount_bits_command: Command = try command_executor_test_command(&router, &bitcount_bits_parsed);
+    const bitcount_bits_reply: CommandReply = command_execute_at(&engine, &bitcount_bits_command, 1000u64);
+    try assert_eq_i32(bitcount_bits_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(bitcount_bits_reply.integer as i32, 5);
+    resp_value_free(&bitcount_bits_parsed.value);
+
     var setrange_parsed: RespParseResult = try parse_resp2(&"*4\r\n$8\r\nSETRANGE\r\n$3\r\nkey\r\n$1\r\n5\r\n$2\r\n__\r\n"[0: 42]);
     const setrange_command: Command = try command_executor_test_command(&router, &setrange_parsed);
     const setrange_reply: CommandReply = command_execute_at(&engine, &setrange_command, 1000u64);
@@ -1241,6 +1284,35 @@ export fn test_command_set_get_del_exists() !void {
     try assert_eq_i32(appended_get_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
     try assert_true(command_executor_test_slice_eq(appended_get_reply.data, &"value__"[0: 7]));
     resp_value_free(&appended_get_parsed.value);
+
+    var setex_ttl_range_parsed: RespParseResult = try parse_resp2(&"*4\r\n$5\r\nSETEX\r\n$9\r\nrange-ttl\r\n$2\r\n10\r\n$5\r\nvalue\r\n"[0: 49]);
+    const setex_ttl_range_command: Command = try command_executor_test_command(&router, &setex_ttl_range_parsed);
+    _ = command_execute_at(&engine, &setex_ttl_range_command, 1000u64);
+    resp_value_free(&setex_ttl_range_parsed.value);
+
+    var setrange_ttl_parsed: RespParseResult = try parse_resp2(&"*4\r\n$8\r\nSETRANGE\r\n$9\r\nrange-ttl\r\n$1\r\n5\r\n$2\r\n__\r\n"[0: 48]);
+    const setrange_ttl_command: Command = try command_executor_test_command(&router, &setrange_ttl_parsed);
+    _ = command_execute_at(&engine, &setrange_ttl_command, 1000u64);
+    resp_value_free(&setrange_ttl_parsed.value);
+    try assert_eq_u64(try get_key_expire_at(&engine, &"range-ttl"[0: 9]), 11000u64);
+
+    var setex_ttl_bit_parsed: RespParseResult = try parse_resp2(&"*4\r\n$5\r\nSETEX\r\n$7\r\nbit-ttl\r\n$2\r\n10\r\n$1\r\na\r\n"[0: 43]);
+    const setex_ttl_bit_command: Command = try command_executor_test_command(&router, &setex_ttl_bit_parsed);
+    _ = command_execute_at(&engine, &setex_ttl_bit_command, 1000u64);
+    resp_value_free(&setex_ttl_bit_parsed.value);
+
+    var setbit_ttl_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nSETBIT\r\n$7\r\nbit-ttl\r\n$1\r\n9\r\n$1\r\n1\r\n"[0: 43]);
+    const setbit_ttl_command: Command = try command_executor_test_command(&router, &setbit_ttl_parsed);
+    _ = command_execute_at(&engine, &setbit_ttl_command, 1000u64);
+    resp_value_free(&setbit_ttl_parsed.value);
+    try assert_eq_u64(try get_key_expire_at(&engine, &"bit-ttl"[0: 7]), 11000u64);
+
+    var ttl_cleanup_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nDEL\r\n$9\r\nrange-ttl\r\n$7\r\nbit-ttl\r\n"[0: 41]);
+    const ttl_cleanup_command: Command = try command_executor_test_command(&router, &ttl_cleanup_parsed);
+    const ttl_cleanup_reply: CommandReply = command_execute_at(&engine, &ttl_cleanup_command, 1000u64);
+    try assert_eq_i32(ttl_cleanup_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(ttl_cleanup_reply.integer as i32, 2);
+    resp_value_free(&ttl_cleanup_parsed.value);
 
     var getdel_set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$6\r\ngd-key\r\n$4\r\nonce\r\n"[0: 36]);
     const getdel_set_command: Command = try command_executor_test_command(&router, &getdel_set_parsed);
@@ -3786,6 +3858,36 @@ export fn test_command_error_paths() !void {
     const setrange_bad_reply: CommandReply = command_execute_at(&engine, &setrange_bad_command, 1000u64);
     try assert_eq_i32(setrange_bad_reply.typ as i32, CommandReplyType.reply_error as i32);
     resp_value_free(&setrange_bad_parsed.value);
+
+    var getbit_wrongtype_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nGETBIT\r\n$4\r\nhash\r\n$1\r\n0\r\n"[0: 33]);
+    const getbit_wrongtype_command: Command = try command_executor_test_command(&router, &getbit_wrongtype_parsed);
+    const getbit_wrongtype_reply: CommandReply = command_execute_at(&engine, &getbit_wrongtype_command, 1000u64);
+    try assert_eq_i32(getbit_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    resp_value_free(&getbit_wrongtype_parsed.value);
+
+    var setbit_bad_offset_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nSETBIT\r\n$3\r\nkey\r\n$2\r\n-1\r\n$1\r\n1\r\n"[0: 40]);
+    const setbit_bad_offset_command: Command = try command_executor_test_command(&router, &setbit_bad_offset_parsed);
+    const setbit_bad_offset_reply: CommandReply = command_execute_at(&engine, &setbit_bad_offset_command, 1000u64);
+    try assert_eq_i32(setbit_bad_offset_reply.typ as i32, CommandReplyType.reply_error as i32);
+    resp_value_free(&setbit_bad_offset_parsed.value);
+
+    var setbit_bad_value_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nSETBIT\r\n$3\r\nkey\r\n$1\r\n0\r\n$1\r\n2\r\n"[0: 39]);
+    const setbit_bad_value_command: Command = try command_executor_test_command(&router, &setbit_bad_value_parsed);
+    const setbit_bad_value_reply: CommandReply = command_execute_at(&engine, &setbit_bad_value_command, 1000u64);
+    try assert_eq_i32(setbit_bad_value_reply.typ as i32, CommandReplyType.reply_error as i32);
+    resp_value_free(&setbit_bad_value_parsed.value);
+
+    var bitcount_bad_mode_parsed: RespParseResult = try parse_resp2(&"*5\r\n$8\r\nBITCOUNT\r\n$3\r\nkey\r\n$1\r\n0\r\n$1\r\n0\r\n$3\r\nBAD\r\n"[0: 50]);
+    const bitcount_bad_mode_command: Command = try command_executor_test_command(&router, &bitcount_bad_mode_parsed);
+    const bitcount_bad_mode_reply: CommandReply = command_execute_at(&engine, &bitcount_bad_mode_command, 1000u64);
+    try assert_eq_i32(bitcount_bad_mode_reply.typ as i32, CommandReplyType.reply_error as i32);
+    resp_value_free(&bitcount_bad_mode_parsed.value);
+
+    var bitcount_wrongtype_parsed: RespParseResult = try parse_resp2(&"*2\r\n$8\r\nBITCOUNT\r\n$4\r\nhash\r\n"[0: 28]);
+    const bitcount_wrongtype_command: Command = try command_executor_test_command(&router, &bitcount_wrongtype_parsed);
+    const bitcount_wrongtype_reply: CommandReply = command_execute_at(&engine, &bitcount_wrongtype_command, 1000u64);
+    try assert_eq_i32(bitcount_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    resp_value_free(&bitcount_wrongtype_parsed.value);
 
     var save_parsed: RespParseResult = try parse_resp2(&"*1\r\n$4\r\nSAVE\r\n"[0: 14]);
     const save_command: Command = try command_executor_test_command(&router, &save_parsed);

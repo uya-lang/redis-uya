@@ -148,6 +148,9 @@ export enum CommandType {
     command_sort_ro,
     command_smove,
     command_sintercard,
+    command_getbit,
+    command_setbit,
+    command_bitcount,
 }
 
 export struct CommandInfo {
@@ -174,7 +177,7 @@ export const COMMAND_FLAG_READONLY: u64 = 1u64;
 export const COMMAND_FLAG_WRITE: u64 = 2u64;
 export const COMMAND_FLAG_FAST: u64 = 4u64;
 
-const MIN_COMMAND_COUNT: usize = 137;
+const MIN_COMMAND_COUNT: usize = 140;
 
 fn command_router_name_eq(a: &[byte], b: &[byte]) bool {
     return bytes_ascii_case_eq(a, b);
@@ -624,6 +627,15 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
     }
     if index == 136 {
         return command_router_info(CommandType.command_sintercard, &"SINTERCARD"[0: 10], -3, COMMAND_FLAG_READONLY, 2, -1, 1);
+    }
+    if index == 137 {
+        return command_router_info(CommandType.command_getbit, &"GETBIT"[0: 6], 3, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 138 {
+        return command_router_info(CommandType.command_setbit, &"SETBIT"[0: 6], 4, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 139 {
+        return command_router_info(CommandType.command_bitcount, &"BITCOUNT"[0: 8], -2, COMMAND_FLAG_READONLY, 1, 1, 1);
     }
     return error.CommandUnknown;
 }

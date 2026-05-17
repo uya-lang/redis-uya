@@ -1,7 +1,7 @@
 # redis-uya command matrix
 
 > version: v0.9.1-dev
-> date: 2026-05-15
+> date: 2026-05-17
 > source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`
 > runtime source: `src/command/catalog_generated.uya`
 
@@ -15,11 +15,11 @@
 
 | status | count |
 |--------|-------|
-| `full` | `131` |
+| `full` | `134` |
 | `partial` | `42` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `329` |
+| `deferred` | `326` |
 
 ## Group counts
 
@@ -85,7 +85,7 @@
 | `bf.scandump` | `bf` | `deferred` | `v0.9.2` | `3` | `bf` | `no` | `@bloom, @write, @slow` |
 | `bgrewriteaof` | `server` | `partial` | `-` | `1` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `bgsave` | `server` | `partial` | `-` | `-1` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `bitcount` | `bitmap` | `deferred` | `v0.9.2` | `-2` | `-` | `no` | `@read, @bitmap, @slow` |
+| `bitcount` | `bitmap` | `full` | `-` | `-2` | `-` | `no` | `@read, @bitmap, @slow` |
 | `bitfield` | `bitmap` | `deferred` | `v0.9.2` | `-2` | `-` | `no` | `@write, @bitmap, @slow` |
 | `bitfield_ro` | `bitmap` | `deferred` | `v0.9.2` | `-2` | `-` | `no` | `@read, @bitmap, @fast` |
 | `bitop` | `bitmap` | `deferred` | `v0.9.2` | `-4` | `-` | `no` | `@write, @bitmap, @slow` |
@@ -256,7 +256,7 @@
 | `geosearch` | `geo` | `deferred` | `v0.9.2` | `-7` | `-` | `no` | `@read, @geo, @slow` |
 | `geosearchstore` | `geo` | `deferred` | `v0.9.2` | `-8` | `-` | `no` | `@write, @geo, @slow` |
 | `get` | `string` | `full` | `-` | `2` | `-` | `no` | `@read, @string, @fast` |
-| `getbit` | `bitmap` | `deferred` | `v0.9.2` | `3` | `-` | `no` | `@read, @bitmap, @fast` |
+| `getbit` | `bitmap` | `full` | `-` | `3` | `-` | `no` | `@read, @bitmap, @fast` |
 | `getdel` | `string` | `full` | `-` | `2` | `-` | `no` | `@write, @string, @fast` |
 | `getex` | `string` | `full` | `-` | `-2` | `-` | `no` | `@write, @string, @fast` |
 | `getrange` | `string` | `full` | `-` | `4` | `-` | `no` | `@read, @string, @slow` |
@@ -432,7 +432,7 @@
 | `sdiffstore` | `set` | `full` | `-` | `-3` | `-` | `no` | `@write, @set, @slow` |
 | `select` | `connection` | `partial` | `-` | `2` | `-` | `no` | `@fast, @connection` |
 | `set` | `string` | `full` | `-` | `-3` | `-` | `no` | `@write, @string, @slow` |
-| `setbit` | `bitmap` | `deferred` | `v0.9.2` | `4` | `-` | `no` | `@write, @bitmap, @slow` |
+| `setbit` | `bitmap` | `full` | `-` | `4` | `-` | `no` | `@write, @bitmap, @slow` |
 | `setex` | `string` | `full` | `-` | `4` | `-` | `no` | `@write, @string, @slow` |
 | `setnx` | `string` | `full` | `-` | `3` | `-` | `no` | `@write, @string, @fast` |
 | `setrange` | `string` | `full` | `-` | `4` | `-` | `no` | `@write, @string, @slow` |

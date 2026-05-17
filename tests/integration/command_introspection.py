@@ -154,6 +154,19 @@ def run_smoke() -> None:
             if not isinstance(info[2], list) or info[2][0] != b"client|id":
                 raise AssertionError(f"COMMAND INFO CLIENT|ID returned wrong payload: {info!r}")
 
+            bitmap_info = send_command(sock, b"COMMAND", b"INFO", b"GETBIT", b"SETBIT", b"BITCOUNT")
+            if (
+                not isinstance(bitmap_info, list)
+                or len(bitmap_info) != 3
+                or not isinstance(bitmap_info[0], list)
+                or bitmap_info[0][0] != b"getbit"
+                or not isinstance(bitmap_info[1], list)
+                or bitmap_info[1][0] != b"setbit"
+                or not isinstance(bitmap_info[2], list)
+                or bitmap_info[2][0] != b"bitcount"
+            ):
+                raise AssertionError(f"bitmap commands missing from COMMAND INFO: {bitmap_info!r}")
+
             unsupported_info = send_command(sock, b"COMMAND", b"INFO", b"ACL", b"BLPOP", b"CLUSTER|RESET")
             if unsupported_info != [None, None, None]:
                 raise AssertionError(f"unsupported COMMAND INFO entries must be null: {unsupported_info!r}")
@@ -191,6 +204,16 @@ def run_smoke() -> None:
             listed_blocking = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"BL*")
             if not isinstance(listed_blocking, list) or b"blpop" in listed_blocking:
                 raise AssertionError(f"unsupported blocking commands leaked into COMMAND LIST: {listed_blocking!r}")
+
+            listed_bitmap = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"BIT*")
+            if (
+                not isinstance(listed_bitmap, list)
+                or b"bitcount" not in listed_bitmap
+                or b"bitfield" in listed_bitmap
+                or b"bitop" in listed_bitmap
+                or b"bitpos" in listed_bitmap
+            ):
+                raise AssertionError(f"unexpected COMMAND LIST bitmap result: {listed_bitmap!r}")
 
             help_reply = send_command(sock, b"COMMAND", b"HELP")
             if not isinstance(help_reply, list) or b"GETKEYS <full-command>" not in help_reply:

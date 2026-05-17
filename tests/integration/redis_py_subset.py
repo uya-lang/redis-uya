@@ -160,6 +160,18 @@ class RedisPySubsetClient:
         assert isinstance(result, bytes)
         return result
 
+    def getbit(self, key: str, offset: int) -> int:
+        return int(self._request(b"GETBIT", key.encode(), str(offset).encode()))
+
+    def setbit(self, key: str, offset: int, value: int) -> int:
+        return int(self._request(b"SETBIT", key.encode(), str(offset).encode(), str(value).encode()))
+
+    def bitcount(self, key: str, *parts: str) -> int:
+        encoded: list[bytes] = [b"BITCOUNT", key.encode()]
+        for part in parts:
+            encoded.append(part.encode())
+        return int(self._request(*encoded))
+
     def setrange(self, key: str, offset: int, value: str) -> int:
         return int(self._request(b"SETRANGE", key.encode(), str(offset).encode(), value.encode()))
 
@@ -655,6 +667,12 @@ def run_smoke() -> None:
             assert client.strlen("key") == 5
             assert client.append("key", "++") == 7
             assert client.getrange("key", 1, 3) == b"alu"
+            assert client.getbit("missing", 0) == 0
+            assert client.getbit("key", 0) == 0
+            assert client.setbit("key", 1, 1) == 1
+            assert client.bitcount("key") == 29
+            assert client.bitcount("key", "0", "0") == 5
+            assert client.bitcount("key", "0", "7", "BIT") == 5
             assert client.setrange("key", 5, "__") == 7
             assert client.get("key") == b"value__"
             assert client.rename("key", "key2")

@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 137);
+    try assert_eq_i32(command_router_count(&router) as i32, 140);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -98,6 +98,18 @@ export fn test_command_router_lookup_and_case() !void {
     const setrange: CommandInfo = try command_router_lookup(&router, &"setrange"[0: 8]);
     try assert_eq_i32(setrange.cmd_type as i32, CommandType.command_setrange as i32);
     try assert_eq_i32(setrange.arity, 4);
+
+    const getbit: CommandInfo = try command_router_lookup(&router, &"GETBIT"[0: 6]);
+    try assert_eq_i32(getbit.cmd_type as i32, CommandType.command_getbit as i32);
+    try assert_eq_i32(getbit.arity, 3);
+
+    const setbit: CommandInfo = try command_router_lookup(&router, &"setbit"[0: 6]);
+    try assert_eq_i32(setbit.cmd_type as i32, CommandType.command_setbit as i32);
+    try assert_eq_i32(setbit.arity, 4);
+
+    const bitcount: CommandInfo = try command_router_lookup(&router, &"BITCOUNT"[0: 8]);
+    try assert_eq_i32(bitcount.cmd_type as i32, CommandType.command_bitcount as i32);
+    try assert_eq_i32(bitcount.arity, -2);
 
     const incrbyfloat: CommandInfo = try command_router_lookup(&router, &"INCRBYFLOAT"[0: 11]);
     try assert_eq_i32(incrbyfloat.cmd_type as i32, CommandType.command_incrbyfloat as i32);
@@ -605,6 +617,9 @@ export fn test_command_router_arity_validation() !void {
     const msetnx: CommandInfo = try command_router_lookup(&router, &"MSETNX"[0: 6]);
     const getrange: CommandInfo = try command_router_lookup(&router, &"GETRANGE"[0: 8]);
     const setrange: CommandInfo = try command_router_lookup(&router, &"SETRANGE"[0: 8]);
+    const getbit: CommandInfo = try command_router_lookup(&router, &"GETBIT"[0: 6]);
+    const setbit: CommandInfo = try command_router_lookup(&router, &"SETBIT"[0: 6]);
+    const bitcount: CommandInfo = try command_router_lookup(&router, &"BITCOUNT"[0: 8]);
     const incrbyfloat: CommandInfo = try command_router_lookup(&router, &"INCRBYFLOAT"[0: 11]);
     const hget: CommandInfo = try command_router_lookup(&router, &"HGET"[0: 4]);
     const hset: CommandInfo = try command_router_lookup(&router, &"HSET"[0: 4]);
@@ -700,6 +715,11 @@ export fn test_command_router_arity_validation() !void {
     try command_validate_arity(&msetnx, 3);
     try command_validate_arity(&msetnx, 5);
     try command_validate_arity(&getrange, 4);
+    try command_validate_arity(&getbit, 3);
+    try command_validate_arity(&setbit, 4);
+    try command_validate_arity(&bitcount, 2);
+    try command_validate_arity(&bitcount, 4);
+    try command_validate_arity(&bitcount, 5);
     try command_validate_arity(&setrange, 4);
     try command_validate_arity(&incrbyfloat, 3);
     try command_validate_arity(&hget, 3);
@@ -778,6 +798,15 @@ export fn test_command_router_arity_validation() !void {
         return;
     };
     try assert_true(saw_command_wrong);
+
+    var saw_bitcount_wrong: bool = false;
+    _ = command_validate_arity(&bitcount, 3) catch |err| {
+        if err == error.CommandWrongArity {
+            saw_bitcount_wrong = true;
+        }
+        return;
+    };
+    try assert_true(saw_bitcount_wrong);
 }
 
 export fn test_command_router_unknown_command() !void {

@@ -3,7 +3,7 @@
 > 版本口径: `v0.9.1-dev`
 > 审计日期: 2026-05-16
 > 审计范围: 当前 `HEAD` 的文档口径、命令覆盖、测试结果、性能结果与 Redis 单机兼容目标的一致性
-> 结论: 当前代码基线具备继续演进的工程基础，但不能宣称已达到可与 Redis 单机版正面竞争的状态
+> 结论: 本文记录 2026-05-16 首次审计时的原始发现；其后 `make test-integration` 已恢复通过，`make benchmark-v0.8.1` 一度恢复，但 2026-05-17 最新复跑仍出现 guard miss；`COMMAND*` 真值和版本号一致性仍待继续收口
 
 ## 1. 审计目标
 
@@ -13,6 +13,11 @@
 2. 当前 `HEAD` 的命令覆盖是否足以支撑“Redis 单机版该有的命令都要有”的目标。
 3. `COMMAND` 控制面、README、DoD、TODO 是否与实际实现一致。
 4. 当前主线下一步应该先修什么，而不是继续扩展什么。
+
+后续说明：
+
+- 本文第 2 节的 `FAIL` 结果是首轮审计时的真实快照，保留为历史证据。
+- 当前 `HEAD` 的最新状态应同时参考 README、DoD 和 TODO 的后续更新。
 
 ## 2. 实际执行的验证
 
@@ -193,3 +198,18 @@
 - [开发 TODO](./redis-uya-todo.md)
 - [Definition of Done](./redis-uya-definition-of-done.md)
 - [方案评审](./redis-uya-review.md)
+
+## 8. 后续修复状态
+
+在本次审计之后，当前 `HEAD` 已完成以下收口：
+
+- `make test-integration` 已恢复通过。
+- `make benchmark-v0.8.1` guard 已重校，并曾恢复通过。
+- `maxmemory` 集成测试已改为基于当前实现的启动内存与稳定 headroom 校准。
+- `PING/GET/SET` 热路径的若干回归开销已收回到当前 guard 范围内。
+
+截至当前，以下问题仍待继续处理：
+
+- `COMMAND*` 目录输出与真实执行面尚未完全一致。
+- banner、`INFO server`、测试断言与文档版本号尚未统一。
+- `make benchmark-v0.8.1` 最新复跑仍有抖动，尚不能宣称稳定转绿。

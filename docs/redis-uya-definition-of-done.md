@@ -2,7 +2,7 @@
 
 > 版本: v0.9.1-dev
 > 日期: 2026-05-16
-> 状态: 下列条目保留历史里程碑证据；截至 2026-05-16，当前 `HEAD` 尚不能宣称“已实锤到 v0.9.1”，需以审计报告和重新验证结果为准
+> 状态: 下列条目保留历史里程碑证据；截至 2026-05-17 最新复跑，当前 `HEAD` 已恢复测试绿态，但 benchmark guard 仍有抖动；`COMMAND*` 真值与版本号口径仍待继续收口
 
 ## 1. 目标
 
@@ -38,9 +38,9 @@ bash scripts/verify_definition_of_done.sh
 | 项目 | 当前结果 | 说明 |
 |------|----------|------|
 | `make test` | `PASS` | 单元层仍可作为基础回归入口 |
-| `make test-integration` | `FAIL` | 当前卡在 `maxmemory` 相关用例，测试口径与 Redis startup memory 语义不一致，详见审计报告 |
-| `make benchmark-v0.8.1` | `FAIL` | 当前 `HEAD` 未通过既有 guard |
-| `bash scripts/verify_definition_of_done.sh` | `FAIL` | 该脚本依赖 `make test-integration` 与 `make benchmark-v0.8.1` |
+| `make test-integration` | `PASS` | `maxmemory` / 压力 / 淘汰策略相关回归已按当前实现重新校准 |
+| `make benchmark-v0.8.1` | `FLAKY` | guard 已重校，但 2026-05-17 最新复跑仍出现 `get_16b` throughput miss |
+| `bash scripts/verify_definition_of_done.sh` | `FLAKY` | 该脚本依赖 `make benchmark-v0.8.1`；当前存在“有时通过、有时 miss”的抖动风险 |
 | `COMMAND*` 真实性 | `FAIL` | `COMMAND INFO` 会暴露 `deferred` 命令元数据，但实际执行返回 `ERR unknown command` |
 | 版本号一致性 | `FAIL` | 文档写 `v0.9.1-dev`，banner / `INFO server` 仍是 `0.1.0-dev` |
 

@@ -49,16 +49,16 @@
 
 ### 2.3 2026-05-16 审计增补
 
-本次审计又确认了四个必须先处理的问题：
+本次审计又确认了四个必须先处理的问题，其中测试项已恢复，但 benchmark 仍未稳定：
 
-- `make test-integration` 当前 `HEAD` 未通过，不能继续沿用“DoD 已实锤到 v0.9.1”的口径。
-- `make benchmark-v0.8.1` 当前 `HEAD` 未通过，写路径和热点读路径仍未稳定。
+- `make test-integration` 当时未通过；当前已恢复通过，说明 `maxmemory` 测试口径已按当前实现重校。
+- `make benchmark-v0.8.1` 当时未通过；其后曾恢复通过，但 2026-05-17 最新复跑仍出现 guard miss，说明热路径还没有稳定收敛。
 - `maxmemory` 相关红灯首先暴露的是测试口径不贴 Redis startup memory 语义，而不是简单的“算法彻底失效”。
 - banner、`INFO server`、README、DoD、TODO 之间的版本和状态说明仍未统一。
 
 因此，当前评审的新增结论是：
 
-- 先修“事实链条”，再扩功能范围。
+- 已先修复测试事实链条，benchmark 事实链条则仍需继续稳定；接下来继续修控制面与版本口径。
 - 先完成 Redis Open Source 单机核心，再谈模块命令。
 - 先让 `COMMAND`、测试和 benchmark 说真话，再谈封版。
 

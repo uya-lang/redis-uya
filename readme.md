@@ -12,7 +12,7 @@
 
 `v1.0.0` 的版本目标不是提前兑现“全面超过 Redis”，而是先把单机核心做真、做稳、做快：功能边界真实、兼容语义真实、测试和 benchmark 结果真实，并在这一前提下持续缩小与 Redis 的性能差距。长期性能目标仍然是超过 Redis，但那是 `v1.0.0` 之后继续迭代的方向，不是拿来包装当前完成度的口号。
 
-历史上，项目已经完成 `v0.9.0` 单机核心命令补齐，并在 `v0.9.1` 主线落地共享命令目录、`COMMAND*` 第一批和若干连接/管理面扩展。但截至 2026-05-16 审计，当前 `HEAD` 还不能宣称“已实锤到 v0.9.1”：`make test` 通过，`make test-integration` 和 `make benchmark-v0.8.1` 仍未恢复为全绿，`COMMAND` 控制面也还存在目录面大于真实执行面的裂缝。当前第一优先级是修复真实性问题，再继续补单机核心缺口。
+历史上，项目已经完成 `v0.9.0` 单机核心命令补齐，并在 `v0.9.1` 主线落地共享命令目录、`COMMAND*` 第一批和若干连接/管理面扩展。当前 `HEAD` 已恢复 `make test` 与 `make test-integration` 的绿态，但 `make benchmark-v0.8.1` 仍不能宣称稳定通过：2026-05-17 的最新复跑仍出现 guard miss。`COMMAND` 控制面也还存在目录面大于真实执行面的裂缝，版本号口径仍未统一。当前第一优先级仍是修控制面真值、版本一致性和 benchmark 稳定性，再补单机核心缺口。
 
 ## 核心目标
 
@@ -27,10 +27,11 @@
 
 ## 当前状态
 
-2026-05-16 审计结论：
+2026-05-16 审计后的当前状态：
 
-- 当前 `HEAD` 不能宣称已达到“可与 Redis 单机版掰手腕”的状态。
-- 当前 `HEAD` 的第一优先级是修复 `COMMAND*` 真值、版本号一致性、`maxmemory` 测试口径和 benchmark guard。
+- `make test`、`make test-integration` 已恢复为通过状态。
+- `maxmemory` 集成测试口径已按当前实现重新校准；`benchmark-v0.8.1` guard 做过重校，但最新复跑仍有抖动。
+- `COMMAND*` 真值与版本号一致性仍待收口，因此当前 `HEAD` 仍不能宣称“v0.9.1 全部审计项已完成”。
 - `v1.0.0` 的封版门槛先收敛 Redis Open Source 单机核心，不再把模块命令数量当作当前完成度包装。
 
 下方列表主要记录历史里程碑沉淀与当前代码库已落地模块，不等价于“当前 `HEAD` 已重新全量复核通过”。
@@ -103,7 +104,7 @@
 
 下一阶段：
 
-- `v0.9.1`：先完成审计整改，修复 `COMMAND` 真值、版本号一致性、`maxmemory` 集成测试口径和 benchmark guard。
+- `v0.9.1`：继续完成审计整改，当前已修复 `maxmemory` 集成测试口径；benchmark guard 已重校但仍需继续稳定，待续 `COMMAND` 真值与版本号一致性。
 - `v0.9.2`：继续补 Redis Open Source 单机核心缺口，优先 blocking list/zset、bitmap/bitfield、HLL/GEO、脚本第一批。
 - `v0.9.3`：收口 Streams、Functions/Script、ACL 与运维诊断第一批，再推进持久化/复制边界深化。
 
@@ -141,7 +142,7 @@ TCP 集成 smoke：
 make test-integration
 ```
 
-`make test-integration` 当前覆盖基础 TCP smoke、空闲连接不阻塞其他客户端、持久化/复制/事务/Pub/Sub/控制面兼容路径，`maxmemory` / 淘汰策略 / 内存统计 / 压力回归，以及历史集群基础 smoke。注意：截至 2026-05-16 审计，当前 `HEAD` 该目标仍未全绿，详见 `docs/redis-uya-audit-2026-05-16.md`。
+`make test-integration` 当前覆盖基础 TCP smoke、空闲连接不阻塞其他客户端、持久化/复制/事务/Pub/Sub/控制面兼容路径，`maxmemory` / 淘汰策略 / 内存统计 / 压力回归，以及历史集群基础 smoke。当前 `HEAD` 该目标已恢复为全绿；仍需继续处理 `COMMAND*` 真值、版本口径和 benchmark 稳定性问题，详见 `docs/redis-uya-audit-2026-05-16.md`。
 
 v0.8.0 核心性能基线：
 
@@ -155,7 +156,7 @@ v0.8.1 写路径性能回归验证：
 make benchmark-v0.8.1
 ```
 
-注意：截至 2026-05-16 审计，当前 `HEAD` 的 `make benchmark-v0.8.1` 仍会因 regression guard miss 失败；`benchmarks/v0.8.1-performance.md` 需要结合生成日期解读，不能默认视为“当前主线已通过”。
+当前 `HEAD` 的 `make benchmark-v0.8.1` 不能宣称“稳定通过”：2026-05-17 的最新复跑样本仍出现 `get_16b` guard miss。`benchmarks/v0.8.1-performance.md` 必须结合生成日期解读，因为它同时承担历史回归证据和当前机器输出两种角色。
 
 v0.8.0 Redis 对照差距报告：
 

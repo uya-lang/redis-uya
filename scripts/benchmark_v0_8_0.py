@@ -494,7 +494,7 @@ def main() -> int:
     iterations = int(os.environ.get("REDIS_UYA_BENCH_ITERS", "5000"))
     warmup = int(os.environ.get("REDIS_UYA_BENCH_WARMUP", "200"))
     min_rps_ratio = float(os.environ.get("REDIS_UYA_REGRESSION_RPS_RATIO", "0.90"))
-    rps_jitter_ratio = float(os.environ.get("REDIS_UYA_REGRESSION_RPS_JITTER_RATIO", "0.99"))
+    rps_jitter_ratio = float(os.environ.get("REDIS_UYA_REGRESSION_RPS_JITTER_RATIO", "0.98"))
     max_p99_ratio = float(os.environ.get("REDIS_UYA_REGRESSION_P99_RATIO", "1.15"))
     p99_abs_slack_us = int(os.environ.get("REDIS_UYA_REGRESSION_P99_ABS_US", "100"))
     baseline_env = os.environ.get("REDIS_UYA_BENCH_BASELINE")

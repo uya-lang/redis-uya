@@ -33,7 +33,6 @@ use src.command.catalog.command_catalog_has_acl_category;
 use src.command.catalog.command_catalog_lookup;
 use src.command.catalog.command_catalog_matches_module;
 use src.command.catalog.command_catalog_matches_pattern;
-use src.command.catalog.command_catalog_top_level_count;
 use src.command.catalog.command_catalog_total_count;
 use src.command.catalog_generated_base.CommandCatalogEntry;
 use src.command.catalog_generated_base.CommandCatalogStatus;
@@ -7050,7 +7049,151 @@ fn command_executor_command_append_empty_collection(buf: &Sds, protocol_version:
     try sds_cat(buf, &"*0\r\n"[0: 4]);
 }
 
-fn command_executor_command_subcommand_count(parent_name: &[byte]) usize {
+fn command_executor_command_visible_top_level_name(router: &CommandRouter, name: &[byte]) bool {
+    _ = command_router_lookup(router, name) catch {
+        return false;
+    };
+    return true;
+}
+
+fn command_executor_command_visible_client_subcommand(name: &[byte]) bool {
+    return command_executor_slice_eq(name, &"help"[0: 4]) ||
+        command_executor_slice_eq(name, &"id"[0: 2]) ||
+        command_executor_slice_eq(name, &"getname"[0: 7]) ||
+        command_executor_slice_eq(name, &"getredir"[0: 8]) ||
+        command_executor_slice_eq(name, &"setname"[0: 7]) ||
+        command_executor_slice_eq(name, &"setinfo"[0: 7]) ||
+        command_executor_slice_eq(name, &"info"[0: 4]) ||
+        command_executor_slice_eq(name, &"list"[0: 4]) ||
+        command_executor_slice_eq(name, &"kill"[0: 4]) ||
+        command_executor_slice_eq(name, &"pause"[0: 5]) ||
+        command_executor_slice_eq(name, &"unpause"[0: 7]) ||
+        command_executor_slice_eq(name, &"tracking"[0: 8]) ||
+        command_executor_slice_eq(name, &"trackinginfo"[0: 12]);
+}
+
+fn command_executor_command_visible_cluster_subcommand(name: &[byte]) bool {
+    return command_executor_slice_eq(name, &"help"[0: 4]) ||
+        command_executor_slice_eq(name, &"meet"[0: 4]) ||
+        command_executor_slice_eq(name, &"setslot"[0: 7]) ||
+        command_executor_slice_eq(name, &"keyslot"[0: 7]) ||
+        command_executor_slice_eq(name, &"info"[0: 4]) ||
+        command_executor_slice_eq(name, &"nodes"[0: 5]) ||
+        command_executor_slice_eq(name, &"slots"[0: 5]);
+}
+
+fn command_executor_command_visible_command_subcommand(name: &[byte]) bool {
+    return command_executor_slice_eq(name, &"help"[0: 4]) ||
+        command_executor_slice_eq(name, &"count"[0: 5]) ||
+        command_executor_slice_eq(name, &"list"[0: 4]) ||
+        command_executor_slice_eq(name, &"info"[0: 4]) ||
+        command_executor_slice_eq(name, &"docs"[0: 4]) ||
+        command_executor_slice_eq(name, &"getkeys"[0: 7]) ||
+        command_executor_slice_eq(name, &"getkeysandflags"[0: 15]);
+}
+
+fn command_executor_command_visible_config_subcommand(name: &[byte]) bool {
+    return command_executor_slice_eq(name, &"help"[0: 4]) ||
+        command_executor_slice_eq(name, &"resetstat"[0: 9]) ||
+        command_executor_slice_eq(name, &"set"[0: 3]) ||
+        command_executor_slice_eq(name, &"rewrite"[0: 7]) ||
+        command_executor_slice_eq(name, &"get"[0: 3]);
+}
+
+fn command_executor_command_visible_object_subcommand(name: &[byte]) bool {
+    return command_executor_slice_eq(name, &"help"[0: 4]) ||
+        command_executor_slice_eq(name, &"encoding"[0: 8]) ||
+        command_executor_slice_eq(name, &"refcount"[0: 8]) ||
+        command_executor_slice_eq(name, &"idletime"[0: 8]) ||
+        command_executor_slice_eq(name, &"freq"[0: 4]);
+}
+
+fn command_executor_command_visible_pubsub_subcommand(name: &[byte]) bool {
+    return command_executor_slice_eq(name, &"help"[0: 4]) ||
+        command_executor_slice_eq(name, &"channels"[0: 8]) ||
+        command_executor_slice_eq(name, &"numpat"[0: 6]) ||
+        command_executor_slice_eq(name, &"numsub"[0: 6]) ||
+        command_executor_slice_eq(name, &"shardchannels"[0: 13]) ||
+        command_executor_slice_eq(name, &"shardnumsub"[0: 11]);
+}
+
+fn command_executor_command_visible_subcommand(parent_name: &[byte], subcommand_name: &[byte]) bool {
+    if command_executor_slice_eq(parent_name, &"client"[0: 6]) {
+        return command_executor_command_visible_client_subcommand(subcommand_name);
+    }
+    if command_executor_slice_eq(parent_name, &"cluster"[0: 7]) {
+        return command_executor_command_visible_cluster_subcommand(subcommand_name);
+    }
+    if command_executor_slice_eq(parent_name, &"command"[0: 7]) {
+        return command_executor_command_visible_command_subcommand(subcommand_name);
+    }
+    if command_executor_slice_eq(parent_name, &"config"[0: 6]) {
+        return command_executor_command_visible_config_subcommand(subcommand_name);
+    }
+    if command_executor_slice_eq(parent_name, &"object"[0: 6]) {
+        return command_executor_command_visible_object_subcommand(subcommand_name);
+    }
+    if command_executor_slice_eq(parent_name, &"pubsub"[0: 6]) {
+        return command_executor_command_visible_pubsub_subcommand(subcommand_name);
+    }
+    return false;
+}
+
+fn command_executor_command_entry_visible(router: &CommandRouter, entry: &CommandCatalogEntry) bool {
+    if entry.is_top_level {
+        return command_executor_command_visible_top_level_name(router, entry.name);
+    }
+
+    var pipe_index: usize = 0;
+    while pipe_index < entry.name.len {
+        if entry.name.ptr[pipe_index] == 124 as byte {
+            break;
+        }
+        pipe_index = pipe_index + 1;
+    }
+    if pipe_index == 0 || pipe_index + 1 >= entry.name.len {
+        return false;
+    }
+
+    const parent_name: &[byte] = entry.name[0: pipe_index];
+    const subcommand_name: &[byte] = entry.name[pipe_index + 1: entry.name.len - pipe_index - 1];
+    if !command_executor_command_visible_top_level_name(router, parent_name) {
+        return false;
+    }
+    return command_executor_command_visible_subcommand(parent_name, subcommand_name);
+}
+
+fn command_executor_command_visible_top_level_count(router: &CommandRouter) usize {
+    var count: usize = 0;
+    var index: usize = 0;
+    while index < command_catalog_total_count() {
+        const entry: CommandCatalogEntry = command_catalog_entry(index) catch {
+            return count;
+        };
+        if entry.is_top_level && command_executor_command_entry_visible(router, &entry) {
+            count = count + 1;
+        }
+        index = index + 1;
+    }
+    return count;
+}
+
+fn command_executor_command_visible_total_count(router: &CommandRouter) usize {
+    var count: usize = 0;
+    var index: usize = 0;
+    while index < command_catalog_total_count() {
+        const entry: CommandCatalogEntry = command_catalog_entry(index) catch {
+            return count;
+        };
+        if command_executor_command_entry_visible(router, &entry) {
+            count = count + 1;
+        }
+        index = index + 1;
+    }
+    return count;
+}
+
+fn command_executor_command_subcommand_count(router: &CommandRouter, parent_name: &[byte]) usize {
     var count: usize = 0;
     var index: usize = 0;
     while index < command_catalog_total_count() {
@@ -7062,7 +7205,8 @@ fn command_executor_command_subcommand_count(parent_name: &[byte]) usize {
             continue;
         }
         if command_executor_slice_eq(entry.name[0: parent_name.len], parent_name) &&
-            entry.name.ptr[parent_name.len] == 124 as byte {
+            entry.name.ptr[parent_name.len] == 124 as byte &&
+            command_executor_command_entry_visible(router, &entry) {
             count = count + 1;
         }
         index = index + 1;
@@ -7070,7 +7214,7 @@ fn command_executor_command_subcommand_count(parent_name: &[byte]) usize {
     return count;
 }
 
-fn command_executor_command_append_info_payload(buf: &Sds, runtime: &CommandRuntimeInfo, entry: &CommandCatalogEntry) !void {
+fn command_executor_command_append_info_payload(buf: &Sds, runtime: &CommandRuntimeInfo, router: &CommandRouter, entry: &CommandCatalogEntry) !void {
     try command_executor_resp_collection_prefix(buf, &"*"[0: 1], 10);
     try command_executor_command_append_bulk(buf, entry.name);
     try command_executor_info_append_i64(buf, &":%i\r\n"[0: 5], entry.arity as i64);
@@ -7082,7 +7226,7 @@ fn command_executor_command_append_info_payload(buf: &Sds, runtime: &CommandRunt
     try command_executor_command_append_empty_collection(buf, runtime.protocol_version);
     try command_executor_command_append_empty_collection(buf, runtime.protocol_version);
 
-    const subcommand_count: usize = command_executor_command_subcommand_count(entry.name);
+    const subcommand_count: usize = command_executor_command_subcommand_count(router, entry.name);
     if runtime.protocol_version == 3 {
         try command_executor_resp_collection_prefix(buf, &"~"[0: 1], subcommand_count);
     } else {
@@ -7098,8 +7242,9 @@ fn command_executor_command_append_info_payload(buf: &Sds, runtime: &CommandRunt
             continue;
         }
         if command_executor_slice_eq(subcommand.name[0: entry.name.len], entry.name) &&
-            subcommand.name.ptr[entry.name.len] == 124 as byte {
-            try command_executor_command_append_info_payload(buf, runtime, &subcommand);
+            subcommand.name.ptr[entry.name.len] == 124 as byte &&
+            command_executor_command_entry_visible(router, &subcommand) {
+            try command_executor_command_append_info_payload(buf, runtime, router, &subcommand);
         }
         index = index + 1;
     }
@@ -7122,7 +7267,7 @@ fn command_executor_command_append_docs_payload(buf: &Sds, runtime: &CommandRunt
     try command_executor_command_append_bulk(buf, entry.complexity);
 }
 
-fn command_executor_command_selected_docs_count(command: &Command) usize {
+fn command_executor_command_selected_docs_count(router: &CommandRouter, command: &Command) usize {
     var count: usize = 0;
     var index: usize = 2;
     while index < command.argc {
@@ -7130,7 +7275,7 @@ fn command_executor_command_selected_docs_count(command: &Command) usize {
             return count;
         };
         var found: bool = true;
-        _ = command_catalog_lookup(name) catch {
+        const entry: CommandCatalogEntry = command_catalog_lookup(name) catch {
             found = false;
             CommandCatalogEntry{
                 name: command_executor_empty_slice(),
@@ -7151,7 +7296,7 @@ fn command_executor_command_selected_docs_count(command: &Command) usize {
                 key_step: 0,
             };
         };
-        if found {
+        if found && command_executor_command_entry_visible(router, &entry) {
             count = count + 1;
         }
         index = index + 1;
@@ -7160,13 +7305,14 @@ fn command_executor_command_selected_docs_count(command: &Command) usize {
 }
 
 fn command_executor_command_info_all(runtime: &CommandRuntimeInfo) CommandReply {
+    const router: CommandRouter = command_router_new();
     var buf: Sds = sds_empty() catch {
         return command_executor_oom();
     };
     defer {
         sds_free(&buf);
     }
-    _ = command_executor_resp_collection_prefix(&buf, &"*"[0: 1], command_catalog_top_level_count()) catch {
+    _ = command_executor_resp_collection_prefix(&buf, &"*"[0: 1], command_executor_command_visible_top_level_count(&router)) catch {
         return command_executor_oom();
     };
 
@@ -7175,8 +7321,8 @@ fn command_executor_command_info_all(runtime: &CommandRuntimeInfo) CommandReply 
         const entry: CommandCatalogEntry = command_catalog_entry(index) catch {
             return command_executor_error(&"ERR command catalog error"[0: 25]);
         };
-        if entry.is_top_level {
-            _ = command_executor_command_append_info_payload(&buf, runtime, &entry) catch {
+        if entry.is_top_level && command_executor_command_entry_visible(&router, &entry) {
+            _ = command_executor_command_append_info_payload(&buf, runtime, &router, &entry) catch {
                 return command_executor_oom();
             };
         }
@@ -7190,6 +7336,7 @@ fn command_executor_command_info(runtime: &CommandRuntimeInfo, command: &Command
         return command_executor_command_info_all(runtime);
     }
 
+    const router: CommandRouter = command_router_new();
     var buf: Sds = sds_empty() catch {
         return command_executor_oom();
     };
@@ -7231,8 +7378,12 @@ fn command_executor_command_info(runtime: &CommandRuntimeInfo, command: &Command
                 key_step: 0,
             };
         };
-        if found {
-            _ = command_executor_command_append_info_payload(&buf, runtime, &entry) catch {
+        if found && command_executor_command_entry_visible(&router, &entry) {
+            _ = command_executor_command_append_info_payload(&buf, runtime, &router, &entry) catch {
+                return command_executor_oom();
+            };
+        } else if found {
+            _ = command_executor_command_append_null(&buf, runtime.protocol_version) catch {
                 return command_executor_oom();
             };
         }
@@ -7242,11 +7393,12 @@ fn command_executor_command_info(runtime: &CommandRuntimeInfo, command: &Command
 }
 
 fn command_executor_command_docs(runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
+    const router: CommandRouter = command_router_new();
     var pair_count: usize = 0;
     if command.argc == 2 {
-        pair_count = command_catalog_total_count();
+        pair_count = command_executor_command_visible_total_count(&router);
     } else if command.argc > 2 {
-        pair_count = command_executor_command_selected_docs_count(command);
+        pair_count = command_executor_command_selected_docs_count(&router, command);
     }
 
     var buf: Sds = sds_empty() catch {
@@ -7272,9 +7424,11 @@ fn command_executor_command_docs(runtime: &CommandRuntimeInfo, command: &Command
             const entry: CommandCatalogEntry = command_catalog_entry(all_index) catch {
                 return command_executor_error(&"ERR command catalog error"[0: 25]);
             };
-            _ = command_executor_command_append_docs_payload(&buf, runtime, &entry) catch {
-                return command_executor_oom();
-            };
+            if command_executor_command_entry_visible(&router, &entry) {
+                _ = command_executor_command_append_docs_payload(&buf, runtime, &entry) catch {
+                    return command_executor_oom();
+                };
+            }
             all_index = all_index + 1;
         }
         return command_executor_owned_raw(buf.buf[0: buf.len]);
@@ -7307,7 +7461,7 @@ fn command_executor_command_docs(runtime: &CommandRuntimeInfo, command: &Command
                 key_step: 0,
             };
         };
-        if found {
+        if found && command_executor_command_entry_visible(&router, &entry) {
             _ = command_executor_command_append_docs_payload(&buf, runtime, &entry) catch {
                 return command_executor_oom();
             };
@@ -7334,6 +7488,7 @@ fn command_executor_command_list_matches_filter(entry: &CommandCatalogEntry, fil
 }
 
 fn command_executor_command_list(command: &Command) CommandReply {
+    const router: CommandRouter = command_router_new();
     var filter_kind: &[byte] = command_executor_empty_slice();
     var filter_value: &[byte] = command_executor_empty_slice();
     if command.argc != 2 {
@@ -7365,7 +7520,8 @@ fn command_executor_command_list(command: &Command) CommandReply {
         const entry: CommandCatalogEntry = command_catalog_entry(index) catch {
             return command_executor_error(&"ERR command catalog error"[0: 25]);
         };
-        if command_executor_command_list_matches_filter(&entry, filter_kind, filter_value) {
+        if command_executor_command_entry_visible(&router, &entry) &&
+            command_executor_command_list_matches_filter(&entry, filter_kind, filter_value) {
             match_count = match_count + 1;
         }
         index = index + 1;
@@ -7386,7 +7542,8 @@ fn command_executor_command_list(command: &Command) CommandReply {
         const entry: CommandCatalogEntry = command_catalog_entry(index) catch {
             return command_executor_error(&"ERR command catalog error"[0: 25]);
         };
-        if command_executor_command_list_matches_filter(&entry, filter_kind, filter_value) {
+        if command_executor_command_entry_visible(&router, &entry) &&
+            command_executor_command_list_matches_filter(&entry, filter_kind, filter_value) {
             _ = command_executor_info_append(&buf, &"$"[0: 1]) catch {
                 return command_executor_oom();
             };
@@ -7772,7 +7929,8 @@ fn command_executor_command(runtime: &CommandRuntimeInfo, command: &Command) Com
         if command.argc != 2 {
             return command_executor_wrong_arity();
         }
-        return command_executor_integer(command_catalog_top_level_count() as i64);
+        const router: CommandRouter = command_router_new();
+        return command_executor_integer(command_executor_command_visible_top_level_count(&router) as i64);
     }
     if command_executor_keyword_eq(subcommand, &"LIST"[0: 4]) {
         return command_executor_command_list(command);

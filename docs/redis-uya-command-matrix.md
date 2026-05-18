@@ -15,11 +15,11 @@
 
 | status | count |
 |--------|-------|
-| `full` | `134` |
+| `full` | `138` |
 | `partial` | `42` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `326` |
+| `deferred` | `322` |
 
 ## Group counts
 
@@ -566,9 +566,9 @@
 | `zinterstore` | `sorted-set` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@write, @sortedset, @slow` |
 | `zlexcount` | `sorted-set` | `deferred` | `v0.9.1` | `4` | `-` | `no` | `@read, @sortedset, @fast` |
 | `zmpop` | `sorted-set` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@write, @sortedset, @slow` |
-| `zmscore` | `sorted-set` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @sortedset, @fast` |
-| `zpopmax` | `sorted-set` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@write, @sortedset, @fast` |
-| `zpopmin` | `sorted-set` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@write, @sortedset, @fast` |
+| `zmscore` | `sorted-set` | `full` | `-` | `-3` | `-` | `no` | `@read, @sortedset, @fast` |
+| `zpopmax` | `sorted-set` | `full` | `-` | `-2` | `-` | `no` | `@write, @sortedset, @fast` |
+| `zpopmin` | `sorted-set` | `full` | `-` | `-2` | `-` | `no` | `@write, @sortedset, @fast` |
 | `zrandmember` | `sorted-set` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@read, @sortedset, @slow` |
 | `zrange` | `sorted-set` | `full` | `-` | `-4` | `-` | `no` | `@read, @sortedset, @slow` |
 | `zrangebylex` | `sorted-set` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@read, @sortedset, @slow` |
@@ -584,6 +584,6 @@
 | `zrevrangebyscore` | `sorted-set` | `full` | `-` | `-4` | `-` | `no` | `@read, @sortedset, @slow` |
 | `zrevrank` | `sorted-set` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @sortedset, @fast` |
 | `zscan` | `sorted-set` | `full` | `-` | `-3` | `-` | `yes` | `@read, @sortedset, @slow` |
-| `zscore` | `sorted-set` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@read, @sortedset, @fast` |
+| `zscore` | `sorted-set` | `full` | `-` | `3` | `-` | `no` | `@read, @sortedset, @fast` |
 | `zunion` | `sorted-set` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @sortedset, @slow` |
 | `zunionstore` | `sorted-set` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@write, @sortedset, @slow` |

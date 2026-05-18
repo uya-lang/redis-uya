@@ -442,6 +442,12 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const zrange_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$6\r\nZRANGE\r\n$4\r\nzset\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 41], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: zrange_result.response_len], &"*2\r\n$1\r\na\r\n$1\r\nb\r\n"[0: 18]));
 
+    const zscore_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$6\r\nZSCORE\r\n$4\r\nzset\r\n$1\r\na\r\n"[0: 33], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: zscore_result.response_len], &"$1\r\n1\r\n"[0: 7]));
+
+    const zmscore_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$7\r\nZMSCORE\r\n$4\r\nzset\r\n$1\r\na\r\n$7\r\nmissing\r\n$1\r\nb\r\n"[0: 54], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: zmscore_result.response_len], &"*3\r\n$1\r\n1\r\n$-1\r\n$1\r\n2\r\n"[0: 23]));
+
     const zrem_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$4\r\nZREM\r\n$4\r\nzset\r\n$1\r\na\r\n"[0: 31], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: zrem_result.response_len], &":1\r\n"[0: 4]));
 
@@ -453,6 +459,15 @@ export fn test_connection_process_ping_set_get_quit() !void {
 
     const scan_tail_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$4\r\nSCAN\r\n$1\r\n3\r\n$5\r\nCOUNT\r\n$1\r\n3\r\n"[0: 39], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: scan_tail_result.response_len], &"*2\r\n$1\r\n0\r\n*2\r\n$3\r\nset\r\n$4\r\nzset\r\n"[0: 34]));
+
+    const zops_add_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*8\r\n$4\r\nZADD\r\n$4\r\nzops\r\n$1\r\n2\r\n$1\r\nb\r\n$1\r\n1\r\n$1\r\na\r\n$1\r\n3\r\n$1\r\nc\r\n"[0: 66], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: zops_add_result.response_len], &":3\r\n"[0: 4]));
+
+    const zops_pop_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$7\r\nZPOPMIN\r\n$4\r\nzops\r\n$1\r\n2\r\n"[0: 34], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: zops_pop_result.response_len], &"*4\r\n$1\r\na\r\n$1\r\n1\r\n$1\r\nb\r\n$1\r\n2\r\n"[0: 32]));
+
+    const zops_score_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$6\r\nZSCORE\r\n$4\r\nzops\r\n$1\r\nc\r\n"[0: 33], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: zops_score_result.response_len], &"$1\r\n3\r\n"[0: 7]));
 
     const info_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$4\r\nINFO\r\n$6\r\nserver\r\n"[0: 26], &out[0], 256, 1000u64);
     try assert_eq_i32(info_result.response_len as i32, 108);

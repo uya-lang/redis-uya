@@ -167,6 +167,21 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"bitmap commands missing from COMMAND INFO: {bitmap_info!r}")
 
+            zset_info = send_command(sock, b"COMMAND", b"INFO", b"ZSCORE", b"ZMSCORE", b"ZPOPMAX", b"ZPOPMIN")
+            if (
+                not isinstance(zset_info, list)
+                or len(zset_info) != 4
+                or not isinstance(zset_info[0], list)
+                or zset_info[0][0] != b"zscore"
+                or not isinstance(zset_info[1], list)
+                or zset_info[1][0] != b"zmscore"
+                or not isinstance(zset_info[2], list)
+                or zset_info[2][0] != b"zpopmax"
+                or not isinstance(zset_info[3], list)
+                or zset_info[3][0] != b"zpopmin"
+            ):
+                raise AssertionError(f"zset score/pop commands missing from COMMAND INFO: {zset_info!r}")
+
             unsupported_info = send_command(sock, b"COMMAND", b"INFO", b"ACL", b"BLPOP", b"CLUSTER|RESET")
             if unsupported_info != [None, None, None]:
                 raise AssertionError(f"unsupported COMMAND INFO entries must be null: {unsupported_info!r}")
@@ -214,6 +229,15 @@ def run_smoke() -> None:
                 or b"bitpos" in listed_bitmap
             ):
                 raise AssertionError(f"unexpected COMMAND LIST bitmap result: {listed_bitmap!r}")
+
+            listed_zpop = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"ZPOP*")
+            if (
+                not isinstance(listed_zpop, list)
+                or b"zpopmax" not in listed_zpop
+                or b"zpopmin" not in listed_zpop
+                or b"zrandmember" in listed_zpop
+            ):
+                raise AssertionError(f"unexpected COMMAND LIST zpop result: {listed_zpop!r}")
 
             help_reply = send_command(sock, b"COMMAND", b"HELP")
             if not isinstance(help_reply, list) or b"GETKEYS <full-command>" not in help_reply:

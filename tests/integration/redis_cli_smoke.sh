@@ -426,6 +426,24 @@ if [[ "$ZCOUNT_AFTER_RESULT" != "1" ]]; then
     exit 1
 fi
 
+ZSCORE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zscore zset a)"
+if [[ "$ZSCORE_RESULT" != "4" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZSCORE 4, got '$ZSCORE_RESULT'" >&2
+    exit 1
+fi
+
+ZSCORE_MISSING_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zscore zset missing)"
+if [[ -n "$ZSCORE_MISSING_RESULT" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected missing ZSCORE to be empty, got '$ZSCORE_MISSING_RESULT'" >&2
+    exit 1
+fi
+
+ZMSCORE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zmscore zset a missing b)"
+if [[ "$ZMSCORE_RESULT" != $'4\n\n2' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZMSCORE 4/null/2, got '$ZMSCORE_RESULT'" >&2
+    exit 1
+fi
+
 ZRANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrange zset 0 -1)"
 if [[ "$ZRANGE_RESULT" != $'b\na' ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ZRANGE b/a after ZINCRBY, got '$ZRANGE_RESULT'" >&2
@@ -507,6 +525,36 @@ fi
 ZWORK_CARD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zcard zwork)"
 if [[ "$ZWORK_CARD_RESULT" != "0" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected zwork ZCARD 0, got '$ZWORK_CARD_RESULT'" >&2
+    exit 1
+fi
+
+ZOPS_ADD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zadd zops 2 b 1 a 3 c)"
+if [[ "$ZOPS_ADD_RESULT" != "3" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected zops ZADD 3, got '$ZOPS_ADD_RESULT'" >&2
+    exit 1
+fi
+
+ZPOPMIN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zpopmin zops 2)"
+if [[ "$ZPOPMIN_RESULT" != $'a\n1\nb\n2' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZPOPMIN a/1/b/2, got '$ZPOPMIN_RESULT'" >&2
+    exit 1
+fi
+
+ZOPS_SCORE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zscore zops c)"
+if [[ "$ZOPS_SCORE_RESULT" != "3" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected zops ZSCORE 3, got '$ZOPS_SCORE_RESULT'" >&2
+    exit 1
+fi
+
+ZPOPMAX_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zpopmax zops)"
+if [[ "$ZPOPMAX_RESULT" != $'c\n3' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZPOPMAX c/3, got '$ZPOPMAX_RESULT'" >&2
+    exit 1
+fi
+
+ZOPS_CARD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zcard zops)"
+if [[ "$ZOPS_CARD_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected zops ZCARD 0, got '$ZOPS_CARD_RESULT'" >&2
     exit 1
 fi
 

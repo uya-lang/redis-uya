@@ -122,6 +122,7 @@ use tests.unit.command_executor_test.test_command_smove;
 use tests.unit.command_executor_test.test_command_zadd_zrem_zrange;
 use tests.unit.command_executor_test.test_command_zincrby_zcard_zcount;
 use tests.unit.command_executor_test.test_command_zrangebyscore_zrevrangebyscore;
+use tests.unit.command_executor_test.test_command_zscore_zmscore_zpopmin_zpopmax;
 use tests.unit.command_executor_test.test_command_zremrangebyrank_zremrangebyscore_zscan;
 use tests.unit.command_executor_test.test_command_scan;
 use tests.unit.command_executor_test.test_command_hscan;
@@ -678,6 +679,10 @@ export fn main() i32 {
     const before_exec_zset_score_ranges: i32 = failed;
     _ = test_command_zrangebyscore_zrevrangebyscore() catch { printf("[FAIL] command_executor/zset_score_ranges\n" as *byte); failed = failed + 1; };
     if failed == before_exec_zset_score_ranges { printf("[PASS] command_executor/zset_score_ranges\n" as *byte); }
+
+    const before_exec_zset_scores_and_pops: i32 = failed;
+    _ = test_command_zscore_zmscore_zpopmin_zpopmax() catch { printf("[FAIL] command_executor/zset_scores_and_pops\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_zset_scores_and_pops { printf("[PASS] command_executor/zset_scores_and_pops\n" as *byte); }
 
     const before_exec_zset_mutations: i32 = failed;
     _ = test_command_zremrangebyrank_zremrangebyscore_zscan() catch { printf("[FAIL] command_executor/zset_mutations\n" as *byte); failed = failed + 1; };

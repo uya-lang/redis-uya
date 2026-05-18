@@ -511,6 +511,32 @@ class RedisPySubsetClient:
     def zcount(self, key: str, minimum: int, maximum: int) -> int:
         return int(self._request(b"ZCOUNT", key.encode(), str(minimum).encode(), str(maximum).encode()))
 
+    def zscore(self, key: str, member: str) -> bytes | None:
+        result = self._request(b"ZSCORE", key.encode(), member.encode())
+        assert result is None or isinstance(result, bytes)
+        return result
+
+    def zmscore(self, key: str, *members: str) -> list[bytes | None]:
+        result = self._request(b"ZMSCORE", key.encode(), *(member.encode() for member in members))
+        assert isinstance(result, list)
+        return result
+
+    def zpopmin(self, key: str, count: int | None = None) -> list[bytes]:
+        parts: list[bytes] = [b"ZPOPMIN", key.encode()]
+        if count is not None:
+            parts.append(str(count).encode())
+        result = self._request(*parts)
+        assert isinstance(result, list)
+        return result
+
+    def zpopmax(self, key: str, count: int | None = None) -> list[bytes]:
+        parts: list[bytes] = [b"ZPOPMAX", key.encode()]
+        if count is not None:
+            parts.append(str(count).encode())
+        result = self._request(*parts)
+        assert isinstance(result, list)
+        return result
+
     def zrangebyscore(self, key: str, minimum: int, maximum: int) -> list[bytes]:
         result = self._request(b"ZRANGEBYSCORE", key.encode(), str(minimum).encode(), str(maximum).encode())
         assert isinstance(result, list)
@@ -892,6 +918,9 @@ def run_smoke() -> None:
             assert client.zcount("zset", 1, 2) == 2
             assert client.zincrby("zset", 3, "a") == b"4"
             assert client.zcount("zset", 4, 4) == 1
+            assert client.zscore("zset", "a") == b"4"
+            assert client.zscore("zset", "missing") is None
+            assert client.zmscore("zset", "a", "missing", "b") == [b"4", None, b"2"]
             assert client.zrange("zset", 0, -1) == [b"b", b"a"]
             assert client.zrangebyscore("zset", 2, 4) == [b"b", b"a"]
             assert client.zrevrangebyscore("zset", 4, 2) == [b"a", b"b"]
@@ -900,9 +929,12 @@ def run_smoke() -> None:
             cursor, zscan_items = client.zscan("zwork", 0, count=16)
             if cursor != 0 or zscan_items != [b"a", b"1", b"b", b"2", b"c", b"3"]:
                 raise AssertionError(f"unexpected zscan result: cursor={cursor} items={zscan_items!r}")
-            assert client.zremrangebyrank("zwork", 0, 1) == 2
-            assert client.zrange("zwork", 0, -1) == [b"c"]
-            assert client.zremrangebyscore("zwork", 3, 3) == 1
+            assert client.zpopmin("zwork", 2) == [b"a", b"1", b"b", b"2"]
+            assert client.zscore("zwork", "c") == b"3"
+            assert client.zpopmax("zwork") == [b"c", b"3"]
+            assert client.zremrangebyrank("zwork", 0, 1) == 0
+            assert client.zrange("zwork", 0, -1) == []
+            assert client.zremrangebyscore("zwork", 3, 3) == 0
             assert client.zcard("zwork") == 0
             assert client.delete("zwork") == 0
 

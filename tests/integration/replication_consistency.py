@@ -123,6 +123,10 @@ def replica_matches(port: int) -> bool:
             return False
         if send_command(sock, b"ZRANGE", b"zset", b"0", b"-1") != b"*2\r\n$1\r\na\r\n$1\r\nc\r\n":
             return False
+        if send_command(sock, b"ZRANGE", b"zops", b"0", b"-1") != b"*2\r\n$1\r\na\r\n$1\r\nb\r\n":
+            return False
+        if send_command(sock, b"ZSCORE", b"zops", b"b") != b"$1\r\n2\r\n":
+            return False
     return True
 
 
@@ -159,6 +163,7 @@ def run_smoke() -> None:
             assert send_command(sock, b"LPUSH", b"list", b"a", b"b") == b":2\r\n"
             assert send_command(sock, b"SADD", b"set", b"a", b"b") == b":2\r\n"
             assert send_command(sock, b"ZADD", b"zset", b"2", b"b", b"1", b"a") == b":2\r\n"
+            assert send_command(sock, b"ZADD", b"zops", b"2", b"b", b"1", b"a", b"3", b"c") == b":3\r\n"
 
         with connect_with_retry(replica_port, time.monotonic() + 5.0) as sock:
             sock.settimeout(2.0)
@@ -175,6 +180,7 @@ def run_smoke() -> None:
             assert send_command(sock, b"SREM", b"set", b"a") == b":1\r\n"
             assert send_command(sock, b"ZREM", b"zset", b"b") == b":1\r\n"
             assert send_command(sock, b"ZADD", b"zset", b"3", b"c") == b":1\r\n"
+            assert send_command(sock, b"ZPOPMAX", b"zops") == b"*2\r\n$1\r\nc\r\n$1\r\n3\r\n"
 
         deadline = time.monotonic() + 5.0
         while time.monotonic() < deadline:

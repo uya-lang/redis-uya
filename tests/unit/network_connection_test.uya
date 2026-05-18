@@ -111,6 +111,10 @@ export fn test_connection_encode_resp_replies() !void {
     const null_bulk: CommandReply = network_connection_reply(CommandReplyType.reply_null_bulk, (null as &byte)[0: 0], 0);
     const null_len: usize = try connection_encode_reply(&null_bulk, &out[0], 128);
     try assert_true(network_connection_slice_eq(out[0: null_len], &"$-1\r\n"[0: 5]));
+
+    const null_array: CommandReply = network_connection_reply(CommandReplyType.reply_null_array, (null as &byte)[0: 0], 0);
+    const null_array_len: usize = try connection_encode_reply(&null_array, &out[0], 128);
+    try assert_true(network_connection_slice_eq(out[0: null_array_len], &"*-1\r\n"[0: 5]));
 }
 
 export fn test_connection_process_ping_set_get_quit() !void {
@@ -519,6 +523,28 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const quit: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*1\r\n$4\r\nQUIT\r\n"[0: 14], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: quit.response_len], &"+OK\r\n"[0: 5]));
     try assert_eq_i32(quit.close_after as i32, 1);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_connection_process_lmpop() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var out: [byte: 128] = [];
+
+    const seed_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$5\r\nRPUSH\r\n$5\r\nlmpop\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\nc\r\n"[0: 47], &out[0], 128, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: seed_result.response_len], &":3\r\n"[0: 4]));
+
+    const lmpop_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*7\r\n$5\r\nLMPOP\r\n$1\r\n2\r\n$4\r\nmiss\r\n$5\r\nlmpop\r\n$4\r\nLEFT\r\n$5\r\nCOUNT\r\n$1\r\n2\r\n"[0: 71], &out[0], 128, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: lmpop_result.response_len], &"*2\r\n$5\r\nlmpop\r\n*2\r\n$1\r\na\r\n$1\r\nb\r\n"[0: 33]));
+
+    const lmpop_tail_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$5\r\nLMPOP\r\n$1\r\n1\r\n$5\r\nlmpop\r\n$5\r\nRIGHT\r\n"[0: 44], &out[0], 128, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: lmpop_tail_result.response_len], &"*2\r\n$5\r\nlmpop\r\n*1\r\n$1\r\nc\r\n"[0: 26]));
+
+    const lmpop_missing_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$5\r\nLMPOP\r\n$1\r\n1\r\n$5\r\nlmpop\r\n$4\r\nLEFT\r\n"[0: 43], &out[0], 128, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: lmpop_missing_result.response_len], &"*-1\r\n"[0: 5]));
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

@@ -194,7 +194,8 @@ def run_smoke() -> None:
                 or list_move_info[0][0] != b"lmove"
                 or not isinstance(list_move_info[1], list)
                 or list_move_info[1][0] != b"rpoplpush"
-                or list_move_info[2] is not None
+                or not isinstance(list_move_info[2], list)
+                or list_move_info[2][0] != b"lmpop"
             ):
                 raise AssertionError(f"list move commands missing from COMMAND INFO: {list_move_info!r}")
 

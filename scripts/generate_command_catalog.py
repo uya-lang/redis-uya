@@ -132,6 +132,7 @@ FULL_NAMES = {
     "linsert",
     "llen",
     "lmove",
+    "lmpop",
     "lpop",
     "lpos",
     "lpush",

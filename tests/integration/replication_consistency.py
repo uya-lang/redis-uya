@@ -85,6 +85,12 @@ def recv_nested(sock: socket.socket) -> bytes:
             return b"$-1\r\n"
         payload = recv_exact(sock, size + 2)
         return prefix + str(size).encode() + b"\r\n" + payload
+    if prefix == b"*":
+        count = int(recv_line(sock))
+        out = prefix + str(count).encode() + b"\r\n"
+        for _ in range(count):
+            out += recv_nested(sock)
+        return out
     raise RuntimeError(f"unexpected nested RESP prefix: {prefix!r}")
 
 
@@ -117,6 +123,8 @@ def replica_matches(port: int) -> bool:
         if send_command(sock, b"HGET", b"hash", b"field") != b"$4\r\nnext\r\n":
             return False
         if send_command(sock, b"LRANGE", b"list", b"0", b"-1") != b"*2\r\n$1\r\nb\r\n$1\r\na\r\n":
+            return False
+        if send_command(sock, b"LRANGE", b"lmpop", b"0", b"-1") != b"*1\r\n$1\r\na\r\n":
             return False
         smembers = send_command(sock, b"SMEMBERS", b"set")
         if smembers not in (b"*1\r\n$1\r\nb\r\n",):
@@ -162,6 +170,7 @@ def run_smoke() -> None:
             assert send_command(sock, b"HSET", b"hash", b"field", b"value") == b":1\r\n"
             assert send_command(sock, b"LPUSH", b"list", b"a", b"b") == b":2\r\n"
             assert send_command(sock, b"RPUSH", b"src", b"a", b"b", b"c") == b":3\r\n"
+            assert send_command(sock, b"RPUSH", b"lmpop", b"a", b"b", b"c") == b":3\r\n"
             assert send_command(sock, b"SADD", b"set", b"a", b"b") == b":2\r\n"
             assert send_command(sock, b"ZADD", b"zset", b"2", b"b", b"1", b"a") == b":2\r\n"
             assert send_command(sock, b"ZADD", b"zops", b"2", b"b", b"1", b"a", b"3", b"c") == b":3\r\n"
@@ -180,6 +189,7 @@ def run_smoke() -> None:
             assert send_command(sock, b"LPOP", b"list") == b"$1\r\nc\r\n"
             assert send_command(sock, b"RPOPLPUSH", b"src", b"dst") == b"$1\r\nc\r\n"
             assert send_command(sock, b"LMOVE", b"src", b"dst", b"LEFT", b"RIGHT") == b"$1\r\na\r\n"
+            assert send_command(sock, b"LMPOP", b"1", b"lmpop", b"RIGHT", b"COUNT", b"2") == b"*2\r\n$5\r\nlmpop\r\n*2\r\n$1\r\nc\r\n$1\r\nb\r\n"
             assert send_command(sock, b"SREM", b"set", b"a") == b":1\r\n"
             assert send_command(sock, b"ZREM", b"zset", b"b") == b":1\r\n"
             assert send_command(sock, b"ZADD", b"zset", b"3", b"c") == b":1\r\n"

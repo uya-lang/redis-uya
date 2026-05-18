@@ -673,6 +673,21 @@ export fn test_command_command_getkeys() !void {
     command_reply_cleanup(&getkeys_getex_reply);
     resp_value_free(&getkeys_getex_parsed.value);
 
+    var getkeys_lmpop_parsed: RespParseResult = try parse_resp2(&"*9\r\n$7\r\nCOMMAND\r\n$7\r\nGETKEYS\r\n$5\r\nLMPOP\r\n$1\r\n2\r\n$1\r\na\r\n$1\r\nb\r\n$4\r\nLEFT\r\n$5\r\nCOUNT\r\n$1\r\n2\r\n"[0: 90]);
+    const getkeys_lmpop_command: Command = try command_executor_test_command(&router, &getkeys_lmpop_parsed);
+    var getkeys_lmpop_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &getkeys_lmpop_command, 1000u64);
+    try assert_true(command_executor_test_slice_eq(getkeys_lmpop_reply.data, &"*2\r\n$1\r\na\r\n$1\r\nb\r\n"[0: 18]));
+    command_reply_cleanup(&getkeys_lmpop_reply);
+    resp_value_free(&getkeys_lmpop_parsed.value);
+
+    var getkeys_lmpop_flags_parsed: RespParseResult = try parse_resp2(&"*9\r\n$7\r\nCOMMAND\r\n$15\r\nGETKEYSANDFLAGS\r\n$5\r\nLMPOP\r\n$1\r\n2\r\n$1\r\na\r\n$1\r\nb\r\n$4\r\nLEFT\r\n$5\r\nCOUNT\r\n$1\r\n2\r\n"[0: 99]);
+    const getkeys_lmpop_flags_command: Command = try command_executor_test_command(&router, &getkeys_lmpop_flags_parsed);
+    var getkeys_lmpop_flags_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &getkeys_lmpop_flags_command, 1000u64);
+    try assert_true(command_executor_test_contains(getkeys_lmpop_flags_reply.data, &"$1\r\na\r\n*3\r\n$2\r\nRW\r\n$6\r\naccess\r\n$6\r\ndelete\r\n"[0: 43]));
+    try assert_true(command_executor_test_contains(getkeys_lmpop_flags_reply.data, &"$1\r\nb\r\n*3\r\n$2\r\nRW\r\n$6\r\naccess\r\n$6\r\ndelete\r\n"[0: 43]));
+    command_reply_cleanup(&getkeys_lmpop_flags_reply);
+    resp_value_free(&getkeys_lmpop_flags_parsed.value);
+
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);
 }
@@ -2106,6 +2121,60 @@ export fn test_command_lmove_rpoplpush() !void {
     try assert_true(command_executor_test_slice_eq(out[0: lrange_roll_len], &"*2\r\n$1\r\na\r\n$1\r\nb\r\n"[0: 18]));
     command_reply_cleanup(&lrange_roll_reply);
     resp_value_free(&lrange_roll_parsed.value);
+
+    var rpush_lmpop_parsed: RespParseResult = try parse_resp2(&"*5\r\n$5\r\nRPUSH\r\n$5\r\nlmpop\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\nc\r\n"[0: 47]);
+    const rpush_lmpop_command: Command = try command_executor_test_command(&router, &rpush_lmpop_parsed);
+    _ = command_execute_at(&engine, &rpush_lmpop_command, 1000u64);
+    resp_value_free(&rpush_lmpop_parsed.value);
+
+    var lmpop_parsed: RespParseResult = try parse_resp2(&"*7\r\n$5\r\nLMPOP\r\n$1\r\n2\r\n$4\r\nmiss\r\n$5\r\nlmpop\r\n$4\r\nLEFT\r\n$5\r\nCOUNT\r\n$1\r\n2\r\n"[0: 71]);
+    const lmpop_command: Command = try command_executor_test_command(&router, &lmpop_parsed);
+    var lmpop_reply: CommandReply = command_execute_at(&engine, &lmpop_command, 1000u64);
+    try assert_eq_i32(lmpop_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    try assert_true(command_executor_test_slice_eq(lmpop_reply.data, &"*2\r\n$5\r\nlmpop\r\n*2\r\n$1\r\na\r\n$1\r\nb\r\n"[0: 33]));
+    command_reply_cleanup(&lmpop_reply);
+    resp_value_free(&lmpop_parsed.value);
+
+    var lrange_lmpop_after_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nLRANGE\r\n$5\r\nlmpop\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 42]);
+    const lrange_lmpop_after_command: Command = try command_executor_test_command(&router, &lrange_lmpop_after_parsed);
+    var lrange_lmpop_after_reply: CommandReply = command_execute_at(&engine, &lrange_lmpop_after_command, 1000u64);
+    const lrange_lmpop_after_len: usize = try connection_encode_reply(&lrange_lmpop_after_reply, &out[0], 512);
+    try assert_true(command_executor_test_slice_eq(out[0: lrange_lmpop_after_len], &"*1\r\n$1\r\nc\r\n"[0: 11]));
+    command_reply_cleanup(&lrange_lmpop_after_reply);
+    resp_value_free(&lrange_lmpop_after_parsed.value);
+
+    var lmpop_right_parsed: RespParseResult = try parse_resp2(&"*4\r\n$5\r\nLMPOP\r\n$1\r\n1\r\n$5\r\nlmpop\r\n$5\r\nRIGHT\r\n"[0: 44]);
+    const lmpop_right_command: Command = try command_executor_test_command(&router, &lmpop_right_parsed);
+    var lmpop_right_reply: CommandReply = command_execute_at(&engine, &lmpop_right_command, 1000u64);
+    try assert_eq_i32(lmpop_right_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    try assert_true(command_executor_test_slice_eq(lmpop_right_reply.data, &"*2\r\n$5\r\nlmpop\r\n*1\r\n$1\r\nc\r\n"[0: 26]));
+    command_reply_cleanup(&lmpop_right_reply);
+    resp_value_free(&lmpop_right_parsed.value);
+
+    var lmpop_missing_parsed: RespParseResult = try parse_resp2(&"*4\r\n$5\r\nLMPOP\r\n$1\r\n1\r\n$5\r\nlmpop\r\n$4\r\nLEFT\r\n"[0: 43]);
+    const lmpop_missing_command: Command = try command_executor_test_command(&router, &lmpop_missing_parsed);
+    const lmpop_missing_reply: CommandReply = command_execute_at(&engine, &lmpop_missing_command, 1000u64);
+    try assert_eq_i32(lmpop_missing_reply.typ as i32, CommandReplyType.reply_null_array as i32);
+    resp_value_free(&lmpop_missing_parsed.value);
+
+    var set_lmpop_bad_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$5\r\nbadlm\r\n$1\r\nx\r\n"[0: 31]);
+    const set_lmpop_bad_command: Command = try command_executor_test_command(&router, &set_lmpop_bad_parsed);
+    _ = command_execute_at(&engine, &set_lmpop_bad_command, 1000u64);
+    resp_value_free(&set_lmpop_bad_parsed.value);
+
+    var lmpop_wrongtype_parsed: RespParseResult = try parse_resp2(&"*5\r\n$5\r\nLMPOP\r\n$1\r\n2\r\n$4\r\nmiss\r\n$5\r\nbadlm\r\n$4\r\nLEFT\r\n"[0: 53]);
+    const lmpop_wrongtype_command: Command = try command_executor_test_command(&router, &lmpop_wrongtype_parsed);
+    const lmpop_wrongtype_reply: CommandReply = command_execute_at(&engine, &lmpop_wrongtype_command, 1000u64);
+    try assert_eq_i32(lmpop_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(lmpop_wrongtype_reply.data, &"WRONGTYPE Operation against a key holding the wrong kind of value"[0: 65]));
+    resp_value_free(&lmpop_wrongtype_parsed.value);
+
+    var lmpop_bad_count_parsed: RespParseResult = try parse_resp2(&"*6\r\n$5\r\nLMPOP\r\n$1\r\n1\r\n$3\r\nfoo\r\n$4\r\nLEFT\r\n$5\r\nCOUNT\r\n$1\r\n0\r\n"[0: 59]);
+    const lmpop_bad_count_command: Command = try command_executor_test_command(&router, &lmpop_bad_count_parsed);
+    const lmpop_bad_count_reply: CommandReply = command_execute_at(&engine, &lmpop_bad_count_command, 1000u64);
+    try assert_eq_i32(lmpop_bad_count_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(lmpop_bad_count_reply.data, &"ERR count should be greater than 0"[0: 34]));
+    resp_value_free(&lmpop_bad_count_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

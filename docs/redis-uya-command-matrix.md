@@ -15,11 +15,11 @@
 
 | status | count |
 |--------|-------|
-| `full` | `142` |
+| `full` | `143` |
 | `partial` | `42` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `318` |
+| `deferred` | `317` |
 
 ## Group counts
 
@@ -341,7 +341,7 @@
 | `linsert` | `list` | `full` | `-` | `5` | `-` | `no` | `@write, @list, @slow` |
 | `llen` | `list` | `full` | `-` | `2` | `-` | `no` | `@read, @list, @fast` |
 | `lmove` | `list` | `full` | `-` | `5` | `-` | `no` | `@write, @list, @slow` |
-| `lmpop` | `list` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@write, @list, @slow` |
+| `lmpop` | `list` | `full` | `-` | `-4` | `-` | `no` | `@write, @list, @slow` |
 | `lolwut` | `server` | `deferred` | `v0.9.1` | `-1` | `-` | `no` | `@read, @fast` |
 | `lpop` | `list` | `full` | `-` | `-2` | `-` | `no` | `@write, @list, @fast` |
 | `lpos` | `list` | `full` | `-` | `-3` | `-` | `no` | `@read, @list, @slow` |

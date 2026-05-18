@@ -2187,6 +2187,14 @@ export fn connection_encode_reply_with_protocol(reply: &CommandReply, out: &byte
         }
         return pos;
     }
+    if reply.typ == CommandReplyType.reply_null_array {
+        if protocol_version == 3 {
+            try connection_append_bytes(out, out_cap, &pos, &"_\r\n"[0: 3]);
+        } else {
+            try connection_append_bytes(out, out_cap, &pos, &"*-1\r\n"[0: 5]);
+        }
+        return pos;
+    }
     if reply.typ == CommandReplyType.reply_array_bulk {
         try connection_append_byte(out, out_cap, &pos, 42 as byte);
         try connection_append_u64(out, out_cap, &pos, reply.array_count as u64);

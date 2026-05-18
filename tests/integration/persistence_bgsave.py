@@ -96,6 +96,8 @@ def run_smoke() -> None:
             roundtrip(sock, b"*5\r\n$5\r\nRPUSH\r\n$3\r\nsrc\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\nc\r\n", b":3\r\n")
             roundtrip(sock, b"*3\r\n$9\r\nRPOPLPUSH\r\n$3\r\nsrc\r\n$3\r\ndst\r\n", b"$1\r\nc\r\n")
             roundtrip(sock, b"*5\r\n$5\r\nLMOVE\r\n$3\r\nsrc\r\n$3\r\ndst\r\n$4\r\nLEFT\r\n$5\r\nRIGHT\r\n", b"$1\r\na\r\n")
+            roundtrip(sock, b"*5\r\n$5\r\nRPUSH\r\n$5\r\nlmpop\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\nc\r\n", b":3\r\n")
+            roundtrip(sock, b"*6\r\n$5\r\nLMPOP\r\n$1\r\n1\r\n$5\r\nlmpop\r\n$5\r\nRIGHT\r\n$5\r\nCOUNT\r\n$1\r\n2\r\n", b"*2\r\n$5\r\nlmpop\r\n*2\r\n$1\r\nc\r\n$1\r\nb\r\n")
             roundtrip(sock, b"*8\r\n$4\r\nZADD\r\n$4\r\nzops\r\n$1\r\n2\r\n$1\r\nb\r\n$1\r\n1\r\n$1\r\na\r\n$1\r\n3\r\n$1\r\nc\r\n", b":3\r\n")
             roundtrip(sock, b"*2\r\n$7\r\nZPOPMAX\r\n$4\r\nzops\r\n", b"*2\r\n$1\r\nc\r\n$1\r\n3\r\n")
             roundtrip(sock, b"*1\r\n$6\r\nBGSAVE\r\n", b"+Background saving scheduled\r\n")
@@ -130,6 +132,7 @@ def run_smoke() -> None:
             roundtrip(sock, b"*4\r\n$6\r\nLRANGE\r\n$4\r\nlist\r\n$1\r\n0\r\n$2\r\n-1\r\n", b"*3\r\n$1\r\nc\r\n$1\r\nb\r\n$1\r\na\r\n")
             roundtrip(sock, b"*4\r\n$6\r\nLRANGE\r\n$3\r\nsrc\r\n$1\r\n0\r\n$2\r\n-1\r\n", b"*1\r\n$1\r\nb\r\n")
             roundtrip(sock, b"*4\r\n$6\r\nLRANGE\r\n$3\r\ndst\r\n$1\r\n0\r\n$2\r\n-1\r\n", b"*2\r\n$1\r\nc\r\n$1\r\na\r\n")
+            roundtrip(sock, b"*4\r\n$6\r\nLRANGE\r\n$5\r\nlmpop\r\n$1\r\n0\r\n$2\r\n-1\r\n", b"*1\r\n$1\r\na\r\n")
             roundtrip_one_of(
                 sock,
                 b"*2\r\n$8\r\nSMEMBERS\r\n$3\r\nset\r\n",

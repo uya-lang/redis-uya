@@ -432,6 +432,30 @@ if [[ "$DST_RANGE_RESULT" != $'a\nc' ]]; then
     exit 1
 fi
 
+LMPOP_SEED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" rpush lmpop a b c)"
+if [[ "$LMPOP_SEED_RESULT" != "3" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected lmpop seed RPUSH 3, got '$LMPOP_SEED_RESULT'" >&2
+    exit 1
+fi
+
+LMPOP_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lmpop 2 miss lmpop LEFT COUNT 2)"
+if [[ "$LMPOP_RESULT" != $'lmpop\na\nb' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected LMPOP left lmpop/a/b, got '$LMPOP_RESULT'" >&2
+    exit 1
+fi
+
+LMPOP_RIGHT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lmpop 1 lmpop RIGHT)"
+if [[ "$LMPOP_RIGHT_RESULT" != $'lmpop\nc' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected LMPOP right lmpop/c, got '$LMPOP_RIGHT_RESULT'" >&2
+    exit 1
+fi
+
+LMPOP_MISSING_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lmpop 1 lmpop LEFT)"
+if [[ -n "$LMPOP_MISSING_RESULT" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected missing LMPOP to be empty, got '$LMPOP_MISSING_RESULT'" >&2
+    exit 1
+fi
+
 ZADD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zadd zset 2 b 1 a)"
 if [[ "$ZADD_RESULT" != "2" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ZADD 2, got '$ZADD_RESULT'" >&2

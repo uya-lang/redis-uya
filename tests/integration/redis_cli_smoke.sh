@@ -396,6 +396,42 @@ if [[ "$XLIST_DEL_RESULT" != "1" ]]; then
     exit 1
 fi
 
+SRC_RPUSH_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" rpush src a b c)"
+if [[ "$SRC_RPUSH_RESULT" != "3" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected src RPUSH 3, got '$SRC_RPUSH_RESULT'" >&2
+    exit 1
+fi
+
+RPOPLPUSH_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" rpoplpush src dst)"
+if [[ "$RPOPLPUSH_RESULT" != "c" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected RPOPLPUSH c, got '$RPOPLPUSH_RESULT'" >&2
+    exit 1
+fi
+
+LMOVE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lmove src dst LEFT RIGHT)"
+if [[ "$LMOVE_RESULT" != "a" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected LMOVE a, got '$LMOVE_RESULT'" >&2
+    exit 1
+fi
+
+LMOVE_SAME_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lmove dst dst RIGHT LEFT)"
+if [[ "$LMOVE_SAME_RESULT" != "a" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected same-key LMOVE a, got '$LMOVE_SAME_RESULT'" >&2
+    exit 1
+fi
+
+SRC_RANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lrange src 0 -1)"
+if [[ "$SRC_RANGE_RESULT" != $'b' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected src range b, got '$SRC_RANGE_RESULT'" >&2
+    exit 1
+fi
+
+DST_RANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lrange dst 0 -1)"
+if [[ "$DST_RANGE_RESULT" != $'a\nc' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected dst range a/c, got '$DST_RANGE_RESULT'" >&2
+    exit 1
+fi
+
 ZADD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zadd zset 2 b 1 a)"
 if [[ "$ZADD_RESULT" != "2" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ZADD 2, got '$ZADD_RESULT'" >&2

@@ -1,7 +1,7 @@
 # redis-uya command matrix
 
 > version: v0.9.1-dev
-> date: 2026-05-17
+> date: 2026-05-18
 > source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`
 > runtime source: `src/command/catalog_generated.uya`
 
@@ -15,11 +15,11 @@
 
 | status | count |
 |--------|-------|
-| `full` | `138` |
+| `full` | `140` |
 | `partial` | `42` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `322` |
+| `deferred` | `320` |
 
 ## Group counts
 
@@ -340,7 +340,7 @@
 | `lindex` | `list` | `full` | `-` | `3` | `-` | `no` | `@read, @list, @slow` |
 | `linsert` | `list` | `full` | `-` | `5` | `-` | `no` | `@write, @list, @slow` |
 | `llen` | `list` | `full` | `-` | `2` | `-` | `no` | `@read, @list, @fast` |
-| `lmove` | `list` | `deferred` | `v0.9.1` | `5` | `-` | `no` | `@write, @list, @slow` |
+| `lmove` | `list` | `full` | `-` | `5` | `-` | `no` | `@write, @list, @slow` |
 | `lmpop` | `list` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@write, @list, @slow` |
 | `lolwut` | `server` | `deferred` | `v0.9.1` | `-1` | `-` | `no` | `@read, @fast` |
 | `lpop` | `list` | `full` | `-` | `-2` | `-` | `no` | `@write, @list, @fast` |
@@ -414,7 +414,7 @@
 | `restore-asking` | `server` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@keyspace, @write, @slow, @dangerous` |
 | `role` | `server` | `full` | `-` | `1` | `-` | `no` | `@admin, @fast, @dangerous` |
 | `rpop` | `list` | `full` | `-` | `-2` | `-` | `no` | `@write, @list, @fast` |
-| `rpoplpush` | `list` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@write, @list, @slow` |
+| `rpoplpush` | `list` | `full` | `-` | `3` | `-` | `no` | `@write, @list, @slow` |
 | `rpush` | `list` | `full` | `-` | `-3` | `-` | `no` | `@write, @list, @fast` |
 | `rpushx` | `list` | `full` | `-` | `-3` | `-` | `no` | `@write, @list, @fast` |
 | `sadd` | `set` | `full` | `-` | `-3` | `-` | `no` | `@write, @set, @fast` |

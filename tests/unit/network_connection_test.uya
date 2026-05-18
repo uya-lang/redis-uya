@@ -397,6 +397,27 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const lpop_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$4\r\nLPOP\r\n$4\r\nlist\r\n"[0: 24], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: lpop_result.response_len], &"$1\r\nc\r\n"[0: 7]));
 
+    const move_seed_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$5\r\nRPUSH\r\n$3\r\nsrc\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\nc\r\n"[0: 45], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: move_seed_result.response_len], &":3\r\n"[0: 4]));
+
+    const rpoplpush_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$9\r\nRPOPLPUSH\r\n$3\r\nsrc\r\n$3\r\ndst\r\n"[0: 37], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: rpoplpush_result.response_len], &"$1\r\nc\r\n"[0: 7]));
+
+    const lmove_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$5\r\nLMOVE\r\n$3\r\nsrc\r\n$3\r\ndst\r\n$4\r\nLEFT\r\n$5\r\nRIGHT\r\n"[0: 54], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: lmove_result.response_len], &"$1\r\na\r\n"[0: 7]));
+
+    const lmove_same_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$5\r\nLMOVE\r\n$3\r\ndst\r\n$3\r\ndst\r\n$5\r\nRIGHT\r\n$4\r\nLEFT\r\n"[0: 54], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: lmove_same_result.response_len], &"$1\r\na\r\n"[0: 7]));
+
+    const lrange_src_after_move_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$6\r\nLRANGE\r\n$3\r\nsrc\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 40], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: lrange_src_after_move_result.response_len], &"*1\r\n$1\r\nb\r\n"[0: 11]));
+
+    const lrange_dst_after_move_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$6\r\nLRANGE\r\n$3\r\ndst\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 40], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: lrange_dst_after_move_result.response_len], &"*2\r\n$1\r\na\r\n$1\r\nc\r\n"[0: 18]));
+
+    const move_cleanup_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$3\r\nDEL\r\n$3\r\nsrc\r\n$3\r\ndst\r\n"[0: 32], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: move_cleanup_result.response_len], &":2\r\n"[0: 4]));
+
     const sadd_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$4\r\nSADD\r\n$3\r\nset\r\n$1\r\na\r\n$1\r\nb\r\n"[0: 37], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: sadd_result.response_len], &":2\r\n"[0: 4]));
 

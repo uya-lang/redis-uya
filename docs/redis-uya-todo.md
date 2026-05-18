@@ -484,7 +484,7 @@
 ### U3. 先补 Redis Open Source 核心，而不是先扩模块
 
 - [ ] Blocking list / zset：`BLPOP`、`BRPOP`、`BRPOPLPUSH`、`BZMPOP`、`BZPOPMIN`、`BZPOPMAX`
-- [ ] 常用 list / zset 缺口：已补 `ZSCORE`、`ZMSCORE`、`ZPOPMIN`、`ZPOPMAX`；待补 `LMOVE`、`LMPOP`、`RPOPLPUSH`、`ZRANK`
+- [ ] 常用 list / zset 缺口：已补 `LMOVE`、`RPOPLPUSH`、`ZSCORE`、`ZMSCORE`、`ZPOPMIN`、`ZPOPMAX`；待补 `LMPOP`、`ZRANK`
 - [ ] 常用 bitmap / bitfield：已补 `SETBIT`、`GETBIT`、`BITCOUNT`；待补 `BITPOS`、`BITOP`、`BITFIELD`
 - [ ] 常用 HLL / GEO：`PFADD`、`PFCOUNT`、`PFMERGE`、`GEOADD`、`GEODIST`、`GEOSEARCH`
 - [ ] Scripting 第一批：`EVAL`、`EVALSHA`、`SCRIPT LOAD/EXISTS/FLUSH`

@@ -413,6 +413,22 @@ class RedisPySubsetClient:
             return None
         return int(result)
 
+    def lmove(self, source: str, destination: str, wherefrom: str, whereto: str) -> bytes | None:
+        result = self._request(
+            b"LMOVE",
+            source.encode(),
+            destination.encode(),
+            wherefrom.encode(),
+            whereto.encode(),
+        )
+        assert result is None or isinstance(result, bytes)
+        return result
+
+    def rpoplpush(self, source: str, destination: str) -> bytes | None:
+        result = self._request(b"RPOPLPUSH", source.encode(), destination.encode())
+        assert result is None or isinstance(result, bytes)
+        return result
+
     def sadd(self, key: str, *members: str) -> int:
         return int(self._request(b"SADD", key.encode(), *(member.encode() for member in members)))
 
@@ -870,6 +886,13 @@ def run_smoke() -> None:
             assert client.lpos("xlist", "b") == 2
             assert client.lrange("xlist", 0, -1) == [b"head", b"a", b"b", b"tail"]
             assert client.delete("xlist") == 1
+            assert client.rpush("src", "a", "b", "c") == 3
+            assert client.rpoplpush("src", "dst") == b"c"
+            assert client.lmove("src", "dst", "LEFT", "RIGHT") == b"a"
+            assert client.lmove("dst", "dst", "RIGHT", "LEFT") == b"a"
+            assert client.lrange("src", 0, -1) == [b"b"]
+            assert client.lrange("dst", 0, -1) == [b"a", b"c"]
+            assert client.delete("src", "dst") == 2
 
             assert client.sadd("set", "a", "b") == 2
             assert client.smembers("set") == {b"a", b"b"}

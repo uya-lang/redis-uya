@@ -3212,6 +3212,176 @@ fn command_executor_lpos(engine: &Engine, command: &Command, now_ms: u64) Comman
     return command_executor_integer(pos);
 }
 
+fn command_executor_list_pop_direction(obj: &RedisObject, left: bool) !&RedisObject {
+    if left {
+        return list_object_pop_head(obj);
+    }
+    return list_object_pop_tail(obj);
+}
+
+fn command_executor_list_push_direction(obj: &RedisObject, data: &[byte], left: bool) !usize {
+    if left {
+        return list_object_push_head(obj, data);
+    }
+    return list_object_push_tail(obj, data);
+}
+
+fn command_executor_list_restore_popped(obj: &RedisObject, popped: &RedisObject, pop_left: bool) !void {
+    const data: &[byte] = command_executor_string_value(popped) catch {
+        return error.ObjectWrongType;
+    };
+    _ = command_executor_list_push_direction(obj, data, pop_left);
+}
+
+fn command_executor_list_move_internal(
+    engine: &Engine,
+    source: &[byte],
+    destination: &[byte],
+    now_ms: u64,
+    pop_left: bool,
+    push_left: bool,
+) CommandReply {
+    const source_obj: &RedisObject = lookup_key_at(engine, source, now_ms) catch {
+        return command_executor_null_bulk();
+    };
+    if source_obj.obj_type != ObjectType.object_list {
+        return command_executor_wrongtype();
+    }
+
+    if bytes_eq(source, destination) {
+        const popped_same: &RedisObject = command_executor_list_pop_direction(source_obj, pop_left) catch |err| {
+            if err == error.ObjectListEmpty {
+                return command_executor_null_bulk();
+            }
+            return command_executor_wrongtype();
+        };
+        const data_same: &[byte] = command_executor_string_value(popped_same) catch {
+            _ = command_executor_list_restore_popped(source_obj, popped_same, pop_left) catch {};
+            object_free(popped_same);
+            return command_executor_wrongtype();
+        };
+        _ = command_executor_list_push_direction(source_obj, data_same, push_left) catch |err| {
+            _ = command_executor_list_restore_popped(source_obj, popped_same, pop_left) catch {};
+            object_free(popped_same);
+            if err == error.AllocOutOfMemory {
+                return command_executor_oom();
+            }
+            return command_executor_wrongtype();
+        };
+        var reply_same: CommandReply = command_executor_bulk(data_same);
+        reply_same.owned_object = popped_same;
+        return reply_same;
+    }
+
+    const destination_obj: &RedisObject = command_executor_lookup_key_now_or_null(engine, destination, now_ms);
+    if destination_obj != null && destination_obj.obj_type != ObjectType.object_list {
+        return command_executor_wrongtype();
+    }
+
+    const popped: &RedisObject = command_executor_list_pop_direction(source_obj, pop_left) catch |err| {
+        if err == error.ObjectListEmpty {
+            return command_executor_null_bulk();
+        }
+        return command_executor_wrongtype();
+    };
+    const data: &[byte] = command_executor_string_value(popped) catch {
+        _ = command_executor_list_restore_popped(source_obj, popped, pop_left) catch {};
+        object_free(popped);
+        return command_executor_wrongtype();
+    };
+
+    if destination_obj == null {
+        const new_destination: &RedisObject = create_list_object() catch {
+            _ = command_executor_list_restore_popped(source_obj, popped, pop_left) catch {};
+            object_free(popped);
+            return command_executor_oom();
+        };
+        _ = command_executor_list_push_direction(new_destination, data, push_left) catch |err| {
+            object_free(new_destination);
+            _ = command_executor_list_restore_popped(source_obj, popped, pop_left) catch {};
+            object_free(popped);
+            if err == error.AllocOutOfMemory {
+                return command_executor_oom();
+            }
+            return command_executor_wrongtype();
+        };
+        _ = set_key_at(engine, destination, new_destination, now_ms) catch {
+            object_free(new_destination);
+            _ = command_executor_list_restore_popped(source_obj, popped, pop_left) catch {};
+            object_free(popped);
+            return command_executor_oom();
+        };
+    } else {
+        _ = command_executor_list_push_direction(destination_obj, data, push_left) catch |err| {
+            _ = command_executor_list_restore_popped(source_obj, popped, pop_left) catch {};
+            object_free(popped);
+            if err == error.AllocOutOfMemory {
+                return command_executor_oom();
+            }
+            return command_executor_wrongtype();
+        };
+    }
+
+    const remaining: usize = list_object_len(source_obj) catch {
+        object_free(popped);
+        return command_executor_wrongtype();
+    };
+    if remaining == 0 {
+        _ = delete_key(engine, source);
+    }
+
+    var reply: CommandReply = command_executor_bulk(data);
+    reply.owned_object = popped;
+    return reply;
+}
+
+fn command_executor_lmove(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 5 {
+        return command_executor_wrong_arity();
+    }
+    const source: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const destination: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    const wherefrom: &[byte] = command_executor_arg(command, 3) catch {
+        return command_executor_wrong_arity();
+    };
+    const whereto: &[byte] = command_executor_arg(command, 4) catch {
+        return command_executor_wrong_arity();
+    };
+
+    var pop_left: bool = false;
+    if command_executor_keyword_eq(wherefrom, &"LEFT"[0: 4]) {
+        pop_left = true;
+    } else if !command_executor_keyword_eq(wherefrom, &"RIGHT"[0: 5]) {
+        return command_executor_syntax_error();
+    }
+
+    var push_left: bool = false;
+    if command_executor_keyword_eq(whereto, &"LEFT"[0: 4]) {
+        push_left = true;
+    } else if !command_executor_keyword_eq(whereto, &"RIGHT"[0: 5]) {
+        return command_executor_syntax_error();
+    }
+
+    return command_executor_list_move_internal(engine, source, destination, now_ms, pop_left, push_left);
+}
+
+fn command_executor_rpoplpush(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 3 {
+        return command_executor_wrong_arity();
+    }
+    const source: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const destination: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    return command_executor_list_move_internal(engine, source, destination, now_ms, false, true);
+}
+
 fn command_executor_set_any_member(obj: &RedisObject) !&[byte] {
     if obj == null || obj.obj_type != ObjectType.object_set {
         return error.ObjectWrongType;
@@ -5126,7 +5296,7 @@ fn command_executor_zmscore(engine: &Engine, command: &Command, now_ms: u64) Com
         return command_executor_wrong_arity();
     };
 
-    const obj: &RedisObject = command_executor_lookup_key_or_null(engine, key, now_ms);
+    const obj: &RedisObject = command_executor_lookup_key_now_or_null(engine, key, now_ms);
     if obj != null && obj.obj_type != ObjectType.object_zset {
         return command_executor_wrongtype();
     }
@@ -8233,6 +8403,12 @@ fn command_executor_command_key_flags(info: &CommandInfo, key_ordinal: usize) &[
         }
         return &"OW|update"[0: 9];
     }
+    if info.cmd_type == CommandType.command_lmove || info.cmd_type == CommandType.command_rpoplpush {
+        if key_ordinal == 0 {
+            return &"RW|access|delete"[0: 16];
+        }
+        return &"RW|insert"[0: 9];
+    }
     if info.cmd_type == CommandType.command_sinterstore {
         if key_ordinal == 0 {
             return &"RW|update"[0: 9];
@@ -8968,6 +9144,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     if command.info.cmd_type == CommandType.command_lrange {
         return command_executor_lrange(engine, command, now_ms);
     }
+    if command.info.cmd_type == CommandType.command_lmove {
+        return command_executor_lmove(engine, command, now_ms);
+    }
     if command.info.cmd_type == CommandType.command_sadd {
         return command_executor_sadd(engine, command, now_ms);
     }
@@ -9150,6 +9329,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_rpop {
         return command_executor_rpop(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_rpoplpush {
+        return command_executor_rpoplpush(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_lindex {
         return command_executor_lindex(engine, command, now_ms);

@@ -527,6 +527,32 @@ class RedisPySubsetClient:
     def zcount(self, key: str, minimum: int, maximum: int) -> int:
         return int(self._request(b"ZCOUNT", key.encode(), str(minimum).encode(), str(maximum).encode()))
 
+    def zrank(self, key: str, member: str, withscore: bool = False) -> int | tuple[int, bytes] | None:
+        parts: list[bytes] = [b"ZRANK", key.encode(), member.encode()]
+        if withscore:
+            parts.append(b"WITHSCORE")
+        result = self._request(*parts)
+        if result is None:
+            return None
+        if withscore:
+            assert isinstance(result, list) and len(result) == 2 and isinstance(result[0], int) and isinstance(result[1], bytes)
+            return result[0], result[1]
+        assert isinstance(result, int)
+        return result
+
+    def zrevrank(self, key: str, member: str, withscore: bool = False) -> int | tuple[int, bytes] | None:
+        parts: list[bytes] = [b"ZREVRANK", key.encode(), member.encode()]
+        if withscore:
+            parts.append(b"WITHSCORE")
+        result = self._request(*parts)
+        if result is None:
+            return None
+        if withscore:
+            assert isinstance(result, list) and len(result) == 2 and isinstance(result[0], int) and isinstance(result[1], bytes)
+            return result[0], result[1]
+        assert isinstance(result, int)
+        return result
+
     def zscore(self, key: str, member: str) -> bytes | None:
         result = self._request(b"ZSCORE", key.encode(), member.encode())
         assert result is None or isinstance(result, bytes)
@@ -941,6 +967,11 @@ def run_smoke() -> None:
             assert client.zcount("zset", 1, 2) == 2
             assert client.zincrby("zset", 3, "a") == b"4"
             assert client.zcount("zset", 4, 4) == 1
+            assert client.zrank("zset", "b") == 0
+            assert client.zrank("zset", "b", withscore=True) == (0, b"2")
+            assert client.zrevrank("zset", "a") == 0
+            assert client.zrevrank("zset", "a", withscore=True) == (0, b"4")
+            assert client.zrank("zset", "missing") is None
             assert client.zscore("zset", "a") == b"4"
             assert client.zscore("zset", "missing") is None
             assert client.zmscore("zset", "a", "missing", "b") == [b"4", None, b"2"]

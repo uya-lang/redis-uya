@@ -15,11 +15,11 @@
 
 | status | count |
 |--------|-------|
-| `full` | `140` |
+| `full` | `142` |
 | `partial` | `42` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `320` |
+| `deferred` | `318` |
 
 ## Group counts
 
@@ -574,7 +574,7 @@
 | `zrangebylex` | `sorted-set` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@read, @sortedset, @slow` |
 | `zrangebyscore` | `sorted-set` | `full` | `-` | `-4` | `-` | `no` | `@read, @sortedset, @slow` |
 | `zrangestore` | `sorted-set` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@write, @sortedset, @slow` |
-| `zrank` | `sorted-set` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @sortedset, @fast` |
+| `zrank` | `sorted-set` | `full` | `-` | `-3` | `-` | `no` | `@read, @sortedset, @fast` |
 | `zrem` | `sorted-set` | `full` | `-` | `-3` | `-` | `no` | `@write, @sortedset, @fast` |
 | `zremrangebylex` | `sorted-set` | `deferred` | `v0.9.1` | `4` | `-` | `no` | `@write, @sortedset, @slow` |
 | `zremrangebyrank` | `sorted-set` | `full` | `-` | `4` | `-` | `no` | `@write, @sortedset, @slow` |
@@ -582,7 +582,7 @@
 | `zrevrange` | `sorted-set` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@read, @sortedset, @slow` |
 | `zrevrangebylex` | `sorted-set` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@read, @sortedset, @slow` |
 | `zrevrangebyscore` | `sorted-set` | `full` | `-` | `-4` | `-` | `no` | `@read, @sortedset, @slow` |
-| `zrevrank` | `sorted-set` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @sortedset, @fast` |
+| `zrevrank` | `sorted-set` | `full` | `-` | `-3` | `-` | `no` | `@read, @sortedset, @fast` |
 | `zscan` | `sorted-set` | `full` | `-` | `-3` | `-` | `yes` | `@read, @sortedset, @slow` |
 | `zscore` | `sorted-set` | `full` | `-` | `3` | `-` | `no` | `@read, @sortedset, @fast` |
 | `zunion` | `sorted-set` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @sortedset, @slow` |

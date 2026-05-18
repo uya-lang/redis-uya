@@ -120,6 +120,7 @@ use src.storage.object.set_object_members_reply;
 use src.storage.object.zset_object_add_member;
 use src.storage.object.zset_object_len;
 use src.storage.object.zset_object_get_score;
+use src.storage.object.zset_object_rank;
 use src.storage.object.zset_object_remove_member;
 use src.storage.object.zset_object_range_reply;
 use src.storage.object.zset_object_range_by_score_reply;
@@ -5263,6 +5264,95 @@ fn command_executor_zset_score_or_missing(obj: &RedisObject, member: &[byte], sc
     return true;
 }
 
+fn command_executor_zrank_withscore_reply(rank: i64, score: i64) CommandReply {
+    var score_buf: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&score_buf);
+    }
+    _ = command_executor_info_append_i64(&score_buf, &"%i"[0: 2], score) catch {
+        return command_executor_oom();
+    };
+
+    var raw: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&raw);
+    }
+    _ = sds_cat(&raw, &"*2\r\n"[0: 4]) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append_i64(&raw, &":%i\r\n"[0: 5], rank) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append_u64(&raw, &"$%u\r\n"[0: 5], score_buf.len as u64) catch {
+        return command_executor_oom();
+    };
+    _ = sds_cat(&raw, score_buf.buf[0: score_buf.len]) catch {
+        return command_executor_oom();
+    };
+    _ = sds_cat(&raw, &"\r\n"[0: 2]) catch {
+        return command_executor_oom();
+    };
+    return command_executor_owned_raw(raw.buf[0: raw.len]);
+}
+
+fn command_executor_zrank(engine: &Engine, command: &Command, now_ms: u64, reverse: bool) CommandReply {
+    if command.argc != 3 && command.argc != 4 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const member: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+
+    var withscore: bool = false;
+    if command.argc == 4 {
+        const option: &[byte] = command_executor_arg(command, 3) catch {
+            return command_executor_wrong_arity();
+        };
+        if !command_executor_keyword_eq(option, &"WITHSCORE"[0: 9]) {
+            return command_executor_syntax_error();
+        }
+        withscore = true;
+    }
+
+    const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+        return command_executor_null_bulk();
+    };
+    if obj.obj_type != ObjectType.object_zset {
+        return command_executor_wrongtype();
+    }
+
+    var rank: i64 = zset_object_rank(obj, member) catch |err| {
+        if err == error.ObjectFieldNotFound {
+            return command_executor_null_bulk();
+        }
+        return command_executor_wrongtype();
+    };
+    if reverse {
+        const total: usize = zset_object_len(obj) catch {
+            return command_executor_wrongtype();
+        };
+        rank = total as i64 - rank - 1;
+    }
+    if !withscore {
+        return command_executor_integer(rank);
+    }
+
+    const score: i64 = zset_object_get_score(obj, member) catch |err| {
+        if err == error.ObjectFieldNotFound {
+            return command_executor_null_bulk();
+        }
+        return command_executor_wrongtype();
+    };
+    return command_executor_zrank_withscore_reply(rank, score);
+}
+
 fn command_executor_zscore(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
     if command.argc != 3 {
         return command_executor_wrong_arity();
@@ -9206,6 +9296,12 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_zcount {
         return command_executor_zcount(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_zrank {
+        return command_executor_zrank(engine, command, now_ms, false);
+    }
+    if command.info.cmd_type == CommandType.command_zrevrank {
+        return command_executor_zrank(engine, command, now_ms, true);
     }
     if command.info.cmd_type == CommandType.command_zscore {
         return command_executor_zscore(engine, command, now_ms);

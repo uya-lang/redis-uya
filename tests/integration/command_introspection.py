@@ -167,18 +167,22 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"bitmap commands missing from COMMAND INFO: {bitmap_info!r}")
 
-            zset_info = send_command(sock, b"COMMAND", b"INFO", b"ZSCORE", b"ZMSCORE", b"ZPOPMAX", b"ZPOPMIN")
+            zset_info = send_command(sock, b"COMMAND", b"INFO", b"ZRANK", b"ZREVRANK", b"ZSCORE", b"ZMSCORE", b"ZPOPMAX", b"ZPOPMIN")
             if (
                 not isinstance(zset_info, list)
-                or len(zset_info) != 4
+                or len(zset_info) != 6
                 or not isinstance(zset_info[0], list)
-                or zset_info[0][0] != b"zscore"
+                or zset_info[0][0] != b"zrank"
                 or not isinstance(zset_info[1], list)
-                or zset_info[1][0] != b"zmscore"
+                or zset_info[1][0] != b"zrevrank"
                 or not isinstance(zset_info[2], list)
-                or zset_info[2][0] != b"zpopmax"
+                or zset_info[2][0] != b"zscore"
                 or not isinstance(zset_info[3], list)
-                or zset_info[3][0] != b"zpopmin"
+                or zset_info[3][0] != b"zmscore"
+                or not isinstance(zset_info[4], list)
+                or zset_info[4][0] != b"zpopmax"
+                or not isinstance(zset_info[5], list)
+                or zset_info[5][0] != b"zpopmin"
             ):
                 raise AssertionError(f"zset score/pop commands missing from COMMAND INFO: {zset_info!r}")
 

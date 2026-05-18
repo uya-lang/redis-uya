@@ -225,11 +225,13 @@ FULL_NAMES = {
     "zpopmin",
     "zrange",
     "zrangebyscore",
+    "zrank",
     "zscore",
     "zrem",
     "zremrangebyrank",
     "zremrangebyscore",
     "zrevrangebyscore",
+    "zrevrank",
     "zscan",
 }
 

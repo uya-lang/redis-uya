@@ -955,6 +955,28 @@ export fn zset_object_get_score(obj: &RedisObject, member: &[byte]) !i64 {
     return zset_score_lookup(obj, member);
 }
 
+export fn zset_object_rank(obj: &RedisObject, member: &[byte]) !i64 {
+    if obj == null || obj.obj_type != ObjectType.object_zset {
+        return error.ObjectWrongType;
+    }
+
+    const target_score: i64 = try zset_score_lookup(obj, member);
+    var rank: i64 = 0;
+
+    var iter: DictIterator = dict_iter_new();
+    var entry: &DictEntry = dict_iter_next(&obj.hash_dict, &iter);
+    while entry != null {
+        const current_member: &[byte] = entry.key.buf[0: entry.key.len];
+        const score_obj: &RedisObject = object_usize_to_object(entry.value);
+        const current_score: i64 = score_obj.int_value;
+        if current_score < target_score || (current_score == target_score && object_slice_cmp(current_member, member) < 0) {
+            rank = rank + 1;
+        }
+        entry = dict_iter_next(&obj.hash_dict, &iter);
+    }
+    return rank;
+}
+
 export fn zset_object_range_reply(obj: &RedisObject, start: i64, stop: i64) !&RedisObject {
     if obj == null || obj.obj_type != ObjectType.object_zset {
         return error.ObjectWrongType;

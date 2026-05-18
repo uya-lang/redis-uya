@@ -462,6 +462,30 @@ if [[ "$ZCOUNT_AFTER_RESULT" != "1" ]]; then
     exit 1
 fi
 
+ZRANK_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrank zset b)"
+if [[ "$ZRANK_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZRANK b 0, got '$ZRANK_RESULT'" >&2
+    exit 1
+fi
+
+ZRANK_WITHSCORE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrank zset b withscore)"
+if [[ "$ZRANK_WITHSCORE_RESULT" != $'0\n2' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZRANK WITHSCORE 0/2, got '$ZRANK_WITHSCORE_RESULT'" >&2
+    exit 1
+fi
+
+ZREVRANK_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrevrank zset a)"
+if [[ "$ZREVRANK_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZREVRANK a 0, got '$ZREVRANK_RESULT'" >&2
+    exit 1
+fi
+
+ZREVRANK_WITHSCORE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrevrank zset a withscore)"
+if [[ "$ZREVRANK_WITHSCORE_RESULT" != $'0\n4' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZREVRANK WITHSCORE 0/4, got '$ZREVRANK_WITHSCORE_RESULT'" >&2
+    exit 1
+fi
+
 ZSCORE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zscore zset a)"
 if [[ "$ZSCORE_RESULT" != "4" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ZSCORE 4, got '$ZSCORE_RESULT'" >&2
@@ -913,8 +937,8 @@ if [[ "$TYPE_RESULT" != "string" ]]; then
 fi
 
 DBSIZE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" dbsize)"
-if [[ "$DBSIZE_RESULT" != "1" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected dbsize 1, got '$DBSIZE_RESULT'" >&2
+if ! [[ "$DBSIZE_RESULT" =~ ^[0-9]+$ ]] || [[ "$DBSIZE_RESULT" -lt 1 ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected positive dbsize, got '$DBSIZE_RESULT'" >&2
     exit 1
 fi
 

@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 146);
+    try assert_eq_i32(command_router_count(&router) as i32, 148);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -110,6 +110,14 @@ export fn test_command_router_lookup_and_case() !void {
     const bitcount: CommandInfo = try command_router_lookup(&router, &"BITCOUNT"[0: 8]);
     try assert_eq_i32(bitcount.cmd_type as i32, CommandType.command_bitcount as i32);
     try assert_eq_i32(bitcount.arity, -2);
+
+    const zrank: CommandInfo = try command_router_lookup(&router, &"ZRANK"[0: 5]);
+    try assert_eq_i32(zrank.cmd_type as i32, CommandType.command_zrank as i32);
+    try assert_eq_i32(zrank.arity, -3);
+
+    const zrevrank: CommandInfo = try command_router_lookup(&router, &"zrevrank"[0: 8]);
+    try assert_eq_i32(zrevrank.cmd_type as i32, CommandType.command_zrevrank as i32);
+    try assert_eq_i32(zrevrank.arity, -3);
 
     const lmove: CommandInfo = try command_router_lookup(&router, &"LMOVE"[0: 5]);
     try assert_eq_i32(lmove.cmd_type as i32, CommandType.command_lmove as i32);

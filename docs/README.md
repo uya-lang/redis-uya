@@ -58,8 +58,8 @@
 截至 2026-05-16 审计、2026-05-17 最新复跑与 2026-05-19 当前复核，项目当前口径应为：
 
 - `v0.9.0` 的历史收口文档仍然保留，但不能直接代表当前 `HEAD`。
-- 当前 `HEAD` 的 `make test` 与 `make test-integration` 已恢复为通过状态，但 `make benchmark-v0.8.1` 仍有抖动，不能宣称稳定通过。
-- 当前主线的第一优先级仍是收口“benchmark 稳定性、文档口径”之间的裂缝，并持续保持控制面真值与版本口径不回退。
+- 当前 `HEAD` 的 `make test`、`make test-integration`、`make benchmark-v0.8.1` 与 `bash scripts/verify_definition_of_done.sh` 已恢复为通过状态。
+- 当前主线的第一优先级已从 benchmark 稳定性转回“命令完成度统计分层、文档口径”之间的裂缝，并持续保持控制面真值与版本口径不回退。
 - `v1.0.0` 的命令封版门槛先收敛 Redis Open Source 单机核心；JSON/Search/Time Series/概率结构/Vector 等模块命令继续追踪，但不再作为当前阶段完成度的包装材料。
 
 当前执行路线见：
@@ -75,5 +75,4 @@
 
 仍待继续收口的问题：
 
-- 当前 `COMMAND*` 已按真实执行面隐藏未实现命令，且当前 `CLIENT/CONFIG` 已实现子命令的矩阵状态已补齐；后续仍需继续扩展剩余单机核心命令。
-- `benchmark-v0.8.1` 最新复跑仍可能出现 guard miss。
+- 当前 `COMMAND*` 已按真实执行面隐藏未实现命令，且当前 `CLIENT/CONFIG` 已实现子命令的矩阵状态已补齐；下一步仍需把 Redis Open Source 单机核心、模式命令、模块命令的完成度统计彻底分层。

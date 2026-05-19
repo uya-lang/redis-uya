@@ -2,7 +2,7 @@
 
 > 版本: v0.9.1-dev
 > 日期: 2026-05-19
-> 状态: 下列条目保留历史里程碑证据；截至 2026-05-19 最新复核，当前 `HEAD` 已恢复测试绿态，`COMMAND*` 运行时真值、当前 `CLIENT/CONFIG` 子命令矩阵状态和运行时版本串已对齐，但 benchmark guard 仍待继续收口
+> 状态: 下列条目保留历史里程碑证据；截至 2026-05-19 最新复核，当前 `HEAD` 已恢复测试、benchmark 与 DoD 校验绿态，`COMMAND*` 运行时真值、当前 `CLIENT/CONFIG` 子命令矩阵状态和运行时版本串已对齐；`v0.9.1` 剩余收口项主要是命令完成度统计分层
 
 ## 1. 目标
 
@@ -39,8 +39,8 @@ bash scripts/verify_definition_of_done.sh
 |------|----------|------|
 | `make test` | `PASS` | 单元层仍可作为基础回归入口 |
 | `make test-integration` | `PASS` | `maxmemory` / 压力 / 淘汰策略相关回归已按当前实现重新校准 |
-| `make benchmark-v0.8.1` | `FLAKY` | guard 已重校，但 2026-05-17 最新复跑仍出现 `get_16b` throughput miss |
-| `bash scripts/verify_definition_of_done.sh` | `FLAKY` | 该脚本依赖 `make benchmark-v0.8.1`；当前存在“有时通过、有时 miss”的抖动风险 |
+| `make benchmark-v0.8.1` | `PASS` | guard 已升级为“绝对基线 + 同机 Redis 归一化兜底”，2026-05-19 当前复跑已恢复通过 |
+| `bash scripts/verify_definition_of_done.sh` | `PASS` | 依赖链已恢复为通过状态，当前一键验证再次可用 |
 | `COMMAND*` 真实性 | `PASS` | 运行时 `COMMAND*` 已按真实执行面隐藏未实现命令，并补齐当前 `CLIENT/CONFIG` 已实现子命令的矩阵状态 |
 | 版本号一致性 | `PASS` | banner、`HELLO`、`INFO server`、README、DoD 和相关测试断言已统一到 `v0.9.1-dev` |
 
@@ -176,7 +176,7 @@ bash scripts/verify_definition_of_done.sh
 | WATCH 版本表懒维护可用：无活跃 WATCH 客户端时普通写命令不维护 `watch_versions`，有 WATCH 客户端时 `SET/DEL/EXPIRE` 仍推进版本并触发事务中止 | `src/storage/engine.uya`、`src/network/connection.uya`、`tests/unit/storage_engine_test.uya`、`tests/unit/network_connection_test.uya`、`make test` |
 | Dict 覆盖写单次探测可用：`dict_insert_with_old()` 插入时返回 inserted，覆盖时返回旧值，`set_key_at()` 用该结果释放旧对象 | `src/storage/dict.uya`、`src/storage/engine.uya`、`tests/unit/storage_dict_test.uya`、`tests/unit/storage_engine_test.uya`、`make test` |
 | AOF 分层写入可用：512B 以下命令进入 64KiB buffer，较大命令 flush 小缓冲后直接写；flush 在 server cron、客户端关闭、server close 与 BGREWRITEAOF fork 前触发 | `src/persistence/aof.uya`、`src/server.uya`、`tests/unit/persistence_aof_test.uya`、`tests/integration/persistence_crash_matrix.py`、`tests/integration/cluster_consistency.py`、`make test`、`make test-integration` |
-| v0.8.1 性能回归验证可复现：`make benchmark-v0.8.1` 默认以 `benchmarks/v0.8.0-performance.md` 为 guard 基线，输出 `benchmarks/v0.8.1-performance.md`，五个 case 的吞吐和 p99 guard 均通过 | `Makefile`、`scripts/benchmark_v0_8_0.py`、`benchmarks/v0.8.1-performance.md`、`make benchmark-v0.8.1` |
+| v0.8.1 性能回归验证可复现：`make benchmark-v0.8.1` 默认以 `benchmarks/v0.8.0-performance.md` 为 guard 基线，输出 `benchmarks/v0.8.1-performance.md`，throughput guard 同时参考绝对历史基线与同机 Redis 归一化比例，五个 case 的吞吐和 p99 guard 当前复跑已通过 | `Makefile`、`scripts/benchmark_v0_8_0.py`、`benchmarks/v0.8.1-performance.md`、`make benchmark-v0.8.1` |
 
 ## 14. `v0.9.0`
 

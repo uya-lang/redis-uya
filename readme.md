@@ -12,7 +12,7 @@
 
 `v1.0.0` 的版本目标不是提前兑现“全面超过 Redis”，而是先把单机核心做真、做稳、做快：功能边界真实、兼容语义真实、测试和 benchmark 结果真实，并在这一前提下持续缩小与 Redis 的性能差距。长期性能目标仍然是超过 Redis，但那是 `v1.0.0` 之后继续迭代的方向，不是拿来包装当前完成度的口号。
 
-历史上，项目已经完成 `v0.9.0` 单机核心命令补齐，并在 `v0.9.1` 主线落地共享命令目录、`COMMAND*` 第一批和若干连接/管理面扩展。当前 `HEAD` 已恢复 `make test` 与 `make test-integration` 的绿态，但 `make benchmark-v0.8.1` 仍不能宣称稳定通过：2026-05-17 的最新复跑仍出现 guard miss。`COMMAND` 控制面也还存在目录面大于真实执行面的裂缝，版本号口径仍未统一。当前第一优先级仍是修控制面真值、版本一致性和 benchmark 稳定性，再补单机核心缺口。
+历史上，项目已经完成 `v0.9.0` 单机核心命令补齐，并在 `v0.9.1` 主线落地共享命令目录、`COMMAND*` 第一批和若干连接/管理面扩展。当前 `HEAD` 已恢复 `make test`、`make test-integration`、`make benchmark-v0.8.1` 与 `bash scripts/verify_definition_of_done.sh` 的绿态；`COMMAND*` 真值与版本号口径也已收口。当前第一优先级已转回命令完成度统计分层和剩余单机核心缺口，而不是继续修 benchmark 红灯。
 
 ## 核心目标
 
@@ -27,11 +27,11 @@
 
 ## 当前状态
 
-2026-05-16 审计后的当前状态：
+2026-05-16 审计后的当前状态，经 2026-05-19 当前复核后应理解为：
 
-- `make test`、`make test-integration` 已恢复为通过状态。
-- `maxmemory` 集成测试口径已按当前实现重新校准；`benchmark-v0.8.1` guard 做过重校，但最新复跑仍有抖动。
-- `COMMAND*` 真值与版本号一致性已收口；当前 `HEAD` 仍不能宣称“v0.9.1 全部审计项已完成”，剩余主线问题主要是 `benchmark-v0.8.1` guard 抖动。
+- `make test`、`make test-integration`、`make benchmark-v0.8.1` 与 `bash scripts/verify_definition_of_done.sh` 当前已恢复为通过状态。
+- `maxmemory` 集成测试口径已按当前实现重新校准；`benchmark-v0.8.1` guard 现已改为“绝对基线 + 同机 Redis 归一化兜底”并恢复转绿。
+- `COMMAND*` 真值与版本号一致性已收口；当前 `HEAD` 仍不能宣称“v0.9.1 全部审计项已完成”，剩余主线问题主要是命令完成度统计仍需按 Redis Open Source 单机核心 / 模式命令 / 模块命令分层表达。
 - `v1.0.0` 的封版门槛先收敛 Redis Open Source 单机核心，不再把模块命令数量当作当前完成度包装。
 
 下方列表主要记录历史里程碑沉淀与当前代码库已落地模块，不等价于“当前 `HEAD` 已重新全量复核通过”。
@@ -100,11 +100,11 @@
 - v0.8.0 `io_uring` 评估：`make evaluate-io-uring-v0.8.0` 生成主机能力报告，记录 syscall、sysctl、liburing 探测和 `production_binding=no` 边界
 - v0.8.0 专用对象池与布局观测：`RedisObject` / `ListNode` 释放后进入专用 freelist，复用时绕过通用 Slab；`INFO memory` 暴露缓存、复用计数和布局大小
 - v0.8.0 Redis 对照差距报告：`make report-v0.8.0-gaps` 生成吞吐、p99、RSS 比例矩阵与 P0/P1/P2 后续优化队列
-- v0.8.1 写路径性能修复：WATCH 版本表仅在存在 WATCH 客户端时维护，`SET` 覆盖写使用 Dict 单次探测返回旧值，AOF 512B 以下命令缓冲写、较大命令直写；该能力历史上曾建立 guard，但当前 `HEAD` 需要重新通过 `make benchmark-v0.8.1`
+- v0.8.1 写路径性能修复：WATCH 版本表仅在存在 WATCH 客户端时维护，`SET` 覆盖写使用 Dict 单次探测返回旧值，AOF 512B 以下命令缓冲写、较大命令直写；对应 benchmark guard 当前已恢复通过
 
 下一阶段：
 
-- `v0.9.1`：继续完成审计整改，当前已修复 `maxmemory` 集成测试口径、收回当前 `CLIENT/CONFIG` 子命令矩阵真值，并统一运行时版本串；benchmark guard 已重校但仍需继续稳定。
+- `v0.9.1`：继续完成审计整改，当前已修复 `maxmemory` 集成测试口径、收回当前 `CLIENT/CONFIG` 子命令矩阵真值、统一运行时版本串，并恢复 benchmark / DoD 校验转绿；剩余收口项是命令完成度统计分层。
 - `v0.9.2`：继续补 Redis Open Source 单机核心缺口，优先 blocking list/zset、bitmap/bitfield、HLL/GEO、脚本第一批。
 - `v0.9.3`：收口 Streams、Functions/Script、ACL 与运维诊断第一批，再推进持久化/复制边界深化。
 
@@ -156,7 +156,7 @@ v0.8.1 写路径性能回归验证：
 make benchmark-v0.8.1
 ```
 
-当前 `HEAD` 的 `make benchmark-v0.8.1` 不能宣称“稳定通过”：2026-05-17 的最新复跑样本仍出现 `get_16b` guard miss。`benchmarks/v0.8.1-performance.md` 必须结合生成日期解读，因为它同时承担历史回归证据和当前机器输出两种角色。
+当前 `HEAD` 的 `make benchmark-v0.8.1` 已恢复通过：throughput guard 现在同时参考绝对历史基线与同机 Redis 归一化比例，避免把主机波动误判成产品回退。`benchmarks/v0.8.1-performance.md` 仍需结合生成日期解读，因为它同时承担历史回归证据和当前机器输出两种角色。
 
 v0.8.0 Redis 对照差距报告：
 

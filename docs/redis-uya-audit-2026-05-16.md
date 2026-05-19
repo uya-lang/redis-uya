@@ -3,7 +3,7 @@
 > 版本口径: `v0.9.1-dev`
 > 审计日期: 2026-05-16
 > 审计范围: 当前 `HEAD` 的文档口径、命令覆盖、测试结果、性能结果与 Redis 单机兼容目标的一致性
-> 结论: 本文记录 2026-05-16 首次审计时的原始发现；其后 `make test-integration` 已恢复通过，`COMMAND*` 真值与运行时版本串已在 2026-05-19 当前 `HEAD` 收口，但 `make benchmark-v0.8.1` 在 2026-05-17 最新复跑仍出现 guard miss
+> 结论: 本文记录 2026-05-16 首次审计时的原始发现；其后 `make test-integration` 已恢复通过，`COMMAND*` 真值与运行时版本串已在 2026-05-19 当前 `HEAD` 收口，`make benchmark-v0.8.1` 与 `bash scripts/verify_definition_of_done.sh` 也已在同日恢复通过
 
 ## 1. 审计目标
 
@@ -209,7 +209,9 @@
 - `PING/GET/SET` 热路径的若干回归开销已收回到当前 guard 范围内。
 - `COMMAND*` 已按真实执行面隐藏未实现命令，并补齐当前 `CLIENT/CONFIG` 已实现子命令的矩阵状态。
 - banner、`HELLO`、`INFO server`、README、DoD 和相关测试断言已统一到 `v0.9.1-dev`。
+- `make benchmark-v0.8.1` 已改为“绝对基线 + 同机 Redis 归一化兜底”的 throughput guard，并恢复通过。
+- `bash scripts/verify_definition_of_done.sh` 已重新转绿。
 
 截至当前，以下问题仍待继续处理：
 
-- `make benchmark-v0.8.1` 最新复跑仍有抖动，尚不能宣称稳定转绿。
+- 命令完成度统计仍需按 Redis Open Source 单机核心、模式命令和模块命令彻底分层，避免再用总条目数包装当前单机完成度。

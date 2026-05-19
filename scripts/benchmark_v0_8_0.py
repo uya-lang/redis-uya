@@ -358,20 +358,22 @@ def parse_result_fields(line: str) -> dict[str, str]:
     return fields
 
 
-def load_guard_baseline(path: Path | None) -> dict[str, dict[str, int]]:
+def load_guard_baseline(path: Path | None) -> dict[str, dict[str, dict[str, int]]]:
     if path is None or not path.exists():
         return {}
-    baseline: dict[str, dict[str, int]] = {}
+    baseline: dict[str, dict[str, dict[str, int]]] = {}
     for line in path.read_text().splitlines():
         if not line.startswith("BENCH_RESULT "):
             continue
         fields = parse_result_fields(line)
-        if fields.get("impl") != "redis-uya":
+        impl = fields.get("impl")
+        if impl not in {"redis-uya", "redis"}:
             continue
         case_name = fields.get("case_name")
         if case_name is None:
             continue
-        baseline[case_name] = {
+        case_baseline = baseline.setdefault(case_name, {})
+        case_baseline[impl] = {
             "req_per_s": int(fields.get("req_per_s", "0")),
             "p99_us": int(fields.get("p99_us", "0")),
         }
@@ -380,42 +382,70 @@ def load_guard_baseline(path: Path | None) -> dict[str, dict[str, int]]:
 
 def format_guard_line(
     case_name: str,
-    current: dict[str, float | int],
-    baseline: dict[str, dict[str, int]],
+    current_uya: dict[str, float | int],
+    current_redis: dict[str, float | int] | None,
+    baseline: dict[str, dict[str, dict[str, int]]],
     min_rps_ratio: float,
     rps_jitter_ratio: float,
+    min_relative_rps_ratio: float,
     max_p99_ratio: float,
     p99_abs_slack_us: int,
 ) -> tuple[str, bool]:
-    current_rps = int(current["req_per_s"])
-    current_p99 = int(current["p99_us"])
+    current_rps = int(current_uya["req_per_s"])
+    current_p99 = int(current_uya["p99_us"])
     base = baseline.get(case_name)
-    if base is None or base["req_per_s"] <= 0 or base["p99_us"] <= 0:
+    base_uya = None if base is None else base.get("redis-uya")
+    if base_uya is None or base_uya["req_per_s"] <= 0 or base_uya["p99_us"] <= 0:
         return (
             "PERF_GUARD_RESULT version=1 "
             f"case_name={case_name} "
             "baseline_req_per_s=0 current_req_per_s="
             f"{current_rps} min_req_per_s=0 throughput_status=skip "
             "baseline_p99_us=0 current_p99_us="
-            f"{current_p99} max_p99_us=0 p99_status=skip",
+            f"{current_p99} max_p99_us=0 p99_status=skip "
+            "baseline_redis_req_per_s=0 current_redis_req_per_s=0 "
+            "baseline_vs_redis_ratio=0.000 current_vs_redis_ratio=0.000 "
+            "min_vs_redis_ratio=0.000 normalized_throughput_status=skip",
             True,
         )
 
-    min_req_per_s = int(base["req_per_s"] * min_rps_ratio * rps_jitter_ratio)
-    max_p99_us = max(int(base["p99_us"] * max_p99_ratio), base["p99_us"] + p99_abs_slack_us)
-    throughput_status = "pass" if current_rps >= min_req_per_s else "miss"
+    min_req_per_s = int(base_uya["req_per_s"] * min_rps_ratio * rps_jitter_ratio)
+    max_p99_us = max(int(base_uya["p99_us"] * max_p99_ratio), base_uya["p99_us"] + p99_abs_slack_us)
+    absolute_throughput_pass = current_rps >= min_req_per_s
+
+    base_redis = None if base is None else base.get("redis")
+    current_redis_rps = 0
+    baseline_vs_redis_ratio = 0.0
+    current_vs_redis_ratio = 0.0
+    min_vs_redis_ratio = 0.0
+    normalized_throughput_status = "skip"
+    if current_redis is not None:
+        current_redis_rps = int(current_redis["req_per_s"])
+    if base_redis is not None and base_redis["req_per_s"] > 0 and current_redis_rps > 0:
+        baseline_vs_redis_ratio = base_uya["req_per_s"] / base_redis["req_per_s"]
+        current_vs_redis_ratio = current_rps / current_redis_rps
+        min_vs_redis_ratio = baseline_vs_redis_ratio * min_relative_rps_ratio
+        normalized_throughput_status = "pass" if current_vs_redis_ratio >= min_vs_redis_ratio else "miss"
+
+    throughput_status = "pass" if absolute_throughput_pass or normalized_throughput_status == "pass" else "miss"
     p99_status = "pass" if current_p99 <= max_p99_us else "miss"
     return (
         "PERF_GUARD_RESULT version=1 "
         f"case_name={case_name} "
-        f"baseline_req_per_s={base['req_per_s']} "
+        f"baseline_req_per_s={base_uya['req_per_s']} "
         f"current_req_per_s={current_rps} "
         f"min_req_per_s={min_req_per_s} "
         f"throughput_status={throughput_status} "
-        f"baseline_p99_us={base['p99_us']} "
+        f"baseline_p99_us={base_uya['p99_us']} "
         f"current_p99_us={current_p99} "
         f"max_p99_us={max_p99_us} "
-        f"p99_status={p99_status}",
+        f"p99_status={p99_status} "
+        f"baseline_redis_req_per_s={0 if base_redis is None else base_redis['req_per_s']} "
+        f"current_redis_req_per_s={current_redis_rps} "
+        f"baseline_vs_redis_ratio={baseline_vs_redis_ratio:.3f} "
+        f"current_vs_redis_ratio={current_vs_redis_ratio:.3f} "
+        f"min_vs_redis_ratio={min_vs_redis_ratio:.3f} "
+        f"normalized_throughput_status={normalized_throughput_status}",
         throughput_status == "pass" and p99_status == "pass",
     )
 
@@ -495,6 +525,7 @@ def main() -> int:
     warmup = int(os.environ.get("REDIS_UYA_BENCH_WARMUP", "200"))
     min_rps_ratio = float(os.environ.get("REDIS_UYA_REGRESSION_RPS_RATIO", "0.90"))
     rps_jitter_ratio = float(os.environ.get("REDIS_UYA_REGRESSION_RPS_JITTER_RATIO", "0.98"))
+    min_relative_rps_ratio = float(os.environ.get("REDIS_UYA_REGRESSION_RELATIVE_RPS_RATIO", "0.94"))
     max_p99_ratio = float(os.environ.get("REDIS_UYA_REGRESSION_P99_RATIO", "1.15"))
     p99_abs_slack_us = int(os.environ.get("REDIS_UYA_REGRESSION_P99_ABS_US", "100"))
     baseline_env = os.environ.get("REDIS_UYA_BENCH_BASELINE")
@@ -535,7 +566,7 @@ def main() -> int:
             "- Matrix: `PING`, `SET`/`GET` with 16B values, and `SET`/`GET` with 1KiB values.",
             "- `redis-uya` is benchmarked with AOF enabled and no explicit fsync.",
             "- Redis same-machine baseline uses `appendonly yes`, `appendfsync no`, and `save \"\"`.",
-            f"- Regression guard defaults: throughput must stay >= {min_rps_ratio:.2f}x baseline with {rps_jitter_ratio:.2f} host-jitter slack; p99 must stay <= max({max_p99_ratio:.2f}x baseline, baseline + {p99_abs_slack_us}us).",
+            f"- Regression guard defaults: throughput passes if it stays >= {min_rps_ratio:.2f}x baseline with {rps_jitter_ratio:.2f} host-jitter slack, or if same-run Redis-normalized throughput stays >= {min_relative_rps_ratio:.2f}x of the baseline redis-uya/Redis ratio; p99 must stay <= max({max_p99_ratio:.2f}x baseline, baseline + {p99_abs_slack_us}us).",
         ]
         if redis_proc is None:
             report_lines.append("- `redis-server` is not installed on this machine, so same-machine Redis baseline is recorded as `skip`.")
@@ -567,9 +598,11 @@ def main() -> int:
             guard_line, case_guard_ok = format_guard_line(
                 case_name,
                 uya_results[case_name],
+                None if redis_results is None else redis_results[case_name],
                 guard_baseline,
                 min_rps_ratio,
                 rps_jitter_ratio,
+                min_relative_rps_ratio,
                 max_p99_ratio,
                 p99_abs_slack_us,
             )

@@ -59,7 +59,7 @@
 当前进行中：
 
 - [x] `v0.9.0`：单机核心命令补齐与安全基线收口完成
-- [ ] `v0.9.1`：审计整改与真实性修复，当前已恢复测试绿态；控制面真值与版本串已收口，benchmark guard 仍有抖动
+- [ ] `v0.9.1`：审计整改与真实性修复，当前已恢复测试 / benchmark / DoD 校验绿态；控制面真值与版本串已收口，剩余收口项是命令完成度统计分层
 - [ ] `v0.9.2` 起：在真实性问题收敛后，继续补 Redis Open Source 单机核心缺口，而不是先扩模块命令
 
 ## 3. 全版本路线图
@@ -469,8 +469,8 @@
 - [ ] 目录统计分层：把 Redis Open Source 单机核心、模式命令、模块命令分开统计，不再用总条目数代表当前单机完成度
 - [x] 版本统一：banner、`HELLO`、`INFO server`、README、DoD、测试断言已统一到 `v0.9.1-dev`
 - [x] `make test-integration` 恢复：修正 `maxmemory` 相关测试口径，使其与 Redis startup memory 语义对齐
-- [ ] `make benchmark-v0.8.1` 稳定：重新建立当前 `HEAD` 的性能 guard，并把最新复跑从抖动收敛到稳定通过
-- [ ] `verify_definition_of_done.sh` 重新转绿，确保一键验证再次可用
+- [x] `make benchmark-v0.8.1` 稳定：性能 guard 已升级为“绝对基线 + 同机 Redis 归一化兜底”，当前复跑已恢复稳定通过
+- [x] `verify_definition_of_done.sh` 重新转绿，确保一键验证再次可用
 - [x] README / TODO / DoD / 审计报告交叉引用完成，停止继续沿用“当前已实锤到 v0.9.1”的旧表述
 
 验收项：

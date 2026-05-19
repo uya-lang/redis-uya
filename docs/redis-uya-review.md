@@ -49,10 +49,10 @@
 
 ### 2.3 2026-05-16 审计增补
 
-本次审计又确认了四个必须先处理的问题，其中测试项已恢复，但 benchmark 仍未稳定：
+本次审计又确认了四个必须先处理的问题；截至 2026-05-19 当前 `HEAD`，其中测试、版本口径与 benchmark guard 已恢复：
 
 - `make test-integration` 当时未通过；当前已恢复通过，说明 `maxmemory` 测试口径已按当前实现重校。
-- `make benchmark-v0.8.1` 当时未通过；其后曾恢复通过，但 2026-05-17 最新复跑仍出现 guard miss，说明热路径还没有稳定收敛。
+- `make benchmark-v0.8.1` 当时未通过；其后已改为“绝对基线 + 同机 Redis 归一化兜底”的 throughput guard，并在 2026-05-19 当前复跑恢复通过。
 - `maxmemory` 相关红灯首先暴露的是测试口径不贴 Redis startup memory 语义，而不是简单的“算法彻底失效”。
 - banner、`INFO server`、README、DoD、TODO 之间的版本和状态说明在审计时仍未统一；该问题已在 2026-05-19 当前 `HEAD` 收口。
 
@@ -165,7 +165,7 @@ README、TODO、开发规范、DoD、API、ARCHITECTURE 和发布报告必须区
 - `COMMAND` 控制面与执行器脱节。
 - README / DoD / TODO / banner / `INFO server` 版本与状态漂移（已在后续主线收口）。
 - `maxmemory` 集成测试与 Redis 对照不一致。
-- 当前 benchmark guard 失败与性能口径失真。
+- 当前 benchmark guard 失败与性能口径失真（已在后续主线收口）。
 
 这一阶段不以“继续堆命令总数”为成功标准，而以“当前 `HEAD` 能否讲真话、能否稳定复核”为成功标准。
 

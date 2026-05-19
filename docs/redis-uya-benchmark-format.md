@@ -84,17 +84,23 @@ REPL_BENCH_RESULT version=1 impl=redis-uya case_name=full_sync runs=3 p50_ms=...
 
 ```text
 PERF_GUARD_RESULT version=1 case_name=get_16b baseline_req_per_s=... current_req_per_s=... \
-min_req_per_s=... throughput_status=pass baseline_p99_us=... current_p99_us=... max_p99_us=... p99_status=pass
+min_req_per_s=... throughput_status=pass baseline_p99_us=... current_p99_us=... max_p99_us=... p99_status=pass \
+baseline_redis_req_per_s=... current_redis_req_per_s=... baseline_vs_redis_ratio=... current_vs_redis_ratio=... \
+min_vs_redis_ratio=... normalized_throughput_status=pass
 ```
 
 默认阈值：
 
-- 吞吐不低于基线的 `0.90x`
+- 吞吐 guard 满足以下任一条件即可通过：
+  - 绝对吞吐不低于基线的 `0.90x`，并乘 `0.98` host-jitter slack
+  - 同机 Redis 归一化吞吐比例不低于基线 `redis-uya req/s / Redis req/s` 的 `0.94x`
 - p99 不高于 `max(基线 * 1.15, 基线 + 100us)`
 
 阈值可通过环境变量覆盖：
 
 - `REDIS_UYA_REGRESSION_RPS_RATIO`
+- `REDIS_UYA_REGRESSION_RPS_JITTER_RATIO`
+- `REDIS_UYA_REGRESSION_RELATIVE_RPS_RATIO`
 - `REDIS_UYA_REGRESSION_P99_RATIO`
 - `REDIS_UYA_REGRESSION_P99_ABS_US`
 

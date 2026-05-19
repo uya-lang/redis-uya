@@ -10,6 +10,15 @@
 - tracked official command names: `531`
 - tracked top-level command names: `388`
 - `COMMAND` / `COMMAND INFO` / `COMMAND DOCS` / `COMMAND LIST` / `COMMAND COUNT` share the same generated catalog
+- `v1.0.0` 完成度必须优先按 Tier A / Tier B / Tier C 分层阅读，不能再用总条目数代表当前单机完成度
+
+## Scope tier counts
+
+| tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
+|------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
+| Tier A: standalone core | 362 | 256 | 142 | 42 | 0 | 3 | 175 |
+| Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
+| Tier C: module commands | 135 | 128 | 0 | 0 | 0 | 0 | 135 |
 
 ## Status counts
 

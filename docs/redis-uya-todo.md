@@ -59,7 +59,7 @@
 当前进行中：
 
 - [x] `v0.9.0`：单机核心命令补齐与安全基线收口完成
-- [ ] `v0.9.1`：审计整改与真实性修复，当前已恢复测试 / benchmark / DoD 校验绿态；控制面真值与版本串已收口，剩余收口项是命令完成度统计分层
+- [x] `v0.9.1`：审计整改与真实性修复完成，测试 / benchmark / DoD 校验已恢复绿态，控制面真值、版本串与命令完成度统计分层已收口
 - [ ] `v0.9.2` 起：在真实性问题收敛后，继续补 Redis Open Source 单机核心缺口，而不是先扩模块命令
 
 ## 3. 全版本路线图
@@ -466,7 +466,7 @@
 ### U2. 当前必须先修的 P0 问题
 
 - [x] `COMMAND` 真值修复：`COMMAND` / `INFO` / `DOCS` / `LIST` 已按真实执行面隐藏未实现命令，并补齐当前 `CLIENT/CONFIG` 已实现子命令的矩阵状态
-- [ ] 目录统计分层：把 Redis Open Source 单机核心、模式命令、模块命令分开统计，不再用总条目数代表当前单机完成度
+- [x] 目录统计分层：已把 Redis Open Source 单机核心、模式命令、模块命令分开统计，不再用总条目数代表当前单机完成度
 - [x] 版本统一：banner、`HELLO`、`INFO server`、README、DoD、测试断言已统一到 `v0.9.1-dev`
 - [x] `make test-integration` 恢复：修正 `maxmemory` 相关测试口径，使其与 Redis startup memory 语义对齐
 - [x] `make benchmark-v0.8.1` 稳定：性能 guard 已升级为“绝对基线 + 同机 Redis 归一化兜底”，当前复跑已恢复稳定通过

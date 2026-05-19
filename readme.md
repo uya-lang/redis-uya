@@ -31,7 +31,7 @@
 
 - `make test`、`make test-integration`、`make benchmark-v0.8.1` 与 `bash scripts/verify_definition_of_done.sh` 当前已恢复为通过状态。
 - `maxmemory` 集成测试口径已按当前实现重新校准；`benchmark-v0.8.1` guard 现已改为“绝对基线 + 同机 Redis 归一化兜底”并恢复转绿。
-- `COMMAND*` 真值与版本号一致性已收口；当前 `HEAD` 仍不能宣称“v0.9.1 全部审计项已完成”，剩余主线问题主要是命令完成度统计仍需按 Redis Open Source 单机核心 / 模式命令 / 模块命令分层表达。
+- `COMMAND*` 真值、版本号一致性与命令完成度统计分层已收口；`v0.9.1` 审计整改主线现已完成，下一阶段主线转入 `v0.9.2` 的 Redis Open Source 单机核心缺口补齐。
 - `v1.0.0` 的封版门槛先收敛 Redis Open Source 单机核心，不再把模块命令数量当作当前完成度包装。
 
 下方列表主要记录历史里程碑沉淀与当前代码库已落地模块，不等价于“当前 `HEAD` 已重新全量复核通过”。
@@ -104,7 +104,7 @@
 
 下一阶段：
 
-- `v0.9.1`：继续完成审计整改，当前已修复 `maxmemory` 集成测试口径、收回当前 `CLIENT/CONFIG` 子命令矩阵真值、统一运行时版本串，并恢复 benchmark / DoD 校验转绿；剩余收口项是命令完成度统计分层。
+- `v0.9.1`：审计整改与真实性修复已完成，当前已修复 `maxmemory` 集成测试口径、收回当前 `CLIENT/CONFIG` 子命令矩阵真值、统一运行时版本串，并恢复 benchmark / DoD 校验转绿。
 - `v0.9.2`：继续补 Redis Open Source 单机核心缺口，优先 blocking list/zset、bitmap/bitfield、HLL/GEO、脚本第一批。
 - `v0.9.3`：收口 Streams、Functions/Script、ACL 与运维诊断第一批，再推进持久化/复制边界深化。
 

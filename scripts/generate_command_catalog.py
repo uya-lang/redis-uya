@@ -46,6 +46,42 @@ CORE_GROUPS = {
     "acl",
 }
 
+TIER_A_GROUPS = {
+    "bitmap",
+    "connection",
+    "generic",
+    "geo",
+    "hash",
+    "hyperloglog",
+    "list",
+    "pubsub",
+    "scripting",
+    "server",
+    "set",
+    "sorted-set",
+    "stream",
+    "string",
+    "transactions",
+}
+
+TIER_B_GROUPS = {
+    "cluster",
+    "sentinel",
+}
+
+TIER_C_GROUPS = {
+    "bf",
+    "cf",
+    "cms",
+    "json",
+    "search",
+    "suggestion",
+    "tdigest",
+    "timeseries",
+    "topk",
+    "vector_set",
+}
+
 ADVANCED_GROUP_TARGETS = {
     "bitmap": "v0.9.2",
     "geo": "v0.9.2",
@@ -952,6 +988,24 @@ def render_docs(entries: list[CommandEntry]) -> str:
     top_level = sum(1 for entry in entries if entry.is_top_level)
     status_counter = Counter(entry.status for entry in entries)
     group_counter = Counter(entry.group for entry in entries)
+    tier_labels = {
+        "tier-a-core": "Tier A: standalone core",
+        "tier-b-mode": "Tier B: mode commands",
+        "tier-c-module": "Tier C: module commands",
+    }
+    tier_order = ["tier-a-core", "tier-b-mode", "tier-c-module"]
+    tier_entries: dict[str, list[CommandEntry]] = {tier: [] for tier in tier_order}
+    for entry in entries:
+        if entry.group in TIER_A_GROUPS:
+            tier_entries["tier-a-core"].append(entry)
+            continue
+        if entry.group in TIER_B_GROUPS:
+            tier_entries["tier-b-mode"].append(entry)
+            continue
+        if entry.group in TIER_C_GROUPS:
+            tier_entries["tier-c-module"].append(entry)
+            continue
+        raise RuntimeError(f"unclassified command group for scope tier: {entry.group}")
     lines: list[str] = []
     lines.append("# redis-uya command matrix\n\n")
     lines.append("> version: v0.9.1-dev\n")
@@ -962,6 +1016,24 @@ def render_docs(entries: list[CommandEntry]) -> str:
     lines.append(f"- tracked official command names: `{total}`\n")
     lines.append(f"- tracked top-level command names: `{top_level}`\n")
     lines.append(f"- `COMMAND` / `COMMAND INFO` / `COMMAND DOCS` / `COMMAND LIST` / `COMMAND COUNT` share the same generated catalog\n")
+    lines.append("- `v1.0.0` 完成度必须优先按 Tier A / Tier B / Tier C 分层阅读，不能再用总条目数代表当前单机完成度\n")
+    lines.append("\n## Scope tier counts\n\n")
+    lines.append("| tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |\n")
+    lines.append("|------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|\n")
+    for tier in tier_order:
+        scoped_entries = tier_entries[tier]
+        scoped_statuses = Counter(entry.status for entry in scoped_entries)
+        scoped_top_level = sum(1 for entry in scoped_entries if entry.is_top_level)
+        lines.append(
+            f"| {tier_labels[tier]} | "
+            f"{len(scoped_entries)} | "
+            f"{scoped_top_level} | "
+            f"{scoped_statuses.get('full', 0)} | "
+            f"{scoped_statuses.get('partial', 0)} | "
+            f"{scoped_statuses.get('standalone-error', 0)} | "
+            f"{scoped_statuses.get('alias', 0)} | "
+            f"{scoped_statuses.get('deferred', 0)} |\n"
+        )
     lines.append("\n## Status counts\n\n")
     lines.append("| status | count |\n")
     lines.append("|--------|-------|\n")

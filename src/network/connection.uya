@@ -57,6 +57,7 @@ use src.storage.sds.Sds;
 use src.storage.sds.sds_empty;
 use src.storage.sds.sds_free;
 use src.storage.sds.sds_cat;
+use src.version.redis_uya_version;
 use src.util.time.now_ms_safe;
 use libc.errno;
 use libc.IOVec;
@@ -2592,18 +2593,34 @@ fn connection_execute_standard_command_at(
 }
 
 fn connection_hello_reply(protocol_version: i32) CommandReply {
-    if protocol_version == 3 {
-        return connection_make_reply(
-            CommandReplyType.reply_raw_bytes,
-            &"%7\r\n$6\r\nserver\r\n$9\r\nredis-uya\r\n$7\r\nversion\r\n$9\r\n0.1.0-dev\r\n$5\r\nproto\r\n:3\r\n$2\r\nid\r\n:0\r\n$4\r\nmode\r\n$10\r\nstandalone\r\n$4\r\nrole\r\n$6\r\nmaster\r\n$7\r\nmodules\r\n*0\r\n"[0: 152],
-            0,
-        );
+    var raw: Sds = sds_empty() catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    defer {
+        sds_free(&raw);
     }
-    return connection_make_reply(
-        CommandReplyType.reply_raw_bytes,
-        &"*14\r\n$6\r\nserver\r\n$9\r\nredis-uya\r\n$7\r\nversion\r\n$9\r\n0.1.0-dev\r\n$5\r\nproto\r\n:2\r\n$2\r\nid\r\n:0\r\n$4\r\nmode\r\n$10\r\nstandalone\r\n$4\r\nrole\r\n$6\r\nmaster\r\n$7\r\nmodules\r\n*0\r\n"[0: 153],
-        0,
-    );
+
+    if protocol_version == 3 {
+        _ = connection_sds_append_resp_map_header(&raw, 7) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    } else {
+        _ = connection_sds_append_resp_array_header(&raw, 14) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    }
+
+    _ = connection_sds_append_resp_bulk(&raw, &"server"[0: 6]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_sds_append_resp_bulk(&raw, &"redis-uya"[0: 9]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_sds_append_resp_bulk(&raw, &"version"[0: 7]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_sds_append_resp_bulk(&raw, redis_uya_version()) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_sds_append_resp_bulk(&raw, &"proto"[0: 5]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_sds_append_resp_integer(&raw, protocol_version as i64) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_sds_append_resp_bulk(&raw, &"id"[0: 2]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_sds_append_resp_integer(&raw, 0) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_sds_append_resp_bulk(&raw, &"mode"[0: 4]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_sds_append_resp_bulk(&raw, &"standalone"[0: 10]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_sds_append_resp_bulk(&raw, &"role"[0: 4]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_sds_append_resp_bulk(&raw, &"master"[0: 6]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_sds_append_resp_bulk(&raw, &"modules"[0: 7]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_sds_append_resp_array_header(&raw, 0) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    return connection_raw_reply_owned(raw.buf[0: raw.len]);
 }
 
 fn connection_handle_hello(tx: &ConnectionTransaction, command: &Command) CommandReply {
@@ -3574,8 +3591,9 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
     }
 
     if command.info.cmd_type == CommandType.command_hello {
-        const hello_reply: CommandReply = connection_handle_hello(tx, &command);
+        var hello_reply: CommandReply = connection_handle_hello(tx, &command);
         const hello_n: usize = try connection_encode_reply_with_protocol(&hello_reply, out, out_cap, tx.protocol_version);
+        command_reply_cleanup(&hello_reply);
         resp_value_free(&parsed.value);
         return ConnectionProcessResult{ response_len: hello_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
     }

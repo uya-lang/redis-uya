@@ -3,7 +3,7 @@
 > 版本口径: `v0.9.1-dev`
 > 审计日期: 2026-05-16
 > 审计范围: 当前 `HEAD` 的文档口径、命令覆盖、测试结果、性能结果与 Redis 单机兼容目标的一致性
-> 结论: 本文记录 2026-05-16 首次审计时的原始发现；其后 `make test-integration` 已恢复通过，`make benchmark-v0.8.1` 一度恢复，但 2026-05-17 最新复跑仍出现 guard miss；`COMMAND*` 真值和版本号一致性仍待继续收口
+> 结论: 本文记录 2026-05-16 首次审计时的原始发现；其后 `make test-integration` 已恢复通过，`COMMAND*` 真值与运行时版本串已在 2026-05-19 当前 `HEAD` 收口，但 `make benchmark-v0.8.1` 在 2026-05-17 最新复跑仍出现 guard miss
 
 ## 1. 审计目标
 
@@ -208,8 +208,8 @@
 - `maxmemory` 集成测试已改为基于当前实现的启动内存与稳定 headroom 校准。
 - `PING/GET/SET` 热路径的若干回归开销已收回到当前 guard 范围内。
 - `COMMAND*` 已按真实执行面隐藏未实现命令，并补齐当前 `CLIENT/CONFIG` 已实现子命令的矩阵状态。
+- banner、`HELLO`、`INFO server`、README、DoD 和相关测试断言已统一到 `v0.9.1-dev`。
 
 截至当前，以下问题仍待继续处理：
 
-- banner、`INFO server`、测试断言与文档版本号尚未统一。
 - `make benchmark-v0.8.1` 最新复跑仍有抖动，尚不能宣称稳定转绿。

@@ -54,7 +54,7 @@
 - `make test-integration` 当时未通过；当前已恢复通过，说明 `maxmemory` 测试口径已按当前实现重校。
 - `make benchmark-v0.8.1` 当时未通过；其后曾恢复通过，但 2026-05-17 最新复跑仍出现 guard miss，说明热路径还没有稳定收敛。
 - `maxmemory` 相关红灯首先暴露的是测试口径不贴 Redis startup memory 语义，而不是简单的“算法彻底失效”。
-- banner、`INFO server`、README、DoD、TODO 之间的版本和状态说明仍未统一。
+- banner、`INFO server`、README、DoD、TODO 之间的版本和状态说明在审计时仍未统一；该问题已在 2026-05-19 当前 `HEAD` 收口。
 
 因此，当前评审的新增结论是：
 
@@ -163,7 +163,7 @@ README、TODO、开发规范、DoD、API、ARCHITECTURE 和发布报告必须区
 优先修复：
 
 - `COMMAND` 控制面与执行器脱节。
-- README / DoD / TODO / banner / `INFO server` 版本与状态漂移。
+- README / DoD / TODO / banner / `INFO server` 版本与状态漂移（已在后续主线收口）。
 - `maxmemory` 集成测试与 Redis 对照不一致。
 - 当前 benchmark guard 失败与性能口径失真。
 

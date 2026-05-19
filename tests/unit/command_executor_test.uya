@@ -44,6 +44,7 @@ use src.network.protocol.parse_resp2;
 use src.network.protocol.resp_value_free;
 use src.memory.allocator.used_memory;
 use src.memory.allocator.reset_memory_stats_for_test;
+use src.version.redis_uya_version;
 use libc.unlink;
 
 fn command_executor_test_slice_eq(a: &[byte], b: &[byte]) bool {
@@ -202,8 +203,13 @@ export fn test_command_info_and_config() !void {
     const info_server_command: Command = try command_executor_test_command(&router, &info_server_parsed);
     var info_server_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &info_server_command, 5000u64);
     try assert_eq_i32(info_server_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
-    try assert_eq_i32(info_server_reply.data.len as i32, 100);
-    try assert_true(command_executor_test_slice_eq(info_server_reply.data, &"# Server\r\nredis_uya_version:0.1.0-dev\r\nredis_mode:standalone\r\ntcp_port:6380\r\nuptime_in_seconds:4\r\n\r\n"[0: 100]));
+    try assert_eq_i32(info_server_reply.data.len as i32, 101);
+    try assert_true(command_executor_test_contains(info_server_reply.data, &"# Server\r\n"[0: 10]));
+    try assert_true(command_executor_test_contains(info_server_reply.data, &"redis_uya_version:"[0: 18]));
+    try assert_true(command_executor_test_contains(info_server_reply.data, redis_uya_version()));
+    try assert_true(command_executor_test_contains(info_server_reply.data, &"redis_mode:standalone\r\n"[0: 23]));
+    try assert_true(command_executor_test_contains(info_server_reply.data, &"tcp_port:6380\r\n"[0: 15]));
+    try assert_true(command_executor_test_contains(info_server_reply.data, &"uptime_in_seconds:4\r\n\r\n"[0: 23]));
     command_reply_cleanup(&info_server_reply);
     resp_value_free(&info_server_parsed.value);
 

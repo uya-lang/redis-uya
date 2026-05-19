@@ -2,7 +2,7 @@
 # redis-uya 开发 TODO 文档
 
 > 版本: v0.9.1-dev
-> 日期: 2026-05-16
+> 日期: 2026-05-19
 > 配套设计文档: `redis-uya-design.md`
 > 配套评审文档: `redis-uya-review.md`
 > 审计基线: `redis-uya-audit-2026-05-16.md`
@@ -59,7 +59,7 @@
 当前进行中：
 
 - [x] `v0.9.0`：单机核心命令补齐与安全基线收口完成
-- [ ] `v0.9.1`：审计整改与真实性修复，当前已恢复测试绿态；benchmark guard 仍有抖动，待续控制面真值和版本号一致性
+- [ ] `v0.9.1`：审计整改与真实性修复，当前已恢复测试绿态；控制面真值与版本串已收口，benchmark guard 仍有抖动
 - [ ] `v0.9.2` 起：在真实性问题收敛后，继续补 Redis Open Source 单机核心缺口，而不是先扩模块命令
 
 ## 3. 全版本路线图
@@ -467,7 +467,7 @@
 
 - [x] `COMMAND` 真值修复：`COMMAND` / `INFO` / `DOCS` / `LIST` 已按真实执行面隐藏未实现命令，并补齐当前 `CLIENT/CONFIG` 已实现子命令的矩阵状态
 - [ ] 目录统计分层：把 Redis Open Source 单机核心、模式命令、模块命令分开统计，不再用总条目数代表当前单机完成度
-- [ ] 版本统一：banner、`INFO server`、README、DoD、测试断言统一到同一主线版本口径
+- [x] 版本统一：banner、`HELLO`、`INFO server`、README、DoD、测试断言已统一到 `v0.9.1-dev`
 - [x] `make test-integration` 恢复：修正 `maxmemory` 相关测试口径，使其与 Redis startup memory 语义对齐
 - [ ] `make benchmark-v0.8.1` 稳定：重新建立当前 `HEAD` 的性能 guard，并把最新复跑从抖动收敛到稳定通过
 - [ ] `verify_definition_of_done.sh` 重新转绿，确保一键验证再次可用

@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 BIN="$ROOT/build/redis-uya"
+REDIS_UYA_VERSION="v0.9.1-dev"
 
 if ! command -v redis-cli >/dev/null 2>&1; then
     echo "[FAIL] integration/redis_cli_smoke: redis-cli is not installed" >&2
@@ -1277,7 +1278,7 @@ if [[ "$DEL_RESULT" != "1" ]]; then
 fi
 
 INFO_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" info server)"
-if [[ "$INFO_RESULT" != *"redis_uya_version:0.1.0-dev"* ]]; then
+if [[ "$INFO_RESULT" != *"redis_uya_version:${REDIS_UYA_VERSION}"* ]]; then
     echo "[FAIL] integration/redis_cli_smoke: INFO output missing redis_uya_version" >&2
     exit 1
 fi

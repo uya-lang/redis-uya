@@ -70,10 +70,12 @@ def roundtrip(sock: socket.socket, request: bytes, expected: bytes) -> None:
         raise AssertionError(f"expected {expected!r}, got {actual!r}")
 
 
+REDIS_UYA_VERSION = b"v0.9.1-dev"
+
 HELLO3_REPLY = (
     b"%7\r\n"
     b"$6\r\nserver\r\n$9\r\nredis-uya\r\n"
-    b"$7\r\nversion\r\n$9\r\n0.1.0-dev\r\n"
+    b"$7\r\nversion\r\n$10\r\n" + REDIS_UYA_VERSION + b"\r\n"
     b"$5\r\nproto\r\n:3\r\n"
     b"$2\r\nid\r\n:0\r\n"
     b"$4\r\nmode\r\n$10\r\nstandalone\r\n"
@@ -84,7 +86,7 @@ HELLO3_REPLY = (
 HELLO2_REPLY = (
     b"*14\r\n"
     b"$6\r\nserver\r\n$9\r\nredis-uya\r\n"
-    b"$7\r\nversion\r\n$9\r\n0.1.0-dev\r\n"
+    b"$7\r\nversion\r\n$10\r\n" + REDIS_UYA_VERSION + b"\r\n"
     b"$5\r\nproto\r\n:2\r\n"
     b"$2\r\nid\r\n:0\r\n"
     b"$4\r\nmode\r\n$10\r\nstandalone\r\n"

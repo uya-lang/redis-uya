@@ -143,6 +143,7 @@ use src.storage.sds.sds_cat_fmt;
 use src.storage.sds.sds_fmt_bytes;
 use src.storage.sds.sds_fmt_i64;
 use src.storage.sds.sds_fmt_u64;
+use src.version.redis_uya_version;
 use libc.strtod;
 use libc.snprintf;
 use libc.isnan;
@@ -7591,7 +7592,7 @@ fn command_executor_info(engine: &Engine, runtime: &CommandRuntimeInfo, command:
 
     if command_executor_info_emit_section(requested, &"server"[0: 6]) {
         _ = command_executor_info_append(&buf, &"# Server\r\n"[0: 10]) catch { return command_executor_oom(); };
-        _ = command_executor_info_append_bytes(&buf, &"redis_uya_version:%s\r\n"[0: 22], &"0.1.0-dev"[0: 9]) catch { return command_executor_oom(); };
+        _ = command_executor_info_append_bytes(&buf, &"redis_uya_version:%s\r\n"[0: 22], redis_uya_version()) catch { return command_executor_oom(); };
         _ = command_executor_info_append_bytes(&buf, &"redis_mode:%s\r\n"[0: 15], &"standalone"[0: 10]) catch { return command_executor_oom(); };
         _ = command_executor_info_append_i64(&buf, &"tcp_port:%i\r\n"[0: 13], runtime.config.port as i64) catch { return command_executor_oom(); };
         _ = command_executor_info_append_u64(&buf, &"uptime_in_seconds:%u\r\n\r\n"[0: 24], uptime_seconds) catch { return command_executor_oom(); };

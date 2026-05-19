@@ -9,6 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 BIN = ROOT / "build" / "redis-uya"
+REDIS_UYA_VERSION = "v0.9.1-dev"
 
 
 class RespError(RuntimeError):
@@ -1025,7 +1026,7 @@ def run_smoke() -> None:
                 raise AssertionError(f"unexpected scan keys: {keys!r}")
 
             info = client.info("server")
-            if info.get("redis_uya_version") != "0.1.0-dev":
+            if info.get("redis_uya_version") != REDIS_UYA_VERSION:
                 raise AssertionError(f"unexpected info server: {info!r}")
 
             keyspace = client.info("keyspace")

@@ -4,7 +4,7 @@
 > 零 GC 路线 · 显式错误处理 · 可测试演进 · 长期性能目标超过 Redis
 
 > 版本: v0.9.1-dev
-> 日期: 2026-05-16
+> 日期: 2026-05-19
 
 ## 简介
 
@@ -31,7 +31,7 @@
 
 - `make test`、`make test-integration` 已恢复为通过状态。
 - `maxmemory` 集成测试口径已按当前实现重新校准；`benchmark-v0.8.1` guard 做过重校，但最新复跑仍有抖动。
-- `COMMAND*` 真值与版本号一致性仍待收口，因此当前 `HEAD` 仍不能宣称“v0.9.1 全部审计项已完成”。
+- `COMMAND*` 真值与版本号一致性已收口；当前 `HEAD` 仍不能宣称“v0.9.1 全部审计项已完成”，剩余主线问题主要是 `benchmark-v0.8.1` guard 抖动。
 - `v1.0.0` 的封版门槛先收敛 Redis Open Source 单机核心，不再把模块命令数量当作当前完成度包装。
 
 下方列表主要记录历史里程碑沉淀与当前代码库已落地模块，不等价于“当前 `HEAD` 已重新全量复核通过”。
@@ -104,7 +104,7 @@
 
 下一阶段：
 
-- `v0.9.1`：继续完成审计整改，当前已修复 `maxmemory` 集成测试口径并收回当前 `CLIENT/CONFIG` 子命令矩阵真值；benchmark guard 已重校但仍需继续稳定，待续版本号一致性。
+- `v0.9.1`：继续完成审计整改，当前已修复 `maxmemory` 集成测试口径、收回当前 `CLIENT/CONFIG` 子命令矩阵真值，并统一运行时版本串；benchmark guard 已重校但仍需继续稳定。
 - `v0.9.2`：继续补 Redis Open Source 单机核心缺口，优先 blocking list/zset、bitmap/bitfield、HLL/GEO、脚本第一批。
 - `v0.9.3`：收口 Streams、Functions/Script、ACL 与运维诊断第一批，再推进持久化/复制边界深化。
 

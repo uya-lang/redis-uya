@@ -41,6 +41,7 @@ test:
 
 test-integration: build
 	python3 tests/integration/smoke_tcp.py
+	python3 tests/integration/blocking_list_smoke.py
 	python3 tests/integration/idle_client.py
 	python3 tests/integration/slow_reader.py
 	python3 tests/integration/persistence_aof.py

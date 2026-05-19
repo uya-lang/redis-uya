@@ -1,7 +1,7 @@
 # redis-uya command matrix
 
 > version: v0.9.1-dev
-> date: 2026-05-19
+> date: 2026-05-20
 > source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`
 > runtime source: `src/command/catalog_generated.uya`
 
@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 362 | 256 | 142 | 42 | 0 | 3 | 175 |
+| Tier A: standalone core | 362 | 256 | 142 | 45 | 0 | 3 | 172 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 135 | 128 | 0 | 0 | 0 | 0 | 135 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `143` |
-| `partial` | `49` |
+| `partial` | `52` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `310` |
+| `deferred` | `307` |
 
 ## Group counts
 
@@ -101,9 +101,9 @@
 | `bitpos` | `bitmap` | `deferred` | `v0.9.2` | `-3` | `-` | `no` | `@read, @bitmap, @slow` |
 | `blmove` | `list` | `deferred` | `v0.9.1` | `6` | `-` | `no` | `@write, @list, @slow, @blocking` |
 | `blmpop` | `list` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@write, @list, @slow, @blocking` |
-| `blpop` | `list` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@write, @list, @slow, @blocking` |
-| `brpop` | `list` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@write, @list, @slow, @blocking` |
-| `brpoplpush` | `list` | `deferred` | `v0.9.1` | `4` | `-` | `no` | `@write, @list, @slow, @blocking` |
+| `blpop` | `list` | `partial` | `-` | `-3` | `-` | `no` | `@write, @list, @slow, @blocking` |
+| `brpop` | `list` | `partial` | `-` | `-3` | `-` | `no` | `@write, @list, @slow, @blocking` |
+| `brpoplpush` | `list` | `partial` | `-` | `4` | `-` | `no` | `@write, @list, @slow, @blocking` |
 | `bzmpop` | `sorted-set` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@write, @sortedset, @slow, @blocking` |
 | `bzpopmax` | `sorted-set` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@write, @sortedset, @fast, @blocking` |
 | `bzpopmin` | `sorted-set` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@write, @sortedset, @fast, @blocking` |

@@ -557,7 +557,7 @@ export fn test_command_command_catalog_core() !void {
     command_reply_cleanup(&info_reply);
     resp_value_free(&info_parsed.value);
 
-    var info_unsupported_parsed: RespParseResult = try parse_resp2(&"*5\r\n$7\r\nCOMMAND\r\n$4\r\nINFO\r\n$3\r\nACL\r\n$5\r\nBLPOP\r\n$13\r\nCLUSTER|RESET\r\n"[0: 67]);
+    var info_unsupported_parsed: RespParseResult = try parse_resp2(&"*5\r\n$7\r\nCOMMAND\r\n$4\r\nINFO\r\n$3\r\nACL\r\n$6\r\nBLMOVE\r\n$13\r\nCLUSTER|RESET\r\n"[0: 68]);
     const info_unsupported_command: Command = try command_executor_test_command(&router, &info_unsupported_parsed);
     var info_unsupported_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &info_unsupported_command, 1000u64);
     try assert_eq_i32(info_unsupported_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
@@ -586,7 +586,7 @@ export fn test_command_command_catalog_core() !void {
     command_reply_cleanup(&docs_all_reply);
     resp_value_free(&docs_all_parsed.value);
 
-    var docs_unsupported_parsed: RespParseResult = try parse_resp2(&"*5\r\n$7\r\nCOMMAND\r\n$4\r\nDOCS\r\n$3\r\nACL\r\n$5\r\nBLPOP\r\n$13\r\nCLUSTER|RESET\r\n"[0: 67]);
+    var docs_unsupported_parsed: RespParseResult = try parse_resp2(&"*5\r\n$7\r\nCOMMAND\r\n$4\r\nDOCS\r\n$3\r\nACL\r\n$6\r\nBLMOVE\r\n$13\r\nCLUSTER|RESET\r\n"[0: 68]);
     const docs_unsupported_command: Command = try command_executor_test_command(&router, &docs_unsupported_parsed);
     var docs_unsupported_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &docs_unsupported_command, 1000u64);
     try assert_eq_i32(docs_unsupported_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
@@ -625,7 +625,7 @@ export fn test_command_command_catalog_core() !void {
     command_reply_cleanup(&root_reply);
     resp_value_free(&root_parsed.value);
 
-    var list_hidden_parsed: RespParseResult = try parse_resp2(&"*5\r\n$7\r\nCOMMAND\r\n$4\r\nLIST\r\n$8\r\nFILTERBY\r\n$7\r\nPATTERN\r\n$3\r\nBL*\r\n"[0: 63]);
+    var list_hidden_parsed: RespParseResult = try parse_resp2(&"*5\r\n$7\r\nCOMMAND\r\n$4\r\nLIST\r\n$8\r\nFILTERBY\r\n$7\r\nPATTERN\r\n$4\r\nBLM*\r\n"[0: 64]);
     const list_hidden_command: Command = try command_executor_test_command(&router, &list_hidden_parsed);
     var list_hidden_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &list_hidden_command, 1000u64);
     try assert_eq_i32(list_hidden_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);

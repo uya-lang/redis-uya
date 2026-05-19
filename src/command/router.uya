@@ -160,6 +160,9 @@ export enum CommandType {
     command_lmove,
     command_rpoplpush,
     command_lmpop,
+    command_blpop,
+    command_brpop,
+    command_brpoplpush,
 }
 
 export struct CommandInfo {
@@ -186,7 +189,7 @@ export const COMMAND_FLAG_READONLY: u64 = 1u64;
 export const COMMAND_FLAG_WRITE: u64 = 2u64;
 export const COMMAND_FLAG_FAST: u64 = 4u64;
 
-const MIN_COMMAND_COUNT: usize = 149;
+const MIN_COMMAND_COUNT: usize = 152;
 
 fn command_router_name_eq(a: &[byte], b: &[byte]) bool {
     return bytes_ascii_case_eq(a, b);
@@ -672,6 +675,15 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
     }
     if index == 148 {
         return command_router_info(CommandType.command_lmpop, &"LMPOP"[0: 5], -4, COMMAND_FLAG_WRITE, 2, -2, 1);
+    }
+    if index == 149 {
+        return command_router_info(CommandType.command_blpop, &"BLPOP"[0: 5], -3, COMMAND_FLAG_WRITE, 1, -2, 1);
+    }
+    if index == 150 {
+        return command_router_info(CommandType.command_brpop, &"BRPOP"[0: 5], -3, COMMAND_FLAG_WRITE, 1, -2, 1);
+    }
+    if index == 151 {
+        return command_router_info(CommandType.command_brpoplpush, &"BRPOPLPUSH"[0: 10], 4, COMMAND_FLAG_WRITE, 1, 2, 1);
     }
     return error.CommandUnknown;
 }

@@ -250,11 +250,11 @@ bash scripts/verify_definition_of_done.sh
 | Pub/Sub 订阅态命令限制第一批可用：RESP2 订阅态仅允许 `SUBSCRIBE/PSUBSCRIBE/UNSUBSCRIBE/PUNSUBSCRIBE/PING/QUIT/RESET`，RESP3 订阅态保持非 Pub/Sub 命令可用 | `src/network/connection.uya`、`tests/unit/network_connection_test.uya`、`tests/unit/test_runner.uya`、`tests/integration/pubsub_smoke.py`、`tests/integration/connection_reset_smoke.py` |
 | Pub/Sub 断开清理可用：连接关闭后会移除其频道/模式订阅项，后续 `PUBLISH` 不再把已断开连接计入接收者数量 | `src/server.uya`、`src/network/connection.uya`、`tests/integration/pubsub_smoke.py` |
 
-## 18. `v0.9.2` 预留
+## 18. `v0.9.2` 第一批
 
 | DoD 项 | 证据 |
 |--------|------|
-| 高级数据能力阶段尚未进入执行期；Bitmap / Bitfield / HyperLogLog / Geo / JSON / Search / Time Series / 概率结构 / Vector 的证据待首批实现落地后补齐 | 以 `docs/redis-uya-todo.md` 当前 `v0.9.2` 计划为准 |
+| Blocking list 第一批可用：`BLPOP`、`BRPOP`、`BRPOPLPUSH` 覆盖立即命中、空源挂起、server-side unblock、超时返回、`COMMAND*` 可见性与 AOF replay | `src/command/router.uya`、`src/command/executor.uya`、`src/network/connection.uya`、`src/server.uya`、`src/persistence/aof.uya`、`tests/unit/command_router_test.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/persistence_aof_test.uya`、`tests/unit/test_runner.uya`、`tests/integration/blocking_list_smoke.py`、`tests/integration/command_introspection.py`、`make test`、`make test-integration` |
 
 ## 19. `v0.9.3` 预留
 

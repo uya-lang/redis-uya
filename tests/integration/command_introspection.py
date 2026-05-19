@@ -199,7 +199,7 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"list move commands missing from COMMAND INFO: {list_move_info!r}")
 
-            unsupported_info = send_command(sock, b"COMMAND", b"INFO", b"ACL", b"BLPOP", b"CLUSTER|RESET")
+            unsupported_info = send_command(sock, b"COMMAND", b"INFO", b"ACL", b"BLMOVE", b"CLUSTER|RESET")
             if unsupported_info != [None, None, None]:
                 raise AssertionError(f"unsupported COMMAND INFO entries must be null: {unsupported_info!r}")
 
@@ -218,7 +218,7 @@ def run_smoke() -> None:
             if not isinstance(docs[1], list) or b"summary" not in docs[1]:
                 raise AssertionError(f"missing COMMAND DOCS summary: {docs!r}")
 
-            unsupported_docs = send_command(sock, b"COMMAND", b"DOCS", b"ACL", b"BLPOP", b"CLUSTER|RESET")
+            unsupported_docs = send_command(sock, b"COMMAND", b"DOCS", b"ACL", b"BLMOVE", b"CLUSTER|RESET")
             if unsupported_docs != []:
                 raise AssertionError(f"unsupported COMMAND DOCS entries should be omitted: {unsupported_docs!r}")
 
@@ -230,12 +230,17 @@ def run_smoke() -> None:
                 or b"client|id" not in docs_all_resp2
             ):
                 raise AssertionError(f"unexpected COMMAND DOCS all RESP2 payload: {docs_all_resp2!r}")
-            if b"acl" in docs_all_resp2 or b"blpop" in docs_all_resp2 or b"cluster|reset" in docs_all_resp2:
+            if b"acl" in docs_all_resp2 or b"blmove" in docs_all_resp2 or b"cluster|reset" in docs_all_resp2:
                 raise AssertionError(f"unsupported commands leaked into COMMAND DOCS all RESP2: {docs_all_resp2!r}")
 
             listed_blocking = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"BL*")
-            if not isinstance(listed_blocking, list) or b"blpop" in listed_blocking:
-                raise AssertionError(f"unsupported blocking commands leaked into COMMAND LIST: {listed_blocking!r}")
+            if (
+                not isinstance(listed_blocking, list)
+                or b"blpop" not in listed_blocking
+                or b"blmove" in listed_blocking
+                or b"blmpop" in listed_blocking
+            ):
+                raise AssertionError(f"unexpected blocking COMMAND LIST result: {listed_blocking!r}")
 
             listed_bitmap = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"BIT*")
             if (
@@ -287,7 +292,7 @@ def run_smoke() -> None:
                 or not isinstance(docs_all.get(b"client|id"), dict)
             ):
                 raise AssertionError(f"unexpected COMMAND DOCS all RESP3 payload: {docs_all!r}")
-            if b"acl" in docs_all or b"blpop" in docs_all or b"cluster|reset" in docs_all:
+            if b"acl" in docs_all or b"blmove" in docs_all or b"cluster|reset" in docs_all:
                 raise AssertionError(f"unsupported commands leaked into COMMAND DOCS all RESP3: {docs_all!r}")
 
             getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"SORT", b"mylist", b"ALPHA", b"STORE", b"out")

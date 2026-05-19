@@ -538,6 +538,59 @@ RPOP key
 - 成功时返回尾元素 Bulk String
 - key 不存在或空 list 返回 Null Bulk
 
+### `BLPOP`
+
+格式：
+
+```text
+BLPOP key [key ...] timeout
+```
+
+返回：
+
+- 命中时返回两段 RESP Array：`[key, element]`
+- 超时返回 Null Array
+
+说明：
+
+- 当前支持多 key 顺序探测、秒级整数或浮点 timeout、server-side block/unblock
+- 当较早 key 不存在时，会继续检查后续 key；当遇到已存在但错类型 key 时返回 `WRONGTYPE`
+
+### `BRPOP`
+
+格式：
+
+```text
+BRPOP key [key ...] timeout
+```
+
+返回：
+
+- 命中时返回两段 RESP Array：`[key, element]`
+- 超时返回 Null Array
+
+说明：
+
+- 语义与 `BLPOP` 相同，但从尾部弹出元素
+
+### `BRPOPLPUSH`
+
+格式：
+
+```text
+BRPOPLPUSH source destination timeout
+```
+
+返回：
+
+- 命中时返回被搬移元素，Bulk String
+- 超时返回 Null Bulk
+
+说明：
+
+- 当前支持 source 缺失时阻塞、source 就绪后从尾部弹出并推入 destination 头部
+- AOF replay 复用相同命令序列，要求前序状态已由同一 AOF 正确重建
+
 ### `LINDEX`
 
 格式：

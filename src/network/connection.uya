@@ -40,11 +40,13 @@ use src.storage.engine.Engine;
 use src.storage.engine.engine_watch_register_client;
 use src.storage.engine.engine_watch_unregister_client;
 use src.storage.engine.engine_watch_version;
+use src.storage.engine.lookup_key_at;
 use src.storage.dict.DictIterator;
 use src.storage.dict.DictEntry;
 use src.storage.dict.dict_iter_new;
 use src.storage.dict.dict_iter_next;
 use src.storage.object.ListNode;
+use src.storage.object.ObjectType;
 use src.storage.object.RedisObject;
 use src.storage.object.create_string_object;
 use src.storage.object.create_list_object;
@@ -61,6 +63,9 @@ use src.version.redis_uya_version;
 use src.util.time.now_ms_safe;
 use libc.errno;
 use libc.IOVec;
+use libc.strtod;
+use libc.isnan;
+use libc.isinf;
 use libc.sys_send;
 use libc.sys_writev;
 use libc.sys_recv;
@@ -119,6 +124,8 @@ export struct ConnectionTransaction {
     tracking_optin: bool,
     tracking_optout: bool,
     tracking_noloop: bool,
+    blocking_active: bool,
+    blocking_deadline_ms: u64,
 }
 
 struct ConnectionSendProgress {
@@ -191,6 +198,8 @@ fn connection_transaction_empty() ConnectionTransaction {
         tracking_optin: false,
         tracking_optout: false,
         tracking_noloop: false,
+        blocking_active: false,
+        blocking_deadline_ms: 0u64,
     };
 }
 
@@ -209,6 +218,8 @@ export fn connection_transaction_reset(tx: &ConnectionTransaction) void {
     tx.active = false;
     tx.queue = null as &RedisObject;
     tx.queue_count = 0;
+    tx.blocking_active = false;
+    tx.blocking_deadline_ms = 0u64;
 }
 
 fn connection_transaction_clear_queue(tx: &ConnectionTransaction) void {
@@ -522,6 +533,130 @@ fn connection_parse_u64(data: &[byte]) !u64 {
     return value;
 }
 
+fn connection_validate_float_token(data: &[byte]) bool {
+    if data.len == 0 {
+        return false;
+    }
+    var index: usize = 0;
+    if data.ptr[index] == 43 as byte || data.ptr[index] == 45 as byte {
+        index = index + 1;
+        if index >= data.len {
+            return false;
+        }
+    }
+
+    var digits_before: usize = 0;
+    while index < data.len && data.ptr[index] >= 48 as byte && data.ptr[index] <= 57 as byte {
+        digits_before = digits_before + 1;
+        index = index + 1;
+    }
+
+    var digits_after: usize = 0;
+    if index < data.len && data.ptr[index] == 46 as byte {
+        index = index + 1;
+        while index < data.len && data.ptr[index] >= 48 as byte && data.ptr[index] <= 57 as byte {
+            digits_after = digits_after + 1;
+            index = index + 1;
+        }
+    }
+
+    if digits_before + digits_after == 0 {
+        return false;
+    }
+
+    if index < data.len && (data.ptr[index] == 101 as byte || data.ptr[index] == 69 as byte) {
+        index = index + 1;
+        if index >= data.len {
+            return false;
+        }
+        if data.ptr[index] == 43 as byte || data.ptr[index] == 45 as byte {
+            index = index + 1;
+            if index >= data.len {
+                return false;
+            }
+        }
+        var exp_digits: usize = 0;
+        while index < data.len && data.ptr[index] >= 48 as byte && data.ptr[index] <= 57 as byte {
+            exp_digits = exp_digits + 1;
+            index = index + 1;
+        }
+        if exp_digits == 0 {
+            return false;
+        }
+    }
+
+    return index == data.len;
+}
+
+fn connection_parse_blocking_timeout_ms(data: &[byte]) !u64 {
+    if !connection_validate_float_token(data) || data.len >= 255usize {
+        return error.ConnectionIoFailed;
+    }
+    var buf: [byte: 256] = [];
+    var index: usize = 0;
+    while index < data.len {
+        buf[index] = data.ptr[index];
+        index = index + 1;
+    }
+    buf[data.len] = 0 as byte;
+    const parsed: f64 = strtod(&buf[0], null);
+    if isnan(parsed) != 0 || isinf(parsed) != 0 || parsed < 0.0 || parsed > 18446744073709551.0 {
+        return error.ConnectionIoFailed;
+    }
+    return (parsed * 1000.0) as u64;
+}
+
+fn connection_blocking_clear(tx: &ConnectionTransaction) void {
+    tx.blocking_active = false;
+    tx.blocking_deadline_ms = 0u64;
+}
+
+fn connection_command_is_blocking_list(cmd_type: CommandType) bool {
+    return cmd_type == CommandType.command_blpop ||
+        cmd_type == CommandType.command_brpop ||
+        cmd_type == CommandType.command_brpoplpush;
+}
+
+fn connection_should_block_list_command(engine: &Engine, command: &Command, now_ms: u64) bool {
+    if command.info.cmd_type == CommandType.command_blpop || command.info.cmd_type == CommandType.command_brpop {
+        var index: usize = 1;
+        while index + 1 < command.argc {
+            const key: &[byte] = command_arg_data(command, index) catch {
+                return false;
+            };
+            const obj_result: !&RedisObject = lookup_key_at(engine, key, now_ms);
+            if obj_result.error_id != 0 {
+                index = index + 1;
+                continue;
+            }
+            const obj: &RedisObject = obj_result.value;
+            if obj.obj_type != ObjectType.object_list {
+                return false;
+            }
+            if obj.list_len > 0 {
+                return false;
+            }
+            index = index + 1;
+        }
+        return true;
+    }
+
+    if command.info.cmd_type == CommandType.command_brpoplpush {
+        const source: &[byte] = command_arg_data(command, 1) catch {
+            return false;
+        };
+        const obj: &RedisObject = lookup_key_at(engine, source, now_ms) catch {
+            return true;
+        };
+        if obj.obj_type != ObjectType.object_list {
+            return false;
+        }
+        return obj.list_len == 0;
+    }
+
+    return false;
+}
+
 fn connection_transaction_ensure_watched(tx: &ConnectionTransaction) !&RedisObject {
     if tx.watched != null {
         return tx.watched;
@@ -674,6 +809,8 @@ fn connection_reset_state(tx: &ConnectionTransaction) void {
     tx.client_lib_ver_len = 0;
     tx.authenticated = false;
     connection_client_tracking_clear(tx);
+    tx.blocking_active = false;
+    tx.blocking_deadline_ms = 0u64;
     connection_client_registry_sync(tx);
 }
 
@@ -2048,6 +2185,12 @@ fn connection_should_append_aof(command: &Command, reply: &CommandReply) bool {
     if reply.typ == CommandReplyType.reply_error {
         return false;
     }
+    if command.info.cmd_type == CommandType.command_blpop || command.info.cmd_type == CommandType.command_brpop {
+        return reply.typ == CommandReplyType.reply_array_bulk || reply.typ == CommandReplyType.reply_raw_bytes;
+    }
+    if command.info.cmd_type == CommandType.command_brpoplpush {
+        return reply.typ == CommandReplyType.reply_bulk_string;
+    }
     if command.info.cmd_type == CommandType.command_getex {
         return command.argc > 2;
     }
@@ -2074,6 +2217,90 @@ fn connection_should_append_aof(command: &Command, reply: &CommandReply) bool {
         return false;
     }
     return (command.info.flags & COMMAND_FLAG_WRITE) != 0u64;
+}
+
+fn connection_execute_blocking_list_command_at(
+    engine: &Engine,
+    runtime: &CommandRuntimeInfo,
+    aof: &AofWriter,
+    rewrite_buf: &Sds,
+    backlog: &ReplicationBacklog,
+    tx: &ConnectionTransaction,
+    parsed: &RespParseResult,
+    command: &Command,
+    input: &[byte],
+    out: &byte,
+    out_cap: usize,
+    now_ms: u64,
+    replicaof_requested: &bool,
+    replicaof_promote: &bool,
+    replicaof_host: &[byte],
+    replicaof_port: &i32,
+    bgsave_requested: &bool,
+    rewrite_requested: &bool,
+    rewrite_failed: &bool,
+    zero_copy_bulk: bool,
+) !ConnectionProcessResult {
+    const timeout_data: &[byte] = command_arg_data(command, command.argc - 1) catch {
+        const err_reply: CommandReply = connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        const err_n: usize = try connection_encode_reply_with_protocol(&err_reply, out, out_cap, tx.protocol_version);
+        resp_value_free(&parsed.value);
+        return ConnectionProcessResult{ response_len: err_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
+    };
+    const timeout_ms: u64 = connection_parse_blocking_timeout_ms(timeout_data) catch {
+        const err_reply: CommandReply = connection_error_reply(&"ERR value is not a valid float"[0: 30]);
+        const err_n: usize = try connection_encode_reply_with_protocol(&err_reply, out, out_cap, tx.protocol_version);
+        resp_value_free(&parsed.value);
+        return ConnectionProcessResult{ response_len: err_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
+    };
+
+    const timed_out: bool = tx.blocking_deadline_ms != 0u64 && now_ms >= tx.blocking_deadline_ms;
+    if timed_out || !connection_should_block_list_command(engine, command, now_ms) {
+        connection_blocking_clear(tx);
+        return connection_execute_standard_command_at(
+            engine,
+            runtime,
+            aof,
+            rewrite_buf,
+            backlog,
+            tx,
+            parsed,
+            command,
+            input,
+            out,
+            out_cap,
+            now_ms,
+            replicaof_requested,
+            replicaof_promote,
+            replicaof_host,
+            replicaof_port,
+            bgsave_requested,
+            rewrite_requested,
+            rewrite_failed,
+            zero_copy_bulk,
+        );
+    }
+
+    tx.blocking_active = true;
+    if timeout_ms == 0u64 {
+        tx.blocking_deadline_ms = 0u64;
+    } else if tx.blocking_deadline_ms == 0u64 {
+        tx.blocking_deadline_ms = now_ms + timeout_ms;
+    }
+    resp_value_free(&parsed.value);
+    return ConnectionProcessResult{
+        response_len: 0,
+        response_head_len: 0,
+        zero_copy_body: connection_reply_empty_slice(),
+        zero_copy_tail_len: 0,
+        consumed: parsed.consumed,
+        close_after: false,
+        request_replicaof: false,
+        replicaof_promote: false,
+        request_bgsave: false,
+        request_aof_rewrite: false,
+        request_shutdown: false,
+    };
 }
 
 fn connection_append_byte(out: &byte, out_cap: usize, pos: &usize, ch: byte) !void {
@@ -3317,7 +3544,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_in
             request_maxclients_set = true;
             maxclients_after = result.maxclients_after;
         }
-        if close_after || request_shutdown || request_client_pause {
+        if close_after || request_shutdown || request_client_pause || tx.blocking_active {
             break;
         }
         batch_index = batch_index + 1;
@@ -3458,6 +3685,12 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
             resp_value_free(&parsed.value);
             return ConnectionProcessResult{ response_len: shutdown_tx_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
         }
+        if connection_command_is_blocking_list(command.info.cmd_type) {
+            const blocking_tx_reply: CommandReply = connection_error_reply(&"ERR blocking commands inside MULTI are not allowed"[0: 47]);
+            const blocking_tx_n: usize = try connection_encode_reply_with_protocol(&blocking_tx_reply, out, out_cap, tx.protocol_version);
+            resp_value_free(&parsed.value);
+            return ConnectionProcessResult{ response_len: blocking_tx_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
+        }
         if command.info.cmd_type == CommandType.command_exec {
             if !connection_transaction_watches_match(tx, engine) {
                 var aborted_reply: CommandReply = connection_raw_reply_owned(&"*-1\r\n"[0: 5]);
@@ -3540,6 +3773,30 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
         const restricted_n: usize = try connection_encode_reply_with_protocol(&restricted_reply, out, out_cap, tx.protocol_version);
         resp_value_free(&parsed.value);
         return ConnectionProcessResult{ response_len: restricted_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
+    }
+    if connection_command_is_blocking_list(command.info.cmd_type) {
+        return connection_execute_blocking_list_command_at(
+            engine,
+            runtime,
+            aof,
+            rewrite_buf,
+            backlog,
+            tx,
+            &parsed,
+            &command,
+            input,
+            out,
+            out_cap,
+            now_ms,
+            replicaof_requested,
+            replicaof_promote,
+            replicaof_host,
+            replicaof_port,
+            bgsave_requested,
+            rewrite_requested,
+            rewrite_failed,
+            zero_copy_bulk,
+        );
     }
     if command.info.cmd_type == CommandType.command_ping ||
         command.info.cmd_type == CommandType.command_get ||

@@ -105,6 +105,7 @@ const SERVER_AOF_REWRITE_KEYS_PER_STEP: usize = 4;
 const SERVER_MAX_CLIENTS: usize = 64;
 const SERVER_INPUT_CAP: usize = 8192;
 const SERVER_OUTPUT_CAP: usize = 81920;
+const SERVER_BLOCKED_REQUEST_CAP: usize = 2048;
 const SERVER_EVENT_CAP: usize = 16;
 const SERVER_WAITPID_WNOHANG: i32 = 1;
 const SERVER_REPL_BACKLOG_BYTES: usize = 16384;
@@ -125,6 +126,8 @@ export struct RedisClient {
     fd: i32,
     input: [byte: SERVER_INPUT_CAP],
     input_len: usize,
+    blocked_request: [byte: SERVER_BLOCKED_REQUEST_CAP],
+    blocked_request_len: usize,
     output: &byte,
     output_len: usize,
     output_sent: usize,
@@ -195,6 +198,7 @@ fn server_init_clients(server: &RedisServer) void {
     while i < SERVER_MAX_CLIENTS {
         server.clients[i].fd = -1;
         server.clients[i].input_len = 0;
+        server.clients[i].blocked_request_len = 0;
         server.clients[i].output = null as &byte;
         server.clients[i].output_len = 0;
         server.clients[i].output_sent = 0;
@@ -215,6 +219,52 @@ fn server_cstring_len(data: &const byte) usize {
         len = len + 1;
     }
     return len;
+}
+
+fn server_client_clear_blocked_request(client: &RedisClient) void {
+    client.blocked_request_len = 0;
+}
+
+fn server_client_store_blocked_request(client: &RedisClient, data: &[byte]) bool {
+    if data.len > SERVER_BLOCKED_REQUEST_CAP {
+        return false;
+    }
+    var i: usize = 0;
+    while i < data.len {
+        client.blocked_request[i] = data.ptr[i];
+        i = i + 1;
+    }
+    client.blocked_request_len = data.len;
+    return true;
+}
+
+fn server_client_prepend_blocked_request(client: &RedisClient) bool {
+    if client.blocked_request_len == 0 {
+        return false;
+    }
+    if client.input_len + client.blocked_request_len > SERVER_INPUT_CAP {
+        return false;
+    }
+    var index: usize = client.input_len;
+    while index > 0 {
+        index = index - 1;
+        if index >= SERVER_INPUT_CAP {
+            return false;
+        }
+        const dest_index: usize = index + client.blocked_request_len;
+        if dest_index >= SERVER_INPUT_CAP {
+            return false;
+        }
+        client.input[dest_index] = client.input[index];
+    }
+    var copy_index: usize = 0;
+    while copy_index < client.blocked_request_len {
+        client.input[copy_index] = client.blocked_request[copy_index];
+        copy_index = copy_index + 1;
+    }
+    client.input_len = client.input_len + client.blocked_request_len;
+    client.blocked_request_len = 0;
+    return true;
 }
 
 fn server_send_all_immediate(fd: i32, data: &const byte, len: usize) bool {
@@ -871,6 +921,7 @@ fn server_close_client_slot(server: &RedisServer, slot: usize) void {
     }
     server.clients[slot].fd = -1;
     server.clients[slot].input_len = 0;
+    server_client_clear_blocked_request(&server.clients[slot]);
     server.clients[slot].output = null as &byte;
     server.clients[slot].output_len = 0;
     server.clients[slot].output_sent = 0;
@@ -1267,6 +1318,9 @@ fn server_async_writev_all_future(fd: i32, head: &const byte, head_len: usize, b
     const client: &RedisClient = &server.clients[slot];
 
     while true {
+        if client.transaction.blocking_active {
+            return true;
+        }
         if server_client_pause_active_at(server, now_ms_safe()) && !server_client_pause_slot_exempt(server, slot) {
             return true;
         }
@@ -1330,6 +1384,13 @@ fn server_async_writev_all_future(fd: i32, head: &const byte, head_len: usize, b
             const response_head_len: usize = result.response_head_len;
             const zero_copy_body: &[byte] = result.zero_copy_body;
             const zero_copy_tail_len: usize = result.zero_copy_tail_len;
+            if client.transaction.blocking_active {
+                if !server_client_store_blocked_request(client, client.input[0: result.consumed]) {
+                    return error.ConnectionInputTooLarge;
+                }
+                connection_shift_buffer(&client.input[0], &client.input_len, result.consumed);
+                return true;
+            }
             connection_shift_buffer(&client.input[0], &client.input_len, result.consumed);
 
             if result.request_replicaof || replicaof_requested {
@@ -1827,6 +1888,7 @@ export fn server_accept_once(server: &RedisServer) !void {
     };
     server.clients[slot].fd = fd;
     server.clients[slot].input_len = 0;
+    server.clients[slot].blocked_request_len = 0;
     server.clients[slot].output = output_buf;
     server.clients[slot].output_len = 0;
     server.clients[slot].output_sent = 0;
@@ -1856,6 +1918,9 @@ fn server_handle_client_fd(server: &RedisServer, fd: i32) void {
         _ = sys_close(fd) catch {};
         return;
     }
+    if server.clients[slot].transaction.blocking_active {
+        return;
+    }
     if server_client_pause_active_at(server, now_ms_safe()) && !server_client_pause_slot_exempt(server, slot) && !server_client_pending_write(server, slot) {
         return;
     }
@@ -1867,6 +1932,38 @@ fn server_handle_client_fd(server: &RedisServer, fd: i32) void {
     if !keep_open {
         server_close_client_slot(server, slot);
         return;
+    }
+}
+
+fn server_run_blocked_clients_at(server: &RedisServer, now_ms: u64) void {
+    var slot: usize = 0;
+    while slot < SERVER_MAX_CLIENTS {
+        const client: &RedisClient = &server.clients[slot];
+        if client.fd < 0 ||
+            !client.transaction.blocking_active ||
+            client.blocked_request_len == 0 ||
+            server_client_pending_write(server, slot) ||
+            (server_client_pause_active_at(server, now_ms) && !server_client_pause_slot_exempt(server, slot)) {
+            slot = slot + 1;
+            continue;
+        }
+        if !server_client_prepend_blocked_request(client) {
+            server_close_client_slot(server, slot);
+            slot = slot + 1;
+            continue;
+        }
+        client.transaction.blocking_active = false;
+        const keep_result: !bool = server_poll_client_async_slot(server, slot);
+        if keep_result.error_id != 0 {
+            server_close_client_slot(server, slot);
+            slot = slot + 1;
+            continue;
+        }
+        const keep_open: bool = keep_result.value;
+        if !keep_open {
+            server_close_client_slot(server, slot);
+        }
+        slot = slot + 1;
     }
 }
 
@@ -1896,6 +1993,7 @@ export fn server_run(server: &RedisServer) !void {
         _ = server_replication_try_heartbeat_at(server, now_ms) catch {};
         _ = server_run_pending_bgsave_at(server, now_ms) catch {};
         _ = server_run_pending_aof_rewrite_at(server, now_ms) catch {};
+        server_run_blocked_clients_at(server, now_ms);
 
         const timeout_ms: i32 = server_ms_until_next_cron(server, now_ms_safe());
         const wait_result: !i32 = sys_epoll_wait(server.listener.poll_fd, &events[0], SERVER_EVENT_CAP as i32, timeout_ms);

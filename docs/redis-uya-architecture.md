@@ -43,7 +43,7 @@ server open
 ### `src/network/`
 
 - `listener.uya`：loopback TCP 监听、accept、listener 级 epoll fd
-- `connection.uya`：RESP 请求处理、连接级 RESP2/RESP3 模式、CLIENT 元数据、回复编码、非阻塞读写、待发送缓冲、`GET` bulk string 零拷贝发送路径
+- `connection.uya`：RESP 请求处理、连接级 RESP2/RESP3 模式、CLIENT 元数据、回复编码、非阻塞读写、待发送缓冲、`GET` bulk string 零拷贝发送路径，以及 blocking list 命令的挂起/恢复判定
 - `protocol.uya`：RESP2 与 RESP3 最小解析；支持一次扫描多个顶层 RESP 帧并返回每帧消费长度，供 pipeline 和后续连接层批处理复用
 
 ### `src/command/`
@@ -96,13 +96,15 @@ server open
 - RESP 批量解析 API 会对读缓冲中的顶层帧做完整前缀扫描，半包尾部保留在输入缓冲，错误尾包释放已解析前缀后返回协议错误
 - 连接层当前会在一次读入中批量消费多个完整 RESP 顶层帧；这条路径用于 `redis-cli` stdin/pipeline、事务管线和后续多命令批处理
 - `close_after_write`：`QUIT` 等命令的延迟关闭标志
-- `transaction`：连接级事务队列、WATCH 集合、RESP 协议版本、CLIENT 名称/库信息与 Pub/Sub 订阅计数状态
+- `transaction`：连接级事务队列、WATCH 集合、RESP 协议版本、CLIENT 名称/库信息、Pub/Sub 订阅计数与 blocking deadline 状态
+- `blocked_request` / `blocked_request_len`：当前被挂起的 blocking list 原始 RESP 请求；server 在 key 就绪或超时后把它前插回 `input` 并复用既有执行链恢复
 
 调度规则：
 
 - 默认关注 `EPOLLIN`
 - 当写回遇到 `EAGAIN` 时，保留剩余输出并切换到 `EPOLLOUT`
 - 输出全部发完后恢复到 `EPOLLIN`
+- `BLPOP` / `BRPOP` / `BRPOPLPUSH` 在 source 未就绪时不会消费后续 pipeline 命令；当前连接会先进入 blocked 状态，等待 server 主循环在 key 就绪或 timeout 后重放同一条原始请求
 - 空闲客户端不再阻塞活跃客户端
 - `v0.8.0` 已新增 `io_uring` 主机能力评估报告，但生产事件循环仍绑定在 epoll 路径；后续只有在独立原型和 benchmark 证明收益后才考虑切换
 

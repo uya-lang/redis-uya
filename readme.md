@@ -56,6 +56,7 @@
 - Hash 命令子集：`HSET`、`HGET`、`HDEL`、`HEXISTS`、`HLEN`、`HMGET`、`HSETNX`、`HSTRLEN`
 - List 最小对象：基于双向链表的最小 list value 容器
 - List 命令子集：`LPUSH`、`LPOP`、`LRANGE`
+- Blocking list 第一批：`BLPOP`、`BRPOP`、`BRPOPLPUSH` 已支持立即命中、server-side block/unblock、超时返回与 AOF replay
 - Set 最小对象：基于项目内 `Dict` 的最小 set value 容器
 - Set 命令子集：`SADD`、`SCARD`、`SISMEMBER`、`SMISMEMBER`、`SMEMBERS`、`SREM`、`SMOVE`、`SSCAN`
 - ZSet 最小对象：基于项目内 `Dict` 的最小 zset value 容器，支持按 score 排序范围读取
@@ -105,7 +106,7 @@
 下一阶段：
 
 - `v0.9.1`：审计整改与真实性修复已完成，当前已修复 `maxmemory` 集成测试口径、收回当前 `CLIENT/CONFIG` 子命令矩阵真值、统一运行时版本串，并恢复 benchmark / DoD 校验转绿。
-- `v0.9.2`：继续补 Redis Open Source 单机核心缺口，优先 blocking list/zset、bitmap/bitfield、HLL/GEO、脚本第一批。
+- `v0.9.2`：继续补 Redis Open Source 单机核心缺口，优先剩余 blocking zset、bitmap/bitfield、HLL/GEO、脚本第一批。
 - `v0.9.3`：收口 Streams、Functions/Script、ACL 与运维诊断第一批，再推进持久化/复制边界深化。
 
 当前阶段尚未生产可用。

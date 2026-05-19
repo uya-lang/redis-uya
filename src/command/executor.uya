@@ -3227,6 +3227,104 @@ fn command_executor_lpos(engine: &Engine, command: &Command, now_ms: u64) Comman
     return command_executor_integer(pos);
 }
 
+fn command_executor_validate_blocking_timeout(timeout_data: &[byte]) !void {
+    const timeout_seconds: f64 = command_executor_parse_f64(timeout_data) catch {
+        return error.CommandInvalidFloat;
+    };
+    if timeout_seconds < 0.0 {
+        return error.CommandInvalidFloat;
+    }
+}
+
+fn command_executor_blocking_list_pop(engine: &Engine, command: &Command, now_ms: u64, left: bool) CommandReply {
+    if command.argc < 3 {
+        return command_executor_wrong_arity();
+    }
+    const timeout_data: &[byte] = command_executor_arg(command, command.argc - 1) catch {
+        return command_executor_wrong_arity();
+    };
+    _ = command_executor_validate_blocking_timeout(timeout_data) catch {
+        return command_executor_invalid_float();
+    };
+
+    var index: usize = 1;
+    while index + 1 < command.argc {
+        const key: &[byte] = command_executor_arg(command, index) catch {
+            return command_executor_wrong_arity();
+        };
+        const obj_result: !&RedisObject = lookup_key_at(engine, key, now_ms);
+        if obj_result.error_id != 0 {
+            index = index + 1;
+            continue;
+        }
+        const obj: &RedisObject = obj_result.value;
+        if obj.obj_type != ObjectType.object_list {
+            return command_executor_wrongtype();
+        }
+
+        const popped_result: !&RedisObject = command_executor_list_pop_direction(obj, left);
+        if popped_result.error_id != 0 {
+            if popped_result.error_id == @error_id(error.ObjectListEmpty) {
+                index = index + 1;
+                continue;
+            }
+            return command_executor_wrongtype();
+        }
+        const popped: &RedisObject = popped_result.value;
+        const data: &[byte] = command_executor_string_value(popped) catch {
+            object_free(popped);
+            return command_executor_wrongtype();
+        };
+        const remaining: usize = list_object_len(obj) catch {
+            object_free(popped);
+            return command_executor_wrongtype();
+        };
+        if remaining == 0 {
+            _ = delete_key(engine, key);
+        }
+
+        const pair_list: &RedisObject = create_list_object() catch {
+            object_free(popped);
+            return command_executor_oom();
+        };
+        _ = list_object_push_tail(pair_list, key) catch {
+            object_free(pair_list);
+            object_free(popped);
+            return command_executor_oom();
+        };
+        _ = list_object_push_tail(pair_list, data) catch {
+            object_free(pair_list);
+            object_free(popped);
+            return command_executor_oom();
+        };
+        object_free(popped);
+        var reply: CommandReply = command_executor_array_bulk(pair_list.list_head, 2);
+        reply.owned_object = pair_list;
+        return reply;
+    }
+
+    return command_executor_null_array();
+}
+
+fn command_executor_brpoplpush(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 4 {
+        return command_executor_wrong_arity();
+    }
+    const source: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const destination: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    const timeout_data: &[byte] = command_executor_arg(command, 3) catch {
+        return command_executor_wrong_arity();
+    };
+    _ = command_executor_validate_blocking_timeout(timeout_data) catch {
+        return command_executor_invalid_float();
+    };
+    return command_executor_list_move_internal(engine, source, destination, now_ms, false, true);
+}
+
 fn command_executor_list_pop_direction(obj: &RedisObject, left: bool) !&RedisObject {
     if left {
         return list_object_pop_head(obj);
@@ -8667,7 +8765,7 @@ fn command_executor_command_key_flags(info: &CommandInfo, key_ordinal: usize) &[
         }
         return &"OW|update"[0: 9];
     }
-    if info.cmd_type == CommandType.command_lmove || info.cmd_type == CommandType.command_rpoplpush {
+    if info.cmd_type == CommandType.command_lmove || info.cmd_type == CommandType.command_rpoplpush || info.cmd_type == CommandType.command_brpoplpush {
         if key_ordinal == 0 {
             return &"RW|access|delete"[0: 16];
         }
@@ -8691,7 +8789,9 @@ fn command_executor_command_key_flags(info: &CommandInfo, key_ordinal: usize) &[
     if info.cmd_type == CommandType.command_getdel ||
         info.cmd_type == CommandType.command_move ||
         info.cmd_type == CommandType.command_lpop ||
+        info.cmd_type == CommandType.command_blpop ||
         info.cmd_type == CommandType.command_rpop ||
+        info.cmd_type == CommandType.command_brpop ||
         info.cmd_type == CommandType.command_spop ||
         info.cmd_type == CommandType.command_zpopmax ||
         info.cmd_type == CommandType.command_zpopmin {
@@ -9464,6 +9564,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     if command.info.cmd_type == CommandType.command_lpop {
         return command_executor_lpop(engine, command, now_ms);
     }
+    if command.info.cmd_type == CommandType.command_blpop {
+        return command_executor_blocking_list_pop(engine, command, now_ms, true);
+    }
     if command.info.cmd_type == CommandType.command_lpush {
         return command_executor_lpush(engine, command, now_ms);
     }
@@ -9665,8 +9768,14 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     if command.info.cmd_type == CommandType.command_rpop {
         return command_executor_rpop(engine, command, now_ms);
     }
+    if command.info.cmd_type == CommandType.command_brpop {
+        return command_executor_blocking_list_pop(engine, command, now_ms, false);
+    }
     if command.info.cmd_type == CommandType.command_rpoplpush {
         return command_executor_rpoplpush(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_brpoplpush {
+        return command_executor_brpoplpush(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_lindex {
         return command_executor_lindex(engine, command, now_ms);

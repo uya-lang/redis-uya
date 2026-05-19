@@ -555,6 +555,25 @@ export fn test_connection_process_lmpop() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_connection_process_blocking_list_commands() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var out: [byte: 256] = [];
+
+    const seed_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$5\r\nRPUSH\r\n$3\r\nblk\r\n$1\r\na\r\n$1\r\nb\r\n"[0: 39], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: seed_result.response_len], &":2\r\n"[0: 4]));
+
+    const blpop_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$5\r\nBLPOP\r\n$4\r\nmiss\r\n$3\r\nblk\r\n$1\r\n1\r\n"[0: 44], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: blpop_result.response_len], &"*2\r\n$3\r\nblk\r\n$1\r\na\r\n"[0: 22]));
+
+    const brpop_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$5\r\nBRPOP\r\n$4\r\nmiss\r\n$3\r\nblk\r\n$1\r\n1\r\n"[0: 44], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: brpop_result.response_len], &"*2\r\n$3\r\nblk\r\n$1\r\nb\r\n"[0: 22]));
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_connection_process_touch_unlink() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();
@@ -1078,7 +1097,7 @@ export fn test_connection_process_command_docs_all_large_reply() !void {
     try assert_true(network_connection_contains(out[0: docs_all.response_len], &"$9\r\nclient|id\r\n"[0: 15]));
     try assert_true(network_connection_contains(out[0: docs_all.response_len], &"$7\r\nsummary\r\n"[0: 13]));
     try assert_true(!network_connection_contains(out[0: docs_all.response_len], &"$3\r\nacl\r\n"[0: 9]));
-    try assert_true(!network_connection_contains(out[0: docs_all.response_len], &"$5\r\nblpop\r\n"[0: 11]));
+    try assert_true(network_connection_contains(out[0: docs_all.response_len], &"$5\r\nblpop\r\n"[0: 11]));
     const docs_all_len: u64 = try network_connection_parse_resp2_collection_len(out[0: docs_all.response_len], 42 as byte);
     try assert_true(docs_all_len > 100u64);
 

@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 149);
+    try assert_eq_i32(command_router_count(&router) as i32, 152);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -127,6 +127,10 @@ export fn test_command_router_lookup_and_case() !void {
     try assert_eq_i32(rpoplpush.cmd_type as i32, CommandType.command_rpoplpush as i32);
     try assert_eq_i32(rpoplpush.arity, 3);
 
+    const brpoplpush: CommandInfo = try command_router_lookup(&router, &"BRPOPLPUSH"[0: 10]);
+    try assert_eq_i32(brpoplpush.cmd_type as i32, CommandType.command_brpoplpush as i32);
+    try assert_eq_i32(brpoplpush.arity, 4);
+
     const lmpop: CommandInfo = try command_router_lookup(&router, &"LMPOP"[0: 5]);
     try assert_eq_i32(lmpop.cmd_type as i32, CommandType.command_lmpop as i32);
     try assert_eq_i32(lmpop.arity, -4);
@@ -215,6 +219,10 @@ export fn test_command_router_lookup_and_case() !void {
     try assert_eq_i32(lpop.cmd_type as i32, CommandType.command_lpop as i32);
     try assert_eq_i32(lpop.arity, 2);
 
+    const blpop: CommandInfo = try command_router_lookup(&router, &"BLPOP"[0: 5]);
+    try assert_eq_i32(blpop.cmd_type as i32, CommandType.command_blpop as i32);
+    try assert_eq_i32(blpop.arity, -3);
+
     const lpush: CommandInfo = try command_router_lookup(&router, &"LPUSH"[0: 5]);
     try assert_eq_i32(lpush.cmd_type as i32, CommandType.command_lpush as i32);
     try assert_eq_i32(lpush.arity, -3);
@@ -230,6 +238,10 @@ export fn test_command_router_lookup_and_case() !void {
     const rpop: CommandInfo = try command_router_lookup(&router, &"rpop"[0: 4]);
     try assert_eq_i32(rpop.cmd_type as i32, CommandType.command_rpop as i32);
     try assert_eq_i32(rpop.arity, 2);
+
+    const brpop: CommandInfo = try command_router_lookup(&router, &"BRPOP"[0: 5]);
+    try assert_eq_i32(brpop.cmd_type as i32, CommandType.command_brpop as i32);
+    try assert_eq_i32(brpop.arity, -3);
 
     const lindex: CommandInfo = try command_router_lookup(&router, &"LINDEX"[0: 6]);
     try assert_eq_i32(lindex.cmd_type as i32, CommandType.command_lindex as i32);

@@ -312,6 +312,58 @@ export fn test_aof_replay_rename_commands() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_aof_replay_blocking_list_commands() !void {
+    reset_memory_stats_for_test();
+    const path: &const byte = "build/test-aof-blocking-list.aof";
+    _ = unlink(path);
+
+    var writer: AofWriter = try aof_open_truncate(path);
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var out: [byte: 256] = [];
+
+    _ = try connection_process_input_with_aof_at(
+        &engine,
+        &router,
+        &writer,
+        &"*4\r\n$5\r\nRPUSH\r\n$3\r\nsrc\r\n$1\r\na\r\n$1\r\nb\r\n"[0: 39],
+        &out[0],
+        256,
+        1000u64,
+    );
+    _ = try connection_process_input_with_aof_at(
+        &engine,
+        &router,
+        &writer,
+        &"*4\r\n$5\r\nBLPOP\r\n$4\r\nmiss\r\n$3\r\nsrc\r\n$1\r\n1\r\n"[0: 44],
+        &out[0],
+        256,
+        1000u64,
+    );
+    _ = try connection_process_input_with_aof_at(
+        &engine,
+        &router,
+        &writer,
+        &"*4\r\n$10\r\nBRPOPLPUSH\r\n$3\r\nsrc\r\n$3\r\ndst\r\n$1\r\n1\r\n"[0: 49],
+        &out[0],
+        256,
+        1000u64,
+    );
+    aof_close(&writer);
+    engine_free(&engine);
+
+    var replay_engine: Engine = engine_new();
+    try aof_replay_file_at(path, &replay_engine, &router, 2000u64);
+    try assert_true(aof_key_missing_at(&replay_engine, &"src"[0: 3], 2000u64));
+    const dst_obj: &RedisObject = try lookup_key_at(&replay_engine, &"dst"[0: 3], 2000u64);
+    try assert_eq_i32(dst_obj.obj_type as i32, ObjectType.object_list as i32);
+    const dst_value: &RedisObject = try list_object_index_value(dst_obj, 0);
+    try assert_true(aof_test_slice_eq(dst_value.value.buf[0: dst_value.value.len], &"b"[0: 1]));
+    engine_free(&replay_engine);
+    _ = unlink(path);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_aof_replay_flush_commands() !void {
     reset_memory_stats_for_test();
     const path: &const byte = "build/test-aof-flush-cmds.aof";

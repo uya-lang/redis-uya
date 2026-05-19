@@ -465,7 +465,7 @@
 
 ### U2. 当前必须先修的 P0 问题
 
-- [ ] `COMMAND` 真值修复：`COMMAND` / `INFO` / `DOCS` / `LIST` 不再把 `deferred` 命令包装成可执行支持面
+- [x] `COMMAND` 真值修复：`COMMAND` / `INFO` / `DOCS` / `LIST` 已按真实执行面隐藏未实现命令，并补齐当前 `CLIENT/CONFIG` 已实现子命令的矩阵状态
 - [ ] 目录统计分层：把 Redis Open Source 单机核心、模式命令、模块命令分开统计，不再用总条目数代表当前单机完成度
 - [ ] 版本统一：banner、`INFO server`、README、DoD、测试断言统一到同一主线版本口径
 - [x] `make test-integration` 恢复：修正 `maxmemory` 相关测试口径，使其与 Redis startup memory 语义对齐

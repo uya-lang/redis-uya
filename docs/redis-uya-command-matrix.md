@@ -1,7 +1,7 @@
 # redis-uya command matrix
 
 > version: v0.9.1-dev
-> date: 2026-05-18
+> date: 2026-05-19
 > source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`
 > runtime source: `src/command/catalog_generated.uya`
 
@@ -16,10 +16,10 @@
 | status | count |
 |--------|-------|
 | `full` | `143` |
-| `partial` | `42` |
+| `partial` | `49` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `317` |
+| `deferred` | `310` |
 
 ## Group counts
 
@@ -117,18 +117,18 @@
 | `client|help` | `connection` | `full` | `-` | `2` | `-` | `no` | `@slow, @connection` |
 | `client|id` | `connection` | `full` | `-` | `2` | `-` | `no` | `@slow, @connection` |
 | `client|info` | `connection` | `partial` | `-` | `2` | `-` | `no` | `@slow, @connection` |
-| `client|kill` | `connection` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
+| `client|kill` | `connection` | `partial` | `-` | `-3` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
 | `client|list` | `connection` | `partial` | `-` | `-2` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
 | `client|no-evict` | `connection` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
 | `client|no-touch` | `connection` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@slow, @connection` |
-| `client|pause` | `connection` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
+| `client|pause` | `connection` | `partial` | `-` | `-3` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
 | `client|reply` | `connection` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@slow, @connection` |
 | `client|setinfo` | `connection` | `full` | `-` | `4` | `-` | `no` | `@slow, @connection` |
 | `client|setname` | `connection` | `partial` | `-` | `3` | `-` | `no` | `@slow, @connection` |
-| `client|tracking` | `connection` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@slow, @connection` |
-| `client|trackinginfo` | `connection` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@slow, @connection` |
+| `client|tracking` | `connection` | `partial` | `-` | `-3` | `-` | `no` | `@slow, @connection` |
+| `client|trackinginfo` | `connection` | `partial` | `-` | `2` | `-` | `no` | `@slow, @connection` |
 | `client|unblock` | `connection` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
-| `client|unpause` | `connection` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
+| `client|unpause` | `connection` | `partial` | `-` | `2` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
 | `cluster` | `cluster` | `partial` | `-` | `-2` | `-` | `no` | `@slow` |
 | `cluster|addslots` | `cluster` | `standalone-error` | `v1.1.0` | `-3` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `cluster|addslotsrange` | `cluster` | `standalone-error` | `v1.1.0` | `-4` | `-` | `no` | `@admin, @slow, @dangerous` |
@@ -178,8 +178,8 @@
 | `config|get` | `server` | `partial` | `-` | `-3` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `config|help` | `server` | `full` | `-` | `2` | `-` | `no` | `@slow` |
 | `config|resetstat` | `server` | `full` | `-` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `config|rewrite` | `server` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `config|set` | `server` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `config|rewrite` | `server` | `partial` | `-` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `config|set` | `server` | `partial` | `-` | `-4` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `copy` | `generic` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@keyspace, @write, @slow` |
 | `dbsize` | `server` | `full` | `-` | `1` | `-` | `no` | `@keyspace, @read, @fast` |
 | `debug` | `server` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@admin, @slow, @dangerous` |

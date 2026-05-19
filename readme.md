@@ -104,7 +104,7 @@
 
 下一阶段：
 
-- `v0.9.1`：继续完成审计整改，当前已修复 `maxmemory` 集成测试口径；benchmark guard 已重校但仍需继续稳定，待续 `COMMAND` 真值与版本号一致性。
+- `v0.9.1`：继续完成审计整改，当前已修复 `maxmemory` 集成测试口径并收回当前 `CLIENT/CONFIG` 子命令矩阵真值；benchmark guard 已重校但仍需继续稳定，待续版本号一致性。
 - `v0.9.2`：继续补 Redis Open Source 单机核心缺口，优先 blocking list/zset、bitmap/bitfield、HLL/GEO、脚本第一批。
 - `v0.9.3`：收口 Streams、Functions/Script、ACL 与运维诊断第一批，再推进持久化/复制边界深化。
 

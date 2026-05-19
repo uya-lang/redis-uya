@@ -207,9 +207,9 @@
 - `make benchmark-v0.8.1` guard 已重校，并曾恢复通过。
 - `maxmemory` 集成测试已改为基于当前实现的启动内存与稳定 headroom 校准。
 - `PING/GET/SET` 热路径的若干回归开销已收回到当前 guard 范围内。
+- `COMMAND*` 已按真实执行面隐藏未实现命令，并补齐当前 `CLIENT/CONFIG` 已实现子命令的矩阵状态。
 
 截至当前，以下问题仍待继续处理：
 
-- `COMMAND*` 目录输出与真实执行面尚未完全一致。
 - banner、`INFO server`、测试断言与文档版本号尚未统一。
 - `make benchmark-v0.8.1` 最新复跑仍有抖动，尚不能宣称稳定转绿。

@@ -2,7 +2,7 @@
 
 > 版本: v0.9.1-dev
 > 日期: 2026-05-16
-> 状态: 下列条目保留历史里程碑证据；截至 2026-05-17 最新复跑，当前 `HEAD` 已恢复测试绿态，但 benchmark guard 仍有抖动；`COMMAND*` 真值与版本号口径仍待继续收口
+> 状态: 下列条目保留历史里程碑证据；截至 2026-05-19 最新复核，当前 `HEAD` 已恢复测试绿态，`COMMAND*` 运行时真值与当前 `CLIENT/CONFIG` 子命令矩阵状态已对齐，但 benchmark guard 与版本号口径仍待继续收口
 
 ## 1. 目标
 
@@ -41,7 +41,7 @@ bash scripts/verify_definition_of_done.sh
 | `make test-integration` | `PASS` | `maxmemory` / 压力 / 淘汰策略相关回归已按当前实现重新校准 |
 | `make benchmark-v0.8.1` | `FLAKY` | guard 已重校，但 2026-05-17 最新复跑仍出现 `get_16b` throughput miss |
 | `bash scripts/verify_definition_of_done.sh` | `FLAKY` | 该脚本依赖 `make benchmark-v0.8.1`；当前存在“有时通过、有时 miss”的抖动风险 |
-| `COMMAND*` 真实性 | `FAIL` | `COMMAND INFO` 会暴露 `deferred` 命令元数据，但实际执行返回 `ERR unknown command` |
+| `COMMAND*` 真实性 | `PASS` | 运行时 `COMMAND*` 已按真实执行面隐藏未实现命令，并补齐当前 `CLIENT/CONFIG` 已实现子命令的矩阵状态 |
 | 版本号一致性 | `FAIL` | 文档写 `v0.9.1-dev`，banner / `INFO server` 仍是 `0.1.0-dev` |
 
 后续历史章节从这里开始顺延，保留原编号不代表当前 `HEAD` 已重新验收。

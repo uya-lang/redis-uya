@@ -255,6 +255,7 @@ bash scripts/verify_definition_of_done.sh
 | DoD 项 | 证据 |
 |--------|------|
 | Blocking list 第一批可用：`BLPOP`、`BRPOP`、`BRPOPLPUSH` 覆盖立即命中、空源挂起、server-side unblock、超时返回、`COMMAND*` 可见性与 AOF replay | `src/command/router.uya`、`src/command/executor.uya`、`src/network/connection.uya`、`src/server.uya`、`src/persistence/aof.uya`、`tests/unit/command_router_test.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/persistence_aof_test.uya`、`tests/unit/test_runner.uya`、`tests/integration/blocking_list_smoke.py`、`tests/integration/command_introspection.py`、`make test`、`make test-integration` |
+| Blocking zset 第一批可用：`BZPOPMIN`、`BZPOPMAX` 覆盖立即命中、空源挂起、server-side unblock、超时返回、`COMMAND*` 可见性与 AOF replay | `src/command/router.uya`、`src/command/executor.uya`、`src/network/connection.uya`、`src/server.uya`、`src/persistence/aof.uya`、`tests/unit/command_router_test.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/network_connection_test.uya`、`tests/unit/persistence_aof_test.uya`、`tests/unit/test_runner.uya`、`tests/integration/blocking_zset_smoke.py`、`tests/integration/command_introspection.py`、`make test`、`make test-integration` |
 
 ## 19. `v0.9.3` 预留
 

@@ -171,6 +171,7 @@ use tests.unit.persistence_aof_test.test_aof_replay_invalid_format_fails;
 use tests.unit.persistence_aof_test.test_aof_expire_replays_absolute_deadline;
 use tests.unit.persistence_aof_test.test_aof_replay_large_file_over_1mb;
 use tests.unit.persistence_aof_test.test_aof_replay_rename_commands;
+use tests.unit.persistence_aof_test.test_aof_replay_blocking_zset_commands;
 use tests.unit.persistence_aof_test.test_aof_replay_flush_commands;
 use tests.unit.persistence_aof_test.test_aof_replay_restore_command;
 use tests.unit.persistence_aof_test.test_aof_replay_sort_store_command;
@@ -854,6 +855,10 @@ export fn main() i32 {
     const before_aof_rename: i32 = failed;
     _ = test_aof_replay_rename_commands() catch { printf("[FAIL] persistence_aof/replay_rename\n" as *byte); failed = failed + 1; };
     if failed == before_aof_rename { printf("[PASS] persistence_aof/replay_rename\n" as *byte); }
+
+    const before_aof_blocking_zset: i32 = failed;
+    _ = test_aof_replay_blocking_zset_commands() catch { printf("[FAIL] persistence_aof/replay_blocking_zset\n" as *byte); failed = failed + 1; };
+    if failed == before_aof_blocking_zset { printf("[PASS] persistence_aof/replay_blocking_zset\n" as *byte); }
 
     const before_aof_flush_cmds: i32 = failed;
     _ = test_aof_replay_flush_commands() catch { printf("[FAIL] persistence_aof/replay_flush_commands\n" as *byte); failed = failed + 1; };

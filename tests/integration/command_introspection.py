@@ -167,10 +167,10 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"bitmap commands missing from COMMAND INFO: {bitmap_info!r}")
 
-            zset_info = send_command(sock, b"COMMAND", b"INFO", b"ZRANK", b"ZREVRANK", b"ZSCORE", b"ZMSCORE", b"ZPOPMAX", b"ZPOPMIN")
+            zset_info = send_command(sock, b"COMMAND", b"INFO", b"ZRANK", b"ZREVRANK", b"ZSCORE", b"ZMSCORE", b"ZPOPMAX", b"ZPOPMIN", b"BZPOPMAX", b"BZPOPMIN")
             if (
                 not isinstance(zset_info, list)
-                or len(zset_info) != 6
+                or len(zset_info) != 8
                 or not isinstance(zset_info[0], list)
                 or zset_info[0][0] != b"zrank"
                 or not isinstance(zset_info[1], list)
@@ -183,6 +183,10 @@ def run_smoke() -> None:
                 or zset_info[4][0] != b"zpopmax"
                 or not isinstance(zset_info[5], list)
                 or zset_info[5][0] != b"zpopmin"
+                or not isinstance(zset_info[6], list)
+                or zset_info[6][0] != b"bzpopmax"
+                or not isinstance(zset_info[7], list)
+                or zset_info[7][0] != b"bzpopmin"
             ):
                 raise AssertionError(f"zset score/pop commands missing from COMMAND INFO: {zset_info!r}")
 
@@ -260,6 +264,15 @@ def run_smoke() -> None:
                 or b"zrandmember" in listed_zpop
             ):
                 raise AssertionError(f"unexpected COMMAND LIST zpop result: {listed_zpop!r}")
+
+            listed_bz = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"BZ*")
+            if (
+                not isinstance(listed_bz, list)
+                or b"bzpopmax" not in listed_bz
+                or b"bzpopmin" not in listed_bz
+                or b"bzmpop" in listed_bz
+            ):
+                raise AssertionError(f"unexpected COMMAND LIST bz* result: {listed_bz!r}")
 
             listed_lmove = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"L*MOVE")
             if (

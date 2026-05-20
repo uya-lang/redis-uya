@@ -1001,6 +1001,42 @@ ZSCAN key cursor [COUNT count]
 - 当前实现支持 `COUNT`
 - 当前项目内 ZSet score 使用整数语义
 
+### `BZPOPMIN`
+
+格式：
+
+```text
+BZPOPMIN key [key ...] timeout
+```
+
+返回：
+
+- 命中时返回三段 RESP Array：`[key, member, score]`
+- 超时返回 Null Array
+
+说明：
+
+- 当前支持多 key 顺序探测、秒级整数或浮点 timeout、server-side block/unblock
+- 当前项目内 ZSet score 使用整数语义
+
+### `BZPOPMAX`
+
+格式：
+
+```text
+BZPOPMAX key [key ...] timeout
+```
+
+返回：
+
+- 命中时返回三段 RESP Array：`[key, member, score]`
+- 超时返回 Null Array
+
+说明：
+
+- 当前支持多 key 顺序探测、秒级整数或浮点 timeout、server-side block/unblock
+- 当前项目内 ZSet score 使用整数语义
+
 ### `RENAME`
 
 格式：

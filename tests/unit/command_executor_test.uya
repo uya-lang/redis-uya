@@ -3003,6 +3003,27 @@ export fn test_command_zscore_zmscore_zpopmin_zpopmax() !void {
     command_reply_cleanup(&zpopmax_all_reply);
     resp_value_free(&zpopmax_all_parsed.value);
 
+    var zadd_bz_parsed: RespParseResult = try parse_resp2(&"*6\r\n$4\r\nZADD\r\n$2\r\nbz\r\n$1\r\n1\r\n$1\r\na\r\n$1\r\n2\r\n$1\r\nb\r\n"[0: 50]);
+    const zadd_bz_command: Command = try command_executor_test_command(&router, &zadd_bz_parsed);
+    _ = command_execute_at(&engine, &zadd_bz_command, 1000u64);
+    resp_value_free(&zadd_bz_parsed.value);
+
+    var bzpopmin_parsed: RespParseResult = try parse_resp2(&"*4\r\n$8\r\nBZPOPMIN\r\n$4\r\nmiss\r\n$2\r\nbz\r\n$1\r\n1\r\n"[0: 49]);
+    const bzpopmin_command: Command = try command_executor_test_command(&router, &bzpopmin_parsed);
+    var bzpopmin_reply: CommandReply = command_execute_at(&engine, &bzpopmin_command, 1000u64);
+    const bzpopmin_len: usize = try connection_encode_reply(&bzpopmin_reply, &out[0], 512);
+    try assert_true(command_executor_test_slice_eq(out[0: bzpopmin_len], &"*3\r\n$2\r\nbz\r\n$1\r\na\r\n$1\r\n1\r\n"[0: 26]));
+    command_reply_cleanup(&bzpopmin_reply);
+    resp_value_free(&bzpopmin_parsed.value);
+
+    var bzpopmax_parsed: RespParseResult = try parse_resp2(&"*3\r\n$8\r\nBZPOPMAX\r\n$2\r\nbz\r\n$1\r\n1\r\n"[0: 37]);
+    const bzpopmax_command: Command = try command_executor_test_command(&router, &bzpopmax_parsed);
+    var bzpopmax_reply: CommandReply = command_execute_at(&engine, &bzpopmax_command, 1000u64);
+    const bzpopmax_len: usize = try connection_encode_reply(&bzpopmax_reply, &out[0], 512);
+    try assert_true(command_executor_test_slice_eq(out[0: bzpopmax_len], &"*3\r\n$2\r\nbz\r\n$1\r\nb\r\n$1\r\n2\r\n"[0: 26]));
+    command_reply_cleanup(&bzpopmax_reply);
+    resp_value_free(&bzpopmax_parsed.value);
+
     var exists_ttl_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nEXISTS\r\n$4\r\nzttl\r\n"[0: 26]);
     const exists_ttl_command: Command = try command_executor_test_command(&router, &exists_ttl_parsed);
     const exists_ttl_reply: CommandReply = command_execute_at(&engine, &exists_ttl_command, 1500u64);

@@ -55,6 +55,7 @@ use src.storage.object.hash_object_set_field;
 use src.storage.object.hash_object_get_field;
 use src.storage.object.list_object_push_tail;
 use src.storage.object.object_free;
+use src.storage.object.zset_object_len;
 use src.storage.sds.Sds;
 use src.storage.sds.sds_empty;
 use src.storage.sds.sds_free;
@@ -611,13 +612,15 @@ fn connection_blocking_clear(tx: &ConnectionTransaction) void {
     tx.blocking_deadline_ms = 0u64;
 }
 
-fn connection_command_is_blocking_list(cmd_type: CommandType) bool {
+fn connection_command_is_blocking_pop(cmd_type: CommandType) bool {
     return cmd_type == CommandType.command_blpop ||
         cmd_type == CommandType.command_brpop ||
-        cmd_type == CommandType.command_brpoplpush;
+        cmd_type == CommandType.command_brpoplpush ||
+        cmd_type == CommandType.command_bzpopmax ||
+        cmd_type == CommandType.command_bzpopmin;
 }
 
-fn connection_should_block_list_command(engine: &Engine, command: &Command, now_ms: u64) bool {
+fn connection_should_block_pop_command(engine: &Engine, command: &Command, now_ms: u64) bool {
     if command.info.cmd_type == CommandType.command_blpop || command.info.cmd_type == CommandType.command_brpop {
         var index: usize = 1;
         while index + 1 < command.argc {
@@ -652,6 +655,32 @@ fn connection_should_block_list_command(engine: &Engine, command: &Command, now_
             return false;
         }
         return obj.list_len == 0;
+    }
+
+    if command.info.cmd_type == CommandType.command_bzpopmax || command.info.cmd_type == CommandType.command_bzpopmin {
+        var index_z: usize = 1;
+        while index_z + 1 < command.argc {
+            const key_z: &[byte] = command_arg_data(command, index_z) catch {
+                return false;
+            };
+            const obj_result_z: !&RedisObject = lookup_key_at(engine, key_z, now_ms);
+            if obj_result_z.error_id != 0 {
+                index_z = index_z + 1;
+                continue;
+            }
+            const obj_z: &RedisObject = obj_result_z.value;
+            if obj_z.obj_type != ObjectType.object_zset {
+                return false;
+            }
+            const zset_len: usize = zset_object_len(obj_z) catch {
+                return false;
+            };
+            if zset_len > 0 {
+                return false;
+            }
+            index_z = index_z + 1;
+        }
+        return true;
     }
 
     return false;
@@ -2191,6 +2220,9 @@ fn connection_should_append_aof(command: &Command, reply: &CommandReply) bool {
     if command.info.cmd_type == CommandType.command_brpoplpush {
         return reply.typ == CommandReplyType.reply_bulk_string;
     }
+    if command.info.cmd_type == CommandType.command_bzpopmax || command.info.cmd_type == CommandType.command_bzpopmin {
+        return reply.typ == CommandReplyType.reply_array_bulk || reply.typ == CommandReplyType.reply_raw_bytes;
+    }
     if command.info.cmd_type == CommandType.command_getex {
         return command.argc > 2;
     }
@@ -2219,7 +2251,7 @@ fn connection_should_append_aof(command: &Command, reply: &CommandReply) bool {
     return (command.info.flags & COMMAND_FLAG_WRITE) != 0u64;
 }
 
-fn connection_execute_blocking_list_command_at(
+fn connection_execute_blocking_pop_command_at(
     engine: &Engine,
     runtime: &CommandRuntimeInfo,
     aof: &AofWriter,
@@ -2255,7 +2287,7 @@ fn connection_execute_blocking_list_command_at(
     };
 
     const timed_out: bool = tx.blocking_deadline_ms != 0u64 && now_ms >= tx.blocking_deadline_ms;
-    if timed_out || !connection_should_block_list_command(engine, command, now_ms) {
+    if timed_out || !connection_should_block_pop_command(engine, command, now_ms) {
         connection_blocking_clear(tx);
         return connection_execute_standard_command_at(
             engine,
@@ -3685,7 +3717,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
             resp_value_free(&parsed.value);
             return ConnectionProcessResult{ response_len: shutdown_tx_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
         }
-        if connection_command_is_blocking_list(command.info.cmd_type) {
+        if connection_command_is_blocking_pop(command.info.cmd_type) {
             const blocking_tx_reply: CommandReply = connection_error_reply(&"ERR blocking commands inside MULTI are not allowed"[0: 47]);
             const blocking_tx_n: usize = try connection_encode_reply_with_protocol(&blocking_tx_reply, out, out_cap, tx.protocol_version);
             resp_value_free(&parsed.value);
@@ -3774,8 +3806,8 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
         resp_value_free(&parsed.value);
         return ConnectionProcessResult{ response_len: restricted_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
     }
-    if connection_command_is_blocking_list(command.info.cmd_type) {
-        return connection_execute_blocking_list_command_at(
+    if connection_command_is_blocking_pop(command.info.cmd_type) {
+        return connection_execute_blocking_pop_command_at(
             engine,
             runtime,
             aof,

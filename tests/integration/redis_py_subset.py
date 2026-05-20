@@ -179,6 +179,9 @@ class RedisPySubsetClient:
             encoded.append(part.encode())
         return int(self._request(*encoded))
 
+    def bitop(self, operation: str, dest: str, *keys: str) -> int:
+        return int(self._request(b"BITOP", operation.encode(), dest.encode(), *(key.encode() for key in keys)))
+
     def setrange(self, key: str, offset: int, value: str) -> int:
         return int(self._request(b"SETRANGE", key.encode(), str(offset).encode(), value.encode()))
 
@@ -772,6 +775,15 @@ def run_smoke() -> None:
             assert client.bitpos("allones", 0) == 8
             assert client.bitpos("allones", 0, "0", "0") == -1
             assert client.bitpos("allones", 1, "4", "7", "BIT") == 4
+            assert client.set("srca", "foo")
+            assert client.set("srcb", "bar")
+            assert client.bitop("AND", "dstbit", "srca", "srcb") == 3
+            assert client.get("dstbit") == b"bab"
+            assert client.bitop("NOT", "dstbit", "srca") == 3
+            assert client.bitcount("dstbit") == 8
+            assert client.set("dropbit", "x")
+            assert client.bitop("AND", "dropbit", "missing") == 0
+            assert client.get("dropbit") is None
             assert client.setrange("key", 5, "__") == 7
             assert client.get("key") == b"value__"
             assert client.rename("key", "key2")
@@ -783,7 +795,7 @@ def run_smoke() -> None:
             assert client.getdel("gd-key") == b"once"
             assert client.getdel("gd-key") is None
             assert client.delete("counter") == 1
-            assert client.delete("fcounter", "nx-key", "gs-key", "sx-key", "mk1", "mk2", "mn1", "mn2", "allones") == 9
+            assert client.delete("fcounter", "nx-key", "gs-key", "sx-key", "mk1", "mk2", "mn1", "mn2", "allones", "srca", "srcb", "dstbit") == 12
             assert client.echo("hi") == b"hi"
             assert client.key_type("key") == "string"
             assert client.dbsize() == 1

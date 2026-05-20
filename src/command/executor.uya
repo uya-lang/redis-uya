@@ -378,6 +378,10 @@ fn command_executor_invalid_bit_value() CommandReply {
     return command_executor_error(&"ERR bit is not an integer or out of range"[0: 41]);
 }
 
+fn command_executor_bitop_not_single_source_required() CommandReply {
+    return command_executor_error(&"ERR BITOP NOT must be called with a single source key."[0: 52]);
+}
+
 fn command_executor_positive_count_required() CommandReply {
     return command_executor_error(&"ERR value is out of range, must be positive"[0: 43]);
 }
@@ -1835,6 +1839,14 @@ fn command_executor_bitpos_bit_mode(data: &[byte], target_bit: i64, start: i64, 
     return command_executor_bitpos_range_bits(data, target_bit, range.start, range.stop);
 }
 
+fn command_executor_string_value_or_empty(engine: &Engine, key: &[byte], now_ms: u64) !&[byte] {
+    const obj: &RedisObject = command_executor_lookup_key_now_or_null(engine, key, now_ms);
+    if obj == null {
+        return command_executor_empty_slice();
+    }
+    return command_executor_string_value(obj);
+}
+
 fn command_executor_key_exists(engine: &Engine, key: &[byte], now_ms: u64) bool {
     const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
         return false;
@@ -2442,6 +2454,107 @@ fn command_executor_bitpos(engine: &Engine, command: &Command, now_ms: u64) Comm
         return command_executor_integer(command_executor_bitpos_bit_mode(data, target_bit, start, end));
     }
     return command_executor_integer(command_executor_bitpos_byte_mode(data, target_bit, start, has_end, end));
+}
+
+fn command_executor_bitop(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 4 {
+        return command_executor_wrong_arity();
+    }
+    const operation: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const destination: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+
+    var op_code: i32 = 0;
+    if command_executor_keyword_eq(operation, &"AND"[0: 3]) {
+        op_code = 1;
+    } else if command_executor_keyword_eq(operation, &"OR"[0: 2]) {
+        op_code = 2;
+    } else if command_executor_keyword_eq(operation, &"XOR"[0: 3]) {
+        op_code = 3;
+    } else if command_executor_keyword_eq(operation, &"NOT"[0: 3]) {
+        op_code = 4;
+        if command.argc != 4 {
+            return command_executor_bitop_not_single_source_required();
+        }
+    } else {
+        return command_executor_syntax_error();
+    }
+
+    var max_len: usize = 0;
+    var source_index: usize = 3;
+    while source_index < command.argc {
+        const source: &[byte] = command_executor_arg(command, source_index) catch {
+            return command_executor_wrong_arity();
+        };
+        const source_data: &[byte] = command_executor_string_value_or_empty(engine, source, now_ms) catch {
+            return command_executor_wrongtype();
+        };
+        if source_data.len > max_len {
+            max_len = source_data.len;
+        }
+        source_index = source_index + 1;
+    }
+
+    if max_len == 0 {
+        _ = delete_key(engine, destination);
+        return command_executor_integer(0);
+    }
+
+    var output: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&output);
+    }
+    _ = sds_grow(&output, max_len) catch {
+        return command_executor_oom();
+    };
+    output.len = max_len;
+    output.buf.ptr[output.len] = 0 as byte;
+
+    var byte_index: usize = 0;
+    while byte_index < max_len {
+        var combined: u32 = 0;
+        if op_code == 1 {
+            combined = 255u32;
+        }
+
+        var current_source_index: usize = 3;
+        while current_source_index < command.argc {
+            const source: &[byte] = command_executor_arg(command, current_source_index) catch {
+                return command_executor_wrong_arity();
+            };
+            const source_data: &[byte] = command_executor_string_value_or_empty(engine, source, now_ms) catch {
+                return command_executor_wrongtype();
+            };
+            var source_byte: u32 = 0u32;
+            if byte_index < source_data.len {
+                source_byte = source_data.ptr[byte_index] as u32;
+            }
+            if op_code == 1 {
+                combined = combined & source_byte;
+            } else if op_code == 2 {
+                combined = combined | source_byte;
+            } else if op_code == 3 {
+                combined = combined ^ source_byte;
+            } else {
+                combined = 255u32 ^ source_byte;
+            }
+            current_source_index = current_source_index + 1;
+        }
+
+        output.buf.ptr[byte_index] = combined as byte;
+        byte_index = byte_index + 1;
+    }
+
+    const set_reply: CommandReply = command_executor_store_string(engine, destination, output.buf[0: output.len], now_ms);
+    if set_reply.typ == CommandReplyType.reply_error {
+        return set_reply;
+    }
+    return command_executor_integer(max_len as i64);
 }
 
 fn command_executor_incrbyfloat(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
@@ -9155,6 +9268,12 @@ fn command_executor_command_key_flags(info: &CommandInfo, key_ordinal: usize) &[
         }
         return &"OW|update"[0: 9];
     }
+    if info.cmd_type == CommandType.command_bitop {
+        if key_ordinal == 0 {
+            return &"OW|update"[0: 9];
+        }
+        return &"RO|access"[0: 9];
+    }
     if info.cmd_type == CommandType.command_lmove || info.cmd_type == CommandType.command_rpoplpush || info.cmd_type == CommandType.command_brpoplpush {
         if key_ordinal == 0 {
             return &"RW|access|delete"[0: 16];
@@ -9996,6 +10115,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_bitpos {
         return command_executor_bitpos(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_bitop {
+        return command_executor_bitop(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_setrange {
         return command_executor_setrange(engine, command, now_ms);

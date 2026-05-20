@@ -249,6 +249,60 @@ if [[ "$BITPOS_ALLONES_ONE_BIT_RESULT" != "4" ]]; then
     exit 1
 fi
 
+BITOP_SRCA_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" set srca foo)"
+if [[ "$BITOP_SRCA_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected srca SET OK, got '$BITOP_SRCA_RESULT'" >&2
+    exit 1
+fi
+
+BITOP_SRCB_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" set srcb bar)"
+if [[ "$BITOP_SRCB_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected srcb SET OK, got '$BITOP_SRCB_RESULT'" >&2
+    exit 1
+fi
+
+BITOP_AND_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" bitop AND dstbit srca srcb)"
+if [[ "$BITOP_AND_RESULT" != "3" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected BITOP AND length 3, got '$BITOP_AND_RESULT'" >&2
+    exit 1
+fi
+
+BITOP_AND_GET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" get dstbit)"
+if [[ "$BITOP_AND_GET_RESULT" != "bab" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected BITOP AND payload bab, got '$BITOP_AND_GET_RESULT'" >&2
+    exit 1
+fi
+
+BITOP_NOT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" bitop NOT dstbit srca)"
+if [[ "$BITOP_NOT_RESULT" != "3" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected BITOP NOT length 3, got '$BITOP_NOT_RESULT'" >&2
+    exit 1
+fi
+
+BITOP_NOT_BITCOUNT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" bitcount dstbit)"
+if [[ "$BITOP_NOT_BITCOUNT_RESULT" != "8" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected BITOP NOT bitcount 8, got '$BITOP_NOT_BITCOUNT_RESULT'" >&2
+    exit 1
+fi
+
+DROPBIT_SET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" set dropbit x)"
+if [[ "$DROPBIT_SET_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected dropbit SET OK, got '$DROPBIT_SET_RESULT'" >&2
+    exit 1
+fi
+
+BITOP_MISSING_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" bitop AND dropbit missing)"
+if [[ "$BITOP_MISSING_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected BITOP missing length 0, got '$BITOP_MISSING_RESULT'" >&2
+    exit 1
+fi
+
+DROPBIT_GET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" get dropbit)"
+if [[ -n "$DROPBIT_GET_RESULT" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected dropbit to be deleted after BITOP missing, got '$DROPBIT_GET_RESULT'" >&2
+    exit 1
+fi
+
 SETRANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" setrange key 5 __)"
 if [[ "$SETRANGE_RESULT" != "7" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected setrange 7, got '$SETRANGE_RESULT'" >&2
@@ -1011,9 +1065,9 @@ if [[ "$COUNTER_DEL_RESULT" != "1" ]]; then
     exit 1
 fi
 
-TEMP_STRING_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del fcounter nx-key gs-key sx-key allones)"
-if [[ "$TEMP_STRING_DEL_RESULT" != "5" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected temp string DEL 5, got '$TEMP_STRING_DEL_RESULT'" >&2
+TEMP_STRING_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del fcounter nx-key gs-key sx-key allones srca srcb dstbit)"
+if [[ "$TEMP_STRING_DEL_RESULT" != "8" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected temp string DEL 8, got '$TEMP_STRING_DEL_RESULT'" >&2
     exit 1
 fi
 

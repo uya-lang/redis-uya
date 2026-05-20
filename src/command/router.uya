@@ -158,6 +158,7 @@ export enum CommandType {
     command_setbit,
     command_bitcount,
     command_bitpos,
+    command_bitop,
     command_lmove,
     command_rpoplpush,
     command_lmpop,
@@ -193,7 +194,7 @@ export const COMMAND_FLAG_READONLY: u64 = 1u64;
 export const COMMAND_FLAG_WRITE: u64 = 2u64;
 export const COMMAND_FLAG_FAST: u64 = 4u64;
 
-const MIN_COMMAND_COUNT: usize = 156;
+const MIN_COMMAND_COUNT: usize = 157;
 
 fn command_router_name_eq(a: &[byte], b: &[byte]) bool {
     return bytes_ascii_case_eq(a, b);
@@ -700,6 +701,9 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
     }
     if index == 155 {
         return command_router_info(CommandType.command_bitpos, &"BITPOS"[0: 6], -3, COMMAND_FLAG_READONLY, 1, 1, 1);
+    }
+    if index == 156 {
+        return command_router_info(CommandType.command_bitop, &"BITOP"[0: 5], -4, COMMAND_FLAG_WRITE, 2, -1, 1);
     }
     return error.CommandUnknown;
 }

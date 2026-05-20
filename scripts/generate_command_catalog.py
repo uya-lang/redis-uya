@@ -113,6 +113,7 @@ FULL_NAMES = {
     "bgrewriteaof",
     "bgsave",
     "bitcount",
+    "bitop",
     "bitpos",
     "client|help",
     "client|id",

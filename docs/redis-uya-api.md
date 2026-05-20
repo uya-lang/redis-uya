@@ -1435,6 +1435,29 @@ BITPOS key bit start end BIT
 - 当查找 `0` 且未显式给出 `end` 时，如果从有效 `start` 到字符串结尾都没有 `0`，返回 `len * 8`
 - 范围支持负索引；start-only 场景会从起始位置扫描到字符串末尾
 
+### `BITOP`
+
+格式：
+
+```text
+BITOP AND destkey key [key ...]
+BITOP OR destkey key [key ...]
+BITOP XOR destkey key [key ...]
+BITOP NOT destkey key
+```
+
+返回：
+
+- 返回结果字符串的字节长度，Integer
+- 所有 source key 都为空时返回 `0`，并删除目标 key
+
+说明：
+
+- `AND` / `OR` / `XOR` 会把较短 source 按 `\\0` 右侧补齐到最长 source 长度
+- `NOT` 当前只接受单个 source key；多 source 时返回兼容错误
+- 目标 key 总是按普通字符串重写，原 TTL 会被清除
+- 当前已覆盖 AOF replay、`COMMAND GETKEYS` / `GETKEYSANDFLAGS` 与客户端 smoke
+
 ### `TYPE`
 
 格式：

@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 362 | 256 | 142 | 47 | 0 | 3 | 170 |
+| Tier A: standalone core | 362 | 256 | 142 | 48 | 0 | 3 | 169 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 135 | 128 | 0 | 0 | 0 | 0 | 135 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `143` |
-| `partial` | `54` |
+| `partial` | `55` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `305` |
+| `deferred` | `304` |
 
 ## Group counts
 
@@ -104,7 +104,7 @@
 | `blpop` | `list` | `partial` | `-` | `-3` | `-` | `no` | `@write, @list, @slow, @blocking` |
 | `brpop` | `list` | `partial` | `-` | `-3` | `-` | `no` | `@write, @list, @slow, @blocking` |
 | `brpoplpush` | `list` | `partial` | `-` | `4` | `-` | `no` | `@write, @list, @slow, @blocking` |
-| `bzmpop` | `sorted-set` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@write, @sortedset, @slow, @blocking` |
+| `bzmpop` | `sorted-set` | `partial` | `-` | `-5` | `-` | `no` | `@write, @sortedset, @slow, @blocking` |
 | `bzpopmax` | `sorted-set` | `partial` | `-` | `-3` | `-` | `no` | `@write, @sortedset, @fast, @blocking` |
 | `bzpopmin` | `sorted-set` | `partial` | `-` | `-3` | `-` | `no` | `@write, @sortedset, @fast, @blocking` |
 | `cf.add` | `cf` | `deferred` | `v0.9.2` | `3` | `cf` | `no` | `@cuckoo, @write, @slow` |

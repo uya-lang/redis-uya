@@ -617,7 +617,8 @@ fn connection_command_is_blocking_pop(cmd_type: CommandType) bool {
         cmd_type == CommandType.command_brpop ||
         cmd_type == CommandType.command_brpoplpush ||
         cmd_type == CommandType.command_bzpopmax ||
-        cmd_type == CommandType.command_bzpopmin;
+        cmd_type == CommandType.command_bzpopmin ||
+        cmd_type == CommandType.command_bzmpop;
 }
 
 fn connection_should_block_pop_command(engine: &Engine, command: &Command, now_ms: u64) bool {
@@ -679,6 +680,42 @@ fn connection_should_block_pop_command(engine: &Engine, command: &Command, now_m
                 return false;
             }
             index_z = index_z + 1;
+        }
+        return true;
+    }
+
+    if command.info.cmd_type == CommandType.command_bzmpop {
+        const numkeys_data: &[byte] = command_arg_data(command, 2) catch {
+            return false;
+        };
+        const numkeys_u64: u64 = connection_parse_u64(numkeys_data) catch {
+            return false;
+        };
+        if numkeys_u64 == 0u64 {
+            return false;
+        }
+        var index_bzm: usize = 3;
+        const end_bzm: usize = 3 + numkeys_u64 as usize;
+        while index_bzm < end_bzm {
+            const key_bzm: &[byte] = command_arg_data(command, index_bzm) catch {
+                return false;
+            };
+            const obj_result_bzm: !&RedisObject = lookup_key_at(engine, key_bzm, now_ms);
+            if obj_result_bzm.error_id != 0 {
+                index_bzm = index_bzm + 1;
+                continue;
+            }
+            const obj_bzm: &RedisObject = obj_result_bzm.value;
+            if obj_bzm.obj_type != ObjectType.object_zset {
+                return false;
+            }
+            const zset_len_bzm: usize = zset_object_len(obj_bzm) catch {
+                return false;
+            };
+            if zset_len_bzm > 0 {
+                return false;
+            }
+            index_bzm = index_bzm + 1;
         }
         return true;
     }
@@ -2223,6 +2260,9 @@ fn connection_should_append_aof(command: &Command, reply: &CommandReply) bool {
     if command.info.cmd_type == CommandType.command_bzpopmax || command.info.cmd_type == CommandType.command_bzpopmin {
         return reply.typ == CommandReplyType.reply_array_bulk || reply.typ == CommandReplyType.reply_raw_bytes;
     }
+    if command.info.cmd_type == CommandType.command_bzmpop {
+        return reply.typ == CommandReplyType.reply_array_bulk || reply.typ == CommandReplyType.reply_raw_bytes;
+    }
     if command.info.cmd_type == CommandType.command_getex {
         return command.argc > 2;
     }
@@ -2273,7 +2313,11 @@ fn connection_execute_blocking_pop_command_at(
     rewrite_failed: &bool,
     zero_copy_bulk: bool,
 ) !ConnectionProcessResult {
-    const timeout_data: &[byte] = command_arg_data(command, command.argc - 1) catch {
+    var timeout_index: usize = command.argc - 1;
+    if command.info.cmd_type == CommandType.command_bzmpop {
+        timeout_index = 1;
+    }
+    const timeout_data: &[byte] = command_arg_data(command, timeout_index) catch {
         const err_reply: CommandReply = connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
         const err_n: usize = try connection_encode_reply_with_protocol(&err_reply, out, out_cap, tx.protocol_version);
         resp_value_free(&parsed.value);

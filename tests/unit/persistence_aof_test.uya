@@ -401,12 +401,31 @@ export fn test_aof_replay_blocking_zset_commands() !void {
         256,
         1000u64,
     );
+    _ = try connection_process_input_with_aof_at(
+        &engine,
+        &router,
+        &writer,
+        &"*6\r\n$4\r\nZADD\r\n$3\r\nzs2\r\n$1\r\n1\r\n$1\r\na\r\n$1\r\n2\r\n$1\r\nb\r\n"[0: 52],
+        &out[0],
+        256,
+        1000u64,
+    );
+    _ = try connection_process_input_with_aof_at(
+        &engine,
+        &router,
+        &writer,
+        &"*7\r\n$6\r\nBZMPOP\r\n$1\r\n1\r\n$1\r\n1\r\n$3\r\nzs2\r\n$3\r\nMIN\r\n$5\r\nCOUNT\r\n$1\r\n2\r\n"[0: 66],
+        &out[0],
+        256,
+        1000u64,
+    );
     aof_close(&writer);
     engine_free(&engine);
 
     var replay_engine: Engine = engine_new();
     try aof_replay_file_at(path, &replay_engine, &router, 2000u64);
     try assert_true(aof_key_missing_at(&replay_engine, &"zs"[0: 2], 2000u64));
+    try assert_true(aof_key_missing_at(&replay_engine, &"zs2"[0: 3], 2000u64));
     engine_free(&replay_engine);
     _ = unlink(path);
     try assert_eq_i32(used_memory() as i32, 0);

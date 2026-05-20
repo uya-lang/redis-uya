@@ -535,6 +535,30 @@ if [[ "$ZRANGE_RESULT" != $'b\na' ]]; then
     exit 1
 fi
 
+BZSET_ZADD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zadd bzset 2 b 1 a 3 c)"
+if [[ "$BZSET_ZADD_RESULT" != "3" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected bzset ZADD 3, got '$BZSET_ZADD_RESULT'" >&2
+    exit 1
+fi
+
+BZMPOP_MIN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" BZMPOP 1 2 missing bzset MIN COUNT 2)"
+if [[ "$BZMPOP_MIN_RESULT" != $'bzset\na\n1\nb\n2' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected BZMPOP MIN COUNT payload, got '$BZMPOP_MIN_RESULT'" >&2
+    exit 1
+fi
+
+BZMPOP_MAX_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" BZMPOP 1 1 bzset MAX)"
+if [[ "$BZMPOP_MAX_RESULT" != $'bzset\nc\n3' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected BZMPOP MAX payload, got '$BZMPOP_MAX_RESULT'" >&2
+    exit 1
+fi
+
+BZSET_EXISTS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" exists bzset)"
+if [[ "$BZSET_EXISTS_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected bzset to be removed after BZMPOP, got '$BZSET_EXISTS_RESULT'" >&2
+    exit 1
+fi
+
 ZSET_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del zset)"
 if [[ "$ZSET_DEL_RESULT" != "1" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected zset DEL 1, got '$ZSET_DEL_RESULT'" >&2

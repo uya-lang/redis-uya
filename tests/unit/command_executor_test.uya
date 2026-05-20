@@ -710,6 +710,21 @@ export fn test_command_command_getkeys() !void {
     command_reply_cleanup(&getkeys_lmpop_flags_reply);
     resp_value_free(&getkeys_lmpop_flags_parsed.value);
 
+    var getkeys_bzmpop_parsed: RespParseResult = try parse_resp2(&"*10\r\n$7\r\nCOMMAND\r\n$7\r\nGETKEYS\r\n$6\r\nBZMPOP\r\n$1\r\n1\r\n$1\r\n2\r\n$1\r\na\r\n$1\r\nb\r\n$3\r\nMIN\r\n$5\r\nCOUNT\r\n$1\r\n2\r\n"[0: 104]);
+    const getkeys_bzmpop_command: Command = try command_executor_test_command(&router, &getkeys_bzmpop_parsed);
+    var getkeys_bzmpop_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &getkeys_bzmpop_command, 1000u64);
+    try assert_true(command_executor_test_slice_eq(getkeys_bzmpop_reply.data, &"*2\r\n$1\r\na\r\n$1\r\nb\r\n"[0: 18]));
+    command_reply_cleanup(&getkeys_bzmpop_reply);
+    resp_value_free(&getkeys_bzmpop_parsed.value);
+
+    var getkeys_bzmpop_flags_parsed: RespParseResult = try parse_resp2(&"*10\r\n$7\r\nCOMMAND\r\n$15\r\nGETKEYSANDFLAGS\r\n$6\r\nBZMPOP\r\n$1\r\n1\r\n$1\r\n2\r\n$1\r\na\r\n$1\r\nb\r\n$3\r\nMAX\r\n$5\r\nCOUNT\r\n$1\r\n2\r\n"[0: 112]);
+    const getkeys_bzmpop_flags_command: Command = try command_executor_test_command(&router, &getkeys_bzmpop_flags_parsed);
+    var getkeys_bzmpop_flags_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &getkeys_bzmpop_flags_command, 1000u64);
+    try assert_true(command_executor_test_contains(getkeys_bzmpop_flags_reply.data, &"$1\r\na\r\n*3\r\n$2\r\nRW\r\n$6\r\naccess\r\n$6\r\ndelete\r\n"[0: 43]));
+    try assert_true(command_executor_test_contains(getkeys_bzmpop_flags_reply.data, &"$1\r\nb\r\n*3\r\n$2\r\nRW\r\n$6\r\naccess\r\n$6\r\ndelete\r\n"[0: 43]));
+    command_reply_cleanup(&getkeys_bzmpop_flags_reply);
+    resp_value_free(&getkeys_bzmpop_flags_parsed.value);
+
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);
 }
@@ -3008,7 +3023,7 @@ export fn test_command_zscore_zmscore_zpopmin_zpopmax() !void {
     _ = command_execute_at(&engine, &zadd_bz_command, 1000u64);
     resp_value_free(&zadd_bz_parsed.value);
 
-    var bzpopmin_parsed: RespParseResult = try parse_resp2(&"*4\r\n$8\r\nBZPOPMIN\r\n$4\r\nmiss\r\n$2\r\nbz\r\n$1\r\n1\r\n"[0: 49]);
+    var bzpopmin_parsed: RespParseResult = try parse_resp2(&"*4\r\n$8\r\nBZPOPMIN\r\n$4\r\nmiss\r\n$2\r\nbz\r\n$1\r\n1\r\n"[0: 43]);
     const bzpopmin_command: Command = try command_executor_test_command(&router, &bzpopmin_parsed);
     var bzpopmin_reply: CommandReply = command_execute_at(&engine, &bzpopmin_command, 1000u64);
     const bzpopmin_len: usize = try connection_encode_reply(&bzpopmin_reply, &out[0], 512);
@@ -3016,13 +3031,68 @@ export fn test_command_zscore_zmscore_zpopmin_zpopmax() !void {
     command_reply_cleanup(&bzpopmin_reply);
     resp_value_free(&bzpopmin_parsed.value);
 
-    var bzpopmax_parsed: RespParseResult = try parse_resp2(&"*3\r\n$8\r\nBZPOPMAX\r\n$2\r\nbz\r\n$1\r\n1\r\n"[0: 37]);
+    var bzpopmax_parsed: RespParseResult = try parse_resp2(&"*3\r\n$8\r\nBZPOPMAX\r\n$2\r\nbz\r\n$1\r\n1\r\n"[0: 33]);
     const bzpopmax_command: Command = try command_executor_test_command(&router, &bzpopmax_parsed);
     var bzpopmax_reply: CommandReply = command_execute_at(&engine, &bzpopmax_command, 1000u64);
     const bzpopmax_len: usize = try connection_encode_reply(&bzpopmax_reply, &out[0], 512);
     try assert_true(command_executor_test_slice_eq(out[0: bzpopmax_len], &"*3\r\n$2\r\nbz\r\n$1\r\nb\r\n$1\r\n2\r\n"[0: 26]));
     command_reply_cleanup(&bzpopmax_reply);
     resp_value_free(&bzpopmax_parsed.value);
+
+    var zadd_bzm_parsed: RespParseResult = try parse_resp2(&"*8\r\n$4\r\nZADD\r\n$4\r\nbzm1\r\n$1\r\n1\r\n$1\r\na\r\n$1\r\n2\r\n$1\r\nb\r\n$1\r\n3\r\n$1\r\nc\r\n"[0: 66]);
+    const zadd_bzm_command: Command = try command_executor_test_command(&router, &zadd_bzm_parsed);
+    _ = command_execute_at(&engine, &zadd_bzm_command, 1000u64);
+    resp_value_free(&zadd_bzm_parsed.value);
+
+    var pexpire_bzm_parsed: RespParseResult = try parse_resp2(&"*3\r\n$7\r\nPEXPIRE\r\n$4\r\nbzm1\r\n$4\r\n5000\r\n"[0: 37]);
+    const pexpire_bzm_command: Command = try command_executor_test_command(&router, &pexpire_bzm_parsed);
+    _ = command_execute_at(&engine, &pexpire_bzm_command, 1000u64);
+    resp_value_free(&pexpire_bzm_parsed.value);
+
+    var bzmpop_min_parsed: RespParseResult = try parse_resp2(&"*8\r\n$6\r\nBZMPOP\r\n$1\r\n1\r\n$1\r\n2\r\n$4\r\nmiss\r\n$4\r\nbzm1\r\n$3\r\nMIN\r\n$5\r\nCOUNT\r\n$1\r\n2\r\n"[0: 77]);
+    const bzmpop_min_command: Command = try command_executor_test_command(&router, &bzmpop_min_parsed);
+    var bzmpop_min_reply: CommandReply = command_execute_at(&engine, &bzmpop_min_command, 1500u64);
+    const bzmpop_min_len: usize = try connection_encode_reply(&bzmpop_min_reply, &out[0], 512);
+    try assert_true(command_executor_test_slice_eq(out[0: bzmpop_min_len], &"*2\r\n$4\r\nbzm1\r\n*2\r\n*2\r\n$1\r\na\r\n$1\r\n1\r\n*2\r\n$1\r\nb\r\n$1\r\n2\r\n"[0: 54]));
+    command_reply_cleanup(&bzmpop_min_reply);
+    resp_value_free(&bzmpop_min_parsed.value);
+
+    var pttl_bzm_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nPTTL\r\n$4\r\nbzm1\r\n"[0: 24]);
+    const pttl_bzm_command: Command = try command_executor_test_command(&router, &pttl_bzm_parsed);
+    const pttl_bzm_reply: CommandReply = command_execute_at(&engine, &pttl_bzm_command, 1500u64);
+    try assert_eq_i32(pttl_bzm_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(pttl_bzm_reply.integer as i32, 4500);
+    resp_value_free(&pttl_bzm_parsed.value);
+
+    var bzmpop_max_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nBZMPOP\r\n$1\r\n1\r\n$1\r\n1\r\n$4\r\nbzm1\r\n$3\r\nMAX\r\n"[0: 49]);
+    const bzmpop_max_command: Command = try command_executor_test_command(&router, &bzmpop_max_parsed);
+    var bzmpop_max_reply: CommandReply = command_execute_at(&engine, &bzmpop_max_command, 1500u64);
+    const bzmpop_max_len: usize = try connection_encode_reply(&bzmpop_max_reply, &out[0], 512);
+    try assert_true(command_executor_test_slice_eq(out[0: bzmpop_max_len], &"*2\r\n$4\r\nbzm1\r\n*1\r\n*2\r\n$1\r\nc\r\n$1\r\n3\r\n"[0: 36]));
+    command_reply_cleanup(&bzmpop_max_reply);
+    resp_value_free(&bzmpop_max_parsed.value);
+
+    var exists_bzm_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nEXISTS\r\n$4\r\nbzm1\r\n"[0: 26]);
+    const exists_bzm_command: Command = try command_executor_test_command(&router, &exists_bzm_parsed);
+    const exists_bzm_reply: CommandReply = command_execute_at(&engine, &exists_bzm_command, 1500u64);
+    try assert_eq_i32(exists_bzm_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(exists_bzm_reply.integer as i32, 0);
+    resp_value_free(&exists_bzm_parsed.value);
+
+    var bzmpop_last_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nBZMPOP\r\n$3\r\n0.1\r\n$1\r\n1\r\n$4\r\nbzm1\r\n$3\r\nMIN\r\n"[0: 51]);
+    const bzmpop_last_command: Command = try command_executor_test_command(&router, &bzmpop_last_parsed);
+    var bzmpop_last_reply: CommandReply = command_execute_at(&engine, &bzmpop_last_command, 1500u64);
+    const bzmpop_last_len: usize = try connection_encode_reply(&bzmpop_last_reply, &out[0], 512);
+    try assert_true(command_executor_test_slice_eq(out[0: bzmpop_last_len], &"*-1\r\n"[0: 5]));
+    command_reply_cleanup(&bzmpop_last_reply);
+    resp_value_free(&bzmpop_last_parsed.value);
+
+    var exists_bzm_after_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nEXISTS\r\n$4\r\nbzm1\r\n"[0: 26]);
+    const exists_bzm_after_command: Command = try command_executor_test_command(&router, &exists_bzm_after_parsed);
+    const exists_bzm_after_reply: CommandReply = command_execute_at(&engine, &exists_bzm_after_command, 1500u64);
+    try assert_eq_i32(exists_bzm_after_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(exists_bzm_after_reply.integer as i32, 0);
+    resp_value_free(&exists_bzm_after_parsed.value);
 
     var exists_ttl_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nEXISTS\r\n$4\r\nzttl\r\n"[0: 26]);
     const exists_ttl_command: Command = try command_executor_test_command(&router, &exists_ttl_parsed);
@@ -4318,6 +4388,39 @@ export fn test_command_error_paths() !void {
     try assert_eq_i32(zpopmax_bad_count_reply.typ as i32, CommandReplyType.reply_error as i32);
     try assert_true(command_executor_test_slice_eq(zpopmax_bad_count_reply.data, &"ERR value is out of range, must be positive"[0: 43]));
     resp_value_free(&zpopmax_bad_count_parsed.value);
+
+    var bzmpop_wrongtype_seed_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$6\r\nstrkey\r\n$1\r\n1\r\n"[0: 32]);
+    const bzmpop_wrongtype_seed_command: Command = try command_executor_test_command(&router, &bzmpop_wrongtype_seed_parsed);
+    _ = command_execute_at(&engine, &bzmpop_wrongtype_seed_command, 1000u64);
+    resp_value_free(&bzmpop_wrongtype_seed_parsed.value);
+
+    var bzmpop_wrongtype_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nBZMPOP\r\n$1\r\n1\r\n$1\r\n1\r\n$6\r\nstrkey\r\n$3\r\nMIN\r\n"[0: 51]);
+    const bzmpop_wrongtype_command: Command = try command_executor_test_command(&router, &bzmpop_wrongtype_parsed);
+    const bzmpop_wrongtype_reply: CommandReply = command_execute_at(&engine, &bzmpop_wrongtype_command, 1000u64);
+    try assert_eq_i32(bzmpop_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(bzmpop_wrongtype_reply.data, &"WRONGTYPE Operation against a key holding the wrong kind of value"[0: 65]));
+    resp_value_free(&bzmpop_wrongtype_parsed.value);
+
+    var bzmpop_bad_numkeys_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nBZMPOP\r\n$1\r\n1\r\n$1\r\n0\r\n$1\r\na\r\n$3\r\nMIN\r\n"[0: 46]);
+    const bzmpop_bad_numkeys_command: Command = try command_executor_test_command(&router, &bzmpop_bad_numkeys_parsed);
+    const bzmpop_bad_numkeys_reply: CommandReply = command_execute_at(&engine, &bzmpop_bad_numkeys_command, 1000u64);
+    try assert_eq_i32(bzmpop_bad_numkeys_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(bzmpop_bad_numkeys_reply.data, &"ERR numkeys should be greater than 0"[0: 36]));
+    resp_value_free(&bzmpop_bad_numkeys_parsed.value);
+
+    var bzmpop_bad_count_parsed: RespParseResult = try parse_resp2(&"*7\r\n$6\r\nBZMPOP\r\n$1\r\n1\r\n$1\r\n1\r\n$1\r\na\r\n$3\r\nMIN\r\n$5\r\nCOUNT\r\n$1\r\n0\r\n"[0: 64]);
+    const bzmpop_bad_count_command: Command = try command_executor_test_command(&router, &bzmpop_bad_count_parsed);
+    const bzmpop_bad_count_reply: CommandReply = command_execute_at(&engine, &bzmpop_bad_count_command, 1000u64);
+    try assert_eq_i32(bzmpop_bad_count_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(bzmpop_bad_count_reply.data, &"ERR count should be greater than 0"[0: 34]));
+    resp_value_free(&bzmpop_bad_count_parsed.value);
+
+    var bzmpop_bad_timeout_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nBZMPOP\r\n$2\r\n-1\r\n$1\r\n1\r\n$1\r\na\r\n$3\r\nMIN\r\n"[0: 47]);
+    const bzmpop_bad_timeout_command: Command = try command_executor_test_command(&router, &bzmpop_bad_timeout_parsed);
+    const bzmpop_bad_timeout_reply: CommandReply = command_execute_at(&engine, &bzmpop_bad_timeout_command, 1000u64);
+    try assert_eq_i32(bzmpop_bad_timeout_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(bzmpop_bad_timeout_reply.data, &"ERR value is not a valid float"[0: 30]));
+    resp_value_free(&bzmpop_bad_timeout_parsed.value);
 
     var save_parsed: RespParseResult = try parse_resp2(&"*1\r\n$4\r\nSAVE\r\n"[0: 14]);
     const save_command: Command = try command_executor_test_command(&router, &save_parsed);

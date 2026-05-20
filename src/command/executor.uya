@@ -390,6 +390,10 @@ fn command_executor_lmpop_count_required() CommandReply {
     return command_executor_error(&"ERR count should be greater than 0"[0: 34]);
 }
 
+fn command_executor_bzmpop_numkeys_required() CommandReply {
+    return command_executor_error(&"ERR numkeys should be greater than 0"[0: 36]);
+}
+
 fn command_executor_invalid_float() CommandReply {
     return command_executor_error(&"ERR value is not a valid float"[0: 30]);
 }
@@ -5913,6 +5917,182 @@ fn command_executor_bzpop(engine: &Engine, command: &Command, now_ms: u64, rever
     return command_executor_null_array();
 }
 
+fn command_executor_bzmpop_key(
+    engine: &Engine,
+    key: &[byte],
+    obj: &RedisObject,
+    reverse: bool,
+    count: usize,
+) CommandReply {
+    var raw: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&raw);
+    }
+
+    _ = command_executor_resp_collection_prefix(&raw, &"*"[0: 1], 2) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_command_append_bulk(&raw, key) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_resp_collection_prefix(&raw, &"*"[0: 1], count) catch {
+        return command_executor_oom();
+    };
+
+    const sorted_members: &RedisObject = zset_object_range_reply(obj, 0, -1) catch |err| {
+        if err == error.AllocOutOfMemory {
+            return command_executor_oom();
+        }
+        return command_executor_wrongtype();
+    };
+    defer {
+        object_free(sorted_members);
+    }
+
+    var node: &ListNode = sorted_members.list_head;
+    if reverse {
+        node = sorted_members.list_tail;
+    }
+
+    var moved: usize = 0;
+    while node != null && moved < count {
+        const member: &[byte] = node.value.value.buf[0: node.value.value.len];
+        const score: i64 = zset_object_get_score(obj, member) catch {
+            return command_executor_wrongtype();
+        };
+        _ = command_executor_resp_collection_prefix(&raw, &"*"[0: 1], 2) catch {
+            return command_executor_oom();
+        };
+        _ = command_executor_command_append_bulk(&raw, member) catch {
+            return command_executor_oom();
+        };
+        var score_buf: Sds = sds_empty() catch {
+            return command_executor_oom();
+        };
+        defer {
+            sds_free(&score_buf);
+        }
+        _ = command_executor_info_append_i64(&score_buf, &"%i"[0: 2], score) catch {
+            return command_executor_oom();
+        };
+        _ = command_executor_command_append_bulk(&raw, score_buf.buf[0: score_buf.len]) catch {
+            return command_executor_oom();
+        };
+        _ = zset_object_remove_member(obj, member) catch {
+            return command_executor_wrongtype();
+        };
+        if reverse {
+            node = node.prev;
+        } else {
+            node = node.next;
+        }
+        moved = moved + 1;
+    }
+
+    const remaining: usize = zset_object_len(obj) catch {
+        return command_executor_wrongtype();
+    };
+    if remaining == 0 {
+        _ = delete_key(engine, key);
+    }
+    return command_executor_owned_raw(raw.buf[0: raw.len]);
+}
+
+fn command_executor_bzmpop(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 5 {
+        return command_executor_wrong_arity();
+    }
+    const timeout_data: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    _ = command_executor_validate_blocking_timeout(timeout_data) catch {
+        return command_executor_invalid_float();
+    };
+
+    const numkeys_data: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    const numkeys_i64: i64 = command_executor_parse_i64(numkeys_data) catch {
+        return command_executor_bzmpop_numkeys_required();
+    };
+    if numkeys_i64 <= 0 {
+        return command_executor_bzmpop_numkeys_required();
+    }
+
+    const numkeys: usize = numkeys_i64 as usize;
+    const keys_end: usize = 3 + numkeys;
+    if command.argc <= keys_end {
+        return command_executor_syntax_error();
+    }
+
+    const direction: &[byte] = command_executor_arg(command, keys_end) catch {
+        return command_executor_syntax_error();
+    };
+    var reverse: bool = false;
+    if command_executor_keyword_eq(direction, &"MIN"[0: 3]) {
+        reverse = false;
+    } else if command_executor_keyword_eq(direction, &"MAX"[0: 3]) {
+        reverse = true;
+    } else {
+        return command_executor_syntax_error();
+    }
+
+    var requested_count: usize = 1;
+    if command.argc == keys_end + 3 {
+        const option: &[byte] = command_executor_arg(command, keys_end + 1) catch {
+            return command_executor_syntax_error();
+        };
+        if !command_executor_keyword_eq(option, &"COUNT"[0: 5]) {
+            return command_executor_syntax_error();
+        }
+        const count_data: &[byte] = command_executor_arg(command, keys_end + 2) catch {
+            return command_executor_syntax_error();
+        };
+        const count_i64: i64 = command_executor_parse_i64(count_data) catch {
+            return command_executor_lmpop_count_required();
+        };
+        if count_i64 <= 0 {
+            return command_executor_lmpop_count_required();
+        }
+        requested_count = count_i64 as usize;
+    } else if command.argc != keys_end + 1 {
+        return command_executor_syntax_error();
+    }
+
+    var key_index: usize = 3;
+    while key_index < keys_end {
+        const key: &[byte] = command_executor_arg(command, key_index) catch {
+            return command_executor_wrong_arity();
+        };
+        const obj_result: !&RedisObject = lookup_key_at(engine, key, now_ms);
+        if obj_result.error_id != 0 {
+            key_index = key_index + 1;
+            continue;
+        }
+        const obj: &RedisObject = obj_result.value;
+        if obj.obj_type != ObjectType.object_zset {
+            return command_executor_wrongtype();
+        }
+        const available: usize = zset_object_len(obj) catch {
+            return command_executor_wrongtype();
+        };
+        if available == 0 {
+            key_index = key_index + 1;
+            continue;
+        }
+
+        var actual_count: usize = requested_count;
+        if actual_count > available {
+            actual_count = available;
+        }
+        return command_executor_bzmpop_key(engine, key, obj, reverse, actual_count);
+    }
+
+    return command_executor_null_array();
+}
+
 fn command_executor_zrangebyscore(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
     if command.argc != 4 {
         return command_executor_wrong_arity();
@@ -8845,6 +9025,9 @@ fn command_executor_command_key_flags(info: &CommandInfo, key_ordinal: usize) &[
     if info.cmd_type == CommandType.command_lmpop {
         return &"RW|access|delete"[0: 16];
     }
+    if info.cmd_type == CommandType.command_bzmpop {
+        return &"RW|access|delete"[0: 16];
+    }
     if info.cmd_type == CommandType.command_sinterstore {
         if key_ordinal == 0 {
             return &"RW|update"[0: 9];
@@ -9066,6 +9249,52 @@ fn command_executor_command_getkeysandflags_lmpop(
     }
 }
 
+fn command_executor_command_bzmpop_numkeys(command: &Command) !usize {
+    const full_argc: usize = command_executor_command_full_argc(command);
+    if full_argc < 5 {
+        return error.CommandWrongArity;
+    }
+    const numkeys_data: &[byte] = try command_executor_command_full_arg(command, 2);
+    const numkeys_i64: i64 = command_executor_parse_i64(numkeys_data) catch {
+        return error.CommandWrongArity;
+    };
+    if numkeys_i64 <= 0 {
+        return error.CommandWrongArity;
+    }
+    const numkeys: usize = numkeys_i64 as usize;
+    const keys_end: usize = 3 + numkeys;
+    if full_argc <= keys_end {
+        return error.CommandWrongArity;
+    }
+    return numkeys;
+}
+
+fn command_executor_command_getkeys_bzmpop(command: &Command, buf: &Sds) !void {
+    const numkeys: usize = try command_executor_command_bzmpop_numkeys(command);
+    try command_executor_resp_collection_prefix(buf, &"*"[0: 1], numkeys);
+    var key_index: usize = 3;
+    while key_index < 3 + numkeys {
+        const key: &[byte] = try command_executor_command_full_arg(command, key_index);
+        try command_executor_command_append_getkeys_key(buf, key);
+        key_index = key_index + 1;
+    }
+}
+
+fn command_executor_command_getkeysandflags_bzmpop(
+    runtime: &CommandRuntimeInfo,
+    command: &Command,
+    buf: &Sds,
+) !void {
+    const numkeys: usize = try command_executor_command_bzmpop_numkeys(command);
+    try command_executor_resp_collection_prefix(buf, &"*"[0: 1], numkeys);
+    var key_index: usize = 3;
+    while key_index < 3 + numkeys {
+        const key: &[byte] = try command_executor_command_full_arg(command, key_index);
+        try command_executor_command_append_getkeysandflags_item(buf, key, &"RW|access|delete"[0: 16], runtime.protocol_version);
+        key_index = key_index + 1;
+    }
+}
+
 fn command_executor_command_getkeys(runtime: &CommandRuntimeInfo, command: &Command, with_flags: bool) CommandReply {
     const info: CommandInfo = command_executor_command_lookup_full_command(command) catch |err| {
         if err == error.CommandUnknown {
@@ -9101,6 +9330,19 @@ fn command_executor_command_getkeys(runtime: &CommandRuntimeInfo, command: &Comm
             };
         } else {
             _ = command_executor_command_getkeys_lmpop(command, &buf) catch {
+                return command_executor_command_invalid_command_arity();
+            };
+        }
+        return command_executor_owned_raw(buf.buf[0: buf.len]);
+    }
+
+    if info.cmd_type == CommandType.command_bzmpop {
+        if with_flags {
+            _ = command_executor_command_getkeysandflags_bzmpop(runtime, command, &buf) catch {
+                return command_executor_command_invalid_command_arity();
+            };
+        } else {
+            _ = command_executor_command_getkeys_bzmpop(command, &buf) catch {
                 return command_executor_command_invalid_command_arity();
             };
         }
@@ -9735,6 +9977,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_bzpopmin {
         return command_executor_bzpop(engine, command, now_ms, false);
+    }
+    if command.info.cmd_type == CommandType.command_bzmpop {
+        return command_executor_bzmpop(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_zrangebyscore {
         return command_executor_zrangebyscore(engine, command, now_ms);

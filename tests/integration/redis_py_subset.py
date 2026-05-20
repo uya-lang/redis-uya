@@ -993,6 +993,9 @@ def run_smoke() -> None:
             assert client.zrangebyscore("zset", 2, 4) == [b"b", b"a"]
             assert client.zrevrangebyscore("zset", 4, 2) == [b"a", b"b"]
             assert client.zrem("zset", "a") == 1
+            assert client.zadd("bzset", {"b": 2, "a": 1, "c": 3}) == 3
+            assert client._request(b"BZMPOP", b"1", b"2", b"missing", b"bzset", b"MIN", b"COUNT", b"2") == [b"bzset", [[b"a", b"1"], [b"b", b"2"]]]
+            assert client._request(b"BZMPOP", b"1", b"1", b"bzset", b"MAX") == [b"bzset", [[b"c", b"3"]]]
             assert client.zadd("zwork", {"b": 2, "a": 1, "c": 3}) == 3
             cursor, zscan_items = client.zscan("zwork", 0, count=16)
             if cursor != 0 or zscan_items != [b"a", b"1", b"b", b"2", b"c", b"3"]:

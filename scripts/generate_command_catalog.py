@@ -279,6 +279,7 @@ PARTIAL_NAMES = {
     "blpop",
     "brpop",
     "brpoplpush",
+    "bzmpop",
     "bzpopmax",
     "bzpopmin",
     "client",

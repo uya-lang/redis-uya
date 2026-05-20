@@ -151,6 +151,23 @@ def run_smoke() -> None:
             if blocked_reply != [b"zwait2", b"late", b"5"]:
                 raise AssertionError(f"unexpected BZPOPMAX unblock reply: {blocked_reply!r}")
 
+        with connect_with_retry(port, time.monotonic() + 5.0) as sock:
+            if send_command(sock, b"ZADD", b"zm", b"2", b"b", b"1", b"a", b"3", b"c") != 3:
+                raise AssertionError("ZADD zm failed")
+            if send_command(sock, b"BZMPOP", b"1", b"2", b"miss", b"zm", b"MIN", b"COUNT", b"2") != [b"zm", [[b"a", b"1"], [b"b", b"2"]]]:
+                raise AssertionError("BZMPOP immediate MIN COUNT result mismatch")
+            if send_command(sock, b"BZMPOP", b"1", b"1", b"zm", b"MAX") != [b"zm", [[b"c", b"3"]]]:
+                raise AssertionError("BZMPOP immediate MAX result mismatch")
+
+        with connect_with_retry(port, time.monotonic() + 5.0) as blocked_sock, connect_with_retry(port, time.monotonic() + 5.0) as wake_sock:
+            send_only(blocked_sock, b"BZMPOP", b"0", b"1", b"zwait3", b"MIN", b"COUNT", b"2")
+            time.sleep(0.1)
+            if send_command(wake_sock, b"ZADD", b"zwait3", b"5", b"late", b"1", b"early", b"2", b"mid") != 3:
+                raise AssertionError("ZADD zwait3 failed")
+            blocked_reply = read_resp(blocked_sock)
+            if blocked_reply != [b"zwait3", [[b"early", b"1"], [b"mid", b"2"]]]:
+                raise AssertionError(f"unexpected BZMPOP unblock reply: {blocked_reply!r}")
+
         with connect_with_retry(port, time.monotonic() + 5.0) as timeout_sock:
             started = time.monotonic()
             send_only(timeout_sock, b"BZPOPMIN", b"timeout-zs", b"0.2")
@@ -160,6 +177,16 @@ def run_smoke() -> None:
                 raise AssertionError(f"BZPOPMIN timeout should return null array, got {timeout_reply!r}")
             if elapsed < 0.15:
                 raise AssertionError(f"BZPOPMIN timeout returned too early: {elapsed:.3f}s")
+
+        with connect_with_retry(port, time.monotonic() + 5.0) as timeout_sock:
+            started = time.monotonic()
+            send_only(timeout_sock, b"BZMPOP", b"0.2", b"1", b"timeout-zm", b"MIN")
+            timeout_reply = read_resp(timeout_sock)
+            elapsed = time.monotonic() - started
+            if timeout_reply is not None:
+                raise AssertionError(f"BZMPOP timeout should return null array, got {timeout_reply!r}")
+            if elapsed < 0.15:
+                raise AssertionError(f"BZMPOP timeout returned too early: {elapsed:.3f}s")
     finally:
         stop_process(proc)
         aof_path.unlink(missing_ok=True)

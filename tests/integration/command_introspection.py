@@ -190,6 +190,15 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"zset score/pop commands missing from COMMAND INFO: {zset_info!r}")
 
+            blocking_zset_info = send_command(sock, b"COMMAND", b"INFO", b"BZMPOP")
+            if (
+                not isinstance(blocking_zset_info, list)
+                or len(blocking_zset_info) != 1
+                or not isinstance(blocking_zset_info[0], list)
+                or blocking_zset_info[0][0] != b"bzmpop"
+            ):
+                raise AssertionError(f"BZMPOP missing from COMMAND INFO: {blocking_zset_info!r}")
+
             list_move_info = send_command(sock, b"COMMAND", b"INFO", b"LMOVE", b"RPOPLPUSH", b"LMPOP")
             if (
                 not isinstance(list_move_info, list)
@@ -270,7 +279,7 @@ def run_smoke() -> None:
                 not isinstance(listed_bz, list)
                 or b"bzpopmax" not in listed_bz
                 or b"bzpopmin" not in listed_bz
-                or b"bzmpop" in listed_bz
+                or b"bzmpop" not in listed_bz
             ):
                 raise AssertionError(f"unexpected COMMAND LIST bz* result: {listed_bz!r}")
 

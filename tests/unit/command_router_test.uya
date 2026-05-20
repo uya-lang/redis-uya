@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 154);
+    try assert_eq_i32(command_router_count(&router) as i32, 155);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -354,6 +354,10 @@ export fn test_command_router_lookup_and_case() !void {
     const bzpopmin: CommandInfo = try command_router_lookup(&router, &"bzpopmin"[0: 8]);
     try assert_eq_i32(bzpopmin.cmd_type as i32, CommandType.command_bzpopmin as i32);
     try assert_eq_i32(bzpopmin.arity, -3);
+
+    const bzmpop: CommandInfo = try command_router_lookup(&router, &"BZMPOP"[0: 6]);
+    try assert_eq_i32(bzmpop.cmd_type as i32, CommandType.command_bzmpop as i32);
+    try assert_eq_i32(bzmpop.arity, -5);
 
     const zrangebyscore: CommandInfo = try command_router_lookup(&router, &"ZRANGEBYSCORE"[0: 13]);
     try assert_eq_i32(zrangebyscore.cmd_type as i32, CommandType.command_zrangebyscore as i32);
@@ -680,6 +684,9 @@ export fn test_command_router_arity_validation() !void {
     const zmscore: CommandInfo = try command_router_lookup(&router, &"ZMSCORE"[0: 7]);
     const zpopmax: CommandInfo = try command_router_lookup(&router, &"ZPOPMAX"[0: 7]);
     const zpopmin: CommandInfo = try command_router_lookup(&router, &"ZPOPMIN"[0: 7]);
+    const bzpopmax: CommandInfo = try command_router_lookup(&router, &"BZPOPMAX"[0: 8]);
+    const bzpopmin: CommandInfo = try command_router_lookup(&router, &"BZPOPMIN"[0: 8]);
+    const bzmpop: CommandInfo = try command_router_lookup(&router, &"BZMPOP"[0: 6]);
     const lmove: CommandInfo = try command_router_lookup(&router, &"LMOVE"[0: 5]);
     const rpoplpush: CommandInfo = try command_router_lookup(&router, &"RPOPLPUSH"[0: 9]);
     const incrbyfloat: CommandInfo = try command_router_lookup(&router, &"INCRBYFLOAT"[0: 11]);
@@ -789,6 +796,12 @@ export fn test_command_router_arity_validation() !void {
     try command_validate_arity(&zpopmax, 3);
     try command_validate_arity(&zpopmin, 2);
     try command_validate_arity(&zpopmin, 3);
+    try command_validate_arity(&bzpopmax, 3);
+    try command_validate_arity(&bzpopmax, 4);
+    try command_validate_arity(&bzpopmin, 3);
+    try command_validate_arity(&bzpopmin, 4);
+    try command_validate_arity(&bzmpop, 5);
+    try command_validate_arity(&bzmpop, 8);
     try command_validate_arity(&lmove, 5);
     try command_validate_arity(&rpoplpush, 3);
     try command_validate_arity(&setrange, 4);

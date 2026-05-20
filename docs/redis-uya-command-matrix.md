@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 362 | 256 | 142 | 48 | 0 | 3 | 169 |
+| Tier A: standalone core | 362 | 256 | 143 | 48 | 0 | 3 | 168 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 135 | 128 | 0 | 0 | 0 | 0 | 135 |
 
@@ -24,11 +24,11 @@
 
 | status | count |
 |--------|-------|
-| `full` | `143` |
+| `full` | `144` |
 | `partial` | `55` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `304` |
+| `deferred` | `303` |
 
 ## Group counts
 
@@ -98,7 +98,7 @@
 | `bitfield` | `bitmap` | `deferred` | `v0.9.2` | `-2` | `-` | `no` | `@write, @bitmap, @slow` |
 | `bitfield_ro` | `bitmap` | `deferred` | `v0.9.2` | `-2` | `-` | `no` | `@read, @bitmap, @fast` |
 | `bitop` | `bitmap` | `deferred` | `v0.9.2` | `-4` | `-` | `no` | `@write, @bitmap, @slow` |
-| `bitpos` | `bitmap` | `deferred` | `v0.9.2` | `-3` | `-` | `no` | `@read, @bitmap, @slow` |
+| `bitpos` | `bitmap` | `full` | `-` | `-3` | `-` | `no` | `@read, @bitmap, @slow` |
 | `blmove` | `list` | `deferred` | `v0.9.1` | `6` | `-` | `no` | `@write, @list, @slow, @blocking` |
 | `blmpop` | `list` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@write, @list, @slow, @blocking` |
 | `blpop` | `list` | `partial` | `-` | `-3` | `-` | `no` | `@write, @list, @slow, @blocking` |

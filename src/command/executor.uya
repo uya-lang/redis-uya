@@ -1767,6 +1767,74 @@ fn command_executor_bitcount_range_bits(data: &[byte], start_bit: usize, stop_bi
     return count;
 }
 
+fn command_executor_bitpos_bits_in_byte(value: byte, target_bit: i64, start_bit: usize, stop_bit: usize) i64 {
+    var bit_index: usize = start_bit;
+    while bit_index <= stop_bit {
+        var current_bit: i64 = 0;
+        if ((value as u32) & command_executor_bit_mask(bit_index)) != 0u32 {
+            current_bit = 1;
+        }
+        if current_bit == target_bit {
+            return bit_index as i64;
+        }
+        bit_index = bit_index + 1;
+    }
+    return -1;
+}
+
+fn command_executor_bitpos_range_bits(data: &[byte], target_bit: i64, start_bit: usize, stop_bit: usize) i64 {
+    const start_byte: usize = start_bit / (8 as usize);
+    const stop_byte: usize = stop_bit / (8 as usize);
+    const start_offset: usize = start_bit % (8 as usize);
+    const stop_offset: usize = stop_bit % (8 as usize);
+
+    var byte_index: usize = start_byte;
+    while byte_index <= stop_byte {
+        var bit_start: usize = 0;
+        if byte_index == start_byte {
+            bit_start = start_offset;
+        }
+        var bit_stop: usize = 7;
+        if byte_index == stop_byte {
+            bit_stop = stop_offset;
+        }
+        const found_bit: i64 = command_executor_bitpos_bits_in_byte(data.ptr[byte_index], target_bit, bit_start, bit_stop);
+        if found_bit >= 0 {
+            return (byte_index * 8 + found_bit as usize) as i64;
+        }
+        byte_index = byte_index + 1;
+    }
+    return -1;
+}
+
+fn command_executor_bitpos_byte_mode(data: &[byte], target_bit: i64, start: i64, has_end: bool, end: i64) i64 {
+    var stop: i64 = -1;
+    if has_end {
+        stop = end;
+    }
+    const range: CommandExecutorIndexRange = command_executor_normalize_index_range(data.len, start, stop);
+    if !range.ok {
+        return -1;
+    }
+    const found: i64 = command_executor_bitpos_range_bits(data, target_bit, range.start * 8, range.stop * 8 + 7);
+    if found >= 0 {
+        return found;
+    }
+    if target_bit == 0 && !has_end {
+        return (data.len * 8) as i64;
+    }
+    return -1;
+}
+
+fn command_executor_bitpos_bit_mode(data: &[byte], target_bit: i64, start: i64, end: i64) i64 {
+    const total_bits: usize = data.len * 8;
+    const range: CommandExecutorIndexRange = command_executor_normalize_index_range(total_bits, start, end);
+    if !range.ok {
+        return -1;
+    }
+    return command_executor_bitpos_range_bits(data, target_bit, range.start, range.stop);
+}
+
 fn command_executor_key_exists(engine: &Engine, key: &[byte], now_ms: u64) bool {
     const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
         return false;
@@ -2303,6 +2371,77 @@ fn command_executor_bitcount(engine: &Engine, command: &Command, now_ms: u64) Co
         return command_executor_integer(0);
     }
     return command_executor_integer(command_executor_bitcount_range_bits(data, range_bits.start, range_bits.stop));
+}
+
+fn command_executor_bitpos(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 3 || command.argc > 6 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const bit_data: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    const target_bit: i64 = command_executor_parse_i64(bit_data) catch {
+        return command_executor_invalid_bit_value();
+    };
+    if target_bit != 0 && target_bit != 1 {
+        return command_executor_invalid_bit_value();
+    }
+
+    const obj: &RedisObject = command_executor_lookup_key_now_or_null(engine, key, now_ms);
+    if obj == null {
+        if target_bit == 0 {
+            return command_executor_integer(0);
+        }
+        return command_executor_integer(-1);
+    }
+    const data: &[byte] = command_executor_string_value(obj) catch {
+        return command_executor_wrongtype();
+    };
+
+    var start: i64 = 0;
+    var end: i64 = 0;
+    var has_end: bool = false;
+    var bit_mode: bool = false;
+    if command.argc >= 4 {
+        const start_data: &[byte] = command_executor_arg(command, 3) catch {
+            return command_executor_wrong_arity();
+        };
+        start = command_executor_parse_i64(start_data) catch {
+            return command_executor_invalid_integer();
+        };
+    }
+    if command.argc >= 5 {
+        const end_data: &[byte] = command_executor_arg(command, 4) catch {
+            return command_executor_wrong_arity();
+        };
+        end = command_executor_parse_i64(end_data) catch {
+            return command_executor_invalid_integer();
+        };
+        has_end = true;
+    }
+    if command.argc == 6 {
+        const mode_data: &[byte] = command_executor_arg(command, 5) catch {
+            return command_executor_wrong_arity();
+        };
+        if command_executor_keyword_eq(mode_data, &"BIT"[0: 3]) {
+            bit_mode = true;
+        } else if command_executor_keyword_eq(mode_data, &"BYTE"[0: 4]) {
+            bit_mode = false;
+        } else {
+            return command_executor_syntax_error();
+        }
+    }
+
+    if data.len == 0 {
+        return command_executor_integer(-1);
+    }
+    if bit_mode {
+        return command_executor_integer(command_executor_bitpos_bit_mode(data, target_bit, start, end));
+    }
+    return command_executor_integer(command_executor_bitpos_byte_mode(data, target_bit, start, has_end, end));
 }
 
 fn command_executor_incrbyfloat(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
@@ -9854,6 +9993,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_bitcount {
         return command_executor_bitcount(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_bitpos {
+        return command_executor_bitpos(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_setrange {
         return command_executor_setrange(engine, command, now_ms);

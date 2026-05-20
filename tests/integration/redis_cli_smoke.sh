@@ -199,6 +199,56 @@ if [[ "$GETRANGE_RESULT" != "alu" ]]; then
     exit 1
 fi
 
+BITPOS_MISSING_ZERO_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" bitpos missing 0)"
+if [[ "$BITPOS_MISSING_ZERO_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected missing BITPOS 0 => 0, got '$BITPOS_MISSING_ZERO_RESULT'" >&2
+    exit 1
+fi
+
+BITPOS_MISSING_ONE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" bitpos missing 1)"
+if [[ "$BITPOS_MISSING_ONE_RESULT" != "-1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected missing BITPOS 1 => -1, got '$BITPOS_MISSING_ONE_RESULT'" >&2
+    exit 1
+fi
+
+BITPOS_ZERO_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" bitpos key 0)"
+if [[ "$BITPOS_ZERO_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected BITPOS key 0 => 0, got '$BITPOS_ZERO_RESULT'" >&2
+    exit 1
+fi
+
+BITPOS_ONE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" bitpos key 1)"
+if [[ "$BITPOS_ONE_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected BITPOS key 1 => 1, got '$BITPOS_ONE_RESULT'" >&2
+    exit 1
+fi
+
+for BIT_INDEX in 0 1 2 3 4 5 6 7; do
+    SET_ALLONES_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" setbit allones "$BIT_INDEX" 1)"
+    if [[ "$SET_ALLONES_RESULT" != "0" ]]; then
+        echo "[FAIL] integration/redis_cli_smoke: expected allones SETBIT previous bit 0, got '$SET_ALLONES_RESULT' at bit $BIT_INDEX" >&2
+        exit 1
+    fi
+done
+
+BITPOS_ALLONES_ZERO_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" bitpos allones 0)"
+if [[ "$BITPOS_ALLONES_ZERO_RESULT" != "8" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected allones BITPOS 0 => 8, got '$BITPOS_ALLONES_ZERO_RESULT'" >&2
+    exit 1
+fi
+
+BITPOS_ALLONES_ZERO_END_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" bitpos allones 0 0 0)"
+if [[ "$BITPOS_ALLONES_ZERO_END_RESULT" != "-1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected allones BITPOS 0 0 0 => -1, got '$BITPOS_ALLONES_ZERO_END_RESULT'" >&2
+    exit 1
+fi
+
+BITPOS_ALLONES_ONE_BIT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" bitpos allones 1 4 7 BIT)"
+if [[ "$BITPOS_ALLONES_ONE_BIT_RESULT" != "4" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected allones BITPOS 1 4 7 BIT => 4, got '$BITPOS_ALLONES_ONE_BIT_RESULT'" >&2
+    exit 1
+fi
+
 SETRANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" setrange key 5 __)"
 if [[ "$SETRANGE_RESULT" != "7" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected setrange 7, got '$SETRANGE_RESULT'" >&2
@@ -961,9 +1011,9 @@ if [[ "$COUNTER_DEL_RESULT" != "1" ]]; then
     exit 1
 fi
 
-TEMP_STRING_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del fcounter nx-key gs-key sx-key)"
-if [[ "$TEMP_STRING_DEL_RESULT" != "4" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected temp string DEL 4, got '$TEMP_STRING_DEL_RESULT'" >&2
+TEMP_STRING_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del fcounter nx-key gs-key sx-key allones)"
+if [[ "$TEMP_STRING_DEL_RESULT" != "5" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected temp string DEL 5, got '$TEMP_STRING_DEL_RESULT'" >&2
     exit 1
 fi
 

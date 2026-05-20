@@ -1351,6 +1351,90 @@ SETRANGE key offset value
 - `offset` 必须为非负整数
 - offset 超过当前长度时，中间空洞会用 `\\0` 填充
 
+### `GETBIT`
+
+格式：
+
+```text
+GETBIT key offset
+```
+
+返回：
+
+- 返回指定 bit 位上的 `0` 或 `1`
+- key 不存在时返回 `0`
+
+说明：
+
+- `offset` 必须为非负整数
+- bit 编号按 Redis bitmap 约定，从首字节最高位开始计数
+
+### `SETBIT`
+
+格式：
+
+```text
+SETBIT key offset value
+```
+
+返回：
+
+- 返回写入前该 bit 位上的 `0` 或 `1`
+
+说明：
+
+- `offset` 必须为非负整数
+- `value` 当前只接受 `0` 或 `1`
+- 超出当前字符串长度时，中间空洞会用 `\\0` 填充
+- 写入后会保留原 key 的 TTL
+
+### `BITCOUNT`
+
+格式：
+
+```text
+BITCOUNT key
+BITCOUNT key start end
+BITCOUNT key start end BYTE
+BITCOUNT key start end BIT
+```
+
+返回：
+
+- 返回指定范围内置位 bit 的数量，Integer
+- key 不存在时返回 `0`
+
+说明：
+
+- 默认按字节范围解释 `start/end`
+- `BIT` 模式下按 bit 范围解释 `start/end`
+- 范围支持负索引；空范围返回 `0`
+
+### `BITPOS`
+
+格式：
+
+```text
+BITPOS key bit
+BITPOS key bit start
+BITPOS key bit start end
+BITPOS key bit start end BYTE
+BITPOS key bit start end BIT
+```
+
+返回：
+
+- 返回首个匹配 bit 的绝对位置，Integer
+- key 不存在时：查找 `0` 返回 `0`，查找 `1` 返回 `-1`
+- 已显式给出 `end` 且范围内未命中时返回 `-1`
+
+说明：
+
+- `bit` 当前只接受 `0` 或 `1`
+- 默认按字节范围解释 `start/end`；`BIT` 模式下按 bit 范围解释
+- 当查找 `0` 且未显式给出 `end` 时，如果从有效 `start` 到字符串结尾都没有 `0`，返回 `len * 8`
+- 范围支持负索引；start-only 场景会从起始位置扫描到字符串末尾
+
 ### `TYPE`
 
 格式：

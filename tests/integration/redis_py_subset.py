@@ -173,6 +173,12 @@ class RedisPySubsetClient:
             encoded.append(part.encode())
         return int(self._request(*encoded))
 
+    def bitpos(self, key: str, bit: int, *parts: str) -> int:
+        encoded: list[bytes] = [b"BITPOS", key.encode(), str(bit).encode()]
+        for part in parts:
+            encoded.append(part.encode())
+        return int(self._request(*encoded))
+
     def setrange(self, key: str, offset: int, value: str) -> int:
         return int(self._request(b"SETRANGE", key.encode(), str(offset).encode(), value.encode()))
 
@@ -751,6 +757,21 @@ def run_smoke() -> None:
             assert client.bitcount("key") == 29
             assert client.bitcount("key", "0", "0") == 5
             assert client.bitcount("key", "0", "7", "BIT") == 5
+            assert client.bitpos("missing", 0) == 0
+            assert client.bitpos("missing", 1) == -1
+            assert client.bitpos("key", 0) == 0
+            assert client.bitpos("key", 1) == 1
+            assert client.setbit("allones", 0, 1) == 0
+            assert client.setbit("allones", 1, 1) == 0
+            assert client.setbit("allones", 2, 1) == 0
+            assert client.setbit("allones", 3, 1) == 0
+            assert client.setbit("allones", 4, 1) == 0
+            assert client.setbit("allones", 5, 1) == 0
+            assert client.setbit("allones", 6, 1) == 0
+            assert client.setbit("allones", 7, 1) == 0
+            assert client.bitpos("allones", 0) == 8
+            assert client.bitpos("allones", 0, "0", "0") == -1
+            assert client.bitpos("allones", 1, "4", "7", "BIT") == 4
             assert client.setrange("key", 5, "__") == 7
             assert client.get("key") == b"value__"
             assert client.rename("key", "key2")
@@ -762,7 +783,7 @@ def run_smoke() -> None:
             assert client.getdel("gd-key") == b"once"
             assert client.getdel("gd-key") is None
             assert client.delete("counter") == 1
-            assert client.delete("fcounter", "nx-key", "gs-key", "sx-key", "mk1", "mk2", "mn1", "mn2") == 8
+            assert client.delete("fcounter", "nx-key", "gs-key", "sx-key", "mk1", "mk2", "mn1", "mn2", "allones") == 9
             assert client.echo("hi") == b"hi"
             assert client.key_type("key") == "string"
             assert client.dbsize() == 1

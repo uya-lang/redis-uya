@@ -1323,6 +1323,102 @@ export fn test_command_set_get_del_exists() !void {
     try assert_eq_i32(bitcount_bits_reply.integer as i32, 5);
     resp_value_free(&bitcount_bits_parsed.value);
 
+    var bitpos_missing_zero_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nBITPOS\r\n$7\r\nmissing\r\n$1\r\n0\r\n"[0: 36]);
+    const bitpos_missing_zero_command: Command = try command_executor_test_command(&router, &bitpos_missing_zero_parsed);
+    const bitpos_missing_zero_reply: CommandReply = command_execute_at(&engine, &bitpos_missing_zero_command, 1000u64);
+    try assert_eq_i32(bitpos_missing_zero_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(bitpos_missing_zero_reply.integer as i32, 0);
+    resp_value_free(&bitpos_missing_zero_parsed.value);
+
+    var bitpos_missing_one_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nBITPOS\r\n$7\r\nmissing\r\n$1\r\n1\r\n"[0: 36]);
+    const bitpos_missing_one_command: Command = try command_executor_test_command(&router, &bitpos_missing_one_parsed);
+    const bitpos_missing_one_reply: CommandReply = command_execute_at(&engine, &bitpos_missing_one_command, 1000u64);
+    try assert_eq_i32(bitpos_missing_one_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(bitpos_missing_one_reply.integer as i32, -1);
+    resp_value_free(&bitpos_missing_one_parsed.value);
+
+    var bitpos_key_zero_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nBITPOS\r\n$3\r\nkey\r\n$1\r\n0\r\n"[0: 32]);
+    const bitpos_key_zero_command: Command = try command_executor_test_command(&router, &bitpos_key_zero_parsed);
+    const bitpos_key_zero_reply: CommandReply = command_execute_at(&engine, &bitpos_key_zero_command, 1000u64);
+    try assert_eq_i32(bitpos_key_zero_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(bitpos_key_zero_reply.integer as i32, 0);
+    resp_value_free(&bitpos_key_zero_parsed.value);
+
+    var bitpos_key_one_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nBITPOS\r\n$3\r\nkey\r\n$1\r\n1\r\n"[0: 32]);
+    const bitpos_key_one_command: Command = try command_executor_test_command(&router, &bitpos_key_one_parsed);
+    const bitpos_key_one_reply: CommandReply = command_execute_at(&engine, &bitpos_key_one_command, 1000u64);
+    try assert_eq_i32(bitpos_key_one_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(bitpos_key_one_reply.integer as i32, 1);
+    resp_value_free(&bitpos_key_one_parsed.value);
+
+    var bitpos_key_range_parsed: RespParseResult = try parse_resp2(&"*6\r\n$6\r\nBITPOS\r\n$3\r\nkey\r\n$1\r\n0\r\n$1\r\n0\r\n$1\r\n7\r\n$3\r\nBIT\r\n"[0: 55]);
+    const bitpos_key_range_command: Command = try command_executor_test_command(&router, &bitpos_key_range_parsed);
+    const bitpos_key_range_reply: CommandReply = command_execute_at(&engine, &bitpos_key_range_command, 1000u64);
+    try assert_eq_i32(bitpos_key_range_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(bitpos_key_range_reply.integer as i32, 0);
+    resp_value_free(&bitpos_key_range_parsed.value);
+
+    var setbit_allones0_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nSETBIT\r\n$7\r\nallones\r\n$1\r\n0\r\n$1\r\n1\r\n"[0: 43]);
+    const setbit_allones0_command: Command = try command_executor_test_command(&router, &setbit_allones0_parsed);
+    _ = command_execute_at(&engine, &setbit_allones0_command, 1000u64);
+    resp_value_free(&setbit_allones0_parsed.value);
+
+    var setbit_allones1_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nSETBIT\r\n$7\r\nallones\r\n$1\r\n1\r\n$1\r\n1\r\n"[0: 43]);
+    const setbit_allones1_command: Command = try command_executor_test_command(&router, &setbit_allones1_parsed);
+    _ = command_execute_at(&engine, &setbit_allones1_command, 1000u64);
+    resp_value_free(&setbit_allones1_parsed.value);
+
+    var setbit_allones2_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nSETBIT\r\n$7\r\nallones\r\n$1\r\n2\r\n$1\r\n1\r\n"[0: 43]);
+    const setbit_allones2_command: Command = try command_executor_test_command(&router, &setbit_allones2_parsed);
+    _ = command_execute_at(&engine, &setbit_allones2_command, 1000u64);
+    resp_value_free(&setbit_allones2_parsed.value);
+
+    var setbit_allones3_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nSETBIT\r\n$7\r\nallones\r\n$1\r\n3\r\n$1\r\n1\r\n"[0: 43]);
+    const setbit_allones3_command: Command = try command_executor_test_command(&router, &setbit_allones3_parsed);
+    _ = command_execute_at(&engine, &setbit_allones3_command, 1000u64);
+    resp_value_free(&setbit_allones3_parsed.value);
+
+    var setbit_allones4_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nSETBIT\r\n$7\r\nallones\r\n$1\r\n4\r\n$1\r\n1\r\n"[0: 43]);
+    const setbit_allones4_command: Command = try command_executor_test_command(&router, &setbit_allones4_parsed);
+    _ = command_execute_at(&engine, &setbit_allones4_command, 1000u64);
+    resp_value_free(&setbit_allones4_parsed.value);
+
+    var setbit_allones5_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nSETBIT\r\n$7\r\nallones\r\n$1\r\n5\r\n$1\r\n1\r\n"[0: 43]);
+    const setbit_allones5_command: Command = try command_executor_test_command(&router, &setbit_allones5_parsed);
+    _ = command_execute_at(&engine, &setbit_allones5_command, 1000u64);
+    resp_value_free(&setbit_allones5_parsed.value);
+
+    var setbit_allones6_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nSETBIT\r\n$7\r\nallones\r\n$1\r\n6\r\n$1\r\n1\r\n"[0: 43]);
+    const setbit_allones6_command: Command = try command_executor_test_command(&router, &setbit_allones6_parsed);
+    _ = command_execute_at(&engine, &setbit_allones6_command, 1000u64);
+    resp_value_free(&setbit_allones6_parsed.value);
+
+    var setbit_allones7_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nSETBIT\r\n$7\r\nallones\r\n$1\r\n7\r\n$1\r\n1\r\n"[0: 43]);
+    const setbit_allones7_command: Command = try command_executor_test_command(&router, &setbit_allones7_parsed);
+    _ = command_execute_at(&engine, &setbit_allones7_command, 1000u64);
+    resp_value_free(&setbit_allones7_parsed.value);
+
+    var bitpos_allones_zero_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nBITPOS\r\n$7\r\nallones\r\n$1\r\n0\r\n"[0: 36]);
+    const bitpos_allones_zero_command: Command = try command_executor_test_command(&router, &bitpos_allones_zero_parsed);
+    const bitpos_allones_zero_reply: CommandReply = command_execute_at(&engine, &bitpos_allones_zero_command, 1000u64);
+    try assert_eq_i32(bitpos_allones_zero_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(bitpos_allones_zero_reply.integer as i32, 8);
+    resp_value_free(&bitpos_allones_zero_parsed.value);
+
+    var bitpos_allones_zero_end_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nBITPOS\r\n$7\r\nallones\r\n$1\r\n0\r\n$1\r\n0\r\n$1\r\n0\r\n"[0: 50]);
+    const bitpos_allones_zero_end_command: Command = try command_executor_test_command(&router, &bitpos_allones_zero_end_parsed);
+    const bitpos_allones_zero_end_reply: CommandReply = command_execute_at(&engine, &bitpos_allones_zero_end_command, 1000u64);
+    try assert_eq_i32(bitpos_allones_zero_end_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(bitpos_allones_zero_end_reply.integer as i32, -1);
+    resp_value_free(&bitpos_allones_zero_end_parsed.value);
+
+    var bitpos_allones_one_bit_parsed: RespParseResult = try parse_resp2(&"*6\r\n$6\r\nBITPOS\r\n$7\r\nallones\r\n$1\r\n1\r\n$1\r\n4\r\n$1\r\n7\r\n$3\r\nBIT\r\n"[0: 59]);
+    const bitpos_allones_one_bit_command: Command = try command_executor_test_command(&router, &bitpos_allones_one_bit_parsed);
+    const bitpos_allones_one_bit_reply: CommandReply = command_execute_at(&engine, &bitpos_allones_one_bit_command, 1000u64);
+    try assert_eq_i32(bitpos_allones_one_bit_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(bitpos_allones_one_bit_reply.integer as i32, 4);
+    resp_value_free(&bitpos_allones_one_bit_parsed.value);
+
     var setrange_parsed: RespParseResult = try parse_resp2(&"*4\r\n$8\r\nSETRANGE\r\n$3\r\nkey\r\n$1\r\n5\r\n$2\r\n__\r\n"[0: 42]);
     const setrange_command: Command = try command_executor_test_command(&router, &setrange_parsed);
     const setrange_reply: CommandReply = command_execute_at(&engine, &setrange_command, 1000u64);
@@ -1406,6 +1502,13 @@ export fn test_command_set_get_del_exists() !void {
     try assert_eq_i32(fcounter_del_reply.typ as i32, CommandReplyType.reply_integer as i32);
     try assert_eq_i32(fcounter_del_reply.integer as i32, 1);
     resp_value_free(&fcounter_del_parsed.value);
+
+    var allones_del_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nDEL\r\n$7\r\nallones\r\n"[0: 26]);
+    const allones_del_command: Command = try command_executor_test_command(&router, &allones_del_parsed);
+    const allones_del_reply: CommandReply = command_execute_at(&engine, &allones_del_command, 1000u64);
+    try assert_eq_i32(allones_del_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(allones_del_reply.integer as i32, 1);
+    resp_value_free(&allones_del_parsed.value);
 
     var echo_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nECHO\r\n$2\r\nhi\r\n"[0: 22]);
     const echo_command: Command = try command_executor_test_command(&router, &echo_parsed);
@@ -4363,6 +4466,24 @@ export fn test_command_error_paths() !void {
     const bitcount_wrongtype_reply: CommandReply = command_execute_at(&engine, &bitcount_wrongtype_command, 1000u64);
     try assert_eq_i32(bitcount_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
     resp_value_free(&bitcount_wrongtype_parsed.value);
+
+    var bitpos_bad_bit_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nBITPOS\r\n$3\r\nkey\r\n$1\r\n2\r\n"[0: 32]);
+    const bitpos_bad_bit_command: Command = try command_executor_test_command(&router, &bitpos_bad_bit_parsed);
+    const bitpos_bad_bit_reply: CommandReply = command_execute_at(&engine, &bitpos_bad_bit_command, 1000u64);
+    try assert_eq_i32(bitpos_bad_bit_reply.typ as i32, CommandReplyType.reply_error as i32);
+    resp_value_free(&bitpos_bad_bit_parsed.value);
+
+    var bitpos_wrongtype_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nBITPOS\r\n$4\r\nhash\r\n$1\r\n0\r\n"[0: 33]);
+    const bitpos_wrongtype_command: Command = try command_executor_test_command(&router, &bitpos_wrongtype_parsed);
+    const bitpos_wrongtype_reply: CommandReply = command_execute_at(&engine, &bitpos_wrongtype_command, 1000u64);
+    try assert_eq_i32(bitpos_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    resp_value_free(&bitpos_wrongtype_parsed.value);
+
+    var bitpos_bad_mode_parsed: RespParseResult = try parse_resp2(&"*6\r\n$6\r\nBITPOS\r\n$3\r\nkey\r\n$1\r\n0\r\n$1\r\n0\r\n$1\r\n0\r\n$3\r\nBAD\r\n"[0: 55]);
+    const bitpos_bad_mode_command: Command = try command_executor_test_command(&router, &bitpos_bad_mode_parsed);
+    const bitpos_bad_mode_reply: CommandReply = command_execute_at(&engine, &bitpos_bad_mode_command, 1000u64);
+    try assert_eq_i32(bitpos_bad_mode_reply.typ as i32, CommandReplyType.reply_error as i32);
+    resp_value_free(&bitpos_bad_mode_parsed.value);
 
     var zscore_wrongtype_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nZSCORE\r\n$3\r\nkey\r\n$1\r\na\r\n"[0: 32]);
     const zscore_wrongtype_command: Command = try command_executor_test_command(&router, &zscore_wrongtype_parsed);

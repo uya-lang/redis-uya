@@ -215,6 +215,12 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const bitcount_bits_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$8\r\nBITCOUNT\r\n$3\r\nkey\r\n$1\r\n0\r\n$1\r\n7\r\n$3\r\nBIT\r\n"[0: 50], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: bitcount_bits_result.response_len], &":5\r\n"[0: 4]));
 
+    const bitpos_zero_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$6\r\nBITPOS\r\n$3\r\nkey\r\n$1\r\n0\r\n"[0: 32], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: bitpos_zero_result.response_len], &":0\r\n"[0: 4]));
+
+    const bitpos_one_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$6\r\nBITPOS\r\n$3\r\nkey\r\n$1\r\n1\r\n"[0: 32], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: bitpos_one_result.response_len], &":1\r\n"[0: 4]));
+
     const setrange_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$8\r\nSETRANGE\r\n$3\r\nkey\r\n$1\r\n5\r\n$2\r\n__\r\n"[0: 42], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: setrange_result.response_len], &":7\r\n"[0: 4]));
 

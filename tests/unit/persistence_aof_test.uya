@@ -199,6 +199,26 @@ export fn test_aof_connection_append_and_replay_set() !void {
         1000u64,
     );
     try assert_true(aof_test_slice_eq(out[0: bitop_result.response_len], &":3\r\n"[0: 4]));
+    const bitfield_set_result: ConnectionProcessResult = try connection_process_input_with_aof_at(
+        &engine,
+        &router,
+        &writer,
+        &"*6\r\n$8\r\nBITFIELD\r\n$2\r\nbf\r\n$3\r\nSET\r\n$2\r\nu8\r\n$1\r\n0\r\n$1\r\n5\r\n"[0: 57],
+        &out[0],
+        256,
+        1000u64,
+    );
+    try assert_true(aof_test_slice_eq(out[0: bitfield_set_result.response_len], &"*1\r\n:0\r\n"[0: 8]));
+    const bitfield_incr_result: ConnectionProcessResult = try connection_process_input_with_aof_at(
+        &engine,
+        &router,
+        &writer,
+        &"*6\r\n$8\r\nBITFIELD\r\n$2\r\nbf\r\n$6\r\nINCRBY\r\n$2\r\nu8\r\n$1\r\n0\r\n$1\r\n3\r\n"[0: 60],
+        &out[0],
+        256,
+        1000u64,
+    );
+    try assert_true(aof_test_slice_eq(out[0: bitfield_incr_result.response_len], &"*1\r\n:8\r\n"[0: 8]));
     aof_close(&writer);
     engine_free(&engine);
 
@@ -218,6 +238,9 @@ export fn test_aof_connection_append_and_replay_set() !void {
     try assert_true(aof_test_slice_eq(found_nx2.value.buf[0: found_nx2.value.len], &"b"[0: 1]));
     const found_dstbit: &RedisObject = try lookup_key_at(&replay_engine, &"dstbit"[0: 6], 2000u64);
     try assert_true(aof_test_slice_eq(found_dstbit.value.buf[0: found_dstbit.value.len], &"bab"[0: 3]));
+    const found_bf: &RedisObject = try lookup_key_at(&replay_engine, &"bf"[0: 2], 2000u64);
+    try assert_eq_i32(found_bf.value.len as i32, 1);
+    try assert_eq_i32(found_bf.value.buf.ptr[0] as i32, 8);
     engine_free(&replay_engine);
     _ = unlink(path);
     try assert_eq_i32(used_memory() as i32, 0);

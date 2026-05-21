@@ -303,6 +303,48 @@ if [[ -n "$DROPBIT_GET_RESULT" ]]; then
     exit 1
 fi
 
+BITFIELD_SET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" bitfield bf SET u8 0 5)"
+if [[ "$BITFIELD_SET_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected BITFIELD SET previous 0, got '$BITFIELD_SET_RESULT'" >&2
+    exit 1
+fi
+
+BITFIELD_GET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" bitfield bf GET u8 0)"
+if [[ "$BITFIELD_GET_RESULT" != "5" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected BITFIELD GET 5, got '$BITFIELD_GET_RESULT'" >&2
+    exit 1
+fi
+
+BITFIELD_INCR_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" bitfield bf INCRBY u8 0 3)"
+if [[ "$BITFIELD_INCR_RESULT" != "8" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected BITFIELD INCRBY 8, got '$BITFIELD_INCR_RESULT'" >&2
+    exit 1
+fi
+
+BITFIELD_HASH_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" bitfield bf SET u8 '#1' 7)"
+if [[ "$BITFIELD_HASH_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected BITFIELD hash offset previous 0, got '$BITFIELD_HASH_RESULT'" >&2
+    exit 1
+fi
+
+BITFIELD_GET8_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" bitfield bf GET u8 8)"
+if [[ "$BITFIELD_GET8_RESULT" != "7" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected BITFIELD GET offset 8 => 7, got '$BITFIELD_GET8_RESULT'" >&2
+    exit 1
+fi
+
+BITFIELD_SIGNED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" bitfield bf SET i8 0 -1)"
+if [[ "$BITFIELD_SIGNED_RESULT" != "8" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected BITFIELD SET i8 previous 8, got '$BITFIELD_SIGNED_RESULT'" >&2
+    exit 1
+fi
+
+BITFIELD_RO_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" bitfield_ro bf GET u8 0)"
+if [[ "$BITFIELD_RO_RESULT" != "255" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected BITFIELD_RO GET 255, got '$BITFIELD_RO_RESULT'" >&2
+    exit 1
+fi
+
 SETRANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" setrange key 5 __)"
 if [[ "$SETRANGE_RESULT" != "7" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected setrange 7, got '$SETRANGE_RESULT'" >&2
@@ -1065,9 +1107,9 @@ if [[ "$COUNTER_DEL_RESULT" != "1" ]]; then
     exit 1
 fi
 
-TEMP_STRING_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del fcounter nx-key gs-key sx-key allones srca srcb dstbit)"
-if [[ "$TEMP_STRING_DEL_RESULT" != "8" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected temp string DEL 8, got '$TEMP_STRING_DEL_RESULT'" >&2
+TEMP_STRING_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del fcounter nx-key gs-key sx-key allones srca srcb dstbit bf)"
+if [[ "$TEMP_STRING_DEL_RESULT" != "9" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected temp string DEL 9, got '$TEMP_STRING_DEL_RESULT'" >&2
     exit 1
 fi
 

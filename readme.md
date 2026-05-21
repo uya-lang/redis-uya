@@ -106,7 +106,7 @@
 下一阶段：
 
 - `v0.9.1`：审计整改与真实性修复已完成，当前已修复 `maxmemory` 集成测试口径、收回当前 `CLIENT/CONFIG` 子命令矩阵真值、统一运行时版本串，并恢复 benchmark / DoD 校验转绿。
-- `v0.9.2`：继续补 Redis Open Source 单机核心缺口，当前优先剩余 `BITFIELD`、HLL/GEO、脚本第一批。
+- `v0.9.2`：继续补 Redis Open Source 单机核心缺口，当前优先 HLL/GEO、脚本第一批。
 - `v0.9.3`：收口 Streams、Functions/Script、ACL 与运维诊断第一批，再推进持久化/复制边界深化。
 
 当前阶段尚未生产可用。
@@ -278,7 +278,7 @@ build/redis-uya 6380 1
 - String 第四批多 key：`MGET`、`MSET`、`MSETNX`
 - String 第五批范围读写：`GETRANGE`、`SETRANGE`
 - String 第六批浮点计数：`INCRBYFLOAT`
-- Bitmap 第一批读写：`GETBIT`、`SETBIT`、`BITCOUNT`、`BITPOS`、`BITOP`
+- Bitmap / Bitfield 第一批：`GETBIT`、`SETBIT`、`BITCOUNT`、`BITPOS`、`BITOP`、`BITFIELD`、`BITFIELD_RO`
 - Hash 第一批数值：`HINCRBY`、`HINCRBYFLOAT`
 - Hash 第二批视图：`HKEYS`、`HVALS`、`HGETALL`
 - Hash 第三批扫描：`HSCAN`

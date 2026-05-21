@@ -1518,6 +1518,100 @@ export fn test_command_set_get_del_exists() !void {
     try assert_eq_i32(cleanup_bitop_reply.integer as i32, 3);
     resp_value_free(&cleanup_bitop_parsed.value);
 
+    var bitfield_get_missing_parsed: RespParseResult = try parse_resp2(&"*5\r\n$8\r\nBITFIELD\r\n$7\r\nmissing\r\n$3\r\nGET\r\n$2\r\nu8\r\n$1\r\n0\r\n"[0: 55]);
+    const bitfield_get_missing_command: Command = try command_executor_test_command(&router, &bitfield_get_missing_parsed);
+    var bitfield_get_missing_reply: CommandReply = command_execute_at(&engine, &bitfield_get_missing_command, 1000u64);
+    try assert_eq_i32(bitfield_get_missing_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    try assert_true(command_executor_test_slice_eq(bitfield_get_missing_reply.data, &"*1\r\n:0\r\n"[0: 8]));
+    command_reply_cleanup(&bitfield_get_missing_reply);
+    resp_value_free(&bitfield_get_missing_parsed.value);
+
+    var bitfield_set_parsed: RespParseResult = try parse_resp2(&"*6\r\n$8\r\nBITFIELD\r\n$2\r\nbf\r\n$3\r\nSET\r\n$2\r\nu8\r\n$1\r\n0\r\n$1\r\n5\r\n"[0: 57]);
+    const bitfield_set_command: Command = try command_executor_test_command(&router, &bitfield_set_parsed);
+    var bitfield_set_reply: CommandReply = command_execute_at(&engine, &bitfield_set_command, 1000u64);
+    try assert_true(command_executor_test_slice_eq(bitfield_set_reply.data, &"*1\r\n:0\r\n"[0: 8]));
+    command_reply_cleanup(&bitfield_set_reply);
+    resp_value_free(&bitfield_set_parsed.value);
+
+    var bitfield_get_parsed: RespParseResult = try parse_resp2(&"*5\r\n$8\r\nBITFIELD\r\n$2\r\nbf\r\n$3\r\nGET\r\n$2\r\nu8\r\n$1\r\n0\r\n"[0: 50]);
+    const bitfield_get_command: Command = try command_executor_test_command(&router, &bitfield_get_parsed);
+    var bitfield_get_reply: CommandReply = command_execute_at(&engine, &bitfield_get_command, 1000u64);
+    try assert_true(command_executor_test_slice_eq(bitfield_get_reply.data, &"*1\r\n:5\r\n"[0: 8]));
+    command_reply_cleanup(&bitfield_get_reply);
+    resp_value_free(&bitfield_get_parsed.value);
+
+    var bitfield_incr_parsed: RespParseResult = try parse_resp2(&"*6\r\n$8\r\nBITFIELD\r\n$2\r\nbf\r\n$6\r\nINCRBY\r\n$2\r\nu8\r\n$1\r\n0\r\n$1\r\n3\r\n"[0: 60]);
+    const bitfield_incr_command: Command = try command_executor_test_command(&router, &bitfield_incr_parsed);
+    var bitfield_incr_reply: CommandReply = command_execute_at(&engine, &bitfield_incr_command, 1000u64);
+    try assert_true(command_executor_test_slice_eq(bitfield_incr_reply.data, &"*1\r\n:8\r\n"[0: 8]));
+    command_reply_cleanup(&bitfield_incr_reply);
+    resp_value_free(&bitfield_incr_parsed.value);
+
+    var bitfield_fail_parsed: RespParseResult = try parse_resp2(&"*11\r\n$8\r\nBITFIELD\r\n$2\r\nbf\r\n$8\r\nOVERFLOW\r\n$4\r\nFAIL\r\n$6\r\nINCRBY\r\n$2\r\nu8\r\n$1\r\n0\r\n$3\r\n300\r\n$3\r\nGET\r\n$2\r\nu8\r\n$1\r\n0\r\n"[0: 111]);
+    const bitfield_fail_command: Command = try command_executor_test_command(&router, &bitfield_fail_parsed);
+    var bitfield_fail_reply: CommandReply = command_execute_at(&engine, &bitfield_fail_command, 1000u64);
+    try assert_true(command_executor_test_slice_eq(bitfield_fail_reply.data, &"*2\r\n$-1\r\n:8\r\n"[0: 13]));
+    command_reply_cleanup(&bitfield_fail_reply);
+    resp_value_free(&bitfield_fail_parsed.value);
+
+    var bitfield_set_hash1_parsed: RespParseResult = try parse_resp2(&"*6\r\n$8\r\nBITFIELD\r\n$2\r\nbf\r\n$3\r\nSET\r\n$2\r\nu8\r\n$2\r\n#1\r\n$1\r\n7\r\n"[0: 58]);
+    const bitfield_set_hash1_command: Command = try command_executor_test_command(&router, &bitfield_set_hash1_parsed);
+    var bitfield_set_hash1_reply: CommandReply = command_execute_at(&engine, &bitfield_set_hash1_command, 1000u64);
+    try assert_true(command_executor_test_slice_eq(bitfield_set_hash1_reply.data, &"*1\r\n:0\r\n"[0: 8]));
+    command_reply_cleanup(&bitfield_set_hash1_reply);
+    resp_value_free(&bitfield_set_hash1_parsed.value);
+
+    var bitfield_get8_parsed: RespParseResult = try parse_resp2(&"*5\r\n$8\r\nBITFIELD\r\n$2\r\nbf\r\n$3\r\nGET\r\n$2\r\nu8\r\n$1\r\n8\r\n"[0: 50]);
+    const bitfield_get8_command: Command = try command_executor_test_command(&router, &bitfield_get8_parsed);
+    var bitfield_get8_reply: CommandReply = command_execute_at(&engine, &bitfield_get8_command, 1000u64);
+    try assert_true(command_executor_test_slice_eq(bitfield_get8_reply.data, &"*1\r\n:7\r\n"[0: 8]));
+    command_reply_cleanup(&bitfield_get8_reply);
+    resp_value_free(&bitfield_get8_parsed.value);
+
+    var bitfield_set_i8_parsed: RespParseResult = try parse_resp2(&"*6\r\n$8\r\nBITFIELD\r\n$2\r\nbf\r\n$3\r\nSET\r\n$2\r\ni8\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 58]);
+    const bitfield_set_i8_command: Command = try command_executor_test_command(&router, &bitfield_set_i8_parsed);
+    var bitfield_set_i8_reply: CommandReply = command_execute_at(&engine, &bitfield_set_i8_command, 1000u64);
+    try assert_true(command_executor_test_slice_eq(bitfield_set_i8_reply.data, &"*1\r\n:8\r\n"[0: 8]));
+    command_reply_cleanup(&bitfield_set_i8_reply);
+    resp_value_free(&bitfield_set_i8_parsed.value);
+
+    var bitfield_get_i8_parsed: RespParseResult = try parse_resp2(&"*5\r\n$8\r\nBITFIELD\r\n$2\r\nbf\r\n$3\r\nGET\r\n$2\r\ni8\r\n$1\r\n0\r\n"[0: 50]);
+    const bitfield_get_i8_command: Command = try command_executor_test_command(&router, &bitfield_get_i8_parsed);
+    var bitfield_get_i8_reply: CommandReply = command_execute_at(&engine, &bitfield_get_i8_command, 1000u64);
+    try assert_true(command_executor_test_slice_eq(bitfield_get_i8_reply.data, &"*1\r\n:-1\r\n"[0: 9]));
+    command_reply_cleanup(&bitfield_get_i8_reply);
+    resp_value_free(&bitfield_get_i8_parsed.value);
+
+    var bitfield_ro_get_parsed: RespParseResult = try parse_resp2(&"*5\r\n$11\r\nBITFIELD_RO\r\n$2\r\nbf\r\n$3\r\nGET\r\n$2\r\nu8\r\n$1\r\n0\r\n"[0: 54]);
+    const bitfield_ro_get_command: Command = try command_executor_test_command(&router, &bitfield_ro_get_parsed);
+    var bitfield_ro_get_reply: CommandReply = command_execute_at(&engine, &bitfield_ro_get_command, 1000u64);
+    try assert_true(command_executor_test_slice_eq(bitfield_ro_get_reply.data, &"*1\r\n:255\r\n"[0: 10]));
+    command_reply_cleanup(&bitfield_ro_get_reply);
+    resp_value_free(&bitfield_ro_get_parsed.value);
+
+    var bitfield_ttl_set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$6\r\nbf-ttl\r\n$1\r\nx\r\n"[0: 32]);
+    const bitfield_ttl_set_command: Command = try command_executor_test_command(&router, &bitfield_ttl_set_parsed);
+    _ = command_execute_at(&engine, &bitfield_ttl_set_command, 1000u64);
+    resp_value_free(&bitfield_ttl_set_parsed.value);
+
+    var bitfield_ttl_expire_parsed: RespParseResult = try parse_resp2(&"*3\r\n$7\r\nPEXPIRE\r\n$6\r\nbf-ttl\r\n$4\r\n5000\r\n"[0: 39]);
+    const bitfield_ttl_expire_command: Command = try command_executor_test_command(&router, &bitfield_ttl_expire_parsed);
+    _ = command_execute_at(&engine, &bitfield_ttl_expire_command, 1000u64);
+    resp_value_free(&bitfield_ttl_expire_parsed.value);
+
+    var bitfield_ttl_incr_parsed: RespParseResult = try parse_resp2(&"*6\r\n$8\r\nBITFIELD\r\n$6\r\nbf-ttl\r\n$6\r\nINCRBY\r\n$2\r\nu8\r\n$1\r\n0\r\n$1\r\n1\r\n"[0: 64]);
+    const bitfield_ttl_incr_command: Command = try command_executor_test_command(&router, &bitfield_ttl_incr_parsed);
+    var bitfield_ttl_incr_reply: CommandReply = command_execute_at(&engine, &bitfield_ttl_incr_command, 1500u64);
+    command_reply_cleanup(&bitfield_ttl_incr_reply);
+    resp_value_free(&bitfield_ttl_incr_parsed.value);
+
+    var bitfield_ttl_pttl_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nPTTL\r\n$6\r\nbf-ttl\r\n"[0: 26]);
+    const bitfield_ttl_pttl_command: Command = try command_executor_test_command(&router, &bitfield_ttl_pttl_parsed);
+    const bitfield_ttl_pttl_reply: CommandReply = command_execute_at(&engine, &bitfield_ttl_pttl_command, 1500u64);
+    try assert_eq_i32(bitfield_ttl_pttl_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(bitfield_ttl_pttl_reply.integer as i32, 4500);
+    resp_value_free(&bitfield_ttl_pttl_parsed.value);
+
     var setrange_parsed: RespParseResult = try parse_resp2(&"*4\r\n$8\r\nSETRANGE\r\n$3\r\nkey\r\n$1\r\n5\r\n$2\r\n__\r\n"[0: 42]);
     const setrange_command: Command = try command_executor_test_command(&router, &setrange_parsed);
     const setrange_reply: CommandReply = command_execute_at(&engine, &setrange_command, 1000u64);
@@ -1608,6 +1702,13 @@ export fn test_command_set_get_del_exists() !void {
     try assert_eq_i32(allones_del_reply.typ as i32, CommandReplyType.reply_integer as i32);
     try assert_eq_i32(allones_del_reply.integer as i32, 1);
     resp_value_free(&allones_del_parsed.value);
+
+    var bitfield_del_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nDEL\r\n$2\r\nbf\r\n$6\r\nbf-ttl\r\n"[0: 33]);
+    const bitfield_del_command: Command = try command_executor_test_command(&router, &bitfield_del_parsed);
+    const bitfield_del_reply: CommandReply = command_execute_at(&engine, &bitfield_del_command, 1000u64);
+    try assert_eq_i32(bitfield_del_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(bitfield_del_reply.integer as i32, 2);
+    resp_value_free(&bitfield_del_parsed.value);
 
     var echo_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nECHO\r\n$2\r\nhi\r\n"[0: 22]);
     const echo_command: Command = try command_executor_test_command(&router, &echo_parsed);
@@ -4608,6 +4709,53 @@ export fn test_command_error_paths() !void {
     try assert_eq_i32(bitop_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
     try assert_true(command_executor_test_slice_eq(bitop_wrongtype_reply.data, &"WRONGTYPE Operation against a key holding the wrong kind of value"[0: 65]));
     resp_value_free(&bitop_wrongtype_parsed.value);
+
+    var bitfield_bad_type_parsed: RespParseResult = try parse_resp2(&"*6\r\n$8\r\nBITFIELD\r\n$2\r\nbf\r\n$3\r\nSET\r\n$3\r\nu64\r\n$1\r\n0\r\n$1\r\n1\r\n"[0: 58]);
+    const bitfield_bad_type_command: Command = try command_executor_test_command(&router, &bitfield_bad_type_parsed);
+    const bitfield_bad_type_reply: CommandReply = command_execute_at(&engine, &bitfield_bad_type_command, 1000u64);
+    try assert_eq_i32(bitfield_bad_type_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(bitfield_bad_type_reply.data, &"ERR Invalid bitfield type. Use something like i16 u8. Note that u64 is not supported but i64 is."[0: 96]));
+    resp_value_free(&bitfield_bad_type_parsed.value);
+
+    var bitfield_ro_set_parsed: RespParseResult = try parse_resp2(&"*6\r\n$11\r\nBITFIELD_RO\r\n$2\r\nbf\r\n$3\r\nSET\r\n$2\r\nu8\r\n$1\r\n0\r\n$1\r\n1\r\n"[0: 61]);
+    const bitfield_ro_set_command: Command = try command_executor_test_command(&router, &bitfield_ro_set_parsed);
+    const bitfield_ro_set_reply: CommandReply = command_execute_at(&engine, &bitfield_ro_set_command, 1000u64);
+    try assert_eq_i32(bitfield_ro_set_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(bitfield_ro_set_reply.data, &"ERR BITFIELD_RO only supports the GET subcommand"[0: 48]));
+    resp_value_free(&bitfield_ro_set_parsed.value);
+
+    var bitfield_bad_overflow_parsed: RespParseResult = try parse_resp2(&"*4\r\n$8\r\nBITFIELD\r\n$2\r\nbf\r\n$8\r\nOVERFLOW\r\n$3\r\nBAD\r\n"[0: 49]);
+    const bitfield_bad_overflow_command: Command = try command_executor_test_command(&router, &bitfield_bad_overflow_parsed);
+    const bitfield_bad_overflow_reply: CommandReply = command_execute_at(&engine, &bitfield_bad_overflow_command, 1000u64);
+    try assert_eq_i32(bitfield_bad_overflow_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(bitfield_bad_overflow_reply.data, &"ERR Invalid OVERFLOW type specified"[0: 35]));
+    resp_value_free(&bitfield_bad_overflow_parsed.value);
+
+    var bitfield_get_short_parsed: RespParseResult = try parse_resp2(&"*3\r\n$8\r\nBITFIELD\r\n$2\r\nbf\r\n$3\r\nGET\r\n"[0: 35]);
+    const bitfield_get_short_command: Command = try command_executor_test_command(&router, &bitfield_get_short_parsed);
+    const bitfield_get_short_reply: CommandReply = command_execute_at(&engine, &bitfield_get_short_command, 1000u64);
+    try assert_eq_i32(bitfield_get_short_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(bitfield_get_short_reply.data, &"ERR syntax error"[0: 16]));
+    resp_value_free(&bitfield_get_short_parsed.value);
+
+    var bitfield_ro_get_short_parsed: RespParseResult = try parse_resp2(&"*3\r\n$11\r\nBITFIELD_RO\r\n$2\r\nbf\r\n$3\r\nGET\r\n"[0: 39]);
+    const bitfield_ro_get_short_command: Command = try command_executor_test_command(&router, &bitfield_ro_get_short_parsed);
+    const bitfield_ro_get_short_reply: CommandReply = command_execute_at(&engine, &bitfield_ro_get_short_command, 1000u64);
+    try assert_eq_i32(bitfield_ro_get_short_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(bitfield_ro_get_short_reply.data, &"ERR syntax error"[0: 16]));
+    resp_value_free(&bitfield_ro_get_short_parsed.value);
+
+    var bitfield_wrongtype_seed_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nHSET\r\n$6\r\nbfhash\r\n$5\r\nfield\r\n$5\r\nvalue\r\n"[0: 48]);
+    const bitfield_wrongtype_seed_command: Command = try command_executor_test_command(&router, &bitfield_wrongtype_seed_parsed);
+    _ = command_execute_at(&engine, &bitfield_wrongtype_seed_command, 1000u64);
+    resp_value_free(&bitfield_wrongtype_seed_parsed.value);
+
+    var bitfield_wrongtype_parsed: RespParseResult = try parse_resp2(&"*5\r\n$8\r\nBITFIELD\r\n$6\r\nbfhash\r\n$3\r\nGET\r\n$2\r\nu8\r\n$1\r\n0\r\n"[0: 54]);
+    const bitfield_wrongtype_command: Command = try command_executor_test_command(&router, &bitfield_wrongtype_parsed);
+    const bitfield_wrongtype_reply: CommandReply = command_execute_at(&engine, &bitfield_wrongtype_command, 1000u64);
+    try assert_eq_i32(bitfield_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(bitfield_wrongtype_reply.data, &"WRONGTYPE Operation against a key holding the wrong kind of value"[0: 65]));
+    resp_value_free(&bitfield_wrongtype_parsed.value);
 
     var zscore_wrongtype_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nZSCORE\r\n$3\r\nkey\r\n$1\r\na\r\n"[0: 32]);
     const zscore_wrongtype_command: Command = try command_executor_test_command(&router, &zscore_wrongtype_parsed);

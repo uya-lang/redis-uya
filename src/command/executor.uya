@@ -382,6 +382,18 @@ fn command_executor_bitop_not_single_source_required() CommandReply {
     return command_executor_error(&"ERR BITOP NOT must be called with a single source key."[0: 52]);
 }
 
+fn command_executor_bitfield_invalid_type() CommandReply {
+    return command_executor_error(&"ERR Invalid bitfield type. Use something like i16 u8. Note that u64 is not supported but i64 is."[0: 96]);
+}
+
+fn command_executor_bitfield_ro_get_only() CommandReply {
+    return command_executor_error(&"ERR BITFIELD_RO only supports the GET subcommand"[0: 48]);
+}
+
+fn command_executor_bitfield_invalid_overflow_type() CommandReply {
+    return command_executor_error(&"ERR Invalid OVERFLOW type specified"[0: 35]);
+}
+
 fn command_executor_positive_count_required() CommandReply {
     return command_executor_error(&"ERR value is out of range, must be positive"[0: 43]);
 }
@@ -1683,6 +1695,17 @@ struct CommandExecutorIndexRange {
     stop: usize,
 }
 
+struct CommandExecutorBitfieldEncoding {
+    is_signed: bool,
+    width: usize,
+}
+
+enum CommandExecutorBitfieldOverflowMode {
+    overflow_wrap,
+    overflow_sat,
+    overflow_fail,
+}
+
 fn command_executor_normalize_index_range(total_len: usize, start: i64, stop: i64) CommandExecutorIndexRange {
     if total_len == 0 {
         return CommandExecutorIndexRange{ ok: false, start: 0, stop: 0 };
@@ -1845,6 +1868,200 @@ fn command_executor_string_value_or_empty(engine: &Engine, key: &[byte], now_ms:
         return command_executor_empty_slice();
     }
     return command_executor_string_value(obj);
+}
+
+fn command_executor_bitfield_mask(width: usize) u64 {
+    if width >= 64 {
+        return 0xFFFFFFFFFFFFFFFF as u64;
+    }
+    return (1u64 << (width as i32)) - 1u64;
+}
+
+fn command_executor_bitfield_parse_encoding(data: &[byte]) !CommandExecutorBitfieldEncoding {
+    if data.len < 2 {
+        return error.CommandInvalidInteger;
+    }
+    const head: byte = data.ptr[0];
+    var is_signed: bool = false;
+    if head == 'i' as byte || head == 'I' as byte {
+        is_signed = true;
+    } else if head == 'u' as byte || head == 'U' as byte {
+        is_signed = false;
+    } else {
+        return error.CommandInvalidInteger;
+    }
+
+    const width_i64: i64 = command_executor_parse_i64(data[1: data.len - 1]) catch {
+        return error.CommandInvalidInteger;
+    };
+    if is_signed {
+        if width_i64 <= 0 || width_i64 > 64 {
+            return error.CommandInvalidInteger;
+        }
+    } else {
+        if width_i64 <= 0 || width_i64 > 63 {
+            return error.CommandInvalidInteger;
+        }
+    }
+    return CommandExecutorBitfieldEncoding{
+        is_signed: is_signed,
+        width: width_i64 as usize,
+    };
+}
+
+fn command_executor_bitfield_parse_offset(data: &[byte], width: usize) !usize {
+    if data.len == 0 {
+        return error.CommandInvalidInteger;
+    }
+    var offset_value: i64 = 0;
+    if data.ptr[0] == '#' as byte {
+        if data.len == 1 {
+            return error.CommandInvalidInteger;
+        }
+        offset_value = command_executor_parse_i64(data[1: data.len - 1]) catch {
+            return error.CommandInvalidInteger;
+        };
+        if offset_value < 0 {
+            return error.CommandInvalidInteger;
+        }
+        return (offset_value as usize) * width;
+    }
+    offset_value = command_executor_parse_i64(data) catch {
+        return error.CommandInvalidInteger;
+    };
+    if offset_value < 0 {
+        return error.CommandInvalidInteger;
+    }
+    return offset_value as usize;
+}
+
+fn command_executor_bitfield_read_raw(data: &[byte], offset: usize, width: usize) u64 {
+    var raw: u64 = 0u64;
+    var bit_index: usize = 0;
+    while bit_index < width {
+        raw = raw << 1;
+        if command_executor_string_bit_get(data, offset + bit_index) != 0 {
+            raw = raw | 1u64;
+        }
+        bit_index = bit_index + 1;
+    }
+    return raw;
+}
+
+fn command_executor_bitfield_decode_value(raw: u64, encoding: &CommandExecutorBitfieldEncoding) i64 {
+    if !encoding.is_signed {
+        return raw as i64;
+    }
+    if encoding.width >= 64 {
+        return raw as i64;
+    }
+    const shift: i32 = (64 - encoding.width) as i32;
+    return ((raw << shift) as i64) >> shift;
+}
+
+fn command_executor_bitfield_min_value(encoding: &CommandExecutorBitfieldEncoding) i64 {
+    if !encoding.is_signed {
+        return 0;
+    }
+    if encoding.width >= 64 {
+        return COMMAND_EXECUTOR_I64_MIN;
+    }
+    return 0 - ((1u64 << ((encoding.width - 1) as i32)) as i64);
+}
+
+fn command_executor_bitfield_max_value(encoding: &CommandExecutorBitfieldEncoding) i64 {
+    if !encoding.is_signed {
+        return command_executor_bitfield_mask(encoding.width) as i64;
+    }
+    if encoding.width >= 64 {
+        return COMMAND_EXECUTOR_I64_MAX;
+    }
+    return ((1u64 << ((encoding.width - 1) as i32)) - 1u64) as i64;
+}
+
+fn command_executor_bitfield_in_range(encoding: &CommandExecutorBitfieldEncoding, value: i64) bool {
+    if !encoding.is_signed && value < 0 {
+        return false;
+    }
+    return value >= command_executor_bitfield_min_value(encoding) &&
+        value <= command_executor_bitfield_max_value(encoding);
+}
+
+fn command_executor_bitfield_encode_value(encoding: &CommandExecutorBitfieldEncoding, value: i64) u64 {
+    if encoding.width >= 64 {
+        return value as u64;
+    }
+    return (value as u64) & command_executor_bitfield_mask(encoding.width);
+}
+
+fn command_executor_bitfield_add_overflow(current: i64, increment: i64) bool {
+    if increment > 0 {
+        return current > COMMAND_EXECUTOR_I64_MAX - increment;
+    }
+    if increment < 0 {
+        return current < COMMAND_EXECUTOR_I64_MIN - increment;
+    }
+    return false;
+}
+
+fn command_executor_bitfield_incrby_overflow(
+    current: i64,
+    increment: i64,
+    encoding: &CommandExecutorBitfieldEncoding,
+) bool {
+    if command_executor_bitfield_add_overflow(current, increment) {
+        return true;
+    }
+    const next: i64 = current + increment;
+    return !command_executor_bitfield_in_range(encoding, next);
+}
+
+fn command_executor_bitfield_wrap_add(
+    current_raw: u64,
+    increment: i64,
+    encoding: &CommandExecutorBitfieldEncoding,
+) u64 {
+    var next_raw: u64 = current_raw + command_executor_bitfield_encode_value(encoding, increment);
+    if encoding.width < 64 {
+        next_raw = next_raw & command_executor_bitfield_mask(encoding.width);
+    }
+    return next_raw;
+}
+
+fn command_executor_bitfield_ensure_len(buf: &Sds, bit_end_exclusive: usize) !void {
+    const required_len: usize = (bit_end_exclusive + 7) / 8;
+    _ = sds_grow(buf, required_len) catch {
+        return error.AllocOutOfMemory;
+    };
+    var fill_index: usize = buf.len;
+    while fill_index < required_len {
+        buf.buf.ptr[fill_index] = 0 as byte;
+        fill_index = fill_index + 1;
+    }
+    if required_len > buf.len {
+        buf.len = required_len;
+        buf.buf.ptr[buf.len] = 0 as byte;
+    }
+}
+
+fn command_executor_bitfield_write_raw(buf: &Sds, offset: usize, width: usize, raw: u64) !void {
+    try command_executor_bitfield_ensure_len(buf, offset + width);
+    var bit_index: usize = 0;
+    while bit_index < width {
+        const byte_index: usize = (offset + bit_index) / 8;
+        const inner_bit_index: usize = (offset + bit_index) % (8 as usize);
+        const mask: u32 = command_executor_bit_mask(inner_bit_index);
+        const source_shift: i32 = (width - bit_index - 1) as i32;
+        const bit_value: u64 = (raw >> source_shift) & 1u64;
+        var current_byte: u32 = buf.buf.ptr[byte_index] as u32;
+        if bit_value == 0u64 {
+            current_byte = current_byte & (255u32 ^ mask);
+        } else {
+            current_byte = current_byte | mask;
+        }
+        buf.buf.ptr[byte_index] = current_byte as byte;
+        bit_index = bit_index + 1;
+    }
 }
 
 fn command_executor_key_exists(engine: &Engine, key: &[byte], now_ms: u64) bool {
@@ -2555,6 +2772,237 @@ fn command_executor_bitop(engine: &Engine, command: &Command, now_ms: u64) Comma
         return set_reply;
     }
     return command_executor_integer(max_len as i64);
+}
+
+fn command_executor_bitfield(engine: &Engine, command: &Command, now_ms: u64, readonly_only: bool) CommandReply {
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const obj: &RedisObject = command_executor_lookup_key_now_or_null(engine, key, now_ms);
+    var existing_data: &[byte] = command_executor_empty_slice();
+    if obj != null {
+        existing_data = command_executor_string_value(obj) catch {
+            return command_executor_wrongtype();
+        };
+    }
+
+    var working: Sds = sds_new(existing_data) catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&working);
+    }
+
+    var items: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&items);
+    }
+
+    var overflow_mode: CommandExecutorBitfieldOverflowMode = CommandExecutorBitfieldOverflowMode.overflow_wrap;
+    var result_count: usize = 0;
+    var wrote: bool = false;
+    var index: usize = 2;
+    while index < command.argc {
+        const token: &[byte] = command_executor_arg(command, index) catch {
+            return command_executor_wrong_arity();
+        };
+
+        if command_executor_keyword_eq(token, &"OVERFLOW"[0: 8]) {
+            if index + 1 >= command.argc {
+                return command_executor_syntax_error();
+            }
+            const mode_token_result: !&[byte] = command_executor_arg(command, index + 1);
+            if mode_token_result.error_id != 0 {
+                return command_executor_syntax_error();
+            }
+            const mode_token: &[byte] = mode_token_result.value;
+            if command_executor_keyword_eq(mode_token, &"WRAP"[0: 4]) {
+                overflow_mode = CommandExecutorBitfieldOverflowMode.overflow_wrap;
+                index = index + 2;
+                continue;
+            }
+            if command_executor_keyword_eq(mode_token, &"SAT"[0: 3]) {
+                overflow_mode = CommandExecutorBitfieldOverflowMode.overflow_sat;
+                index = index + 2;
+                continue;
+            }
+            if command_executor_keyword_eq(mode_token, &"FAIL"[0: 4]) {
+                overflow_mode = CommandExecutorBitfieldOverflowMode.overflow_fail;
+                index = index + 2;
+                continue;
+            }
+            return command_executor_bitfield_invalid_overflow_type();
+        }
+
+        if command_executor_keyword_eq(token, &"GET"[0: 3]) {
+            if index + 2 >= command.argc {
+                return command_executor_syntax_error();
+            }
+            const encoding_result: !&[byte] = command_executor_arg(command, index + 1);
+            if encoding_result.error_id != 0 {
+                return command_executor_syntax_error();
+            }
+            const offset_result: !&[byte] = command_executor_arg(command, index + 2);
+            if offset_result.error_id != 0 {
+                return command_executor_syntax_error();
+            }
+            const encoding_data: &[byte] = encoding_result.value;
+            const offset_data: &[byte] = offset_result.value;
+            const encoding: CommandExecutorBitfieldEncoding = command_executor_bitfield_parse_encoding(encoding_data) catch {
+                return command_executor_bitfield_invalid_type();
+            };
+            const offset: usize = command_executor_bitfield_parse_offset(offset_data, encoding.width) catch {
+                return command_executor_invalid_bit_offset();
+            };
+            const raw_value: u64 = command_executor_bitfield_read_raw(working.buf[0: working.len], offset, encoding.width);
+            const decoded: i64 = command_executor_bitfield_decode_value(raw_value, &encoding);
+            _ = command_executor_info_append_i64(&items, &":%i\r\n"[0: 5], decoded) catch {
+                return command_executor_oom();
+            };
+            result_count = result_count + 1;
+            index = index + 3;
+            continue;
+        }
+
+        if command_executor_keyword_eq(token, &"SET"[0: 3]) || command_executor_keyword_eq(token, &"INCRBY"[0: 6]) {
+            if readonly_only {
+                return command_executor_bitfield_ro_get_only();
+            }
+            if index + 3 >= command.argc {
+                return command_executor_syntax_error();
+            }
+
+            const encoding_result: !&[byte] = command_executor_arg(command, index + 1);
+            if encoding_result.error_id != 0 {
+                return command_executor_syntax_error();
+            }
+            const offset_result: !&[byte] = command_executor_arg(command, index + 2);
+            if offset_result.error_id != 0 {
+                return command_executor_syntax_error();
+            }
+            const value_result: !&[byte] = command_executor_arg(command, index + 3);
+            if value_result.error_id != 0 {
+                return command_executor_syntax_error();
+            }
+            const encoding_data: &[byte] = encoding_result.value;
+            const offset_data: &[byte] = offset_result.value;
+            const value_data: &[byte] = value_result.value;
+            const encoding: CommandExecutorBitfieldEncoding = command_executor_bitfield_parse_encoding(encoding_data) catch {
+                return command_executor_bitfield_invalid_type();
+            };
+            const offset: usize = command_executor_bitfield_parse_offset(offset_data, encoding.width) catch {
+                return command_executor_invalid_bit_offset();
+            };
+            const operand: i64 = command_executor_parse_i64(value_data) catch {
+                return command_executor_invalid_integer();
+            };
+            const previous_raw: u64 = command_executor_bitfield_read_raw(working.buf[0: working.len], offset, encoding.width);
+            const previous_value: i64 = command_executor_bitfield_decode_value(previous_raw, &encoding);
+
+            if command_executor_keyword_eq(token, &"SET"[0: 3]) {
+                var store_value: i64 = operand;
+                var should_store: bool = true;
+                if !command_executor_bitfield_in_range(&encoding, operand) {
+                    if overflow_mode == CommandExecutorBitfieldOverflowMode.overflow_fail {
+                        should_store = false;
+                    } else if overflow_mode == CommandExecutorBitfieldOverflowMode.overflow_sat {
+                        if operand < command_executor_bitfield_min_value(&encoding) {
+                            store_value = command_executor_bitfield_min_value(&encoding);
+                        } else {
+                            store_value = command_executor_bitfield_max_value(&encoding);
+                        }
+                    }
+                }
+                if should_store {
+                    _ = command_executor_bitfield_write_raw(&working, offset, encoding.width, command_executor_bitfield_encode_value(&encoding, store_value)) catch {
+                        return command_executor_oom();
+                    };
+                    wrote = true;
+                    _ = command_executor_info_append_i64(&items, &":%i\r\n"[0: 5], previous_value) catch {
+                        return command_executor_oom();
+                    };
+                } else {
+                    _ = command_executor_command_append_null(&items, 2) catch {
+                        return command_executor_oom();
+                    };
+                }
+                result_count = result_count + 1;
+                index = index + 4;
+                continue;
+            }
+
+            var next_value: i64 = previous_value;
+            var should_store_incr: bool = true;
+            if overflow_mode == CommandExecutorBitfieldOverflowMode.overflow_wrap {
+                const wrapped_raw: u64 = command_executor_bitfield_wrap_add(previous_raw, operand, &encoding);
+                next_value = command_executor_bitfield_decode_value(wrapped_raw, &encoding);
+                _ = command_executor_bitfield_write_raw(&working, offset, encoding.width, wrapped_raw) catch {
+                    return command_executor_oom();
+                };
+                wrote = true;
+                _ = command_executor_info_append_i64(&items, &":%i\r\n"[0: 5], next_value) catch {
+                    return command_executor_oom();
+                };
+            } else {
+                if command_executor_bitfield_incrby_overflow(previous_value, operand, &encoding) {
+                    if overflow_mode == CommandExecutorBitfieldOverflowMode.overflow_fail {
+                        should_store_incr = false;
+                    } else if operand < 0 {
+                        next_value = command_executor_bitfield_min_value(&encoding);
+                    } else {
+                        next_value = command_executor_bitfield_max_value(&encoding);
+                    }
+                } else {
+                    next_value = previous_value + operand;
+                }
+
+                if should_store_incr {
+                    _ = command_executor_bitfield_write_raw(&working, offset, encoding.width, command_executor_bitfield_encode_value(&encoding, next_value)) catch {
+                        return command_executor_oom();
+                    };
+                    wrote = true;
+                    _ = command_executor_info_append_i64(&items, &":%i\r\n"[0: 5], next_value) catch {
+                        return command_executor_oom();
+                    };
+                } else {
+                    _ = command_executor_command_append_null(&items, 2) catch {
+                        return command_executor_oom();
+                    };
+                }
+            }
+            result_count = result_count + 1;
+            index = index + 4;
+            continue;
+        }
+
+        if readonly_only {
+            return command_executor_syntax_error();
+        }
+        return command_executor_syntax_error();
+    }
+
+    if wrote {
+        const set_reply: CommandReply = command_executor_replace_string_preserve_ttl(engine, key, working.buf[0: working.len], now_ms);
+        if set_reply.typ == CommandReplyType.reply_error {
+            return set_reply;
+        }
+    }
+
+    var raw: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&raw);
+    }
+    _ = command_executor_resp_collection_prefix(&raw, &"*"[0: 1], result_count) catch {
+        return command_executor_oom();
+    };
+    _ = sds_cat(&raw, items.buf[0: items.len]) catch {
+        return command_executor_oom();
+    };
+    return command_executor_owned_raw(raw.buf[0: raw.len]);
 }
 
 fn command_executor_incrbyfloat(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
@@ -9274,6 +9722,9 @@ fn command_executor_command_key_flags(info: &CommandInfo, key_ordinal: usize) &[
         }
         return &"RO|access"[0: 9];
     }
+    if info.cmd_type == CommandType.command_bitfield {
+        return &"RW|access|update"[0: 16];
+    }
     if info.cmd_type == CommandType.command_lmove || info.cmd_type == CommandType.command_rpoplpush || info.cmd_type == CommandType.command_brpoplpush {
         if key_ordinal == 0 {
             return &"RW|access|delete"[0: 16];
@@ -10118,6 +10569,12 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_bitop {
         return command_executor_bitop(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_bitfield {
+        return command_executor_bitfield(engine, command, now_ms, false);
+    }
+    if command.info.cmd_type == CommandType.command_bitfield_ro {
+        return command_executor_bitfield(engine, command, now_ms, true);
     }
     if command.info.cmd_type == CommandType.command_setrange {
         return command_executor_setrange(engine, command, now_ms);

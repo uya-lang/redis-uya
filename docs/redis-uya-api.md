@@ -1458,6 +1458,45 @@ BITOP NOT destkey key
 - 目标 key 总是按普通字符串重写，原 TTL 会被清除
 - 当前已覆盖 AOF replay、`COMMAND GETKEYS` / `GETKEYSANDFLAGS` 与客户端 smoke
 
+### `BITFIELD`
+
+格式：
+
+```text
+BITFIELD key [GET encoding offset] [OVERFLOW WRAP|SAT|FAIL] [SET encoding offset value] [INCRBY encoding offset increment] ...
+```
+
+返回：
+
+- 返回一个 RESP Array；每个 `GET` / `SET` / `INCRBY` 子操作各占一个返回槽位
+- `OVERFLOW` 只修改后续写子操作的溢出模式，不单独产生返回项
+- `OVERFLOW FAIL` 触发时，对应写子操作返回 Null Bulk，并保持原值不变
+
+说明：
+
+- 当前支持 `iN` / `uN` 编码：`i1..i64`、`u1..u63`
+- 当前支持绝对 bit 偏移和 `#offset` 形式的按字段宽度步进偏移
+- `SET` / `INCRBY` 默认使用 `WRAP`；也支持 `SAT` / `FAIL`
+- 写子操作会保留原 key 的 TTL
+- key 不存在时按全 `0` 位图读取；写入时按需扩展并用 `\\0` 填充空洞
+
+### `BITFIELD_RO`
+
+格式：
+
+```text
+BITFIELD_RO key [GET encoding offset] ...
+```
+
+返回：
+
+- 返回一个 RESP Array；每个 `GET` 子操作返回对应整数值
+
+说明：
+
+- 当前只允许 `GET` 子操作；写子操作会返回 `ERR BITFIELD_RO only supports the GET subcommand`
+- 当前接受 `OVERFLOW` 语法占位，但它对只读 `GET` 没有实际效果
+
 ### `TYPE`
 
 格式：

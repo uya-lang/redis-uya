@@ -182,6 +182,16 @@ class RedisPySubsetClient:
     def bitop(self, operation: str, dest: str, *keys: str) -> int:
         return int(self._request(b"BITOP", operation.encode(), dest.encode(), *(key.encode() for key in keys)))
 
+    def bitfield(self, key: str, *parts: str):
+        result = self._request(b"BITFIELD", key.encode(), *(part.encode() for part in parts))
+        assert isinstance(result, list)
+        return result
+
+    def bitfield_ro(self, key: str, *parts: str):
+        result = self._request(b"BITFIELD_RO", key.encode(), *(part.encode() for part in parts))
+        assert isinstance(result, list)
+        return result
+
     def setrange(self, key: str, offset: int, value: str) -> int:
         return int(self._request(b"SETRANGE", key.encode(), str(offset).encode(), value.encode()))
 
@@ -784,6 +794,15 @@ def run_smoke() -> None:
             assert client.set("dropbit", "x")
             assert client.bitop("AND", "dropbit", "missing") == 0
             assert client.get("dropbit") is None
+            assert client.bitfield("bf", "SET", "u8", "0", "5") == [0]
+            assert client.bitfield("bf", "GET", "u8", "0") == [5]
+            assert client.bitfield("bf", "INCRBY", "u8", "0", "3") == [8]
+            assert client.bitfield("bf", "OVERFLOW", "FAIL", "INCRBY", "u8", "0", "300", "GET", "u8", "0") == [None, 8]
+            assert client.bitfield("bf", "SET", "u8", "#1", "7") == [0]
+            assert client.bitfield("bf", "GET", "u8", "8") == [7]
+            assert client.bitfield("bf", "SET", "i8", "0", "-1") == [8]
+            assert client.bitfield("bf", "GET", "i8", "0") == [-1]
+            assert client.bitfield_ro("bf", "GET", "u8", "0") == [255]
             assert client.setrange("key", 5, "__") == 7
             assert client.get("key") == b"value__"
             assert client.rename("key", "key2")
@@ -795,7 +814,7 @@ def run_smoke() -> None:
             assert client.getdel("gd-key") == b"once"
             assert client.getdel("gd-key") is None
             assert client.delete("counter") == 1
-            assert client.delete("fcounter", "nx-key", "gs-key", "sx-key", "mk1", "mk2", "mn1", "mn2", "allones", "srca", "srcb", "dstbit") == 12
+            assert client.delete("fcounter", "nx-key", "gs-key", "sx-key", "mk1", "mk2", "mn1", "mn2", "allones", "srca", "srcb", "dstbit", "bf") == 13
             assert client.echo("hi") == b"hi"
             assert client.key_type("key") == "string"
             assert client.dbsize() == 1

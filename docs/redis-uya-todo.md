@@ -485,7 +485,7 @@
 
 - [x] Blocking list / zset：已补 `BLPOP`、`BRPOP`、`BRPOPLPUSH`、`BZPOPMIN`、`BZPOPMAX`、`BZMPOP`
 - [x] 常用 list / zset 缺口：已补 `LMOVE`、`LMPOP`、`RPOPLPUSH`、`ZRANK`、`ZREVRANK`、`ZSCORE`、`ZMSCORE`、`ZPOPMIN`、`ZPOPMAX`
-- [ ] 常用 bitmap / bitfield：已补 `SETBIT`、`GETBIT`、`BITCOUNT`、`BITPOS`、`BITOP`；待补 `BITFIELD`
+- [x] 常用 bitmap / bitfield：已补 `SETBIT`、`GETBIT`、`BITCOUNT`、`BITPOS`、`BITOP`、`BITFIELD`、`BITFIELD_RO`
 - [ ] 常用 HLL / GEO：`PFADD`、`PFCOUNT`、`PFMERGE`、`GEOADD`、`GEODIST`、`GEOSEARCH`
 - [ ] Scripting 第一批：`EVAL`、`EVALSHA`、`SCRIPT LOAD/EXISTS/FLUSH`
 - [ ] Server / Connection 缺口第一批：`SLOWLOG`、`MEMORY`、`LATENCY`、`MONITOR` 的最小可验证实现方案

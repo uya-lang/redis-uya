@@ -1,7 +1,7 @@
 # redis-uya command matrix
 
 > version: v0.9.1-dev
-> date: 2026-05-20
+> date: 2026-05-21
 > source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`
 > runtime source: `src/command/catalog_generated.uya`
 
@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 362 | 256 | 144 | 48 | 0 | 3 | 167 |
+| Tier A: standalone core | 362 | 256 | 146 | 48 | 0 | 3 | 165 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 135 | 128 | 0 | 0 | 0 | 0 | 135 |
 
@@ -24,11 +24,11 @@
 
 | status | count |
 |--------|-------|
-| `full` | `145` |
+| `full` | `147` |
 | `partial` | `55` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `302` |
+| `deferred` | `300` |
 
 ## Group counts
 
@@ -95,8 +95,8 @@
 | `bgrewriteaof` | `server` | `partial` | `-` | `1` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `bgsave` | `server` | `partial` | `-` | `-1` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `bitcount` | `bitmap` | `full` | `-` | `-2` | `-` | `no` | `@read, @bitmap, @slow` |
-| `bitfield` | `bitmap` | `deferred` | `v0.9.2` | `-2` | `-` | `no` | `@write, @bitmap, @slow` |
-| `bitfield_ro` | `bitmap` | `deferred` | `v0.9.2` | `-2` | `-` | `no` | `@read, @bitmap, @fast` |
+| `bitfield` | `bitmap` | `full` | `-` | `-2` | `-` | `no` | `@write, @bitmap, @slow` |
+| `bitfield_ro` | `bitmap` | `full` | `-` | `-2` | `-` | `no` | `@read, @bitmap, @fast` |
 | `bitop` | `bitmap` | `full` | `-` | `-4` | `-` | `no` | `@write, @bitmap, @slow` |
 | `bitpos` | `bitmap` | `full` | `-` | `-3` | `-` | `no` | `@read, @bitmap, @slow` |
 | `blmove` | `list` | `deferred` | `v0.9.1` | `6` | `-` | `no` | `@write, @list, @slow, @blocking` |

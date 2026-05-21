@@ -154,10 +154,10 @@ def run_smoke() -> None:
             if not isinstance(info[2], list) or info[2][0] != b"client|id":
                 raise AssertionError(f"COMMAND INFO CLIENT|ID returned wrong payload: {info!r}")
 
-            bitmap_info = send_command(sock, b"COMMAND", b"INFO", b"GETBIT", b"SETBIT", b"BITCOUNT", b"BITPOS", b"BITOP")
+            bitmap_info = send_command(sock, b"COMMAND", b"INFO", b"GETBIT", b"SETBIT", b"BITCOUNT", b"BITPOS", b"BITOP", b"BITFIELD", b"BITFIELD_RO")
             if (
                 not isinstance(bitmap_info, list)
-                or len(bitmap_info) != 5
+                or len(bitmap_info) != 7
                 or not isinstance(bitmap_info[0], list)
                 or bitmap_info[0][0] != b"getbit"
                 or not isinstance(bitmap_info[1], list)
@@ -168,6 +168,10 @@ def run_smoke() -> None:
                 or bitmap_info[3][0] != b"bitpos"
                 or not isinstance(bitmap_info[4], list)
                 or bitmap_info[4][0] != b"bitop"
+                or not isinstance(bitmap_info[5], list)
+                or bitmap_info[5][0] != b"bitfield"
+                or not isinstance(bitmap_info[6], list)
+                or bitmap_info[6][0] != b"bitfield_ro"
             ):
                 raise AssertionError(f"bitmap commands missing from COMMAND INFO: {bitmap_info!r}")
 
@@ -265,7 +269,8 @@ def run_smoke() -> None:
                 or b"bitcount" not in listed_bitmap
                 or b"bitpos" not in listed_bitmap
                 or b"bitop" not in listed_bitmap
-                or b"bitfield" in listed_bitmap
+                or b"bitfield" not in listed_bitmap
+                or b"bitfield_ro" not in listed_bitmap
             ):
                 raise AssertionError(f"unexpected COMMAND LIST bitmap result: {listed_bitmap!r}")
 

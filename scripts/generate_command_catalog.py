@@ -332,6 +332,9 @@ PARTIAL_NAMES = {
     "subscribe",
     "unsubscribe",
     "wait",
+    "pfadd",
+    "pfcount",
+    "pfmerge",
 }
 
 ALIAS_NAMES = {

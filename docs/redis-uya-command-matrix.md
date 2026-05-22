@@ -1,7 +1,7 @@
 # redis-uya command matrix
 
 > version: v0.9.1-dev
-> date: 2026-05-21
+> date: 2026-05-22
 > source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`
 > runtime source: `src/command/catalog_generated.uya`
 
@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 362 | 256 | 146 | 48 | 0 | 3 | 165 |
+| Tier A: standalone core | 362 | 256 | 146 | 51 | 0 | 3 | 162 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 135 | 128 | 0 | 0 | 0 | 0 | 135 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `55` |
+| `partial` | `58` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `300` |
+| `deferred` | `297` |
 
 ## Group counts
 
@@ -391,10 +391,10 @@
 | `pexpire` | `generic` | `full` | `-` | `-3` | `-` | `no` | `@keyspace, @write, @fast` |
 | `pexpireat` | `generic` | `full` | `-` | `-3` | `-` | `no` | `@keyspace, @write, @fast` |
 | `pexpiretime` | `generic` | `full` | `-` | `2` | `-` | `no` | `@keyspace, @read, @fast` |
-| `pfadd` | `hyperloglog` | `deferred` | `v0.9.2` | `-2` | `-` | `no` | `@write, @hyperloglog, @fast` |
-| `pfcount` | `hyperloglog` | `deferred` | `v0.9.2` | `-2` | `-` | `no` | `@read, @hyperloglog, @slow` |
+| `pfadd` | `hyperloglog` | `partial` | `-` | `-2` | `-` | `no` | `@write, @hyperloglog, @fast` |
+| `pfcount` | `hyperloglog` | `partial` | `-` | `-2` | `-` | `no` | `@read, @hyperloglog, @slow` |
 | `pfdebug` | `hyperloglog` | `deferred` | `v0.9.2` | `3` | `-` | `no` | `@write, @hyperloglog, @admin, @slow, @dangerous` |
-| `pfmerge` | `hyperloglog` | `deferred` | `v0.9.2` | `-2` | `-` | `no` | `@write, @hyperloglog, @slow` |
+| `pfmerge` | `hyperloglog` | `partial` | `-` | `-2` | `-` | `no` | `@write, @hyperloglog, @slow` |
 | `pfselftest` | `hyperloglog` | `deferred` | `v0.9.2` | `1` | `-` | `no` | `@hyperloglog, @admin, @slow, @dangerous` |
 | `ping` | `connection` | `full` | `-` | `-1` | `-` | `no` | `@fast, @connection` |
 | `psetex` | `string` | `full` | `-` | `4` | `-` | `no` | `@write, @string, @slow` |

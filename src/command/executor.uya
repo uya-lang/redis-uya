@@ -394,6 +394,10 @@ fn command_executor_bitfield_invalid_overflow_type() CommandReply {
     return command_executor_error(&"ERR Invalid OVERFLOW type specified"[0: 35]);
 }
 
+fn command_executor_hll_wrongtype() CommandReply {
+    return command_executor_error(&"WRONGTYPE Key is not a valid HyperLogLog string value."[0: 54]);
+}
+
 fn command_executor_positive_count_required() CommandReply {
     return command_executor_error(&"ERR value is out of range, must be positive"[0: 43]);
 }
@@ -3003,6 +3007,188 @@ fn command_executor_bitfield(engine: &Engine, command: &Command, now_ms: u64, re
         return command_executor_oom();
     };
     return command_executor_owned_raw(raw.buf[0: raw.len]);
+}
+
+fn command_executor_hll_members_into_set(source_obj: &RedisObject, destination_set: &RedisObject) !void {
+    if source_obj == null || source_obj.obj_type != ObjectType.object_set {
+        return error.ObjectWrongType;
+    }
+    var iter: DictIterator = dict_iter_new();
+    var entry: &DictEntry = dict_iter_next(&source_obj.hash_dict, &iter);
+    while entry != null {
+        _ = try set_object_add_member(destination_set, entry.key.buf[0: entry.key.len]);
+        entry = dict_iter_next(&source_obj.hash_dict, &iter);
+    }
+}
+
+fn command_executor_pfadd(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 2 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+
+    const existing: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+        const hll_obj: &RedisObject = create_set_object() catch {
+            return command_executor_oom();
+        };
+        var added_any_new: i64 = 1;
+        var index_new: usize = 2;
+        while index_new < command.argc {
+            const member_new: &[byte] = command_executor_arg(command, index_new) catch {
+                object_free(hll_obj);
+                return command_executor_wrong_arity();
+            };
+            const inserted_new: bool = set_object_add_member(hll_obj, member_new) catch |err| {
+                object_free(hll_obj);
+                if err == error.AllocOutOfMemory {
+                    return command_executor_oom();
+                }
+                return command_executor_error(&"ERR PFADD failed"[0: 16]);
+            };
+            if inserted_new {
+                added_any_new = 1;
+            }
+            index_new = index_new + 1;
+        }
+        _ = set_key_at(engine, key, hll_obj, now_ms) catch {
+            object_free(hll_obj);
+            return command_executor_oom();
+        };
+        return command_executor_integer(added_any_new);
+    };
+
+    if existing.obj_type != ObjectType.object_set {
+        return command_executor_hll_wrongtype();
+    }
+
+    var added_any: i64 = 0;
+    var index: usize = 2;
+    while index < command.argc {
+        const member: &[byte] = command_executor_arg(command, index) catch {
+            return command_executor_wrong_arity();
+        };
+        const inserted: bool = set_object_add_member(existing, member) catch |err| {
+            if err == error.AllocOutOfMemory {
+                return command_executor_oom();
+            }
+            return command_executor_error(&"ERR PFADD failed"[0: 16]);
+        };
+        if inserted {
+            added_any = 1;
+        }
+        index = index + 1;
+    }
+    return command_executor_integer(added_any);
+}
+
+fn command_executor_pfcount(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 2 {
+        return command_executor_wrong_arity();
+    }
+    if command.argc == 2 {
+        const key: &[byte] = command_executor_arg(command, 1) catch {
+            return command_executor_wrong_arity();
+        };
+        const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+            return command_executor_integer(0);
+        };
+        if obj.obj_type != ObjectType.object_set {
+            return command_executor_hll_wrongtype();
+        }
+        const count: usize = set_object_len(obj) catch {
+            return command_executor_hll_wrongtype();
+        };
+        return command_executor_integer(count as i64);
+    }
+
+    const union_set: &RedisObject = create_set_object() catch {
+        return command_executor_oom();
+    };
+    defer {
+        object_free(union_set);
+    }
+
+    var index: usize = 1;
+    while index < command.argc {
+        const key: &[byte] = command_executor_arg(command, index) catch {
+            return command_executor_wrong_arity();
+        };
+        const obj_result: !&RedisObject = lookup_key_at(engine, key, now_ms);
+        if obj_result.error_id != 0 {
+            index = index + 1;
+            continue;
+        }
+        const obj: &RedisObject = obj_result.value;
+        if obj.obj_type != ObjectType.object_set {
+            return command_executor_hll_wrongtype();
+        }
+        _ = command_executor_hll_members_into_set(obj, union_set) catch |err| {
+            if err == error.AllocOutOfMemory {
+                return command_executor_oom();
+            }
+            return command_executor_hll_wrongtype();
+        };
+        index = index + 1;
+    }
+
+    const count: usize = set_object_len(union_set) catch {
+        return command_executor_hll_wrongtype();
+    };
+    return command_executor_integer(count as i64);
+}
+
+fn command_executor_pfmerge(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 2 {
+        return command_executor_wrong_arity();
+    }
+    const destination: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+
+    const merged: &RedisObject = create_set_object() catch {
+        return command_executor_oom();
+    };
+    defer {
+        object_free(merged);
+    }
+
+    var index: usize = 2;
+    while index < command.argc {
+        const key: &[byte] = command_executor_arg(command, index) catch {
+            return command_executor_wrong_arity();
+        };
+        const obj_result: !&RedisObject = lookup_key_at(engine, key, now_ms);
+        if obj_result.error_id != 0 {
+            index = index + 1;
+            continue;
+        }
+        const obj: &RedisObject = obj_result.value;
+        if obj.obj_type != ObjectType.object_set {
+            return command_executor_hll_wrongtype();
+        }
+        _ = command_executor_hll_members_into_set(obj, merged) catch |err| {
+            if err == error.AllocOutOfMemory {
+                return command_executor_oom();
+            }
+            return command_executor_hll_wrongtype();
+        };
+        index = index + 1;
+    }
+
+    const stored: &RedisObject = object_clone(merged) catch |err| {
+        if err == error.AllocOutOfMemory {
+            return command_executor_oom();
+        }
+        return command_executor_error(&"ERR PFMERGE failed"[0: 18]);
+    };
+    _ = set_key_at(engine, destination, stored, now_ms) catch {
+        object_free(stored);
+        return command_executor_oom();
+    };
+    _ = clear_key_expire(engine, destination);
+    return command_executor_simple(&"OK"[0: 2]);
 }
 
 fn command_executor_incrbyfloat(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
@@ -9725,6 +9911,12 @@ fn command_executor_command_key_flags(info: &CommandInfo, key_ordinal: usize) &[
     if info.cmd_type == CommandType.command_bitfield {
         return &"RW|access|update"[0: 16];
     }
+    if info.cmd_type == CommandType.command_pfmerge {
+        if key_ordinal == 0 {
+            return &"OW|update"[0: 9];
+        }
+        return &"RO|access"[0: 9];
+    }
     if info.cmd_type == CommandType.command_lmove || info.cmd_type == CommandType.command_rpoplpush || info.cmd_type == CommandType.command_brpoplpush {
         if key_ordinal == 0 {
             return &"RW|access|delete"[0: 16];
@@ -10575,6 +10767,15 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_bitfield_ro {
         return command_executor_bitfield(engine, command, now_ms, true);
+    }
+    if command.info.cmd_type == CommandType.command_pfadd {
+        return command_executor_pfadd(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_pfcount {
+        return command_executor_pfcount(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_pfmerge {
+        return command_executor_pfmerge(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_setrange {
         return command_executor_setrange(engine, command, now_ms);

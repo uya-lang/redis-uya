@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 159);
+    try assert_eq_i32(command_router_count(&router) as i32, 162);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -126,6 +126,18 @@ export fn test_command_router_lookup_and_case() !void {
     const bitfield_ro: CommandInfo = try command_router_lookup(&router, &"BITFIELD_RO"[0: 11]);
     try assert_eq_i32(bitfield_ro.cmd_type as i32, CommandType.command_bitfield_ro as i32);
     try assert_eq_i32(bitfield_ro.arity, -2);
+
+    const pfadd: CommandInfo = try command_router_lookup(&router, &"PFADD"[0: 5]);
+    try assert_eq_i32(pfadd.cmd_type as i32, CommandType.command_pfadd as i32);
+    try assert_eq_i32(pfadd.arity, -2);
+
+    const pfcount: CommandInfo = try command_router_lookup(&router, &"PFCOUNT"[0: 7]);
+    try assert_eq_i32(pfcount.cmd_type as i32, CommandType.command_pfcount as i32);
+    try assert_eq_i32(pfcount.arity, -2);
+
+    const pfmerge: CommandInfo = try command_router_lookup(&router, &"PFMERGE"[0: 7]);
+    try assert_eq_i32(pfmerge.cmd_type as i32, CommandType.command_pfmerge as i32);
+    try assert_eq_i32(pfmerge.arity, -2);
 
     const zrank: CommandInfo = try command_router_lookup(&router, &"ZRANK"[0: 5]);
     try assert_eq_i32(zrank.cmd_type as i32, CommandType.command_zrank as i32);
@@ -700,6 +712,9 @@ export fn test_command_router_arity_validation() !void {
     const bitop: CommandInfo = try command_router_lookup(&router, &"BITOP"[0: 5]);
     const bitfield: CommandInfo = try command_router_lookup(&router, &"BITFIELD"[0: 8]);
     const bitfield_ro: CommandInfo = try command_router_lookup(&router, &"BITFIELD_RO"[0: 11]);
+    const pfadd: CommandInfo = try command_router_lookup(&router, &"PFADD"[0: 5]);
+    const pfcount: CommandInfo = try command_router_lookup(&router, &"PFCOUNT"[0: 7]);
+    const pfmerge: CommandInfo = try command_router_lookup(&router, &"PFMERGE"[0: 7]);
     const zscore: CommandInfo = try command_router_lookup(&router, &"ZSCORE"[0: 6]);
     const zmscore: CommandInfo = try command_router_lookup(&router, &"ZMSCORE"[0: 7]);
     const zpopmax: CommandInfo = try command_router_lookup(&router, &"ZPOPMAX"[0: 7]);
@@ -817,6 +832,12 @@ export fn test_command_router_arity_validation() !void {
     try command_validate_arity(&bitfield, 6);
     try command_validate_arity(&bitfield_ro, 2);
     try command_validate_arity(&bitfield_ro, 6);
+    try command_validate_arity(&pfadd, 2);
+    try command_validate_arity(&pfadd, 4);
+    try command_validate_arity(&pfcount, 2);
+    try command_validate_arity(&pfcount, 4);
+    try command_validate_arity(&pfmerge, 2);
+    try command_validate_arity(&pfmerge, 4);
     try command_validate_arity(&zscore, 3);
     try command_validate_arity(&zmscore, 3);
     try command_validate_arity(&zmscore, 5);

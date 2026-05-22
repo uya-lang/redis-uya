@@ -219,6 +219,26 @@ export fn test_aof_connection_append_and_replay_set() !void {
         1000u64,
     );
     try assert_true(aof_test_slice_eq(out[0: bitfield_incr_result.response_len], &"*1\r\n:8\r\n"[0: 8]));
+    const pfadd_result: ConnectionProcessResult = try connection_process_input_with_aof_at(
+        &engine,
+        &router,
+        &writer,
+        &"*5\r\n$5\r\nPFADD\r\n$3\r\nhll\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\nc\r\n"[0: 45],
+        &out[0],
+        256,
+        1000u64,
+    );
+    try assert_true(aof_test_slice_eq(out[0: pfadd_result.response_len], &":1\r\n"[0: 4]));
+    const pfmerge_result: ConnectionProcessResult = try connection_process_input_with_aof_at(
+        &engine,
+        &router,
+        &writer,
+        &"*4\r\n$7\r\nPFMERGE\r\n$3\r\ndst\r\n$3\r\nhll\r\n$7\r\nmissing\r\n"[0: 48],
+        &out[0],
+        256,
+        1000u64,
+    );
+    try assert_true(aof_test_slice_eq(out[0: pfmerge_result.response_len], &"+OK\r\n"[0: 5]));
     aof_close(&writer);
     engine_free(&engine);
 
@@ -241,6 +261,12 @@ export fn test_aof_connection_append_and_replay_set() !void {
     const found_bf: &RedisObject = try lookup_key_at(&replay_engine, &"bf"[0: 2], 2000u64);
     try assert_eq_i32(found_bf.value.len as i32, 1);
     try assert_eq_i32(found_bf.value.buf.ptr[0] as i32, 8);
+    const found_hll: &RedisObject = try lookup_key_at(&replay_engine, &"hll"[0: 3], 2000u64);
+    try assert_eq_i32(found_hll.obj_type as i32, ObjectType.object_set as i32);
+    try assert_eq_i32((try set_object_len(found_hll)) as i32, 3);
+    const found_dst_hll: &RedisObject = try lookup_key_at(&replay_engine, &"dst"[0: 3], 2000u64);
+    try assert_eq_i32(found_dst_hll.obj_type as i32, ObjectType.object_set as i32);
+    try assert_eq_i32((try set_object_len(found_dst_hll)) as i32, 3);
     engine_free(&replay_engine);
     _ = unlink(path);
     try assert_eq_i32(used_memory() as i32, 0);

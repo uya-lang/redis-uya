@@ -192,6 +192,15 @@ class RedisPySubsetClient:
         assert isinstance(result, list)
         return result
 
+    def pfadd(self, key: str, *elements: str) -> int:
+        return int(self._request(b"PFADD", key.encode(), *(element.encode() for element in elements)))
+
+    def pfcount(self, *keys: str) -> int:
+        return int(self._request(b"PFCOUNT", *(key.encode() for key in keys)))
+
+    def pfmerge(self, dest: str, *sources: str) -> bool:
+        return self._request(b"PFMERGE", dest.encode(), *(source.encode() for source in sources)) == "OK"
+
     def setrange(self, key: str, offset: int, value: str) -> int:
         return int(self._request(b"SETRANGE", key.encode(), str(offset).encode(), value.encode()))
 
@@ -803,6 +812,14 @@ def run_smoke() -> None:
             assert client.bitfield("bf", "SET", "i8", "0", "-1") == [8]
             assert client.bitfield("bf", "GET", "i8", "0") == [-1]
             assert client.bitfield_ro("bf", "GET", "u8", "0") == [255]
+            assert client.pfadd("hll", "a", "b", "c") == 1
+            assert client.pfcount("hll") == 3
+            assert client.pfadd("hll", "a", "b") == 0
+            assert client.pfcount("hll", "missing") == 3
+            assert client.pfmerge("dsthll", "hll", "missing")
+            assert client.pfcount("dsthll") == 3
+            assert client.pfadd("emptyhll") == 1
+            assert client.pfcount("emptyhll") == 0
             assert client.setrange("key", 5, "__") == 7
             assert client.get("key") == b"value__"
             assert client.rename("key", "key2")
@@ -814,7 +831,7 @@ def run_smoke() -> None:
             assert client.getdel("gd-key") == b"once"
             assert client.getdel("gd-key") is None
             assert client.delete("counter") == 1
-            assert client.delete("fcounter", "nx-key", "gs-key", "sx-key", "mk1", "mk2", "mn1", "mn2", "allones", "srca", "srcb", "dstbit", "bf") == 13
+            assert client.delete("fcounter", "nx-key", "gs-key", "sx-key", "mk1", "mk2", "mn1", "mn2", "allones", "srca", "srcb", "dstbit", "bf", "hll", "dsthll", "emptyhll") == 16
             assert client.echo("hi") == b"hi"
             assert client.key_type("key") == "string"
             assert client.dbsize() == 1

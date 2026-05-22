@@ -1497,6 +1497,60 @@ BITFIELD_RO key [GET encoding offset] ...
 - 当前只允许 `GET` 子操作；写子操作会返回 `ERR BITFIELD_RO only supports the GET subcommand`
 - 当前接受 `OVERFLOW` 语法占位，但它对只读 `GET` 没有实际效果
 
+### `PFADD`
+
+格式：
+
+```text
+PFADD key [element ...]
+```
+
+返回：
+
+- 返回 `1` 表示当前 key 的近似基数被本次调用改变
+- 返回 `0` 表示当前 key 的近似基数未变化
+
+说明：
+
+- 当前实现为 partial：内部暂用 exact set-backed cardinality 逼近 Redis 语义，不是 Redis 原生 dense/sparse HLL 字符串编码
+- `PFADD key` 无元素时，若 key 不存在会创建一个空的 partial-HLL 并返回 `1`；再次调用返回 `0`
+
+### `PFCOUNT`
+
+格式：
+
+```text
+PFCOUNT key [key ...]
+```
+
+返回：
+
+- 单 key：返回当前近似基数
+- 多 key：返回所有输入 key 合并后的近似基数
+
+说明：
+
+- 当前实现为 partial，基于 exact set-backed union/count 返回精确去重计数
+- key 不存在时按空 HLL 处理
+
+### `PFMERGE`
+
+格式：
+
+```text
+PFMERGE destkey [sourcekey ...]
+```
+
+返回：
+
+- 成功：`+OK`
+
+说明：
+
+- 当前实现为 partial，内部用 exact set-backed union 结果重写目标 key
+- `PFMERGE destkey` 无 source 时会把目标写成空的 partial-HLL
+- 目标 key 会被重写，因此原 TTL 会被清除
+
 ### `TYPE`
 
 格式：

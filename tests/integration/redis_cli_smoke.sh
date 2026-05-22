@@ -345,6 +345,54 @@ if [[ "$BITFIELD_RO_RESULT" != "255" ]]; then
     exit 1
 fi
 
+PFADD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" pfadd hll a b c)"
+if [[ "$PFADD_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected PFADD 1, got '$PFADD_RESULT'" >&2
+    exit 1
+fi
+
+PFCOUNT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" pfcount hll)"
+if [[ "$PFCOUNT_RESULT" != "3" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected PFCOUNT 3, got '$PFCOUNT_RESULT'" >&2
+    exit 1
+fi
+
+PFADD_DUP_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" pfadd hll a b)"
+if [[ "$PFADD_DUP_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected PFADD duplicate 0, got '$PFADD_DUP_RESULT'" >&2
+    exit 1
+fi
+
+PFCOUNT_MULTI_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" pfcount hll missing)"
+if [[ "$PFCOUNT_MULTI_RESULT" != "3" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected PFCOUNT multi 3, got '$PFCOUNT_MULTI_RESULT'" >&2
+    exit 1
+fi
+
+PFMERGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" pfmerge dsthll hll missing)"
+if [[ "$PFMERGE_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected PFMERGE OK, got '$PFMERGE_RESULT'" >&2
+    exit 1
+fi
+
+PFCOUNT_DST_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" pfcount dsthll)"
+if [[ "$PFCOUNT_DST_RESULT" != "3" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected PFMERGE result PFCOUNT 3, got '$PFCOUNT_DST_RESULT'" >&2
+    exit 1
+fi
+
+PFADD_EMPTY_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" pfadd emptyhll)"
+if [[ "$PFADD_EMPTY_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected empty PFADD 1, got '$PFADD_EMPTY_RESULT'" >&2
+    exit 1
+fi
+
+PFCOUNT_EMPTY_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" pfcount emptyhll)"
+if [[ "$PFCOUNT_EMPTY_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected empty PFCOUNT 0, got '$PFCOUNT_EMPTY_RESULT'" >&2
+    exit 1
+fi
+
 SETRANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" setrange key 5 __)"
 if [[ "$SETRANGE_RESULT" != "7" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected setrange 7, got '$SETRANGE_RESULT'" >&2
@@ -1107,9 +1155,9 @@ if [[ "$COUNTER_DEL_RESULT" != "1" ]]; then
     exit 1
 fi
 
-TEMP_STRING_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del fcounter nx-key gs-key sx-key allones srca srcb dstbit bf)"
-if [[ "$TEMP_STRING_DEL_RESULT" != "9" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected temp string DEL 9, got '$TEMP_STRING_DEL_RESULT'" >&2
+TEMP_STRING_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del fcounter nx-key gs-key sx-key allones srca srcb dstbit bf hll dsthll emptyhll)"
+if [[ "$TEMP_STRING_DEL_RESULT" != "12" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected temp string DEL 12, got '$TEMP_STRING_DEL_RESULT'" >&2
     exit 1
 fi
 

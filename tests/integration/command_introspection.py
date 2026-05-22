@@ -154,10 +154,10 @@ def run_smoke() -> None:
             if not isinstance(info[2], list) or info[2][0] != b"client|id":
                 raise AssertionError(f"COMMAND INFO CLIENT|ID returned wrong payload: {info!r}")
 
-            bitmap_info = send_command(sock, b"COMMAND", b"INFO", b"GETBIT", b"SETBIT", b"BITCOUNT", b"BITPOS", b"BITOP", b"BITFIELD", b"BITFIELD_RO")
+            bitmap_info = send_command(sock, b"COMMAND", b"INFO", b"GETBIT", b"SETBIT", b"BITCOUNT", b"BITPOS", b"BITOP", b"BITFIELD", b"BITFIELD_RO", b"PFADD", b"PFCOUNT", b"PFMERGE")
             if (
                 not isinstance(bitmap_info, list)
-                or len(bitmap_info) != 7
+                or len(bitmap_info) != 10
                 or not isinstance(bitmap_info[0], list)
                 or bitmap_info[0][0] != b"getbit"
                 or not isinstance(bitmap_info[1], list)
@@ -172,6 +172,12 @@ def run_smoke() -> None:
                 or bitmap_info[5][0] != b"bitfield"
                 or not isinstance(bitmap_info[6], list)
                 or bitmap_info[6][0] != b"bitfield_ro"
+                or not isinstance(bitmap_info[7], list)
+                or bitmap_info[7][0] != b"pfadd"
+                or not isinstance(bitmap_info[8], list)
+                or bitmap_info[8][0] != b"pfcount"
+                or not isinstance(bitmap_info[9], list)
+                or bitmap_info[9][0] != b"pfmerge"
             ):
                 raise AssertionError(f"bitmap commands missing from COMMAND INFO: {bitmap_info!r}")
 
@@ -273,6 +279,16 @@ def run_smoke() -> None:
                 or b"bitfield_ro" not in listed_bitmap
             ):
                 raise AssertionError(f"unexpected COMMAND LIST bitmap result: {listed_bitmap!r}")
+
+            listed_pf = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"PF*")
+            if (
+                not isinstance(listed_pf, list)
+                or b"pfadd" not in listed_pf
+                or b"pfcount" not in listed_pf
+                or b"pfmerge" not in listed_pf
+                or b"pfdebug" in listed_pf
+            ):
+                raise AssertionError(f"unexpected COMMAND LIST pf* result: {listed_pf!r}")
 
             listed_zpop = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"ZPOP*")
             if (

@@ -161,6 +161,9 @@ export enum CommandType {
     command_bitop,
     command_bitfield,
     command_bitfield_ro,
+    command_pfadd,
+    command_pfcount,
+    command_pfmerge,
     command_lmove,
     command_rpoplpush,
     command_lmpop,
@@ -196,7 +199,7 @@ export const COMMAND_FLAG_READONLY: u64 = 1u64;
 export const COMMAND_FLAG_WRITE: u64 = 2u64;
 export const COMMAND_FLAG_FAST: u64 = 4u64;
 
-const MIN_COMMAND_COUNT: usize = 159;
+const MIN_COMMAND_COUNT: usize = 162;
 
 fn command_router_name_eq(a: &[byte], b: &[byte]) bool {
     return bytes_ascii_case_eq(a, b);
@@ -712,6 +715,15 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
     }
     if index == 158 {
         return command_router_info(CommandType.command_bitfield_ro, &"BITFIELD_RO"[0: 11], -2, COMMAND_FLAG_READONLY, 1, 1, 1);
+    }
+    if index == 159 {
+        return command_router_info(CommandType.command_pfadd, &"PFADD"[0: 5], -2, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 160 {
+        return command_router_info(CommandType.command_pfcount, &"PFCOUNT"[0: 7], -2, COMMAND_FLAG_READONLY, 1, -1, 1);
+    }
+    if index == 161 {
+        return command_router_info(CommandType.command_pfmerge, &"PFMERGE"[0: 7], -2, COMMAND_FLAG_WRITE, 1, -1, 1);
     }
     return error.CommandUnknown;
 }

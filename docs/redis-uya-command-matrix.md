@@ -1,7 +1,7 @@
 # redis-uya command matrix
 
 > version: v0.9.1-dev
-> date: 2026-05-22
+> date: 2026-05-23
 > source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`
 > runtime source: `src/command/catalog_generated.uya`
 
@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 362 | 256 | 146 | 51 | 0 | 3 | 162 |
+| Tier A: standalone core | 362 | 256 | 146 | 54 | 0 | 3 | 159 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 135 | 128 | 0 | 0 | 0 | 0 | 135 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `58` |
+| `partial` | `61` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `297` |
+| `deferred` | `294` |
 
 ## Group counts
 
@@ -254,15 +254,15 @@
 | `function|load` | `scripting` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@write, @slow, @scripting` |
 | `function|restore` | `scripting` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@write, @slow, @scripting` |
 | `function|stats` | `scripting` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@slow, @scripting` |
-| `geoadd` | `geo` | `deferred` | `v0.9.2` | `-5` | `-` | `no` | `@write, @geo, @slow` |
-| `geodist` | `geo` | `deferred` | `v0.9.2` | `-4` | `-` | `no` | `@read, @geo, @slow` |
+| `geoadd` | `geo` | `partial` | `-` | `-5` | `-` | `no` | `@write, @geo, @slow` |
+| `geodist` | `geo` | `partial` | `-` | `-4` | `-` | `no` | `@read, @geo, @slow` |
 | `geohash` | `geo` | `deferred` | `v0.9.2` | `-2` | `-` | `no` | `@read, @geo, @slow` |
 | `geopos` | `geo` | `deferred` | `v0.9.2` | `-2` | `-` | `no` | `@read, @geo, @slow` |
 | `georadius` | `geo` | `deferred` | `v0.9.2` | `-6` | `-` | `no` | `@write, @geo, @slow` |
 | `georadius_ro` | `geo` | `deferred` | `v0.9.2` | `-6` | `-` | `no` | `@read, @geo, @slow` |
 | `georadiusbymember` | `geo` | `deferred` | `v0.9.2` | `-5` | `-` | `no` | `@write, @geo, @slow` |
 | `georadiusbymember_ro` | `geo` | `deferred` | `v0.9.2` | `-5` | `-` | `no` | `@read, @geo, @slow` |
-| `geosearch` | `geo` | `deferred` | `v0.9.2` | `-7` | `-` | `no` | `@read, @geo, @slow` |
+| `geosearch` | `geo` | `partial` | `-` | `-7` | `-` | `no` | `@read, @geo, @slow` |
 | `geosearchstore` | `geo` | `deferred` | `v0.9.2` | `-8` | `-` | `no` | `@write, @geo, @slow` |
 | `get` | `string` | `full` | `-` | `2` | `-` | `no` | `@read, @string, @fast` |
 | `getbit` | `bitmap` | `full` | `-` | `3` | `-` | `no` | `@read, @bitmap, @fast` |

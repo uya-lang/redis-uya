@@ -393,6 +393,24 @@ if [[ "$PFCOUNT_EMPTY_RESULT" != "0" ]]; then
     exit 1
 fi
 
+GEOADD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" geoadd geo 13.361389 38.115556 Palermo 15.087269 37.502669 Catania)"
+if [[ "$GEOADD_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected GEOADD 2, got '$GEOADD_RESULT'" >&2
+    exit 1
+fi
+
+GEODIST_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" geodist geo Palermo Catania km)"
+if [[ "$GEODIST_RESULT" != "166.2742" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected GEODIST 166.2742, got '$GEODIST_RESULT'" >&2
+    exit 1
+fi
+
+GEOSEARCH_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" geosearch geo FROMLONLAT 15 37 BYRADIUS 200 km)"
+if [[ "$GEOSEARCH_RESULT" != $'Palermo\nCatania' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected GEOSEARCH Palermo/Catania, got '$GEOSEARCH_RESULT'" >&2
+    exit 1
+fi
+
 SETRANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" setrange key 5 __)"
 if [[ "$SETRANGE_RESULT" != "7" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected setrange 7, got '$SETRANGE_RESULT'" >&2
@@ -1155,9 +1173,9 @@ if [[ "$COUNTER_DEL_RESULT" != "1" ]]; then
     exit 1
 fi
 
-TEMP_STRING_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del fcounter nx-key gs-key sx-key allones srca srcb dstbit bf hll dsthll emptyhll)"
-if [[ "$TEMP_STRING_DEL_RESULT" != "12" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected temp string DEL 12, got '$TEMP_STRING_DEL_RESULT'" >&2
+TEMP_STRING_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del fcounter nx-key gs-key sx-key allones srca srcb dstbit bf hll dsthll emptyhll geo)"
+if [[ "$TEMP_STRING_DEL_RESULT" != "13" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected temp string DEL 13, got '$TEMP_STRING_DEL_RESULT'" >&2
     exit 1
 fi
 

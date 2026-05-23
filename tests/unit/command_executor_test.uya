@@ -1706,6 +1706,84 @@ export fn test_command_set_get_del_exists() !void {
     try assert_eq_i32(del_hll_reply.integer as i32, 4);
     resp_value_free(&del_hll_parsed.value);
 
+    var geoadd_parsed: RespParseResult = try parse_resp2(&"*8\r\n$6\r\nGEOADD\r\n$3\r\ngeo\r\n$9\r\n13.361389\r\n$9\r\n38.115556\r\n$7\r\nPalermo\r\n$9\r\n15.087269\r\n$9\r\n37.502669\r\n$7\r\nCatania\r\n"[0: 111]);
+    const geoadd_command: Command = try command_executor_test_command(&router, &geoadd_parsed);
+    const geoadd_reply: CommandReply = command_execute_at(&engine, &geoadd_command, 1000u64);
+    try assert_eq_i32(geoadd_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(geoadd_reply.integer as i32, 2);
+    resp_value_free(&geoadd_parsed.value);
+
+    var geodist_parsed: RespParseResult = try parse_resp2(&"*5\r\n$7\r\nGEODIST\r\n$3\r\ngeo\r\n$7\r\nPalermo\r\n$7\r\nCatania\r\n$2\r\nkm\r\n"[0: 60]);
+    const geodist_command: Command = try command_executor_test_command(&router, &geodist_parsed);
+    var geodist_reply: CommandReply = command_execute_at(&engine, &geodist_command, 1000u64);
+    try assert_eq_i32(geodist_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(geodist_reply.data, &"166.2742"[0: 8]));
+    command_reply_cleanup(&geodist_reply);
+    resp_value_free(&geodist_parsed.value);
+
+    var geosearch_parsed: RespParseResult = try parse_resp2(&"*8\r\n$9\r\nGEOSEARCH\r\n$3\r\ngeo\r\n$10\r\nFROMLONLAT\r\n$2\r\n15\r\n$2\r\n37\r\n$8\r\nBYRADIUS\r\n$3\r\n200\r\n$2\r\nkm\r\n"[0: 92]);
+    const geosearch_command: Command = try command_executor_test_command(&router, &geosearch_parsed);
+    var geosearch_reply: CommandReply = command_execute_at(&engine, &geosearch_command, 1000u64);
+    try assert_true(command_executor_test_slice_eq(geosearch_reply.data, &"*2\r\n$7\r\nPalermo\r\n$7\r\nCatania\r\n"[0: 30]));
+    command_reply_cleanup(&geosearch_reply);
+    resp_value_free(&geosearch_parsed.value);
+
+    var geosearch_withdist_parsed: RespParseResult = try parse_resp2(&"*8\r\n$9\r\nGEOSEARCH\r\n$3\r\ngeo\r\n$10\r\nFROMMEMBER\r\n$7\r\nPalermo\r\n$8\r\nBYRADIUS\r\n$3\r\n200\r\n$2\r\nkm\r\n$8\r\nWITHDIST\r\n"[0: 103]);
+    const geosearch_withdist_command: Command = try command_executor_test_command(&router, &geosearch_withdist_parsed);
+    var geosearch_withdist_reply: CommandReply = command_execute_at(&engine, &geosearch_withdist_command, 1000u64);
+    try assert_true(command_executor_test_slice_eq(geosearch_withdist_reply.data, &"*2\r\n*2\r\n$7\r\nPalermo\r\n$6\r\n0.0000\r\n*2\r\n$7\r\nCatania\r\n$8\r\n166.2742\r\n"[0: 64]));
+    command_reply_cleanup(&geosearch_withdist_reply);
+    resp_value_free(&geosearch_withdist_parsed.value);
+
+    var geosearch_withcoord_parsed: RespParseResult = try parse_resp2(&"*10\r\n$9\r\nGEOSEARCH\r\n$3\r\ngeo\r\n$10\r\nFROMLONLAT\r\n$2\r\n15\r\n$2\r\n37\r\n$5\r\nBYBOX\r\n$3\r\n400\r\n$3\r\n400\r\n$2\r\nkm\r\n$9\r\nWITHCOORD\r\n"[0: 114]);
+    const geosearch_withcoord_command: Command = try command_executor_test_command(&router, &geosearch_withcoord_parsed);
+    var geosearch_withcoord_reply: CommandReply = command_execute_at(&engine, &geosearch_withcoord_command, 1000u64);
+    try assert_true(command_executor_test_slice_eq(geosearch_withcoord_reply.data, &"*2\r\n*2\r\n$7\r\nPalermo\r\n*2\r\n$9\r\n13.361389\r\n$9\r\n38.115555\r\n*2\r\n$7\r\nCatania\r\n*2\r\n$9\r\n15.087268\r\n$9\r\n37.502668\r\n"[0: 106]));
+    command_reply_cleanup(&geosearch_withcoord_reply);
+    resp_value_free(&geosearch_withcoord_parsed.value);
+
+    var geosearch_count_hash_parsed: RespParseResult = try parse_resp2(&"*13\r\n$9\r\nGEOSEARCH\r\n$3\r\ngeo\r\n$10\r\nFROMLONLAT\r\n$2\r\n15\r\n$2\r\n37\r\n$8\r\nBYRADIUS\r\n$3\r\n200\r\n$2\r\nkm\r\n$8\r\nWITHDIST\r\n$9\r\nWITHCOORD\r\n$8\r\nWITHHASH\r\n$5\r\nCOUNT\r\n$1\r\n1\r\n"[0: 154]);
+    const geosearch_count_hash_command: Command = try command_executor_test_command(&router, &geosearch_count_hash_parsed);
+    var geosearch_count_hash_reply: CommandReply = command_execute_at(&engine, &geosearch_count_hash_command, 1000u64);
+    try assert_true(command_executor_test_slice_eq(geosearch_count_hash_reply.data, &"*1\r\n*4\r\n$7\r\nPalermo\r\n$8\r\n190.4424\r\n:57386728822249700\r\n*2\r\n$9\r\n13.361389\r\n$9\r\n38.115555\r\n"[0: 89]));
+    command_reply_cleanup(&geosearch_count_hash_reply);
+    resp_value_free(&geosearch_count_hash_parsed.value);
+
+    var geoadd_ch_parsed: RespParseResult = try parse_resp2(&"*6\r\n$6\r\nGEOADD\r\n$3\r\ngeo\r\n$2\r\nCH\r\n$9\r\n15.087269\r\n$9\r\n37.502669\r\n$7\r\nCatania\r\n"[0: 76]);
+    const geoadd_ch_command: Command = try command_executor_test_command(&router, &geoadd_ch_parsed);
+    const geoadd_ch_reply: CommandReply = command_execute_at(&engine, &geoadd_ch_command, 1000u64);
+    try assert_eq_i32(geoadd_ch_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(geoadd_ch_reply.integer as i32, 0);
+    resp_value_free(&geoadd_ch_parsed.value);
+
+    var geoadd_nx_parsed: RespParseResult = try parse_resp2(&"*6\r\n$6\r\nGEOADD\r\n$3\r\ngeo\r\n$2\r\nNX\r\n$9\r\n15.087269\r\n$9\r\n37.502669\r\n$7\r\nCatania\r\n"[0: 76]);
+    const geoadd_nx_command: Command = try command_executor_test_command(&router, &geoadd_nx_parsed);
+    const geoadd_nx_reply: CommandReply = command_execute_at(&engine, &geoadd_nx_command, 1000u64);
+    try assert_eq_i32(geoadd_nx_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(geoadd_nx_reply.integer as i32, 0);
+    resp_value_free(&geoadd_nx_parsed.value);
+
+    var geoadd_xx_parsed: RespParseResult = try parse_resp2(&"*6\r\n$6\r\nGEOADD\r\n$3\r\ngeo\r\n$2\r\nXX\r\n$9\r\n15.187269\r\n$9\r\n37.602669\r\n$7\r\nCatania\r\n"[0: 76]);
+    const geoadd_xx_command: Command = try command_executor_test_command(&router, &geoadd_xx_parsed);
+    const geoadd_xx_reply: CommandReply = command_execute_at(&engine, &geoadd_xx_command, 1000u64);
+    try assert_eq_i32(geoadd_xx_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(geoadd_xx_reply.integer as i32, 0);
+    resp_value_free(&geoadd_xx_parsed.value);
+
+    var geo_type_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nTYPE\r\n$3\r\ngeo\r\n"[0: 23]);
+    const geo_type_command: Command = try command_executor_test_command(&router, &geo_type_parsed);
+    const geo_type_reply: CommandReply = command_execute_at(&engine, &geo_type_command, 1000u64);
+    try assert_eq_i32(geo_type_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(geo_type_reply.data, &"zset"[0: 4]));
+    resp_value_free(&geo_type_parsed.value);
+
+    var del_geo_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nDEL\r\n$3\r\ngeo\r\n"[0: 22]);
+    const del_geo_command: Command = try command_executor_test_command(&router, &del_geo_parsed);
+    const del_geo_reply: CommandReply = command_execute_at(&engine, &del_geo_command, 1000u64);
+    try assert_eq_i32(del_geo_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(del_geo_reply.integer as i32, 1);
+    resp_value_free(&del_geo_parsed.value);
+
     var setrange_parsed: RespParseResult = try parse_resp2(&"*4\r\n$8\r\nSETRANGE\r\n$3\r\nkey\r\n$1\r\n5\r\n$2\r\n__\r\n"[0: 42]);
     const setrange_command: Command = try command_executor_test_command(&router, &setrange_parsed);
     const setrange_reply: CommandReply = command_execute_at(&engine, &setrange_command, 1000u64);
@@ -4864,6 +4942,54 @@ export fn test_command_error_paths() !void {
     try assert_eq_i32(pfmerge_wrong_reply.typ as i32, CommandReplyType.reply_error as i32);
     try assert_true(command_executor_test_slice_eq(pfmerge_wrong_reply.data, &"WRONGTYPE Key is not a valid HyperLogLog string value."[0: 54]));
     resp_value_free(&pfmerge_wrong_parsed.value);
+
+    var geo_wrongtype_seed_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$1\r\nx\r\n"[0: 29]);
+    const geo_wrongtype_seed_command: Command = try command_executor_test_command(&router, &geo_wrongtype_seed_parsed);
+    _ = command_execute_at(&engine, &geo_wrongtype_seed_command, 1000u64);
+    resp_value_free(&geo_wrongtype_seed_parsed.value);
+
+    var geoadd_wrongtype_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nGEOADD\r\n$3\r\nkey\r\n$9\r\n13.361389\r\n$9\r\n38.115556\r\n$7\r\nPalermo\r\n"[0: 78]);
+    const geoadd_wrongtype_command: Command = try command_executor_test_command(&router, &geoadd_wrongtype_parsed);
+    const geoadd_wrongtype_reply: CommandReply = command_execute_at(&engine, &geoadd_wrongtype_command, 1000u64);
+    try assert_eq_i32(geoadd_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(geoadd_wrongtype_reply.data, &"WRONGTYPE Operation against a key holding the wrong kind of value"[0: 65]));
+    resp_value_free(&geoadd_wrongtype_parsed.value);
+
+    var geodist_wrongtype_parsed: RespParseResult = try parse_resp2(&"*5\r\n$7\r\nGEODIST\r\n$3\r\nkey\r\n$1\r\na\r\n$1\r\nb\r\n$2\r\nkm\r\n"[0: 50]);
+    const geodist_wrongtype_command: Command = try command_executor_test_command(&router, &geodist_wrongtype_parsed);
+    const geodist_wrongtype_reply: CommandReply = command_execute_at(&engine, &geodist_wrongtype_command, 1000u64);
+    try assert_eq_i32(geodist_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(geodist_wrongtype_reply.data, &"WRONGTYPE Operation against a key holding the wrong kind of value"[0: 65]));
+    resp_value_free(&geodist_wrongtype_parsed.value);
+
+    var geosearch_missing_member_parsed: RespParseResult = try parse_resp2(&"*7\r\n$9\r\nGEOSEARCH\r\n$3\r\ngeo\r\n$10\r\nFROMMEMBER\r\n$7\r\nMissing\r\n$8\r\nBYRADIUS\r\n$3\r\n200\r\n$2\r\nkm\r\n"[0: 89]);
+    const geosearch_missing_member_command: Command = try command_executor_test_command(&router, &geosearch_missing_member_parsed);
+    const geosearch_missing_member_reply: CommandReply = command_execute_at(&engine, &geosearch_missing_member_command, 1000u64);
+    try assert_eq_i32(geosearch_missing_member_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(geosearch_missing_member_reply.data, &"ERR could not decode requested zset member"[0: 41]));
+    resp_value_free(&geosearch_missing_member_parsed.value);
+
+    var geo_invalid_pair_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nGEOADD\r\n$3\r\ngeo\r\n$3\r\n500\r\n$2\r\n38\r\n$1\r\nx\r\n"[0: 49]);
+    const geo_invalid_pair_command: Command = try command_executor_test_command(&router, &geo_invalid_pair_parsed);
+    var geo_invalid_pair_reply: CommandReply = command_execute_at(&engine, &geo_invalid_pair_command, 1000u64);
+    try assert_eq_i32(geo_invalid_pair_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(geo_invalid_pair_reply.data, &"ERR invalid longitude,latitude pair 500.000000,38.000000"[0: 56]));
+    command_reply_cleanup(&geo_invalid_pair_reply);
+    resp_value_free(&geo_invalid_pair_parsed.value);
+
+    var geo_invalid_unit_parsed: RespParseResult = try parse_resp2(&"*5\r\n$7\r\nGEODIST\r\n$3\r\ngeo\r\n$7\r\nPalermo\r\n$7\r\nCatania\r\n$3\r\nbad\r\n"[0: 61]);
+    const geo_invalid_unit_command: Command = try command_executor_test_command(&router, &geo_invalid_unit_parsed);
+    const geo_invalid_unit_reply: CommandReply = command_execute_at(&engine, &geo_invalid_unit_command, 1000u64);
+    try assert_eq_i32(geo_invalid_unit_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(geo_invalid_unit_reply.data, &"ERR unsupported unit provided. please use M, KM, FT, MI"[0: 57]));
+    resp_value_free(&geo_invalid_unit_parsed.value);
+
+    var geo_count_zero_parsed: RespParseResult = try parse_resp2(&"*10\r\n$9\r\nGEOSEARCH\r\n$3\r\ngeo\r\n$10\r\nFROMLONLAT\r\n$2\r\n15\r\n$2\r\n37\r\n$8\r\nBYRADIUS\r\n$3\r\n200\r\n$2\r\nkm\r\n$5\r\nCOUNT\r\n$1\r\n0\r\n"[0: 111]);
+    const geo_count_zero_command: Command = try command_executor_test_command(&router, &geo_count_zero_parsed);
+    const geo_count_zero_reply: CommandReply = command_execute_at(&engine, &geo_count_zero_command, 1000u64);
+    try assert_eq_i32(geo_count_zero_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(geo_count_zero_reply.data, &"ERR COUNT must be > 0"[0: 22]));
+    resp_value_free(&geo_count_zero_parsed.value);
 
     var bitfield_wrongtype_seed_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nHSET\r\n$6\r\nbfhash\r\n$5\r\nfield\r\n$5\r\nvalue\r\n"[0: 48]);
     const bitfield_wrongtype_seed_command: Command = try command_executor_test_command(&router, &bitfield_wrongtype_seed_parsed);

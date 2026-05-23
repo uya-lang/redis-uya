@@ -154,10 +154,10 @@ def run_smoke() -> None:
             if not isinstance(info[2], list) or info[2][0] != b"client|id":
                 raise AssertionError(f"COMMAND INFO CLIENT|ID returned wrong payload: {info!r}")
 
-            bitmap_info = send_command(sock, b"COMMAND", b"INFO", b"GETBIT", b"SETBIT", b"BITCOUNT", b"BITPOS", b"BITOP", b"BITFIELD", b"BITFIELD_RO", b"PFADD", b"PFCOUNT", b"PFMERGE")
+            bitmap_info = send_command(sock, b"COMMAND", b"INFO", b"GETBIT", b"SETBIT", b"BITCOUNT", b"BITPOS", b"BITOP", b"BITFIELD", b"BITFIELD_RO", b"PFADD", b"PFCOUNT", b"PFMERGE", b"GEOADD", b"GEODIST", b"GEOSEARCH")
             if (
                 not isinstance(bitmap_info, list)
-                or len(bitmap_info) != 10
+                or len(bitmap_info) != 13
                 or not isinstance(bitmap_info[0], list)
                 or bitmap_info[0][0] != b"getbit"
                 or not isinstance(bitmap_info[1], list)
@@ -178,6 +178,12 @@ def run_smoke() -> None:
                 or bitmap_info[8][0] != b"pfcount"
                 or not isinstance(bitmap_info[9], list)
                 or bitmap_info[9][0] != b"pfmerge"
+                or not isinstance(bitmap_info[10], list)
+                or bitmap_info[10][0] != b"geoadd"
+                or not isinstance(bitmap_info[11], list)
+                or bitmap_info[11][0] != b"geodist"
+                or not isinstance(bitmap_info[12], list)
+                or bitmap_info[12][0] != b"geosearch"
             ):
                 raise AssertionError(f"bitmap commands missing from COMMAND INFO: {bitmap_info!r}")
 
@@ -289,6 +295,18 @@ def run_smoke() -> None:
                 or b"pfdebug" in listed_pf
             ):
                 raise AssertionError(f"unexpected COMMAND LIST pf* result: {listed_pf!r}")
+
+            listed_geo = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"GEO*")
+            if (
+                not isinstance(listed_geo, list)
+                or b"geoadd" not in listed_geo
+                or b"geodist" not in listed_geo
+                or b"geosearch" not in listed_geo
+                or b"geohash" in listed_geo
+                or b"geopos" in listed_geo
+                or b"georadius" in listed_geo
+            ):
+                raise AssertionError(f"unexpected COMMAND LIST geo* result: {listed_geo!r}")
 
             listed_zpop = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"ZPOP*")
             if (

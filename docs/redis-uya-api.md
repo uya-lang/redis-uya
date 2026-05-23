@@ -1551,6 +1551,66 @@ PFMERGE destkey [sourcekey ...]
 - `PFMERGE destkey` 无 source 时会把目标写成空的 partial-HLL
 - 目标 key 会被重写，因此原 TTL 会被清除
 
+### `GEOADD`
+
+格式：
+
+```text
+GEOADD key [NX|XX] [CH] longitude latitude member [longitude latitude member ...]
+```
+
+返回：
+
+- 默认返回新插入的 member 数量
+- 带 `CH` 时，返回插入或坐标实际变化的 member 数量
+
+说明：
+
+- 当前实现为 partial：内部暂用 exact zset-backed packed coordinate score，而不是 Redis 原生 geohash score
+- 当前支持 `NX`、`XX`、`CH`
+- longitude / latitude 仍按 Redis 边界校验；越界会返回 `ERR invalid longitude,latitude pair ...`
+
+### `GEODIST`
+
+格式：
+
+```text
+GEODIST key member1 member2 [M|KM|FT|MI]
+```
+
+返回：
+
+- 命中时返回距离字符串，默认单位为米
+- 任一 member 不存在时返回 Null Bulk
+
+说明：
+
+- 当前实现为 partial，但距离计算走 exact great-circle path
+- 当前支持 `M`、`KM`、`FT`、`MI`
+
+### `GEOSEARCH`
+
+格式：
+
+```text
+GEOSEARCH key FROMMEMBER member BYRADIUS radius unit [ASC|DESC] [COUNT count [ANY]] [WITHDIST] [WITHCOORD] [WITHHASH]
+GEOSEARCH key FROMLONLAT longitude latitude BYRADIUS radius unit [ASC|DESC] [COUNT count [ANY]] [WITHDIST] [WITHCOORD] [WITHHASH]
+GEOSEARCH key FROMMEMBER member BYBOX width height unit [ASC|DESC] [COUNT count [ANY]] [WITHDIST] [WITHCOORD] [WITHHASH]
+GEOSEARCH key FROMLONLAT longitude latitude BYBOX width height unit [ASC|DESC] [COUNT count [ANY]] [WITHDIST] [WITHCOORD] [WITHHASH]
+```
+
+返回：
+
+- 默认返回 member 数组
+- 带附加选项时返回嵌套数组，顺序为 `member`, `dist`, `hash`, `coord`
+
+说明：
+
+- 当前实现为 partial，内部使用 exact zset-backed packed coordinate score
+- 当前 `WITHHASH` 返回当前 packed score 整数，不是 Redis 原生 geohash 整数
+- 当前 `WITHCOORD` 返回量化到 `1e-6` 的经纬度字符串
+- 当前接受 `COUNT ... ANY` 语法，但不会像 Redis 原生实现那样做提早截断优化
+
 ### `TYPE`
 
 格式：

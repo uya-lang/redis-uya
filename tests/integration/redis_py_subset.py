@@ -201,6 +201,19 @@ class RedisPySubsetClient:
     def pfmerge(self, dest: str, *sources: str) -> bool:
         return self._request(b"PFMERGE", dest.encode(), *(source.encode() for source in sources)) == "OK"
 
+    def geoadd(self, key: str, *parts: str) -> int:
+        return int(self._request(b"GEOADD", key.encode(), *(part.encode() for part in parts)))
+
+    def geodist(self, key: str, member1: str, member2: str, unit: str = "m") -> bytes | None:
+        result = self._request(b"GEODIST", key.encode(), member1.encode(), member2.encode(), unit.encode())
+        assert result is None or isinstance(result, bytes)
+        return result
+
+    def geosearch(self, key: str, *parts: str):
+        result = self._request(b"GEOSEARCH", key.encode(), *(part.encode() for part in parts))
+        assert isinstance(result, list)
+        return result
+
     def setrange(self, key: str, offset: int, value: str) -> int:
         return int(self._request(b"SETRANGE", key.encode(), str(offset).encode(), value.encode()))
 
@@ -820,6 +833,10 @@ def run_smoke() -> None:
             assert client.pfcount("dsthll") == 3
             assert client.pfadd("emptyhll") == 1
             assert client.pfcount("emptyhll") == 0
+            assert client.geoadd("geo", "13.361389", "38.115556", "Palermo", "15.087269", "37.502669", "Catania") == 2
+            assert client.geodist("geo", "Palermo", "Catania", "km") == b"166.2742"
+            assert client.geosearch("geo", "FROMLONLAT", "15", "37", "BYRADIUS", "200", "km") == [b"Palermo", b"Catania"]
+            assert client.geosearch("geo", "FROMMEMBER", "Palermo", "BYRADIUS", "200", "km", "WITHDIST") == [[b"Palermo", b"0.0000"], [b"Catania", b"166.2742"]]
             assert client.setrange("key", 5, "__") == 7
             assert client.get("key") == b"value__"
             assert client.rename("key", "key2")
@@ -831,7 +848,7 @@ def run_smoke() -> None:
             assert client.getdel("gd-key") == b"once"
             assert client.getdel("gd-key") is None
             assert client.delete("counter") == 1
-            assert client.delete("fcounter", "nx-key", "gs-key", "sx-key", "mk1", "mk2", "mn1", "mn2", "allones", "srca", "srcb", "dstbit", "bf", "hll", "dsthll", "emptyhll") == 16
+            assert client.delete("fcounter", "nx-key", "gs-key", "sx-key", "mk1", "mk2", "mn1", "mn2", "allones", "srca", "srcb", "dstbit", "bf", "hll", "dsthll", "emptyhll", "geo") == 17
             assert client.echo("hi") == b"hi"
             assert client.key_type("key") == "string"
             assert client.dbsize() == 1

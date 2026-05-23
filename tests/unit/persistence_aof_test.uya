@@ -24,6 +24,7 @@ use src.storage.object.hash_object_get_field;
 use src.storage.object.list_object_index_value;
 use src.storage.object.set_object_len;
 use src.storage.object.set_object_members_reply;
+use src.storage.object.zset_object_len;
 use src.storage.object.object_free;
 use src.memory.allocator.used_memory;
 use src.memory.allocator.reset_memory_stats_for_test;
@@ -239,6 +240,16 @@ export fn test_aof_connection_append_and_replay_set() !void {
         1000u64,
     );
     try assert_true(aof_test_slice_eq(out[0: pfmerge_result.response_len], &"+OK\r\n"[0: 5]));
+    const geoadd_result: ConnectionProcessResult = try connection_process_input_with_aof_at(
+        &engine,
+        &router,
+        &writer,
+        &"*8\r\n$6\r\nGEOADD\r\n$3\r\ngeo\r\n$9\r\n13.361389\r\n$9\r\n38.115556\r\n$7\r\nPalermo\r\n$9\r\n15.087269\r\n$9\r\n37.502669\r\n$7\r\nCatania\r\n"[0: 111],
+        &out[0],
+        256,
+        1000u64,
+    );
+    try assert_true(aof_test_slice_eq(out[0: geoadd_result.response_len], &":2\r\n"[0: 4]));
     aof_close(&writer);
     engine_free(&engine);
 
@@ -267,6 +278,9 @@ export fn test_aof_connection_append_and_replay_set() !void {
     const found_dst_hll: &RedisObject = try lookup_key_at(&replay_engine, &"dst"[0: 3], 2000u64);
     try assert_eq_i32(found_dst_hll.obj_type as i32, ObjectType.object_set as i32);
     try assert_eq_i32((try set_object_len(found_dst_hll)) as i32, 3);
+    const found_geo: &RedisObject = try lookup_key_at(&replay_engine, &"geo"[0: 3], 2000u64);
+    try assert_eq_i32(found_geo.obj_type as i32, ObjectType.object_zset as i32);
+    try assert_eq_i32((try zset_object_len(found_geo)) as i32, 2);
     engine_free(&replay_engine);
     _ = unlink(path);
     try assert_eq_i32(used_memory() as i32, 0);

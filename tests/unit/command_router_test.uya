@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 165);
+    try assert_eq_i32(command_router_count(&router) as i32, 168);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -138,6 +138,18 @@ export fn test_command_router_lookup_and_case() !void {
     const pfmerge: CommandInfo = try command_router_lookup(&router, &"PFMERGE"[0: 7]);
     try assert_eq_i32(pfmerge.cmd_type as i32, CommandType.command_pfmerge as i32);
     try assert_eq_i32(pfmerge.arity, -2);
+
+    const eval_info: CommandInfo = try command_router_lookup(&router, &"EVAL"[0: 4]);
+    try assert_eq_i32(eval_info.cmd_type as i32, CommandType.command_eval as i32);
+    try assert_eq_i32(eval_info.arity, -3);
+
+    const evalsha: CommandInfo = try command_router_lookup(&router, &"EVALSHA"[0: 7]);
+    try assert_eq_i32(evalsha.cmd_type as i32, CommandType.command_evalsha as i32);
+    try assert_eq_i32(evalsha.arity, -3);
+
+    const script: CommandInfo = try command_router_lookup(&router, &"SCRIPT"[0: 6]);
+    try assert_eq_i32(script.cmd_type as i32, CommandType.command_script as i32);
+    try assert_eq_i32(script.arity, -2);
 
     const geoadd: CommandInfo = try command_router_lookup(&router, &"GEOADD"[0: 6]);
     try assert_eq_i32(geoadd.cmd_type as i32, CommandType.command_geoadd as i32);
@@ -727,6 +739,9 @@ export fn test_command_router_arity_validation() !void {
     const pfadd: CommandInfo = try command_router_lookup(&router, &"PFADD"[0: 5]);
     const pfcount: CommandInfo = try command_router_lookup(&router, &"PFCOUNT"[0: 7]);
     const pfmerge: CommandInfo = try command_router_lookup(&router, &"PFMERGE"[0: 7]);
+    const eval_info: CommandInfo = try command_router_lookup(&router, &"EVAL"[0: 4]);
+    const evalsha: CommandInfo = try command_router_lookup(&router, &"EVALSHA"[0: 7]);
+    const script: CommandInfo = try command_router_lookup(&router, &"SCRIPT"[0: 6]);
     const geoadd: CommandInfo = try command_router_lookup(&router, &"GEOADD"[0: 6]);
     const geodist: CommandInfo = try command_router_lookup(&router, &"GEODIST"[0: 7]);
     const geosearch: CommandInfo = try command_router_lookup(&router, &"GEOSEARCH"[0: 9]);
@@ -853,6 +868,12 @@ export fn test_command_router_arity_validation() !void {
     try command_validate_arity(&pfcount, 4);
     try command_validate_arity(&pfmerge, 2);
     try command_validate_arity(&pfmerge, 4);
+    try command_validate_arity(&eval_info, 3);
+    try command_validate_arity(&eval_info, 6);
+    try command_validate_arity(&evalsha, 3);
+    try command_validate_arity(&evalsha, 6);
+    try command_validate_arity(&script, 2);
+    try command_validate_arity(&script, 4);
     try command_validate_arity(&geoadd, 5);
     try command_validate_arity(&geoadd, 8);
     try command_validate_arity(&geodist, 4);

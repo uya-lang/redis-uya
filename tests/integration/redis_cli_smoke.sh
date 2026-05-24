@@ -411,6 +411,42 @@ if [[ "$GEOSEARCH_RESULT" != $'Palermo\nCatania' ]]; then
     exit 1
 fi
 
+EVAL_SET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" eval "return redis.call('SET', KEYS[1], ARGV[1])" 1 lua-key value)"
+if [[ "$EVAL_SET_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected EVAL set OK, got '$EVAL_SET_RESULT'" >&2
+    exit 1
+fi
+
+SCRIPT_EXISTS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" script exists d8f2fad9f8e86a53d2a6ebd960b33c4972cacc37)"
+if [[ "$SCRIPT_EXISTS_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SCRIPT EXISTS 1, got '$SCRIPT_EXISTS_RESULT'" >&2
+    exit 1
+fi
+
+SCRIPT_LOAD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" script load "return redis.call('GET', KEYS[1])")"
+if [[ "$SCRIPT_LOAD_RESULT" != "d3c21d0c2b9ca22f82737626a27bcaf5d288f99f" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SCRIPT LOAD sha, got '$SCRIPT_LOAD_RESULT'" >&2
+    exit 1
+fi
+
+EVALSHA_GET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" evalsha D3C21D0C2B9CA22F82737626A27BCAF5D288F99F 1 lua-key)"
+if [[ "$EVALSHA_GET_RESULT" != "value" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected EVALSHA value, got '$EVALSHA_GET_RESULT'" >&2
+    exit 1
+fi
+
+SCRIPT_FLUSH_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" script flush)"
+if [[ "$SCRIPT_FLUSH_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SCRIPT FLUSH OK, got '$SCRIPT_FLUSH_RESULT'" >&2
+    exit 1
+fi
+
+EVALSHA_NOSCRIPT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" evalsha d3c21d0c2b9ca22f82737626a27bcaf5d288f99f 1 lua-key 2>&1 || true)"
+if [[ "$EVALSHA_NOSCRIPT_RESULT" != "NOSCRIPT No matching script. Please use EVAL." ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected EVALSHA NOSCRIPT, got '$EVALSHA_NOSCRIPT_RESULT'" >&2
+    exit 1
+fi
+
 SETRANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" setrange key 5 __)"
 if [[ "$SETRANGE_RESULT" != "7" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected setrange 7, got '$SETRANGE_RESULT'" >&2
@@ -1173,9 +1209,9 @@ if [[ "$COUNTER_DEL_RESULT" != "1" ]]; then
     exit 1
 fi
 
-TEMP_STRING_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del fcounter nx-key gs-key sx-key allones srca srcb dstbit bf hll dsthll emptyhll geo)"
-if [[ "$TEMP_STRING_DEL_RESULT" != "13" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected temp string DEL 13, got '$TEMP_STRING_DEL_RESULT'" >&2
+TEMP_STRING_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del fcounter nx-key gs-key sx-key allones srca srcb dstbit bf hll dsthll emptyhll geo lua-key)"
+if [[ "$TEMP_STRING_DEL_RESULT" != "14" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected temp string DEL 14, got '$TEMP_STRING_DEL_RESULT'" >&2
     exit 1
 fi
 

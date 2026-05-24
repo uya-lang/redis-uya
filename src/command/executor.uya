@@ -10037,6 +10037,13 @@ fn command_executor_command_visible_pubsub_subcommand(name: &[byte]) bool {
         command_executor_slice_eq(name, &"shardnumsub"[0: 11]);
 }
 
+fn command_executor_command_visible_script_subcommand(name: &[byte]) bool {
+    return command_executor_slice_eq(name, &"help"[0: 4]) ||
+        command_executor_slice_eq(name, &"exists"[0: 6]) ||
+        command_executor_slice_eq(name, &"flush"[0: 5]) ||
+        command_executor_slice_eq(name, &"load"[0: 4]);
+}
+
 fn command_executor_command_visible_subcommand(parent_name: &[byte], subcommand_name: &[byte]) bool {
     if command_executor_slice_eq(parent_name, &"client"[0: 6]) {
         return command_executor_command_visible_client_subcommand(subcommand_name);
@@ -10055,6 +10062,9 @@ fn command_executor_command_visible_subcommand(parent_name: &[byte], subcommand_
     }
     if command_executor_slice_eq(parent_name, &"pubsub"[0: 6]) {
         return command_executor_command_visible_pubsub_subcommand(subcommand_name);
+    }
+    if command_executor_slice_eq(parent_name, &"script"[0: 6]) {
+        return command_executor_command_visible_script_subcommand(subcommand_name);
     }
     return false;
 }
@@ -10545,6 +10555,25 @@ fn command_executor_command_count_range_keys(info: &CommandInfo, full_argc: usiz
     return (((last_index - info.first_key) / info.key_step) + 1) as usize;
 }
 
+fn command_executor_command_eval_numkeys(command: &Command) !usize {
+    const full_argc: usize = command_executor_command_full_argc(command);
+    if full_argc < 3 {
+        return error.CommandWrongArity;
+    }
+    const numkeys_data: &[byte] = try command_executor_command_full_arg(command, 2);
+    const numkeys_i64: i64 = command_executor_parse_i64(numkeys_data) catch {
+        return error.CommandWrongArity;
+    };
+    if numkeys_i64 <= 0 {
+        return error.CommandWrongArity;
+    }
+    const numkeys: usize = numkeys_i64 as usize;
+    if full_argc < 3 + numkeys {
+        return error.CommandWrongArity;
+    }
+    return numkeys;
+}
+
 fn command_executor_command_sort_store_index(command: &Command) !i32 {
     const full_argc: usize = command_executor_command_full_argc(command);
     if full_argc < 2 {
@@ -10596,6 +10625,12 @@ fn command_executor_command_getkeys_count(info: &CommandInfo, command: &Command)
             return 2usize;
         }
         return 1usize;
+    }
+    if info.cmd_type == CommandType.command_eval || info.cmd_type == CommandType.command_evalsha {
+        const numkeys: usize = command_executor_command_eval_numkeys(command) catch {
+            return 0usize;
+        };
+        return numkeys;
     }
     return command_executor_command_count_range_keys(info, command_executor_command_full_argc(command));
 }
@@ -10917,6 +10952,38 @@ fn command_executor_command_getkeysandflags_bzmpop(
     }
 }
 
+fn command_executor_command_getkeys_eval(command: &Command, buf: &Sds) !void {
+    const numkeys: usize = command_executor_command_eval_numkeys(command) catch {
+        try command_executor_resp_collection_prefix(buf, &"*"[0: 1], 0);
+        return;
+    };
+    try command_executor_resp_collection_prefix(buf, &"*"[0: 1], numkeys);
+    var key_index: usize = 3;
+    while key_index < 3 + numkeys {
+        const key: &[byte] = try command_executor_command_full_arg(command, key_index);
+        try command_executor_command_append_getkeys_key(buf, key);
+        key_index = key_index + 1;
+    }
+}
+
+fn command_executor_command_getkeysandflags_eval(
+    runtime: &CommandRuntimeInfo,
+    command: &Command,
+    buf: &Sds,
+) !void {
+    const numkeys: usize = command_executor_command_eval_numkeys(command) catch {
+        try command_executor_resp_collection_prefix(buf, &"*"[0: 1], 0);
+        return;
+    };
+    try command_executor_resp_collection_prefix(buf, &"*"[0: 1], numkeys);
+    var key_index: usize = 3;
+    while key_index < 3 + numkeys {
+        const key: &[byte] = try command_executor_command_full_arg(command, key_index);
+        try command_executor_command_append_getkeysandflags_item(buf, key, &"RW|access|update"[0: 16], runtime.protocol_version);
+        key_index = key_index + 1;
+    }
+}
+
 fn command_executor_command_getkeys(runtime: &CommandRuntimeInfo, command: &Command, with_flags: bool) CommandReply {
     const info: CommandInfo = command_executor_command_lookup_full_command(command) catch |err| {
         if err == error.CommandUnknown {
@@ -10965,6 +11032,19 @@ fn command_executor_command_getkeys(runtime: &CommandRuntimeInfo, command: &Comm
             };
         } else {
             _ = command_executor_command_getkeys_bzmpop(command, &buf) catch {
+                return command_executor_command_invalid_command_arity();
+            };
+        }
+        return command_executor_owned_raw(buf.buf[0: buf.len]);
+    }
+
+    if info.cmd_type == CommandType.command_eval || info.cmd_type == CommandType.command_evalsha {
+        if with_flags {
+            _ = command_executor_command_getkeysandflags_eval(runtime, command, &buf) catch {
+                return command_executor_command_invalid_command_arity();
+            };
+        } else {
+            _ = command_executor_command_getkeys_eval(command, &buf) catch {
                 return command_executor_command_invalid_command_arity();
             };
         }

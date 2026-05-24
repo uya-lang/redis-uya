@@ -250,6 +250,26 @@ export fn test_aof_connection_append_and_replay_set() !void {
         1000u64,
     );
     try assert_true(aof_test_slice_eq(out[0: geoadd_result.response_len], &":2\r\n"[0: 4]));
+    const eval_result: ConnectionProcessResult = try connection_process_input_with_aof_at(
+        &engine,
+        &router,
+        &writer,
+        &"*5\r\n$4\r\nEVAL\r\n$42\r\nreturn redis.call('SET', KEYS[1], ARGV[1])\r\n$1\r\n1\r\n$7\r\nlua-key\r\n$5\r\nvalue\r\n"[0: 94],
+        &out[0],
+        256,
+        1000u64,
+    );
+    try assert_true(aof_test_slice_eq(out[0: eval_result.response_len], &"+OK\r\n"[0: 5]));
+    const script_flush_result: ConnectionProcessResult = try connection_process_input_with_aof_at(
+        &engine,
+        &router,
+        &writer,
+        &"*2\r\n$6\r\nSCRIPT\r\n$5\r\nFLUSH\r\n"[0: 27],
+        &out[0],
+        256,
+        1000u64,
+    );
+    try assert_true(aof_test_slice_eq(out[0: script_flush_result.response_len], &"+OK\r\n"[0: 5]));
     aof_close(&writer);
     engine_free(&engine);
 
@@ -281,6 +301,8 @@ export fn test_aof_connection_append_and_replay_set() !void {
     const found_geo: &RedisObject = try lookup_key_at(&replay_engine, &"geo"[0: 3], 2000u64);
     try assert_eq_i32(found_geo.obj_type as i32, ObjectType.object_zset as i32);
     try assert_eq_i32((try zset_object_len(found_geo)) as i32, 2);
+    const found_lua_key: &RedisObject = try lookup_key_at(&replay_engine, &"lua-key"[0: 7], 2000u64);
+    try assert_true(aof_test_slice_eq(found_lua_key.value.buf[0: found_lua_key.value.len], &"value"[0: 5]));
     engine_free(&replay_engine);
     _ = unlink(path);
     try assert_eq_i32(used_memory() as i32, 0);

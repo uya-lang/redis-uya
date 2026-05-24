@@ -118,7 +118,8 @@ def wait_for_incremental_sync(replica_port: int, deadline: float) -> None:
             sock.settimeout(2.0)
             get_key = send_command(sock, b"GET", b"key")
             get_hash = send_command(sock, b"HGET", b"hash", b"field")
-            if get_key == b"$5\r\nnewer\r\n" and get_hash == b"$4\r\nnext\r\n":
+            get_lua = send_command(sock, b"GET", b"lua-key")
+            if get_key == b"$5\r\nnewer\r\n" and get_hash == b"$4\r\nnext\r\n" and get_lua == b"$5\r\nvalue\r\n":
                 return
         time.sleep(0.05)
     raise RuntimeError("replica incremental sync did not converge in time")
@@ -170,6 +171,8 @@ def run_smoke() -> None:
                 raise AssertionError("master second SET failed")
             if send_command(sock, b"HSET", b"hash", b"field", b"next") != b":0\r\n":
                 raise AssertionError("master second HSET failed")
+            if send_command(sock, b"EVAL", b"return redis.call('SET', KEYS[1], ARGV[1])", b"1", b"lua-key", b"value") != b"+OK\r\n":
+                raise AssertionError("master EVAL SET failed")
 
         wait_for_incremental_sync(replica_port, time.monotonic() + 5.0)
     finally:

@@ -1,7 +1,7 @@
 # redis-uya command matrix
 
 > version: v0.9.1-dev
-> date: 2026-05-23
+> date: 2026-05-24
 > source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`
 > runtime source: `src/command/catalog_generated.uya`
 
@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 362 | 256 | 146 | 54 | 0 | 3 | 159 |
+| Tier A: standalone core | 362 | 256 | 146 | 61 | 0 | 3 | 152 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 135 | 128 | 0 | 0 | 0 | 0 | 135 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `61` |
+| `partial` | `68` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `294` |
+| `deferred` | `287` |
 
 ## Group counts
 
@@ -200,9 +200,9 @@
 | `discard` | `transactions` | `full` | `-` | `1` | `-` | `no` | `@fast, @transaction` |
 | `dump` | `generic` | `full` | `-` | `2` | `-` | `no` | `@keyspace, @read, @slow` |
 | `echo` | `connection` | `full` | `-` | `2` | `-` | `no` | `@fast, @connection` |
-| `eval` | `scripting` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@slow, @scripting` |
+| `eval` | `scripting` | `partial` | `-` | `-3` | `-` | `no` | `@slow, @scripting` |
 | `eval_ro` | `scripting` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@slow, @scripting` |
-| `evalsha` | `scripting` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@slow, @scripting` |
+| `evalsha` | `scripting` | `partial` | `-` | `-3` | `-` | `no` | `@slow, @scripting` |
 | `evalsha_ro` | `scripting` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@slow, @scripting` |
 | `exec` | `transactions` | `full` | `-` | `1` | `-` | `no` | `@slow, @transaction` |
 | `exists` | `generic` | `full` | `-` | `-2` | `-` | `no` | `@keyspace, @read, @fast` |
@@ -430,13 +430,13 @@
 | `save` | `server` | `partial` | `-` | `1` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `scan` | `generic` | `full` | `-` | `-2` | `-` | `yes` | `@keyspace, @read, @slow` |
 | `scard` | `set` | `full` | `-` | `2` | `-` | `no` | `@read, @set, @fast` |
-| `script` | `scripting` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@slow` |
+| `script` | `scripting` | `partial` | `-` | `-2` | `-` | `no` | `@slow` |
 | `script|debug` | `scripting` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@slow, @scripting` |
-| `script|exists` | `scripting` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@slow, @scripting` |
-| `script|flush` | `scripting` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@slow, @scripting` |
-| `script|help` | `scripting` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@slow, @scripting` |
+| `script|exists` | `scripting` | `partial` | `-` | `-3` | `-` | `no` | `@slow, @scripting` |
+| `script|flush` | `scripting` | `partial` | `-` | `-2` | `-` | `no` | `@slow, @scripting` |
+| `script|help` | `scripting` | `partial` | `-` | `2` | `-` | `no` | `@slow, @scripting` |
 | `script|kill` | `scripting` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@slow, @scripting` |
-| `script|load` | `scripting` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@slow, @scripting` |
+| `script|load` | `scripting` | `partial` | `-` | `3` | `-` | `no` | `@slow, @scripting` |
 | `sdiff` | `set` | `full` | `-` | `-2` | `-` | `no` | `@read, @set, @slow` |
 | `sdiffstore` | `set` | `full` | `-` | `-3` | `-` | `no` | `@write, @set, @slow` |
 | `select` | `connection` | `partial` | `-` | `2` | `-` | `no` | `@fast, @connection` |

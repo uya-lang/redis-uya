@@ -1551,6 +1551,67 @@ PFMERGE destkey [sourcekey ...]
 - `PFMERGE destkey` 无 source 时会把目标写成空的 partial-HLL
 - 目标 key 会被重写，因此原 TTL 会被清除
 
+### `EVAL`
+
+格式：
+
+```text
+EVAL script numkeys [key ...] [arg ...]
+```
+
+返回：
+
+- 返回当前脚本内部那条 `redis.call(...)` 的原始 Redis 回复
+
+说明：
+
+- 当前实现为 partial：只支持单条 `return redis.call(...)` 脚本子集
+- 当前支持 `KEYS[n]` / `ARGV[n]` 参数替换，脚本会自动写入脚本缓存
+- AOF / 复制传播的是脚本内部实际执行的命令效果，不是原始 `EVAL`
+- 当前不支持多语句 Lua、`redis.pcall`、只读脚本变体或任意 Lua 值返回
+
+### `EVALSHA`
+
+格式：
+
+```text
+EVALSHA sha1 numkeys [key ...] [arg ...]
+```
+
+返回：
+
+- 返回命中脚本内部那条 `redis.call(...)` 的原始 Redis 回复
+- 未命中脚本缓存时返回 `NOSCRIPT No matching script. Please use EVAL.`
+
+说明：
+
+- 当前实现为 partial，语义边界与 `EVAL` 相同
+- `sha1` 查找大小写不敏感
+
+### `SCRIPT`
+
+格式：
+
+```text
+SCRIPT HELP
+SCRIPT LOAD script
+SCRIPT EXISTS sha1 [sha1 ...]
+SCRIPT FLUSH [ASYNC|SYNC]
+```
+
+返回：
+
+- `HELP`：返回当前支持的子命令说明
+- `LOAD`：返回脚本 SHA1
+- `EXISTS`：按输入顺序返回 `0/1`
+- `FLUSH`：成功返回 `+OK`
+
+说明：
+
+- 当前实现为 partial：`LOAD` 只接受可由当前 `EVAL/EVALSHA` 执行的单条 `return redis.call(...)` 子集
+- `FLUSH ASYNC|SYNC` 当前都走同步清空路径，只保留参数兼容
+- 当前不支持 `SCRIPT DEBUG`、`SCRIPT KILL`
+
 ### `GEOADD`
 
 格式：

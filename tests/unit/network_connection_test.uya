@@ -257,6 +257,24 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const geosearch_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*8\r\n$9\r\nGEOSEARCH\r\n$3\r\ngeo\r\n$10\r\nFROMLONLAT\r\n$2\r\n15\r\n$2\r\n37\r\n$8\r\nBYRADIUS\r\n$3\r\n200\r\n$2\r\nkm\r\n"[0: 92], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: geosearch_result.response_len], &"*2\r\n$7\r\nPalermo\r\n$7\r\nCatania\r\n"[0: 30]));
 
+    const eval_set_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$4\r\nEVAL\r\n$42\r\nreturn redis.call('SET', KEYS[1], ARGV[1])\r\n$1\r\n1\r\n$7\r\nlua-key\r\n$5\r\nvalue\r\n"[0: 94], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: eval_set_result.response_len], &"+OK\r\n"[0: 5]));
+
+    const script_exists_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$6\r\nSCRIPT\r\n$6\r\nEXISTS\r\n$40\r\nd8f2fad9f8e86a53d2a6ebd960b33c4972cacc37\r\n"[0: 75], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: script_exists_result.response_len], &"*1\r\n:1\r\n"[0: 8]));
+
+    const script_load_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$6\r\nSCRIPT\r\n$4\r\nLOAD\r\n$33\r\nreturn redis.call('GET', KEYS[1])\r\n"[0: 66], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: script_load_result.response_len], &"$40\r\nd3c21d0c2b9ca22f82737626a27bcaf5d288f99f\r\n"[0: 47]));
+
+    const evalsha_get_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$7\r\nEVALSHA\r\n$40\r\nd3c21d0c2b9ca22f82737626a27bcaf5d288f99f\r\n$1\r\n1\r\n$7\r\nlua-key\r\n"[0: 84], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: evalsha_get_result.response_len], &"$5\r\nvalue\r\n"[0: 11]));
+
+    const script_flush_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$6\r\nSCRIPT\r\n$5\r\nFLUSH\r\n"[0: 27], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: script_flush_result.response_len], &"+OK\r\n"[0: 5]));
+
+    const evalsha_noscript_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$7\r\nEVALSHA\r\n$40\r\nd3c21d0c2b9ca22f82737626a27bcaf5d288f99f\r\n$1\r\n1\r\n$7\r\nlua-key\r\n"[0: 84], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: evalsha_noscript_result.response_len], &"-NOSCRIPT No matching script. Please use EVAL.\r\n"[0: 48]));
+
     const setrange_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$8\r\nSETRANGE\r\n$3\r\nkey\r\n$1\r\n5\r\n$2\r\n__\r\n"[0: 42], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: setrange_result.response_len], &":7\r\n"[0: 4]));
 
@@ -303,6 +321,9 @@ export fn test_connection_process_ping_set_get_quit() !void {
 
     const geo_cleanup_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$3\r\nDEL\r\n$3\r\ngeo\r\n"[0: 22], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: geo_cleanup_result.response_len], &":1\r\n"[0: 4]));
+
+    const lua_cleanup_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$3\r\nDEL\r\n$7\r\nlua-key\r\n"[0: 26], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: lua_cleanup_result.response_len], &":1\r\n"[0: 4]));
 
     const echo_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$4\r\nECHO\r\n$2\r\nhi\r\n"[0: 22], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: echo_result.response_len], &"$2\r\nhi\r\n"[0: 8]));
@@ -826,6 +847,21 @@ export fn test_connection_process_multi_exec_discard() !void {
 
     const empty_exec: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$4\r\nEXEC\r\n"[0: 14], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: empty_exec.response_len], &"*0\r\n"[0: 4]));
+
+    const multi_script: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$5\r\nMULTI\r\n"[0: 15], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: multi_script.response_len], &"+OK\r\n"[0: 5]));
+
+    const queued_eval: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*5\r\n$4\r\nEVAL\r\n$42\r\nreturn redis.call('SET', KEYS[1], ARGV[1])\r\n$1\r\n1\r\n$6\r\ntx-lua\r\n$3\r\ntxv\r\n"[0: 91], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: queued_eval.response_len], &"+QUEUED\r\n"[0: 9]));
+
+    const queued_script_get: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$3\r\nGET\r\n$6\r\ntx-lua\r\n"[0: 25], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: queued_script_get.response_len], &"+QUEUED\r\n"[0: 9]));
+
+    const exec_script: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$4\r\nEXEC\r\n"[0: 14], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: exec_script.response_len], &"*2\r\n+OK\r\n$3\r\ntxv\r\n"[0: 18]));
+
+    const script_flush: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nSCRIPT\r\n$5\r\nFLUSH\r\n"[0: 27], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: script_flush.response_len], &"+OK\r\n"[0: 5]));
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

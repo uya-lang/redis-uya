@@ -76,6 +76,13 @@ export error ConnectionOutputTooSmall;
 export error ConnectionInputTooLarge;
 export error ConnectionIoFailed;
 export error ConnectionWouldBlock;
+error ConnectionScriptInvalidNumkeys;
+error ConnectionScriptNegativeNumkeys;
+error ConnectionScriptTooManyKeys;
+error ConnectionScriptUnsupported;
+error ConnectionScriptMissingReference;
+error ConnectionScriptCacheMiss;
+error ConnectionScriptCommandDisallowed;
 
 export struct ConnectionProcessResult {
     response_len: usize,
@@ -144,6 +151,10 @@ const CONNECTION_BATCH_PARSE_MIN_INPUT: usize = 64;
 const CONNECTION_CLIENT_REGISTRY_MAX: usize = 128;
 const CONNECTION_BLOCKING_INPUT_CAP: usize = 8192;
 const CONNECTION_BLOCKING_OUTPUT_CAP: usize = 81920;
+const CONNECTION_SCRIPT_CACHE_MAX: usize = 128;
+const CONNECTION_SCRIPT_SHA1_BYTES: usize = 20;
+const CONNECTION_SCRIPT_SHA1_HEX_BYTES: usize = 40;
+const CONNECTION_SCRIPT_MAX_CALL_ARGS: usize = 64;
 
 struct ConnectionPubSubSubscription {
     active: bool,
@@ -174,6 +185,27 @@ struct ConnectionClientRegistryEntry {
 
 var connection_client_registry: [ConnectionClientRegistryEntry: CONNECTION_CLIENT_REGISTRY_MAX] = [];
 var connection_client_registry_next_id: i64 = 1;
+
+enum ConnectionScriptArgKind {
+    script_arg_literal,
+    script_arg_key,
+    script_arg_argv,
+}
+
+struct ConnectionScriptArgSpec {
+    kind: ConnectionScriptArgKind,
+    start: usize,
+    len: usize,
+    ref_index: usize,
+}
+
+struct ConnectionScriptCacheEntry {
+    active: bool,
+    sha_hex: [byte: CONNECTION_SCRIPT_SHA1_HEX_BYTES],
+    script: &RedisObject,
+}
+
+var connection_script_cache: [ConnectionScriptCacheEntry: CONNECTION_SCRIPT_CACHE_MAX] = [];
 
 fn connection_transaction_empty() ConnectionTransaction {
     return ConnectionTransaction{
@@ -839,6 +871,557 @@ fn connection_sds_append_ascii_lower(buf: &Sds, data: &[byte]) !void {
         try sds_cat(buf, tmp[0: 1]);
         i = i + 1;
     }
+}
+
+fn connection_sha1_rotl32(x: u32, n: i32) u32 {
+    return (x << n) | (x >> (32 - n));
+}
+
+fn connection_sha1_load_be32(block: &[byte], off: usize) u32 {
+    return ((block.ptr[off] as u32) << 24) |
+        ((block.ptr[off + 1] as u32) << 16) |
+        ((block.ptr[off + 2] as u32) << 8) |
+        (block.ptr[off + 3] as u32);
+}
+
+fn connection_sha1_digest(data: &[byte], digest: &[byte]) void {
+    if digest.len < CONNECTION_SCRIPT_SHA1_BYTES {
+        return;
+    }
+    var h: [u32: 5] = [
+        0x67452301 as u32,
+        0xefcdab89 as u32,
+        0x98badcfe as u32,
+        0x10325476 as u32,
+        0xc3d2e1f0 as u32,
+    ];
+    var off: usize = 0;
+    var schedule: [u32: 80] = [];
+    while off + 64 <= data.len {
+        var t: usize = 0;
+        while t < 16 {
+            schedule[t] = connection_sha1_load_be32(data[off: data.len - off], t * 4);
+            t = t + 1;
+        }
+        while t < 80 {
+            const tm3: usize = t - 3;
+            const tm8: usize = t - 8;
+            const tm14: usize = t - 14;
+            const tm16: usize = t - 16;
+            if tm3 < 80 && tm8 < 80 && tm14 < 80 && tm16 < 80 && t < 80 {
+                schedule[t] = connection_sha1_rotl32(schedule[tm3] ^ schedule[tm8] ^ schedule[tm14] ^ schedule[tm16], 1);
+            }
+            t = t + 1;
+        }
+        var a: u32 = h[0];
+        var b: u32 = h[1];
+        var c: u32 = h[2];
+        var d: u32 = h[3];
+        var e: u32 = h[4];
+        var round: usize = 0;
+        while round < 80 {
+            var f: u32 = 0u32;
+            var k: u32 = 0u32;
+            if round < 20 {
+                f = (b & c) | ((~b) & d);
+                k = 0x5a827999 as u32;
+            } else if round < 40 {
+                f = b ^ c ^ d;
+                k = 0x6ed9eba1 as u32;
+            } else if round < 60 {
+                f = (b & c) | (b & d) | (c & d);
+                k = 0x8f1bbcdc as u32;
+            } else {
+                f = b ^ c ^ d;
+                k = 0xca62c1d6 as u32;
+            }
+            const tmp: u32 = connection_sha1_rotl32(a, 5) + f + e + k + schedule[round];
+            e = d;
+            d = c;
+            c = connection_sha1_rotl32(b, 30);
+            b = a;
+            a = tmp;
+            round = round + 1;
+        }
+        h[0] = h[0] + a;
+        h[1] = h[1] + b;
+        h[2] = h[2] + c;
+        h[3] = h[3] + d;
+        h[4] = h[4] + e;
+        off = off + 64;
+    }
+
+    var tail: [byte: 128] = [];
+    const remain: usize = data.len - off;
+    var i: usize = 0;
+    while i < remain {
+        tail[i] = data.ptr[off + i];
+        i = i + 1;
+    }
+    tail[remain] = 0x80 as byte;
+    const rem1: usize = remain + 1;
+    var pad: usize = (64usize - ((rem1 + 8usize) % 64usize)) % 64usize;
+    i = 0;
+    while i < pad {
+        tail[rem1 + i] = 0 as byte;
+        i = i + 1;
+    }
+    const bitlen: u64 = (data.len as u64) * 8u64;
+    const len_off: usize = rem1 + pad;
+    var bi: i32 = 0;
+    while bi < 8 {
+        const sh: i32 = (7 - bi) * 8;
+        tail[len_off + bi as usize] = ((bitlen >> sh) & 0xffu64) as byte;
+        bi = bi + 1;
+    }
+    const total: usize = rem1 + pad + 8;
+    var block_off: usize = 0;
+    while block_off < total {
+        var t2: usize = 0;
+        while t2 < 16 {
+            schedule[t2] = connection_sha1_load_be32(tail[block_off: total - block_off], t2 * 4);
+            t2 = t2 + 1;
+        }
+        while t2 < 80 {
+            const tm3_2: usize = t2 - 3;
+            const tm8_2: usize = t2 - 8;
+            const tm14_2: usize = t2 - 14;
+            const tm16_2: usize = t2 - 16;
+            if tm3_2 < 80 && tm8_2 < 80 && tm14_2 < 80 && tm16_2 < 80 && t2 < 80 {
+                schedule[t2] = connection_sha1_rotl32(schedule[tm3_2] ^ schedule[tm8_2] ^ schedule[tm14_2] ^ schedule[tm16_2], 1);
+            }
+            t2 = t2 + 1;
+        }
+        var a2: u32 = h[0];
+        var b2: u32 = h[1];
+        var c2: u32 = h[2];
+        var d2: u32 = h[3];
+        var e2: u32 = h[4];
+        var round2: usize = 0;
+        while round2 < 80 {
+            var f2: u32 = 0u32;
+            var k2: u32 = 0u32;
+            if round2 < 20 {
+                f2 = (b2 & c2) | ((~b2) & d2);
+                k2 = 0x5a827999 as u32;
+            } else if round2 < 40 {
+                f2 = b2 ^ c2 ^ d2;
+                k2 = 0x6ed9eba1 as u32;
+            } else if round2 < 60 {
+                f2 = (b2 & c2) | (b2 & d2) | (c2 & d2);
+                k2 = 0x8f1bbcdc as u32;
+            } else {
+                f2 = b2 ^ c2 ^ d2;
+                k2 = 0xca62c1d6 as u32;
+            }
+            const tmp2: u32 = connection_sha1_rotl32(a2, 5) + f2 + e2 + k2 + schedule[round2];
+            e2 = d2;
+            d2 = c2;
+            c2 = connection_sha1_rotl32(b2, 30);
+            b2 = a2;
+            a2 = tmp2;
+            round2 = round2 + 1;
+        }
+        h[0] = h[0] + a2;
+        h[1] = h[1] + b2;
+        h[2] = h[2] + c2;
+        h[3] = h[3] + d2;
+        h[4] = h[4] + e2;
+        block_off = block_off + 64;
+    }
+
+    var di: usize = 0;
+    while di < 5 {
+        const word: u32 = h[di];
+        digest.ptr[di * 4] = ((word >> 24) & 0xffu32) as byte;
+        digest.ptr[di * 4 + 1] = ((word >> 16) & 0xffu32) as byte;
+        digest.ptr[di * 4 + 2] = ((word >> 8) & 0xffu32) as byte;
+        digest.ptr[di * 4 + 3] = (word & 0xffu32) as byte;
+        di = di + 1;
+    }
+}
+
+fn connection_script_hex_nibble(value: byte) byte {
+    if value < 10 as byte {
+        return (48 as byte) + value;
+    }
+    return (97 as byte) + (value - 10 as byte);
+}
+
+fn connection_script_sha_hex(script: &[byte], sha_hex: &[byte]) void {
+    if sha_hex.len < CONNECTION_SCRIPT_SHA1_HEX_BYTES {
+        return;
+    }
+    var digest: [byte: CONNECTION_SCRIPT_SHA1_BYTES] = [];
+    connection_sha1_digest(script, digest[0: CONNECTION_SCRIPT_SHA1_BYTES]);
+    var i: usize = 0;
+    while i < CONNECTION_SCRIPT_SHA1_BYTES {
+        const value: byte = digest[i];
+        sha_hex.ptr[i * 2] = connection_script_hex_nibble((value >> 4) & (15 as byte));
+        sha_hex.ptr[i * 2 + 1] = connection_script_hex_nibble(value & (15 as byte));
+        i = i + 1;
+    }
+}
+
+fn connection_script_cache_find_sha(sha_hex: &[byte]) i32 {
+    if sha_hex.len != CONNECTION_SCRIPT_SHA1_HEX_BYTES {
+        return -1;
+    }
+    var index: usize = 0;
+    while index < CONNECTION_SCRIPT_CACHE_MAX {
+        if connection_script_cache[index].active &&
+            connection_keyword_eq(connection_script_cache[index].sha_hex[0: CONNECTION_SCRIPT_SHA1_HEX_BYTES], sha_hex) {
+            return index as i32;
+        }
+        index = index + 1;
+    }
+    return -1;
+}
+
+fn connection_script_cache_find_free() i32 {
+    var index: usize = 0;
+    while index < CONNECTION_SCRIPT_CACHE_MAX {
+        if !connection_script_cache[index].active {
+            return index as i32;
+        }
+        index = index + 1;
+    }
+    return -1;
+}
+
+fn connection_script_cache_store(script: &[byte], sha_out: &[byte]) !void {
+    connection_script_sha_hex(script, sha_out);
+    const existing: i32 = connection_script_cache_find_sha(sha_out);
+    if existing >= 0 {
+        return;
+    }
+    const slot: i32 = connection_script_cache_find_free();
+    if slot < 0 {
+        return error.AllocOutOfMemory;
+    }
+    const slot_index: usize = slot as usize;
+    if slot_index >= CONNECTION_SCRIPT_CACHE_MAX {
+        return error.AllocOutOfMemory;
+    }
+    const obj: &RedisObject = create_string_object(script) catch {
+        return error.AllocOutOfMemory;
+    };
+    connection_script_cache[slot_index].active = true;
+    connection_script_cache[slot_index].script = obj;
+    var i: usize = 0;
+    while i < CONNECTION_SCRIPT_SHA1_HEX_BYTES {
+        connection_script_cache[slot_index].sha_hex[i] = sha_out.ptr[i];
+        i = i + 1;
+    }
+}
+
+fn connection_script_cache_lookup_script(sha_hex: &[byte]) !&[byte] {
+    const slot: i32 = connection_script_cache_find_sha(sha_hex);
+    if slot < 0 {
+        return error.ConnectionScriptCacheMiss;
+    }
+    const slot_index: usize = slot as usize;
+    if slot_index >= CONNECTION_SCRIPT_CACHE_MAX {
+        return error.ConnectionScriptCacheMiss;
+    }
+    const obj: &RedisObject = connection_script_cache[slot_index].script;
+    if obj == null {
+        return error.ConnectionScriptCacheMiss;
+    }
+    return obj.value.buf[0: obj.value.len];
+}
+
+fn connection_script_cache_exists(sha_hex: &[byte]) bool {
+    return connection_script_cache_find_sha(sha_hex) >= 0;
+}
+
+fn connection_script_cache_flush_all() void {
+    var index: usize = 0;
+    while index < CONNECTION_SCRIPT_CACHE_MAX {
+        if connection_script_cache[index].active {
+            if connection_script_cache[index].script != null {
+                object_free(connection_script_cache[index].script);
+                connection_script_cache[index].script = null as &RedisObject;
+            }
+            connection_script_cache[index].active = false;
+        }
+        index = index + 1;
+    }
+}
+
+fn connection_script_is_space(ch: byte) bool {
+    return ch == 32 as byte || ch == 9 as byte || ch == 10 as byte || ch == 13 as byte;
+}
+
+fn connection_script_skip_space(script: &[byte], index: &usize) void {
+    while *index < script.len && connection_script_is_space(script.ptr[*index]) {
+        *index = *index + 1;
+    }
+}
+
+fn connection_script_match_prefix(script: &[byte], index: usize, prefix: &[byte]) bool {
+    if index + prefix.len > script.len {
+        return false;
+    }
+    var i: usize = 0;
+    while i < prefix.len {
+        if script.ptr[index + i] != prefix.ptr[i] {
+            return false;
+        }
+        i = i + 1;
+    }
+    return true;
+}
+
+fn connection_script_parse_reference_index(script: &[byte], index: &usize, prefix: &[byte]) !usize {
+    if !connection_script_match_prefix(script, *index, prefix) {
+        return error.ConnectionScriptUnsupported;
+    }
+    *index = *index + prefix.len;
+    if *index >= script.len {
+        return error.ConnectionScriptUnsupported;
+    }
+    var value: usize = 0;
+    var digits: usize = 0;
+    while *index < script.len {
+        const ch: byte = script.ptr[*index];
+        if ch == 93 as byte {
+            break;
+        }
+        if ch < 48 as byte || ch > 57 as byte {
+            return error.ConnectionScriptUnsupported;
+        }
+        value = value * 10usize + ((ch - 48 as byte) as usize);
+        digits = digits + 1;
+        *index = *index + 1;
+    }
+    if *index >= script.len || script.ptr[*index] != 93 as byte || digits == 0 || value == 0usize {
+        return error.ConnectionScriptUnsupported;
+    }
+    *index = *index + 1;
+    return value;
+}
+
+fn connection_script_parse_arg_spec(script: &[byte], index: &usize, spec: &ConnectionScriptArgSpec) !void {
+    if *index >= script.len {
+        return error.ConnectionScriptUnsupported;
+    }
+    const ch: byte = script.ptr[*index];
+    if ch == 39 as byte || ch == 34 as byte {
+        const quote: byte = ch;
+        *index = *index + 1;
+        const start: usize = *index;
+        while *index < script.len && script.ptr[*index] != quote {
+            if script.ptr[*index] == 92 as byte {
+                return error.ConnectionScriptUnsupported;
+            }
+            *index = *index + 1;
+        }
+        if *index >= script.len {
+            return error.ConnectionScriptUnsupported;
+        }
+        spec.kind = ConnectionScriptArgKind.script_arg_literal;
+        spec.start = start;
+        spec.len = *index - start;
+        spec.ref_index = 0;
+        *index = *index + 1;
+        return;
+    }
+    if connection_script_match_prefix(script, *index, &"KEYS["[0: 5]) {
+        spec.kind = ConnectionScriptArgKind.script_arg_key;
+        spec.start = 0;
+        spec.len = 0;
+        spec.ref_index = try connection_script_parse_reference_index(script, index, &"KEYS["[0: 5]);
+        return;
+    }
+    if connection_script_match_prefix(script, *index, &"ARGV["[0: 5]) {
+        spec.kind = ConnectionScriptArgKind.script_arg_argv;
+        spec.start = 0;
+        spec.len = 0;
+        spec.ref_index = try connection_script_parse_reference_index(script, index, &"ARGV["[0: 5]);
+        return;
+    }
+    const start_bare: usize = *index;
+    while *index < script.len {
+        const current: byte = script.ptr[*index];
+        if connection_script_is_space(current) || current == 44 as byte || current == 41 as byte {
+            break;
+        }
+        *index = *index + 1;
+    }
+    if *index == start_bare {
+        return error.ConnectionScriptUnsupported;
+    }
+    spec.kind = ConnectionScriptArgKind.script_arg_literal;
+    spec.start = start_bare;
+    spec.len = *index - start_bare;
+    spec.ref_index = 0;
+}
+
+fn connection_script_parse_single_call(script: &[byte], args: &[ConnectionScriptArgSpec], arg_count: &usize) !void {
+    var index: usize = 0;
+    *arg_count = 0;
+    connection_script_skip_space(script, &index);
+    if !connection_script_match_prefix(script, index, &"return"[0: 6]) {
+        return error.ConnectionScriptUnsupported;
+    }
+    index = index + 6;
+    if index < script.len && !connection_script_is_space(script.ptr[index]) {
+        return error.ConnectionScriptUnsupported;
+    }
+    connection_script_skip_space(script, &index);
+    if !connection_script_match_prefix(script, index, &"redis.call"[0: 10]) {
+        return error.ConnectionScriptUnsupported;
+    }
+    index = index + 10;
+    connection_script_skip_space(script, &index);
+    if index >= script.len || script.ptr[index] != 40 as byte {
+        return error.ConnectionScriptUnsupported;
+    }
+    index = index + 1;
+    connection_script_skip_space(script, &index);
+    while index < script.len && script.ptr[index] != 41 as byte {
+        if *arg_count >= args.len {
+            return error.ConnectionScriptUnsupported;
+        }
+        try connection_script_parse_arg_spec(script, &index, &args.ptr[*arg_count]);
+        *arg_count = *arg_count + 1;
+        connection_script_skip_space(script, &index);
+        if index < script.len && script.ptr[index] == 44 as byte {
+            index = index + 1;
+            connection_script_skip_space(script, &index);
+            continue;
+        }
+        break;
+    }
+    if *arg_count == 0 || index >= script.len || script.ptr[index] != 41 as byte {
+        return error.ConnectionScriptUnsupported;
+    }
+    if args.ptr[0].kind != ConnectionScriptArgKind.script_arg_literal {
+        return error.ConnectionScriptUnsupported;
+    }
+    index = index + 1;
+    connection_script_skip_space(script, &index);
+    if index != script.len {
+        return error.ConnectionScriptUnsupported;
+    }
+}
+
+fn connection_script_validate_subset(script: &[byte]) !void {
+    var args: [ConnectionScriptArgSpec: CONNECTION_SCRIPT_MAX_CALL_ARGS] = [];
+    var arg_count: usize = 0;
+    try connection_script_parse_single_call(script, args[0: CONNECTION_SCRIPT_MAX_CALL_ARGS], &arg_count);
+}
+
+fn connection_script_eval_numkeys(command: &Command) !usize {
+    const numkeys_data: &[byte] = command_arg_data(command, 2) catch {
+        return error.ConnectionScriptInvalidNumkeys;
+    };
+    if numkeys_data.len == 0 {
+        return error.ConnectionScriptInvalidNumkeys;
+    }
+    if numkeys_data.ptr[0] == 45 as byte {
+        return error.ConnectionScriptNegativeNumkeys;
+    }
+    const numkeys_u64: u64 = connection_parse_u64(numkeys_data) catch {
+        return error.ConnectionScriptInvalidNumkeys;
+    };
+    const numkeys: usize = numkeys_u64 as usize;
+    if command.argc < 3 + numkeys {
+        return error.ConnectionScriptTooManyKeys;
+    }
+    return numkeys;
+}
+
+fn connection_script_resolve_arg(script: &[byte], command: &Command, numkeys: usize, spec: &ConnectionScriptArgSpec) !&[byte] {
+    if spec.kind == ConnectionScriptArgKind.script_arg_literal {
+        return script[spec.start: spec.len];
+    }
+    if spec.kind == ConnectionScriptArgKind.script_arg_key {
+        const key_index: usize = 2 + spec.ref_index;
+        return command_arg_data(command, key_index) catch {
+            return error.ConnectionScriptMissingReference;
+        };
+    }
+    const argv_index: usize = 2 + numkeys + spec.ref_index;
+    return command_arg_data(command, argv_index) catch {
+        return error.ConnectionScriptMissingReference;
+    };
+}
+
+fn connection_script_build_raw_command(script: &[byte], command: &Command, numkeys: usize) !&RedisObject {
+    var specs: [ConnectionScriptArgSpec: CONNECTION_SCRIPT_MAX_CALL_ARGS] = [];
+    var arg_count: usize = 0;
+    try connection_script_parse_single_call(script, specs[0: CONNECTION_SCRIPT_MAX_CALL_ARGS], &arg_count);
+
+    var raw: Sds = sds_empty() catch {
+        return error.AllocOutOfMemory;
+    };
+    defer {
+        sds_free(&raw);
+    }
+    try connection_sds_append_resp_array_header(&raw, arg_count);
+    var index: usize = 0;
+    while index < arg_count {
+        const arg: &[byte] = try connection_script_resolve_arg(script, command, numkeys, &specs[index]);
+        try connection_sds_append_resp_bulk(&raw, arg);
+        index = index + 1;
+    }
+    return create_string_object(raw.buf[0: raw.len]) catch {
+        return error.AllocOutOfMemory;
+    };
+}
+
+fn connection_script_reply_attach_raw(reply: &CommandReply, raw_obj: &RedisObject) void {
+    if raw_obj == null {
+        return;
+    }
+    if reply.owned_object == null {
+        reply.owned_object = raw_obj;
+        return;
+    }
+    if reply.owned_aux_object == null {
+        reply.owned_aux_object = raw_obj;
+        return;
+    }
+    object_free(raw_obj);
+}
+
+fn connection_script_command_allowed(cmd_type: CommandType) bool {
+    if connection_command_is_blocking_pop(cmd_type) {
+        return false;
+    }
+    if cmd_type == CommandType.command_multi ||
+        cmd_type == CommandType.command_exec ||
+        cmd_type == CommandType.command_discard ||
+        cmd_type == CommandType.command_watch ||
+        cmd_type == CommandType.command_unwatch ||
+        cmd_type == CommandType.command_auth ||
+        cmd_type == CommandType.command_hello ||
+        cmd_type == CommandType.command_client ||
+        cmd_type == CommandType.command_subscribe ||
+        cmd_type == CommandType.command_unsubscribe ||
+        cmd_type == CommandType.command_psubscribe ||
+        cmd_type == CommandType.command_punsubscribe ||
+        cmd_type == CommandType.command_publish ||
+        cmd_type == CommandType.command_pubsub ||
+        cmd_type == CommandType.command_shutdown ||
+        cmd_type == CommandType.command_quit ||
+        cmd_type == CommandType.command_reset ||
+        cmd_type == CommandType.command_save ||
+        cmd_type == CommandType.command_bgsave ||
+        cmd_type == CommandType.command_bgrewriteaof ||
+        cmd_type == CommandType.command_replicaof ||
+        cmd_type == CommandType.command_psync ||
+        cmd_type == CommandType.command_config ||
+        cmd_type == CommandType.command_cluster ||
+        cmd_type == CommandType.command_wait ||
+        cmd_type == CommandType.command_eval ||
+        cmd_type == CommandType.command_evalsha ||
+        cmd_type == CommandType.command_script {
+        return false;
+    }
+    return true;
 }
 
 fn connection_resp2_pubsub_mode_active(tx: &ConnectionTransaction) bool {
@@ -2588,6 +3171,261 @@ export fn connection_encode_reply(reply: &CommandReply, out: &byte, out_cap: usi
     return connection_encode_reply_with_protocol(reply, out, out_cap, 2);
 }
 
+fn connection_script_help() CommandReply {
+    const reply_list: &RedisObject = create_list_object() catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = list_object_push_tail(reply_list, &"SCRIPT <subcommand> [<arg> [value] [opt] ...]. Subcommands are:"[0: 63]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = list_object_push_tail(reply_list, &"EXISTS <sha1> [<sha1> ...]"[0: 26]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = list_object_push_tail(reply_list, &"    Return information about the existence of the scripts in the script cache."[0: 76]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = list_object_push_tail(reply_list, &"FLUSH [ASYNC|SYNC]"[0: 19]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = list_object_push_tail(reply_list, &"    Flush the supported script cache." [0: 37]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = list_object_push_tail(reply_list, &"LOAD <script>"[0: 13]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = list_object_push_tail(reply_list, &"    Load a supported script into the script cache without executing it."[0: 69]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = list_object_push_tail(reply_list, &"HELP"[0: 4]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = list_object_push_tail(reply_list, &"    Prints this help." [0: 22]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    return connection_array_reply_owned(reply_list, 8usize);
+}
+
+fn connection_script_unknown_subcommand(subcommand: &[byte]) CommandReply {
+    var raw: Sds = sds_empty() catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    defer {
+        sds_free(&raw);
+    }
+    _ = sds_cat(&raw, &"ERR unknown subcommand '"[0: 24]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = sds_cat(&raw, subcommand) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = sds_cat(&raw, &"'. Try SCRIPT HELP."[0: 19]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    return connection_owned_error(raw.buf[0: raw.len]);
+}
+
+fn connection_script_eval_error(err: any) CommandReply {
+    return connection_error_reply(&"ERR unsupported Lua script subset"[0: 33]);
+}
+
+fn connection_handle_script(command: &Command) CommandReply {
+    if command.argc < 2 {
+        return connection_error_reply(&"ERR wrong number of arguments for 'script' command"[0: 48]);
+    }
+    const subcommand: &[byte] = command_arg_data(command, 1) catch {
+        return connection_error_reply(&"ERR wrong number of arguments for 'script' command"[0: 48]);
+    };
+    if connection_keyword_eq(subcommand, &"HELP"[0: 4]) {
+        if command.argc != 2 {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        }
+        return connection_script_help();
+    }
+    if connection_keyword_eq(subcommand, &"LOAD"[0: 4]) {
+        if command.argc != 3 {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        }
+        const script: &[byte] = command_arg_data(command, 2) catch {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        };
+        _ = connection_script_validate_subset(script) catch {
+            return connection_error_reply(&"ERR unsupported Lua script subset"[0: 33]);
+        };
+        var sha_hex: [byte: CONNECTION_SCRIPT_SHA1_HEX_BYTES] = [];
+        _ = connection_script_cache_store(script, sha_hex[0: CONNECTION_SCRIPT_SHA1_HEX_BYTES]) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+        return connection_bulk_reply_owned(sha_hex[0: CONNECTION_SCRIPT_SHA1_HEX_BYTES]);
+    }
+    if connection_keyword_eq(subcommand, &"EXISTS"[0: 6]) {
+        if command.argc < 3 {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        }
+        var raw: Sds = sds_empty() catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+        defer {
+            sds_free(&raw);
+        }
+        _ = connection_sds_append_resp_array_header(&raw, command.argc - 2) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+        var index: usize = 2;
+        while index < command.argc {
+            const sha_hex: &[byte] = command_arg_data(command, index) catch {
+                return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+            };
+            var exists_value: i64 = 0;
+            if connection_script_cache_exists(sha_hex) {
+                exists_value = 1;
+            }
+            _ = connection_sds_append_resp_integer(&raw, exists_value) catch {
+                return connection_error_reply(&"ERR out of memory"[0: 17]);
+            };
+            index = index + 1;
+        }
+        return connection_raw_reply_owned(raw.buf[0: raw.len]);
+    }
+    if connection_keyword_eq(subcommand, &"FLUSH"[0: 5]) {
+        if command.argc > 3 {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        }
+        if command.argc == 3 {
+            const mode: &[byte] = command_arg_data(command, 2) catch {
+                return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+            };
+            if !connection_keyword_eq(mode, &"SYNC"[0: 4]) && !connection_keyword_eq(mode, &"ASYNC"[0: 5]) {
+                return connection_error_reply(&"ERR SCRIPT FLUSH only support SYNC|ASYNC option"[0: 49]);
+            }
+        }
+        connection_script_cache_flush_all();
+        return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+    }
+    return connection_script_unknown_subcommand(subcommand);
+}
+
+fn connection_execute_script_effect_at(
+    engine: &Engine,
+    runtime: &CommandRuntimeInfo,
+    router: &CommandRouter,
+    aof: &AofWriter,
+    rewrite_buf: &Sds,
+    backlog: &ReplicationBacklog,
+    raw_obj: &RedisObject,
+    now_ms: u64,
+    rewrite_failed: &bool,
+) CommandReply {
+    const raw_cmd: &[byte] = raw_obj.value.buf[0: raw_obj.value.len];
+    const parsed: RespParseResult = parse_resp2(raw_cmd) catch {
+        object_free(raw_obj);
+        return connection_error_reply(&"ERR unsupported Lua script subset"[0: 33]);
+    };
+    const inner_command: Command = command_from_resp(router, &parsed.value) catch |err| {
+        resp_value_free(&parsed.value);
+        object_free(raw_obj);
+        if err == error.CommandWrongArity {
+            return connection_error_reply(&"ERR wrong number of arguments for script command"[0: 46]);
+        }
+        return connection_error_reply(&"ERR unknown command in script"[0: 27]);
+    };
+    if !connection_script_command_allowed(inner_command.info.cmd_type) {
+        resp_value_free(&parsed.value);
+        object_free(raw_obj);
+        return connection_error_reply(&"ERR command is not allowed from script"[0: 38]);
+    }
+
+    var reply: CommandReply = command_execute_with_runtime_at(engine, runtime, &inner_command, now_ms);
+    if aof != null && connection_should_append_aof(&inner_command, &reply) {
+        _ = aof_append_command_at(aof, &inner_command, raw_cmd, now_ms) catch {
+            command_reply_cleanup(&reply);
+            resp_value_free(&parsed.value);
+            object_free(raw_obj);
+            return connection_error_reply(&"ERR AOF append failed"[0: 21]);
+        };
+        if rewrite_buf != null && runtime.aof_rewrite_in_progress && reply.typ != CommandReplyType.reply_error {
+            _ = aof_append_command_to_sds_at(rewrite_buf, &inner_command, raw_cmd, now_ms) catch {
+                if rewrite_failed != null {
+                    *rewrite_failed = true;
+                }
+            };
+        }
+        if backlog != null && runtime.replication_role == ReplicationRole.role_master && reply.typ != CommandReplyType.reply_error {
+            _ = replication_backlog_append_command_at(backlog, &inner_command, raw_cmd, now_ms) catch {};
+        }
+    }
+    resp_value_free(&parsed.value);
+    connection_script_reply_attach_raw(&reply, raw_obj);
+    return reply;
+}
+
+fn connection_handle_eval_like_at(
+    engine: &Engine,
+    runtime: &CommandRuntimeInfo,
+    router: &CommandRouter,
+    aof: &AofWriter,
+    rewrite_buf: &Sds,
+    backlog: &ReplicationBacklog,
+    command: &Command,
+    now_ms: u64,
+    rewrite_failed: &bool,
+    use_sha: bool,
+) CommandReply {
+    const numkeys: usize = connection_script_eval_numkeys(command) catch |err| {
+        if err == error.ConnectionScriptInvalidNumkeys {
+            return connection_error_reply(&"ERR value is not an integer or out of range"[0: 43]);
+        }
+        if err == error.ConnectionScriptNegativeNumkeys {
+            return connection_error_reply(&"ERR Number of keys can't be negative"[0: 37]);
+        }
+        return connection_error_reply(&"ERR Number of keys can't be greater than number of args"[0: 54]);
+    };
+
+    var script: &[byte] = [];
+    if use_sha {
+        const sha_hex: &[byte] = command_arg_data(command, 1) catch {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        };
+        script = connection_script_cache_lookup_script(sha_hex) catch {
+            return connection_error_reply(&"NOSCRIPT No matching script. Please use EVAL."[0: 45]);
+        };
+    } else {
+        script = command_arg_data(command, 1) catch {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        };
+        _ = connection_script_validate_subset(script) catch {
+            return connection_error_reply(&"ERR unsupported Lua script subset"[0: 33]);
+        };
+        var sha_hex_new: [byte: CONNECTION_SCRIPT_SHA1_HEX_BYTES] = [];
+        _ = connection_script_cache_store(script, sha_hex_new[0: CONNECTION_SCRIPT_SHA1_HEX_BYTES]) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+    }
+
+    const raw_obj: &RedisObject = connection_script_build_raw_command(script, command, numkeys) catch |err| {
+        if err == error.ConnectionScriptMissingReference {
+            return connection_error_reply(&"ERR script requested missing KEYS or ARGV index"[0: 47]);
+        }
+        if err == error.AllocOutOfMemory {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        }
+        return connection_error_reply(&"ERR unsupported Lua script subset"[0: 33]);
+    };
+    return connection_execute_script_effect_at(engine, runtime, router, aof, rewrite_buf, backlog, raw_obj, now_ms, rewrite_failed);
+}
+
+fn connection_execute_script_command_at(
+    engine: &Engine,
+    runtime: &CommandRuntimeInfo,
+    router: &CommandRouter,
+    aof: &AofWriter,
+    rewrite_buf: &Sds,
+    backlog: &ReplicationBacklog,
+    tx: &ConnectionTransaction,
+    parsed: &RespParseResult,
+    command: &Command,
+    out: &byte,
+    out_cap: usize,
+    now_ms: u64,
+    rewrite_failed: &bool,
+) !ConnectionProcessResult {
+    var reply: CommandReply = connection_empty_reply();
+    if command.info.cmd_type == CommandType.command_script {
+        reply = connection_handle_script(command);
+    } else {
+        reply = connection_handle_eval_like_at(engine, runtime, router, aof, rewrite_buf, backlog, command, now_ms, rewrite_failed, command.info.cmd_type == CommandType.command_evalsha);
+    }
+    const response_len: usize = try connection_encode_reply_with_protocol(&reply, out, out_cap, tx.protocol_version);
+    command_reply_cleanup(&reply);
+    resp_value_free(&parsed.value);
+    return ConnectionProcessResult{
+        response_len: response_len,
+        response_head_len: 0,
+        zero_copy_body: connection_reply_empty_slice(),
+        zero_copy_tail_len: 0,
+        consumed: parsed.consumed,
+        close_after: false,
+        request_replicaof: false,
+        replicaof_promote: false,
+        request_bgsave: false,
+        request_aof_rewrite: false,
+        request_shutdown: false,
+    };
+}
+
 fn connection_transaction_execute_at(
     engine: &Engine,
     runtime: &CommandRuntimeInfo,
@@ -2657,7 +3495,22 @@ fn connection_transaction_execute_at(
         }
 
         var reply: CommandReply = connection_empty_reply();
-        if command.info.cmd_type == CommandType.command_auth {
+        if command.info.cmd_type == CommandType.command_script {
+            reply = connection_handle_script(&command);
+        } else if command.info.cmd_type == CommandType.command_eval || command.info.cmd_type == CommandType.command_evalsha {
+            reply = connection_handle_eval_like_at(
+                engine,
+                runtime,
+                router,
+                aof,
+                rewrite_buf,
+                backlog,
+                &command,
+                now_ms,
+                rewrite_failed,
+                command.info.cmd_type == CommandType.command_evalsha,
+            );
+        } else if command.info.cmd_type == CommandType.command_auth {
             reply = connection_handle_auth(tx, runtime, &command);
         } else {
             reply = command_execute_with_runtime_at(engine, runtime, &command, now_ms);
@@ -2669,7 +3522,11 @@ fn connection_transaction_execute_at(
             reply.data.ptr[1] == 75 as byte {
             runtime.lastsave_ms = now_ms;
         }
-        if aof != null && connection_should_append_aof(&command, &reply) {
+        if command.info.cmd_type != CommandType.command_eval &&
+            command.info.cmd_type != CommandType.command_evalsha &&
+            command.info.cmd_type != CommandType.command_script &&
+            aof != null &&
+            connection_should_append_aof(&command, &reply) {
             _ = aof_append_command_at(aof, &command, raw_cmd, now_ms) catch {
                 command_reply_cleanup(&reply);
                 reply = connection_error_reply(&"ERR AOF append failed"[0: 21]);
@@ -3849,6 +4706,25 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
         const restricted_n: usize = try connection_encode_reply_with_protocol(&restricted_reply, out, out_cap, tx.protocol_version);
         resp_value_free(&parsed.value);
         return ConnectionProcessResult{ response_len: restricted_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
+    }
+    if command.info.cmd_type == CommandType.command_script ||
+        command.info.cmd_type == CommandType.command_eval ||
+        command.info.cmd_type == CommandType.command_evalsha {
+        return connection_execute_script_command_at(
+            engine,
+            runtime,
+            router,
+            aof,
+            rewrite_buf,
+            backlog,
+            tx,
+            &parsed,
+            &command,
+            out,
+            out_cap,
+            now_ms,
+            rewrite_failed,
+        );
     }
     if connection_command_is_blocking_pop(command.info.cmd_type) {
         return connection_execute_blocking_pop_command_at(

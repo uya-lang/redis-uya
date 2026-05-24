@@ -187,6 +187,25 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"bitmap commands missing from COMMAND INFO: {bitmap_info!r}")
 
+            script_info = send_command(sock, b"COMMAND", b"INFO", b"EVAL", b"EVALSHA", b"SCRIPT", b"SCRIPT|LOAD", b"SCRIPT|EXISTS", b"SCRIPT|FLUSH")
+            if (
+                not isinstance(script_info, list)
+                or len(script_info) != 6
+                or not isinstance(script_info[0], list)
+                or script_info[0][0] != b"eval"
+                or not isinstance(script_info[1], list)
+                or script_info[1][0] != b"evalsha"
+                or not isinstance(script_info[2], list)
+                or script_info[2][0] != b"script"
+                or not isinstance(script_info[3], list)
+                or script_info[3][0] != b"script|load"
+                or not isinstance(script_info[4], list)
+                or script_info[4][0] != b"script|exists"
+                or not isinstance(script_info[5], list)
+                or script_info[5][0] != b"script|flush"
+            ):
+                raise AssertionError(f"scripting commands missing from COMMAND INFO: {script_info!r}")
+
             zset_info = send_command(sock, b"COMMAND", b"INFO", b"ZRANK", b"ZREVRANK", b"ZSCORE", b"ZMSCORE", b"ZPOPMAX", b"ZPOPMIN", b"BZPOPMAX", b"BZPOPMIN")
             if (
                 not isinstance(zset_info, list)
@@ -307,6 +326,28 @@ def run_smoke() -> None:
                 or b"georadius" in listed_geo
             ):
                 raise AssertionError(f"unexpected COMMAND LIST geo* result: {listed_geo!r}")
+
+            listed_eval = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"EVAL*")
+            if (
+                not isinstance(listed_eval, list)
+                or b"eval" not in listed_eval
+                or b"evalsha" not in listed_eval
+                or b"eval_ro" in listed_eval
+                or b"evalsha_ro" in listed_eval
+            ):
+                raise AssertionError(f"unexpected COMMAND LIST eval* result: {listed_eval!r}")
+
+            listed_script = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"SCRIPT*")
+            if (
+                not isinstance(listed_script, list)
+                or b"script" not in listed_script
+                or b"script|load" not in listed_script
+                or b"script|exists" not in listed_script
+                or b"script|flush" not in listed_script
+                or b"script|debug" in listed_script
+                or b"script|kill" in listed_script
+            ):
+                raise AssertionError(f"unexpected COMMAND LIST script* result: {listed_script!r}")
 
             listed_zpop = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"ZPOP*")
             if (

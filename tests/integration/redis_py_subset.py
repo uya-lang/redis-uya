@@ -214,6 +214,25 @@ class RedisPySubsetClient:
         assert isinstance(result, list)
         return result
 
+    def eval(self, script: str, numkeys: int, *parts: str):
+        return self._request(b"EVAL", script.encode(), str(numkeys).encode(), *(part.encode() for part in parts))
+
+    def evalsha(self, sha1: str, numkeys: int, *parts: str):
+        return self._request(b"EVALSHA", sha1.encode(), str(numkeys).encode(), *(part.encode() for part in parts))
+
+    def script_load(self, script: str) -> bytes:
+        result = self._request(b"SCRIPT", b"LOAD", script.encode())
+        assert isinstance(result, bytes)
+        return result
+
+    def script_exists(self, *sha1s: str):
+        result = self._request(b"SCRIPT", b"EXISTS", *(sha.encode() for sha in sha1s))
+        assert isinstance(result, list)
+        return result
+
+    def script_flush(self) -> bool:
+        return self._request(b"SCRIPT", b"FLUSH") == "OK"
+
     def setrange(self, key: str, offset: int, value: str) -> int:
         return int(self._request(b"SETRANGE", key.encode(), str(offset).encode(), value.encode()))
 
@@ -837,6 +856,17 @@ def run_smoke() -> None:
             assert client.geodist("geo", "Palermo", "Catania", "km") == b"166.2742"
             assert client.geosearch("geo", "FROMLONLAT", "15", "37", "BYRADIUS", "200", "km") == [b"Palermo", b"Catania"]
             assert client.geosearch("geo", "FROMMEMBER", "Palermo", "BYRADIUS", "200", "km", "WITHDIST") == [[b"Palermo", b"0.0000"], [b"Catania", b"166.2742"]]
+            assert client.eval("return redis.call('SET', KEYS[1], ARGV[1])", 1, "lua-key", "value") == "OK"
+            assert client.script_exists("d8f2fad9f8e86a53d2a6ebd960b33c4972cacc37") == [1]
+            assert client.script_load("return redis.call('GET', KEYS[1])") == b"d3c21d0c2b9ca22f82737626a27bcaf5d288f99f"
+            assert client.evalsha("D3C21D0C2B9CA22F82737626A27BCAF5D288F99F", 1, "lua-key") == b"value"
+            assert client.script_flush()
+            try:
+                client.evalsha("d3c21d0c2b9ca22f82737626a27bcaf5d288f99f", 1, "lua-key")
+                raise AssertionError("expected EVALSHA after SCRIPT FLUSH to fail")
+            except RespError as exc:
+                if str(exc) != "NOSCRIPT No matching script. Please use EVAL.":
+                    raise AssertionError(f"unexpected EVALSHA error: {exc}") from exc
             assert client.setrange("key", 5, "__") == 7
             assert client.get("key") == b"value__"
             assert client.rename("key", "key2")
@@ -848,7 +878,7 @@ def run_smoke() -> None:
             assert client.getdel("gd-key") == b"once"
             assert client.getdel("gd-key") is None
             assert client.delete("counter") == 1
-            assert client.delete("fcounter", "nx-key", "gs-key", "sx-key", "mk1", "mk2", "mn1", "mn2", "allones", "srca", "srcb", "dstbit", "bf", "hll", "dsthll", "emptyhll", "geo") == 17
+            assert client.delete("fcounter", "nx-key", "gs-key", "sx-key", "mk1", "mk2", "mn1", "mn2", "allones", "srca", "srcb", "dstbit", "bf", "hll", "dsthll", "emptyhll", "geo", "lua-key") == 18
             assert client.echo("hi") == b"hi"
             assert client.key_type("key") == "string"
             assert client.dbsize() == 1

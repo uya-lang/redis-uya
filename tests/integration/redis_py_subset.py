@@ -233,6 +233,24 @@ class RedisPySubsetClient:
     def script_flush(self) -> bool:
         return self._request(b"SCRIPT", b"FLUSH") == "OK"
 
+    def memory_usage(self, key: str, samples: int | None = None) -> int | None:
+        parts = [b"MEMORY", b"USAGE", key.encode()]
+        if samples is not None:
+            parts.extend([b"SAMPLES", str(samples).encode()])
+        result = self._request(*parts)
+        assert result is None or isinstance(result, int)
+        return result
+
+    def memory_stats(self):
+        result = self._request(b"MEMORY", b"STATS")
+        assert isinstance(result, list)
+        return result
+
+    def memory_doctor(self) -> bytes:
+        result = self._request(b"MEMORY", b"DOCTOR")
+        assert isinstance(result, bytes)
+        return result
+
     def setrange(self, key: str, offset: int, value: str) -> int:
         return int(self._request(b"SETRANGE", key.encode(), str(offset).encode(), value.encode()))
 
@@ -867,6 +885,26 @@ def run_smoke() -> None:
             except RespError as exc:
                 if str(exc) != "NOSCRIPT No matching script. Please use EVAL.":
                     raise AssertionError(f"unexpected EVALSHA error: {exc}") from exc
+            memory_usage = client.memory_usage("key")
+            if memory_usage is None or memory_usage <= 0:
+                raise AssertionError(f"unexpected MEMORY USAGE key: {memory_usage!r}")
+            if client.memory_usage("missing") is not None:
+                raise AssertionError("expected MEMORY USAGE missing to be None")
+            memory_usage_samples = client.memory_usage("key", samples=0)
+            if memory_usage_samples is None or memory_usage_samples <= 0:
+                raise AssertionError(f"unexpected MEMORY USAGE key SAMPLES 0: {memory_usage_samples!r}")
+            memory_stats = client.memory_stats()
+            if b"used_memory" not in memory_stats or b"maxmemory_policy" not in memory_stats:
+                raise AssertionError(f"unexpected MEMORY STATS payload: {memory_stats!r}")
+            memory_doctor = client.memory_doctor()
+            if b"diagnosis" not in memory_doctor and b"No obvious allocator" not in memory_doctor:
+                raise AssertionError(f"unexpected MEMORY DOCTOR payload: {memory_doctor!r}")
+            try:
+                client._request(b"MEMORY")
+                raise AssertionError("expected MEMORY without subcommand to fail")
+            except RespError as exc:
+                if str(exc) != "ERR wrong number of arguments":
+                    raise AssertionError(f"unexpected MEMORY arity error: {exc}") from exc
             assert client.setrange("key", 5, "__") == 7
             assert client.get("key") == b"value__"
             assert client.rename("key", "key2")

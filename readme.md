@@ -106,7 +106,7 @@
 下一阶段：
 
 - `v0.9.1`：审计整改与真实性修复已完成，当前已修复 `maxmemory` 集成测试口径、收回当前 `CLIENT/CONFIG` 子命令矩阵真值、统一运行时版本串，并恢复 benchmark / DoD 校验转绿。
-- `v0.9.2`：继续补 Redis Open Source 单机核心缺口，当前优先脚本第一批；`PFADD/PFCOUNT/PFMERGE` 已以 exact set-backed partial 形态落地，`GEOADD/GEODIST/GEOSEARCH` 已以 exact zset-backed partial 形态落地，`EVAL/EVALSHA/SCRIPT LOAD|EXISTS|FLUSH` 已以 single-call script subset partial 形态落地。
+- `v0.9.2`：继续补 Redis Open Source 单机核心缺口，当前优先脚本第一批；`PFADD/PFCOUNT/PFMERGE` 已以 exact set-backed partial 形态落地，`GEOADD/GEODIST/GEOSEARCH` 已以 exact zset-backed partial 形态落地，`EVAL/EVALSHA/SCRIPT LOAD|EXISTS|FLUSH` 已以 single-call script subset partial 形态落地，`MEMORY HELP/STATS/USAGE/DOCTOR` 已以 runtime-approx partial 形态落地。
 - `v0.9.3`：收口 Streams、Functions/Script、ACL 与运维诊断第一批，再推进持久化/复制边界深化。
 
 当前阶段尚未生产可用。
@@ -282,6 +282,7 @@ build/redis-uya 6380 1
 - HyperLogLog 第一批 partial：`PFADD`、`PFCOUNT`、`PFMERGE` 当前可用，但内部暂以 exact set-backed cardinality 近似 Redis 语义，尚未落地 Redis 原生 dense/sparse HLL 字符串编码
 - Geo 第一批 partial：`GEOADD`、`GEODIST`、`GEOSEARCH` 当前可用，但内部暂以 exact zset-backed packed coordinate score 实现，`WITHHASH` 返回当前 packed score，而不是 Redis 原生 geohash 整数
 - Scripting 第一批 partial：`EVAL`、`EVALSHA`、`SCRIPT LOAD/EXISTS/FLUSH` 当前可用，但只支持单条 `return redis.call(...)` 脚本子集；AOF/复制传播的是脚本内部实际执行的命令效果，而不是原始 `EVAL*`
+- Memory 第一批 partial：`MEMORY HELP`、`MEMORY STATS`、`MEMORY USAGE`、`MEMORY DOCTOR` 当前可用；`USAGE` 返回基于 redis-uya 对象布局、dict/list 节点和 SDS 容量的近似运行时占用，不是 Redis 原生 jemalloc 口径
 - Hash 第一批数值：`HINCRBY`、`HINCRBYFLOAT`
 - Hash 第二批视图：`HKEYS`、`HVALS`、`HGETALL`
 - Hash 第三批扫描：`HSCAN`
@@ -349,7 +350,7 @@ build/redis-uya 6380 1
 | `v0.8.1` | 写路径性能修复 | WATCH 懒维护、Dict 单次探测、AOF 分层写入 |
 | `v0.9.0` | 单机核心命令补齐 | String/Hash/List/Set/ZSet/Key/Server/Security 核心命令 |
 | `v0.9.1` | 审计整改与真实性修复 | 修正文档/控制面/测试/benchmark 口径，统一版本号 |
-| `v0.9.2` | 单机核心缺口补齐 I | blocking list/zset、bitmap/bitfield、HLL/GEO、脚本第一批 |
+| `v0.9.2` | 单机核心缺口补齐 I | blocking list/zset、bitmap/bitfield、HLL/GEO、脚本第一批、Memory 第一批 |
 | `v0.9.3` | 单机核心缺口补齐 II | Streams、Functions/Script、ACL、运维诊断第一批 |
 | `v0.9.4` | 性能与稳定性收敛 | benchmark guard 恢复、release build 基线、长时运行、故障恢复 |
 | `v0.9.5`, `v0.9.6`, ... | 单机封版候选迭代 | 核心命令矩阵、文档、性能、运维边界综合收口 |

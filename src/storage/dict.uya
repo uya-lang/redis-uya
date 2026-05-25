@@ -54,9 +54,21 @@ fn dict_entry_stride() usize {
     return @size_of(sample[0]) as usize;
 }
 
+export fn dict_entry_layout_size() usize {
+    return dict_entry_stride();
+}
+
 fn dict_bucket_stride() usize {
     var sample: [DictBucket: 1] = [];
     return @size_of(sample[0]) as usize;
+}
+
+export fn dict_bucket_layout_size() usize {
+    return dict_bucket_stride();
+}
+
+export fn dict_bucket_count(dict: &Dict) usize {
+    return dict.table.size + dict.rehash_table.size;
 }
 
 fn dict_bucket_at(base: &byte, index: usize) &DictBucket {

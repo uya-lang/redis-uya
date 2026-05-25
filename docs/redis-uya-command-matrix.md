@@ -1,7 +1,7 @@
 # redis-uya command matrix
 
 > version: v0.9.1-dev
-> date: 2026-05-24
+> date: 2026-05-25
 > source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`
 > runtime source: `src/command/catalog_generated.uya`
 
@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 362 | 256 | 146 | 61 | 0 | 3 | 152 |
+| Tier A: standalone core | 362 | 256 | 146 | 66 | 0 | 3 | 147 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 135 | 128 | 0 | 0 | 0 | 0 | 135 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `68` |
+| `partial` | `73` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `287` |
+| `deferred` | `282` |
 
 ## Group counts
 
@@ -360,13 +360,13 @@
 | `lrem` | `list` | `full` | `-` | `4` | `-` | `no` | `@write, @list, @slow` |
 | `lset` | `list` | `full` | `-` | `4` | `-` | `no` | `@write, @list, @slow` |
 | `ltrim` | `list` | `full` | `-` | `4` | `-` | `no` | `@write, @list, @slow` |
-| `memory` | `server` | `deferred` | `v0.9.3` | `-2` | `-` | `no` | `@slow` |
-| `memory|doctor` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@slow` |
-| `memory|help` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@slow` |
+| `memory` | `server` | `partial` | `-` | `-2` | `-` | `no` | `@slow` |
+| `memory|doctor` | `server` | `partial` | `-` | `2` | `-` | `no` | `@slow` |
+| `memory|help` | `server` | `partial` | `-` | `2` | `-` | `no` | `@slow` |
 | `memory|malloc-stats` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@slow` |
 | `memory|purge` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@slow` |
-| `memory|stats` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@slow` |
-| `memory|usage` | `server` | `deferred` | `v0.9.3` | `-3` | `-` | `no` | `@read, @slow` |
+| `memory|stats` | `server` | `partial` | `-` | `2` | `-` | `no` | `@slow` |
+| `memory|usage` | `server` | `partial` | `-` | `-3` | `-` | `no` | `@read, @slow` |
 | `mget` | `string` | `full` | `-` | `-2` | `-` | `no` | `@read, @string, @fast` |
 | `migrate` | `generic` | `deferred` | `v0.9.1` | `-6` | `-` | `no` | `@keyspace, @write, @slow, @dangerous` |
 | `module` | `server` | `deferred` | `v0.9.3` | `-2` | `-` | `no` | `@slow` |

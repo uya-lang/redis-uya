@@ -206,6 +206,21 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"scripting commands missing from COMMAND INFO: {script_info!r}")
 
+            memory_info = send_command(sock, b"COMMAND", b"INFO", b"MEMORY", b"MEMORY|DOCTOR", b"MEMORY|STATS", b"MEMORY|USAGE")
+            if (
+                not isinstance(memory_info, list)
+                or len(memory_info) != 4
+                or not isinstance(memory_info[0], list)
+                or memory_info[0][0] != b"memory"
+                or not isinstance(memory_info[1], list)
+                or memory_info[1][0] != b"memory|doctor"
+                or not isinstance(memory_info[2], list)
+                or memory_info[2][0] != b"memory|stats"
+                or not isinstance(memory_info[3], list)
+                or memory_info[3][0] != b"memory|usage"
+            ):
+                raise AssertionError(f"memory commands missing from COMMAND INFO: {memory_info!r}")
+
             zset_info = send_command(sock, b"COMMAND", b"INFO", b"ZRANK", b"ZREVRANK", b"ZSCORE", b"ZMSCORE", b"ZPOPMAX", b"ZPOPMIN", b"BZPOPMAX", b"BZPOPMIN")
             if (
                 not isinstance(zset_info, list)
@@ -349,6 +364,18 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"unexpected COMMAND LIST script* result: {listed_script!r}")
 
+            listed_memory = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"MEMORY*")
+            if (
+                not isinstance(listed_memory, list)
+                or b"memory" not in listed_memory
+                or b"memory|doctor" not in listed_memory
+                or b"memory|stats" not in listed_memory
+                or b"memory|usage" not in listed_memory
+                or b"memory|malloc-stats" in listed_memory
+                or b"memory|purge" in listed_memory
+            ):
+                raise AssertionError(f"unexpected COMMAND LIST memory* result: {listed_memory!r}")
+
             listed_zpop = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"ZPOP*")
             if (
                 not isinstance(listed_zpop, list)
@@ -410,6 +437,18 @@ def run_smoke() -> None:
                 raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS shape: {getkeysandflags!r}")
             if getkeysandflags[0][0] != b"src" or getkeysandflags[1][0] != b"dst":
                 raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS keys: {getkeysandflags!r}")
+
+            memory_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"MEMORY", b"USAGE", b"mkey")
+            if memory_getkeys != [b"mkey"]:
+                raise AssertionError(f"unexpected COMMAND GETKEYS MEMORY USAGE result: {memory_getkeys!r}")
+
+            memory_getkeysandflags = send_command(sock, b"COMMAND", b"GETKEYSANDFLAGS", b"MEMORY", b"USAGE", b"mkey")
+            if (
+                not isinstance(memory_getkeysandflags, list)
+                or len(memory_getkeysandflags) != 1
+                or memory_getkeysandflags[0][0] != b"mkey"
+            ):
+                raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS MEMORY USAGE result: {memory_getkeysandflags!r}")
 
             bad_arity_error = None
             try:

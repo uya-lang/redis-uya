@@ -447,6 +447,24 @@ if [[ "$EVALSHA_NOSCRIPT_RESULT" != "NOSCRIPT No matching script. Please use EVA
     exit 1
 fi
 
+MEMORY_USAGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" memory usage key)"
+if ! [[ "$MEMORY_USAGE_RESULT" =~ ^[0-9]+$ ]] || [[ "$MEMORY_USAGE_RESULT" == "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected MEMORY USAGE key to be a positive integer, got '$MEMORY_USAGE_RESULT'" >&2
+    exit 1
+fi
+
+MEMORY_STATS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" memory stats)"
+if [[ "$MEMORY_STATS_RESULT" != *$'used_memory\n'* ]] || [[ "$MEMORY_STATS_RESULT" != *$'maxmemory_policy\n'* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected MEMORY STATS fields, got '$MEMORY_STATS_RESULT'" >&2
+    exit 1
+fi
+
+MEMORY_DOCTOR_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" memory doctor)"
+if [[ "$MEMORY_DOCTOR_RESULT" != *"diagnosis"* ]] && [[ "$MEMORY_DOCTOR_RESULT" != *"No obvious allocator"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected MEMORY DOCTOR diagnosis text, got '$MEMORY_DOCTOR_RESULT'" >&2
+    exit 1
+fi
+
 SETRANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" setrange key 5 __)"
 if [[ "$SETRANGE_RESULT" != "7" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected setrange 7, got '$SETRANGE_RESULT'" >&2

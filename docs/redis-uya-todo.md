@@ -488,7 +488,7 @@
 - [x] 常用 bitmap / bitfield：已补 `SETBIT`、`GETBIT`、`BITCOUNT`、`BITPOS`、`BITOP`、`BITFIELD`、`BITFIELD_RO`
 - [x] 常用 HLL / GEO：已补 `PFADD`、`PFCOUNT`、`PFMERGE`（exact set-backed partial），以及 `GEOADD`、`GEODIST`、`GEOSEARCH`（exact zset-backed partial）
 - [x] Scripting 第一批：已补 `EVAL`、`EVALSHA`、`SCRIPT LOAD/EXISTS/FLUSH`，当前为 single-call script subset partial
-- [ ] Server / Connection 缺口第一批：`SLOWLOG`、`MEMORY`、`LATENCY`、`MONITOR` 的最小可验证实现方案
+- [ ] Server / Connection 缺口第一批：已补 `MEMORY HELP/STATS/USAGE/DOCTOR`（runtime-approx partial）；待 `SLOWLOG`、`LATENCY`、`MONITOR`
 
 验收项：
 

@@ -34,6 +34,11 @@ use src.command.catalog.command_catalog_lookup;
 use src.command.catalog.command_catalog_matches_module;
 use src.command.catalog.command_catalog_matches_pattern;
 use src.command.catalog.command_catalog_total_count;
+use src.command.slowlog.SlowlogEntry;
+use src.command.slowlog.slowlog_append;
+use src.command.slowlog.slowlog_count;
+use src.command.slowlog.slowlog_entry_newest;
+use src.command.slowlog.slowlog_reset;
 use src.command.catalog_generated_base.CommandCatalogEntry;
 use src.command.catalog_generated_base.CommandCatalogStatus;
 use src.command.router.CommandInfo;
@@ -6083,6 +6088,114 @@ fn command_executor_memory(runtime: &CommandRuntimeInfo, engine: &Engine, comman
     return command_executor_owned_error(err.buf[0: err.len]);
 }
 
+fn command_executor_slowlog(command: &Command) CommandReply {
+    if command.argc < 2 {
+        return command_executor_owned_error(&"ERR wrong number of arguments for 'slowlog' command"[0: 49]);
+    }
+
+    const subcommand: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_owned_error(&"ERR wrong number of arguments for 'slowlog' command"[0: 49]);
+    };
+    if command_executor_keyword_eq(subcommand, &"HELP"[0: 4]) {
+        if command.argc != 2 {
+            return command_executor_owned_error(&"ERR wrong number of arguments for 'slowlog|help' command"[0: 56]);
+        }
+        const reply_list: &RedisObject = create_list_object() catch {
+            return command_executor_oom();
+        };
+        _ = list_object_push_tail(reply_list, &"SLOWLOG GET [count]"[0: 19]) catch { object_free(reply_list); return command_executor_oom(); };
+        _ = list_object_push_tail(reply_list, &"    Return top <count> entries from redis-uya slowlog (default: 10)." [0: 68]) catch { object_free(reply_list); return command_executor_oom(); };
+        _ = list_object_push_tail(reply_list, &"SLOWLOG LEN"[0: 11]) catch { object_free(reply_list); return command_executor_oom(); };
+        _ = list_object_push_tail(reply_list, &"    Return the length of the redis-uya slowlog." [0: 48]) catch { object_free(reply_list); return command_executor_oom(); };
+        _ = list_object_push_tail(reply_list, &"SLOWLOG RESET"[0: 13]) catch { object_free(reply_list); return command_executor_oom(); };
+        _ = list_object_push_tail(reply_list, &"    Reset the redis-uya slowlog." [0: 33]) catch { object_free(reply_list); return command_executor_oom(); };
+        _ = list_object_push_tail(reply_list, &"SLOWLOG HELP"[0: 12]) catch { object_free(reply_list); return command_executor_oom(); };
+        _ = list_object_push_tail(reply_list, &"    Prints this help."[0: 21]) catch { object_free(reply_list); return command_executor_oom(); };
+        return command_executor_owned_array(reply_list);
+    }
+    if command_executor_keyword_eq(subcommand, &"LEN"[0: 3]) {
+        if command.argc != 2 {
+            return command_executor_owned_error(&"ERR wrong number of arguments for 'slowlog|len' command"[0: 55]);
+        }
+        return command_executor_integer(slowlog_count() as i64);
+    }
+    if command_executor_keyword_eq(subcommand, &"RESET"[0: 5]) {
+        if command.argc != 2 {
+            return command_executor_owned_error(&"ERR wrong number of arguments for 'slowlog|reset' command"[0: 57]);
+        }
+        slowlog_reset();
+        return command_executor_simple(&"OK"[0: 2]);
+    }
+    if command_executor_keyword_eq(subcommand, &"GET"[0: 3]) {
+        var count_i64: i64 = 10 as i64;
+        if command.argc == 3 {
+            const count_data: &[byte] = command_executor_arg(command, 2) catch {
+                return command_executor_owned_error(&"ERR wrong number of arguments for 'slowlog|get' command"[0: 55]);
+            };
+            count_i64 = command_executor_parse_i64(count_data) catch {
+                return command_executor_owned_error(&"ERR count should be greater than or equal to -1"[0: 47]);
+            };
+            if count_i64 < -1 {
+                return command_executor_owned_error(&"ERR count should be greater than or equal to -1"[0: 47]);
+            }
+        } else if command.argc != 2 {
+            return command_executor_owned_error(&"ERR wrong number of arguments for 'slowlog|get' command"[0: 55]);
+        }
+
+        var result_count: usize = slowlog_count();
+        if count_i64 >= 0 && (count_i64 as usize) < result_count {
+            result_count = count_i64 as usize;
+        }
+
+        var raw: Sds = sds_empty() catch {
+            return command_executor_oom();
+        };
+        defer {
+            sds_free(&raw);
+        }
+        _ = command_executor_resp_collection_prefix(&raw, &"*"[0: 1], result_count) catch {
+            return command_executor_oom();
+        };
+        var index: usize = 0;
+        while index < result_count {
+            const entry: &SlowlogEntry = slowlog_entry_newest(index);
+            if entry != null {
+                _ = command_executor_resp_collection_prefix(&raw, &"*"[0: 1], 6) catch { return command_executor_oom(); };
+                _ = command_executor_info_append_u64(&raw, &":%u\r\n"[0: 5], entry.id) catch { return command_executor_oom(); };
+                _ = command_executor_info_append_u64(&raw, &":%u\r\n"[0: 5], entry.timestamp_sec) catch { return command_executor_oom(); };
+                _ = command_executor_info_append_u64(&raw, &":%u\r\n"[0: 5], entry.duration_us) catch { return command_executor_oom(); };
+                _ = command_executor_resp_collection_prefix(&raw, &"*"[0: 1], entry.argc) catch { return command_executor_oom(); };
+                var arg_index: usize = 0;
+                while arg_index < entry.argc {
+                    _ = command_executor_command_append_bulk(&raw, entry.args[arg_index].data[0: entry.args[arg_index].len]) catch { return command_executor_oom(); };
+                    arg_index = arg_index + 1;
+                }
+                _ = command_executor_command_append_bulk(&raw, entry.client[0: entry.client_len]) catch { return command_executor_oom(); };
+                _ = command_executor_command_append_bulk(&raw, entry.name[0: entry.name_len]) catch { return command_executor_oom(); };
+            }
+            index = index + 1;
+        }
+        return command_executor_owned_raw(raw.buf[0: raw.len]);
+    }
+
+    var err: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&err);
+    }
+    _ = command_executor_info_append(&err, &"ERR unknown subcommand '"[0: 24]) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append(&err, subcommand) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append(&err, &"'. Try SLOWLOG HELP."[0: 20]) catch {
+        return command_executor_oom();
+    };
+    return command_executor_owned_error(err.buf[0: err.len]);
+}
+
 fn command_executor_move(runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
     _ = runtime;
     if command.argc != 3 {
@@ -10291,6 +10404,13 @@ fn command_executor_command_visible_memory_subcommand(name: &[byte]) bool {
         command_executor_slice_eq(name, &"usage"[0: 5]);
 }
 
+fn command_executor_command_visible_slowlog_subcommand(name: &[byte]) bool {
+    return command_executor_slice_eq(name, &"help"[0: 4]) ||
+        command_executor_slice_eq(name, &"get"[0: 3]) ||
+        command_executor_slice_eq(name, &"len"[0: 3]) ||
+        command_executor_slice_eq(name, &"reset"[0: 5]);
+}
+
 fn command_executor_command_visible_subcommand(parent_name: &[byte], subcommand_name: &[byte]) bool {
     if command_executor_slice_eq(parent_name, &"client"[0: 6]) {
         return command_executor_command_visible_client_subcommand(subcommand_name);
@@ -10315,6 +10435,9 @@ fn command_executor_command_visible_subcommand(parent_name: &[byte], subcommand_
     }
     if command_executor_slice_eq(parent_name, &"memory"[0: 6]) {
         return command_executor_command_visible_memory_subcommand(subcommand_name);
+    }
+    if command_executor_slice_eq(parent_name, &"slowlog"[0: 7]) {
+        return command_executor_command_visible_slowlog_subcommand(subcommand_name);
     }
     return false;
 }
@@ -11818,6 +11941,9 @@ export fn command_reply_cleanup(reply: &CommandReply) void {
 export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRuntimeInfo, command: &Command, now_ms: u64) CommandReply {
     const default_single_node: bool = runtime.cluster_topology == null ||
         (runtime.cluster_topology.node_count == 1 && runtime.cluster_topology.local_index == 0);
+    if command.info.cmd_type != CommandType.command_slowlog {
+        slowlog_append(command, now_ms / 1000u64, 0u64);
+    }
     if command.info.cmd_type == CommandType.command_ping {
         return command_executor_ping(command);
     }
@@ -12073,6 +12199,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_memory {
         return command_executor_memory(runtime, engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_slowlog {
+        return command_executor_slowlog(command);
     }
     if command.info.cmd_type == CommandType.command_move {
         return command_executor_move(runtime, command);

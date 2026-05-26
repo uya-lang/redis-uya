@@ -221,6 +221,21 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"memory commands missing from COMMAND INFO: {memory_info!r}")
 
+            slowlog_info = send_command(sock, b"COMMAND", b"INFO", b"SLOWLOG", b"SLOWLOG|GET", b"SLOWLOG|LEN", b"SLOWLOG|RESET")
+            if (
+                not isinstance(slowlog_info, list)
+                or len(slowlog_info) != 4
+                or not isinstance(slowlog_info[0], list)
+                or slowlog_info[0][0] != b"slowlog"
+                or not isinstance(slowlog_info[1], list)
+                or slowlog_info[1][0] != b"slowlog|get"
+                or not isinstance(slowlog_info[2], list)
+                or slowlog_info[2][0] != b"slowlog|len"
+                or not isinstance(slowlog_info[3], list)
+                or slowlog_info[3][0] != b"slowlog|reset"
+            ):
+                raise AssertionError(f"slowlog commands missing from COMMAND INFO: {slowlog_info!r}")
+
             zset_info = send_command(sock, b"COMMAND", b"INFO", b"ZRANK", b"ZREVRANK", b"ZSCORE", b"ZMSCORE", b"ZPOPMAX", b"ZPOPMIN", b"BZPOPMAX", b"BZPOPMIN")
             if (
                 not isinstance(zset_info, list)
@@ -375,6 +390,17 @@ def run_smoke() -> None:
                 or b"memory|purge" in listed_memory
             ):
                 raise AssertionError(f"unexpected COMMAND LIST memory* result: {listed_memory!r}")
+
+            listed_slowlog = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"SLOWLOG*")
+            if (
+                not isinstance(listed_slowlog, list)
+                or b"slowlog" not in listed_slowlog
+                or b"slowlog|get" not in listed_slowlog
+                or b"slowlog|len" not in listed_slowlog
+                or b"slowlog|reset" not in listed_slowlog
+                or b"slowlog|help" not in listed_slowlog
+            ):
+                raise AssertionError(f"unexpected COMMAND LIST slowlog* result: {listed_slowlog!r}")
 
             listed_zpop = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"ZPOP*")
             if (

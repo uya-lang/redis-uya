@@ -3,30 +3,10 @@ use src.command.catalog_generated_base.CommandCatalogEntry;
 use src.command.catalog_generated_base.CommandCatalogStatus;
 
 export fn command_catalog_generated_part_aa(index: usize) CommandCatalogEntry {
-    if index == 312 {
+    if index == 416 {
         return CommandCatalogEntry{
-            name: &"mset"[0: 4],
-            group: &"string"[0: 6],
-            module_name: &""[0: 0],
-            acl_tags: &"write|string|slow"[0: 17],
-            flag_tags: &"write|denyoom"[0: 13],
-            status: CommandCatalogStatus.status_full,
-            target_version: &""[0: 0],
-            summary: &"Atomically creates or modifies the string values of one or more keys."[0: 69],
-            since: &"1.0.1"[0: 5],
-            complexity: &"O(N) where N is the number of keys to set."[0: 42],
-            is_pattern: false,
-            is_top_level: true,
-            arity: -3,
-            first_key: 1,
-            last_key: -1,
-            key_step: 2,
-        };
-    }
-    if index == 313 {
-        return CommandCatalogEntry{
-            name: &"msetex"[0: 6],
-            group: &"string"[0: 6],
+            name: &"spublish"[0: 8],
+            group: &"pubsub"[0: 6],
             module_name: &""[0: 0],
             acl_tags: &""[0: 0],
             flag_tags: &""[0: 0],
@@ -37,56 +17,116 @@ export fn command_catalog_generated_part_aa(index: usize) CommandCatalogEntry {
             complexity: &""[0: 0],
             is_pattern: false,
             is_top_level: true,
-            arity: -4,
-            first_key: 0,
+            arity: 3,
+            first_key: 1,
             last_key: 0,
-            key_step: 0,
+            key_step: 1,
         };
     }
-    if index == 314 {
+    if index == 417 {
         return CommandCatalogEntry{
-            name: &"msetnx"[0: 6],
-            group: &"string"[0: 6],
+            name: &"srandmember"[0: 11],
+            group: &"set"[0: 3],
             module_name: &""[0: 0],
-            acl_tags: &"write|string|slow"[0: 17],
-            flag_tags: &"write|denyoom"[0: 13],
+            acl_tags: &"read|set|slow"[0: 13],
+            flag_tags: &"readonly"[0: 8],
             status: CommandCatalogStatus.status_full,
             target_version: &""[0: 0],
-            summary: &"Atomically modifies the string values of one or more keys only when all keys don't exist."[0: 89],
-            since: &"1.0.1"[0: 5],
-            complexity: &"O(N) where N is the number of keys to set."[0: 42],
+            summary: &"Get one or multiple random members from a set"[0: 45],
+            since: &"1.0.0"[0: 5],
+            complexity: &"Without the count argument O(1), otherwise O(N) where N is the absolute value of the passed count."[0: 98],
+            is_pattern: false,
+            is_top_level: true,
+            arity: -2,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 418 {
+        return CommandCatalogEntry{
+            name: &"srem"[0: 4],
+            group: &"set"[0: 3],
+            module_name: &""[0: 0],
+            acl_tags: &"write|set|fast"[0: 14],
+            flag_tags: &"write|fast"[0: 10],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Removes one or more members from a set. Deletes the set if the last member was removed."[0: 87],
+            since: &"1.0.0"[0: 5],
+            complexity: &"O(N) where N is the number of members to be removed."[0: 52],
             is_pattern: false,
             is_top_level: true,
             arity: -3,
             first_key: 1,
-            last_key: -1,
-            key_step: 2,
+            last_key: 0,
+            key_step: 1,
         };
     }
-    if index == 315 {
+    if index == 419 {
         return CommandCatalogEntry{
-            name: &"multi"[0: 5],
-            group: &"transactions"[0: 12],
+            name: &"sscan"[0: 5],
+            group: &"set"[0: 3],
             module_name: &""[0: 0],
-            acl_tags: &"fast|transaction"[0: 16],
-            flag_tags: &"noscript|loading|stale|fast|allow_busy"[0: 38],
+            acl_tags: &"read|set|slow"[0: 13],
+            flag_tags: &"readonly"[0: 8],
             status: CommandCatalogStatus.status_full,
             target_version: &""[0: 0],
-            summary: &"Starts a transaction."[0: 21],
-            since: &"1.2.0"[0: 5],
+            summary: &"Iterates over members of a set."[0: 31],
+            since: &"2.8.0"[0: 5],
+            complexity: &"O(1) for every call. O(N) for a complete iteration, including enough command calls for the cursor to return back to 0. N is the number of elements inside the collection."[0: 169],
+            is_pattern: true,
+            is_top_level: true,
+            arity: -3,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 420 {
+        return CommandCatalogEntry{
+            name: &"ssubscribe"[0: 10],
+            group: &"pubsub"[0: 6],
+            module_name: &""[0: 0],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_deferred,
+            target_version: &"v0.9.1"[0: 6],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: true,
+            arity: -2,
+            first_key: 1,
+            last_key: -1,
+            key_step: 1,
+        };
+    }
+    if index == 421 {
+        return CommandCatalogEntry{
+            name: &"strlen"[0: 6],
+            group: &"string"[0: 6],
+            module_name: &""[0: 0],
+            acl_tags: &"read|string|fast"[0: 16],
+            flag_tags: &"readonly|fast"[0: 13],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Returns the length of a string value."[0: 37],
+            since: &"2.2.0"[0: 5],
             complexity: &"O(1)"[0: 4],
             is_pattern: false,
             is_top_level: true,
-            arity: 1,
-            first_key: 0,
+            arity: 2,
+            first_key: 1,
             last_key: 0,
-            key_step: 0,
+            key_step: 1,
         };
     }
-    if index == 316 {
+    if index == 422 {
         return CommandCatalogEntry{
-            name: &"object"[0: 6],
-            group: &"generic"[0: 7],
+            name: &"subscribe"[0: 9],
+            group: &"pubsub"[0: 6],
             module_name: &""[0: 0],
             acl_tags: &""[0: 0],
             flag_tags: &""[0: 0],
@@ -103,141 +143,181 @@ export fn command_catalog_generated_part_aa(index: usize) CommandCatalogEntry {
             key_step: 0,
         };
     }
-    if index == 317 {
+    if index == 423 {
         return CommandCatalogEntry{
-            name: &"object|encoding"[0: 15],
-            group: &"generic"[0: 7],
+            name: &"substr"[0: 6],
+            group: &"string"[0: 6],
             module_name: &""[0: 0],
-            acl_tags: &"keyspace|read|slow"[0: 18],
-            flag_tags: &"readonly"[0: 8],
-            status: CommandCatalogStatus.status_full,
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_alias,
             target_version: &""[0: 0],
-            summary: &"Returns the internal encoding of a Redis object."[0: 48],
-            since: &"2.2.3"[0: 5],
-            complexity: &"O(1)"[0: 4],
-            is_pattern: false,
-            is_top_level: false,
-            arity: 3,
-            first_key: 2,
-            last_key: 0,
-            key_step: 1,
-        };
-    }
-    if index == 318 {
-        return CommandCatalogEntry{
-            name: &"object|freq"[0: 11],
-            group: &"generic"[0: 7],
-            module_name: &""[0: 0],
-            acl_tags: &"keyspace|read|slow"[0: 18],
-            flag_tags: &"readonly"[0: 8],
-            status: CommandCatalogStatus.status_full,
-            target_version: &""[0: 0],
-            summary: &"Returns the logarithmic access frequency counter of a Redis object."[0: 67],
-            since: &"4.0.0"[0: 5],
-            complexity: &"O(1)"[0: 4],
-            is_pattern: false,
-            is_top_level: false,
-            arity: 3,
-            first_key: 2,
-            last_key: 0,
-            key_step: 1,
-        };
-    }
-    if index == 319 {
-        return CommandCatalogEntry{
-            name: &"object|help"[0: 11],
-            group: &"generic"[0: 7],
-            module_name: &""[0: 0],
-            acl_tags: &"keyspace|slow"[0: 13],
-            flag_tags: &"loading|stale"[0: 13],
-            status: CommandCatalogStatus.status_full,
-            target_version: &""[0: 0],
-            summary: &"Returns helpful text about the different subcommands."[0: 53],
-            since: &"6.2.0"[0: 5],
-            complexity: &"O(1)"[0: 4],
-            is_pattern: false,
-            is_top_level: false,
-            arity: 2,
-            first_key: 0,
-            last_key: 0,
-            key_step: 0,
-        };
-    }
-    if index == 320 {
-        return CommandCatalogEntry{
-            name: &"object|idletime"[0: 15],
-            group: &"generic"[0: 7],
-            module_name: &""[0: 0],
-            acl_tags: &"keyspace|read|slow"[0: 18],
-            flag_tags: &"readonly"[0: 8],
-            status: CommandCatalogStatus.status_full,
-            target_version: &""[0: 0],
-            summary: &"Returns the time since the last access to a Redis object."[0: 57],
-            since: &"2.2.3"[0: 5],
-            complexity: &"O(1)"[0: 4],
-            is_pattern: false,
-            is_top_level: false,
-            arity: 3,
-            first_key: 2,
-            last_key: 0,
-            key_step: 1,
-        };
-    }
-    if index == 321 {
-        return CommandCatalogEntry{
-            name: &"object|refcount"[0: 15],
-            group: &"generic"[0: 7],
-            module_name: &""[0: 0],
-            acl_tags: &"keyspace|read|slow"[0: 18],
-            flag_tags: &"readonly"[0: 8],
-            status: CommandCatalogStatus.status_full,
-            target_version: &""[0: 0],
-            summary: &"Returns the reference count of a value of a key."[0: 48],
-            since: &"2.2.3"[0: 5],
-            complexity: &"O(1)"[0: 4],
-            is_pattern: false,
-            is_top_level: false,
-            arity: 3,
-            first_key: 2,
-            last_key: 0,
-            key_step: 1,
-        };
-    }
-    if index == 322 {
-        return CommandCatalogEntry{
-            name: &"persist"[0: 7],
-            group: &"generic"[0: 7],
-            module_name: &""[0: 0],
-            acl_tags: &"keyspace|write|fast"[0: 19],
-            flag_tags: &"write|fast"[0: 10],
-            status: CommandCatalogStatus.status_full,
-            target_version: &""[0: 0],
-            summary: &"Removes the expiration time of a key."[0: 37],
-            since: &"2.2.0"[0: 5],
-            complexity: &"O(1)"[0: 4],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
             is_pattern: false,
             is_top_level: true,
-            arity: 2,
+            arity: 4,
             first_key: 1,
             last_key: 0,
             key_step: 1,
         };
     }
-    if index == 323 {
+    if index == 424 {
         return CommandCatalogEntry{
-            name: &"pexpire"[0: 7],
-            group: &"generic"[0: 7],
+            name: &"sunion"[0: 6],
+            group: &"set"[0: 3],
             module_name: &""[0: 0],
-            acl_tags: &"keyspace|write|fast"[0: 19],
-            flag_tags: &"write|fast"[0: 10],
+            acl_tags: &"read|set|slow"[0: 13],
+            flag_tags: &"readonly"[0: 8],
             status: CommandCatalogStatus.status_full,
             target_version: &""[0: 0],
-            summary: &"Sets the expiration time of a key in milliseconds."[0: 50],
-            since: &"2.6.0"[0: 5],
-            complexity: &"O(1)"[0: 4],
+            summary: &"Returns the union of multiple sets."[0: 35],
+            since: &"1.0.0"[0: 5],
+            complexity: &"O(N) where N is the total number of elements in all given sets."[0: 63],
+            is_pattern: false,
+            is_top_level: true,
+            arity: -2,
+            first_key: 1,
+            last_key: -1,
+            key_step: 1,
+        };
+    }
+    if index == 425 {
+        return CommandCatalogEntry{
+            name: &"sunionstore"[0: 11],
+            group: &"set"[0: 3],
+            module_name: &""[0: 0],
+            acl_tags: &"write|set|slow"[0: 14],
+            flag_tags: &"write|denyoom"[0: 13],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Stores the union of multiple sets in a key."[0: 43],
+            since: &"1.0.0"[0: 5],
+            complexity: &"O(N) where N is the total number of elements in all given sets."[0: 63],
             is_pattern: false,
             is_top_level: true,
             arity: -3,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 426 {
+        return CommandCatalogEntry{
+            name: &"sunsubscribe"[0: 12],
+            group: &"pubsub"[0: 6],
+            module_name: &""[0: 0],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_deferred,
+            target_version: &"v0.9.1"[0: 6],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: true,
+            arity: -1,
+            first_key: 1,
+            last_key: -1,
+            key_step: 1,
+        };
+    }
+    if index == 427 {
+        return CommandCatalogEntry{
+            name: &"swapdb"[0: 6],
+            group: &"server"[0: 6],
+            module_name: &""[0: 0],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_deferred,
+            target_version: &"v0.9.1"[0: 6],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: true,
+            arity: 3,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 428 {
+        return CommandCatalogEntry{
+            name: &"sync"[0: 4],
+            group: &"server"[0: 6],
+            module_name: &""[0: 0],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_deferred,
+            target_version: &"v0.9.1"[0: 6],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: true,
+            arity: 1,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 429 {
+        return CommandCatalogEntry{
+            name: &"tdigest.add"[0: 11],
+            group: &"tdigest"[0: 7],
+            module_name: &"tdigest"[0: 7],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_deferred,
+            target_version: &"v0.9.2"[0: 6],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: true,
+            arity: -2,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 430 {
+        return CommandCatalogEntry{
+            name: &"tdigest.byrank"[0: 14],
+            group: &"tdigest"[0: 7],
+            module_name: &"tdigest"[0: 7],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_deferred,
+            target_version: &"v0.9.2"[0: 6],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: true,
+            arity: -2,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 431 {
+        return CommandCatalogEntry{
+            name: &"tdigest.byrevrank"[0: 17],
+            group: &"tdigest"[0: 7],
+            module_name: &"tdigest"[0: 7],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_deferred,
+            target_version: &"v0.9.2"[0: 6],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: true,
+            arity: -2,
             first_key: 1,
             last_key: 0,
             key_step: 1,

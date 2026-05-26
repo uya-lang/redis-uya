@@ -1,14 +1,14 @@
 # redis-uya command matrix
 
 > version: v0.9.1-dev
-> date: 2026-05-25
+> date: 2026-05-26
 > source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`
 > runtime source: `src/command/catalog_generated.uya`
 
 ## Summary
 
-- tracked official command names: `531`
-- tracked top-level command names: `388`
+- tracked official command names: `552`
+- tracked top-level command names: `409`
 - `COMMAND` / `COMMAND INFO` / `COMMAND DOCS` / `COMMAND LIST` / `COMMAND COUNT` share the same generated catalog
 - `v1.0.0` 完成度必须优先按 Tier A / Tier B / Tier C 分层阅读，不能再用总条目数代表当前单机完成度
 
@@ -16,24 +16,25 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 362 | 256 | 146 | 66 | 0 | 3 | 147 |
+| Tier A: standalone core | 365 | 259 | 146 | 71 | 0 | 3 | 145 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
-| Tier C: module commands | 135 | 128 | 0 | 0 | 0 | 0 | 135 |
+| Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
 ## Status counts
 
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `73` |
+| `partial` | `78` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `282` |
+| `deferred` | `298` |
 
 ## Group counts
 
 | group | count |
 |-------|-------|
+| `array` | `18` |
 | `bf` | `10` |
 | `bitmap` | `7` |
 | `cf` | `12` |
@@ -52,8 +53,8 @@
 | `server` | `82` |
 | `set` | `17` |
 | `sorted-set` | `35` |
-| `stream` | `28` |
-| `string` | `25` |
+| `stream` | `30` |
+| `string` | `26` |
 | `suggestion` | `4` |
 | `tdigest` | `14` |
 | `timeseries` | `17` |
@@ -80,6 +81,24 @@
 | `acl|users` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `acl|whoami` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@slow` |
 | `append` | `string` | `full` | `-` | `3` | `-` | `no` | `@write, @string, @fast` |
+| `arcount` | `array` | `deferred` | `v0.9.2` | `2` | `array` | `no` | `@array` |
+| `ardel` | `array` | `deferred` | `v0.9.2` | `-3` | `array` | `no` | `ARRAY` |
+| `ardelrange` | `array` | `deferred` | `v0.9.2` | `-4` | `array` | `no` | `ARRAY` |
+| `arget` | `array` | `deferred` | `v0.9.2` | `3` | `array` | `no` | `ARRAY` |
+| `argetrange` | `array` | `deferred` | `v0.9.2` | `4` | `array` | `no` | `ARRAY` |
+| `argrep` | `array` | `deferred` | `v0.9.2` | `-6` | `array` | `no` | `@array` |
+| `arinfo` | `array` | `deferred` | `v0.9.2` | `-2` | `array` | `no` | `ARRAY` |
+| `arinsert` | `array` | `deferred` | `v0.9.2` | `-3` | `array` | `no` | `ARRAY` |
+| `arlastitems` | `array` | `deferred` | `v0.9.2` | `-3` | `array` | `no` | `ARRAY` |
+| `arlen` | `array` | `deferred` | `v0.9.2` | `2` | `array` | `no` | `ARRAY` |
+| `armget` | `array` | `deferred` | `v0.9.2` | `-3` | `array` | `no` | `ARRAY` |
+| `armset` | `array` | `deferred` | `v0.9.2` | `-4` | `array` | `no` | `ARRAY` |
+| `arnext` | `array` | `deferred` | `v0.9.2` | `2` | `array` | `no` | `ARRAY` |
+| `arop` | `array` | `deferred` | `v0.9.2` | `-5` | `array` | `no` | `ARRAY` |
+| `arring` | `array` | `deferred` | `v0.9.2` | `-4` | `array` | `no` | `ARRAY` |
+| `arscan` | `array` | `deferred` | `v0.9.2` | `-4` | `array` | `no` | `ARRAY` |
+| `arseek` | `array` | `deferred` | `v0.9.2` | `3` | `array` | `no` | `ARRAY` |
+| `arset` | `array` | `deferred` | `v0.9.2` | `-4` | `array` | `no` | `ARRAY` |
 | `asking` | `cluster` | `standalone-error` | `v1.1.0` | `1` | `-` | `no` | `@fast, @connection` |
 | `auth` | `connection` | `partial` | `-` | `-2` | `-` | `no` | `@fast, @connection` |
 | `bf.add` | `bf` | `deferred` | `v0.9.2` | `3` | `bf` | `no` | `@bloom, @write, @slow` |
@@ -308,6 +327,7 @@
 | `incr` | `string` | `full` | `-` | `2` | `-` | `no` | `@write, @string, @fast` |
 | `incrby` | `string` | `full` | `-` | `3` | `-` | `no` | `@write, @string, @fast` |
 | `incrbyfloat` | `string` | `full` | `-` | `3` | `-` | `no` | `@write, @string, @fast` |
+| `increx` | `string` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@fast, @string, @write` |
 | `info` | `server` | `partial` | `-` | `-1` | `-` | `no` | `@slow, @dangerous` |
 | `json.arrappend` | `json` | `deferred` | `v0.9.2` | `-3` | `json` | `no` | `@json, @write, @slow` |
 | `json.arrindex` | `json` | `deferred` | `v0.9.2` | `-4` | `json` | `no` | `@json, @read, @slow` |
@@ -451,11 +471,11 @@
 | `sinterstore` | `set` | `full` | `-` | `-3` | `-` | `no` | `@write, @set, @slow` |
 | `sismember` | `set` | `full` | `-` | `3` | `-` | `no` | `@read, @set, @fast` |
 | `slaveof` | `server` | `alias` | `-` | `3` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `slowlog` | `server` | `deferred` | `v0.9.3` | `-2` | `-` | `no` | `@slow` |
-| `slowlog|get` | `server` | `deferred` | `v0.9.3` | `-2` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `slowlog|help` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@slow` |
-| `slowlog|len` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `slowlog|reset` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `slowlog` | `server` | `partial` | `-` | `-2` | `-` | `no` | `@slow` |
+| `slowlog|get` | `server` | `partial` | `-` | `-2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `slowlog|help` | `server` | `partial` | `-` | `2` | `-` | `no` | `@slow` |
+| `slowlog|len` | `server` | `partial` | `-` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `slowlog|reset` | `server` | `partial` | `-` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `smembers` | `set` | `full` | `-` | `2` | `-` | `no` | `@read, @set, @slow` |
 | `smismember` | `set` | `full` | `-` | `-3` | `-` | `no` | `@read, @set, @fast` |
 | `smove` | `set` | `full` | `-` | `4` | `-` | `no` | `@write, @set, @fast` |
@@ -551,12 +571,14 @@
 | `xgroup|destroy` | `stream` | `deferred` | `v0.9.1` | `4` | `-` | `no` | `@write, @stream, @slow` |
 | `xgroup|help` | `stream` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@stream, @slow` |
 | `xgroup|setid` | `stream` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@write, @stream, @slow` |
+| `xidmprecord` | `stream` | `deferred` | `v0.9.1` | `5` | `-` | `no` | `@write, @stream, @fast` |
 | `xinfo` | `stream` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@slow` |
 | `xinfo|consumers` | `stream` | `deferred` | `v0.9.1` | `4` | `-` | `no` | `@read, @stream, @slow` |
 | `xinfo|groups` | `stream` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@read, @stream, @slow` |
 | `xinfo|help` | `stream` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@stream, @slow` |
 | `xinfo|stream` | `stream` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @stream, @slow` |
 | `xlen` | `stream` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@read, @stream, @fast` |
+| `xnack` | `stream` | `deferred` | `v0.9.1` | `-7` | `-` | `no` | `@stream` |
 | `xpending` | `stream` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @stream, @slow` |
 | `xrange` | `stream` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@read, @stream, @slow` |
 | `xread` | `stream` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@read, @stream, @slow, @blocking` |

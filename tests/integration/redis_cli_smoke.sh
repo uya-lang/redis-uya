@@ -465,6 +465,48 @@ if [[ "$MEMORY_DOCTOR_RESULT" != *"diagnosis"* ]] && [[ "$MEMORY_DOCTOR_RESULT" 
     exit 1
 fi
 
+SLOWLOG_RESET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" slowlog reset)"
+if [[ "$SLOWLOG_RESET_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SLOWLOG RESET OK, got '$SLOWLOG_RESET_RESULT'" >&2
+    exit 1
+fi
+
+SLOWLOG_SET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" set slow-k 1)"
+if [[ "$SLOWLOG_SET_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected slowlog seed SET OK, got '$SLOWLOG_SET_RESULT'" >&2
+    exit 1
+fi
+
+SLOWLOG_GET_KEY_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" get slow-k)"
+if [[ "$SLOWLOG_GET_KEY_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected slowlog seed GET 1, got '$SLOWLOG_GET_KEY_RESULT'" >&2
+    exit 1
+fi
+
+SLOWLOG_LEN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" slowlog len)"
+if [[ "$SLOWLOG_LEN_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SLOWLOG LEN 2, got '$SLOWLOG_LEN_RESULT'" >&2
+    exit 1
+fi
+
+SLOWLOG_GET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" slowlog get 1)"
+if [[ "$SLOWLOG_GET_RESULT" != *$'get\nslow-k'* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SLOWLOG GET latest entry to contain get slow-k, got '$SLOWLOG_GET_RESULT'" >&2
+    exit 1
+fi
+
+SLOWLOG_RESET_AGAIN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" slowlog reset)"
+if [[ "$SLOWLOG_RESET_AGAIN_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected second SLOWLOG RESET OK, got '$SLOWLOG_RESET_AGAIN_RESULT'" >&2
+    exit 1
+fi
+
+SLOWLOG_LEN_ZERO_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" slowlog len)"
+if [[ "$SLOWLOG_LEN_ZERO_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SLOWLOG LEN 0 after reset, got '$SLOWLOG_LEN_ZERO_RESULT'" >&2
+    exit 1
+fi
+
 SETRANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" setrange key 5 __)"
 if [[ "$SETRANGE_RESULT" != "7" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected setrange 7, got '$SETRANGE_RESULT'" >&2
@@ -1227,9 +1269,9 @@ if [[ "$COUNTER_DEL_RESULT" != "1" ]]; then
     exit 1
 fi
 
-TEMP_STRING_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del fcounter nx-key gs-key sx-key allones srca srcb dstbit bf hll dsthll emptyhll geo lua-key)"
-if [[ "$TEMP_STRING_DEL_RESULT" != "14" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected temp string DEL 14, got '$TEMP_STRING_DEL_RESULT'" >&2
+TEMP_STRING_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del fcounter nx-key gs-key sx-key allones srca srcb dstbit bf hll dsthll emptyhll geo lua-key slow-k)"
+if [[ "$TEMP_STRING_DEL_RESULT" != "15" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected temp string DEL 15, got '$TEMP_STRING_DEL_RESULT'" >&2
     exit 1
 fi
 

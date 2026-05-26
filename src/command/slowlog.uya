@@ -1,0 +1,120 @@
+// command/slowlog.uya - minimal in-process slowlog ring for server commands.
+
+use src.command.router.Command;
+use src.command.router.command_arg_data;
+
+const SLOWLOG_MAX_ENTRIES: usize = 128;
+const SLOWLOG_MAX_ARGS: usize = 16;
+const SLOWLOG_MAX_ARG_BYTES: usize = 128;
+const SLOWLOG_CLIENT_BYTES: usize = 32;
+const SLOWLOG_NAME_BYTES: usize = 32;
+
+export struct SlowlogArg {
+    len: usize,
+    data: [byte: SLOWLOG_MAX_ARG_BYTES],
+}
+
+export struct SlowlogEntry {
+    active: bool,
+    id: u64,
+    timestamp_sec: u64,
+    duration_us: u64,
+    argc: usize,
+    args: [SlowlogArg: SLOWLOG_MAX_ARGS],
+    client_len: usize,
+    client: [byte: SLOWLOG_CLIENT_BYTES],
+    name_len: usize,
+    name: [byte: SLOWLOG_NAME_BYTES],
+}
+
+var slowlog_entries: [SlowlogEntry: SLOWLOG_MAX_ENTRIES] = [];
+var slowlog_start: usize = 0;
+var slowlog_count_entries: usize = 0;
+var slowlog_next_id: u64 = 1u64;
+
+export fn slowlog_append(command: &Command, timestamp_sec: u64, duration_us: u64) void {
+    var slot: usize = 0;
+    if slowlog_count_entries < SLOWLOG_MAX_ENTRIES {
+        slot = (slowlog_start + slowlog_count_entries) % SLOWLOG_MAX_ENTRIES;
+        slowlog_count_entries = slowlog_count_entries + 1;
+    } else {
+        slot = slowlog_start;
+        slowlog_start = (slowlog_start + 1) % SLOWLOG_MAX_ENTRIES;
+    }
+
+    slowlog_entries[slot].active = false;
+    slowlog_entries[slot].id = 0u64;
+    slowlog_entries[slot].timestamp_sec = 0u64;
+    slowlog_entries[slot].duration_us = 0u64;
+    slowlog_entries[slot].argc = 0;
+    slowlog_entries[slot].client_len = 0;
+    slowlog_entries[slot].name_len = 0;
+    slowlog_entries[slot].active = true;
+    slowlog_entries[slot].id = slowlog_next_id;
+    slowlog_entries[slot].timestamp_sec = timestamp_sec;
+    slowlog_entries[slot].duration_us = duration_us;
+    var argc: usize = command.argc;
+    if argc > SLOWLOG_MAX_ARGS {
+        argc = SLOWLOG_MAX_ARGS;
+    }
+    slowlog_entries[slot].argc = argc;
+    var arg_index: usize = 0;
+    while arg_index < argc {
+        const arg: &[byte] = command_arg_data(command, arg_index) catch {
+            return;
+        };
+        slowlog_entries[slot].args[arg_index].len = 0;
+        var arg_limit: usize = arg.len;
+        if arg_limit > SLOWLOG_MAX_ARG_BYTES {
+            arg_limit = SLOWLOG_MAX_ARG_BYTES;
+        }
+        var byte_index: usize = 0;
+        while byte_index < arg_limit {
+            slowlog_entries[slot].args[arg_index].data[byte_index] = arg.ptr[byte_index];
+            byte_index = byte_index + 1;
+        }
+        slowlog_entries[slot].args[arg_index].len = arg_limit;
+        arg_index = arg_index + 1;
+    }
+    const client: &[byte] = &"127.0.0.1:0"[0: 11];
+    var client_index: usize = 0;
+    while client_index < client.len {
+        slowlog_entries[slot].client[client_index] = client.ptr[client_index];
+        client_index = client_index + 1;
+    }
+    slowlog_entries[slot].client_len = client.len;
+    slowlog_entries[slot].name_len = 0;
+    slowlog_next_id = slowlog_next_id + 1u64;
+}
+
+export fn slowlog_count() usize {
+    return slowlog_count_entries;
+}
+
+export fn slowlog_reset() void {
+    var index: usize = 0;
+    while index < SLOWLOG_MAX_ENTRIES {
+        slowlog_entries[index].active = false;
+        slowlog_entries[index].id = 0u64;
+        slowlog_entries[index].timestamp_sec = 0u64;
+        slowlog_entries[index].duration_us = 0u64;
+        slowlog_entries[index].argc = 0;
+        slowlog_entries[index].client_len = 0;
+        slowlog_entries[index].name_len = 0;
+        index = index + 1;
+    }
+    slowlog_start = 0;
+    slowlog_count_entries = 0;
+}
+
+export fn slowlog_entry_newest(offset: usize) &SlowlogEntry {
+    if offset >= slowlog_count_entries || slowlog_count_entries == 0 {
+        return null as &SlowlogEntry;
+    }
+    const logical: usize = slowlog_count_entries - 1 - offset;
+    const slot: usize = (slowlog_start + logical) % SLOWLOG_MAX_ENTRIES;
+    if !slowlog_entries[slot].active {
+        return null as &SlowlogEntry;
+    }
+    return &slowlog_entries[slot];
+}

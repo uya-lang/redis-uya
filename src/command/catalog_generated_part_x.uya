@@ -3,118 +3,18 @@ use src.command.catalog_generated_base.CommandCatalogEntry;
 use src.command.catalog_generated_base.CommandCatalogStatus;
 
 export fn command_catalog_generated_part_x(index: usize) CommandCatalogEntry {
-    if index == 276 {
+    if index == 368 {
         return CommandCatalogEntry{
-            name: &"latency|histogram"[0: 17],
-            group: &"server"[0: 6],
+            name: &"rename"[0: 6],
+            group: &"generic"[0: 7],
             module_name: &""[0: 0],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_deferred,
-            target_version: &"v0.9.3"[0: 6],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: false,
-            arity: -2,
-            first_key: 0,
-            last_key: 0,
-            key_step: 0,
-        };
-    }
-    if index == 277 {
-        return CommandCatalogEntry{
-            name: &"latency|history"[0: 15],
-            group: &"server"[0: 6],
-            module_name: &""[0: 0],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_deferred,
-            target_version: &"v0.9.3"[0: 6],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: false,
-            arity: 3,
-            first_key: 0,
-            last_key: 0,
-            key_step: 0,
-        };
-    }
-    if index == 278 {
-        return CommandCatalogEntry{
-            name: &"latency|latest"[0: 14],
-            group: &"server"[0: 6],
-            module_name: &""[0: 0],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_deferred,
-            target_version: &"v0.9.3"[0: 6],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: false,
-            arity: 2,
-            first_key: 0,
-            last_key: 0,
-            key_step: 0,
-        };
-    }
-    if index == 279 {
-        return CommandCatalogEntry{
-            name: &"latency|reset"[0: 13],
-            group: &"server"[0: 6],
-            module_name: &""[0: 0],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_deferred,
-            target_version: &"v0.9.3"[0: 6],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: false,
-            arity: -2,
-            first_key: 0,
-            last_key: 0,
-            key_step: 0,
-        };
-    }
-    if index == 280 {
-        return CommandCatalogEntry{
-            name: &"lcs"[0: 3],
-            group: &"string"[0: 6],
-            module_name: &""[0: 0],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_deferred,
-            target_version: &"v0.9.1"[0: 6],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: true,
-            arity: -3,
-            first_key: 1,
-            last_key: 1,
-            key_step: 1,
-        };
-    }
-    if index == 281 {
-        return CommandCatalogEntry{
-            name: &"lindex"[0: 6],
-            group: &"list"[0: 4],
-            module_name: &""[0: 0],
-            acl_tags: &"read|list|slow"[0: 14],
-            flag_tags: &"readonly"[0: 8],
+            acl_tags: &"keyspace|write|slow"[0: 19],
+            flag_tags: &"write"[0: 5],
             status: CommandCatalogStatus.status_full,
             target_version: &""[0: 0],
-            summary: &"Returns an element from a list by its index."[0: 44],
+            summary: &"Renames a key and overwrites the destination."[0: 45],
             since: &"1.0.0"[0: 5],
-            complexity: &"O(N) where N is the number of elements to traverse to get to the element at index. This makes asking for the first or the last element of the list O(1)."[0: 152],
+            complexity: &"O(1)"[0: 4],
             is_pattern: false,
             is_top_level: true,
             arity: 3,
@@ -123,89 +23,29 @@ export fn command_catalog_generated_part_x(index: usize) CommandCatalogEntry {
             key_step: 1,
         };
     }
-    if index == 282 {
+    if index == 369 {
         return CommandCatalogEntry{
-            name: &"linsert"[0: 7],
-            group: &"list"[0: 4],
+            name: &"renamenx"[0: 8],
+            group: &"generic"[0: 7],
             module_name: &""[0: 0],
-            acl_tags: &"write|list|slow"[0: 15],
-            flag_tags: &"write|denyoom"[0: 13],
+            acl_tags: &"keyspace|write|fast"[0: 19],
+            flag_tags: &"write|fast"[0: 10],
             status: CommandCatalogStatus.status_full,
             target_version: &""[0: 0],
-            summary: &"Inserts an element before or after another element in a list."[0: 61],
-            since: &"2.2.0"[0: 5],
-            complexity: &"O(N) where N is the number of elements to traverse before seeing the value pivot. This means that inserting somewhere on the left end on the list (head) can be considered O(1) and inserting somewhere on the right end (tail) is O(N)."[0: 232],
-            is_pattern: false,
-            is_top_level: true,
-            arity: 5,
-            first_key: 1,
-            last_key: 0,
-            key_step: 1,
-        };
-    }
-    if index == 283 {
-        return CommandCatalogEntry{
-            name: &"llen"[0: 4],
-            group: &"list"[0: 4],
-            module_name: &""[0: 0],
-            acl_tags: &"read|list|fast"[0: 14],
-            flag_tags: &"readonly|fast"[0: 13],
-            status: CommandCatalogStatus.status_full,
-            target_version: &""[0: 0],
-            summary: &"Returns the length of a list."[0: 29],
+            summary: &"Renames a key only when the target key name doesn't exist."[0: 58],
             since: &"1.0.0"[0: 5],
             complexity: &"O(1)"[0: 4],
             is_pattern: false,
             is_top_level: true,
-            arity: 2,
+            arity: 3,
             first_key: 1,
             last_key: 0,
             key_step: 1,
         };
     }
-    if index == 284 {
+    if index == 370 {
         return CommandCatalogEntry{
-            name: &"lmove"[0: 5],
-            group: &"list"[0: 4],
-            module_name: &""[0: 0],
-            acl_tags: &"write|list|slow"[0: 15],
-            flag_tags: &"write|denyoom"[0: 13],
-            status: CommandCatalogStatus.status_full,
-            target_version: &""[0: 0],
-            summary: &"Returns an element after popping it from one list and pushing it to another. Deletes the list if the last element was moved."[0: 124],
-            since: &"6.2.0"[0: 5],
-            complexity: &"O(1)"[0: 4],
-            is_pattern: false,
-            is_top_level: true,
-            arity: 5,
-            first_key: 1,
-            last_key: 0,
-            key_step: 1,
-        };
-    }
-    if index == 285 {
-        return CommandCatalogEntry{
-            name: &"lmpop"[0: 5],
-            group: &"list"[0: 4],
-            module_name: &""[0: 0],
-            acl_tags: &"write|list|slow"[0: 15],
-            flag_tags: &"write|movablekeys"[0: 17],
-            status: CommandCatalogStatus.status_full,
-            target_version: &""[0: 0],
-            summary: &"Returns multiple elements from a list after removing them. Deletes the list if the last element was popped."[0: 107],
-            since: &"7.0.0"[0: 5],
-            complexity: &"O(N+M) where N is the number of provided keys and M is the number of elements returned."[0: 87],
-            is_pattern: false,
-            is_top_level: true,
-            arity: -4,
-            first_key: 0,
-            last_key: 0,
-            key_step: 0,
-        };
-    }
-    if index == 286 {
-        return CommandCatalogEntry{
-            name: &"lolwut"[0: 6],
+            name: &"replconf"[0: 8],
             group: &"server"[0: 6],
             module_name: &""[0: 0],
             acl_tags: &""[0: 0],
@@ -223,21 +63,261 @@ export fn command_catalog_generated_part_x(index: usize) CommandCatalogEntry {
             key_step: 0,
         };
     }
-    if index == 287 {
+    if index == 371 {
         return CommandCatalogEntry{
-            name: &"lpop"[0: 4],
+            name: &"replicaof"[0: 9],
+            group: &"server"[0: 6],
+            module_name: &""[0: 0],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_partial,
+            target_version: &""[0: 0],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: true,
+            arity: 3,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 372 {
+        return CommandCatalogEntry{
+            name: &"reset"[0: 5],
+            group: &"connection"[0: 10],
+            module_name: &""[0: 0],
+            acl_tags: &"fast|connection"[0: 15],
+            flag_tags: &"noscript|loading|stale|fast|no_auth|allow_busy"[0: 46],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Resets the connection."[0: 22],
+            since: &"6.2.0"[0: 5],
+            complexity: &"O(1)"[0: 4],
+            is_pattern: false,
+            is_top_level: true,
+            arity: 1,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 373 {
+        return CommandCatalogEntry{
+            name: &"restore"[0: 7],
+            group: &"generic"[0: 7],
+            module_name: &""[0: 0],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_partial,
+            target_version: &""[0: 0],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: true,
+            arity: -4,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 374 {
+        return CommandCatalogEntry{
+            name: &"restore-asking"[0: 14],
+            group: &"server"[0: 6],
+            module_name: &""[0: 0],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_deferred,
+            target_version: &"v0.9.1"[0: 6],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: true,
+            arity: -4,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 375 {
+        return CommandCatalogEntry{
+            name: &"role"[0: 4],
+            group: &"server"[0: 6],
+            module_name: &""[0: 0],
+            acl_tags: &"admin|fast|dangerous"[0: 20],
+            flag_tags: &"noscript|loading|stale|fast"[0: 27],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Returns the replication role."[0: 29],
+            since: &"2.8.12"[0: 6],
+            complexity: &"O(1)"[0: 4],
+            is_pattern: false,
+            is_top_level: true,
+            arity: 1,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 376 {
+        return CommandCatalogEntry{
+            name: &"rpop"[0: 4],
             group: &"list"[0: 4],
             module_name: &""[0: 0],
             acl_tags: &"write|list|fast"[0: 15],
             flag_tags: &"write|fast"[0: 10],
             status: CommandCatalogStatus.status_full,
             target_version: &""[0: 0],
-            summary: &"Returns the first elements in a list after removing it. Deletes the list if the last element was popped."[0: 104],
+            summary: &"Returns and removes the last elements of a list. Deletes the list if the last element was popped."[0: 97],
             since: &"1.0.0"[0: 5],
             complexity: &"O(N) where N is the number of elements returned"[0: 47],
             is_pattern: false,
             is_top_level: true,
             arity: -2,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 377 {
+        return CommandCatalogEntry{
+            name: &"rpoplpush"[0: 9],
+            group: &"list"[0: 4],
+            module_name: &""[0: 0],
+            acl_tags: &"write|list|slow"[0: 15],
+            flag_tags: &"write|denyoom"[0: 13],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Returns the last element of a list after removing and pushing it to another list. Deletes the list if the last element was popped."[0: 130],
+            since: &"1.2.0"[0: 5],
+            complexity: &"O(1)"[0: 4],
+            is_pattern: false,
+            is_top_level: true,
+            arity: 3,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 378 {
+        return CommandCatalogEntry{
+            name: &"rpush"[0: 5],
+            group: &"list"[0: 4],
+            module_name: &""[0: 0],
+            acl_tags: &"write|list|fast"[0: 15],
+            flag_tags: &"write|denyoom|fast"[0: 18],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Appends one or more elements to a list. Creates the key if it doesn't exist."[0: 76],
+            since: &"1.0.0"[0: 5],
+            complexity: &"O(1) for each element added, so O(N) to add N elements when the command is called with multiple arguments."[0: 106],
+            is_pattern: false,
+            is_top_level: true,
+            arity: -3,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 379 {
+        return CommandCatalogEntry{
+            name: &"rpushx"[0: 6],
+            group: &"list"[0: 4],
+            module_name: &""[0: 0],
+            acl_tags: &"write|list|fast"[0: 15],
+            flag_tags: &"write|denyoom|fast"[0: 18],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Appends an element to a list only when the list exists."[0: 55],
+            since: &"2.2.0"[0: 5],
+            complexity: &"O(1) for each element added, so O(N) to add N elements when the command is called with multiple arguments."[0: 106],
+            is_pattern: false,
+            is_top_level: true,
+            arity: -3,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 380 {
+        return CommandCatalogEntry{
+            name: &"sadd"[0: 4],
+            group: &"set"[0: 3],
+            module_name: &""[0: 0],
+            acl_tags: &"write|set|fast"[0: 14],
+            flag_tags: &"write|denyoom|fast"[0: 18],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Adds one or more members to a set. Creates the key if it doesn't exist."[0: 71],
+            since: &"1.0.0"[0: 5],
+            complexity: &"O(1) for each element added, so O(N) to add N elements when the command is called with multiple arguments."[0: 106],
+            is_pattern: false,
+            is_top_level: true,
+            arity: -3,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 381 {
+        return CommandCatalogEntry{
+            name: &"save"[0: 4],
+            group: &"server"[0: 6],
+            module_name: &""[0: 0],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_partial,
+            target_version: &""[0: 0],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: true,
+            arity: 1,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 382 {
+        return CommandCatalogEntry{
+            name: &"scan"[0: 4],
+            group: &"generic"[0: 7],
+            module_name: &""[0: 0],
+            acl_tags: &"keyspace|read|slow"[0: 18],
+            flag_tags: &"readonly"[0: 8],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Iterates over the key names in the database."[0: 44],
+            since: &"2.8.0"[0: 5],
+            complexity: &"O(1) for every call. O(N) for a complete iteration, including enough command calls for the cursor to return back to 0. N is the number of elements inside the collection."[0: 169],
+            is_pattern: true,
+            is_top_level: true,
+            arity: -2,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 383 {
+        return CommandCatalogEntry{
+            name: &"scard"[0: 5],
+            group: &"set"[0: 3],
+            module_name: &""[0: 0],
+            acl_tags: &"read|set|fast"[0: 13],
+            flag_tags: &"readonly|fast"[0: 13],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Returns the number of members in a set."[0: 39],
+            since: &"1.0.0"[0: 5],
+            complexity: &"O(1)"[0: 4],
+            is_pattern: false,
+            is_top_level: true,
+            arity: 2,
             first_key: 1,
             last_key: 0,
             key_step: 1,

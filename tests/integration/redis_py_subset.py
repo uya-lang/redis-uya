@@ -251,6 +251,20 @@ class RedisPySubsetClient:
         assert isinstance(result, bytes)
         return result
 
+    def slowlog_len(self) -> int:
+        return int(self._request(b"SLOWLOG", b"LEN"))
+
+    def slowlog_get(self, count: int | None = None):
+        if count is None:
+            result = self._request(b"SLOWLOG", b"GET")
+        else:
+            result = self._request(b"SLOWLOG", b"GET", str(count).encode())
+        assert isinstance(result, list)
+        return result
+
+    def slowlog_reset(self) -> bool:
+        return self._request(b"SLOWLOG", b"RESET") == "OK"
+
     def setrange(self, key: str, offset: int, value: str) -> int:
         return int(self._request(b"SETRANGE", key.encode(), str(offset).encode(), value.encode()))
 
@@ -905,6 +919,22 @@ def run_smoke() -> None:
             except RespError as exc:
                 if str(exc) != "ERR wrong number of arguments":
                     raise AssertionError(f"unexpected MEMORY arity error: {exc}") from exc
+            assert client.slowlog_reset()
+            assert client.set("slow-k", "1")
+            assert client.get("slow-k") == b"1"
+            if client.slowlog_len() != 2:
+                raise AssertionError("expected SLOWLOG LEN 2 after SET/GET")
+            slow_entries = client.slowlog_get(1)
+            if (
+                len(slow_entries) != 1
+                or not isinstance(slow_entries[0], list)
+                or len(slow_entries[0]) < 4
+                or slow_entries[0][3] != [b"GET", b"slow-k"]
+            ):
+                raise AssertionError(f"unexpected SLOWLOG GET payload: {slow_entries!r}")
+            assert client.slowlog_reset()
+            if client.slowlog_len() != 0:
+                raise AssertionError("expected SLOWLOG LEN 0 after RESET")
             assert client.setrange("key", 5, "__") == 7
             assert client.get("key") == b"value__"
             assert client.rename("key", "key2")
@@ -916,7 +946,7 @@ def run_smoke() -> None:
             assert client.getdel("gd-key") == b"once"
             assert client.getdel("gd-key") is None
             assert client.delete("counter") == 1
-            assert client.delete("fcounter", "nx-key", "gs-key", "sx-key", "mk1", "mk2", "mn1", "mn2", "allones", "srca", "srcb", "dstbit", "bf", "hll", "dsthll", "emptyhll", "geo", "lua-key") == 18
+            assert client.delete("fcounter", "nx-key", "gs-key", "sx-key", "mk1", "mk2", "mn1", "mn2", "allones", "srca", "srcb", "dstbit", "bf", "hll", "dsthll", "emptyhll", "geo", "lua-key", "slow-k") == 19
             assert client.echo("hi") == b"hi"
             assert client.key_type("key") == "string"
             assert client.dbsize() == 1

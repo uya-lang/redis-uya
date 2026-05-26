@@ -23,7 +23,7 @@ INDEX_URL = "https://redis.io/docs/latest/commands/index.xml"
 USER_AGENT = "redis-uya-command-catalog/1.0"
 FETCH_WORKERS = 8
 FETCH_RETRIES = 3
-PART_SIZE = 12
+PART_SIZE = 16
 
 CORE_GROUPS = {
     "string",
@@ -70,6 +70,7 @@ TIER_B_GROUPS = {
 }
 
 TIER_C_GROUPS = {
+    "array",
     "bf",
     "cf",
     "cms",
@@ -83,6 +84,7 @@ TIER_C_GROUPS = {
 }
 
 ADVANCED_GROUP_TARGETS = {
+    "array": "v0.9.2",
     "bitmap": "v0.9.2",
     "geo": "v0.9.2",
     "hyperloglog": "v0.9.2",
@@ -344,6 +346,11 @@ PARTIAL_NAMES = {
     "save",
     "select",
     "sort",
+    "slowlog",
+    "slowlog|get",
+    "slowlog|help",
+    "slowlog|len",
+    "slowlog|reset",
     "subscribe",
     "unsubscribe",
     "wait",

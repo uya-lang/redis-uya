@@ -5,6 +5,7 @@ use tests.unit.assert.assert_true;
 use src.command.catalog.command_catalog_lookup;
 use src.command.catalog_generated_base.CommandCatalogEntry;
 use src.command.catalog_generated_base.CommandCatalogStatus;
+use src.command.slowlog.slowlog_reset;
 use src.command.router.CommandRouter;
 use src.command.router.Command;
 use src.command.router.command_router_new;
@@ -4449,6 +4450,79 @@ export fn test_command_memory() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_command_slowlog() !void {
+    reset_memory_stats_for_test();
+    slowlog_reset();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var out: [byte: 1024] = [];
+
+    var slowlog_help_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nSLOWLOG\r\n$4\r\nHELP\r\n"[0: 27]);
+    const slowlog_help_command: Command = try command_executor_test_command(&router, &slowlog_help_parsed);
+    var slowlog_help_reply: CommandReply = command_execute_at(&engine, &slowlog_help_command, 1000u64);
+    const slowlog_help_len: usize = try connection_encode_reply(&slowlog_help_reply, &out[0], 1024);
+    try assert_true(command_executor_test_contains(out[0: slowlog_help_len], &"SLOWLOG GET [count]"[0: 19]));
+    try assert_true(command_executor_test_contains(out[0: slowlog_help_len], &"SLOWLOG RESET"[0: 13]));
+    command_reply_cleanup(&slowlog_help_reply);
+    resp_value_free(&slowlog_help_parsed.value);
+
+    var slowlog_empty_get_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nSLOWLOG\r\n$3\r\nGET\r\n"[0: 26]);
+    const slowlog_empty_get_command: Command = try command_executor_test_command(&router, &slowlog_empty_get_parsed);
+    var slowlog_empty_get_reply: CommandReply = command_execute_at(&engine, &slowlog_empty_get_command, 1000u64);
+    try assert_true(command_executor_test_slice_eq(slowlog_empty_get_reply.data, &"*0\r\n"[0: 4]));
+    command_reply_cleanup(&slowlog_empty_get_reply);
+    resp_value_free(&slowlog_empty_get_parsed.value);
+
+    var set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$1\r\nk\r\n$1\r\nv\r\n"[0: 27]);
+    const set_command: Command = try command_executor_test_command(&router, &set_parsed);
+    _ = command_execute_at(&engine, &set_command, 1000u64);
+    resp_value_free(&set_parsed.value);
+
+    var get_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nGET\r\n$1\r\nk\r\n"[0: 20]);
+    const get_command: Command = try command_executor_test_command(&router, &get_parsed);
+    var get_reply: CommandReply = command_execute_at(&engine, &get_command, 1000u64);
+    command_reply_cleanup(&get_reply);
+    resp_value_free(&get_parsed.value);
+
+    var slowlog_len_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nSLOWLOG\r\n$3\r\nLEN\r\n"[0: 26]);
+    const slowlog_len_command: Command = try command_executor_test_command(&router, &slowlog_len_parsed);
+    const slowlog_len_reply: CommandReply = command_execute_at(&engine, &slowlog_len_command, 1000u64);
+    try assert_eq_i32(slowlog_len_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(slowlog_len_reply.integer as i32, 2);
+    resp_value_free(&slowlog_len_parsed.value);
+
+    var slowlog_get_one_parsed: RespParseResult = try parse_resp2(&"*3\r\n$7\r\nSLOWLOG\r\n$3\r\nGET\r\n$1\r\n1\r\n"[0: 33]);
+    const slowlog_get_one_command: Command = try command_executor_test_command(&router, &slowlog_get_one_parsed);
+    var slowlog_get_one_reply: CommandReply = command_execute_at(&engine, &slowlog_get_one_command, 1000u64);
+    try assert_true(command_executor_test_contains(slowlog_get_one_reply.data, &"$3\r\nGET\r\n$1\r\nk\r\n"[0: 16]));
+    try assert_true(command_executor_test_contains(slowlog_get_one_reply.data, &"$11\r\n127.0.0.1:0\r\n"[0: 18]));
+    command_reply_cleanup(&slowlog_get_one_reply);
+    resp_value_free(&slowlog_get_one_parsed.value);
+
+    var slowlog_get_all_parsed: RespParseResult = try parse_resp2(&"*3\r\n$7\r\nSLOWLOG\r\n$3\r\nGET\r\n$2\r\n-1\r\n"[0: 34]);
+    const slowlog_get_all_command: Command = try command_executor_test_command(&router, &slowlog_get_all_parsed);
+    var slowlog_get_all_reply: CommandReply = command_execute_at(&engine, &slowlog_get_all_command, 1000u64);
+    try assert_true(command_executor_test_contains(slowlog_get_all_reply.data, &"$3\r\nSET\r\n$1\r\nk\r\n$1\r\nv\r\n"[0: 23]));
+    command_reply_cleanup(&slowlog_get_all_reply);
+    resp_value_free(&slowlog_get_all_parsed.value);
+
+    var slowlog_reset_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nSLOWLOG\r\n$5\r\nRESET\r\n"[0: 28]);
+    const slowlog_reset_command: Command = try command_executor_test_command(&router, &slowlog_reset_parsed);
+    const slowlog_reset_reply: CommandReply = command_execute_at(&engine, &slowlog_reset_command, 1000u64);
+    try assert_eq_i32(slowlog_reset_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(slowlog_reset_reply.data, &"OK"[0: 2]));
+    resp_value_free(&slowlog_reset_parsed.value);
+
+    var slowlog_len_zero_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nSLOWLOG\r\n$3\r\nLEN\r\n"[0: 26]);
+    const slowlog_len_zero_command: Command = try command_executor_test_command(&router, &slowlog_len_zero_parsed);
+    const slowlog_len_zero_reply: CommandReply = command_execute_at(&engine, &slowlog_len_zero_command, 1000u64);
+    try assert_eq_i32(slowlog_len_zero_reply.integer as i32, 0);
+    resp_value_free(&slowlog_len_zero_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_command_move() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();
@@ -5221,6 +5295,22 @@ export fn test_command_error_paths() !void {
     try assert_true(command_executor_test_slice_eq(memory_unknown_reply.data, &"ERR unknown subcommand 'X'. Try MEMORY HELP."[0: 44]));
     command_reply_cleanup(&memory_unknown_reply);
     resp_value_free(&memory_unknown_parsed.value);
+
+    var slowlog_get_bad_count_parsed: RespParseResult = try parse_resp2(&"*3\r\n$7\r\nSLOWLOG\r\n$3\r\nGET\r\n$1\r\nx\r\n"[0: 33]);
+    const slowlog_get_bad_count_command: Command = try command_executor_test_command(&router, &slowlog_get_bad_count_parsed);
+    var slowlog_get_bad_count_reply: CommandReply = command_execute_at(&engine, &slowlog_get_bad_count_command, 1000u64);
+    try assert_eq_i32(slowlog_get_bad_count_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(slowlog_get_bad_count_reply.data, &"ERR count should be greater than or equal to -1"[0: 47]));
+    command_reply_cleanup(&slowlog_get_bad_count_reply);
+    resp_value_free(&slowlog_get_bad_count_parsed.value);
+
+    var slowlog_unknown_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nSLOWLOG\r\n$1\r\nX\r\n"[0: 24]);
+    const slowlog_unknown_command: Command = try command_executor_test_command(&router, &slowlog_unknown_parsed);
+    var slowlog_unknown_reply: CommandReply = command_execute_at(&engine, &slowlog_unknown_command, 1000u64);
+    try assert_eq_i32(slowlog_unknown_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(slowlog_unknown_reply.data, &"ERR unknown subcommand 'X'. Try SLOWLOG HELP."[0: 45]));
+    command_reply_cleanup(&slowlog_unknown_reply);
+    resp_value_free(&slowlog_unknown_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

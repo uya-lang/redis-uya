@@ -2008,6 +2008,31 @@ MEMORY USAGE key [SAMPLES count]
 - `USAGE ... SAMPLES count` 当前只做参数兼容校验，不影响近似值计算
 - 当前不支持 `MEMORY MALLOC-STATS`、`MEMORY PURGE`
 
+### `SLOWLOG`
+
+格式：
+
+```text
+SLOWLOG HELP
+SLOWLOG LEN
+SLOWLOG GET [count]
+SLOWLOG RESET
+```
+
+返回：
+
+- `HELP`：返回当前支持的 `SLOWLOG` 子命令说明
+- `LEN`：返回当前 slowlog 条目数
+- `GET`：返回最新在前的 slowlog entry 数组；未带 `count` 时默认 `10`，`-1` 表示返回全部
+- `RESET`：成功返回 `+OK`
+
+说明：
+
+- 当前实现为 partial：slowlog 仅是 redis-uya 进程内固定容量 ring，不持久化
+- 当前记录每条命令的 `id`、秒级时间戳、`duration_us`、命令参数数组、客户端占位地址与空 client name
+- 当前 `duration_us` 固定为 `0`，客户端地址固定为占位值 `127.0.0.1:0`，不代表 Redis 原生真实慢查询采样结果
+- 当前不支持 Redis 原生 `slowlog-log-slower-than` / `slowlog-max-len` 配置联动
+
 ### `INFO`
 
 格式：

@@ -3,15 +3,55 @@ use src.command.catalog_generated_base.CommandCatalogEntry;
 use src.command.catalog_generated_base.CommandCatalogStatus;
 
 export fn command_catalog_generated_part_i(index: usize) CommandCatalogEntry {
-    if index == 96 {
+    if index == 128 {
         return CommandCatalogEntry{
-            name: &"cluster|reset"[0: 13],
-            group: &"cluster"[0: 7],
+            name: &"command"[0: 7],
+            group: &"server"[0: 6],
             module_name: &""[0: 0],
             acl_tags: &""[0: 0],
             flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_standalone_error,
-            target_version: &"v1.1.0"[0: 6],
+            status: CommandCatalogStatus.status_partial,
+            target_version: &""[0: 0],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: true,
+            arity: -1,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 129 {
+        return CommandCatalogEntry{
+            name: &"command|count"[0: 13],
+            group: &"server"[0: 6],
+            module_name: &""[0: 0],
+            acl_tags: &"slow|connection"[0: 15],
+            flag_tags: &"loading|stale"[0: 13],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Returns a count of commands."[0: 28],
+            since: &"2.8.13"[0: 6],
+            complexity: &"O(1)"[0: 4],
+            is_pattern: false,
+            is_top_level: false,
+            arity: 2,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 130 {
+        return CommandCatalogEntry{
+            name: &"command|docs"[0: 12],
+            group: &"server"[0: 6],
+            module_name: &""[0: 0],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_partial,
+            target_version: &""[0: 0],
             summary: &""[0: 0],
             since: &""[0: 0],
             complexity: &""[0: 0],
@@ -23,15 +63,195 @@ export fn command_catalog_generated_part_i(index: usize) CommandCatalogEntry {
             key_step: 0,
         };
     }
-    if index == 97 {
+    if index == 131 {
         return CommandCatalogEntry{
-            name: &"cluster|saveconfig"[0: 18],
-            group: &"cluster"[0: 7],
+            name: &"command|getkeys"[0: 15],
+            group: &"server"[0: 6],
             module_name: &""[0: 0],
             acl_tags: &""[0: 0],
             flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_standalone_error,
-            target_version: &"v1.1.0"[0: 6],
+            status: CommandCatalogStatus.status_partial,
+            target_version: &""[0: 0],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: false,
+            arity: -3,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 132 {
+        return CommandCatalogEntry{
+            name: &"command|getkeysandflags"[0: 23],
+            group: &"server"[0: 6],
+            module_name: &""[0: 0],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_partial,
+            target_version: &""[0: 0],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: false,
+            arity: -3,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 133 {
+        return CommandCatalogEntry{
+            name: &"command|help"[0: 12],
+            group: &"server"[0: 6],
+            module_name: &""[0: 0],
+            acl_tags: &"slow|connection"[0: 15],
+            flag_tags: &"loading|stale"[0: 13],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Returns helpful text about the different subcommands."[0: 53],
+            since: &"5.0.0"[0: 5],
+            complexity: &"O(1)"[0: 4],
+            is_pattern: false,
+            is_top_level: false,
+            arity: 2,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 134 {
+        return CommandCatalogEntry{
+            name: &"command|info"[0: 12],
+            group: &"server"[0: 6],
+            module_name: &""[0: 0],
+            acl_tags: &"slow|connection"[0: 15],
+            flag_tags: &"loading|stale"[0: 13],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Returns information about one, multiple or all commands."[0: 56],
+            since: &"2.8.13"[0: 6],
+            complexity: &"O(N) where N is the number of commands to look up"[0: 49],
+            is_pattern: false,
+            is_top_level: false,
+            arity: -2,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 135 {
+        return CommandCatalogEntry{
+            name: &"command|list"[0: 12],
+            group: &"server"[0: 6],
+            module_name: &""[0: 0],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_partial,
+            target_version: &""[0: 0],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: true,
+            is_top_level: false,
+            arity: -2,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 136 {
+        return CommandCatalogEntry{
+            name: &"config"[0: 6],
+            group: &"server"[0: 6],
+            module_name: &""[0: 0],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_partial,
+            target_version: &""[0: 0],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: true,
+            arity: -2,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 137 {
+        return CommandCatalogEntry{
+            name: &"config|get"[0: 10],
+            group: &"server"[0: 6],
+            module_name: &""[0: 0],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_partial,
+            target_version: &""[0: 0],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: false,
+            arity: -3,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 138 {
+        return CommandCatalogEntry{
+            name: &"config|help"[0: 11],
+            group: &"server"[0: 6],
+            module_name: &""[0: 0],
+            acl_tags: &"slow"[0: 4],
+            flag_tags: &"loading|stale"[0: 13],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Returns helpful text about the different subcommands."[0: 53],
+            since: &"5.0.0"[0: 5],
+            complexity: &"O(1)"[0: 4],
+            is_pattern: false,
+            is_top_level: false,
+            arity: 2,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 139 {
+        return CommandCatalogEntry{
+            name: &"config|resetstat"[0: 16],
+            group: &"server"[0: 6],
+            module_name: &""[0: 0],
+            acl_tags: &"admin|slow|dangerous"[0: 20],
+            flag_tags: &"admin|noscript|loading|stale"[0: 28],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Resets the server's statistics."[0: 31],
+            since: &"2.0.0"[0: 5],
+            complexity: &"O(1)"[0: 4],
+            is_pattern: false,
+            is_top_level: false,
+            arity: 2,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 140 {
+        return CommandCatalogEntry{
+            name: &"config|rewrite"[0: 14],
+            group: &"server"[0: 6],
+            module_name: &""[0: 0],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_partial,
+            target_version: &""[0: 0],
             summary: &""[0: 0],
             since: &""[0: 0],
             complexity: &""[0: 0],
@@ -43,30 +263,10 @@ export fn command_catalog_generated_part_i(index: usize) CommandCatalogEntry {
             key_step: 0,
         };
     }
-    if index == 98 {
+    if index == 141 {
         return CommandCatalogEntry{
-            name: &"cluster|set-config-epoch"[0: 24],
-            group: &"cluster"[0: 7],
-            module_name: &""[0: 0],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_standalone_error,
-            target_version: &"v1.1.0"[0: 6],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: false,
-            arity: 3,
-            first_key: 0,
-            last_key: 0,
-            key_step: 0,
-        };
-    }
-    if index == 99 {
-        return CommandCatalogEntry{
-            name: &"cluster|setslot"[0: 15],
-            group: &"cluster"[0: 7],
+            name: &"config|set"[0: 10],
+            group: &"server"[0: 6],
             module_name: &""[0: 0],
             acl_tags: &""[0: 0],
             flag_tags: &""[0: 0],
@@ -83,164 +283,44 @@ export fn command_catalog_generated_part_i(index: usize) CommandCatalogEntry {
             key_step: 0,
         };
     }
-    if index == 100 {
+    if index == 142 {
         return CommandCatalogEntry{
-            name: &"cluster|shards"[0: 14],
-            group: &"cluster"[0: 7],
+            name: &"copy"[0: 4],
+            group: &"generic"[0: 7],
             module_name: &""[0: 0],
             acl_tags: &""[0: 0],
             flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_standalone_error,
-            target_version: &"v1.1.0"[0: 6],
+            status: CommandCatalogStatus.status_deferred,
+            target_version: &"v0.9.1"[0: 6],
             summary: &""[0: 0],
             since: &""[0: 0],
             complexity: &""[0: 0],
             is_pattern: false,
-            is_top_level: false,
-            arity: 2,
-            first_key: 0,
+            is_top_level: true,
+            arity: -3,
+            first_key: 1,
             last_key: 0,
-            key_step: 0,
+            key_step: 1,
         };
     }
-    if index == 101 {
+    if index == 143 {
         return CommandCatalogEntry{
-            name: &"cluster|slaves"[0: 14],
-            group: &"cluster"[0: 7],
+            name: &"dbsize"[0: 6],
+            group: &"server"[0: 6],
             module_name: &""[0: 0],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_standalone_error,
-            target_version: &"v1.1.0"[0: 6],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: false,
-            arity: 3,
-            first_key: 0,
-            last_key: 0,
-            key_step: 0,
-        };
-    }
-    if index == 102 {
-        return CommandCatalogEntry{
-            name: &"cluster|slot-stats"[0: 18],
-            group: &"cluster"[0: 7],
-            module_name: &""[0: 0],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_standalone_error,
-            target_version: &"v1.1.0"[0: 6],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: false,
-            arity: -4,
-            first_key: 0,
-            last_key: 0,
-            key_step: 0,
-        };
-    }
-    if index == 103 {
-        return CommandCatalogEntry{
-            name: &"cluster|slots"[0: 13],
-            group: &"cluster"[0: 7],
-            module_name: &""[0: 0],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_partial,
+            acl_tags: &"keyspace|read|fast"[0: 18],
+            flag_tags: &"readonly|fast"[0: 13],
+            status: CommandCatalogStatus.status_full,
             target_version: &""[0: 0],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
+            summary: &"Returns the number of keys in the database."[0: 43],
+            since: &"1.0.0"[0: 5],
+            complexity: &"O(1)"[0: 4],
             is_pattern: false,
-            is_top_level: false,
-            arity: 2,
+            is_top_level: true,
+            arity: 1,
             first_key: 0,
             last_key: 0,
             key_step: 0,
-        };
-    }
-    if index == 104 {
-        return CommandCatalogEntry{
-            name: &"cms.incrby"[0: 10],
-            group: &"cms"[0: 3],
-            module_name: &"cms"[0: 3],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_deferred,
-            target_version: &"v0.9.2"[0: 6],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: true,
-            arity: -2,
-            first_key: 1,
-            last_key: 0,
-            key_step: 1,
-        };
-    }
-    if index == 105 {
-        return CommandCatalogEntry{
-            name: &"cms.info"[0: 8],
-            group: &"cms"[0: 3],
-            module_name: &"cms"[0: 3],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_deferred,
-            target_version: &"v0.9.2"[0: 6],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: true,
-            arity: 2,
-            first_key: 1,
-            last_key: 0,
-            key_step: 1,
-        };
-    }
-    if index == 106 {
-        return CommandCatalogEntry{
-            name: &"cms.initbydim"[0: 13],
-            group: &"cms"[0: 3],
-            module_name: &"cms"[0: 3],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_deferred,
-            target_version: &"v0.9.2"[0: 6],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: true,
-            arity: 4,
-            first_key: 1,
-            last_key: 0,
-            key_step: 1,
-        };
-    }
-    if index == 107 {
-        return CommandCatalogEntry{
-            name: &"cms.initbyprob"[0: 14],
-            group: &"cms"[0: 3],
-            module_name: &"cms"[0: 3],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_deferred,
-            target_version: &"v0.9.2"[0: 6],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: true,
-            arity: 4,
-            first_key: 1,
-            last_key: 0,
-            key_step: 1,
         };
     }
     return CommandCatalogEntry{

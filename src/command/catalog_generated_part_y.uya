@@ -3,150 +3,10 @@ use src.command.catalog_generated_base.CommandCatalogEntry;
 use src.command.catalog_generated_base.CommandCatalogStatus;
 
 export fn command_catalog_generated_part_y(index: usize) CommandCatalogEntry {
-    if index == 288 {
+    if index == 384 {
         return CommandCatalogEntry{
-            name: &"lpos"[0: 4],
-            group: &"list"[0: 4],
-            module_name: &""[0: 0],
-            acl_tags: &"read|list|slow"[0: 14],
-            flag_tags: &"readonly"[0: 8],
-            status: CommandCatalogStatus.status_full,
-            target_version: &""[0: 0],
-            summary: &"Returns the index of matching elements in a list."[0: 49],
-            since: &"6.0.6"[0: 5],
-            complexity: &"O(N) where N is the number of elements in the list, for the average case. When searching for elements near the head or the tail of the list, or when the MAXLEN option is provided, the command may run in constant time."[0: 217],
-            is_pattern: false,
-            is_top_level: true,
-            arity: -3,
-            first_key: 1,
-            last_key: 0,
-            key_step: 1,
-        };
-    }
-    if index == 289 {
-        return CommandCatalogEntry{
-            name: &"lpush"[0: 5],
-            group: &"list"[0: 4],
-            module_name: &""[0: 0],
-            acl_tags: &"write|list|fast"[0: 15],
-            flag_tags: &"write|denyoom|fast"[0: 18],
-            status: CommandCatalogStatus.status_full,
-            target_version: &""[0: 0],
-            summary: &"Prepends one or more elements to a list. Creates the key if it doesn't exist."[0: 77],
-            since: &"1.0.0"[0: 5],
-            complexity: &"O(1) for each element added, so O(N) to add N elements when the command is called with multiple arguments."[0: 106],
-            is_pattern: false,
-            is_top_level: true,
-            arity: -3,
-            first_key: 1,
-            last_key: 0,
-            key_step: 1,
-        };
-    }
-    if index == 290 {
-        return CommandCatalogEntry{
-            name: &"lpushx"[0: 6],
-            group: &"list"[0: 4],
-            module_name: &""[0: 0],
-            acl_tags: &"write|list|fast"[0: 15],
-            flag_tags: &"write|denyoom|fast"[0: 18],
-            status: CommandCatalogStatus.status_full,
-            target_version: &""[0: 0],
-            summary: &"Prepends one or more elements to a list only when the list exists."[0: 66],
-            since: &"2.2.0"[0: 5],
-            complexity: &"O(1) for each element added, so O(N) to add N elements when the command is called with multiple arguments."[0: 106],
-            is_pattern: false,
-            is_top_level: true,
-            arity: -3,
-            first_key: 1,
-            last_key: 0,
-            key_step: 1,
-        };
-    }
-    if index == 291 {
-        return CommandCatalogEntry{
-            name: &"lrange"[0: 6],
-            group: &"list"[0: 4],
-            module_name: &""[0: 0],
-            acl_tags: &"read|list|slow"[0: 14],
-            flag_tags: &"readonly"[0: 8],
-            status: CommandCatalogStatus.status_full,
-            target_version: &""[0: 0],
-            summary: &"Returns a range of elements from a list."[0: 40],
-            since: &"1.0.0"[0: 5],
-            complexity: &"O(S+N) where S is the distance of start offset from HEAD for small lists, from nearest end (HEAD or TAIL) for large lists; and N is the number of elements in the specified range."[0: 178],
-            is_pattern: false,
-            is_top_level: true,
-            arity: 4,
-            first_key: 1,
-            last_key: 0,
-            key_step: 1,
-        };
-    }
-    if index == 292 {
-        return CommandCatalogEntry{
-            name: &"lrem"[0: 4],
-            group: &"list"[0: 4],
-            module_name: &""[0: 0],
-            acl_tags: &"write|list|slow"[0: 15],
-            flag_tags: &"write"[0: 5],
-            status: CommandCatalogStatus.status_full,
-            target_version: &""[0: 0],
-            summary: &"Removes elements from a list. Deletes the list if the last element was removed."[0: 79],
-            since: &"1.0.0"[0: 5],
-            complexity: &"O(N+M) where N is the length of the list and M is the number of elements removed."[0: 81],
-            is_pattern: false,
-            is_top_level: true,
-            arity: 4,
-            first_key: 1,
-            last_key: 0,
-            key_step: 1,
-        };
-    }
-    if index == 293 {
-        return CommandCatalogEntry{
-            name: &"lset"[0: 4],
-            group: &"list"[0: 4],
-            module_name: &""[0: 0],
-            acl_tags: &"write|list|slow"[0: 15],
-            flag_tags: &"write|denyoom"[0: 13],
-            status: CommandCatalogStatus.status_full,
-            target_version: &""[0: 0],
-            summary: &"Sets the value of an element in a list by its index."[0: 52],
-            since: &"1.0.0"[0: 5],
-            complexity: &"O(N) where N is the length of the list. Setting either the first or the last element of the list is O(1)."[0: 105],
-            is_pattern: false,
-            is_top_level: true,
-            arity: 4,
-            first_key: 1,
-            last_key: 0,
-            key_step: 1,
-        };
-    }
-    if index == 294 {
-        return CommandCatalogEntry{
-            name: &"ltrim"[0: 5],
-            group: &"list"[0: 4],
-            module_name: &""[0: 0],
-            acl_tags: &"write|list|slow"[0: 15],
-            flag_tags: &"write"[0: 5],
-            status: CommandCatalogStatus.status_full,
-            target_version: &""[0: 0],
-            summary: &"Removes elements from both ends a list. Deletes the list if all elements were trimmed."[0: 86],
-            since: &"1.0.0"[0: 5],
-            complexity: &"O(N) where N is the number of elements to be removed by the operation."[0: 70],
-            is_pattern: false,
-            is_top_level: true,
-            arity: 4,
-            first_key: 1,
-            last_key: 0,
-            key_step: 1,
-        };
-    }
-    if index == 295 {
-        return CommandCatalogEntry{
-            name: &"memory"[0: 6],
-            group: &"server"[0: 6],
+            name: &"script"[0: 6],
+            group: &"scripting"[0: 9],
             module_name: &""[0: 0],
             acl_tags: &""[0: 0],
             flag_tags: &""[0: 0],
@@ -163,10 +23,70 @@ export fn command_catalog_generated_part_y(index: usize) CommandCatalogEntry {
             key_step: 0,
         };
     }
-    if index == 296 {
+    if index == 385 {
         return CommandCatalogEntry{
-            name: &"memory|doctor"[0: 13],
-            group: &"server"[0: 6],
+            name: &"script|debug"[0: 12],
+            group: &"scripting"[0: 9],
+            module_name: &""[0: 0],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_deferred,
+            target_version: &"v0.9.1"[0: 6],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: false,
+            arity: 3,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 386 {
+        return CommandCatalogEntry{
+            name: &"script|exists"[0: 13],
+            group: &"scripting"[0: 9],
+            module_name: &""[0: 0],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_partial,
+            target_version: &""[0: 0],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: false,
+            arity: -3,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 387 {
+        return CommandCatalogEntry{
+            name: &"script|flush"[0: 12],
+            group: &"scripting"[0: 9],
+            module_name: &""[0: 0],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_partial,
+            target_version: &""[0: 0],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: false,
+            arity: -2,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 388 {
+        return CommandCatalogEntry{
+            name: &"script|help"[0: 11],
+            group: &"scripting"[0: 9],
             module_name: &""[0: 0],
             acl_tags: &""[0: 0],
             flag_tags: &""[0: 0],
@@ -183,10 +103,30 @@ export fn command_catalog_generated_part_y(index: usize) CommandCatalogEntry {
             key_step: 0,
         };
     }
-    if index == 297 {
+    if index == 389 {
         return CommandCatalogEntry{
-            name: &"memory|help"[0: 11],
-            group: &"server"[0: 6],
+            name: &"script|kill"[0: 11],
+            group: &"scripting"[0: 9],
+            module_name: &""[0: 0],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_deferred,
+            target_version: &"v0.9.1"[0: 6],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: false,
+            arity: 2,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 390 {
+        return CommandCatalogEntry{
+            name: &"script|load"[0: 11],
+            group: &"scripting"[0: 9],
             module_name: &""[0: 0],
             acl_tags: &""[0: 0],
             flag_tags: &""[0: 0],
@@ -197,47 +137,187 @@ export fn command_catalog_generated_part_y(index: usize) CommandCatalogEntry {
             complexity: &""[0: 0],
             is_pattern: false,
             is_top_level: false,
+            arity: 3,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 391 {
+        return CommandCatalogEntry{
+            name: &"sdiff"[0: 5],
+            group: &"set"[0: 3],
+            module_name: &""[0: 0],
+            acl_tags: &"read|set|slow"[0: 13],
+            flag_tags: &"readonly"[0: 8],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Returns the difference of multiple sets."[0: 40],
+            since: &"1.0.0"[0: 5],
+            complexity: &"O(N) where N is the total number of elements in all given sets."[0: 63],
+            is_pattern: false,
+            is_top_level: true,
+            arity: -2,
+            first_key: 1,
+            last_key: -1,
+            key_step: 1,
+        };
+    }
+    if index == 392 {
+        return CommandCatalogEntry{
+            name: &"sdiffstore"[0: 10],
+            group: &"set"[0: 3],
+            module_name: &""[0: 0],
+            acl_tags: &"write|set|slow"[0: 14],
+            flag_tags: &"write|denyoom"[0: 13],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Stores the difference of multiple sets in a key."[0: 48],
+            since: &"1.0.0"[0: 5],
+            complexity: &"O(N) where N is the total number of elements in all given sets."[0: 63],
+            is_pattern: false,
+            is_top_level: true,
+            arity: -3,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 393 {
+        return CommandCatalogEntry{
+            name: &"select"[0: 6],
+            group: &"connection"[0: 10],
+            module_name: &""[0: 0],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_partial,
+            target_version: &""[0: 0],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: true,
             arity: 2,
             first_key: 0,
             last_key: 0,
             key_step: 0,
         };
     }
-    if index == 298 {
+    if index == 394 {
         return CommandCatalogEntry{
-            name: &"memory|malloc-stats"[0: 19],
-            group: &"server"[0: 6],
+            name: &"set"[0: 3],
+            group: &"string"[0: 6],
             module_name: &""[0: 0],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_deferred,
-            target_version: &"v0.9.3"[0: 6],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
+            acl_tags: &"write|string|slow"[0: 17],
+            flag_tags: &"write|denyoom"[0: 13],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Sets the string value of a key, ignoring its type. The key is created if it doesn't exist."[0: 90],
+            since: &"1.0.0"[0: 5],
+            complexity: &"O(1)"[0: 4],
             is_pattern: false,
-            is_top_level: false,
-            arity: 2,
-            first_key: 0,
+            is_top_level: true,
+            arity: -3,
+            first_key: 1,
             last_key: 0,
-            key_step: 0,
+            key_step: 1,
         };
     }
-    if index == 299 {
+    if index == 395 {
         return CommandCatalogEntry{
-            name: &"memory|purge"[0: 12],
+            name: &"setbit"[0: 6],
+            group: &"bitmap"[0: 6],
+            module_name: &""[0: 0],
+            acl_tags: &"write|bitmap|slow"[0: 17],
+            flag_tags: &"write|denyoom"[0: 13],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Sets or clears the bit at offset of the string value. Creates the key if it doesn't exist."[0: 90],
+            since: &"2.2.0"[0: 5],
+            complexity: &"O(1)"[0: 4],
+            is_pattern: false,
+            is_top_level: true,
+            arity: 4,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 396 {
+        return CommandCatalogEntry{
+            name: &"setex"[0: 5],
+            group: &"string"[0: 6],
+            module_name: &""[0: 0],
+            acl_tags: &"write|string|slow"[0: 17],
+            flag_tags: &"write|denyoom"[0: 13],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Sets the string value and expiration time of a key. Creates the key if it doesn't exist."[0: 88],
+            since: &"2.0.0"[0: 5],
+            complexity: &"O(1)"[0: 4],
+            is_pattern: false,
+            is_top_level: true,
+            arity: 4,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 397 {
+        return CommandCatalogEntry{
+            name: &"setnx"[0: 5],
+            group: &"string"[0: 6],
+            module_name: &""[0: 0],
+            acl_tags: &"write|string|fast"[0: 17],
+            flag_tags: &"write|denyoom|fast"[0: 18],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Set the string value of a key only when the key doesn't exist."[0: 62],
+            since: &"1.0.0"[0: 5],
+            complexity: &"O(1)"[0: 4],
+            is_pattern: false,
+            is_top_level: true,
+            arity: 3,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 398 {
+        return CommandCatalogEntry{
+            name: &"setrange"[0: 8],
+            group: &"string"[0: 6],
+            module_name: &""[0: 0],
+            acl_tags: &"write|string|slow"[0: 17],
+            flag_tags: &"write|denyoom"[0: 13],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Overwrites a part of a string value with another by an offset. Creates the key if it doesn't exist."[0: 99],
+            since: &"2.2.0"[0: 5],
+            complexity: &"O(1), not counting the time taken to copy the new string in place. Usually, this string is very small so the amortized complexity is O(1). Otherwise, complexity is O(M) with M being the length of the value argument."[0: 215],
+            is_pattern: false,
+            is_top_level: true,
+            arity: 4,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 399 {
+        return CommandCatalogEntry{
+            name: &"shutdown"[0: 8],
             group: &"server"[0: 6],
             module_name: &""[0: 0],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_deferred,
-            target_version: &"v0.9.3"[0: 6],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
+            acl_tags: &"admin|slow|dangerous"[0: 20],
+            flag_tags: &"admin|noscript|loading|stale|no_multi|allow_busy"[0: 48],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Synchronously saves the database(s) to disk and shuts down the Redis server."[0: 76],
+            since: &"1.0.0"[0: 5],
+            complexity: &"O(N) when saving, where N is the total number of keys in all databases when saving data, otherwise O(1)"[0: 103],
             is_pattern: false,
-            is_top_level: false,
-            arity: 2,
+            is_top_level: true,
+            arity: -1,
             first_key: 0,
             last_key: 0,
             key_step: 0,

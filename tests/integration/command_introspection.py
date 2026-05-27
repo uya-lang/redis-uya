@@ -262,6 +262,23 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"monitor command missing from COMMAND INFO: {monitor_info!r}")
 
+            stream_info = send_command(sock, b"COMMAND", b"INFO", b"XADD", b"XLEN", b"XRANGE", b"XREVRANGE", b"XREAD")
+            if (
+                not isinstance(stream_info, list)
+                or len(stream_info) != 5
+                or not isinstance(stream_info[0], list)
+                or stream_info[0][0] != b"xadd"
+                or not isinstance(stream_info[1], list)
+                or stream_info[1][0] != b"xlen"
+                or not isinstance(stream_info[2], list)
+                or stream_info[2][0] != b"xrange"
+                or not isinstance(stream_info[3], list)
+                or stream_info[3][0] != b"xrevrange"
+                or not isinstance(stream_info[4], list)
+                or stream_info[4][0] != b"xread"
+            ):
+                raise AssertionError(f"stream commands missing from COMMAND INFO: {stream_info!r}")
+
             zset_info = send_command(sock, b"COMMAND", b"INFO", b"ZRANK", b"ZREVRANK", b"ZSCORE", b"ZMSCORE", b"ZPOPMAX", b"ZPOPMIN", b"BZPOPMAX", b"BZPOPMIN")
             if (
                 not isinstance(zset_info, list)
@@ -445,6 +462,20 @@ def run_smoke() -> None:
             listed_monitor = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"MONITOR")
             if listed_monitor != [b"monitor"]:
                 raise AssertionError(f"unexpected COMMAND LIST monitor result: {listed_monitor!r}")
+
+            listed_stream = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"X*")
+            if (
+                not isinstance(listed_stream, list)
+                or b"xadd" not in listed_stream
+                or b"xlen" not in listed_stream
+                or b"xrange" not in listed_stream
+                or b"xrevrange" not in listed_stream
+                or b"xread" not in listed_stream
+                or b"xgroup" in listed_stream
+                or b"xack" in listed_stream
+                or b"xpending" in listed_stream
+            ):
+                raise AssertionError(f"unexpected COMMAND LIST stream result: {listed_stream!r}")
 
             listed_zpop = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"ZPOP*")
             if (

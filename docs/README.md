@@ -59,7 +59,7 @@
 
 - `v0.9.0` 的历史收口文档仍然保留，但不能直接代表当前 `HEAD`。
 - 当前 `HEAD` 的 `make test`、`make test-integration`、`make benchmark-v0.8.1` 与 `bash scripts/verify_definition_of_done.sh` 已恢复为通过状态。
-- 当前主线的第一优先级已从 `v0.9.1` 的真实性修复转入 `v0.9.2` 的 Redis Open Source 单机核心缺口补齐，并持续保持控制面真值、版本口径与统计分层不回退。
+- 当前主线的第一优先级已从 `v0.9.1` 的真实性修复转入 `v0.9.3` 的 Redis Open Source 单机核心缺口补齐，并持续保持控制面真值、版本口径与统计分层不回退。
 - `v1.0.0` 的命令封版门槛先收敛 Redis Open Source 单机核心；JSON/Search/Time Series/概率结构/Vector 等模块命令继续追踪，但不再作为当前阶段完成度的包装材料。
 
 当前执行路线见：

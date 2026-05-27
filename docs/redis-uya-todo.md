@@ -60,7 +60,7 @@
 
 - [x] `v0.9.0`：单机核心命令补齐与安全基线收口完成
 - [x] `v0.9.1`：审计整改与真实性修复完成，测试 / benchmark / DoD 校验已恢复绿态，控制面真值、版本串与命令完成度统计分层已收口
-- [ ] `v0.9.2` 起：在真实性问题收敛后，继续补 Redis Open Source 单机核心缺口，而不是先扩模块命令
+- [ ] `v0.9.3` 起：在真实性问题收敛后，继续补 Redis Open Source 单机核心缺口，而不是先扩模块命令
 
 ## 3. 全版本路线图
 
@@ -500,7 +500,7 @@
 
 ### U4. Streams、Functions、安全与运维面
 
-- [ ] Streams 第一批：`XADD`、`XLEN`、`XRANGE`、`XREVRANGE`、`XREAD`
+- [x] Streams 第一批：已补 `XADD`、`XLEN`、`XRANGE`、`XREVRANGE`、`XREAD`，当前为 list-backed、非阻塞基础 stream partial；普通 AOF append 对 `XADD *` 回放会重新生成 ID，RDB 与 AOF rewrite 保存显式 ID
 - [ ] Streams 第二批：`XGROUP`、`XACK`、`XPENDING`、`XCLAIM`、`XTRIM`
 - [ ] Functions / Script 收口：只读脚本、脚本缓存、错误中止、传播边界
 - [ ] ACL 第一批：用户、密码、命令分类、最小权限拒绝路径

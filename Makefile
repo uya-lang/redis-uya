@@ -59,6 +59,7 @@ test-integration: build
 	python3 tests/integration/replication_consistency.py
 	python3 tests/integration/pubsub_smoke.py
 	python3 tests/integration/monitor_smoke.py
+	python3 tests/integration/streams_smoke.py
 	python3 tests/integration/client_config_smoke.py
 	python3 tests/integration/connection_reset_smoke.py
 	python3 tests/integration/command_introspection.py

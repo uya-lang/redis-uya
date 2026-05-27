@@ -31,6 +31,7 @@ use src.storage.object.create_hash_object;
 use src.storage.object.create_list_object;
 use src.storage.object.create_set_object;
 use src.storage.object.create_zset_object;
+use src.storage.object.create_stream_object;
 use src.storage.object.hash_object_set_field;
 use src.storage.object.hash_object_get_field;
 use src.storage.object.list_object_push_tail;
@@ -40,6 +41,8 @@ use src.storage.object.set_object_add_member;
 use src.storage.object.zset_object_add_member;
 use src.storage.object.zset_object_range_reply;
 use src.storage.object.zset_object_get_score;
+use src.storage.object.stream_object_append_entry;
+use src.storage.object.stream_object_len;
 use src.storage.sds.Sds;
 use src.storage.sds.sds_empty;
 use src.storage.sds.sds_free;
@@ -74,6 +77,8 @@ const RDB_ENTRY_TYPE_SET: byte = 6 as byte;
 const RDB_ENTRY_TYPE_SET_EXPIRE_MS: byte = 7 as byte;
 const RDB_ENTRY_TYPE_ZSET: byte = 8 as byte;
 const RDB_ENTRY_TYPE_ZSET_EXPIRE_MS: byte = 9 as byte;
+const RDB_ENTRY_TYPE_STREAM: byte = 10 as byte;
+const RDB_ENTRY_TYPE_STREAM_EXPIRE_MS: byte = 11 as byte;
 const RDB_ENTRY_TYPE_EOF: byte = 255 as byte;
 const RDB_ENTRY_MAX_BYTES: usize = 1024 * 1024;
 
@@ -301,6 +306,10 @@ fn rdb_entry_type_for_object(obj_type: ObjectType, has_expire: bool) !byte {
             if has_expire { return RDB_ENTRY_TYPE_ZSET_EXPIRE_MS; }
             return RDB_ENTRY_TYPE_ZSET;
         },
+        ObjectType.object_stream => {
+            if has_expire { return RDB_ENTRY_TYPE_STREAM_EXPIRE_MS; }
+            return RDB_ENTRY_TYPE_STREAM;
+        },
         else => {
             return error.RdbUnsupportedType;
         }
@@ -312,7 +321,8 @@ fn rdb_entry_type_has_expire(typ: byte) bool {
         typ == RDB_ENTRY_TYPE_HASH_EXPIRE_MS ||
         typ == RDB_ENTRY_TYPE_LIST_EXPIRE_MS ||
         typ == RDB_ENTRY_TYPE_SET_EXPIRE_MS ||
-        typ == RDB_ENTRY_TYPE_ZSET_EXPIRE_MS;
+        typ == RDB_ENTRY_TYPE_ZSET_EXPIRE_MS ||
+        typ == RDB_ENTRY_TYPE_STREAM_EXPIRE_MS;
 }
 
 fn rdb_entry_type_is_supported(typ: byte) bool {
@@ -325,7 +335,9 @@ fn rdb_entry_type_is_supported(typ: byte) bool {
         typ == RDB_ENTRY_TYPE_SET ||
         typ == RDB_ENTRY_TYPE_SET_EXPIRE_MS ||
         typ == RDB_ENTRY_TYPE_ZSET ||
-        typ == RDB_ENTRY_TYPE_ZSET_EXPIRE_MS;
+        typ == RDB_ENTRY_TYPE_ZSET_EXPIRE_MS ||
+        typ == RDB_ENTRY_TYPE_STREAM ||
+        typ == RDB_ENTRY_TYPE_STREAM_EXPIRE_MS;
 }
 
 fn rdb_sorted_dict_keys(dict_obj: &RedisObject) !&RedisObject {
@@ -484,6 +496,52 @@ fn rdb_sds_write_zset_payload(buf: &Sds, obj: &RedisObject) !void {
     }
 }
 
+fn rdb_write_stream_payload(file: &File, obj: &RedisObject) !void {
+    const count: usize = stream_object_len(obj) catch {
+        return error.RdbUnsupportedType;
+    };
+    try rdb_write_u32(file, count as u32);
+    try rdb_write_u64(file, obj.stream_last_ms);
+    try rdb_write_u64(file, obj.stream_last_seq);
+    var node: &ListNode = obj.list_head;
+    while node != null {
+        const entry: &RedisObject = node.value;
+        const entry_count: usize = list_object_len(entry) catch {
+            return error.RdbUnsupportedType;
+        };
+        try rdb_write_u32(file, entry_count as u32);
+        var entry_node: &ListNode = entry.list_head;
+        while entry_node != null {
+            try rdb_write_blob(file, entry_node.value.value.buf[0: entry_node.value.value.len]);
+            entry_node = entry_node.next;
+        }
+        node = node.next;
+    }
+}
+
+fn rdb_sds_write_stream_payload(buf: &Sds, obj: &RedisObject) !void {
+    const count: usize = stream_object_len(obj) catch {
+        return error.RdbUnsupportedType;
+    };
+    try rdb_sds_write_u32(buf, count as u32);
+    try rdb_sds_write_u64(buf, obj.stream_last_ms);
+    try rdb_sds_write_u64(buf, obj.stream_last_seq);
+    var node: &ListNode = obj.list_head;
+    while node != null {
+        const entry: &RedisObject = node.value;
+        const entry_count: usize = list_object_len(entry) catch {
+            return error.RdbUnsupportedType;
+        };
+        try rdb_sds_write_u32(buf, entry_count as u32);
+        var entry_node: &ListNode = entry.list_head;
+        while entry_node != null {
+            try rdb_sds_write_blob(buf, entry_node.value.value.buf[0: entry_node.value.value.len]);
+            entry_node = entry_node.next;
+        }
+        node = node.next;
+    }
+}
+
 fn rdb_write_payload(file: &File, obj: &RedisObject) !void {
     match obj.obj_type {
         ObjectType.object_string => {
@@ -500,6 +558,9 @@ fn rdb_write_payload(file: &File, obj: &RedisObject) !void {
         },
         ObjectType.object_zset => {
             try rdb_write_zset_payload(file, obj);
+        },
+        ObjectType.object_stream => {
+            try rdb_write_stream_payload(file, obj);
         },
         else => {
             return error.RdbUnsupportedType;
@@ -523,6 +584,9 @@ fn rdb_sds_write_payload(buf: &Sds, obj: &RedisObject) !void {
         },
         ObjectType.object_zset => {
             try rdb_sds_write_zset_payload(buf, obj);
+        },
+        ObjectType.object_stream => {
+            try rdb_sds_write_stream_payload(buf, obj);
         },
         else => {
             return error.RdbUnsupportedType;
@@ -593,6 +657,32 @@ fn rdb_load_zset_payload(file: &File) !&RedisObject {
     return obj;
 }
 
+fn rdb_load_stream_payload(file: &File) !&RedisObject {
+    const obj: &RedisObject = try create_stream_object();
+    errdefer object_free(obj);
+
+    const count: usize = (try rdb_read_u32(file)) as usize;
+    const last_ms: u64 = try rdb_read_u64(file);
+    const last_seq: u64 = try rdb_read_u64(file);
+    var i: usize = 0;
+    while i < count {
+        const entry_count: usize = (try rdb_read_u32(file)) as usize;
+        const entry: &RedisObject = try create_list_object();
+        var j: usize = 0;
+        while j < entry_count {
+            var item_blob: RdbBlob = try rdb_read_blob(file);
+            defer rdb_free_blob(&item_blob);
+            _ = try list_object_push_tail(entry, rdb_blob_slice(&item_blob));
+            j = j + 1;
+        }
+        _ = try stream_object_append_entry(obj, entry, last_ms, last_seq);
+        i = i + 1;
+    }
+    obj.stream_last_ms = last_ms;
+    obj.stream_last_seq = last_seq;
+    return obj;
+}
+
 fn rdb_load_payload(file: &File, typ: byte) !&RedisObject {
     if typ == RDB_ENTRY_TYPE_STRING || typ == RDB_ENTRY_TYPE_STRING_EXPIRE_MS {
         var value_blob: RdbBlob = try rdb_read_blob(file);
@@ -610,6 +700,9 @@ fn rdb_load_payload(file: &File, typ: byte) !&RedisObject {
     }
     if typ == RDB_ENTRY_TYPE_ZSET || typ == RDB_ENTRY_TYPE_ZSET_EXPIRE_MS {
         return rdb_load_zset_payload(file);
+    }
+    if typ == RDB_ENTRY_TYPE_STREAM || typ == RDB_ENTRY_TYPE_STREAM_EXPIRE_MS {
+        return rdb_load_stream_payload(file);
     }
     return error.RdbUnsupportedType;
 }
@@ -677,6 +770,32 @@ fn rdb_load_zset_payload_from_bytes(data: &[byte], pos: &usize) !&RedisObject {
     return obj;
 }
 
+fn rdb_load_stream_payload_from_bytes(data: &[byte], pos: &usize) !&RedisObject {
+    const obj: &RedisObject = try create_stream_object();
+    errdefer object_free(obj);
+
+    const count: usize = (try rdb_read_u32_from_bytes(data, pos)) as usize;
+    const last_ms: u64 = try rdb_read_u64_from_bytes(data, pos);
+    const last_seq: u64 = try rdb_read_u64_from_bytes(data, pos);
+    var i: usize = 0;
+    while i < count {
+        const entry_count: usize = (try rdb_read_u32_from_bytes(data, pos)) as usize;
+        const entry: &RedisObject = try create_list_object();
+        var j: usize = 0;
+        while j < entry_count {
+            var item_blob: RdbBlob = try rdb_read_blob_from_bytes(data, pos);
+            defer rdb_free_blob(&item_blob);
+            _ = try list_object_push_tail(entry, rdb_blob_slice(&item_blob));
+            j = j + 1;
+        }
+        _ = try stream_object_append_entry(obj, entry, last_ms, last_seq);
+        i = i + 1;
+    }
+    obj.stream_last_ms = last_ms;
+    obj.stream_last_seq = last_seq;
+    return obj;
+}
+
 fn rdb_load_payload_from_bytes(data: &[byte], pos: &usize, typ: byte) !&RedisObject {
     if typ == RDB_ENTRY_TYPE_STRING || typ == RDB_ENTRY_TYPE_STRING_EXPIRE_MS {
         var value_blob: RdbBlob = try rdb_read_blob_from_bytes(data, pos);
@@ -694,6 +813,9 @@ fn rdb_load_payload_from_bytes(data: &[byte], pos: &usize, typ: byte) !&RedisObj
     }
     if typ == RDB_ENTRY_TYPE_ZSET || typ == RDB_ENTRY_TYPE_ZSET_EXPIRE_MS {
         return rdb_load_zset_payload_from_bytes(data, pos);
+    }
+    if typ == RDB_ENTRY_TYPE_STREAM || typ == RDB_ENTRY_TYPE_STREAM_EXPIRE_MS {
+        return rdb_load_stream_payload_from_bytes(data, pos);
     }
     return error.RdbUnsupportedType;
 }

@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 172);
+    try assert_eq_i32(command_router_count(&router) as i32, 177);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -162,6 +162,26 @@ export fn test_command_router_lookup_and_case() !void {
     const latency: CommandInfo = try command_router_lookup(&router, &"LATENCY"[0: 7]);
     try assert_eq_i32(latency.cmd_type as i32, CommandType.command_latency as i32);
     try assert_eq_i32(latency.arity, -2);
+
+    const xadd: CommandInfo = try command_router_lookup(&router, &"XADD"[0: 4]);
+    try assert_eq_i32(xadd.cmd_type as i32, CommandType.command_xadd as i32);
+    try assert_eq_i32(xadd.arity, -5);
+
+    const xlen: CommandInfo = try command_router_lookup(&router, &"XLEN"[0: 4]);
+    try assert_eq_i32(xlen.cmd_type as i32, CommandType.command_xlen as i32);
+    try assert_eq_i32(xlen.arity, 2);
+
+    const xrange: CommandInfo = try command_router_lookup(&router, &"XRANGE"[0: 6]);
+    try assert_eq_i32(xrange.cmd_type as i32, CommandType.command_xrange as i32);
+    try assert_eq_i32(xrange.arity, -4);
+
+    const xrevrange: CommandInfo = try command_router_lookup(&router, &"XREVRANGE"[0: 9]);
+    try assert_eq_i32(xrevrange.cmd_type as i32, CommandType.command_xrevrange as i32);
+    try assert_eq_i32(xrevrange.arity, -4);
+
+    const xread: CommandInfo = try command_router_lookup(&router, &"XREAD"[0: 5]);
+    try assert_eq_i32(xread.cmd_type as i32, CommandType.command_xread as i32);
+    try assert_eq_i32(xread.arity, -4);
 
     const geoadd: CommandInfo = try command_router_lookup(&router, &"GEOADD"[0: 6]);
     try assert_eq_i32(geoadd.cmd_type as i32, CommandType.command_geoadd as i32);

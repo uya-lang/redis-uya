@@ -28,6 +28,7 @@ export enum ObjectType {
     object_list,
     object_set,
     object_zset,
+    object_stream,
 }
 
 export enum Encoding {
@@ -37,6 +38,7 @@ export enum Encoding {
     encoding_linked_list,
     encoding_set_table,
     encoding_zset_table,
+    encoding_stream_list,
 }
 
 export struct ListNode {
@@ -59,6 +61,8 @@ export struct RedisObject {
     list_head: &ListNode,
     list_tail: &ListNode,
     list_len: usize,
+    stream_last_ms: u64,
+    stream_last_seq: u64,
     lru_at_ms: u64,
     lfu_counter: u64,
 }
@@ -235,6 +239,8 @@ fn object_init_base(obj: &RedisObject, obj_type: ObjectType, encoding: Encoding,
     obj.list_head = null as &ListNode;
     obj.list_tail = null as &ListNode;
     obj.list_len = 0;
+    obj.stream_last_ms = 0u64;
+    obj.stream_last_seq = 0u64;
     obj.lru_at_ms = 0u64;
     obj.lfu_counter = 0u64;
 }
@@ -369,6 +375,18 @@ export fn create_zset_object() !&RedisObject {
     };
 
     object_init_base(obj, ObjectType.object_zset, Encoding.encoding_zset_table, value, 0);
+    return obj;
+}
+
+export fn create_stream_object() !&RedisObject {
+    const obj: &RedisObject = try object_alloc();
+    const value_result: !Sds = sds_empty();
+    const value: Sds = value_result catch {
+        object_release(obj);
+        return error.AllocOutOfMemory;
+    };
+
+    object_init_base(obj, ObjectType.object_stream, Encoding.encoding_stream_list, value, 0);
     return obj;
 }
 
@@ -1112,6 +1130,38 @@ export fn zset_object_range_by_score_reply(obj: &RedisObject, min_score: i64, ma
     return ranged;
 }
 
+export fn stream_object_append_entry(obj: &RedisObject, entry: &RedisObject, id_ms: u64, id_seq: u64) !usize {
+    if obj == null || obj.obj_type != ObjectType.object_stream {
+        return error.ObjectWrongType;
+    }
+    if entry == null || entry.obj_type != ObjectType.object_list {
+        return error.ObjectWrongType;
+    }
+
+    const node_result: !&ListNode = list_node_new(entry);
+    const node: &ListNode = node_result catch {
+        return error.AllocOutOfMemory;
+    };
+    node.prev = obj.list_tail;
+    if obj.list_tail != null {
+        obj.list_tail.next = node;
+    } else {
+        obj.list_head = node;
+    }
+    obj.list_tail = node;
+    obj.list_len = obj.list_len + 1;
+    obj.stream_last_ms = id_ms;
+    obj.stream_last_seq = id_seq;
+    return obj.list_len;
+}
+
+export fn stream_object_len(obj: &RedisObject) !usize {
+    if obj == null || obj.obj_type != ObjectType.object_stream {
+        return error.ObjectWrongType;
+    }
+    return obj.list_len;
+}
+
 export fn object_clone(obj: &RedisObject) !&RedisObject {
     if obj == null {
         return error.ObjectWrongType;
@@ -1174,6 +1224,23 @@ export fn object_clone(obj: &RedisObject) !&RedisObject {
         return cloned_zset;
     }
 
+    if obj.obj_type == ObjectType.object_stream {
+        const cloned_stream: &RedisObject = try create_stream_object();
+        errdefer object_free(cloned_stream);
+        cloned_stream.stream_last_ms = obj.stream_last_ms;
+        cloned_stream.stream_last_seq = obj.stream_last_seq;
+        var stream_node: &ListNode = obj.list_head;
+        while stream_node != null {
+            const cloned_entry: &RedisObject = try object_clone(stream_node.value);
+            _ = stream_object_append_entry(cloned_stream, cloned_entry, cloned_stream.stream_last_ms, cloned_stream.stream_last_seq) catch |err| {
+                object_free(cloned_entry);
+                return err;
+            };
+            stream_node = stream_node.next;
+        }
+        return cloned_stream;
+    }
+
     return error.ObjectWrongType;
 }
 
@@ -1189,7 +1256,7 @@ export fn object_free(obj: &RedisObject) void {
             entry = dict_iter_next(&obj.hash_dict, &iter);
         }
     }
-    if obj.obj_type == ObjectType.object_list {
+    if obj.obj_type == ObjectType.object_list || obj.obj_type == ObjectType.object_stream {
         var node: &ListNode = obj.list_head;
         while node != null {
             const next: &ListNode = node.next;
@@ -1210,6 +1277,7 @@ export fn object_type_name(obj_type: ObjectType) &[byte] {
         ObjectType.object_list => { return &"list"[0: 4]; },
         ObjectType.object_set => { return &"set"[0: 3]; },
         ObjectType.object_zset => { return &"zset"[0: 4]; },
+        ObjectType.object_stream => { return &"stream"[0: 6]; },
         else => { return &"unknown"[0: 7]; }
     }
 }
@@ -1222,6 +1290,7 @@ export fn object_encoding_name(encoding: Encoding) &[byte] {
         Encoding.encoding_linked_list => { return &"linkedlist"[0: 10]; },
         Encoding.encoding_set_table => { return &"settable"[0: 8]; },
         Encoding.encoding_zset_table => { return &"zsettable"[0: 9]; },
+        Encoding.encoding_stream_list => { return &"streamlist"[0: 10]; },
         else => { return &"unknown"[0: 7]; }
     }
 }

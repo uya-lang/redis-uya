@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 80 | 0 | 3 | 136 |
+| Tier A: standalone core | 365 | 259 | 146 | 85 | 0 | 3 | 131 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `87` |
+| `partial` | `92` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `289` |
+| `deferred` | `284` |
 
 ## Group counts
 
@@ -558,7 +558,7 @@
 | `watch` | `transactions` | `full` | `-` | `-2` | `-` | `no` | `@fast, @transaction` |
 | `xack` | `stream` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@write, @stream, @fast` |
 | `xackdel` | `stream` | `deferred` | `v0.9.1` | `-6` | `-` | `no` | `@write, @stream, @fast` |
-| `xadd` | `stream` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@write, @stream, @fast` |
+| `xadd` | `stream` | `partial` | `-` | `-5` | `-` | `no` | `@write, @stream, @fast` |
 | `xautoclaim` | `stream` | `deferred` | `v0.9.1` | `-6` | `-` | `no` | `@write, @stream, @fast` |
 | `xcfgset` | `stream` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@write, @stream, @fast` |
 | `xclaim` | `stream` | `deferred` | `v0.9.1` | `-6` | `-` | `no` | `@write, @stream, @fast` |
@@ -577,13 +577,13 @@
 | `xinfo|groups` | `stream` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@read, @stream, @slow` |
 | `xinfo|help` | `stream` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@stream, @slow` |
 | `xinfo|stream` | `stream` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @stream, @slow` |
-| `xlen` | `stream` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@read, @stream, @fast` |
+| `xlen` | `stream` | `partial` | `-` | `2` | `-` | `no` | `@read, @stream, @fast` |
 | `xnack` | `stream` | `deferred` | `v0.9.1` | `-7` | `-` | `no` | `@stream` |
 | `xpending` | `stream` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @stream, @slow` |
-| `xrange` | `stream` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@read, @stream, @slow` |
-| `xread` | `stream` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@read, @stream, @slow, @blocking` |
+| `xrange` | `stream` | `partial` | `-` | `-4` | `-` | `no` | `@read, @stream, @slow` |
+| `xread` | `stream` | `partial` | `-` | `-4` | `-` | `no` | `@read, @stream, @slow, @blocking` |
 | `xreadgroup` | `stream` | `deferred` | `v0.9.1` | `-7` | `-` | `no` | `@write, @stream, @slow, @blocking` |
-| `xrevrange` | `stream` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@read, @stream, @slow` |
+| `xrevrange` | `stream` | `partial` | `-` | `-4` | `-` | `no` | `@read, @stream, @slow` |
 | `xsetid` | `stream` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@write, @stream, @fast` |
 | `xtrim` | `stream` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@write, @stream, @slow` |
 | `zadd` | `sorted-set` | `full` | `-` | `-4` | `-` | `no` | `@write, @sortedset, @fast` |

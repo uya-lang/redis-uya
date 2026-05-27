@@ -31,7 +31,7 @@
 
 - `make test`、`make test-integration`、`make benchmark-v0.8.1` 与 `bash scripts/verify_definition_of_done.sh` 当前已恢复为通过状态。
 - `maxmemory` 集成测试口径已按当前实现重新校准；`benchmark-v0.8.1` guard 现已改为“绝对基线 + 同机 Redis 归一化兜底”并恢复转绿。
-- `COMMAND*` 真值、版本号一致性与命令完成度统计分层已收口；`v0.9.1` 审计整改主线现已完成，下一阶段主线转入 `v0.9.2` 的 Redis Open Source 单机核心缺口补齐。
+- `COMMAND*` 真值、版本号一致性与命令完成度统计分层已收口；`v0.9.1` 审计整改主线现已完成，当前主线推进 `v0.9.3` 的 Redis Open Source 单机核心缺口补齐。
 - `v1.0.0` 的封版门槛先收敛 Redis Open Source 单机核心，不再把模块命令数量当作当前完成度包装。
 
 下方列表主要记录历史里程碑沉淀与当前代码库已落地模块，不等价于“当前 `HEAD` 已重新全量复核通过”。
@@ -106,8 +106,8 @@
 下一阶段：
 
 - `v0.9.1`：审计整改与真实性修复已完成，当前已修复 `maxmemory` 集成测试口径、收回当前 `CLIENT/CONFIG` 子命令矩阵真值、统一运行时版本串，并恢复 benchmark / DoD 校验转绿。
-- `v0.9.2`：继续补 Redis Open Source 单机核心缺口，当前优先脚本第一批；`PFADD/PFCOUNT/PFMERGE` 已以 exact set-backed partial 形态落地，`GEOADD/GEODIST/GEOSEARCH` 已以 exact zset-backed partial 形态落地，`EVAL/EVALSHA/SCRIPT LOAD|EXISTS|FLUSH` 已以 single-call script subset partial 形态落地，`MEMORY HELP/STATS/USAGE/DOCTOR` 已以 runtime-approx partial 形态落地，`SLOWLOG HELP/LEN/GET/RESET` 已以 in-process ring partial 形态落地，`LATENCY HELP/LATEST/HISTORY/RESET/DOCTOR/HISTOGRAM/GRAPH` 已以 empty-event compatibility partial 形态落地，`MONITOR` 已以流式命令观测 partial 形态落地。
-- `v0.9.3`：收口 Streams、Functions/Script、ACL 与运维诊断第一批，再推进持久化/复制边界深化。
+- `v0.9.2`：继续补 Redis Open Source 单机核心缺口；`PFADD/PFCOUNT/PFMERGE` 已以 exact set-backed partial 形态落地，`GEOADD/GEODIST/GEOSEARCH` 已以 exact zset-backed partial 形态落地，`EVAL/EVALSHA/SCRIPT LOAD|EXISTS|FLUSH` 已以 single-call script subset partial 形态落地，`MEMORY HELP/STATS/USAGE/DOCTOR` 已以 runtime-approx partial 形态落地，`SLOWLOG HELP/LEN/GET/RESET` 已以 in-process ring partial 形态落地，`LATENCY HELP/LATEST/HISTORY/RESET/DOCTOR/HISTOGRAM/GRAPH` 已以 empty-event compatibility partial 形态落地，`MONITOR` 已以流式命令观测 partial 形态落地。
+- `v0.9.3`：收口 Streams、Functions/Script、ACL 与运维诊断第一批，再推进持久化/复制边界深化；`XADD/XLEN/XRANGE/XREVRANGE/XREAD` 已以非阻塞基础 stream partial 形态落地。
 
 当前阶段尚未生产可用。
 
@@ -143,7 +143,7 @@ TCP 集成 smoke：
 make test-integration
 ```
 
-`make test-integration` 当前覆盖基础 TCP smoke、blocking list/zset、空闲连接不阻塞其他客户端、持久化/复制/事务/Pub/Sub/MONITOR/控制面兼容路径，`maxmemory` / 淘汰策略 / 内存统计 / 压力回归，以及历史集群基础 smoke。当前 `HEAD` 该目标已恢复为全绿；当前主线已转入 `v0.9.2` 的 bitmap/bitfield、HLL/GEO 与脚本第一批缺口补齐，详见 `docs/redis-uya-todo.md`。
+`make test-integration` 当前覆盖基础 TCP smoke、blocking list/zset、Streams 第一批、空闲连接不阻塞其他客户端、持久化/复制/事务/Pub/Sub/MONITOR/控制面兼容路径，`maxmemory` / 淘汰策略 / 内存统计 / 压力回归，以及历史集群基础 smoke。当前 `HEAD` 该目标已恢复为全绿；当前主线已进入 `v0.9.3` 的 Streams、Functions/Script、ACL 与运维面缺口补齐，详见 `docs/redis-uya-todo.md`。
 
 v0.8.0 核心性能基线：
 
@@ -286,6 +286,7 @@ build/redis-uya 6380 1
 - Slowlog 第一批 partial：`SLOWLOG HELP`、`SLOWLOG LEN`、`SLOWLOG GET`、`SLOWLOG RESET` 当前可用；slowlog 当前是 redis-uya 进程内固定容量 ring，记录执行命令与占位 `duration_us=0`，不含 Redis 原生阈值配置、真实微秒耗时和客户端端点/名称真值
 - Latency 第一批 partial：`LATENCY HELP`、`LATENCY LATEST`、`LATENCY HISTORY`、`LATENCY RESET`、`LATENCY DOCTOR`、`LATENCY HISTOGRAM`、`LATENCY GRAPH` 当前可用；当前暴露空事件兼容面，尚未采样真实延迟事件和命令直方图
 - Monitor 第一批 partial：`MONITOR` 当前可让连接进入流式观测模式，并向 monitor 客户端推送后续成功执行的普通命令；当前监控行使用 redis-uya 占位端点，不包含 Redis 原生客户端地址、DB 切换真值或微秒精度时间
+- Streams 第一批 partial：`XADD`、`XLEN`、`XRANGE`、`XREVRANGE`、`XREAD` 当前可用；当前只支持基础追加、长度、范围读取和非阻塞读取，尚不支持 `XADD` trim / `NOMKSTREAM` 等选项、`XREAD BLOCK`、consumer group、stream 删除/裁剪和 Redis 原生 radix-tree/listpack 编码。项目内 RDB 与 AOF rewrite 会保存显式 stream ID；普通 AOF append 仍记录原始请求，因此 `XADD *` 回放会重新生成 ID，只承诺恢复条目内容与顺序
 - Hash 第一批数值：`HINCRBY`、`HINCRBYFLOAT`
 - Hash 第二批视图：`HKEYS`、`HVALS`、`HGETALL`
 - Hash 第三批扫描：`HSCAN`

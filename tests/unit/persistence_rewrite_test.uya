@@ -20,6 +20,7 @@ use src.storage.object.create_hash_object;
 use src.storage.object.create_list_object;
 use src.storage.object.create_set_object;
 use src.storage.object.create_zset_object;
+use src.storage.object.create_stream_object;
 use src.storage.object.hash_object_set_field;
 use src.storage.object.hash_object_get_field;
 use src.storage.object.list_object_push_head;
@@ -30,6 +31,8 @@ use src.storage.object.set_object_remove_member;
 use src.storage.object.zset_object_add_member;
 use src.storage.object.zset_object_range_reply;
 use src.storage.object.zset_object_get_score;
+use src.storage.object.stream_object_append_entry;
+use src.storage.object.stream_object_len;
 use src.storage.object.list_object_len;
 use src.storage.object.object_free;
 use src.memory.allocator.used_memory;
@@ -78,6 +81,14 @@ export fn test_aof_rewrite_roundtrip_current_types() !void {
     _ = try zset_object_add_member(zset_obj, 1, &"a"[0: 1]);
     try set_key(&engine, &"zset"[0: 4], zset_obj);
 
+    const stream_obj: &RedisObject = try create_stream_object();
+    const stream_entry: &RedisObject = try create_list_object();
+    _ = try list_object_push_head(stream_entry, &"value"[0: 5]);
+    _ = try list_object_push_head(stream_entry, &"field"[0: 5]);
+    _ = try list_object_push_head(stream_entry, &"1000-0"[0: 6]);
+    _ = try stream_object_append_entry(stream_obj, stream_entry, 1000u64, 0u64);
+    try set_key(&engine, &"stream"[0: 6], stream_obj);
+
     try aof_rewrite_file_at(path, &engine, 1000u64);
     engine_free(&engine);
 
@@ -116,6 +127,11 @@ export fn test_aof_rewrite_roundtrip_current_types() !void {
     try assert_eq_i32((try zset_object_get_score(zset_found, &"a"[0: 1])) as i32, 1);
     try assert_eq_i32((try zset_object_get_score(zset_found, &"b"[0: 1])) as i32, 2);
     object_free(zrange);
+
+    const stream_found: &RedisObject = try lookup_key_at(&replay_engine, &"stream"[0: 6], 2000u64);
+    try assert_eq_i32(stream_found.obj_type as i32, ObjectType.object_stream as i32);
+    try assert_eq_i32((try stream_object_len(stream_found)) as i32, 1);
+    try assert_true(rewrite_test_slice_eq(stream_found.list_head.value.list_head.value.value.buf[0: stream_found.list_head.value.list_head.value.value.len], &"1000-0"[0: 6]));
 
     engine_free(&replay_engine);
     _ = unlink(path);

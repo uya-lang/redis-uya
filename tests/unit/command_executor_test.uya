@@ -2387,6 +2387,80 @@ export fn test_command_lpush_lpop_lrange() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_command_streams_first_batch() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var out: [byte: 1024] = [];
+
+    var xadd_parsed: RespParseResult = try parse_resp2(&"*7\r\n$4\r\nXADD\r\n$6\r\nstream\r\n$1\r\n*\r\n$2\r\nf1\r\n$2\r\nv1\r\n$2\r\nf2\r\n$2\r\nv2\r\n"[0: 65]);
+    const xadd_command: Command = try command_executor_test_command(&router, &xadd_parsed);
+    const xadd_reply: CommandReply = command_execute_at(&engine, &xadd_command, 1000u64);
+    try assert_eq_i32(xadd_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(xadd_reply.data, &"1000-0"[0: 6]));
+    command_reply_cleanup(&xadd_reply);
+    resp_value_free(&xadd_parsed.value);
+
+    var xadd_second_parsed: RespParseResult = try parse_resp2(&"*5\r\n$4\r\nXADD\r\n$6\r\nstream\r\n$1\r\n*\r\n$1\r\nf\r\n$2\r\nv3\r\n"[0: 48]);
+    const xadd_second_command: Command = try command_executor_test_command(&router, &xadd_second_parsed);
+    const xadd_second_reply: CommandReply = command_execute_at(&engine, &xadd_second_command, 1000u64);
+    try assert_eq_i32(xadd_second_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(xadd_second_reply.data, &"1000-1"[0: 6]));
+    command_reply_cleanup(&xadd_second_reply);
+    resp_value_free(&xadd_second_parsed.value);
+
+    var xlen_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nXLEN\r\n$6\r\nstream\r\n"[0: 26]);
+    const xlen_command: Command = try command_executor_test_command(&router, &xlen_parsed);
+    const xlen_reply: CommandReply = command_execute_at(&engine, &xlen_command, 1000u64);
+    try assert_eq_i32(xlen_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(xlen_reply.integer as i32, 2);
+    resp_value_free(&xlen_parsed.value);
+
+    var xrange_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nXRANGE\r\n$6\r\nstream\r\n$1\r\n-\r\n$1\r\n+\r\n"[0: 42]);
+    const xrange_command: Command = try command_executor_test_command(&router, &xrange_parsed);
+    const xrange_reply: CommandReply = command_execute_at(&engine, &xrange_command, 1000u64);
+    try assert_eq_i32(xrange_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    const xrange_len: usize = try connection_encode_reply(&xrange_reply, &out[0], 1024);
+    try assert_true(command_executor_test_contains(out[0: xrange_len], &"$6\r\n1000-0\r\n"[0: 12]));
+    try assert_true(command_executor_test_contains(out[0: xrange_len], &"$2\r\nf1\r\n$2\r\nv1\r\n"[0: 16]));
+    try assert_true(command_executor_test_contains(out[0: xrange_len], &"$6\r\n1000-1\r\n"[0: 12]));
+    command_reply_cleanup(&xrange_reply);
+    resp_value_free(&xrange_parsed.value);
+
+    var xrevrange_parsed: RespParseResult = try parse_resp2(&"*6\r\n$9\r\nXREVRANGE\r\n$6\r\nstream\r\n$1\r\n+\r\n$1\r\n-\r\n$5\r\nCOUNT\r\n$1\r\n1\r\n"[0: 63]);
+    const xrevrange_command: Command = try command_executor_test_command(&router, &xrevrange_parsed);
+    const xrevrange_reply: CommandReply = command_execute_at(&engine, &xrevrange_command, 1000u64);
+    const xrevrange_len: usize = try connection_encode_reply(&xrevrange_reply, &out[0], 1024);
+    try assert_true(command_executor_test_contains(out[0: xrevrange_len], &"$6\r\n1000-1\r\n"[0: 12]));
+    try assert_true(!command_executor_test_contains(out[0: xrevrange_len], &"$6\r\n1000-0\r\n"[0: 12]));
+    command_reply_cleanup(&xrevrange_reply);
+    resp_value_free(&xrevrange_parsed.value);
+
+    var xread_parsed: RespParseResult = try parse_resp2(&"*6\r\n$5\r\nXREAD\r\n$5\r\nCOUNT\r\n$1\r\n2\r\n$7\r\nSTREAMS\r\n$6\r\nstream\r\n$3\r\n0-0\r\n"[0: 67]);
+    const xread_command: Command = try command_executor_test_command(&router, &xread_parsed);
+    const xread_reply: CommandReply = command_execute_at(&engine, &xread_command, 1000u64);
+    try assert_eq_i32(xread_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    const xread_len: usize = try connection_encode_reply(&xread_reply, &out[0], 1024);
+    try assert_true(command_executor_test_contains(out[0: xread_len], &"$6\r\nstream\r\n"[0: 12]));
+    try assert_true(command_executor_test_contains(out[0: xread_len], &"$6\r\n1000-1\r\n"[0: 12]));
+    command_reply_cleanup(&xread_reply);
+    resp_value_free(&xread_parsed.value);
+
+    var set_plain_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$5\r\nplain\r\n$1\r\nx\r\n"[0: 31]);
+    const set_plain_command: Command = try command_executor_test_command(&router, &set_plain_parsed);
+    _ = command_execute_at(&engine, &set_plain_command, 1000u64);
+    resp_value_free(&set_plain_parsed.value);
+
+    var wrongtype_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nXLEN\r\n$5\r\nplain\r\n"[0: 25]);
+    const wrongtype_command: Command = try command_executor_test_command(&router, &wrongtype_parsed);
+    const wrongtype_reply: CommandReply = command_execute_at(&engine, &wrongtype_command, 1000u64);
+    try assert_eq_i32(wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    resp_value_free(&wrongtype_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_command_rpush_rpop_lindex_lset_llen() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();

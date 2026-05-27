@@ -9,6 +9,7 @@ use src.storage.object.create_hash_object;
 use src.storage.object.create_list_object;
 use src.storage.object.create_set_object;
 use src.storage.object.create_zset_object;
+use src.storage.object.create_stream_object;
 use src.storage.object.hash_object_delete_field;
 use src.storage.object.hash_object_exists_field;
 use src.storage.object.hash_object_set_field;
@@ -26,6 +27,8 @@ use src.storage.object.zset_object_add_member;
 use src.storage.object.zset_object_remove_member;
 use src.storage.object.zset_object_len;
 use src.storage.object.zset_object_range_reply;
+use src.storage.object.stream_object_append_entry;
+use src.storage.object.stream_object_len;
 use src.storage.object.ListRangeView;
 use src.storage.object.ListNode;
 use src.storage.object.object_free;
@@ -196,6 +199,27 @@ export fn test_object_zset_create_add_remove_range_free() !void {
     try assert_eq_i32((try zset_object_len(obj)) as i32, 2);
 
     object_free(obj);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_object_stream_create_append_free() !void {
+    reset_memory_stats_for_test();
+    const stream: &RedisObject = try create_stream_object();
+    try assert_eq_i32(stream.obj_type as i32, ObjectType.object_stream as i32);
+    try assert_eq_i32(stream.encoding as i32, Encoding.encoding_stream_list as i32);
+    try assert_true(object_slice_eq(object_type_name(stream.obj_type), &"stream"[0: 6]));
+    try assert_true(object_slice_eq(object_encoding_name(stream.encoding), &"streamlist"[0: 10]));
+
+    const entry: &RedisObject = try create_list_object();
+    _ = try list_object_push_head(entry, &"value"[0: 5]);
+    _ = try list_object_push_head(entry, &"field"[0: 5]);
+    _ = try list_object_push_head(entry, &"1000-0"[0: 6]);
+    try assert_eq_i32((try stream_object_append_entry(stream, entry, 1000u64, 0u64)) as i32, 1);
+    try assert_eq_i32((try stream_object_len(stream)) as i32, 1);
+    try assert_eq_i32(stream.stream_last_ms as i32, 1000);
+    try assert_eq_i32(stream.stream_last_seq as i32, 0);
+
+    object_free(stream);
     try assert_eq_i32(used_memory() as i32, 0);
 }
 

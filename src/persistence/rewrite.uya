@@ -23,6 +23,7 @@ use src.storage.object.list_object_len;
 use src.storage.object.zset_object_range_reply;
 use src.storage.object.zset_object_get_score;
 use src.storage.object.hash_object_get_field;
+use src.storage.object.stream_object_len;
 use src.storage.object.object_free;
 
 export error RewritePathTooLong;
@@ -255,6 +256,35 @@ fn rewrite_emit_zset(aof: &AofWriter, key: &[byte], obj: &RedisObject) !void {
     }
 }
 
+fn rewrite_emit_stream(aof: &AofWriter, key: &[byte], obj: &RedisObject) !void {
+    const count: usize = stream_object_len(obj) catch {
+        return error.RewriteUnsupportedType;
+    };
+    if count == 0 {
+        return error.RewriteUnsupportedType;
+    }
+
+    var node: &ListNode = obj.list_head;
+    while node != null {
+        const entry: &RedisObject = node.value;
+        const entry_count: usize = list_object_len(entry) catch {
+            return error.RewriteUnsupportedType;
+        };
+        if entry_count < 3 || ((entry_count - 1) % 2usize) != 0usize {
+            return error.RewriteUnsupportedType;
+        }
+        try rewrite_append_array_header(aof, 3u64 + ((entry_count - 1) as u64));
+        try rewrite_append_bulk(aof, &"XADD"[0: 4]);
+        try rewrite_append_bulk(aof, key);
+        var entry_node: &ListNode = entry.list_head;
+        while entry_node != null {
+            try rewrite_append_bulk(aof, entry_node.value.value.buf[0: entry_node.value.value.len]);
+            entry_node = entry_node.next;
+        }
+        node = node.next;
+    }
+}
+
 export fn aof_rewrite_append_key_at(aof: &AofWriter, engine: &Engine, key: &[byte], now_ms: u64) !bool {
     const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
         return false;
@@ -274,6 +304,9 @@ export fn aof_rewrite_append_key_at(aof: &AofWriter, engine: &Engine, key: &[byt
         },
         ObjectType.object_zset => {
             try rewrite_emit_zset(aof, key, obj);
+        },
+        ObjectType.object_stream => {
+            try rewrite_emit_stream(aof, key, obj);
         },
         else => {
             return error.RewriteUnsupportedType;

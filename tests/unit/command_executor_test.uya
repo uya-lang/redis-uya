@@ -4523,6 +4523,78 @@ export fn test_command_slowlog() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_command_latency() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+
+    var latest_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nLATENCY\r\n$6\r\nLATEST\r\n"[0: 29]);
+    const latest_command: Command = try command_executor_test_command(&router, &latest_parsed);
+    var latest_reply: CommandReply = command_execute_at(&engine, &latest_command, 1000u64);
+    try assert_eq_i32(latest_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    try assert_true(command_executor_test_slice_eq(latest_reply.data, &"*0\r\n"[0: 4]));
+    command_reply_cleanup(&latest_reply);
+    resp_value_free(&latest_parsed.value);
+
+    var history_parsed: RespParseResult = try parse_resp2(&"*3\r\n$7\r\nLATENCY\r\n$7\r\nHISTORY\r\n$7\r\ncommand\r\n"[0: 43]);
+    const history_command: Command = try command_executor_test_command(&router, &history_parsed);
+    var history_reply: CommandReply = command_execute_at(&engine, &history_command, 1000u64);
+    try assert_eq_i32(history_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    try assert_true(command_executor_test_slice_eq(history_reply.data, &"*0\r\n"[0: 4]));
+    command_reply_cleanup(&history_reply);
+    resp_value_free(&history_parsed.value);
+
+    var histogram_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nLATENCY\r\n$9\r\nHISTOGRAM\r\n"[0: 32]);
+    const histogram_command: Command = try command_executor_test_command(&router, &histogram_parsed);
+    var histogram_reply: CommandReply = command_execute_at(&engine, &histogram_command, 1000u64);
+    try assert_eq_i32(histogram_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    try assert_true(command_executor_test_slice_eq(histogram_reply.data, &"*0\r\n"[0: 4]));
+    command_reply_cleanup(&histogram_reply);
+    resp_value_free(&histogram_parsed.value);
+
+    var graph_parsed: RespParseResult = try parse_resp2(&"*3\r\n$7\r\nLATENCY\r\n$5\r\nGRAPH\r\n$7\r\ncommand\r\n"[0: 41]);
+    const graph_command: Command = try command_executor_test_command(&router, &graph_parsed);
+    var graph_reply: CommandReply = command_execute_at(&engine, &graph_command, 1000u64);
+    try assert_eq_i32(graph_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_contains(graph_reply.data, &"LATENCY GRAPH is empty"[0: 22]));
+    command_reply_cleanup(&graph_reply);
+    resp_value_free(&graph_parsed.value);
+
+    var doctor_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nLATENCY\r\n$6\r\nDOCTOR\r\n"[0: 29]);
+    const doctor_command: Command = try command_executor_test_command(&router, &doctor_parsed);
+    var doctor_reply: CommandReply = command_execute_at(&engine, &doctor_command, 1000u64);
+    try assert_eq_i32(doctor_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_contains(doctor_reply.data, &"No latency events"[0: 17]));
+    command_reply_cleanup(&doctor_reply);
+    resp_value_free(&doctor_parsed.value);
+
+    var reset_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nLATENCY\r\n$5\r\nRESET\r\n"[0: 28]);
+    const reset_command: Command = try command_executor_test_command(&router, &reset_parsed);
+    const reset_reply: CommandReply = command_execute_at(&engine, &reset_command, 1000u64);
+    try assert_eq_i32(reset_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(reset_reply.integer as i32, 0);
+    resp_value_free(&reset_parsed.value);
+
+    var unknown_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nLATENCY\r\n$1\r\nX\r\n"[0: 24]);
+    const unknown_command: Command = try command_executor_test_command(&router, &unknown_parsed);
+    var unknown_reply: CommandReply = command_execute_at(&engine, &unknown_command, 1000u64);
+    try assert_eq_i32(unknown_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(unknown_reply.data, &"ERR unknown subcommand 'X'. Try LATENCY HELP."[0: 45]));
+    command_reply_cleanup(&unknown_reply);
+    resp_value_free(&unknown_parsed.value);
+
+    var history_bad_arity_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nLATENCY\r\n$7\r\nHISTORY\r\n"[0: 30]);
+    const history_bad_arity_command: Command = try command_executor_test_command(&router, &history_bad_arity_parsed);
+    var history_bad_arity_reply: CommandReply = command_execute_at(&engine, &history_bad_arity_command, 1000u64);
+    try assert_eq_i32(history_bad_arity_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(history_bad_arity_reply.data, &"ERR wrong number of arguments for 'latency|history' command"[0: 59]));
+    command_reply_cleanup(&history_bad_arity_reply);
+    resp_value_free(&history_bad_arity_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_command_move() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();

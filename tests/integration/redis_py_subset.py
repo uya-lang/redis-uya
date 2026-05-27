@@ -265,6 +265,29 @@ class RedisPySubsetClient:
     def slowlog_reset(self) -> bool:
         return self._request(b"SLOWLOG", b"RESET") == "OK"
 
+    def latency_latest(self):
+        result = self._request(b"LATENCY", b"LATEST")
+        assert isinstance(result, list)
+        return result
+
+    def latency_history(self, event: str):
+        result = self._request(b"LATENCY", b"HISTORY", event.encode())
+        assert isinstance(result, list)
+        return result
+
+    def latency_histogram(self):
+        result = self._request(b"LATENCY", b"HISTOGRAM")
+        assert isinstance(result, list)
+        return result
+
+    def latency_doctor(self) -> bytes:
+        result = self._request(b"LATENCY", b"DOCTOR")
+        assert isinstance(result, bytes)
+        return result
+
+    def latency_reset(self) -> int:
+        return int(self._request(b"LATENCY", b"RESET"))
+
     def setrange(self, key: str, offset: int, value: str) -> int:
         return int(self._request(b"SETRANGE", key.encode(), str(offset).encode(), value.encode()))
 
@@ -935,6 +958,16 @@ def run_smoke() -> None:
             assert client.slowlog_reset()
             if client.slowlog_len() != 0:
                 raise AssertionError("expected SLOWLOG LEN 0 after RESET")
+            if client.latency_latest() != []:
+                raise AssertionError("expected empty LATENCY LATEST partial result")
+            if client.latency_history("command") != []:
+                raise AssertionError("expected empty LATENCY HISTORY partial result")
+            if client.latency_histogram() != []:
+                raise AssertionError("expected empty LATENCY HISTOGRAM partial result")
+            if b"No latency events" not in client.latency_doctor():
+                raise AssertionError("expected LATENCY DOCTOR minimal diagnostic")
+            if client.latency_reset() != 0:
+                raise AssertionError("expected LATENCY RESET 0")
             assert client.setrange("key", 5, "__") == 7
             assert client.get("key") == b"value__"
             assert client.rename("key", "key2")

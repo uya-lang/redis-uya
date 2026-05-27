@@ -2033,6 +2033,36 @@ SLOWLOG RESET
 - 当前 `duration_us` 固定为 `0`，客户端地址固定为占位值 `127.0.0.1:0`，不代表 Redis 原生真实慢查询采样结果
 - 当前不支持 Redis 原生 `slowlog-log-slower-than` / `slowlog-max-len` 配置联动
 
+### `LATENCY`
+
+格式：
+
+```text
+LATENCY HELP
+LATENCY LATEST
+LATENCY HISTORY event
+LATENCY RESET [event [event ...]]
+LATENCY DOCTOR
+LATENCY HISTOGRAM [command [command ...]]
+LATENCY GRAPH event
+```
+
+返回：
+
+- `HELP`：返回当前支持的 `LATENCY` 子命令说明
+- `LATEST`：返回 latest event 数组；当前为空数组
+- `HISTORY`：返回指定 event 的历史数组；当前为空数组
+- `RESET`：返回已清除 event 数；当前为 `0`
+- `DOCTOR`：返回 minimal 诊断文本 Bulk String
+- `HISTOGRAM`：返回命令延迟直方图数组；当前为空数组
+- `GRAPH`：返回指定 event 的 ASCII graph 文本；当前说明未采样事件
+
+说明：
+
+- 当前实现为 partial：只提供 Redis 单机运维命令的兼容入口、参数校验和空事件返回
+- 当前尚未采样真实延迟事件、命令直方图或事件历史；这些能力后续与可观测/性能收敛一起推进
+- 当前不支持基于 `latency-monitor-threshold` 的 Redis 原生事件采样语义
+
 ### `INFO`
 
 格式：

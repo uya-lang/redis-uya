@@ -106,7 +106,7 @@
 下一阶段：
 
 - `v0.9.1`：审计整改与真实性修复已完成，当前已修复 `maxmemory` 集成测试口径、收回当前 `CLIENT/CONFIG` 子命令矩阵真值、统一运行时版本串，并恢复 benchmark / DoD 校验转绿。
-- `v0.9.2`：继续补 Redis Open Source 单机核心缺口，当前优先脚本第一批；`PFADD/PFCOUNT/PFMERGE` 已以 exact set-backed partial 形态落地，`GEOADD/GEODIST/GEOSEARCH` 已以 exact zset-backed partial 形态落地，`EVAL/EVALSHA/SCRIPT LOAD|EXISTS|FLUSH` 已以 single-call script subset partial 形态落地，`MEMORY HELP/STATS/USAGE/DOCTOR` 已以 runtime-approx partial 形态落地，`SLOWLOG HELP/LEN/GET/RESET` 已以 in-process ring partial 形态落地。
+- `v0.9.2`：继续补 Redis Open Source 单机核心缺口，当前优先脚本第一批；`PFADD/PFCOUNT/PFMERGE` 已以 exact set-backed partial 形态落地，`GEOADD/GEODIST/GEOSEARCH` 已以 exact zset-backed partial 形态落地，`EVAL/EVALSHA/SCRIPT LOAD|EXISTS|FLUSH` 已以 single-call script subset partial 形态落地，`MEMORY HELP/STATS/USAGE/DOCTOR` 已以 runtime-approx partial 形态落地，`SLOWLOG HELP/LEN/GET/RESET` 已以 in-process ring partial 形态落地，`LATENCY HELP/LATEST/HISTORY/RESET/DOCTOR/HISTOGRAM/GRAPH` 已以 empty-event compatibility partial 形态落地。
 - `v0.9.3`：收口 Streams、Functions/Script、ACL 与运维诊断第一批，再推进持久化/复制边界深化。
 
 当前阶段尚未生产可用。
@@ -284,6 +284,7 @@ build/redis-uya 6380 1
 - Scripting 第一批 partial：`EVAL`、`EVALSHA`、`SCRIPT LOAD/EXISTS/FLUSH` 当前可用，但只支持单条 `return redis.call(...)` 脚本子集；AOF/复制传播的是脚本内部实际执行的命令效果，而不是原始 `EVAL*`
 - Memory 第一批 partial：`MEMORY HELP`、`MEMORY STATS`、`MEMORY USAGE`、`MEMORY DOCTOR` 当前可用；`USAGE` 返回基于 redis-uya 对象布局、dict/list 节点和 SDS 容量的近似运行时占用，不是 Redis 原生 jemalloc 口径
 - Slowlog 第一批 partial：`SLOWLOG HELP`、`SLOWLOG LEN`、`SLOWLOG GET`、`SLOWLOG RESET` 当前可用；slowlog 当前是 redis-uya 进程内固定容量 ring，记录执行命令与占位 `duration_us=0`，不含 Redis 原生阈值配置、真实微秒耗时和客户端端点/名称真值
+- Latency 第一批 partial：`LATENCY HELP`、`LATENCY LATEST`、`LATENCY HISTORY`、`LATENCY RESET`、`LATENCY DOCTOR`、`LATENCY HISTOGRAM`、`LATENCY GRAPH` 当前可用；当前暴露空事件兼容面，尚未采样真实延迟事件和命令直方图
 - Hash 第一批数值：`HINCRBY`、`HINCRBYFLOAT`
 - Hash 第二批视图：`HKEYS`、`HVALS`、`HGETALL`
 - Hash 第三批扫描：`HSCAN`
@@ -351,7 +352,7 @@ build/redis-uya 6380 1
 | `v0.8.1` | 写路径性能修复 | WATCH 懒维护、Dict 单次探测、AOF 分层写入 |
 | `v0.9.0` | 单机核心命令补齐 | String/Hash/List/Set/ZSet/Key/Server/Security 核心命令 |
 | `v0.9.1` | 审计整改与真实性修复 | 修正文档/控制面/测试/benchmark 口径，统一版本号 |
-| `v0.9.2` | 单机核心缺口补齐 I | blocking list/zset、bitmap/bitfield、HLL/GEO、脚本第一批、Memory/Slowlog 第一批 |
+| `v0.9.2` | 单机核心缺口补齐 I | blocking list/zset、bitmap/bitfield、HLL/GEO、脚本第一批、Memory/Slowlog/Latency 第一批 |
 | `v0.9.3` | 单机核心缺口补齐 II | Streams、Functions/Script、ACL、运维诊断第一批 |
 | `v0.9.4` | 性能与稳定性收敛 | benchmark guard 恢复、release build 基线、长时运行、故障恢复 |
 | `v0.9.5`, `v0.9.6`, ... | 单机封版候选迭代 | 核心命令矩阵、文档、性能、运维边界综合收口 |

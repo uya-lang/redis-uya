@@ -236,6 +236,23 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"slowlog commands missing from COMMAND INFO: {slowlog_info!r}")
 
+            latency_info = send_command(sock, b"COMMAND", b"INFO", b"LATENCY", b"LATENCY|LATEST", b"LATENCY|HISTORY", b"LATENCY|RESET", b"LATENCY|DOCTOR")
+            if (
+                not isinstance(latency_info, list)
+                or len(latency_info) != 5
+                or not isinstance(latency_info[0], list)
+                or latency_info[0][0] != b"latency"
+                or not isinstance(latency_info[1], list)
+                or latency_info[1][0] != b"latency|latest"
+                or not isinstance(latency_info[2], list)
+                or latency_info[2][0] != b"latency|history"
+                or not isinstance(latency_info[3], list)
+                or latency_info[3][0] != b"latency|reset"
+                or not isinstance(latency_info[4], list)
+                or latency_info[4][0] != b"latency|doctor"
+            ):
+                raise AssertionError(f"latency commands missing from COMMAND INFO: {latency_info!r}")
+
             zset_info = send_command(sock, b"COMMAND", b"INFO", b"ZRANK", b"ZREVRANK", b"ZSCORE", b"ZMSCORE", b"ZPOPMAX", b"ZPOPMIN", b"BZPOPMAX", b"BZPOPMIN")
             if (
                 not isinstance(zset_info, list)
@@ -401,6 +418,20 @@ def run_smoke() -> None:
                 or b"slowlog|help" not in listed_slowlog
             ):
                 raise AssertionError(f"unexpected COMMAND LIST slowlog* result: {listed_slowlog!r}")
+
+            listed_latency = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"LATENCY*")
+            if (
+                not isinstance(listed_latency, list)
+                or b"latency" not in listed_latency
+                or b"latency|latest" not in listed_latency
+                or b"latency|history" not in listed_latency
+                or b"latency|reset" not in listed_latency
+                or b"latency|doctor" not in listed_latency
+                or b"latency|histogram" not in listed_latency
+                or b"latency|graph" not in listed_latency
+                or b"latency|help" not in listed_latency
+            ):
+                raise AssertionError(f"unexpected COMMAND LIST latency* result: {listed_latency!r}")
 
             listed_zpop = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"ZPOP*")
             if (

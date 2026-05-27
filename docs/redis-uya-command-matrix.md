@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 71 | 0 | 3 | 145 |
+| Tier A: standalone core | 365 | 259 | 146 | 79 | 0 | 3 | 137 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `78` |
+| `partial` | `86` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `298` |
+| `deferred` | `290` |
 
 ## Group counts
 
@@ -357,14 +357,14 @@
 | `json.type` | `json` | `deferred` | `v0.9.2` | `-2` | `json` | `no` | `@json, @read, @slow` |
 | `keys` | `generic` | `full` | `-` | `2` | `-` | `yes` | `@keyspace, @read, @slow, @dangerous` |
 | `lastsave` | `server` | `full` | `-` | `1` | `-` | `no` | `@admin, @fast, @dangerous` |
-| `latency` | `server` | `deferred` | `v0.9.3` | `-2` | `-` | `no` | `@slow` |
-| `latency|doctor` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `latency|graph` | `server` | `deferred` | `v0.9.3` | `3` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `latency|help` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@slow` |
-| `latency|histogram` | `server` | `deferred` | `v0.9.3` | `-2` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `latency|history` | `server` | `deferred` | `v0.9.3` | `3` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `latency|latest` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `latency|reset` | `server` | `deferred` | `v0.9.3` | `-2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `latency` | `server` | `partial` | `-` | `-2` | `-` | `no` | `@slow` |
+| `latency|doctor` | `server` | `partial` | `-` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `latency|graph` | `server` | `partial` | `-` | `3` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `latency|help` | `server` | `partial` | `-` | `2` | `-` | `no` | `@slow` |
+| `latency|histogram` | `server` | `partial` | `-` | `-2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `latency|history` | `server` | `partial` | `-` | `3` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `latency|latest` | `server` | `partial` | `-` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `latency|reset` | `server` | `partial` | `-` | `-2` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `lcs` | `string` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @string, @slow` |
 | `lindex` | `list` | `full` | `-` | `3` | `-` | `no` | `@read, @list, @slow` |
 | `linsert` | `list` | `full` | `-` | `5` | `-` | `no` | `@write, @list, @slow` |

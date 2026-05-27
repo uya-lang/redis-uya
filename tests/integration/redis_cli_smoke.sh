@@ -507,6 +507,30 @@ if [[ "$SLOWLOG_LEN_ZERO_RESULT" != "0" ]]; then
     exit 1
 fi
 
+LATENCY_LATEST_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" latency latest)"
+if [[ -n "$LATENCY_LATEST_RESULT" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected empty LATENCY LATEST, got '$LATENCY_LATEST_RESULT'" >&2
+    exit 1
+fi
+
+LATENCY_HISTORY_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" latency history command)"
+if [[ -n "$LATENCY_HISTORY_RESULT" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected empty LATENCY HISTORY, got '$LATENCY_HISTORY_RESULT'" >&2
+    exit 1
+fi
+
+LATENCY_DOCTOR_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" latency doctor)"
+if [[ "$LATENCY_DOCTOR_RESULT" != *"No latency events"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected LATENCY DOCTOR minimal diagnostic, got '$LATENCY_DOCTOR_RESULT'" >&2
+    exit 1
+fi
+
+LATENCY_RESET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" latency reset)"
+if [[ "$LATENCY_RESET_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected LATENCY RESET 0, got '$LATENCY_RESET_RESULT'" >&2
+    exit 1
+fi
+
 SETRANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" setrange key 5 __)"
 if [[ "$SETRANGE_RESULT" != "7" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected setrange 7, got '$SETRANGE_RESULT'" >&2

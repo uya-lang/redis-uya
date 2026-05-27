@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 79 | 0 | 3 | 137 |
+| Tier A: standalone core | 365 | 259 | 146 | 80 | 0 | 3 | 136 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `86` |
+| `partial` | `87` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `290` |
+| `deferred` | `289` |
 
 ## Group counts
 
@@ -395,7 +395,7 @@
 | `module|load` | `server` | `deferred` | `v0.9.3` | `-3` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `module|loadex` | `server` | `deferred` | `v0.9.3` | `-3` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `module|unload` | `server` | `deferred` | `v0.9.3` | `3` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `monitor` | `server` | `deferred` | `v0.9.3` | `1` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `monitor` | `server` | `partial` | `-` | `1` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `move` | `generic` | `partial` | `-` | `3` | `-` | `no` | `@keyspace, @write, @fast` |
 | `mset` | `string` | `full` | `-` | `-3` | `-` | `no` | `@write, @string, @slow` |
 | `msetex` | `string` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@write, @string, @slow` |

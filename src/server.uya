@@ -22,6 +22,7 @@ use src.network.connection.connection_shift_buffer;
 use src.network.connection.connection_transaction_new;
 use src.network.connection.connection_transaction_reset;
 use src.network.connection.connection_pubsub_unregister_fd;
+use src.network.connection.connection_monitor_unregister_fd;
 use src.persistence.aof.AofWriter;
 use src.persistence.aof.aof_disabled;
 use src.persistence.aof.aof_open_append;
@@ -910,6 +911,7 @@ fn server_close_client_slot(server: &RedisServer, slot: usize) void {
     }
     _ = sys_epoll_ctl(server.listener.poll_fd, EPOLL_CTL_DEL, fd, null as &EpollEvent) catch {};
     connection_pubsub_unregister_fd(fd);
+    connection_monitor_unregister_fd(fd);
     connection_client_registry_unregister_tx(&server.clients[slot].transaction);
     _ = aof_flush(&server.aof) catch {};
     _ = sys_shutdown(fd, SHUT_WR) catch {};

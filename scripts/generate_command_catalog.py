@@ -326,6 +326,7 @@ PARTIAL_NAMES = {
     "latency|history",
     "latency|latest",
     "latency|reset",
+    "monitor",
     "move",
     "memory",
     "memory|doctor",

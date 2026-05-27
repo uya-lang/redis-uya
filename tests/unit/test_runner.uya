@@ -149,6 +149,7 @@ use tests.unit.network_connection_test.test_connection_encode_resp_replies;
 use tests.unit.network_connection_test.test_connection_process_ping_set_get_quit;
 use tests.unit.network_connection_test.test_connection_process_slowlog;
 use tests.unit.network_connection_test.test_connection_process_latency;
+use tests.unit.network_connection_test.test_connection_process_monitor;
 use tests.unit.network_connection_test.test_connection_process_lmpop;
 use tests.unit.network_connection_test.test_connection_process_touch_unlink;
 use tests.unit.network_connection_test.test_connection_process_keys;
@@ -796,6 +797,10 @@ export fn main() i32 {
     const before_conn_latency: i32 = failed;
     _ = test_connection_process_latency() catch { printf("[FAIL] network_connection/latency\n" as *byte); failed = failed + 1; };
     if failed == before_conn_latency { printf("[PASS] network_connection/latency\n" as *byte); }
+
+    const before_conn_monitor: i32 = failed;
+    _ = test_connection_process_monitor() catch { printf("[FAIL] network_connection/monitor\n" as *byte); failed = failed + 1; };
+    if failed == before_conn_monitor { printf("[PASS] network_connection/monitor\n" as *byte); }
 
     const before_conn_lmpop: i32 = failed;
     _ = test_connection_process_lmpop() catch { printf("[FAIL] network_connection/lmpop\n" as *byte); failed = failed + 1; };

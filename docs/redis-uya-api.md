@@ -2063,6 +2063,30 @@ LATENCY GRAPH event
 - 当前尚未采样真实延迟事件、命令直方图或事件历史；这些能力后续与可观测/性能收敛一起推进
 - 当前不支持基于 `latency-monitor-threshold` 的 Redis 原生事件采样语义
 
+### `MONITOR`
+
+格式：
+
+```text
+MONITOR
+RESET
+QUIT
+```
+
+返回：
+
+- `MONITOR`：成功后返回 `+OK`，当前连接进入 monitor 流式观测模式
+- monitor 模式下，其他客户端后续成功执行的普通命令会以 RESP Simple String 行推送给 monitor 客户端
+- `RESET`：退出 monitor 模式并返回 `+RESET`
+- `QUIT`：关闭 monitor 连接
+
+说明：
+
+- 当前实现为 partial：覆盖单机流式命令观测入口、跨连接推送、连接关闭清理和 `RESET` 退出
+- 当前监控行格式为 redis-uya 兼容占位格式，包含时间戳、固定 DB/端点占位和双引号参数列表；尚不提供 Redis 原生客户端地址、DB 切换真值或微秒精度时间
+- 当前只在普通命令成功执行后推送；脚本内部实际命令、事务队列展开和控制面特殊分支不会完整等价 Redis 原生 `MONITOR`
+- monitor 模式下同一连接只允许 `RESET` / `QUIT`
+
 ### `INFO`
 
 格式：

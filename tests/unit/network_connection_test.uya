@@ -20,6 +20,7 @@ use src.network.connection.connection_client_registry_reset_for_test;
 use src.network.connection.connection_transaction_new;
 use src.network.connection.connection_transaction_reset;
 use src.network.connection.connection_pubsub_reset_for_test;
+use src.network.connection.connection_monitor_reset_for_test;
 use src.storage.engine.Engine;
 use src.storage.engine.engine_new;
 use src.storage.engine.engine_free;
@@ -689,6 +690,31 @@ export fn test_connection_process_latency() !void {
     const unknown_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$7\r\nLATENCY\r\n$1\r\nX\r\n"[0: 24], &out[0], 1024, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: unknown_result.response_len], &"-ERR unknown subcommand 'X'. Try LATENCY HELP.\r\n"[0: 48]));
 
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_connection_process_monitor() !void {
+    reset_memory_stats_for_test();
+    connection_monitor_reset_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var tx: ConnectionTransaction = connection_transaction_new();
+    var out: [byte: 1024] = [];
+
+    const monitor_result: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$7\r\nMONITOR\r\n"[0: 17], &out[0], 1024, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: monitor_result.response_len], &"+OK\r\n"[0: 5]));
+
+    const ping_blocked: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$4\r\nPING\r\n"[0: 14], &out[0], 1024, 1001u64);
+    try assert_true(network_connection_contains(out[0: ping_blocked.response_len], &"only RESET / QUIT are allowed in monitor mode"[0: 45]));
+
+    const reset_result: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$5\r\nRESET\r\n"[0: 15], &out[0], 1024, 1002u64);
+    try assert_true(network_connection_slice_eq(out[0: reset_result.response_len], &"+RESET\r\n"[0: 8]));
+
+    const ping_after_reset: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$4\r\nPING\r\n"[0: 14], &out[0], 1024, 1003u64);
+    try assert_true(network_connection_slice_eq(out[0: ping_after_reset.response_len], &"+PONG\r\n"[0: 7]));
+
+    connection_transaction_reset(&tx);
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);
 }

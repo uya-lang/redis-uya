@@ -74,6 +74,7 @@ export enum CommandType {
     command_memory,
     command_slowlog,
     command_latency,
+    command_monitor,
     command_move,
     command_wait,
     command_sort,
@@ -208,7 +209,7 @@ export const COMMAND_FLAG_READONLY: u64 = 1u64;
 export const COMMAND_FLAG_WRITE: u64 = 2u64;
 export const COMMAND_FLAG_FAST: u64 = 4u64;
 
-const MIN_COMMAND_COUNT: usize = 171;
+const MIN_COMMAND_COUNT: usize = 172;
 
 fn command_router_name_eq(a: &[byte], b: &[byte]) bool {
     return bytes_ascii_case_eq(a, b);
@@ -753,12 +754,15 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
         return command_router_info(CommandType.command_latency, &"LATENCY"[0: 7], -2, COMMAND_FLAG_READONLY, 0, 0, 0);
     }
     if index == 168 {
-        return command_router_info(CommandType.command_geoadd, &"GEOADD"[0: 6], -5, COMMAND_FLAG_WRITE, 1, 1, 1);
+        return command_router_info(CommandType.command_monitor, &"MONITOR"[0: 7], 1, COMMAND_FLAG_READONLY, 0, 0, 0);
     }
     if index == 169 {
-        return command_router_info(CommandType.command_geodist, &"GEODIST"[0: 7], -4, COMMAND_FLAG_READONLY, 1, 1, 1);
+        return command_router_info(CommandType.command_geoadd, &"GEOADD"[0: 6], -5, COMMAND_FLAG_WRITE, 1, 1, 1);
     }
     if index == 170 {
+        return command_router_info(CommandType.command_geodist, &"GEODIST"[0: 7], -4, COMMAND_FLAG_READONLY, 1, 1, 1);
+    }
+    if index == 171 {
         return command_router_info(CommandType.command_geosearch, &"GEOSEARCH"[0: 9], -7, COMMAND_FLAG_READONLY, 1, 1, 1);
     }
     return error.CommandUnknown;

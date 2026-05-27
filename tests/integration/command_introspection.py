@@ -253,6 +253,15 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"latency commands missing from COMMAND INFO: {latency_info!r}")
 
+            monitor_info = send_command(sock, b"COMMAND", b"INFO", b"MONITOR")
+            if (
+                not isinstance(monitor_info, list)
+                or len(monitor_info) != 1
+                or not isinstance(monitor_info[0], list)
+                or monitor_info[0][0] != b"monitor"
+            ):
+                raise AssertionError(f"monitor command missing from COMMAND INFO: {monitor_info!r}")
+
             zset_info = send_command(sock, b"COMMAND", b"INFO", b"ZRANK", b"ZREVRANK", b"ZSCORE", b"ZMSCORE", b"ZPOPMAX", b"ZPOPMIN", b"BZPOPMAX", b"BZPOPMIN")
             if (
                 not isinstance(zset_info, list)
@@ -432,6 +441,10 @@ def run_smoke() -> None:
                 or b"latency|help" not in listed_latency
             ):
                 raise AssertionError(f"unexpected COMMAND LIST latency* result: {listed_latency!r}")
+
+            listed_monitor = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"MONITOR")
+            if listed_monitor != [b"monitor"]:
+                raise AssertionError(f"unexpected COMMAND LIST monitor result: {listed_monitor!r}")
 
             listed_zpop = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"ZPOP*")
             if (

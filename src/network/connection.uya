@@ -134,6 +134,7 @@ export struct ConnectionTransaction {
     tracking_noloop: bool,
     blocking_active: bool,
     blocking_deadline_ms: u64,
+    monitoring: bool,
 }
 
 struct ConnectionSendProgress {
@@ -149,6 +150,7 @@ const CONNECTION_ZERO_COPY_BULK_MIN: usize = 64;
 const CONNECTION_BATCH_MAX_COUNT: usize = 64;
 const CONNECTION_BATCH_PARSE_MIN_INPUT: usize = 64;
 const CONNECTION_CLIENT_REGISTRY_MAX: usize = 128;
+const CONNECTION_MONITOR_MAX_CLIENTS: usize = 64;
 const CONNECTION_BLOCKING_INPUT_CAP: usize = 8192;
 const CONNECTION_BLOCKING_OUTPUT_CAP: usize = 81920;
 const CONNECTION_SCRIPT_CACHE_MAX: usize = 128;
@@ -185,6 +187,13 @@ struct ConnectionClientRegistryEntry {
 
 var connection_client_registry: [ConnectionClientRegistryEntry: CONNECTION_CLIENT_REGISTRY_MAX] = [];
 var connection_client_registry_next_id: i64 = 1;
+
+struct ConnectionMonitorClient {
+    active: bool,
+    fd: i32,
+}
+
+var connection_monitor_clients: [ConnectionMonitorClient: CONNECTION_MONITOR_MAX_CLIENTS] = [];
 
 enum ConnectionScriptArgKind {
     script_arg_literal,
@@ -233,6 +242,7 @@ fn connection_transaction_empty() ConnectionTransaction {
         tracking_noloop: false,
         blocking_active: false,
         blocking_deadline_ms: 0u64,
+        monitoring: false,
     };
 }
 
@@ -253,6 +263,7 @@ export fn connection_transaction_reset(tx: &ConnectionTransaction) void {
     tx.queue_count = 0;
     tx.blocking_active = false;
     tx.blocking_deadline_ms = 0u64;
+    tx.monitoring = false;
 }
 
 fn connection_transaction_clear_queue(tx: &ConnectionTransaction) void {
@@ -1411,6 +1422,7 @@ fn connection_script_command_allowed(cmd_type: CommandType) bool {
         cmd_type == CommandType.command_save ||
         cmd_type == CommandType.command_bgsave ||
         cmd_type == CommandType.command_bgrewriteaof ||
+        cmd_type == CommandType.command_monitor ||
         cmd_type == CommandType.command_replicaof ||
         cmd_type == CommandType.command_psync ||
         cmd_type == CommandType.command_config ||
@@ -1450,8 +1462,10 @@ fn connection_reset_state(tx: &ConnectionTransaction) void {
     connection_transaction_clear_watches(tx);
     if tx.client_fd >= 0 {
         connection_pubsub_unregister_fd(tx.client_fd);
+        connection_monitor_unregister_fd(tx.client_fd);
     }
     tx.pubsub_count = 0;
+    tx.monitoring = false;
     tx.protocol_version = 2;
     tx.client_name_len = 0;
     tx.client_lib_name_len = 0;
@@ -1724,6 +1738,123 @@ export fn connection_client_registry_reset_for_test() void {
         i = i + 1;
     }
     connection_client_registry_next_id = 1;
+}
+
+export fn connection_monitor_reset_for_test() void {
+    var i: usize = 0;
+    while i < CONNECTION_MONITOR_MAX_CLIENTS {
+        connection_monitor_clients[i].active = false;
+        connection_monitor_clients[i].fd = -1;
+        i = i + 1;
+    }
+}
+
+fn connection_monitor_register(fd: i32) bool {
+    if fd < 0 {
+        return true;
+    }
+    var free_index: i32 = -1;
+    var i: usize = 0;
+    while i < CONNECTION_MONITOR_MAX_CLIENTS {
+        if connection_monitor_clients[i].active {
+            if connection_monitor_clients[i].fd == fd {
+                return true;
+            }
+        } else if free_index < 0 {
+            free_index = i as i32;
+        }
+        i = i + 1;
+    }
+    if free_index < 0 {
+        return false;
+    }
+    const slot: usize = free_index as usize;
+    if slot >= CONNECTION_MONITOR_MAX_CLIENTS {
+        return false;
+    }
+    connection_monitor_clients[slot].active = true;
+    connection_monitor_clients[slot].fd = fd;
+    return true;
+}
+
+export fn connection_monitor_unregister_fd(fd: i32) void {
+    var i: usize = 0;
+    while i < CONNECTION_MONITOR_MAX_CLIENTS {
+        if connection_monitor_clients[i].active && connection_monitor_clients[i].fd == fd {
+            connection_monitor_clients[i].active = false;
+            connection_monitor_clients[i].fd = -1;
+        }
+        i = i + 1;
+    }
+}
+
+fn connection_monitor_append_quoted_arg(buf: &Sds, data: &[byte]) !void {
+    try sds_cat(buf, &"\""[0: 1]);
+    var i: usize = 0;
+    while i < data.len {
+        const ch: byte = data.ptr[i];
+        if ch == 34 as byte || ch == 92 as byte {
+            try sds_cat(buf, &"\\"[0: 1]);
+        }
+        var tmp: [byte: 1] = [];
+        tmp[0] = ch;
+        try sds_cat(buf, tmp[0: 1]);
+        i = i + 1;
+    }
+    try sds_cat(buf, &"\""[0: 1]);
+}
+
+fn connection_monitor_build_line(command: &Command, now_ms: u64) CommandReply {
+    var raw: Sds = sds_empty() catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    defer {
+        sds_free(&raw);
+    }
+    _ = sds_cat(&raw, &"+"[0: 1]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_sds_append_u64(&raw, now_ms / 1000u64) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = sds_cat(&raw, &"."[0: 1]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    const millis: u64 = now_ms % 1000u64;
+    _ = connection_sds_append_u64(&raw, millis) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = sds_cat(&raw, &" [0 redis-uya] "[0: 15]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    var index: usize = 0;
+    while index < command.argc {
+        if index > 0 {
+            _ = sds_cat(&raw, &" "[0: 1]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+        }
+        const arg: &[byte] = command_arg_data(command, index) catch {
+            return connection_error_reply(&"ERR invalid request"[0: 19]);
+        };
+        _ = connection_monitor_append_quoted_arg(&raw, arg) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+        index = index + 1;
+    }
+    _ = sds_cat(&raw, &"\r\n"[0: 2]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    return connection_raw_reply_owned(raw.buf[0: raw.len]);
+}
+
+fn connection_monitor_broadcast(command: &Command, source_fd: i32, now_ms: u64) void {
+    var line: CommandReply = connection_monitor_build_line(command, now_ms);
+    defer {
+        command_reply_cleanup(&line);
+    }
+    if line.typ != CommandReplyType.reply_raw_bytes {
+        return;
+    }
+    var i: usize = 0;
+    while i < CONNECTION_MONITOR_MAX_CLIENTS {
+        if connection_monitor_clients[i].active {
+            const fd: i32 = connection_monitor_clients[i].fd;
+            if fd >= 0 && fd != source_fd {
+                _ = connection_send_all_nonblocking(fd, line.data.ptr, line.data.len) catch {
+                    connection_monitor_clients[i].active = false;
+                    connection_monitor_clients[i].fd = -1;
+                };
+            }
+        }
+        i = i + 1;
+    }
 }
 
 fn connection_requirepass(runtime: &CommandRuntimeInfo) &[byte] {
@@ -3643,6 +3774,9 @@ fn connection_execute_standard_command_at(
     zero_copy_bulk: bool,
 ) !ConnectionProcessResult {
     var reply: CommandReply = command_execute_with_runtime_at(engine, runtime, command, now_ms);
+    if reply.typ != CommandReplyType.reply_error {
+        connection_monitor_broadcast(command, tx.client_fd, now_ms);
+    }
     if command.info.cmd_type == CommandType.command_save &&
         reply.typ == CommandReplyType.reply_simple_string &&
         reply.data.len == 2 &&
@@ -4618,6 +4752,12 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
             resp_value_free(&parsed.value);
             return ConnectionProcessResult{ response_len: shutdown_tx_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
         }
+        if command.info.cmd_type == CommandType.command_monitor {
+            const monitor_tx_reply: CommandReply = connection_error_reply(&"ERR Command not allowed inside a transaction"[0: 44]);
+            const monitor_tx_n: usize = try connection_encode_reply_with_protocol(&monitor_tx_reply, out, out_cap, tx.protocol_version);
+            resp_value_free(&parsed.value);
+            return ConnectionProcessResult{ response_len: monitor_tx_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
+        }
         if connection_command_is_blocking_pop(command.info.cmd_type) {
             const blocking_tx_reply: CommandReply = connection_error_reply(&"ERR blocking commands inside MULTI are not allowed"[0: 47]);
             const blocking_tx_n: usize = try connection_encode_reply_with_protocol(&blocking_tx_reply, out, out_cap, tx.protocol_version);
@@ -4701,11 +4841,32 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
         resp_value_free(&parsed.value);
         return ConnectionProcessResult{ response_len: noauth_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
     }
+    if tx.monitoring &&
+        command.info.cmd_type != CommandType.command_reset &&
+        command.info.cmd_type != CommandType.command_quit {
+        const restricted_monitor_reply: CommandReply = connection_error_reply(&"ERR only RESET / QUIT are allowed in monitor mode"[0: 49]);
+        const restricted_monitor_n: usize = try connection_encode_reply_with_protocol(&restricted_monitor_reply, out, out_cap, tx.protocol_version);
+        resp_value_free(&parsed.value);
+        return ConnectionProcessResult{ response_len: restricted_monitor_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
+    }
     if connection_resp2_pubsub_mode_active(tx) && !connection_command_allowed_in_resp2_pubsub_mode(command.info.cmd_type) {
         const restricted_reply: CommandReply = connection_pubsub_mode_error();
         const restricted_n: usize = try connection_encode_reply_with_protocol(&restricted_reply, out, out_cap, tx.protocol_version);
         resp_value_free(&parsed.value);
         return ConnectionProcessResult{ response_len: restricted_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
+    }
+    if command.info.cmd_type == CommandType.command_monitor {
+        if !connection_monitor_register(tx.client_fd) {
+            const monitor_full_reply: CommandReply = connection_error_reply(&"ERR too many monitor clients"[0: 28]);
+            const monitor_full_n: usize = try connection_encode_reply_with_protocol(&monitor_full_reply, out, out_cap, tx.protocol_version);
+            resp_value_free(&parsed.value);
+            return ConnectionProcessResult{ response_len: monitor_full_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
+        }
+        tx.monitoring = true;
+        const monitor_reply: CommandReply = connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+        const monitor_n: usize = try connection_encode_reply_with_protocol(&monitor_reply, out, out_cap, tx.protocol_version);
+        resp_value_free(&parsed.value);
+        return ConnectionProcessResult{ response_len: monitor_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
     }
     if command.info.cmd_type == CommandType.command_script ||
         command.info.cmd_type == CommandType.command_eval ||

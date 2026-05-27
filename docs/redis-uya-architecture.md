@@ -114,7 +114,7 @@ server open
 - `CONFIG GET` 从 `CommandRuntimeInfo` 暴露运行时配置快照，支持 `maxclients`、`databases` 等兼容字段
 - `MEMORY` / `SLOWLOG` / `LATENCY` 由 `command/executor.uya` 执行；其中 `LATENCY` 当前是空事件兼容子集，真实采样和直方图后续再接入观测管线
 - `MONITOR` 由 `connection.uya` 维护连接级 monitor 状态和全局 fd 注册表；普通命令成功执行后向 monitor fd 推送兼容行，连接关闭和 `RESET` 会清理注册项
-- `XADD/XLEN/XRANGE/XREVRANGE/XREAD` 由 `command/executor.uya` 执行；当前覆盖基础 stream 追加、长度、范围读取和非阻塞 `XREAD`，持久化层的 RDB/AOF rewrite 会写出显式 stream id，普通 AOF append 对 `XADD *` 仍按原始请求回放并重新生成 id
+- `XADD/XLEN/XRANGE/XREVRANGE/XREAD/XTRIM` 由 `command/executor.uya` 执行；当前覆盖基础 stream 追加、长度、范围读取、非阻塞 `XREAD` 和 `MAXLEN` 头部裁剪，持久化层的 RDB/AOF rewrite 会写出显式 stream id，普通 AOF append 对 `XADD *` 仍按原始请求回放并重新生成 id
 - `COMMAND` 由 `command/executor.uya` 执行，当前覆盖 `COMMAND`、`COUNT`、`LIST`、`INFO`、`DOCS`，运行时数据统一来自 `catalog_generated*`
 - `COMMAND DOCS` 已支持命令名定向查询和无参数全量 docs 查询；连接/服务端当前使用扩大的输出缓冲完成 RESP2/RESP3 大响应发送第一批闭环
 - `CLUSTER` 由 `command/executor.uya` 执行，当前通过服务端最小拓扑提供 `KEYSLOT/INFO/NODES/SLOTS/HELP/MEET/SETSLOT`

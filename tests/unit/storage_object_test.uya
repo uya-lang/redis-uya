@@ -219,6 +219,16 @@ export fn test_object_stream_create_append_free() !void {
     try assert_eq_i32(stream.stream_last_ms as i32, 1000);
     try assert_eq_i32(stream.stream_last_seq as i32, 0);
 
+    const second_entry: &RedisObject = try create_list_object();
+    _ = try list_object_push_head(second_entry, &"next"[0: 4]);
+    _ = try list_object_push_head(second_entry, &"field"[0: 5]);
+    _ = try list_object_push_head(second_entry, &"1000-1"[0: 6]);
+    try assert_eq_i32((try stream_object_append_entry(stream, second_entry, 1000u64, 1u64)) as i32, 2);
+    const popped: &RedisObject = try list_object_pop_head(stream);
+    object_free(popped);
+    try assert_eq_i32((try stream_object_len(stream)) as i32, 1);
+    try assert_true(object_slice_eq(stream.list_head.value.list_head.value.value.buf[0: stream.list_head.value.list_head.value.value.len], &"1000-1"[0: 6]));
+
     object_free(stream);
     try assert_eq_i32(used_memory() as i32, 0);
 }

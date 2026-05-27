@@ -2446,6 +2446,29 @@ export fn test_command_streams_first_batch() !void {
     command_reply_cleanup(&xread_reply);
     resp_value_free(&xread_parsed.value);
 
+    var xtrim_parsed: RespParseResult = try parse_resp2(&"*5\r\n$5\r\nXTRIM\r\n$6\r\nstream\r\n$6\r\nMAXLEN\r\n$1\r\n~\r\n$1\r\n1\r\n"[0: 53]);
+    const xtrim_command: Command = try command_executor_test_command(&router, &xtrim_parsed);
+    const xtrim_reply: CommandReply = command_execute_at(&engine, &xtrim_command, 1000u64);
+    try assert_eq_i32(xtrim_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(xtrim_reply.integer as i32, 1);
+    resp_value_free(&xtrim_parsed.value);
+
+    var xrange_after_trim_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nXRANGE\r\n$6\r\nstream\r\n$1\r\n-\r\n$1\r\n+\r\n"[0: 42]);
+    const xrange_after_trim_command: Command = try command_executor_test_command(&router, &xrange_after_trim_parsed);
+    const xrange_after_trim_reply: CommandReply = command_execute_at(&engine, &xrange_after_trim_command, 1000u64);
+    const xrange_after_trim_len: usize = try connection_encode_reply(&xrange_after_trim_reply, &out[0], 1024);
+    try assert_true(!command_executor_test_contains(out[0: xrange_after_trim_len], &"$6\r\n1000-0\r\n"[0: 12]));
+    try assert_true(command_executor_test_contains(out[0: xrange_after_trim_len], &"$6\r\n1000-1\r\n"[0: 12]));
+    command_reply_cleanup(&xrange_after_trim_reply);
+    resp_value_free(&xrange_after_trim_parsed.value);
+
+    var xtrim_missing_parsed: RespParseResult = try parse_resp2(&"*4\r\n$5\r\nXTRIM\r\n$5\r\nempty\r\n$6\r\nMAXLEN\r\n$1\r\n1\r\n"[0: 45]);
+    const xtrim_missing_command: Command = try command_executor_test_command(&router, &xtrim_missing_parsed);
+    const xtrim_missing_reply: CommandReply = command_execute_at(&engine, &xtrim_missing_command, 1000u64);
+    try assert_eq_i32(xtrim_missing_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(xtrim_missing_reply.integer as i32, 0);
+    resp_value_free(&xtrim_missing_parsed.value);
+
     var set_plain_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$5\r\nplain\r\n$1\r\nx\r\n"[0: 31]);
     const set_plain_command: Command = try command_executor_test_command(&router, &set_plain_parsed);
     _ = command_execute_at(&engine, &set_plain_command, 1000u64);
@@ -2456,6 +2479,12 @@ export fn test_command_streams_first_batch() !void {
     const wrongtype_reply: CommandReply = command_execute_at(&engine, &wrongtype_command, 1000u64);
     try assert_eq_i32(wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
     resp_value_free(&wrongtype_parsed.value);
+
+    var xtrim_wrongtype_parsed: RespParseResult = try parse_resp2(&"*4\r\n$5\r\nXTRIM\r\n$5\r\nplain\r\n$6\r\nMAXLEN\r\n$1\r\n1\r\n"[0: 45]);
+    const xtrim_wrongtype_command: Command = try command_executor_test_command(&router, &xtrim_wrongtype_parsed);
+    const xtrim_wrongtype_reply: CommandReply = command_execute_at(&engine, &xtrim_wrongtype_command, 1000u64);
+    try assert_eq_i32(xtrim_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    resp_value_free(&xtrim_wrongtype_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

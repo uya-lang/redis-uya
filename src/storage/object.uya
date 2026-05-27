@@ -478,7 +478,7 @@ export fn list_object_push_head(obj: &RedisObject, data: &[byte]) !usize {
 }
 
 export fn list_object_pop_head(obj: &RedisObject) !&RedisObject {
-    if obj == null || obj.obj_type != ObjectType.object_list {
+    if obj == null || (obj.obj_type != ObjectType.object_list && obj.obj_type != ObjectType.object_stream) {
         return error.ObjectWrongType;
     }
     const node: &ListNode = obj.list_head;

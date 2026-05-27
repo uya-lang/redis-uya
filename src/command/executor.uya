@@ -334,10 +334,6 @@ fn command_executor_null_bulk() CommandReply {
     return command_executor_reply(CommandReplyType.reply_null_bulk, command_executor_empty_slice(), 0);
 }
 
-fn command_executor_null_array() CommandReply {
-    return command_executor_reply(CommandReplyType.reply_null_array, command_executor_empty_slice(), 0);
-}
-
 fn command_executor_array_bulk(head: &ListNode, count: usize) CommandReply {
     var reply: CommandReply = command_executor_reply(CommandReplyType.reply_array_bulk, command_executor_empty_slice(), 0);
     reply.array_head = head;
@@ -370,48 +366,12 @@ fn command_executor_oom() CommandReply {
     return command_executor_error(&"ERR out of memory"[0: 17]);
 }
 
-fn command_executor_maxmemory() CommandReply {
-    return command_executor_error(&"OOM command not allowed when used memory > 'maxmemory'"[0: 54]);
-}
-
 fn command_executor_wrongtype() CommandReply {
     return command_executor_error(&"WRONGTYPE Operation against a key holding the wrong kind of value"[0: 65]);
 }
 
 fn command_executor_invalid_integer() CommandReply {
     return command_executor_error(&"ERR value is not an integer or out of range"[0: 43]);
-}
-
-fn command_executor_invalid_bit_offset() CommandReply {
-    return command_executor_error(&"ERR bit offset is not an integer or out of range"[0: 48]);
-}
-
-fn command_executor_invalid_bit_value() CommandReply {
-    return command_executor_error(&"ERR bit is not an integer or out of range"[0: 41]);
-}
-
-fn command_executor_bitop_not_single_source_required() CommandReply {
-    return command_executor_error(&"ERR BITOP NOT must be called with a single source key."[0: 52]);
-}
-
-fn command_executor_bitfield_invalid_type() CommandReply {
-    return command_executor_error(&"ERR Invalid bitfield type. Use something like i16 u8. Note that u64 is not supported but i64 is."[0: 96]);
-}
-
-fn command_executor_bitfield_ro_get_only() CommandReply {
-    return command_executor_error(&"ERR BITFIELD_RO only supports the GET subcommand"[0: 48]);
-}
-
-fn command_executor_bitfield_invalid_overflow_type() CommandReply {
-    return command_executor_error(&"ERR Invalid OVERFLOW type specified"[0: 35]);
-}
-
-fn command_executor_hll_wrongtype() CommandReply {
-    return command_executor_error(&"WRONGTYPE Key is not a valid HyperLogLog string value."[0: 54]);
-}
-
-fn command_executor_geo_missing_member() CommandReply {
-    return command_executor_error(&"ERR could not decode requested zset member"[0: 41]);
 }
 
 fn command_executor_geo_invalid_lonlat(lon: f64, lat: f64) CommandReply {
@@ -421,38 +381,6 @@ fn command_executor_geo_invalid_lonlat(lon: f64, lat: f64) CommandReply {
         return command_executor_syntax_error();
     }
     return command_executor_owned_error(buf[0: written as usize]);
-}
-
-fn command_executor_geo_invalid_unit() CommandReply {
-    return command_executor_error(&"ERR unsupported unit provided. please use M, KM, FT, MI"[0: 57]);
-}
-
-fn command_executor_geo_invalid_count() CommandReply {
-    return command_executor_error(&"ERR COUNT must be > 0"[0: 22]);
-}
-
-fn command_executor_positive_count_required() CommandReply {
-    return command_executor_error(&"ERR value is out of range, must be positive"[0: 43]);
-}
-
-fn command_executor_lmpop_numkeys_required() CommandReply {
-    return command_executor_error(&"ERR numkeys should be greater than 0"[0: 36]);
-}
-
-fn command_executor_lmpop_count_required() CommandReply {
-    return command_executor_error(&"ERR count should be greater than 0"[0: 34]);
-}
-
-fn command_executor_bzmpop_numkeys_required() CommandReply {
-    return command_executor_error(&"ERR numkeys should be greater than 0"[0: 36]);
-}
-
-fn command_executor_invalid_float() CommandReply {
-    return command_executor_error(&"ERR value is not a valid float"[0: 30]);
-}
-
-fn command_executor_float_overflow() CommandReply {
-    return command_executor_error(&"ERR increment would produce NaN or Infinity"[0: 42]);
 }
 
 fn command_executor_syntax_error() CommandReply {
@@ -576,7 +504,7 @@ fn command_executor_parse_f64(data: &[byte]) !f64 {
 
 fn command_executor_set_float_string(engine: &Engine, key: &[byte], value: f64, now_ms: u64) CommandReply {
     if isnan(value) != 0 || isinf(value) != 0 {
-        return command_executor_float_overflow();
+        return command_executor_error(&"ERR increment would produce NaN or Infinity"[0: 42]);
     }
     if value == 0.0 {
         const zero_obj: &RedisObject = create_string_object(&"0"[0: 1]) catch {
@@ -592,7 +520,7 @@ fn command_executor_set_float_string(engine: &Engine, key: &[byte], value: f64, 
     var buf: [byte: 128] = [];
     const written: i32 = snprintf(&buf[0] as *byte, 128usize, "%.17g" as *byte, value);
     if written <= 0 || written >= 128 {
-        return command_executor_float_overflow();
+        return command_executor_error(&"ERR increment would produce NaN or Infinity"[0: 42]);
     }
     var text_len: usize = written as usize;
     var exp_index: usize = text_len;
@@ -683,12 +611,12 @@ fn command_executor_hash_set_integer_field(obj: &RedisObject, field: &[byte], va
 
 fn command_executor_hash_set_float_field(obj: &RedisObject, field: &[byte], value: f64) CommandReply {
     if isnan(value) != 0 || isinf(value) != 0 {
-        return command_executor_float_overflow();
+        return command_executor_error(&"ERR increment would produce NaN or Infinity"[0: 42]);
     }
     var buf: [byte: 128] = [];
     const written: i32 = snprintf(&buf[0] as *byte, 128usize, "%.17g" as *byte, value);
     if written <= 0 || written >= 128 {
-        return command_executor_float_overflow();
+        return command_executor_error(&"ERR increment would produce NaN or Infinity"[0: 42]);
     }
     var text_len: usize = written as usize;
     var exp_index: usize = text_len;
@@ -866,13 +794,6 @@ fn command_executor_stream_id_cmp(a: &StreamId, b: &StreamId) i32 {
     return 0;
 }
 
-fn command_executor_stream_entry_id(entry: &RedisObject) !&[byte] {
-    if entry == null || entry.obj_type != ObjectType.object_list || entry.list_head == null {
-        return error.ObjectWrongType;
-    }
-    return entry.list_head.value.value.buf[0: entry.list_head.value.value.len];
-}
-
 fn command_executor_resp_append_array_header(buf: &Sds, count: usize) !void {
     try sds_cat(buf, &"*"[0: 1]);
     try command_executor_info_append_u64(buf, &"%u"[0: 2], count as u64);
@@ -906,7 +827,7 @@ fn command_executor_stream_append_entry_resp(buf: &Sds, entry: &RedisObject) !vo
         return error.ObjectWrongType;
     }
     try command_executor_resp_append_array_header(buf, 2);
-    const id_data: &[byte] = try command_executor_stream_entry_id(entry);
+    const id_data: &[byte] = entry.list_head.value.value.buf[0: entry.list_head.value.value.len];
     try command_executor_resp_append_bulk(buf, id_data);
     try command_executor_resp_append_array_header(buf, entry_len - 1);
     var node: &ListNode = entry.list_head.next;
@@ -915,18 +836,6 @@ fn command_executor_stream_append_entry_resp(buf: &Sds, entry: &RedisObject) !vo
         try command_executor_resp_append_bulk(buf, data);
         node = node.next;
     }
-}
-
-fn command_executor_stream_id_in_range(id: &StreamId, start: &StreamId, end: &StreamId) bool {
-    return command_executor_stream_id_cmp(id, start) >= 0 && command_executor_stream_id_cmp(id, end) <= 0;
-}
-
-fn command_executor_stream_invalid_id() CommandReply {
-    return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 57]);
-}
-
-fn command_executor_stream_small_id() CommandReply {
-    return command_executor_error(&"ERR The ID specified in XADD is equal or smaller than the target stream top item"[0: 78]);
 }
 
 fn command_executor_keyword_match(pattern: &[byte], value: &[byte]) bool {
@@ -2723,10 +2632,10 @@ fn command_executor_getbit(engine: &Engine, command: &Command, now_ms: u64) Comm
         return command_executor_wrong_arity();
     };
     const offset_i64: i64 = command_executor_parse_i64(offset_data) catch {
-        return command_executor_invalid_bit_offset();
+        return command_executor_error(&"ERR bit offset is not an integer or out of range"[0: 48]);
     };
     if offset_i64 < 0 {
-        return command_executor_invalid_bit_offset();
+        return command_executor_error(&"ERR bit offset is not an integer or out of range"[0: 48]);
     }
     const obj: &RedisObject = command_executor_lookup_key_now_or_null(engine, key, now_ms);
     if obj == null {
@@ -2752,16 +2661,16 @@ fn command_executor_setbit(engine: &Engine, command: &Command, now_ms: u64) Comm
         return command_executor_wrong_arity();
     };
     const offset_i64: i64 = command_executor_parse_i64(offset_data) catch {
-        return command_executor_invalid_bit_offset();
+        return command_executor_error(&"ERR bit offset is not an integer or out of range"[0: 48]);
     };
     if offset_i64 < 0 {
-        return command_executor_invalid_bit_offset();
+        return command_executor_error(&"ERR bit offset is not an integer or out of range"[0: 48]);
     }
     const bit_value_i64: i64 = command_executor_parse_i64(bit_value_data) catch {
-        return command_executor_invalid_bit_value();
+        return command_executor_error(&"ERR bit is not an integer or out of range"[0: 41]);
     };
     if bit_value_i64 != 0 && bit_value_i64 != 1 {
-        return command_executor_invalid_bit_value();
+        return command_executor_error(&"ERR bit is not an integer or out of range"[0: 41]);
     }
 
     const bit_offset: usize = offset_i64 as usize;
@@ -2991,10 +2900,10 @@ fn command_executor_bitpos(engine: &Engine, command: &Command, now_ms: u64) Comm
         return command_executor_wrong_arity();
     };
     const target_bit: i64 = command_executor_parse_i64(bit_data) catch {
-        return command_executor_invalid_bit_value();
+        return command_executor_error(&"ERR bit is not an integer or out of range"[0: 41]);
     };
     if target_bit != 0 && target_bit != 1 {
-        return command_executor_invalid_bit_value();
+        return command_executor_error(&"ERR bit is not an integer or out of range"[0: 41]);
     }
 
     const obj: &RedisObject = command_executor_lookup_key_now_or_null(engine, key, now_ms);
@@ -3072,7 +2981,7 @@ fn command_executor_bitop(engine: &Engine, command: &Command, now_ms: u64) Comma
     } else if command_executor_keyword_eq(operation, &"NOT"[0: 3]) {
         op_code = 4;
         if command.argc != 4 {
-            return command_executor_bitop_not_single_source_required();
+            return command_executor_error(&"ERR BITOP NOT must be called with a single source key."[0: 52]);
         }
     } else {
         return command_executor_syntax_error();
@@ -3211,7 +3120,7 @@ fn command_executor_bitfield(engine: &Engine, command: &Command, now_ms: u64, re
                 index = index + 2;
                 continue;
             }
-            return command_executor_bitfield_invalid_overflow_type();
+            return command_executor_error(&"ERR Invalid OVERFLOW type specified"[0: 35]);
         }
 
         if command_executor_keyword_eq(token, &"GET"[0: 3]) {
@@ -3229,10 +3138,10 @@ fn command_executor_bitfield(engine: &Engine, command: &Command, now_ms: u64, re
             const encoding_data: &[byte] = encoding_result.value;
             const offset_data: &[byte] = offset_result.value;
             const encoding: CommandExecutorBitfieldEncoding = command_executor_bitfield_parse_encoding(encoding_data) catch {
-                return command_executor_bitfield_invalid_type();
+                return command_executor_error(&"ERR Invalid bitfield type. Use something like i16 u8. Note that u64 is not supported but i64 is."[0: 96]);
             };
             const offset: usize = command_executor_bitfield_parse_offset(offset_data, encoding.width) catch {
-                return command_executor_invalid_bit_offset();
+                return command_executor_error(&"ERR bit offset is not an integer or out of range"[0: 48]);
             };
             const raw_value: u64 = command_executor_bitfield_read_raw(working.buf[0: working.len], offset, encoding.width);
             const decoded: i64 = command_executor_bitfield_decode_value(raw_value, &encoding);
@@ -3246,7 +3155,7 @@ fn command_executor_bitfield(engine: &Engine, command: &Command, now_ms: u64, re
 
         if command_executor_keyword_eq(token, &"SET"[0: 3]) || command_executor_keyword_eq(token, &"INCRBY"[0: 6]) {
             if readonly_only {
-                return command_executor_bitfield_ro_get_only();
+                return command_executor_error(&"ERR BITFIELD_RO only supports the GET subcommand"[0: 48]);
             }
             if index + 3 >= command.argc {
                 return command_executor_syntax_error();
@@ -3268,10 +3177,10 @@ fn command_executor_bitfield(engine: &Engine, command: &Command, now_ms: u64, re
             const offset_data: &[byte] = offset_result.value;
             const value_data: &[byte] = value_result.value;
             const encoding: CommandExecutorBitfieldEncoding = command_executor_bitfield_parse_encoding(encoding_data) catch {
-                return command_executor_bitfield_invalid_type();
+                return command_executor_error(&"ERR Invalid bitfield type. Use something like i16 u8. Note that u64 is not supported but i64 is."[0: 96]);
             };
             const offset: usize = command_executor_bitfield_parse_offset(offset_data, encoding.width) catch {
-                return command_executor_invalid_bit_offset();
+                return command_executor_error(&"ERR bit offset is not an integer or out of range"[0: 48]);
             };
             const operand: i64 = command_executor_parse_i64(value_data) catch {
                 return command_executor_invalid_integer();
@@ -3434,7 +3343,7 @@ fn command_executor_pfadd(engine: &Engine, command: &Command, now_ms: u64) Comma
     };
 
     if existing.obj_type != ObjectType.object_set {
-        return command_executor_hll_wrongtype();
+        return command_executor_error(&"WRONGTYPE Key is not a valid HyperLogLog string value."[0: 54]);
     }
 
     var added_any: i64 = 0;
@@ -3469,10 +3378,10 @@ fn command_executor_pfcount(engine: &Engine, command: &Command, now_ms: u64) Com
             return command_executor_integer(0);
         };
         if obj.obj_type != ObjectType.object_set {
-            return command_executor_hll_wrongtype();
+            return command_executor_error(&"WRONGTYPE Key is not a valid HyperLogLog string value."[0: 54]);
         }
         const count: usize = set_object_len(obj) catch {
-            return command_executor_hll_wrongtype();
+            return command_executor_error(&"WRONGTYPE Key is not a valid HyperLogLog string value."[0: 54]);
         };
         return command_executor_integer(count as i64);
     }
@@ -3496,19 +3405,19 @@ fn command_executor_pfcount(engine: &Engine, command: &Command, now_ms: u64) Com
         }
         const obj: &RedisObject = obj_result.value;
         if obj.obj_type != ObjectType.object_set {
-            return command_executor_hll_wrongtype();
+            return command_executor_error(&"WRONGTYPE Key is not a valid HyperLogLog string value."[0: 54]);
         }
         _ = command_executor_hll_members_into_set(obj, union_set) catch |err| {
             if err == error.AllocOutOfMemory {
                 return command_executor_oom();
             }
-            return command_executor_hll_wrongtype();
+            return command_executor_error(&"WRONGTYPE Key is not a valid HyperLogLog string value."[0: 54]);
         };
         index = index + 1;
     }
 
     const count: usize = set_object_len(union_set) catch {
-        return command_executor_hll_wrongtype();
+        return command_executor_error(&"WRONGTYPE Key is not a valid HyperLogLog string value."[0: 54]);
     };
     return command_executor_integer(count as i64);
 }
@@ -3540,13 +3449,13 @@ fn command_executor_pfmerge(engine: &Engine, command: &Command, now_ms: u64) Com
         }
         const obj: &RedisObject = obj_result.value;
         if obj.obj_type != ObjectType.object_set {
-            return command_executor_hll_wrongtype();
+            return command_executor_error(&"WRONGTYPE Key is not a valid HyperLogLog string value."[0: 54]);
         }
         _ = command_executor_hll_members_into_set(obj, merged) catch |err| {
             if err == error.AllocOutOfMemory {
                 return command_executor_oom();
             }
-            return command_executor_hll_wrongtype();
+            return command_executor_error(&"WRONGTYPE Key is not a valid HyperLogLog string value."[0: 54]);
         };
         index = index + 1;
     }
@@ -3576,7 +3485,7 @@ fn command_executor_incrbyfloat(engine: &Engine, command: &Command, now_ms: u64)
         return command_executor_wrong_arity();
     };
     const increment: f64 = command_executor_parse_f64(increment_data) catch {
-        return command_executor_invalid_float();
+        return command_executor_error(&"ERR value is not a valid float"[0: 30]);
     };
 
     const existing: &RedisObject = command_executor_lookup_key_now_or_null(engine, key, now_ms);
@@ -3587,7 +3496,7 @@ fn command_executor_incrbyfloat(engine: &Engine, command: &Command, now_ms: u64)
         return command_executor_wrongtype();
     };
     const current: f64 = command_executor_parse_f64(current_data) catch {
-        return command_executor_invalid_float();
+        return command_executor_error(&"ERR value is not a valid float"[0: 30]);
     };
     return command_executor_set_float_string(engine, key, current + increment, now_ms);
 }
@@ -4076,20 +3985,20 @@ fn command_executor_xadd(engine: &Engine, command: &Command, now_ms: u64) Comman
             if created {
                 _ = delete_key(engine, key);
             }
-            return command_executor_stream_invalid_id();
+            return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 57]);
         };
         if parsed.ms == 0u64 && parsed.seq == 0u64 {
             if created {
                 _ = delete_key(engine, key);
             }
-            return command_executor_stream_small_id();
+            return command_executor_error(&"ERR The ID specified in XADD is equal or smaller than the target stream top item"[0: 78]);
         }
         const last: StreamId = StreamId{ ms: stream_obj.stream_last_ms, seq: stream_obj.stream_last_seq, is_min: false, is_max: false, is_dollar: false };
         if stream_obj.list_len > 0 && command_executor_stream_id_cmp(&parsed, &last) <= 0 {
             if created {
                 _ = delete_key(engine, key);
             }
-            return command_executor_stream_small_id();
+            return command_executor_error(&"ERR The ID specified in XADD is equal or smaller than the target stream top item"[0: 78]);
         }
         id_ms = parsed.ms;
         id_seq = parsed.seq;
@@ -4222,10 +4131,10 @@ fn command_executor_xrange_common(engine: &Engine, command: &Command, now_ms: u6
         end_default_seq = STREAM_ID_MAX_SEQ;
     }
     const start_id: StreamId = command_executor_parse_stream_id(start_token, start_default_seq, true, false) catch {
-        return command_executor_stream_invalid_id();
+        return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 57]);
     };
     const end_id: StreamId = command_executor_parse_stream_id(end_token, end_default_seq, true, false) catch {
-        return command_executor_stream_invalid_id();
+        return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 57]);
     };
 
     const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
@@ -4247,13 +4156,14 @@ fn command_executor_xrange_common(engine: &Engine, command: &Command, now_ms: u6
         node = obj.list_tail;
     }
     while node != null {
-        const entry_id_data: &[byte] = command_executor_stream_entry_id(node.value) catch {
+        if node.value == null || node.value.obj_type != ObjectType.object_list || node.value.list_head == null {
             return command_executor_wrongtype();
-        };
+        }
+        const entry_id_data: &[byte] = node.value.list_head.value.value.buf[0: node.value.list_head.value.value.len];
         const entry_id: StreamId = command_executor_parse_stream_id(entry_id_data, 0u64, false, false) catch {
             return command_executor_wrongtype();
         };
-        if command_executor_stream_id_in_range(&entry_id, &start_id, &end_id) {
+        if command_executor_stream_id_cmp(&entry_id, &start_id) >= 0 && command_executor_stream_id_cmp(&entry_id, &end_id) <= 0 {
             if count_limit < 0 || emitted < count_limit as usize {
                 _ = command_executor_stream_append_entry_resp(&body, node.value) catch {
                     return command_executor_oom();
@@ -4310,7 +4220,7 @@ fn command_executor_xread(engine: &Engine, command: &Command, now_ms: u64) Comma
                 return command_executor_invalid_integer();
             };
             if count_limit <= 0 {
-                return command_executor_positive_count_required();
+                return command_executor_error(&"ERR value is out of range, must be positive"[0: 43]);
             }
             index = index + 2;
         } else if command_executor_keyword_eq(token, &"BLOCK"[0: 5]) {
@@ -4346,7 +4256,7 @@ fn command_executor_xread(engine: &Engine, command: &Command, now_ms: u64) Comma
             return command_executor_wrong_arity();
         };
         const start_id: StreamId = command_executor_parse_stream_id(id_data, 0u64, false, true) catch {
-            return command_executor_stream_invalid_id();
+            return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 57]);
         };
         if !start_id.is_dollar {
             const obj_result: !&RedisObject = lookup_key_at(engine, key, now_ms);
@@ -4367,9 +4277,10 @@ fn command_executor_xread(engine: &Engine, command: &Command, now_ms: u64) Comma
             var emitted: usize = 0;
             var node: &ListNode = obj.list_head;
             while node != null {
-                const entry_id_data: &[byte] = command_executor_stream_entry_id(node.value) catch {
+                if node.value == null || node.value.obj_type != ObjectType.object_list || node.value.list_head == null {
                     return command_executor_wrongtype();
-                };
+                }
+                const entry_id_data: &[byte] = node.value.list_head.value.value.buf[0: node.value.list_head.value.value.len];
                 const entry_id: StreamId = command_executor_parse_stream_id(entry_id_data, 0u64, false, false) catch {
                     return command_executor_wrongtype();
                 };
@@ -4397,7 +4308,7 @@ fn command_executor_xread(engine: &Engine, command: &Command, now_ms: u64) Comma
         key_offset = key_offset + 1;
     }
     if stream_count == 0 {
-        return command_executor_null_array();
+        return command_executor_reply(CommandReplyType.reply_null_array, command_executor_empty_slice(), 0);
     }
 
     var raw: Sds = sds_empty() catch {
@@ -4895,7 +4806,7 @@ fn command_executor_blocking_list_pop(engine: &Engine, command: &Command, now_ms
         return command_executor_wrong_arity();
     };
     _ = command_executor_validate_blocking_timeout(timeout_data) catch {
-        return command_executor_invalid_float();
+        return command_executor_error(&"ERR value is not a valid float"[0: 30]);
     };
 
     var index: usize = 1;
@@ -4954,7 +4865,7 @@ fn command_executor_blocking_list_pop(engine: &Engine, command: &Command, now_ms
         return reply;
     }
 
-    return command_executor_null_array();
+    return command_executor_reply(CommandReplyType.reply_null_array, command_executor_empty_slice(), 0);
 }
 
 fn command_executor_brpoplpush(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
@@ -4971,7 +4882,7 @@ fn command_executor_brpoplpush(engine: &Engine, command: &Command, now_ms: u64) 
         return command_executor_wrong_arity();
     };
     _ = command_executor_validate_blocking_timeout(timeout_data) catch {
-        return command_executor_invalid_float();
+        return command_executor_error(&"ERR value is not a valid float"[0: 30]);
     };
     return command_executor_list_move_internal(engine, source, destination, now_ms, false, true);
 }
@@ -5192,10 +5103,10 @@ fn command_executor_lmpop(engine: &Engine, command: &Command, now_ms: u64) Comma
         return command_executor_wrong_arity();
     };
     const numkeys_i64: i64 = command_executor_parse_i64(numkeys_data) catch {
-        return command_executor_lmpop_numkeys_required();
+        return command_executor_error(&"ERR numkeys should be greater than 0"[0: 36]);
     };
     if numkeys_i64 <= 0 {
-        return command_executor_lmpop_numkeys_required();
+        return command_executor_error(&"ERR numkeys should be greater than 0"[0: 36]);
     }
 
     const numkeys: usize = numkeys_i64 as usize;
@@ -5226,10 +5137,10 @@ fn command_executor_lmpop(engine: &Engine, command: &Command, now_ms: u64) Comma
             return command_executor_syntax_error();
         };
         const count_i64: i64 = command_executor_parse_i64(count_data) catch {
-            return command_executor_lmpop_count_required();
+            return command_executor_error(&"ERR count should be greater than 0"[0: 34]);
         };
         if count_i64 <= 0 {
-            return command_executor_lmpop_count_required();
+            return command_executor_error(&"ERR count should be greater than 0"[0: 34]);
         }
         requested_count = count_i64 as usize;
     } else if command.argc != keys_end + 1 {
@@ -5266,7 +5177,7 @@ fn command_executor_lmpop(engine: &Engine, command: &Command, now_ms: u64) Comma
     }
 
     if source_obj == null {
-        return command_executor_null_array();
+        return command_executor_reply(CommandReplyType.reply_null_array, command_executor_empty_slice(), 0);
     }
 
     var actual_count: usize = requested_count;
@@ -5278,7 +5189,7 @@ fn command_executor_lmpop(engine: &Engine, command: &Command, now_ms: u64) Comma
     }
     if actual_count == 0 {
         _ = delete_key(engine, source);
-        return command_executor_null_array();
+        return command_executor_reply(CommandReplyType.reply_null_array, command_executor_empty_slice(), 0);
     }
 
     var reply: CommandReply = command_executor_lmpop_reply(source, source_obj, pop_left, actual_count);
@@ -7933,7 +7844,7 @@ fn command_executor_zpop(engine: &Engine, command: &Command, now_ms: u64, revers
             return command_executor_invalid_integer();
         };
         if count_i64 < 0 {
-            return command_executor_positive_count_required();
+            return command_executor_error(&"ERR value is out of range, must be positive"[0: 43]);
         }
         requested_count = count_i64 as usize;
         if requested_count == 0 {
@@ -7952,7 +7863,7 @@ fn command_executor_bzpop(engine: &Engine, command: &Command, now_ms: u64, rever
         return command_executor_wrong_arity();
     };
     _ = command_executor_validate_blocking_timeout(timeout_data) catch {
-        return command_executor_invalid_float();
+        return command_executor_error(&"ERR value is not a valid float"[0: 30]);
     };
 
     var index: usize = 1;
@@ -8008,7 +7919,7 @@ fn command_executor_bzpop(engine: &Engine, command: &Command, now_ms: u64, rever
         return command_executor_owned_array(reply_list);
     }
 
-    return command_executor_null_array();
+    return command_executor_reply(CommandReplyType.reply_null_array, command_executor_empty_slice(), 0);
 }
 
 fn command_executor_bzmpop_key(
@@ -8102,17 +8013,17 @@ fn command_executor_bzmpop(engine: &Engine, command: &Command, now_ms: u64) Comm
         return command_executor_wrong_arity();
     };
     _ = command_executor_validate_blocking_timeout(timeout_data) catch {
-        return command_executor_invalid_float();
+        return command_executor_error(&"ERR value is not a valid float"[0: 30]);
     };
 
     const numkeys_data: &[byte] = command_executor_arg(command, 2) catch {
         return command_executor_wrong_arity();
     };
     const numkeys_i64: i64 = command_executor_parse_i64(numkeys_data) catch {
-        return command_executor_bzmpop_numkeys_required();
+        return command_executor_error(&"ERR numkeys should be greater than 0"[0: 36]);
     };
     if numkeys_i64 <= 0 {
-        return command_executor_bzmpop_numkeys_required();
+        return command_executor_error(&"ERR numkeys should be greater than 0"[0: 36]);
     }
 
     const numkeys: usize = numkeys_i64 as usize;
@@ -8145,10 +8056,10 @@ fn command_executor_bzmpop(engine: &Engine, command: &Command, now_ms: u64) Comm
             return command_executor_syntax_error();
         };
         const count_i64: i64 = command_executor_parse_i64(count_data) catch {
-            return command_executor_lmpop_count_required();
+            return command_executor_error(&"ERR count should be greater than 0"[0: 34]);
         };
         if count_i64 <= 0 {
-            return command_executor_lmpop_count_required();
+            return command_executor_error(&"ERR count should be greater than 0"[0: 34]);
         }
         requested_count = count_i64 as usize;
     } else if command.argc != keys_end + 1 {
@@ -8184,7 +8095,7 @@ fn command_executor_bzmpop(engine: &Engine, command: &Command, now_ms: u64) Comm
         return command_executor_bzmpop_key(engine, key, obj, reverse, actual_count);
     }
 
-    return command_executor_null_array();
+    return command_executor_reply(CommandReplyType.reply_null_array, command_executor_empty_slice(), 0);
 }
 
 fn command_executor_zrangebyscore(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
@@ -8598,13 +8509,13 @@ fn command_executor_geoadd(engine: &Engine, command: &Command, now_ms: u64) Comm
             if created != null {
                 object_free(created);
             }
-            return command_executor_invalid_float();
+            return command_executor_error(&"ERR value is not a valid float"[0: 30]);
         };
         const lat: f64 = command_executor_parse_f64(lat_data) catch {
             if created != null {
                 object_free(created);
             }
-            return command_executor_invalid_float();
+            return command_executor_error(&"ERR value is not a valid float"[0: 30]);
         };
         if !command_executor_geo_validate_lonlat(lon, lat) {
             if created != null {
@@ -8685,7 +8596,7 @@ fn command_executor_geodist(engine: &Engine, command: &Command, now_ms: u64) Com
             return command_executor_wrong_arity();
         };
         unit_scale = command_executor_geo_unit_scale(unit) catch {
-            return command_executor_geo_invalid_unit();
+            return command_executor_error(&"ERR unsupported unit provided. please use M, KM, FT, MI"[0: 57]);
         };
     }
 
@@ -8733,12 +8644,12 @@ fn command_executor_geosearch(engine: &Engine, command: &Command, now_ms: u64) C
         options.center_lon = command_executor_parse_f64(command_executor_arg(command, index + 1) catch {
             return command_executor_wrong_arity();
         }) catch {
-            return command_executor_invalid_float();
+            return command_executor_error(&"ERR value is not a valid float"[0: 30]);
         };
         options.center_lat = command_executor_parse_f64(command_executor_arg(command, index + 2) catch {
             return command_executor_wrong_arity();
         }) catch {
-            return command_executor_invalid_float();
+            return command_executor_error(&"ERR value is not a valid float"[0: 30]);
         };
         if !command_executor_geo_validate_lonlat(options.center_lon, options.center_lat) {
             return command_executor_geo_invalid_lonlat(options.center_lon, options.center_lat);
@@ -8758,13 +8669,13 @@ fn command_executor_geosearch(engine: &Engine, command: &Command, now_ms: u64) C
         const radius: f64 = command_executor_parse_f64(command_executor_arg(command, index + 1) catch {
             return command_executor_wrong_arity();
         }) catch {
-            return command_executor_invalid_float();
+            return command_executor_error(&"ERR value is not a valid float"[0: 30]);
         };
         const unit: &[byte] = command_executor_arg(command, index + 2) catch {
             return command_executor_wrong_arity();
         };
         const unit_scale: f64 = command_executor_geo_unit_scale(unit) catch {
-            return command_executor_geo_invalid_unit();
+            return command_executor_error(&"ERR unsupported unit provided. please use M, KM, FT, MI"[0: 57]);
         };
         options.by_radius = true;
         options.radius_m = radius * unit_scale;
@@ -8777,18 +8688,18 @@ fn command_executor_geosearch(engine: &Engine, command: &Command, now_ms: u64) C
         const width: f64 = command_executor_parse_f64(command_executor_arg(command, index + 1) catch {
             return command_executor_wrong_arity();
         }) catch {
-            return command_executor_invalid_float();
+            return command_executor_error(&"ERR value is not a valid float"[0: 30]);
         };
         const height: f64 = command_executor_parse_f64(command_executor_arg(command, index + 2) catch {
             return command_executor_wrong_arity();
         }) catch {
-            return command_executor_invalid_float();
+            return command_executor_error(&"ERR value is not a valid float"[0: 30]);
         };
         const unit: &[byte] = command_executor_arg(command, index + 3) catch {
             return command_executor_wrong_arity();
         };
         const unit_scale: f64 = command_executor_geo_unit_scale(unit) catch {
-            return command_executor_geo_invalid_unit();
+            return command_executor_error(&"ERR unsupported unit provided. please use M, KM, FT, MI"[0: 57]);
         };
         options.by_radius = false;
         options.box_width_m = width * unit_scale;
@@ -8829,7 +8740,7 @@ fn command_executor_geosearch(engine: &Engine, command: &Command, now_ms: u64) C
                 return command_executor_invalid_integer();
             };
             if count_i64 <= 0 {
-                return command_executor_geo_invalid_count();
+                return command_executor_error(&"ERR COUNT must be > 0"[0: 22]);
             }
             options.has_count = true;
             options.count_limit = count_i64 as usize;
@@ -8866,7 +8777,7 @@ fn command_executor_geosearch(engine: &Engine, command: &Command, now_ms: u64) C
     const obj_result: !&RedisObject = lookup_key_at(engine, key, now_ms);
     const obj: &RedisObject = obj_result catch {
         if options.from_member {
-            return command_executor_geo_missing_member();
+            return command_executor_error(&"ERR could not decode requested zset member"[0: 41]);
         }
         return command_executor_array_bulk(null as &ListNode, 0);
     };
@@ -8877,7 +8788,7 @@ fn command_executor_geosearch(engine: &Engine, command: &Command, now_ms: u64) C
     var center: CommandExecutorGeoPoint = CommandExecutorGeoPoint{ lon: options.center_lon, lat: options.center_lat, packed: 0 };
     if options.from_member {
         center = command_executor_geo_decode_member(obj, options.center_member) catch {
-            return command_executor_geo_missing_member();
+            return command_executor_error(&"ERR could not decode requested zset member"[0: 41]);
         };
     }
 
@@ -9483,7 +9394,7 @@ fn command_executor_hincrbyfloat(engine: &Engine, command: &Command, now_ms: u64
         return command_executor_wrong_arity();
     };
     const increment: f64 = command_executor_parse_f64(increment_data) catch {
-        return command_executor_invalid_float();
+        return command_executor_error(&"ERR value is not a valid float"[0: 30]);
     };
     const hash_obj: &RedisObject = command_executor_hash_lookup_or_create(engine, key, now_ms) catch |err| {
         if err == error.AllocOutOfMemory {
@@ -9502,7 +9413,7 @@ fn command_executor_hincrbyfloat(engine: &Engine, command: &Command, now_ms: u64
         return command_executor_wrongtype();
     };
     const current: f64 = command_executor_parse_f64(data) catch {
-        return command_executor_invalid_float();
+        return command_executor_error(&"ERR value is not a valid float"[0: 30]);
     };
     return command_executor_hash_set_float_field(hash_obj, field, current + increment);
 }
@@ -12608,7 +12519,7 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
 
     if !command_executor_prepare_maxmemory(engine, runtime, command, now_ms) {
-        return command_executor_maxmemory();
+        return command_executor_error(&"OOM command not allowed when used memory > 'maxmemory'"[0: 54]);
     }
 
     if command.info.cmd_type == CommandType.command_echo {
@@ -12739,6 +12650,56 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_xread {
         return command_executor_xread(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_xtrim {
+        if command.argc != 4 && command.argc != 5 {
+            return command_executor_wrong_arity();
+        }
+        const key: &[byte] = command_executor_arg(command, 1) catch {
+            return command_executor_wrong_arity();
+        };
+        const strategy: &[byte] = command_executor_arg(command, 2) catch {
+            return command_executor_wrong_arity();
+        };
+        if !command_executor_keyword_eq(strategy, &"MAXLEN"[0: 6]) {
+            return command_executor_syntax_error();
+        }
+        var threshold_index: usize = 3;
+        if command.argc == 5 {
+            const operator: &[byte] = command_executor_arg(command, 3) catch {
+                return command_executor_wrong_arity();
+            };
+            const exact: bool = operator.len == 1 && operator.ptr[0] == 61 as byte;
+            const approximate: bool = operator.len == 1 && operator.ptr[0] == 126 as byte;
+            if !exact && !approximate {
+                return command_executor_syntax_error();
+            }
+            threshold_index = 4;
+        }
+        const threshold_data: &[byte] = command_executor_arg(command, threshold_index) catch {
+            return command_executor_wrong_arity();
+        };
+        const threshold: i64 = command_executor_parse_i64(threshold_data) catch {
+            return command_executor_invalid_integer();
+        };
+        if threshold < 0 {
+            return command_executor_invalid_integer();
+        }
+        const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+            return command_executor_integer(0);
+        };
+        if obj.obj_type != ObjectType.object_stream {
+            return command_executor_wrongtype();
+        }
+        var removed: usize = 0;
+        while obj.list_len > threshold as usize {
+            const popped: &RedisObject = list_object_pop_head(obj) catch {
+                return command_executor_wrongtype();
+            };
+            object_free(popped);
+            removed = removed + 1;
+        }
+        return command_executor_integer(removed as i64);
     }
     if command.info.cmd_type == CommandType.command_lmove {
         return command_executor_lmove(engine, command, now_ms);

@@ -369,6 +369,7 @@ PARTIAL_NAMES = {
     "xgroup|create",
     "xgroup|destroy",
     "xgroup|help",
+    "xgroup|setid",
     "xinfo",
     "xinfo|consumers",
     "xinfo|groups",

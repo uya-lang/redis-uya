@@ -144,6 +144,12 @@ def run_smoke() -> None:
             if client.command(b"XGROUP", b"DESTROY", b"mystream", b"group") != 0:
                 raise AssertionError("XGROUP DESTROY did not return zero without consumer groups")
             try:
+                client.command(b"XGROUP", b"SETID", b"mystream", b"group", b"$")
+                raise AssertionError("XGROUP SETID did not fail without consumer groups")
+            except RuntimeError as exc:
+                if "NOGROUP" not in str(exc):
+                    raise AssertionError(f"unexpected XGROUP SETID error: {exc}") from exc
+            try:
                 client.command(b"XINFO", b"CONSUMERS", b"mystream", b"group")
                 raise AssertionError("XINFO CONSUMERS did not fail without consumer groups")
             except RuntimeError as exc:

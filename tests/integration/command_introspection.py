@@ -305,7 +305,7 @@ def run_smoke() -> None:
             if (
                 not isinstance(xinfo_help, list)
                 or b"XINFO HELP" not in xinfo_help
-                or b"XINFO STREAM <key>" not in xinfo_help
+                or b"XINFO STREAM <key> [FULL [COUNT <count>]]" not in xinfo_help
             ):
                 raise AssertionError(f"unexpected XINFO HELP: {xinfo_help!r}")
 

@@ -2682,6 +2682,17 @@ export fn test_command_streams_first_batch() !void {
     command_reply_cleanup(&xinfo_stream_reply);
     resp_value_free(&xinfo_stream_parsed.value);
 
+    var xinfo_stream_full_parsed: RespParseResult = try parse_resp2(&"*6\r\n$5\r\nXINFO\r\n$6\r\nSTREAM\r\n$6\r\nstream\r\n$4\r\nFULL\r\n$5\r\nCOUNT\r\n$1\r\n1\r\n"[0: 67]);
+    const xinfo_stream_full_command: Command = try command_executor_test_command(&router, &xinfo_stream_full_parsed);
+    const xinfo_stream_full_reply: CommandReply = command_execute_at(&engine, &xinfo_stream_full_command, 1000u64);
+    try assert_eq_i32(xinfo_stream_full_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    const xinfo_stream_full_len: usize = try connection_encode_reply(&xinfo_stream_full_reply, &out[0], 1024);
+    try assert_true(command_executor_test_contains(out[0: xinfo_stream_full_len], &"$7\r\nentries\r\n*1\r\n"[0: 17]));
+    try assert_true(command_executor_test_contains(out[0: xinfo_stream_full_len], &"$6\r\n1000-0\r\n"[0: 12]));
+    try assert_true(command_executor_test_contains(out[0: xinfo_stream_full_len], &"$6\r\ngroups\r\n*0\r\n"[0: 16]));
+    command_reply_cleanup(&xinfo_stream_full_reply);
+    resp_value_free(&xinfo_stream_full_parsed.value);
+
     var xinfo_stream_missing_key_parsed: RespParseResult = try parse_resp2(&"*3\r\n$5\r\nXINFO\r\n$6\r\nSTREAM\r\n$7\r\nmissing\r\n"[0: 40]);
     const xinfo_stream_missing_key_command: Command = try command_executor_test_command(&router, &xinfo_stream_missing_key_parsed);
     const xinfo_stream_missing_key_reply: CommandReply = command_execute_at(&engine, &xinfo_stream_missing_key_command, 1000u64);

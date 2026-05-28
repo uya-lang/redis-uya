@@ -4373,6 +4373,55 @@ fn command_executor_xinfo_stream_resp(buf: &Sds, obj: &RedisObject, length: usiz
     try command_executor_xinfo_append_entry_or_null(buf, last_entry);
 }
 
+fn command_executor_xinfo_stream_full_resp(buf: &Sds, obj: &RedisObject, length: usize, count_limit: i64) !void {
+    var last_id: Sds = try command_executor_stream_id_sds(obj.stream_last_ms, obj.stream_last_seq);
+    defer {
+        sds_free(&last_id);
+    }
+
+    var entries_count: usize = length;
+    if count_limit >= 0 && count_limit < entries_count as i64 {
+        entries_count = count_limit as usize;
+    }
+
+    var first_entry: &RedisObject = null as &RedisObject;
+    if obj.list_head != null {
+        first_entry = obj.list_head.value;
+    }
+
+    try command_executor_resp_append_array_header(buf, 18);
+    try command_executor_resp_append_bulk(buf, &"length"[0: 6]);
+    try command_executor_resp_append_integer(buf, length as i64);
+    try command_executor_resp_append_bulk(buf, &"radix-tree-keys"[0: 15]);
+    try command_executor_resp_append_integer(buf, 0);
+    try command_executor_resp_append_bulk(buf, &"radix-tree-nodes"[0: 16]);
+    try command_executor_resp_append_integer(buf, 0);
+    try command_executor_resp_append_bulk(buf, &"last-generated-id"[0: 17]);
+    try command_executor_resp_append_bulk(buf, last_id.buf[0: last_id.len]);
+    try command_executor_resp_append_bulk(buf, &"max-deleted-entry-id"[0: 20]);
+    try command_executor_resp_append_bulk(buf, &"0-0"[0: 3]);
+    try command_executor_resp_append_bulk(buf, &"entries-added"[0: 13]);
+    try command_executor_resp_append_integer(buf, length as i64);
+    try command_executor_resp_append_bulk(buf, &"recorded-first-entry-id"[0: 23]);
+    if first_entry != null && first_entry.list_head != null {
+        const first_id: &[byte] = first_entry.list_head.value.value.buf[0: first_entry.list_head.value.value.len];
+        try command_executor_resp_append_bulk(buf, first_id);
+    } else {
+        try command_executor_resp_append_bulk(buf, &"0-0"[0: 3]);
+    }
+    try command_executor_resp_append_bulk(buf, &"entries"[0: 7]);
+    try command_executor_resp_append_array_header(buf, entries_count);
+    var emitted: usize = 0;
+    var node: &ListNode = obj.list_head;
+    while node != null && emitted < entries_count {
+        try command_executor_stream_append_entry_resp(buf, node.value);
+        emitted = emitted + 1;
+        node = node.next;
+    }
+    try command_executor_resp_append_bulk(buf, &"groups"[0: 6]);
+    try command_executor_resp_append_array_header(buf, 0);
+}
+
 fn command_executor_xinfo(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
     if command.argc < 2 {
         return command_executor_owned_error(&"ERR wrong number of arguments for 'xinfo' command"[0: 49]);
@@ -4389,9 +4438,8 @@ fn command_executor_xinfo(engine: &Engine, command: &Command, now_ms: u64) Comma
         };
         _ = list_object_push_tail(reply_list, &"XINFO HELP"[0: 10]) catch { object_free(reply_list); return command_executor_oom(); };
         _ = list_object_push_tail(reply_list, &"    Prints this help."[0: 21]) catch { object_free(reply_list); return command_executor_oom(); };
-        _ = list_object_push_tail(reply_list, &"XINFO STREAM <key>"[0: 18]) catch { object_free(reply_list); return command_executor_oom(); };
-        _ = list_object_push_tail(reply_list, &"    Returns basic stream metadata."[0: 34]) catch { object_free(reply_list); return command_executor_oom(); };
-        _ = list_object_push_tail(reply_list, &"    FULL is not implemented yet."[0: 32]) catch { object_free(reply_list); return command_executor_oom(); };
+        _ = list_object_push_tail(reply_list, &"XINFO STREAM <key> [FULL [COUNT <count>]]"[0: 41]) catch { object_free(reply_list); return command_executor_oom(); };
+        _ = list_object_push_tail(reply_list, &"    Returns basic stream metadata and FULL entry details."[0: 57]) catch { object_free(reply_list); return command_executor_oom(); };
         _ = list_object_push_tail(reply_list, &"XINFO GROUPS <key>"[0: 18]) catch { object_free(reply_list); return command_executor_oom(); };
         _ = list_object_push_tail(reply_list, &"    Returns an empty list; consumer group state is deferred."[0: 60]) catch { object_free(reply_list); return command_executor_oom(); };
         _ = list_object_push_tail(reply_list, &"XINFO CONSUMERS <key> <groupname>"[0: 33]) catch { object_free(reply_list); return command_executor_oom(); };
@@ -4399,12 +4447,40 @@ fn command_executor_xinfo(engine: &Engine, command: &Command, now_ms: u64) Comma
         return command_executor_owned_array(reply_list);
     }
     if command_executor_keyword_eq(subcommand, &"STREAM"[0: 6]) {
-        if command.argc != 3 {
+        if command.argc != 3 && command.argc != 4 && command.argc != 6 {
             return command_executor_owned_error(&"ERR wrong number of arguments for 'xinfo|stream' command"[0: 56]);
         }
         const key: &[byte] = command_executor_arg(command, 2) catch {
             return command_executor_owned_error(&"ERR wrong number of arguments for 'xinfo|stream' command"[0: 56]);
         };
+        var full: bool = false;
+        var count_limit: i64 = -1;
+        if command.argc == 4 || command.argc == 6 {
+            const full_token: &[byte] = command_executor_arg(command, 3) catch {
+                return command_executor_owned_error(&"ERR wrong number of arguments for 'xinfo|stream' command"[0: 56]);
+            };
+            if !command_executor_keyword_eq(full_token, &"FULL"[0: 4]) {
+                return command_executor_syntax_error();
+            }
+            full = true;
+        }
+        if command.argc == 6 {
+            const count_kw: &[byte] = command_executor_arg(command, 4) catch {
+                return command_executor_owned_error(&"ERR wrong number of arguments for 'xinfo|stream' command"[0: 56]);
+            };
+            if !command_executor_keyword_eq(count_kw, &"COUNT"[0: 5]) {
+                return command_executor_syntax_error();
+            }
+            const count_data: &[byte] = command_executor_arg(command, 5) catch {
+                return command_executor_owned_error(&"ERR wrong number of arguments for 'xinfo|stream' command"[0: 56]);
+            };
+            count_limit = command_executor_parse_i64(count_data) catch {
+                return command_executor_invalid_integer();
+            };
+            if count_limit < 0 {
+                return command_executor_invalid_integer();
+            }
+        }
         const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
             return command_executor_error(&"ERR no such key"[0: 14]);
         };
@@ -4420,12 +4496,21 @@ fn command_executor_xinfo(engine: &Engine, command: &Command, now_ms: u64) Comma
         defer {
             sds_free(&raw);
         }
-        _ = command_executor_xinfo_stream_resp(&raw, obj, length) catch |build_err| {
-            if build_err == error.AllocOutOfMemory {
-                return command_executor_oom();
-            }
-            return command_executor_wrongtype();
-        };
+        if full {
+            _ = command_executor_xinfo_stream_full_resp(&raw, obj, length, count_limit) catch |build_err| {
+                if build_err == error.AllocOutOfMemory {
+                    return command_executor_oom();
+                }
+                return command_executor_wrongtype();
+            };
+        } else {
+            _ = command_executor_xinfo_stream_resp(&raw, obj, length) catch |build_err| {
+                if build_err == error.AllocOutOfMemory {
+                    return command_executor_oom();
+                }
+                return command_executor_wrongtype();
+            };
+        }
         return command_executor_owned_raw(raw.buf[0: raw.len]);
     }
     if command_executor_keyword_eq(subcommand, &"GROUPS"[0: 6]) {

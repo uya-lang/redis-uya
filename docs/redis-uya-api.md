@@ -1688,7 +1688,7 @@ XGROUP SETID key groupname id-or-$ [ENTRIESREAD entries-read]
 XINFO HELP
 XINFO CONSUMERS key groupname
 XINFO GROUPS key
-XINFO STREAM key
+XINFO STREAM key [FULL [COUNT count]]
 XLEN key
 XPENDING key group [IDLE min-idle-time] start end count [consumer]
 XRANGE key start end [COUNT count]
@@ -1710,7 +1710,7 @@ XTRIM key MAXLEN [=|~] count
 - `XINFO HELP`：返回当前 XINFO 兼容面帮助数组
 - `XINFO CONSUMERS`：当前没有 consumer group 模型，因此对现有 stream key 返回 `NOGROUP No such consumer group`
 - `XINFO GROUPS`：当前没有 consumer group 模型，因此对 stream key 返回空数组；key 不存在返回 `ERR no such key`
-- `XINFO STREAM`：返回基础 stream 元数据，包括 `length`、`last-generated-id`、`groups=0`、`first-entry` 与 `last-entry`；key 不存在返回 `ERR no such key`
+- `XINFO STREAM`：返回基础 stream 元数据，包括 `length`、`last-generated-id`、`groups=0`、`first-entry` 与 `last-entry`；`FULL [COUNT count]` 返回基础元数据、entry 明细和空 `groups`；key 不存在返回 `ERR no such key`
 - `XLEN`：返回 stream entry 数量；key 不存在返回 `0`
 - `XPENDING`：当前没有 consumer group 模型，因此对现有 stream key 返回 `NOGROUP No such consumer group`
 - `XRANGE` / `XREVRANGE`：返回 `[id, [field, value, ...]]` 形式的嵌套数组，支持 `-` / `+` 边界和 `COUNT`
@@ -1727,9 +1727,9 @@ XTRIM key MAXLEN [=|~] count
 - `XDEL` 当前只做精确 ID 删除，不维护 consumer group PEL
 - `XPENDING` 当前只提供无 group 时的 `NOGROUP` 错误面，不维护 consumer group PEL
 - `XGROUP CREATE` 当前只提供 key/type 校验和明确未支持错误，不创建 consumer group；`XGROUP DESTROY` 当前只提供 empty-state 返回值，不维护 group；`XGROUP SETID` 当前只提供无 group 时的 `NOGROUP` 错误面；consumer 管理和 consumer group 状态仍未实现
-- `XINFO STREAM` 当前只支持 key-only 基础元数据，`XINFO GROUPS` 当前只支持 empty-state 空数组，`XINFO CONSUMERS` 当前只提供无 group 时的 `NOGROUP` 错误面；`FULL` 与真实 consumer group 状态仍未实现；`radix-tree-*` 字段为 list-backed partial 占位
+- `XINFO STREAM` 当前支持 key-only 基础元数据和 `FULL [COUNT count]` entry 明细，`XINFO GROUPS` 当前只支持 empty-state 空数组，`XINFO CONSUMERS` 当前只提供无 group 时的 `NOGROUP` 错误面；真实 consumer group 状态仍未实现；`radix-tree-*` 字段为 list-backed partial 占位
 - `XTRIM` 当前只支持 `MAXLEN` 与可选 `=` / `~` 操作符；`~` 只是语法兼容占位，仍按精确头部裁剪执行；暂不支持 `MINID` 或 `LIMIT`
-- 当前不支持 `XINFO STREAM FULL` 或真实 consumer group 状态命令
+- 当前不支持真实 consumer group 状态命令
 - 项目内 RDB 与 AOF rewrite 会保存显式 stream ID；普通 AOF append 仍记录原始请求，因此 `XADD *` 回放会重新生成 ID，只承诺恢复条目内容与顺序
 
 ### `TYPE`

@@ -133,6 +133,15 @@ def run_smoke() -> None:
                 or info[info.index(b"last-entry") + 1][0] != second
             ):
                 raise AssertionError(f"unexpected XINFO STREAM payload: {info!r}")
+            full_info = client.command(b"XINFO", b"STREAM", b"mystream", b"FULL", b"COUNT", b"1")
+            if (
+                not isinstance(full_info, list)
+                or b"entries" not in full_info
+                or full_info[full_info.index(b"entries") + 1] != [[first, [b"sensor", b"a", b"value", b"1"]]]
+                or b"groups" not in full_info
+                or full_info[full_info.index(b"groups") + 1] != []
+            ):
+                raise AssertionError(f"unexpected XINFO STREAM FULL payload: {full_info!r}")
             if client.command(b"XINFO", b"GROUPS", b"mystream") != []:
                 raise AssertionError("XINFO GROUPS did not return an empty group list")
             try:

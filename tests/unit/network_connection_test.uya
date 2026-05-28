@@ -299,6 +299,15 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const function_delete_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$8\r\nFUNCTION\r\n$6\r\nDELETE\r\n$7\r\nmissing\r\n"[0: 43], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: function_delete_result.response_len], &"-ERR Library not found\r\n"[0: 24]));
 
+    var function_dump_expected: [byte: 17] = [
+        0x24 as byte, 0x31 as byte, 0x30 as byte, 0x0d as byte, 0x0a as byte,
+        0x0a as byte, 0x00 as byte, 0x5d as byte, 0x9b as byte, 0x5c as byte,
+        0x40 as byte, 0x0f as byte, 0x7f as byte, 0xa2 as byte, 0xda as byte,
+        0x0d as byte, 0x0a as byte,
+    ];
+    const function_dump_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$8\r\nFUNCTION\r\n$4\r\nDUMP\r\n"[0: 28], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: function_dump_result.response_len], function_dump_expected[0: 17]));
+
     const function_kill_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$8\r\nFUNCTION\r\n$4\r\nKILL\r\n"[0: 28], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: function_kill_result.response_len], &"-NOTBUSY No scripts in execution right now.\r\n"[0: 45]));
 

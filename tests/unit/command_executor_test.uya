@@ -647,6 +647,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"fcall_ro"[0: 8], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"function"[0: 8], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"function|delete"[0: 15], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"function|dump"[0: 13], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"function|flush"[0: 14], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"function|help"[0: 13], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"function|kill"[0: 13], CommandCatalogStatus.status_partial);
@@ -682,6 +683,7 @@ export fn test_command_function_help() !void {
     const help_len: usize = try connection_encode_reply(&help_reply, &out[0], 1024);
     try assert_true(command_executor_test_contains(out[0: help_len], &"FUNCTION HELP"[0: 13]));
     try assert_true(command_executor_test_contains(out[0: help_len], &"FUNCTION LIST"[0: 13]));
+    try assert_true(command_executor_test_contains(out[0: help_len], &"FUNCTION DUMP"[0: 13]));
     try assert_true(command_executor_test_contains(out[0: help_len], &"FUNCTION KILL"[0: 13]));
     command_reply_cleanup(&help_reply);
     resp_value_free(&help_parsed.value);
@@ -858,6 +860,43 @@ export fn test_command_function_kill() !void {
     var extra_reply: CommandReply = command_execute_at(&engine, &extra_command, 1000u64);
     try assert_eq_i32(extra_reply.typ as i32, CommandReplyType.reply_error as i32);
     try assert_true(command_executor_test_slice_eq(extra_reply.data, &"ERR wrong number of arguments for 'function|kill' command"[0: 57]));
+    command_reply_cleanup(&extra_reply);
+    resp_value_free(&extra_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_command_function_dump() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var expected: [byte: 10] = [
+        0x0a as byte,
+        0x00 as byte,
+        0x5d as byte,
+        0x9b as byte,
+        0x5c as byte,
+        0x40 as byte,
+        0x0f as byte,
+        0x7f as byte,
+        0xa2 as byte,
+        0xda as byte,
+    ];
+
+    var dump_parsed: RespParseResult = try parse_resp2(&"*2\r\n$8\r\nFUNCTION\r\n$4\r\nDUMP\r\n"[0: 28]);
+    const dump_command: Command = try command_executor_test_command(&router, &dump_parsed);
+    var dump_reply: CommandReply = command_execute_at(&engine, &dump_command, 1000u64);
+    try assert_eq_i32(dump_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(dump_reply.data, expected[0: 10]));
+    command_reply_cleanup(&dump_reply);
+    resp_value_free(&dump_parsed.value);
+
+    var extra_parsed: RespParseResult = try parse_resp2(&"*3\r\n$8\r\nFUNCTION\r\n$4\r\nDUMP\r\n$1\r\nX\r\n"[0: 35]);
+    const extra_command: Command = try command_executor_test_command(&router, &extra_parsed);
+    var extra_reply: CommandReply = command_execute_at(&engine, &extra_command, 1000u64);
+    try assert_eq_i32(extra_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(extra_reply.data, &"ERR wrong number of arguments for 'function|dump' command"[0: 57]));
     command_reply_cleanup(&extra_reply);
     resp_value_free(&extra_parsed.value);
 

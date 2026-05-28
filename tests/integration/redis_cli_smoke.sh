@@ -513,6 +513,12 @@ if [[ "$FUNCTION_DELETE_RESULT" != "ERR Library not found" ]]; then
     exit 1
 fi
 
+FUNCTION_DUMP_HEX="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function dump | xxd -p -c 256)"
+if [[ "$FUNCTION_DUMP_HEX" != "0a005d9b5c400f7fa2da0a" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected FUNCTION DUMP empty-library payload, got '$FUNCTION_DUMP_HEX'" >&2
+    exit 1
+fi
+
 FUNCTION_KILL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function kill 2>&1 || true)"
 if [[ "$FUNCTION_KILL_RESULT" != "NOTBUSY No scripts in execution right now." ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected FUNCTION KILL no running script error, got '$FUNCTION_KILL_RESULT'" >&2

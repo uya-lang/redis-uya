@@ -269,6 +269,11 @@ class RedisPySubsetClient:
     def function_delete(self, library_name: bytes):
         return self._request(b"FUNCTION", b"DELETE", library_name)
 
+    def function_dump(self):
+        result = self._request(b"FUNCTION", b"DUMP")
+        assert isinstance(result, bytes)
+        return result
+
     def function_kill(self):
         return self._request(b"FUNCTION", b"KILL")
 
@@ -988,7 +993,7 @@ def run_smoke() -> None:
                 if str(exc) != "ERR Function not found":
                     raise AssertionError(f"unexpected FCALL_RO error: {exc}") from exc
             function_help = client.function_help()
-            if b"FUNCTION HELP" not in function_help or b"FUNCTION LIST [LIBRARYNAME <pattern>] [WITHCODE]" not in function_help or b"FUNCTION KILL" not in function_help:
+            if b"FUNCTION HELP" not in function_help or b"FUNCTION LIST [LIBRARYNAME <pattern>] [WITHCODE]" not in function_help or b"FUNCTION DUMP" not in function_help or b"FUNCTION KILL" not in function_help:
                 raise AssertionError(f"unexpected FUNCTION HELP result: {function_help!r}")
             if client.function_list() != []:
                 raise AssertionError("expected empty FUNCTION LIST partial result")
@@ -1008,6 +1013,8 @@ def run_smoke() -> None:
             except RespError as exc:
                 if str(exc) != "ERR Library not found":
                     raise AssertionError(f"unexpected FUNCTION DELETE error: {exc}") from exc
+            if client.function_dump() != bytes.fromhex("0a005d9b5c400f7fa2da"):
+                raise AssertionError("expected FUNCTION DUMP empty-library payload")
             try:
                 client.function_kill()
                 raise AssertionError("expected FUNCTION KILL with no running function to fail")

@@ -349,6 +349,7 @@ PARTIAL_NAMES = {
     "fcall_ro",
     "function",
     "function|delete",
+    "function|dump",
     "function|flush",
     "function|help",
     "function|kill",

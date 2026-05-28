@@ -149,6 +149,7 @@ use tests.unit.command_executor_test.test_command_function_stats;
 use tests.unit.command_executor_test.test_command_function_flush;
 use tests.unit.command_executor_test.test_command_function_delete;
 use tests.unit.command_executor_test.test_command_function_kill;
+use tests.unit.command_executor_test.test_command_function_dump;
 use tests.unit.command_executor_test.test_command_fcall;
 use tests.unit.command_executor_test.test_command_move;
 use tests.unit.command_executor_test.test_command_wait;
@@ -806,6 +807,10 @@ export fn main() i32 {
     const before_exec_function_kill: i32 = failed;
     _ = test_command_function_kill() catch { printf("[FAIL] command_executor/function_kill\n" as *byte); failed = failed + 1; };
     if failed == before_exec_function_kill { printf("[PASS] command_executor/function_kill\n" as *byte); }
+
+    const before_exec_function_dump: i32 = failed;
+    _ = test_command_function_dump() catch { printf("[FAIL] command_executor/function_dump\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_function_dump { printf("[PASS] command_executor/function_dump\n" as *byte); }
 
     const before_exec_fcall: i32 = failed;
     _ = test_command_fcall() catch { printf("[FAIL] command_executor/fcall\n" as *byte); failed = failed + 1; };

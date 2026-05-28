@@ -644,6 +644,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"xgroup"[0: 6], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xgroup|help"[0: 11], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xinfo"[0: 5], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"xinfo|groups"[0: 12], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xinfo|help"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xinfo|stream"[0: 12], CommandCatalogStatus.status_partial);
 
@@ -2551,6 +2552,36 @@ export fn test_command_streams_first_batch() !void {
     try assert_true(command_executor_test_slice_eq(xinfo_stream_arity_reply.data, &"ERR wrong number of arguments for 'xinfo|stream' command"[0: 56]));
     command_reply_cleanup(&xinfo_stream_arity_reply);
     resp_value_free(&xinfo_stream_arity_parsed.value);
+
+    var xinfo_groups_parsed: RespParseResult = try parse_resp2(&"*3\r\n$5\r\nXINFO\r\n$6\r\nGROUPS\r\n$6\r\nstream\r\n"[0: 39]);
+    const xinfo_groups_command: Command = try command_executor_test_command(&router, &xinfo_groups_parsed);
+    const xinfo_groups_reply: CommandReply = command_execute_at(&engine, &xinfo_groups_command, 1000u64);
+    try assert_eq_i32(xinfo_groups_reply.typ as i32, CommandReplyType.reply_array_bulk as i32);
+    try assert_eq_i32(xinfo_groups_reply.array_count as i32, 0);
+    resp_value_free(&xinfo_groups_parsed.value);
+
+    var xinfo_groups_missing_key_parsed: RespParseResult = try parse_resp2(&"*3\r\n$5\r\nXINFO\r\n$6\r\nGROUPS\r\n$7\r\nmissing\r\n"[0: 40]);
+    const xinfo_groups_missing_key_command: Command = try command_executor_test_command(&router, &xinfo_groups_missing_key_parsed);
+    const xinfo_groups_missing_key_reply: CommandReply = command_execute_at(&engine, &xinfo_groups_missing_key_command, 1000u64);
+    try assert_eq_i32(xinfo_groups_missing_key_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(xinfo_groups_missing_key_reply.data, &"ERR no such key"[0: 14]));
+    command_reply_cleanup(&xinfo_groups_missing_key_reply);
+    resp_value_free(&xinfo_groups_missing_key_parsed.value);
+
+    var xinfo_groups_wrongtype_parsed: RespParseResult = try parse_resp2(&"*3\r\n$5\r\nXINFO\r\n$6\r\nGROUPS\r\n$6\r\nstring\r\n"[0: 39]);
+    const xinfo_groups_wrongtype_command: Command = try command_executor_test_command(&router, &xinfo_groups_wrongtype_parsed);
+    const xinfo_groups_wrongtype_reply: CommandReply = command_execute_at(&engine, &xinfo_groups_wrongtype_command, 1000u64);
+    try assert_eq_i32(xinfo_groups_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xinfo_groups_wrongtype_reply.data, &"WRONGTYPE"[0: 9]));
+    resp_value_free(&xinfo_groups_wrongtype_parsed.value);
+
+    var xinfo_groups_arity_parsed: RespParseResult = try parse_resp2(&"*2\r\n$5\r\nXINFO\r\n$6\r\nGROUPS\r\n"[0: 27]);
+    const xinfo_groups_arity_command: Command = try command_executor_test_command(&router, &xinfo_groups_arity_parsed);
+    const xinfo_groups_arity_reply: CommandReply = command_execute_at(&engine, &xinfo_groups_arity_command, 1000u64);
+    try assert_eq_i32(xinfo_groups_arity_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(xinfo_groups_arity_reply.data, &"ERR wrong number of arguments for 'xinfo|groups' command"[0: 56]));
+    command_reply_cleanup(&xinfo_groups_arity_reply);
+    resp_value_free(&xinfo_groups_arity_parsed.value);
 
     var xdel_missing_id_parsed: RespParseResult = try parse_resp2(&"*3\r\n$4\r\nXDEL\r\n$6\r\nstream\r\n$6\r\n9999-0\r\n"[0: 38]);
     const xdel_missing_id_command: Command = try command_executor_test_command(&router, &xdel_missing_id_parsed);

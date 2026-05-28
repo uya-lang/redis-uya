@@ -4243,7 +4243,7 @@ fn command_executor_xinfo(engine: &Engine, command: &Command, now_ms: u64) Comma
         _ = list_object_push_tail(reply_list, &"    Returns basic stream metadata."[0: 34]) catch { object_free(reply_list); return command_executor_oom(); };
         _ = list_object_push_tail(reply_list, &"    FULL is not implemented yet."[0: 32]) catch { object_free(reply_list); return command_executor_oom(); };
         _ = list_object_push_tail(reply_list, &"XINFO GROUPS <key>"[0: 18]) catch { object_free(reply_list); return command_executor_oom(); };
-        _ = list_object_push_tail(reply_list, &"    Not implemented yet in redis-uya; consumer group state is still deferred."[0: 77]) catch { object_free(reply_list); return command_executor_oom(); };
+        _ = list_object_push_tail(reply_list, &"    Returns an empty list; consumer group state is deferred."[0: 60]) catch { object_free(reply_list); return command_executor_oom(); };
         _ = list_object_push_tail(reply_list, &"XINFO CONSUMERS <key> <groupname>"[0: 33]) catch { object_free(reply_list); return command_executor_oom(); };
         _ = list_object_push_tail(reply_list, &"    Not implemented yet in redis-uya."[0: 37]) catch { object_free(reply_list); return command_executor_oom(); };
         return command_executor_owned_array(reply_list);
@@ -4277,6 +4277,21 @@ fn command_executor_xinfo(engine: &Engine, command: &Command, now_ms: u64) Comma
             return command_executor_wrongtype();
         };
         return command_executor_owned_raw(raw.buf[0: raw.len]);
+    }
+    if command_executor_keyword_eq(subcommand, &"GROUPS"[0: 6]) {
+        if command.argc != 3 {
+            return command_executor_owned_error(&"ERR wrong number of arguments for 'xinfo|groups' command"[0: 56]);
+        }
+        const key: &[byte] = command_executor_arg(command, 2) catch {
+            return command_executor_owned_error(&"ERR wrong number of arguments for 'xinfo|groups' command"[0: 56]);
+        };
+        const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+            return command_executor_error(&"ERR no such key"[0: 14]);
+        };
+        if obj.obj_type != ObjectType.object_stream {
+            return command_executor_wrongtype();
+        }
+        return command_executor_array_bulk(null as &ListNode, 0);
     }
 
     var err: Sds = sds_empty() catch {
@@ -11172,6 +11187,7 @@ fn command_executor_command_visible_subcommand(parent_name: &[byte], subcommand_
     }
     if command_executor_slice_eq(parent_name, &"xinfo"[0: 5]) {
         return command_executor_slice_eq(subcommand_name, &"help"[0: 4]) ||
+            command_executor_slice_eq(subcommand_name, &"groups"[0: 6]) ||
             command_executor_slice_eq(subcommand_name, &"stream"[0: 6]);
     }
     return false;

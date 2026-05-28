@@ -377,6 +377,7 @@ PARTIAL_NAMES = {
     "xinfo|help",
     "xinfo|stream",
     "xlen",
+    "xpending",
     "xrange",
     "xread",
     "xrevrange",

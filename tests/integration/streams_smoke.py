@@ -174,6 +174,13 @@ def run_smoke() -> None:
                 if "NOGROUP" not in str(exc):
                     raise AssertionError(f"unexpected XACK error: {exc}") from exc
 
+            try:
+                client.command(b"XPENDING", b"mystream", b"group")
+                raise AssertionError("XPENDING did not fail without consumer groups")
+            except RuntimeError as exc:
+                if "NOGROUP" not in str(exc):
+                    raise AssertionError(f"unexpected XPENDING error: {exc}") from exc
+
             if client.command(b"XDEL", b"mystream", first) != 1:
                 raise AssertionError("XDEL did not remove the first stream entry")
             if client.command(b"XLEN", b"mystream") != 1:

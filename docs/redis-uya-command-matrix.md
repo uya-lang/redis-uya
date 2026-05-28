@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 98 | 0 | 3 | 118 |
+| Tier A: standalone core | 365 | 259 | 146 | 99 | 0 | 3 | 117 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `105` |
+| `partial` | `106` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `271` |
+| `deferred` | `270` |
 
 ## Group counts
 
@@ -579,7 +579,7 @@
 | `xinfo|stream` | `stream` | `partial` | `-` | `-3` | `-` | `no` | `@read, @stream, @slow` |
 | `xlen` | `stream` | `partial` | `-` | `2` | `-` | `no` | `@read, @stream, @fast` |
 | `xnack` | `stream` | `deferred` | `v0.9.1` | `-7` | `-` | `no` | `@stream` |
-| `xpending` | `stream` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @stream, @slow` |
+| `xpending` | `stream` | `partial` | `-` | `-3` | `-` | `no` | `@read, @stream, @slow` |
 | `xrange` | `stream` | `partial` | `-` | `-4` | `-` | `no` | `@read, @stream, @slow` |
 | `xread` | `stream` | `partial` | `-` | `-4` | `-` | `no` | `@read, @stream, @slow, @blocking` |
 | `xreadgroup` | `stream` | `deferred` | `v0.9.1` | `-7` | `-` | `no` | `@write, @stream, @slow, @blocking` |

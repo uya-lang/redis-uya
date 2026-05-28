@@ -4161,6 +4161,25 @@ fn command_executor_xack(engine: &Engine, command: &Command, now_ms: u64) Comman
     return command_executor_error(&"NOGROUP No such consumer group"[0: 30]);
 }
 
+fn command_executor_xpending(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 3 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    _ = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+        return command_executor_error(&"ERR no such key"[0: 14]);
+    };
+    if obj.obj_type != ObjectType.object_stream {
+        return command_executor_wrongtype();
+    }
+    return command_executor_error(&"NOGROUP No such consumer group"[0: 30]);
+}
+
 fn command_executor_xgroup(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
     if command.argc < 2 {
         return command_executor_owned_error(&"ERR wrong number of arguments for 'xgroup' command"[0: 50]);
@@ -12934,6 +12953,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_xlen {
         return command_executor_xlen(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_xpending {
+        return command_executor_xpending(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_xrange {
         return command_executor_xrange_common(engine, command, now_ms, false);

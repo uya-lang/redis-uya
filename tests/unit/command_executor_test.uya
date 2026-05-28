@@ -652,6 +652,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"xinfo|groups"[0: 12], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xinfo|help"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xinfo|stream"[0: 12], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"xpending"[0: 8], CommandCatalogStatus.status_partial);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);
@@ -2482,6 +2483,31 @@ export fn test_command_streams_first_batch() !void {
     try assert_true(xack_wrong_arity);
     resp_value_free(&xack_arity_parsed.value);
 
+    var xpending_parsed: RespParseResult = try parse_resp2(&"*3\r\n$8\r\nXPENDING\r\n$6\r\nstream\r\n$1\r\ng\r\n"[0: 37]);
+    const xpending_command: Command = try command_executor_test_command(&router, &xpending_parsed);
+    const xpending_reply: CommandReply = command_execute_at(&engine, &xpending_command, 1000u64);
+    try assert_eq_i32(xpending_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xpending_reply.data, &"NOGROUP"[0: 7]));
+    resp_value_free(&xpending_parsed.value);
+
+    var xpending_missing_parsed: RespParseResult = try parse_resp2(&"*3\r\n$8\r\nXPENDING\r\n$7\r\nmissing\r\n$1\r\ng\r\n"[0: 38]);
+    const xpending_missing_command: Command = try command_executor_test_command(&router, &xpending_missing_parsed);
+    const xpending_missing_reply: CommandReply = command_execute_at(&engine, &xpending_missing_command, 1000u64);
+    try assert_eq_i32(xpending_missing_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(xpending_missing_reply.data, &"ERR no such key"[0: 14]));
+    resp_value_free(&xpending_missing_parsed.value);
+
+    var xpending_arity_parsed: RespParseResult = try parse_resp2(&"*2\r\n$8\r\nXPENDING\r\n$6\r\nstream\r\n"[0: 30]);
+    var xpending_wrong_arity: bool = false;
+    _ = command_from_resp(&router, &xpending_arity_parsed.value) catch |err| {
+        if err == error.CommandWrongArity {
+            xpending_wrong_arity = true;
+        }
+        return;
+    };
+    try assert_true(xpending_wrong_arity);
+    resp_value_free(&xpending_arity_parsed.value);
+
     var xgroup_help_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nXGROUP\r\n$4\r\nHELP\r\n"[0: 26]);
     const xgroup_help_command: Command = try command_executor_test_command(&router, &xgroup_help_parsed);
     const xgroup_help_reply: CommandReply = command_execute_at(&engine, &xgroup_help_command, 1000u64);
@@ -2646,6 +2672,13 @@ export fn test_command_streams_first_batch() !void {
     try assert_eq_i32(xack_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
     try assert_true(command_executor_test_contains(xack_wrongtype_reply.data, &"WRONGTYPE"[0: 9]));
     resp_value_free(&xack_wrongtype_parsed.value);
+
+    var xpending_wrongtype_parsed: RespParseResult = try parse_resp2(&"*3\r\n$8\r\nXPENDING\r\n$6\r\nstring\r\n$1\r\ng\r\n"[0: 37]);
+    const xpending_wrongtype_command: Command = try command_executor_test_command(&router, &xpending_wrongtype_parsed);
+    const xpending_wrongtype_reply: CommandReply = command_execute_at(&engine, &xpending_wrongtype_command, 1000u64);
+    try assert_eq_i32(xpending_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xpending_wrongtype_reply.data, &"WRONGTYPE"[0: 9]));
+    resp_value_free(&xpending_wrongtype_parsed.value);
 
     var xgroup_create_wrongtype_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nXGROUP\r\n$6\r\nCREATE\r\n$6\r\nstring\r\n$1\r\ng\r\n$1\r\n$\r\n"[0: 54]);
     const xgroup_create_wrongtype_command: Command = try command_executor_test_command(&router, &xgroup_create_wrongtype_parsed);

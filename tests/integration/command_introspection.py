@@ -495,6 +495,7 @@ def run_smoke() -> None:
                 or b"xgroup" not in listed_stream
                 or b"xgroup|help" not in listed_stream
                 or b"xinfo" not in listed_stream
+                or b"xinfo|consumers" not in listed_stream
                 or b"xinfo|groups" not in listed_stream
                 or b"xinfo|help" not in listed_stream
                 or b"xinfo|stream" not in listed_stream

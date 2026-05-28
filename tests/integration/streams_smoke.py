@@ -135,6 +135,12 @@ def run_smoke() -> None:
                 raise AssertionError(f"unexpected XINFO STREAM payload: {info!r}")
             if client.command(b"XINFO", b"GROUPS", b"mystream") != []:
                 raise AssertionError("XINFO GROUPS did not return an empty group list")
+            try:
+                client.command(b"XINFO", b"CONSUMERS", b"mystream", b"group")
+                raise AssertionError("XINFO CONSUMERS did not fail without consumer groups")
+            except RuntimeError as exc:
+                if "NOGROUP" not in str(exc):
+                    raise AssertionError(f"unexpected XINFO CONSUMERS error: {exc}") from exc
 
             ranged = client.command(b"XRANGE", b"mystream", b"-", b"+")
             if ranged != [[first, [b"sensor", b"a", b"value", b"1"]], [second, [b"sensor", b"b"]]]:

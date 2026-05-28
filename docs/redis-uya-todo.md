@@ -501,7 +501,7 @@
 ### U4. Streams、Functions、安全与运维面
 
 - [x] Streams 第一批：已补 `XADD`、`XLEN`、`XRANGE`、`XREVRANGE`、`XREAD`，当前为 list-backed、非阻塞基础 stream partial；普通 AOF append 对 `XADD *` 回放会重新生成 ID，RDB 与 AOF rewrite 保存显式 ID
-- [ ] Streams 第二批：`XTRIM` 已补 `MAXLEN [=|~] count` 基础裁剪 partial，`XDEL` 已补精确 ID 删除 partial，`XGROUP HELP` / `XINFO HELP` 已补帮助兼容面，`XINFO STREAM` 已补 key-only 基础元数据 partial，`XINFO GROUPS` 已补 empty-state 空数组 partial；`XGROUP CREATE/DESTROY/SETID`、`XINFO STREAM FULL`、`XINFO CONSUMERS`、`XACK`、`XPENDING`、`XCLAIM` 仍待补
+- [ ] Streams 第二批：`XTRIM` 已补 `MAXLEN [=|~] count` 基础裁剪 partial，`XDEL` 已补精确 ID 删除 partial，`XGROUP HELP` / `XINFO HELP` 已补帮助兼容面，`XINFO STREAM` 已补 key-only 基础元数据 partial，`XINFO GROUPS` 已补 empty-state 空数组 partial，`XINFO CONSUMERS` 已补无 group 时的 `NOGROUP` 错误面 partial；`XGROUP CREATE/DESTROY/SETID`、`XINFO STREAM FULL`、`XACK`、`XPENDING`、`XCLAIM` 仍待补
 - [ ] Functions / Script 收口：只读脚本、脚本缓存、错误中止、传播边界
 - [ ] ACL 第一批：用户、密码、命令分类、最小权限拒绝路径
 - [ ] 运维与诊断第一批：`CONFIG` 余量、`CLIENT` 余量、`MEMORY` 观测、`SLOWLOG`、`LATENCY`、`MONITOR`

@@ -368,6 +368,7 @@ PARTIAL_NAMES = {
     "xgroup",
     "xgroup|help",
     "xinfo",
+    "xinfo|consumers",
     "xinfo|groups",
     "xinfo|help",
     "xinfo|stream",

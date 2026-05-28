@@ -77,16 +77,18 @@ AUTH default password
 
 ```text
 ACL HELP
+ACL WHOAMI
 ```
 
 返回：
 
 - `ACL HELP` 返回 Redis 兼容的 ACL 子命令帮助数组
+- `ACL WHOAMI` 返回当前连接用户名；当前始终为 `default`
 
 说明：
 
-- 当前实现为 partial，仅暴露 `ACL HELP` 控制面帮助和 `COMMAND*` 可见面
-- `COMMAND INFO/LIST/DOCS` 会暴露 `ACL` 与 `ACL|HELP`
+- 当前实现为 partial，仅暴露 `ACL HELP`、`ACL WHOAMI` 和 `COMMAND*` 可见面
+- `COMMAND INFO/LIST/DOCS` 会暴露 `ACL`、`ACL|HELP` 与 `ACL|WHOAMI`
 - 当前不支持 ACL 用户存储、命令权限、key pattern 权限、ACL 日志、ACL 文件加载保存或真实权限拒绝路径；安全基线仍由 `requirepass` / `AUTH` 提供
 
 ### `COMMAND`

@@ -7291,6 +7291,12 @@ fn command_executor_acl(command: &Command) CommandReply {
         }
         return command_executor_acl_help();
     }
+    if command_executor_keyword_eq(subcommand, &"WHOAMI"[0: 6]) {
+        if command.argc != 2 {
+            return command_executor_owned_error(&"ERR wrong number of arguments for 'acl|whoami' command"[0: 54]);
+        }
+        return command_executor_bulk(&"default"[0: 7]);
+    }
 
     var err: Sds = sds_empty() catch {
         return command_executor_oom();
@@ -11622,7 +11628,8 @@ fn command_executor_command_visible_function_subcommand(name: &[byte]) bool {
 }
 
 fn command_executor_command_visible_acl_subcommand(name: &[byte]) bool {
-    return command_executor_slice_eq(name, &"help"[0: 4]);
+    return command_executor_slice_eq(name, &"help"[0: 4]) ||
+        command_executor_slice_eq(name, &"whoami"[0: 6]);
 }
 
 fn command_executor_command_visible_memory_subcommand(name: &[byte]) bool {

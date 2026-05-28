@@ -636,6 +636,7 @@ export fn test_command_command_catalog_core() !void {
 
     try command_executor_test_assert_catalog_status(&"acl"[0: 3], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"acl|help"[0: 8], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"acl|whoami"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"config|set"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"config|rewrite"[0: 14], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"client|kill"[0: 11], CommandCatalogStatus.status_partial);
@@ -705,6 +706,22 @@ export fn test_command_acl_help() !void {
     try assert_true(command_executor_test_slice_eq(unknown_reply.data, &"ERR unknown subcommand 'X'. Try ACL HELP."[0: 41]));
     command_reply_cleanup(&unknown_reply);
     resp_value_free(&unknown_parsed.value);
+
+    var whoami_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nACL\r\n$6\r\nWHOAMI\r\n"[0: 25]);
+    const whoami_command: Command = try command_executor_test_command(&router, &whoami_parsed);
+    var whoami_reply: CommandReply = command_execute_at(&engine, &whoami_command, 1000u64);
+    try assert_eq_i32(whoami_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(whoami_reply.data, &"default"[0: 7]));
+    command_reply_cleanup(&whoami_reply);
+    resp_value_free(&whoami_parsed.value);
+
+    var whoami_extra_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nACL\r\n$6\r\nWHOAMI\r\n$1\r\nX\r\n"[0: 32]);
+    const whoami_extra_command: Command = try command_executor_test_command(&router, &whoami_extra_parsed);
+    var whoami_extra_reply: CommandReply = command_execute_at(&engine, &whoami_extra_command, 1000u64);
+    try assert_eq_i32(whoami_extra_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(whoami_extra_reply.data, &"ERR wrong number of arguments for 'acl|whoami' command"[0: 54]));
+    command_reply_cleanup(&whoami_extra_reply);
+    resp_value_free(&whoami_extra_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

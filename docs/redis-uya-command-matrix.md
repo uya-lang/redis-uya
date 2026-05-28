@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 114 | 0 | 3 | 102 |
+| Tier A: standalone core | 365 | 259 | 146 | 115 | 0 | 3 | 101 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `121` |
+| `partial` | `122` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `255` |
+| `deferred` | `254` |
 
 ## Group counts
 
@@ -79,7 +79,7 @@
 | `acl|save` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `acl|setuser` | `server` | `deferred` | `v0.9.3` | `-3` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `acl|users` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `acl|whoami` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@slow` |
+| `acl|whoami` | `server` | `partial` | `-` | `2` | `-` | `no` | `@slow` |
 | `append` | `string` | `full` | `-` | `3` | `-` | `no` | `@write, @string, @fast` |
 | `arcount` | `array` | `deferred` | `v0.9.2` | `2` | `array` | `no` | `@array` |
 | `ardel` | `array` | `deferred` | `v0.9.2` | `-3` | `array` | `no` | `ARRAY` |

@@ -281,6 +281,7 @@ FULL_NAMES = {
 PARTIAL_NAMES = {
     "acl",
     "acl|help",
+    "acl|whoami",
     "auth",
     "bgrewriteaof",
     "bgsave",

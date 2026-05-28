@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 95 | 0 | 3 | 121 |
+| Tier A: standalone core | 365 | 259 | 146 | 96 | 0 | 3 | 120 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `102` |
+| `partial` | `103` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `274` |
+| `deferred` | `273` |
 
 ## Group counts
 
@@ -568,7 +568,7 @@
 | `xgroup|create` | `stream` | `partial` | `-` | `-5` | `-` | `no` | `@write, @stream, @slow` |
 | `xgroup|createconsumer` | `stream` | `deferred` | `v0.9.1` | `5` | `-` | `no` | `@write, @stream, @slow` |
 | `xgroup|delconsumer` | `stream` | `deferred` | `v0.9.1` | `5` | `-` | `no` | `@write, @stream, @slow` |
-| `xgroup|destroy` | `stream` | `deferred` | `v0.9.1` | `4` | `-` | `no` | `@write, @stream, @slow` |
+| `xgroup|destroy` | `stream` | `partial` | `-` | `4` | `-` | `no` | `@write, @stream, @slow` |
 | `xgroup|help` | `stream` | `partial` | `-` | `2` | `-` | `no` | `@stream, @slow` |
 | `xgroup|setid` | `stream` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@write, @stream, @slow` |
 | `xidmprecord` | `stream` | `deferred` | `v0.9.1` | `5` | `-` | `no` | `@write, @stream, @fast` |

@@ -4158,7 +4158,7 @@ fn command_executor_xgroup(engine: &Engine, command: &Command, now_ms: u64) Comm
         _ = list_object_push_tail(reply_list, &"XGROUP CREATE <key> <groupname> <id-or-$> [MKSTREAM]"[0: 52]) catch { object_free(reply_list); return command_executor_oom(); };
         _ = list_object_push_tail(reply_list, &"    Validates stream keys; consumer group state is still deferred."[0: 66]) catch { object_free(reply_list); return command_executor_oom(); };
         _ = list_object_push_tail(reply_list, &"XGROUP DESTROY <key> <groupname>"[0: 32]) catch { object_free(reply_list); return command_executor_oom(); };
-        _ = list_object_push_tail(reply_list, &"    Not implemented yet in redis-uya."[0: 37]) catch { object_free(reply_list); return command_executor_oom(); };
+        _ = list_object_push_tail(reply_list, &"    Returns 0 while consumer group state is deferred."[0: 53]) catch { object_free(reply_list); return command_executor_oom(); };
         return command_executor_owned_array(reply_list);
     }
     if command_executor_keyword_eq(subcommand, &"CREATE"[0: 6]) {
@@ -4189,6 +4189,24 @@ fn command_executor_xgroup(engine: &Engine, command: &Command, now_ms: u64) Comm
             return command_executor_wrongtype();
         }
         return command_executor_error(&"ERR XGROUP CREATE is not supported yet"[0: 38]);
+    }
+    if command_executor_keyword_eq(subcommand, &"DESTROY"[0: 7]) {
+        if command.argc != 4 {
+            return command_executor_owned_error(&"ERR wrong number of arguments for 'xgroup|destroy' command"[0: 58]);
+        }
+        const key: &[byte] = command_executor_arg(command, 2) catch {
+            return command_executor_owned_error(&"ERR wrong number of arguments for 'xgroup|destroy' command"[0: 58]);
+        };
+        _ = command_executor_arg(command, 3) catch {
+            return command_executor_owned_error(&"ERR wrong number of arguments for 'xgroup|destroy' command"[0: 58]);
+        };
+        const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+            return command_executor_integer(0);
+        };
+        if obj.obj_type != ObjectType.object_stream {
+            return command_executor_wrongtype();
+        }
+        return command_executor_integer(0);
     }
 
     var err: Sds = sds_empty() catch {
@@ -11231,6 +11249,7 @@ fn command_executor_command_visible_subcommand(parent_name: &[byte], subcommand_
     }
     if command_executor_slice_eq(parent_name, &"xgroup"[0: 6]) {
         return command_executor_slice_eq(subcommand_name, &"create"[0: 6]) ||
+            command_executor_slice_eq(subcommand_name, &"destroy"[0: 7]) ||
             command_executor_slice_eq(subcommand_name, &"help"[0: 4]);
     }
     if command_executor_slice_eq(parent_name, &"xinfo"[0: 5]) {

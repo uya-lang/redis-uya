@@ -157,6 +157,14 @@ C Runtime → entry.uya::main() → main_main()
 
 ### 3.4 编译命令
 
+如果你只是想先确认当前测试文件能否通过语法和 checker，而不想生成 C 或运行程序，可以先用：
+
+```bash
+bin/uya check tests/programs/test_xxx.uya
+```
+
+这条路径会停在 checker，适合在改测试输入、parser、checker 或 proof 相关代码时快速验证。
+
 ```bash
 # 仅生成 C99
 bin/uya build tests/programs/test_xxx.uya -o /tmp/test_xxx.c --c99

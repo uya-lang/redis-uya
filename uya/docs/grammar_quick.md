@@ -1,6 +1,6 @@
 # Uya 语法速查手册（Quick Reference）
 
-> **版本**：与 [uya.md](./uya.md) 0.49.49 同步（2026-05-12）
+> **版本**：与 [uya.md](./uya.md) 0.49.50 同步（2026-05-14）
 
 本文档是 Uya 语言的快速参考手册，包含精简语法定义、常用代码模式和速查表。
 
@@ -141,6 +141,8 @@ error MyError;
 ```
 
 **error_id 稳定性**：`error_id = hash(error_name)`，相同错误名在任意编译中映射到相同 `error_id`；hash 冲突时编译器报错并提示冲突名称。
+
+**错误名字符串**：`@error_name(err)` 可返回语言级命名错误的名字（不带 `error.` 前缀）；对未知或 `@syscall` 错误，当前统一回退为 `"UnknownError"`。
 
 ### 返回错误
 

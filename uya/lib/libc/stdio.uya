@@ -23,9 +23,20 @@ var _stdin: FILE = FILE{ fd: 0, buf_pos: 0, buf_len: 0, buf_mode: 0 };
 var _stdout: FILE = FILE{ fd: 1, buf_pos: 0, buf_len: 0, buf_mode: 1 };  // 行缓冲
 var _stderr: FILE = FILE{ fd: 2, buf_pos: 0, buf_len: 0, buf_mode: 0 };  // 无缓冲
 
+fn stdio_fopen_slot_at(idx: usize) &FILE {
+    if idx >= @len(fopen_fd_storage) {
+        return null;
+    }
+    return &fopen_fd_storage[idx];
+}
+
 export var stdin: &FILE = &_stdin;
 export var stdout: &FILE = &_stdout;
 export var stderr: &FILE = &_stderr;
+
+fn _stdio_write_fail_isize() isize {
+    return -1 as isize;
+}
 
 // ============================================================
 // 缓冲区操作函数
@@ -42,9 +53,7 @@ export extern "libc" fn flush_buffer(stream: &FILE) i32 {
     
     // 写入缓冲区中的所有数据
     const result: !isize = sys_write(stream.fd as i32, &stream.buffer[0] as *const byte, stream.buf_len);
-    const written: isize = result catch {
-        return -1;  // 写入失败
-    };
+    const written: isize = result catch { _stdio_write_fail_isize(); };
     
     if written < 0 as isize {
         return -1;
@@ -73,9 +82,7 @@ export extern "libc" fn write_to_buffer(stream: &FILE, buf: &const byte, n: usiz
     // 如果禁用了缓冲或缓冲区太小，直接写入
     if stream.buf_mode == 0 || n >= buf_size {
         const result: !isize = sys_write(stream.fd as i32, buf as *const byte, n);
-        const written: isize = result catch {
-            return -1;
-        };
+        const written: isize = result catch { _stdio_write_fail_isize(); };
         return written as i64;
     }
     
@@ -196,9 +203,7 @@ export extern "libc" fn put_char_fd(c: i32, fd: i64) i32 {
         // 非标准流，直接写入
         var ch: byte = c as byte;
         const result: !isize = sys_write(fd as i32, &ch as *const byte, 1);
-        const written: isize = result catch {
-            return 0 - 1;
-        };
+        const written: isize = result catch { _stdio_write_fail_isize(); };
         if written == 1 as isize {
             return c;
         }
@@ -227,9 +232,7 @@ export extern "libc" fn write_bytes_fd(buf: &const byte, n: usize, fd: i64) i64 
     } else {
         // 非标准流，直接写入
         const result: !isize = sys_write(fd as i32, buf as *const byte, n);
-        const written: isize = result catch {
-            return 0 - 1;
-        };
+        const written: isize = result catch { _stdio_write_fail_isize(); };
         return written as i64;
     }
 }
@@ -470,20 +473,23 @@ export extern "libc" fn fopen(filename: &const byte, mode: &const byte) &FILE {
     var j: usize = 0;
     while j < storage_size {
         // 查找空闲槽位（fd <= 0 表示未使用）
-        if fopen_fd_storage[j].fd <= 0 {
-            fopen_fd_storage[j].fd = fd as i64;
-            fopen_fd_storage[j].buf_pos = 0;
-            fopen_fd_storage[j].buf_len = 0;
+        const slot: &FILE = stdio_fopen_slot_at(j);
+        if slot != null && slot.fd <= 0 {
+            slot.fd = fd as i64;
+            slot.buf_pos = 0;
+            slot.buf_len = 0;
             // 普通文件默认应使用全缓冲；编译器代码生成依赖这一点，
             // 以避免病态的超小 write() 输出。
-            fopen_fd_storage[j].buf_mode = 2;
-            return &fopen_fd_storage[j];
+            slot.buf_mode = 2;
+            return slot;
         }
         j = j + 1;
     }
     
     // 如果数组满了，关闭文件描述符并返回 null
-    _ = sys_close(fd);
+    const close_result: i32 = sys_close(fd) catch { 0; };
+    if close_result != 0 {
+    }
     return null;
 }
 
@@ -2017,7 +2023,7 @@ export extern "libc" fn remove(path: &const byte) i32 {
 // 返回：0 成功，-1 失败
 export extern "libc" fn rename(oldpath: &const byte, newpath: &const byte) i32 {
     if oldpath == null || newpath == null { return -1; }
-    const result: !i32 = @syscall(SYS_rename, oldpath as i64, newpath as i64) as! i32;
+    const result: !i32 = sys_rename(oldpath, newpath);
     const ret: i32 = result catch { return -1; };
     return ret;
 }

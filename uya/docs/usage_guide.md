@@ -143,10 +143,11 @@ make release
 | `make uya` | 构建自举编译器 |
 | `make b` | 自举验证 |
 | `make tests-uya` | 运行测试 |
+| `make tests-emcc` | 运行独立 emcc/unknown target smoke（需 `emcc` 与 `node`；不默认包含在 `make check` / `make release-dirty` 中） |
 | `make from-c` | 从备份恢复并构建 |
 | `make backup` | 验证 + 备份 |
 | `make release` | 构建发布版本（-O3 优化） |
-| `make release-dirty` | 在当前工作树强行执行完整 release；会先 `clean`，再跑 `from-c` / `uya` / `b` / `check` / `backup-seed` / `release-build`，只适合本地调试 |
+| `make release-dirty` | 在当前工作树强行执行完整 release；会先 `clean`，再跑 `from-c` / `uya` / `b` / `check` / `backup-all-seed` / `release-build`，只适合本地调试 |
 | `make release-clean` | 在 Git HEAD 干净快照里执行 `make release`，会忽略未提交修改，更接近 CI |
 | `make clean` | 清理构建产物 |
 
@@ -499,9 +500,19 @@ make from-c
 
 ```bash
 # 运行单个测试
-./bin/uya tests/programs/test_xxx.uya -o /tmp/test.c
+./bin/uya build tests/programs/test_xxx.uya -o /tmp/test.c
 gcc /tmp/test.c -o /tmp/test && /tmp/test
 ```
+
+### 先做语法 / checker 检查
+
+如果你怀疑问题出在语法、模块解析或类型检查阶段，可以先运行：
+
+```bash
+./bin/uya check your_file.uya
+```
+
+这会只执行到 checker，不进入代码生成与宿主 C 编译器，便于更快定位前端问题。
 
 ---
 

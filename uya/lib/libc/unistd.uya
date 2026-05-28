@@ -118,7 +118,7 @@ export extern "libc" fn getpid() i32 {
     std.cfg(std.target_os == .tos_macos, {
         return uya_macos_getpid();
     }, {
-        const result: !i64 = @syscall(SYS_getpid);
+        const result: !i64 = sys_getpid();
         const ret: i64 = result catch {
             return 0;
         };
@@ -131,7 +131,7 @@ export extern "libc" fn getppid() i32 {
     std.cfg(std.target_os == .tos_macos, {
         return uya_macos_getppid();
     }, {
-        const result: !i64 = @syscall(SYS_getppid);
+        const result: !i64 = sys_getppid();
         const ret: i64 = result catch {
             return 0;
         };
@@ -149,7 +149,7 @@ export extern "libc" fn fork() i32 {
         };
         return ret as i32;
     }, {
-        const result: !i64 = @syscall(SYS_fork);
+        const result: !i64 = sys_fork();
         const ret: i64 = result catch {
             errno = ENOMEM;
             return 0 - 1;
@@ -160,7 +160,7 @@ export extern "libc" fn fork() i32 {
 
 // execve - 执行程序
 export extern "libc" fn execve(pathname: &const byte, argv: & &byte, envp: & &byte) i32 {
-    const result: !i64 = @syscall(SYS_execve, pathname as i64, argv as i64, envp as i64);
+    const result: !i32 = sys_execve(pathname, argv as &(&const byte), envp as &(&const byte));
     result catch {
         errno = ENOENT;
         return 0 - 1;
@@ -173,8 +173,7 @@ export extern "libc" fn _exit(status: i32) void {
     std.cfg(std.target_os == .tos_macos, {
         uya_macos_exit(status);
     }, {
-        const exit_result: !i64 = @syscall(SYS_exit, status as i64);
-        _ = exit_result catch {};
+        sys_exit(status);
     })
     while true {}
 }
@@ -189,12 +188,12 @@ export extern "libc" fn waitpid(pid: i32, status: &i32, options: i32) i32 {
         };
         return ret;
     }, {
-        const result: !i64 = @syscall(SYS_waitpid, pid as i64, status as i64, options as i64, 0 as i64);
-        const ret: i64 = result catch {
+        const result: !i32 = sys_waitpid(pid, status, options);
+        const ret: i32 = result catch {
             errno = ECHILD;
             return 0 - 1;
         };
-        return ret as i32;
+        return ret;
     })
 }
 
@@ -273,11 +272,12 @@ export extern "libc" fn unlink(pathname: &const byte) i32 {
 // mkdir - 创建目录
 export extern "libc" fn mkdir(pathname: &const byte, mode: i32) i32 {
     const result: !i32 = sys_mkdir(pathname as *const byte, mode);
-    result catch {
-        errno = ENOENT;
-        return 0 - 1;
-    };
-    return 0;
+    return result catch { mkdir_errno_enoent(); };
+}
+
+fn mkdir_errno_enoent() i32 {
+    errno = ENOENT;
+    return 0 - 1;
 }
 
 // rmdir - 删除目录
@@ -319,12 +319,12 @@ export extern "libc" fn getcwd(buf: &byte, size: usize) &byte {
 
 // dup - 复制文件描述符
 export extern "libc" fn dup(oldfd: i32) i32 {
-    const result: !i64 = @syscall(SYS_dup, oldfd as i64);
-    const ret: i64 = result catch {
+    const result: !i32 = sys_dup(oldfd);
+    const ret: i32 = result catch {
         errno = EBADF;
         return 0 - 1;
     };
-    return ret as i32;
+    return ret;
 }
 
 // dup2 - 复制文件描述符到指定位置

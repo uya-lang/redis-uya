@@ -2446,6 +2446,13 @@ export fn test_command_streams_first_batch() !void {
     command_reply_cleanup(&xread_reply);
     resp_value_free(&xread_parsed.value);
 
+    var xdel_missing_id_parsed: RespParseResult = try parse_resp2(&"*3\r\n$4\r\nXDEL\r\n$6\r\nstream\r\n$6\r\n9999-0\r\n"[0: 38]);
+    const xdel_missing_id_command: Command = try command_executor_test_command(&router, &xdel_missing_id_parsed);
+    const xdel_missing_id_reply: CommandReply = command_execute_at(&engine, &xdel_missing_id_command, 1000u64);
+    try assert_eq_i32(xdel_missing_id_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(xdel_missing_id_reply.integer as i32, 0);
+    resp_value_free(&xdel_missing_id_parsed.value);
+
     var xtrim_parsed: RespParseResult = try parse_resp2(&"*5\r\n$5\r\nXTRIM\r\n$6\r\nstream\r\n$6\r\nMAXLEN\r\n$1\r\n~\r\n$1\r\n1\r\n"[0: 53]);
     const xtrim_command: Command = try command_executor_test_command(&router, &xtrim_parsed);
     const xtrim_reply: CommandReply = command_execute_at(&engine, &xtrim_command, 1000u64);
@@ -2469,6 +2476,27 @@ export fn test_command_streams_first_batch() !void {
     try assert_eq_i32(xtrim_missing_reply.integer as i32, 0);
     resp_value_free(&xtrim_missing_parsed.value);
 
+    var xdel_parsed: RespParseResult = try parse_resp2(&"*3\r\n$4\r\nXDEL\r\n$6\r\nstream\r\n$6\r\n1000-1\r\n"[0: 38]);
+    const xdel_command: Command = try command_executor_test_command(&router, &xdel_parsed);
+    const xdel_reply: CommandReply = command_execute_at(&engine, &xdel_command, 1000u64);
+    try assert_eq_i32(xdel_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(xdel_reply.integer as i32, 1);
+    resp_value_free(&xdel_parsed.value);
+
+    var xlen_empty_stream_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nXLEN\r\n$6\r\nstream\r\n"[0: 26]);
+    const xlen_empty_stream_command: Command = try command_executor_test_command(&router, &xlen_empty_stream_parsed);
+    const xlen_empty_stream_reply: CommandReply = command_execute_at(&engine, &xlen_empty_stream_command, 1000u64);
+    try assert_eq_i32(xlen_empty_stream_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(xlen_empty_stream_reply.integer as i32, 0);
+    resp_value_free(&xlen_empty_stream_parsed.value);
+
+    var xdel_missing_key_parsed: RespParseResult = try parse_resp2(&"*3\r\n$4\r\nXDEL\r\n$5\r\nempty\r\n$6\r\n1000-1\r\n"[0: 37]);
+    const xdel_missing_key_command: Command = try command_executor_test_command(&router, &xdel_missing_key_parsed);
+    const xdel_missing_key_reply: CommandReply = command_execute_at(&engine, &xdel_missing_key_command, 1000u64);
+    try assert_eq_i32(xdel_missing_key_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(xdel_missing_key_reply.integer as i32, 0);
+    resp_value_free(&xdel_missing_key_parsed.value);
+
     var set_plain_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$5\r\nplain\r\n$1\r\nx\r\n"[0: 31]);
     const set_plain_command: Command = try command_executor_test_command(&router, &set_plain_parsed);
     _ = command_execute_at(&engine, &set_plain_command, 1000u64);
@@ -2485,6 +2513,12 @@ export fn test_command_streams_first_batch() !void {
     const xtrim_wrongtype_reply: CommandReply = command_execute_at(&engine, &xtrim_wrongtype_command, 1000u64);
     try assert_eq_i32(xtrim_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
     resp_value_free(&xtrim_wrongtype_parsed.value);
+
+    var xdel_wrongtype_parsed: RespParseResult = try parse_resp2(&"*3\r\n$4\r\nXDEL\r\n$5\r\nplain\r\n$6\r\n1000-1\r\n"[0: 37]);
+    const xdel_wrongtype_command: Command = try command_executor_test_command(&router, &xdel_wrongtype_parsed);
+    const xdel_wrongtype_reply: CommandReply = command_execute_at(&engine, &xdel_wrongtype_command, 1000u64);
+    try assert_eq_i32(xdel_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    resp_value_free(&xdel_wrongtype_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

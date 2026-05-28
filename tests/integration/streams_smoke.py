@@ -132,10 +132,15 @@ def run_smoke() -> None:
             if read != [[b"mystream", [[first, [b"sensor", b"a", b"value", b"1"]], [second, [b"sensor", b"b"]]]]]:
                 raise AssertionError(f"unexpected XREAD payload: {read!r}")
 
-            if client.command(b"XTRIM", b"mystream", b"MAXLEN", b"~", b"1") != 1:
-                raise AssertionError("XTRIM did not remove one stream entry")
+            if client.command(b"XDEL", b"mystream", first) != 1:
+                raise AssertionError("XDEL did not remove the first stream entry")
             if client.command(b"XLEN", b"mystream") != 1:
-                raise AssertionError("XLEN did not report one stream entry after trim")
+                raise AssertionError("XLEN did not report one stream entry after XDEL")
+
+            if client.command(b"XTRIM", b"mystream", b"MAXLEN", b"~", b"0") != 1:
+                raise AssertionError("XTRIM did not remove one stream entry")
+            if client.command(b"XLEN", b"mystream") != 0:
+                raise AssertionError("XLEN did not report zero stream entries after trim")
 
             if client.command(b"TYPE", b"mystream") != b"stream":
                 raise AssertionError("TYPE mystream did not report stream")
@@ -156,12 +161,10 @@ def run_smoke() -> None:
     try:
         replay_client = Client(port)
         try:
-            if replay_client.command(b"XLEN", b"mystream") != 1:
+            if replay_client.command(b"XLEN", b"mystream") != 0:
                 raise AssertionError("AOF replay did not restore stream length")
             replayed = replay_client.command(b"XRANGE", b"mystream", b"-", b"+")
-            if not isinstance(replayed, list) or len(replayed) != 1:
-                raise AssertionError(f"unexpected replayed stream payload: {replayed!r}")
-            if replayed[0][1] != [b"sensor", b"b"]:
+            if not isinstance(replayed, list) or len(replayed) != 0:
                 raise AssertionError(f"unexpected replayed stream payload: {replayed!r}")
             if replay_client.command(b"QUIT") != b"OK":
                 raise AssertionError("replay QUIT failed")

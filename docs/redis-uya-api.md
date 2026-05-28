@@ -1678,6 +1678,7 @@ GEOSEARCH key FROMLONLAT longitude latitude BYBOX width height unit [ASC|DESC] [
 
 ```text
 XADD key id field value [field value ...]
+XDEL key id [id ...]
 XLEN key
 XRANGE key start end [COUNT count]
 XREVRANGE key end start [COUNT count]
@@ -1688,6 +1689,7 @@ XTRIM key MAXLEN [=|~] count
 返回：
 
 - `XADD`：成功时返回新增 entry id；`*` 会按当前毫秒时间和单毫秒递增序列生成 id
+- `XDEL`：返回被删除的 entry 数量；key 不存在返回 `0`
 - `XLEN`：返回 stream entry 数量；key 不存在返回 `0`
 - `XRANGE` / `XREVRANGE`：返回 `[id, [field, value, ...]]` 形式的嵌套数组，支持 `-` / `+` 边界和 `COUNT`
 - `XREAD`：命中时返回 stream 名与 entry 数组；无新 entry 时返回 Null Array
@@ -1698,8 +1700,9 @@ XTRIM key MAXLEN [=|~] count
 - 当前实现为 partial：stream 内部暂用项目内 list-backed entry 存储，不是 Redis 原生 radix-tree/listpack 编码
 - `XADD` 当前只支持基础追加和显式完整 id / `*` 自动 id；不支持 `MAXLEN`、`MINID`、`LIMIT`、`NOMKSTREAM` 或 `field value` 之外的扩展选项
 - `XREAD` 当前只支持非阻塞读取；`BLOCK` 会返回明确错误，consumer group 相关语义仍未实现
+- `XDEL` 当前只做精确 ID 删除，不维护 consumer group PEL
 - `XTRIM` 当前只支持 `MAXLEN` 与可选 `=` / `~` 操作符；`~` 只是语法兼容占位，仍按精确头部裁剪执行；暂不支持 `MINID` 或 `LIMIT`
-- 当前不支持 `XDEL`、`XGROUP`、`XACK`、`XPENDING`、`XCLAIM` 等第二批 stream 命令
+- 当前不支持 `XGROUP`、`XACK`、`XPENDING`、`XCLAIM` 等第二批 stream 命令
 - 项目内 RDB 与 AOF rewrite 会保存显式 stream ID；普通 AOF append 仍记录原始请求，因此 `XADD *` 回放会重新生成 ID，只承诺恢复条目内容与顺序
 
 ### `TYPE`

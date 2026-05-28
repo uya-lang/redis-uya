@@ -93,7 +93,36 @@ export struct AsyncFramePool : IAllocator {
         }
         const total_size: usize = *(raw_ptr as &usize);
         const align: usize = ASYNC_FRAME_POOL_IALLOC_ALIGN;
-        async_frame_pool_free_aligned(self, raw_ptr, total_size, align);
+        const bucket: &AsyncFramePoolBucket = async_frame_pool_find_or_create_bucket(self, total_size, align);
+        if bucket == null || bucket.slot_count >= bucket.capacity {
+            if self.buffer != null && self.buffer_size != 0 {
+                const base: usize = @usize_from_ptr(self.buffer as &void);
+                const p: usize = @usize_from_ptr(raw_ptr as &void);
+                if p >= base && p < base + self.buffer_size {
+                    return;
+                }
+            }
+            free(raw_ptr as *void);
+            return;
+        }
+        const slot_cap: i32 = @len(bucket.slots) as i32;
+        if bucket.slot_count >= 0 && bucket.slot_count < slot_cap {
+            const slot_idx: i32 = bucket.slot_count;
+            if slot_idx >= 0 && slot_idx < slot_cap {
+                const slot_ptr: &&byte = async_frame_bucket_slot_ptr(bucket, slot_idx);
+                if slot_ptr == null {
+                    return;
+                }
+                slot_ptr[0] = raw_ptr;
+                bucket.slot_count = bucket.slot_count + 1;
+            } else {
+                return;
+            }
+        } else {
+            return;
+        }
+        bucket.free_count = bucket.free_count + 1;
+        self.total_free_count = self.total_free_count + 1;
     }
 
     fn realloc(self: &Self, ptr: &byte, new_size: usize) !&byte {
@@ -111,6 +140,40 @@ export struct AsyncFramePool : IAllocator {
         self.dealloc(ptr);
         return p;
     }
+}
+
+// Keep the shared free-aligned body near the allocator implementation; the
+// IAllocator dealloc path above is expanded to avoid late export link gaps.
+export fn async_frame_pool_free_aligned(pool: &AsyncFramePool, ptr: &byte, size: usize, align: usize) void {
+    if pool == null || ptr == null {
+        return;
+    }
+    const bucket: &AsyncFramePoolBucket = async_frame_pool_find_or_create_bucket(pool, size, align);
+    if bucket == null || bucket.slot_count >= bucket.capacity {
+        if async_frame_pool_ptr_in_buffer(pool, ptr) != 0 {
+            return;
+        }
+        free(ptr as *void);
+        return;
+    }
+    const slot_cap: i32 = @len(bucket.slots) as i32;
+    if bucket.slot_count >= 0 && bucket.slot_count < slot_cap {
+        const slot_idx: i32 = bucket.slot_count;
+        if slot_idx >= 0 && slot_idx < slot_cap {
+            const slot_ptr: &&byte = async_frame_bucket_slot_ptr(bucket, slot_idx);
+            if slot_ptr == null {
+                return;
+            }
+            slot_ptr[0] = ptr;
+            bucket.slot_count = bucket.slot_count + 1;
+        } else {
+            return;
+        }
+    } else {
+        return;
+    }
+    bucket.free_count = bucket.free_count + 1;
+    pool.total_free_count = pool.total_free_count + 1;
 }
 
 // 包装结构体，使 extern 变量能被 checker 接受
@@ -492,39 +555,6 @@ export fn async_frame_pool_alloc_aligned(pool: &AsyncFramePool, size: usize, ali
     }
     pool.pool_full_count = pool.pool_full_count + 1;
     return null;
-}
-
-// 按 (size, align) 直接归还
-export fn async_frame_pool_free_aligned(pool: &AsyncFramePool, ptr: &byte, size: usize, align: usize) void {
-    if pool == null || ptr == null {
-        return;
-    }
-    const bucket: &AsyncFramePoolBucket = async_frame_pool_find_or_create_bucket(pool, size, align);
-    if bucket == null || bucket.slot_count >= bucket.capacity {
-        if async_frame_pool_ptr_in_buffer(pool, ptr) != 0 {
-            return;
-        }
-        free(ptr as *void);
-        return;
-    }
-    const slot_cap: i32 = @len(bucket.slots) as i32;
-    if bucket.slot_count >= 0 && bucket.slot_count < slot_cap {
-        const slot_idx: i32 = bucket.slot_count;
-        if slot_idx >= 0 && slot_idx < slot_cap {
-            const slot_ptr: &&byte = async_frame_bucket_slot_ptr(bucket, slot_idx);
-            if slot_ptr == null {
-                return;
-            }
-            slot_ptr[0] = ptr;
-            bucket.slot_count = bucket.slot_count + 1;
-        } else {
-            return;
-        }
-    } else {
-        return;
-    }
-    bucket.free_count = bucket.free_count + 1;
-    pool.total_free_count = pool.total_free_count + 1;
 }
 
 // 归还帧到池

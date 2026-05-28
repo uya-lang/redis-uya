@@ -364,6 +364,7 @@ PARTIAL_NAMES = {
     "unsubscribe",
     "wait",
     "xadd",
+    "xdel",
     "xlen",
     "xrange",
     "xread",

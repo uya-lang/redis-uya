@@ -365,6 +365,7 @@ PARTIAL_NAMES = {
     "wait",
     "xack",
     "xadd",
+    "xclaim",
     "xdel",
     "xgroup",
     "xgroup|create",

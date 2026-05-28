@@ -642,6 +642,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"client|tracking"[0: 15], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"client|trackinginfo"[0: 19], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xack"[0: 4], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"xclaim"[0: 6], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xgroup"[0: 6], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xgroup|create"[0: 13], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xgroup|destroy"[0: 14], CommandCatalogStatus.status_partial);
@@ -2483,6 +2484,31 @@ export fn test_command_streams_first_batch() !void {
     try assert_true(xack_wrong_arity);
     resp_value_free(&xack_arity_parsed.value);
 
+    var xclaim_parsed: RespParseResult = try parse_resp2(&"*6\r\n$6\r\nXCLAIM\r\n$6\r\nstream\r\n$1\r\ng\r\n$1\r\nc\r\n$1\r\n0\r\n$6\r\n1000-0\r\n"[0: 61]);
+    const xclaim_command: Command = try command_executor_test_command(&router, &xclaim_parsed);
+    const xclaim_reply: CommandReply = command_execute_at(&engine, &xclaim_command, 1000u64);
+    try assert_eq_i32(xclaim_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xclaim_reply.data, &"NOGROUP"[0: 7]));
+    resp_value_free(&xclaim_parsed.value);
+
+    var xclaim_missing_parsed: RespParseResult = try parse_resp2(&"*6\r\n$6\r\nXCLAIM\r\n$7\r\nmissing\r\n$1\r\ng\r\n$1\r\nc\r\n$1\r\n0\r\n$6\r\n1000-0\r\n"[0: 62]);
+    const xclaim_missing_command: Command = try command_executor_test_command(&router, &xclaim_missing_parsed);
+    const xclaim_missing_reply: CommandReply = command_execute_at(&engine, &xclaim_missing_command, 1000u64);
+    try assert_eq_i32(xclaim_missing_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(xclaim_missing_reply.data, &"ERR no such key"[0: 14]));
+    resp_value_free(&xclaim_missing_parsed.value);
+
+    var xclaim_arity_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nXCLAIM\r\n$6\r\nstream\r\n$1\r\ng\r\n$1\r\nc\r\n$1\r\n0\r\n"[0: 49]);
+    var xclaim_wrong_arity: bool = false;
+    _ = command_from_resp(&router, &xclaim_arity_parsed.value) catch |err| {
+        if err == error.CommandWrongArity {
+            xclaim_wrong_arity = true;
+        }
+        return;
+    };
+    try assert_true(xclaim_wrong_arity);
+    resp_value_free(&xclaim_arity_parsed.value);
+
     var xpending_parsed: RespParseResult = try parse_resp2(&"*3\r\n$8\r\nXPENDING\r\n$6\r\nstream\r\n$1\r\ng\r\n"[0: 37]);
     const xpending_command: Command = try command_executor_test_command(&router, &xpending_parsed);
     const xpending_reply: CommandReply = command_execute_at(&engine, &xpending_command, 1000u64);
@@ -2672,6 +2698,13 @@ export fn test_command_streams_first_batch() !void {
     try assert_eq_i32(xack_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
     try assert_true(command_executor_test_contains(xack_wrongtype_reply.data, &"WRONGTYPE"[0: 9]));
     resp_value_free(&xack_wrongtype_parsed.value);
+
+    var xclaim_wrongtype_parsed: RespParseResult = try parse_resp2(&"*6\r\n$6\r\nXCLAIM\r\n$6\r\nstring\r\n$1\r\ng\r\n$1\r\nc\r\n$1\r\n0\r\n$6\r\n1000-0\r\n"[0: 61]);
+    const xclaim_wrongtype_command: Command = try command_executor_test_command(&router, &xclaim_wrongtype_parsed);
+    const xclaim_wrongtype_reply: CommandReply = command_execute_at(&engine, &xclaim_wrongtype_command, 1000u64);
+    try assert_eq_i32(xclaim_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xclaim_wrongtype_reply.data, &"WRONGTYPE"[0: 9]));
+    resp_value_free(&xclaim_wrongtype_parsed.value);
 
     var xpending_wrongtype_parsed: RespParseResult = try parse_resp2(&"*3\r\n$8\r\nXPENDING\r\n$6\r\nstring\r\n$1\r\ng\r\n"[0: 37]);
     const xpending_wrongtype_command: Command = try command_executor_test_command(&router, &xpending_wrongtype_parsed);

@@ -493,6 +493,7 @@ def run_smoke() -> None:
                 or b"xadd" not in listed_stream
                 or b"xdel" not in listed_stream
                 or b"xgroup" not in listed_stream
+                or b"xgroup|create" not in listed_stream
                 or b"xgroup|help" not in listed_stream
                 or b"xinfo" not in listed_stream
                 or b"xinfo|consumers" not in listed_stream
@@ -504,7 +505,6 @@ def run_smoke() -> None:
                 or b"xrevrange" not in listed_stream
                 or b"xread" not in listed_stream
                 or b"xtrim" not in listed_stream
-                or b"xgroup|create" in listed_stream
                 or b"xack" in listed_stream
                 or b"xpending" in listed_stream
             ):

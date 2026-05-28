@@ -642,6 +642,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"client|tracking"[0: 15], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"client|trackinginfo"[0: 19], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xgroup"[0: 6], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"xgroup|create"[0: 13], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xgroup|help"[0: 11], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xinfo"[0: 5], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xinfo|consumers"[0: 15], CommandCatalogStatus.status_partial);
@@ -2485,9 +2486,30 @@ export fn test_command_streams_first_batch() !void {
     const xgroup_create_command: Command = try command_executor_test_command(&router, &xgroup_create_parsed);
     const xgroup_create_reply: CommandReply = command_execute_at(&engine, &xgroup_create_command, 1000u64);
     try assert_eq_i32(xgroup_create_reply.typ as i32, CommandReplyType.reply_error as i32);
-    try assert_true(command_executor_test_slice_eq(xgroup_create_reply.data, &"ERR unknown subcommand 'CREATE'. Try XGROUP HELP."[0: 49]));
+    try assert_true(command_executor_test_slice_eq(xgroup_create_reply.data, &"ERR wrong number of arguments for 'xgroup|create' command"[0: 56]));
     command_reply_cleanup(&xgroup_create_reply);
     resp_value_free(&xgroup_create_parsed.value);
+
+    var xgroup_create_existing_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nXGROUP\r\n$6\r\nCREATE\r\n$6\r\nstream\r\n$1\r\ng\r\n$1\r\n$\r\n"[0: 54]);
+    const xgroup_create_existing_command: Command = try command_executor_test_command(&router, &xgroup_create_existing_parsed);
+    const xgroup_create_existing_reply: CommandReply = command_execute_at(&engine, &xgroup_create_existing_command, 1000u64);
+    try assert_eq_i32(xgroup_create_existing_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(xgroup_create_existing_reply.data, &"ERR XGROUP CREATE is not supported yet"[0: 38]));
+    resp_value_free(&xgroup_create_existing_parsed.value);
+
+    var xgroup_create_missing_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nXGROUP\r\n$6\r\nCREATE\r\n$7\r\nmissing\r\n$1\r\ng\r\n$1\r\n$\r\n"[0: 55]);
+    const xgroup_create_missing_command: Command = try command_executor_test_command(&router, &xgroup_create_missing_parsed);
+    const xgroup_create_missing_reply: CommandReply = command_execute_at(&engine, &xgroup_create_missing_command, 1000u64);
+    try assert_eq_i32(xgroup_create_missing_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(xgroup_create_missing_reply.data, &"ERR no such key"[0: 14]));
+    resp_value_free(&xgroup_create_missing_parsed.value);
+
+    var xgroup_create_bad_option_parsed: RespParseResult = try parse_resp2(&"*6\r\n$6\r\nXGROUP\r\n$6\r\nCREATE\r\n$6\r\nstream\r\n$1\r\ng\r\n$3\r\n0-0\r\n$5\r\nMKBAD\r\n"[0: 67]);
+    const xgroup_create_bad_option_command: Command = try command_executor_test_command(&router, &xgroup_create_bad_option_parsed);
+    const xgroup_create_bad_option_reply: CommandReply = command_execute_at(&engine, &xgroup_create_bad_option_command, 1000u64);
+    try assert_eq_i32(xgroup_create_bad_option_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(xgroup_create_bad_option_reply.data, &"ERR syntax error"[0: 16]));
+    resp_value_free(&xgroup_create_bad_option_parsed.value);
 
     var xinfo_help_parsed: RespParseResult = try parse_resp2(&"*2\r\n$5\r\nXINFO\r\n$4\r\nHELP\r\n"[0: 25]);
     const xinfo_help_command: Command = try command_executor_test_command(&router, &xinfo_help_parsed);
@@ -2539,6 +2561,13 @@ export fn test_command_streams_first_batch() !void {
 
     const string_obj: &RedisObject = try create_string_object(&"value"[0: 5]);
     try set_key_at(&engine, &"string"[0: 6], string_obj, 1000u64);
+    var xgroup_create_wrongtype_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nXGROUP\r\n$6\r\nCREATE\r\n$6\r\nstring\r\n$1\r\ng\r\n$1\r\n$\r\n"[0: 54]);
+    const xgroup_create_wrongtype_command: Command = try command_executor_test_command(&router, &xgroup_create_wrongtype_parsed);
+    const xgroup_create_wrongtype_reply: CommandReply = command_execute_at(&engine, &xgroup_create_wrongtype_command, 1000u64);
+    try assert_eq_i32(xgroup_create_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xgroup_create_wrongtype_reply.data, &"WRONGTYPE"[0: 9]));
+    resp_value_free(&xgroup_create_wrongtype_parsed.value);
+
     var xinfo_stream_wrongtype_parsed: RespParseResult = try parse_resp2(&"*3\r\n$5\r\nXINFO\r\n$6\r\nSTREAM\r\n$6\r\nstring\r\n"[0: 39]);
     const xinfo_stream_wrongtype_command: Command = try command_executor_test_command(&router, &xinfo_stream_wrongtype_parsed);
     const xinfo_stream_wrongtype_reply: CommandReply = command_execute_at(&engine, &xinfo_stream_wrongtype_command, 1000u64);

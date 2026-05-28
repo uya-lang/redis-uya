@@ -136,6 +136,12 @@ def run_smoke() -> None:
             if client.command(b"XINFO", b"GROUPS", b"mystream") != []:
                 raise AssertionError("XINFO GROUPS did not return an empty group list")
             try:
+                client.command(b"XGROUP", b"CREATE", b"mystream", b"group", b"$")
+                raise AssertionError("XGROUP CREATE did not report deferred consumer groups")
+            except RuntimeError as exc:
+                if "XGROUP CREATE is not supported yet" not in str(exc):
+                    raise AssertionError(f"unexpected XGROUP CREATE error: {exc}") from exc
+            try:
                 client.command(b"XINFO", b"CONSUMERS", b"mystream", b"group")
                 raise AssertionError("XINFO CONSUMERS did not fail without consumer groups")
             except RuntimeError as exc:

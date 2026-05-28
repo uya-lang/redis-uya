@@ -120,6 +120,20 @@ def run_smoke() -> None:
             if client.command(b"XLEN", b"mystream") != 2:
                 raise AssertionError("XLEN did not report two stream entries")
 
+            info = client.command(b"XINFO", b"STREAM", b"mystream")
+            if (
+                not isinstance(info, list)
+                or b"length" not in info
+                or info[info.index(b"length") + 1] != 2
+                or b"groups" not in info
+                or info[info.index(b"groups") + 1] != 0
+                or b"first-entry" not in info
+                or info[info.index(b"first-entry") + 1][0] != first
+                or b"last-entry" not in info
+                or info[info.index(b"last-entry") + 1][0] != second
+            ):
+                raise AssertionError(f"unexpected XINFO STREAM payload: {info!r}")
+
             ranged = client.command(b"XRANGE", b"mystream", b"-", b"+")
             if ranged != [[first, [b"sensor", b"a", b"value", b"1"]], [second, [b"sensor", b"b"]]]:
                 raise AssertionError(f"unexpected XRANGE payload: {ranged!r}")

@@ -239,6 +239,11 @@ class RedisPySubsetClient:
     def script_flush(self) -> bool:
         return self._request(b"SCRIPT", b"FLUSH") == "OK"
 
+    def function_help(self):
+        result = self._request(b"FUNCTION", b"HELP")
+        assert isinstance(result, list)
+        return result
+
     def memory_usage(self, key: str, samples: int | None = None) -> int | None:
         parts = [b"MEMORY", b"USAGE", key.encode()]
         if samples is not None:
@@ -942,6 +947,9 @@ def run_smoke() -> None:
             except RespError as exc:
                 if str(exc) != "NOSCRIPT No matching script. Please use EVAL.":
                     raise AssertionError(f"unexpected EVALSHA_RO error: {exc}") from exc
+            function_help = client.function_help()
+            if b"FUNCTION HELP" not in function_help or b"FUNCTION LIST [LIBRARYNAME <pattern>] [WITHCODE]" not in function_help:
+                raise AssertionError(f"unexpected FUNCTION HELP result: {function_help!r}")
             memory_usage = client.memory_usage("key")
             if memory_usage is None or memory_usage <= 0:
                 raise AssertionError(f"unexpected MEMORY USAGE key: {memory_usage!r}")

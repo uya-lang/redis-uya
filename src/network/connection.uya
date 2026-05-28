@@ -1432,7 +1432,8 @@ fn connection_script_command_allowed(cmd_type: CommandType) bool {
         cmd_type == CommandType.command_evalsha ||
         cmd_type == CommandType.command_eval_ro ||
         cmd_type == CommandType.command_evalsha_ro ||
-        cmd_type == CommandType.command_script {
+        cmd_type == CommandType.command_script ||
+        cmd_type == CommandType.command_function {
         return false;
     }
     return true;

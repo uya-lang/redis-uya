@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 102 | 0 | 3 | 114 |
+| Tier A: standalone core | 365 | 259 | 146 | 104 | 0 | 3 | 112 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `109` |
+| `partial` | `111` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `267` |
+| `deferred` | `265` |
 
 ## Group counts
 
@@ -263,11 +263,11 @@
 | `ft.syndump` | `search` | `deferred` | `v0.9.2` | `2` | `ft` | `no` | `@search` |
 | `ft.synupdate` | `search` | `deferred` | `v0.9.2` | `-3` | `ft` | `no` | `@search` |
 | `ft.tagvals` | `search` | `deferred` | `v0.9.2` | `3` | `ft` | `no` | `@dangerous, @read, @search, @slow` |
-| `function` | `scripting` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@slow` |
+| `function` | `scripting` | `partial` | `-` | `-2` | `-` | `no` | `@slow` |
 | `function|delete` | `scripting` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@write, @slow, @scripting` |
 | `function|dump` | `scripting` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@slow, @scripting` |
 | `function|flush` | `scripting` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@write, @slow, @scripting` |
-| `function|help` | `scripting` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@slow, @scripting` |
+| `function|help` | `scripting` | `partial` | `-` | `2` | `-` | `no` | `@slow, @scripting` |
 | `function|kill` | `scripting` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@slow, @scripting` |
 | `function|list` | `scripting` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@slow, @scripting` |
 | `function|load` | `scripting` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@write, @slow, @scripting` |

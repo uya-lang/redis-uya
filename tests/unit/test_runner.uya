@@ -143,6 +143,7 @@ use tests.unit.command_executor_test.test_command_select_and_object;
 use tests.unit.command_executor_test.test_command_memory;
 use tests.unit.command_executor_test.test_command_slowlog;
 use tests.unit.command_executor_test.test_command_latency;
+use tests.unit.command_executor_test.test_command_function_help;
 use tests.unit.command_executor_test.test_command_move;
 use tests.unit.command_executor_test.test_command_wait;
 use tests.unit.command_executor_test.test_command_sort;
@@ -775,6 +776,10 @@ export fn main() i32 {
     const before_exec_latency: i32 = failed;
     _ = test_command_latency() catch { printf("[FAIL] command_executor/latency\n" as *byte); failed = failed + 1; };
     if failed == before_exec_latency { printf("[PASS] command_executor/latency\n" as *byte); }
+
+    const before_exec_function_help: i32 = failed;
+    _ = test_command_function_help() catch { printf("[FAIL] command_executor/function_help\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_function_help { printf("[PASS] command_executor/function_help\n" as *byte); }
 
     const before_exec_move: i32 = failed;
     _ = test_command_move() catch { printf("[FAIL] command_executor/move\n" as *byte); failed = failed + 1; };

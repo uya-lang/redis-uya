@@ -225,6 +225,17 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"memory commands missing from COMMAND INFO: {memory_info!r}")
 
+            function_info = send_command(sock, b"COMMAND", b"INFO", b"FUNCTION", b"FUNCTION|HELP")
+            if (
+                not isinstance(function_info, list)
+                or len(function_info) != 2
+                or not isinstance(function_info[0], list)
+                or function_info[0][0] != b"function"
+                or not isinstance(function_info[1], list)
+                or function_info[1][0] != b"function|help"
+            ):
+                raise AssertionError(f"function commands missing from COMMAND INFO: {function_info!r}")
+
             slowlog_info = send_command(sock, b"COMMAND", b"INFO", b"SLOWLOG", b"SLOWLOG|GET", b"SLOWLOG|LEN", b"SLOWLOG|RESET")
             if (
                 not isinstance(slowlog_info, list)
@@ -455,6 +466,15 @@ def run_smoke() -> None:
                 or b"script|kill" in listed_script
             ):
                 raise AssertionError(f"unexpected COMMAND LIST script* result: {listed_script!r}")
+
+            listed_function = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"FUNCTION*")
+            if (
+                not isinstance(listed_function, list)
+                or b"function" not in listed_function
+                or b"function|help" not in listed_function
+                or b"function|load" in listed_function
+            ):
+                raise AssertionError(f"unexpected COMMAND LIST function* result: {listed_function!r}")
 
             listed_memory = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"MEMORY*")
             if (

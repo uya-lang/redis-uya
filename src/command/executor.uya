@@ -7222,6 +7222,55 @@ fn command_executor_latency(command: &Command) CommandReply {
     return command_executor_owned_error(err.buf[0: err.len]);
 }
 
+fn command_executor_function_help() CommandReply {
+    const reply_list: &RedisObject = create_list_object() catch {
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"FUNCTION <subcommand> [<arg> [value] [opt] ...]. Subcommands are:"[0: 65]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"FUNCTION HELP"[0: 13]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Prints this help."[0: 21]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"FUNCTION LIST [LIBRARYNAME <pattern>] [WITHCODE]"[0: 48]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Return loaded functions. Currently empty until Redis Functions execution lands."[0: 83]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"FUNCTION STATS"[0: 14]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Return function runtime stats. Currently empty until Redis Functions execution lands."[0: 89]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"FUNCTION FLUSH [ASYNC|SYNC]"[0: 27]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Flush loaded functions. Currently a no-op because function storage is not implemented."[0: 90]) catch { object_free(reply_list); return command_executor_oom(); };
+    return command_executor_owned_array(reply_list);
+}
+
+fn command_executor_function(command: &Command) CommandReply {
+    if command.argc < 2 {
+        return command_executor_owned_error(&"ERR wrong number of arguments for 'function' command"[0: 52]);
+    }
+
+    const subcommand: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_owned_error(&"ERR wrong number of arguments for 'function' command"[0: 52]);
+    };
+    if command_executor_keyword_eq(subcommand, &"HELP"[0: 4]) {
+        if command.argc != 2 {
+            return command_executor_owned_error(&"ERR wrong number of arguments for 'function' command"[0: 52]);
+        }
+        return command_executor_function_help();
+    }
+
+    var err: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&err);
+    }
+    _ = command_executor_info_append(&err, &"ERR unknown subcommand '"[0: 24]) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append(&err, subcommand) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append(&err, &"'. Try FUNCTION HELP."[0: 21]) catch {
+        return command_executor_oom();
+    };
+    return command_executor_owned_error(err.buf[0: err.len]);
+}
+
 fn command_executor_move(runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
     _ = runtime;
     if command.argc != 3 {
@@ -11380,6 +11429,10 @@ fn command_executor_command_visible_script_subcommand(name: &[byte]) bool {
         command_executor_slice_eq(name, &"load"[0: 4]);
 }
 
+fn command_executor_command_visible_function_subcommand(name: &[byte]) bool {
+    return command_executor_slice_eq(name, &"help"[0: 4]);
+}
+
 fn command_executor_command_visible_memory_subcommand(name: &[byte]) bool {
     return command_executor_slice_eq(name, &"help"[0: 4]) ||
         command_executor_slice_eq(name, &"doctor"[0: 6]) ||
@@ -11425,6 +11478,9 @@ fn command_executor_command_visible_subcommand(parent_name: &[byte], subcommand_
     }
     if command_executor_slice_eq(parent_name, &"script"[0: 6]) {
         return command_executor_command_visible_script_subcommand(subcommand_name);
+    }
+    if command_executor_slice_eq(parent_name, &"function"[0: 8]) {
+        return command_executor_command_visible_function_subcommand(subcommand_name);
     }
     if command_executor_slice_eq(parent_name, &"memory"[0: 6]) {
         return command_executor_command_visible_memory_subcommand(subcommand_name);
@@ -13279,6 +13335,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_latency {
         return command_executor_latency(command);
+    }
+    if command.info.cmd_type == CommandType.command_function {
+        return command_executor_function(command);
     }
     if command.info.cmd_type == CommandType.command_move {
         return command_executor_move(runtime, command);

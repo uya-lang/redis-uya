@@ -1648,6 +1648,24 @@ SCRIPT FLUSH [ASYNC|SYNC]
 - `FLUSH ASYNC|SYNC` 当前都走同步清空路径，只保留参数兼容
 - 当前不支持 `SCRIPT DEBUG`、`SCRIPT KILL`
 
+### `FUNCTION`
+
+格式：
+
+```text
+FUNCTION HELP
+```
+
+返回：
+
+- 返回当前 `FUNCTION` 命令帮助数组
+
+说明：
+
+- 当前实现为 partial，仅执行 `FUNCTION HELP`
+- `COMMAND INFO/LIST/DOCS` 会暴露 `FUNCTION` 和 `FUNCTION|HELP`
+- 当前不支持 `FUNCTION LOAD/LIST/STATS/FLUSH/DELETE/DUMP/RESTORE/KILL` 或 `FCALL/FCALL_RO`
+
 ### `GEOADD`
 
 格式：

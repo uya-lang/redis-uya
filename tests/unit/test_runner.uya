@@ -146,6 +146,7 @@ use tests.unit.command_executor_test.test_command_latency;
 use tests.unit.command_executor_test.test_command_function_help;
 use tests.unit.command_executor_test.test_command_function_list;
 use tests.unit.command_executor_test.test_command_function_stats;
+use tests.unit.command_executor_test.test_command_function_flush;
 use tests.unit.command_executor_test.test_command_move;
 use tests.unit.command_executor_test.test_command_wait;
 use tests.unit.command_executor_test.test_command_sort;
@@ -790,6 +791,10 @@ export fn main() i32 {
     const before_exec_function_stats: i32 = failed;
     _ = test_command_function_stats() catch { printf("[FAIL] command_executor/function_stats\n" as *byte); failed = failed + 1; };
     if failed == before_exec_function_stats { printf("[PASS] command_executor/function_stats\n" as *byte); }
+
+    const before_exec_function_flush: i32 = failed;
+    _ = test_command_function_flush() catch { printf("[FAIL] command_executor/function_flush\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_function_flush { printf("[PASS] command_executor/function_flush\n" as *byte); }
 
     const before_exec_move: i32 = failed;
     _ = test_command_move() catch { printf("[FAIL] command_executor/move\n" as *byte); failed = failed + 1; };

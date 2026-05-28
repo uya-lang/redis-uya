@@ -254,6 +254,12 @@ class RedisPySubsetClient:
         assert isinstance(result, list)
         return result
 
+    def function_flush(self, mode: bytes | None = None):
+        parts = [b"FUNCTION", b"FLUSH"]
+        if mode is not None:
+            parts.append(mode)
+        return self._request(*parts)
+
     def memory_usage(self, key: str, samples: int | None = None) -> int | None:
         parts = [b"MEMORY", b"USAGE", key.encode()]
         if samples is not None:
@@ -970,6 +976,8 @@ def run_smoke() -> None:
                 or b"functions_count" not in function_stats[3][1]
             ):
                 raise AssertionError(f"unexpected FUNCTION STATS result: {function_stats!r}")
+            if client.function_flush(b"SYNC") != "OK" or client.function_flush(b"ASYNC") != "OK":
+                raise AssertionError("expected FUNCTION FLUSH SYNC/ASYNC to return OK")
             memory_usage = client.memory_usage("key")
             if memory_usage is None or memory_usage <= 0:
                 raise AssertionError(f"unexpected MEMORY USAGE key: {memory_usage!r}")

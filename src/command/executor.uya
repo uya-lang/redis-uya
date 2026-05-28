@@ -7269,6 +7269,21 @@ fn command_executor_function_stats() CommandReply {
     return command_executor_owned_raw(&"*4\r\n$14\r\nrunning_script\r\n$-1\r\n$7\r\nengines\r\n*2\r\n$3\r\nLUA\r\n*4\r\n$15\r\nlibraries_count\r\n:0\r\n$15\r\nfunctions_count\r\n:0\r\n"[0: 112]);
 }
 
+fn command_executor_function_flush(command: &Command) CommandReply {
+    if command.argc > 3 {
+        return command_executor_owned_error(&"ERR unknown subcommand or wrong number of arguments for 'flush'. Try FUNCTION HELP."[0: 83]);
+    }
+    if command.argc == 3 {
+        const mode: &[byte] = command_executor_arg(command, 2) catch {
+            return command_executor_wrong_arity();
+        };
+        if !command_executor_keyword_eq(mode, &"SYNC"[0: 4]) && !command_executor_keyword_eq(mode, &"ASYNC"[0: 5]) {
+            return command_executor_owned_error(&"ERR FUNCTION FLUSH only supports SYNC|ASYNC option"[0: 50]);
+        }
+    }
+    return command_executor_simple(&"OK"[0: 2]);
+}
+
 fn command_executor_function(command: &Command) CommandReply {
     if command.argc < 2 {
         return command_executor_owned_error(&"ERR wrong number of arguments for 'function' command"[0: 52]);
@@ -7291,6 +7306,9 @@ fn command_executor_function(command: &Command) CommandReply {
             return command_executor_owned_error(&"ERR wrong number of arguments for 'function' command"[0: 52]);
         }
         return command_executor_function_stats();
+    }
+    if command_executor_keyword_eq(subcommand, &"FLUSH"[0: 5]) {
+        return command_executor_function_flush(command);
     }
 
     var err: Sds = sds_empty() catch {
@@ -11472,7 +11490,8 @@ fn command_executor_command_visible_script_subcommand(name: &[byte]) bool {
 fn command_executor_command_visible_function_subcommand(name: &[byte]) bool {
     return command_executor_slice_eq(name, &"help"[0: 4]) ||
         command_executor_slice_eq(name, &"list"[0: 4]) ||
-        command_executor_slice_eq(name, &"stats"[0: 5]);
+        command_executor_slice_eq(name, &"stats"[0: 5]) ||
+        command_executor_slice_eq(name, &"flush"[0: 5]);
 }
 
 fn command_executor_command_visible_memory_subcommand(name: &[byte]) bool {

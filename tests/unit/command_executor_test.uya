@@ -644,6 +644,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"eval_ro"[0: 7], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"evalsha_ro"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"function"[0: 8], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"function|flush"[0: 14], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"function|help"[0: 13], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"function|list"[0: 13], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"function|stats"[0: 14], CommandCatalogStatus.status_partial);
@@ -763,6 +764,47 @@ export fn test_command_function_stats() !void {
     try assert_true(command_executor_test_slice_eq(bad_arity_reply.data, &"ERR wrong number of arguments for 'function' command"[0: 52]));
     command_reply_cleanup(&bad_arity_reply);
     resp_value_free(&bad_arity_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_command_function_flush() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+
+    var flush_parsed: RespParseResult = try parse_resp2(&"*2\r\n$8\r\nFUNCTION\r\n$5\r\nFLUSH\r\n"[0: 29]);
+    const flush_command: Command = try command_executor_test_command(&router, &flush_parsed);
+    var flush_reply: CommandReply = command_execute_at(&engine, &flush_command, 1000u64);
+    try assert_eq_i32(flush_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(flush_reply.data, &"OK"[0: 2]));
+    command_reply_cleanup(&flush_reply);
+    resp_value_free(&flush_parsed.value);
+
+    var sync_parsed: RespParseResult = try parse_resp2(&"*3\r\n$8\r\nFUNCTION\r\n$5\r\nFLUSH\r\n$4\r\nSYNC\r\n"[0: 39]);
+    const sync_command: Command = try command_executor_test_command(&router, &sync_parsed);
+    var sync_reply: CommandReply = command_execute_at(&engine, &sync_command, 1000u64);
+    try assert_eq_i32(sync_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(sync_reply.data, &"OK"[0: 2]));
+    command_reply_cleanup(&sync_reply);
+    resp_value_free(&sync_parsed.value);
+
+    var bad_mode_parsed: RespParseResult = try parse_resp2(&"*3\r\n$8\r\nFUNCTION\r\n$5\r\nFLUSH\r\n$1\r\nX\r\n"[0: 36]);
+    const bad_mode_command: Command = try command_executor_test_command(&router, &bad_mode_parsed);
+    var bad_mode_reply: CommandReply = command_execute_at(&engine, &bad_mode_command, 1000u64);
+    try assert_eq_i32(bad_mode_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(bad_mode_reply.data, &"ERR FUNCTION FLUSH only supports SYNC|ASYNC option"[0: 50]));
+    command_reply_cleanup(&bad_mode_reply);
+    resp_value_free(&bad_mode_parsed.value);
+
+    var extra_parsed: RespParseResult = try parse_resp2(&"*4\r\n$8\r\nFUNCTION\r\n$5\r\nFLUSH\r\n$4\r\nSYNC\r\n$1\r\nX\r\n"[0: 46]);
+    const extra_command: Command = try command_executor_test_command(&router, &extra_parsed);
+    var extra_reply: CommandReply = command_execute_at(&engine, &extra_command, 1000u64);
+    try assert_eq_i32(extra_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(extra_reply.data, &"ERR unknown subcommand or wrong number of arguments for 'flush'. Try FUNCTION HELP."[0: 83]));
+    command_reply_cleanup(&extra_reply);
+    resp_value_free(&extra_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

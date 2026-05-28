@@ -1430,10 +1430,16 @@ fn connection_script_command_allowed(cmd_type: CommandType) bool {
         cmd_type == CommandType.command_wait ||
         cmd_type == CommandType.command_eval ||
         cmd_type == CommandType.command_evalsha ||
+        cmd_type == CommandType.command_eval_ro ||
+        cmd_type == CommandType.command_evalsha_ro ||
         cmd_type == CommandType.command_script {
         return false;
     }
     return true;
+}
+
+fn connection_script_command_readonly(info: &CommandInfo) bool {
+    return (info.flags & COMMAND_FLAG_WRITE) == 0u64;
 }
 
 fn connection_resp2_pubsub_mode_active(tx: &ConnectionTransaction) bool {
@@ -3474,6 +3480,7 @@ fn connection_handle_eval_like_at(
     now_ms: u64,
     rewrite_failed: &bool,
     use_sha: bool,
+    read_only: bool,
 ) CommandReply {
     const numkeys: usize = connection_script_eval_numkeys(command) catch |err| {
         if err == error.ConnectionScriptInvalidNumkeys {
@@ -3515,6 +3522,24 @@ fn connection_handle_eval_like_at(
         }
         return connection_error_reply(&"ERR unsupported Lua script subset"[0: 33]);
     };
+    if read_only {
+        const raw_cmd: &[byte] = raw_obj.value.buf[0: raw_obj.value.len];
+        const parsed_inner: RespParseResult = parse_resp2(raw_cmd) catch {
+            object_free(raw_obj);
+            return connection_error_reply(&"ERR unsupported Lua script subset"[0: 33]);
+        };
+        const inner_command: Command = command_from_resp(router, &parsed_inner.value) catch {
+            resp_value_free(&parsed_inner.value);
+            object_free(raw_obj);
+            return connection_error_reply(&"ERR unknown command in script"[0: 27]);
+        };
+        if !connection_script_command_readonly(&inner_command.info) {
+            resp_value_free(&parsed_inner.value);
+            object_free(raw_obj);
+            return connection_error_reply(&"ERR Write commands are not allowed from read-only scripts"[0: 57]);
+        }
+        resp_value_free(&parsed_inner.value);
+    }
     return connection_execute_script_effect_at(engine, runtime, router, aof, rewrite_buf, backlog, raw_obj, now_ms, rewrite_failed);
 }
 
@@ -3537,7 +3562,19 @@ fn connection_execute_script_command_at(
     if command.info.cmd_type == CommandType.command_script {
         reply = connection_handle_script(command);
     } else {
-        reply = connection_handle_eval_like_at(engine, runtime, router, aof, rewrite_buf, backlog, command, now_ms, rewrite_failed, command.info.cmd_type == CommandType.command_evalsha);
+        reply = connection_handle_eval_like_at(
+            engine,
+            runtime,
+            router,
+            aof,
+            rewrite_buf,
+            backlog,
+            command,
+            now_ms,
+            rewrite_failed,
+            command.info.cmd_type == CommandType.command_evalsha || command.info.cmd_type == CommandType.command_evalsha_ro,
+            command.info.cmd_type == CommandType.command_eval_ro || command.info.cmd_type == CommandType.command_evalsha_ro,
+        );
     }
     const response_len: usize = try connection_encode_reply_with_protocol(&reply, out, out_cap, tx.protocol_version);
     command_reply_cleanup(&reply);
@@ -3628,7 +3665,10 @@ fn connection_transaction_execute_at(
         var reply: CommandReply = connection_empty_reply();
         if command.info.cmd_type == CommandType.command_script {
             reply = connection_handle_script(&command);
-        } else if command.info.cmd_type == CommandType.command_eval || command.info.cmd_type == CommandType.command_evalsha {
+        } else if command.info.cmd_type == CommandType.command_eval ||
+            command.info.cmd_type == CommandType.command_evalsha ||
+            command.info.cmd_type == CommandType.command_eval_ro ||
+            command.info.cmd_type == CommandType.command_evalsha_ro {
             reply = connection_handle_eval_like_at(
                 engine,
                 runtime,
@@ -3639,7 +3679,8 @@ fn connection_transaction_execute_at(
                 &command,
                 now_ms,
                 rewrite_failed,
-                command.info.cmd_type == CommandType.command_evalsha,
+                command.info.cmd_type == CommandType.command_evalsha || command.info.cmd_type == CommandType.command_evalsha_ro,
+                command.info.cmd_type == CommandType.command_eval_ro || command.info.cmd_type == CommandType.command_evalsha_ro,
             );
         } else if command.info.cmd_type == CommandType.command_auth {
             reply = connection_handle_auth(tx, runtime, &command);
@@ -3655,6 +3696,8 @@ fn connection_transaction_execute_at(
         }
         if command.info.cmd_type != CommandType.command_eval &&
             command.info.cmd_type != CommandType.command_evalsha &&
+            command.info.cmd_type != CommandType.command_eval_ro &&
+            command.info.cmd_type != CommandType.command_evalsha_ro &&
             command.info.cmd_type != CommandType.command_script &&
             aof != null &&
             connection_should_append_aof(&command, &reply) {
@@ -4870,7 +4913,9 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
     }
     if command.info.cmd_type == CommandType.command_script ||
         command.info.cmd_type == CommandType.command_eval ||
-        command.info.cmd_type == CommandType.command_evalsha {
+        command.info.cmd_type == CommandType.command_evalsha ||
+        command.info.cmd_type == CommandType.command_eval_ro ||
+        command.info.cmd_type == CommandType.command_evalsha_ro {
         return connection_execute_script_command_at(
             engine,
             runtime,

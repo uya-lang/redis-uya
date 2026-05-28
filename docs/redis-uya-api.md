@@ -1568,7 +1568,25 @@ EVAL script numkeys [key ...] [arg ...]
 - 当前实现为 partial：只支持单条 `return redis.call(...)` 脚本子集
 - 当前支持 `KEYS[n]` / `ARGV[n]` 参数替换，脚本会自动写入脚本缓存
 - AOF / 复制传播的是脚本内部实际执行的命令效果，不是原始 `EVAL`
-- 当前不支持多语句 Lua、`redis.pcall`、只读脚本变体或任意 Lua 值返回
+- 当前不支持多语句 Lua、`redis.pcall` 或任意 Lua 值返回
+
+### `EVAL_RO`
+
+格式：
+
+```text
+EVAL_RO script numkeys [key ...] [arg ...]
+```
+
+返回：
+
+- 返回当前脚本内部那条只读 `redis.call(...)` 的原始 Redis 回复
+
+说明：
+
+- 当前实现为 partial，脚本子集、脚本缓存和参数替换语义与 `EVAL` 相同
+- 如果脚本内部命令带写标记，返回 `ERR Write commands are not allowed from read-only scripts`
+- AOF / 复制只传播脚本内部成功执行的实际命令效果；被拒绝的写脚本不产生传播副作用
 
 ### `EVALSHA`
 
@@ -1586,6 +1604,24 @@ EVALSHA sha1 numkeys [key ...] [arg ...]
 说明：
 
 - 当前实现为 partial，语义边界与 `EVAL` 相同
+- `sha1` 查找大小写不敏感
+
+### `EVALSHA_RO`
+
+格式：
+
+```text
+EVALSHA_RO sha1 numkeys [key ...] [arg ...]
+```
+
+返回：
+
+- 返回命中脚本内部那条只读 `redis.call(...)` 的原始 Redis 回复
+- 未命中脚本缓存时返回 `NOSCRIPT No matching script. Please use EVAL.`
+
+说明：
+
+- 当前实现为 partial，语义边界与 `EVAL_RO` 相同
 - `sha1` 查找大小写不敏感
 
 ### `SCRIPT`

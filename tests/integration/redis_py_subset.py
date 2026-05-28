@@ -217,8 +217,14 @@ class RedisPySubsetClient:
     def eval(self, script: str, numkeys: int, *parts: str):
         return self._request(b"EVAL", script.encode(), str(numkeys).encode(), *(part.encode() for part in parts))
 
+    def eval_ro(self, script: str, numkeys: int, *parts: str):
+        return self._request(b"EVAL_RO", script.encode(), str(numkeys).encode(), *(part.encode() for part in parts))
+
     def evalsha(self, sha1: str, numkeys: int, *parts: str):
         return self._request(b"EVALSHA", sha1.encode(), str(numkeys).encode(), *(part.encode() for part in parts))
+
+    def evalsha_ro(self, sha1: str, numkeys: int, *parts: str):
+        return self._request(b"EVALSHA_RO", sha1.encode(), str(numkeys).encode(), *(part.encode() for part in parts))
 
     def script_load(self, script: str) -> bytes:
         result = self._request(b"SCRIPT", b"LOAD", script.encode())
@@ -915,6 +921,14 @@ def run_smoke() -> None:
             assert client.script_exists("d8f2fad9f8e86a53d2a6ebd960b33c4972cacc37") == [1]
             assert client.script_load("return redis.call('GET', KEYS[1])") == b"d3c21d0c2b9ca22f82737626a27bcaf5d288f99f"
             assert client.evalsha("D3C21D0C2B9CA22F82737626A27BCAF5D288F99F", 1, "lua-key") == b"value"
+            assert client.eval_ro("return redis.call('GET', KEYS[1])", 1, "lua-key") == b"value"
+            try:
+                client.eval_ro("return redis.call('SET', KEYS[1], ARGV[1])", 1, "lua-key", "blocked")
+                raise AssertionError("expected EVAL_RO write script to fail")
+            except RespError as exc:
+                if str(exc) != "ERR Write commands are not allowed from read-only scripts":
+                    raise AssertionError(f"unexpected EVAL_RO write error: {exc}") from exc
+            assert client.evalsha_ro("D3C21D0C2B9CA22F82737626A27BCAF5D288F99F", 1, "lua-key") == b"value"
             assert client.script_flush()
             try:
                 client.evalsha("d3c21d0c2b9ca22f82737626a27bcaf5d288f99f", 1, "lua-key")
@@ -922,6 +936,12 @@ def run_smoke() -> None:
             except RespError as exc:
                 if str(exc) != "NOSCRIPT No matching script. Please use EVAL.":
                     raise AssertionError(f"unexpected EVALSHA error: {exc}") from exc
+            try:
+                client.evalsha_ro("d3c21d0c2b9ca22f82737626a27bcaf5d288f99f", 1, "lua-key")
+                raise AssertionError("expected EVALSHA_RO after SCRIPT FLUSH to fail")
+            except RespError as exc:
+                if str(exc) != "NOSCRIPT No matching script. Please use EVAL.":
+                    raise AssertionError(f"unexpected EVALSHA_RO error: {exc}") from exc
             memory_usage = client.memory_usage("key")
             if memory_usage is None or memory_usage <= 0:
                 raise AssertionError(f"unexpected MEMORY USAGE key: {memory_usage!r}")

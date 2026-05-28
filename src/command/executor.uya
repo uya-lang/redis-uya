@@ -12364,6 +12364,7 @@ fn command_executor_command_getkeysandflags_eval(
     runtime: &CommandRuntimeInfo,
     command: &Command,
     buf: &Sds,
+    read_only: bool,
 ) !void {
     const numkeys: usize = command_executor_command_eval_numkeys(command) catch {
         try command_executor_resp_collection_prefix(buf, &"*"[0: 1], 0);
@@ -12373,7 +12374,11 @@ fn command_executor_command_getkeysandflags_eval(
     var key_index: usize = 3;
     while key_index < 3 + numkeys {
         const key: &[byte] = try command_executor_command_full_arg(command, key_index);
-        try command_executor_command_append_getkeysandflags_item(buf, key, &"RW|access|update"[0: 16], runtime.protocol_version);
+        if read_only {
+            try command_executor_command_append_getkeysandflags_item(buf, key, &"RO|access"[0: 9], runtime.protocol_version);
+        } else {
+            try command_executor_command_append_getkeysandflags_item(buf, key, &"RW|access|update"[0: 16], runtime.protocol_version);
+        }
         key_index = key_index + 1;
     }
 }
@@ -12458,9 +12463,17 @@ fn command_executor_command_getkeys(runtime: &CommandRuntimeInfo, command: &Comm
         return command_executor_owned_raw(buf.buf[0: buf.len]);
     }
 
-    if info.cmd_type == CommandType.command_eval || info.cmd_type == CommandType.command_evalsha {
+    if info.cmd_type == CommandType.command_eval ||
+        info.cmd_type == CommandType.command_evalsha ||
+        info.cmd_type == CommandType.command_eval_ro ||
+        info.cmd_type == CommandType.command_evalsha_ro {
         if with_flags {
-            _ = command_executor_command_getkeysandflags_eval(runtime, command, &buf) catch {
+            _ = command_executor_command_getkeysandflags_eval(
+                runtime,
+                command,
+                &buf,
+                info.cmd_type == CommandType.command_eval_ro || info.cmd_type == CommandType.command_evalsha_ro,
+            ) catch {
                 return command_executor_command_invalid_command_arity();
             };
         } else {

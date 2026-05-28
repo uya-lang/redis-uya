@@ -182,6 +182,8 @@ export enum CommandType {
     command_pfmerge,
     command_eval,
     command_evalsha,
+    command_eval_ro,
+    command_evalsha_ro,
     command_script,
     command_geoadd,
     command_geodist,
@@ -221,7 +223,7 @@ export const COMMAND_FLAG_READONLY: u64 = 1u64;
 export const COMMAND_FLAG_WRITE: u64 = 2u64;
 export const COMMAND_FLAG_FAST: u64 = 4u64;
 
-const MIN_COMMAND_COUNT: usize = 184;
+const MIN_COMMAND_COUNT: usize = 186;
 
 fn command_router_name_eq(a: &[byte], b: &[byte]) bool {
     return bytes_ascii_case_eq(a, b);
@@ -754,63 +756,69 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
         return command_router_info(CommandType.command_evalsha, &"EVALSHA"[0: 7], -3, COMMAND_FLAG_WRITE, 0, 0, 0);
     }
     if index == 164 {
-        return command_router_info(CommandType.command_script, &"SCRIPT"[0: 6], -2, 0u64, 0, 0, 0);
+        return command_router_info(CommandType.command_eval_ro, &"EVAL_RO"[0: 7], -3, COMMAND_FLAG_READONLY, 0, 0, 0);
     }
     if index == 165 {
-        return command_router_info(CommandType.command_memory, &"MEMORY"[0: 6], -2, COMMAND_FLAG_READONLY, 0, 0, 0);
+        return command_router_info(CommandType.command_evalsha_ro, &"EVALSHA_RO"[0: 10], -3, COMMAND_FLAG_READONLY, 0, 0, 0);
     }
     if index == 166 {
-        return command_router_info(CommandType.command_slowlog, &"SLOWLOG"[0: 7], -2, COMMAND_FLAG_READONLY, 0, 0, 0);
+        return command_router_info(CommandType.command_script, &"SCRIPT"[0: 6], -2, 0u64, 0, 0, 0);
     }
     if index == 167 {
-        return command_router_info(CommandType.command_latency, &"LATENCY"[0: 7], -2, COMMAND_FLAG_READONLY, 0, 0, 0);
+        return command_router_info(CommandType.command_memory, &"MEMORY"[0: 6], -2, COMMAND_FLAG_READONLY, 0, 0, 0);
     }
     if index == 168 {
-        return command_router_info(CommandType.command_monitor, &"MONITOR"[0: 7], 1, COMMAND_FLAG_READONLY, 0, 0, 0);
+        return command_router_info(CommandType.command_slowlog, &"SLOWLOG"[0: 7], -2, COMMAND_FLAG_READONLY, 0, 0, 0);
     }
     if index == 169 {
-        return command_router_info(CommandType.command_xack, &"XACK"[0: 4], -4, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+        return command_router_info(CommandType.command_latency, &"LATENCY"[0: 7], -2, COMMAND_FLAG_READONLY, 0, 0, 0);
     }
     if index == 170 {
-        return command_router_info(CommandType.command_xadd, &"XADD"[0: 4], -5, COMMAND_FLAG_WRITE, 1, 1, 1);
+        return command_router_info(CommandType.command_monitor, &"MONITOR"[0: 7], 1, COMMAND_FLAG_READONLY, 0, 0, 0);
     }
     if index == 171 {
-        return command_router_info(CommandType.command_xclaim, &"XCLAIM"[0: 6], -6, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+        return command_router_info(CommandType.command_xack, &"XACK"[0: 4], -4, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     if index == 172 {
-        return command_router_info(CommandType.command_xdel, &"XDEL"[0: 4], -3, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+        return command_router_info(CommandType.command_xadd, &"XADD"[0: 4], -5, COMMAND_FLAG_WRITE, 1, 1, 1);
     }
     if index == 173 {
-        return command_router_info(CommandType.command_xgroup, &"XGROUP"[0: 6], -2, COMMAND_FLAG_READONLY, 0, 0, 0);
+        return command_router_info(CommandType.command_xclaim, &"XCLAIM"[0: 6], -6, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     if index == 174 {
-        return command_router_info(CommandType.command_xinfo, &"XINFO"[0: 5], -2, COMMAND_FLAG_READONLY, 0, 0, 0);
+        return command_router_info(CommandType.command_xdel, &"XDEL"[0: 4], -3, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     if index == 175 {
-        return command_router_info(CommandType.command_xlen, &"XLEN"[0: 4], 2, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
+        return command_router_info(CommandType.command_xgroup, &"XGROUP"[0: 6], -2, COMMAND_FLAG_READONLY, 0, 0, 0);
     }
     if index == 176 {
-        return command_router_info(CommandType.command_xpending, &"XPENDING"[0: 8], -3, COMMAND_FLAG_READONLY, 1, 1, 1);
+        return command_router_info(CommandType.command_xinfo, &"XINFO"[0: 5], -2, COMMAND_FLAG_READONLY, 0, 0, 0);
     }
     if index == 177 {
-        return command_router_info(CommandType.command_xrange, &"XRANGE"[0: 6], -4, COMMAND_FLAG_READONLY, 1, 1, 1);
+        return command_router_info(CommandType.command_xlen, &"XLEN"[0: 4], 2, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     if index == 178 {
-        return command_router_info(CommandType.command_xrevrange, &"XREVRANGE"[0: 9], -4, COMMAND_FLAG_READONLY, 1, 1, 1);
+        return command_router_info(CommandType.command_xpending, &"XPENDING"[0: 8], -3, COMMAND_FLAG_READONLY, 1, 1, 1);
     }
     if index == 179 {
-        return command_router_info(CommandType.command_xread, &"XREAD"[0: 5], -4, COMMAND_FLAG_READONLY, 0, 0, 0);
+        return command_router_info(CommandType.command_xrange, &"XRANGE"[0: 6], -4, COMMAND_FLAG_READONLY, 1, 1, 1);
     }
     if index == 180 {
-        return command_router_info(CommandType.command_xtrim, &"XTRIM"[0: 5], -4, COMMAND_FLAG_WRITE, 1, 1, 1);
+        return command_router_info(CommandType.command_xrevrange, &"XREVRANGE"[0: 9], -4, COMMAND_FLAG_READONLY, 1, 1, 1);
     }
     if index == 181 {
-        return command_router_info(CommandType.command_geoadd, &"GEOADD"[0: 6], -5, COMMAND_FLAG_WRITE, 1, 1, 1);
+        return command_router_info(CommandType.command_xread, &"XREAD"[0: 5], -4, COMMAND_FLAG_READONLY, 0, 0, 0);
     }
     if index == 182 {
-        return command_router_info(CommandType.command_geodist, &"GEODIST"[0: 7], -4, COMMAND_FLAG_READONLY, 1, 1, 1);
+        return command_router_info(CommandType.command_xtrim, &"XTRIM"[0: 5], -4, COMMAND_FLAG_WRITE, 1, 1, 1);
     }
     if index == 183 {
+        return command_router_info(CommandType.command_geoadd, &"GEOADD"[0: 6], -5, COMMAND_FLAG_WRITE, 1, 1, 1);
+    }
+    if index == 184 {
+        return command_router_info(CommandType.command_geodist, &"GEODIST"[0: 7], -4, COMMAND_FLAG_READONLY, 1, 1, 1);
+    }
+    if index == 185 {
         return command_router_info(CommandType.command_geosearch, &"GEOSEARCH"[0: 9], -7, COMMAND_FLAG_READONLY, 1, 1, 1);
     }
     return error.CommandUnknown;

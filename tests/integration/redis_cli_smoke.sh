@@ -435,6 +435,24 @@ if [[ "$EVALSHA_GET_RESULT" != "value" ]]; then
     exit 1
 fi
 
+EVAL_RO_GET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" eval_ro "return redis.call('GET', KEYS[1])" 1 lua-key)"
+if [[ "$EVAL_RO_GET_RESULT" != "value" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected EVAL_RO value, got '$EVAL_RO_GET_RESULT'" >&2
+    exit 1
+fi
+
+EVAL_RO_SET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" eval_ro "return redis.call('SET', KEYS[1], ARGV[1])" 1 lua-key blocked 2>&1 || true)"
+if [[ "$EVAL_RO_SET_RESULT" != "ERR Write commands are not allowed from read-only scripts" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected EVAL_RO read-only error, got '$EVAL_RO_SET_RESULT'" >&2
+    exit 1
+fi
+
+EVALSHA_RO_GET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" evalsha_ro D3C21D0C2B9CA22F82737626A27BCAF5D288F99F 1 lua-key)"
+if [[ "$EVALSHA_RO_GET_RESULT" != "value" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected EVALSHA_RO value, got '$EVALSHA_RO_GET_RESULT'" >&2
+    exit 1
+fi
+
 SCRIPT_FLUSH_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" script flush)"
 if [[ "$SCRIPT_FLUSH_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected SCRIPT FLUSH OK, got '$SCRIPT_FLUSH_RESULT'" >&2
@@ -444,6 +462,12 @@ fi
 EVALSHA_NOSCRIPT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" evalsha d3c21d0c2b9ca22f82737626a27bcaf5d288f99f 1 lua-key 2>&1 || true)"
 if [[ "$EVALSHA_NOSCRIPT_RESULT" != "NOSCRIPT No matching script. Please use EVAL." ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected EVALSHA NOSCRIPT, got '$EVALSHA_NOSCRIPT_RESULT'" >&2
+    exit 1
+fi
+
+EVALSHA_RO_NOSCRIPT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" evalsha_ro d3c21d0c2b9ca22f82737626a27bcaf5d288f99f 1 lua-key 2>&1 || true)"
+if [[ "$EVALSHA_RO_NOSCRIPT_RESULT" != "NOSCRIPT No matching script. Please use EVAL." ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected EVALSHA_RO NOSCRIPT, got '$EVALSHA_RO_NOSCRIPT_RESULT'" >&2
     exit 1
 fi
 

@@ -643,6 +643,8 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"client|trackinginfo"[0: 19], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"eval_ro"[0: 7], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"evalsha_ro"[0: 10], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"fcall"[0: 5], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"fcall_ro"[0: 8], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"function"[0: 8], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"function|delete"[0: 15], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"function|flush"[0: 14], CommandCatalogStatus.status_partial);
@@ -863,6 +865,31 @@ export fn test_command_function_kill() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_command_fcall() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+
+    var fcall_parsed: RespParseResult = try parse_resp2(&"*3\r\n$5\r\nFCALL\r\n$7\r\nmissing\r\n$1\r\n0\r\n"[0: 35]);
+    const fcall_command: Command = try command_executor_test_command(&router, &fcall_parsed);
+    var fcall_reply: CommandReply = command_execute_at(&engine, &fcall_command, 1000u64);
+    try assert_eq_i32(fcall_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(fcall_reply.data, &"ERR Function not found"[0: 22]));
+    command_reply_cleanup(&fcall_reply);
+    resp_value_free(&fcall_parsed.value);
+
+    var fcall_ro_parsed: RespParseResult = try parse_resp2(&"*3\r\n$8\r\nFCALL_RO\r\n$7\r\nmissing\r\n$1\r\n0\r\n"[0: 38]);
+    const fcall_ro_command: Command = try command_executor_test_command(&router, &fcall_ro_parsed);
+    var fcall_ro_reply: CommandReply = command_execute_at(&engine, &fcall_ro_command, 1000u64);
+    try assert_eq_i32(fcall_ro_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(fcall_ro_reply.data, &"ERR Function not found"[0: 22]));
+    command_reply_cleanup(&fcall_ro_reply);
+    resp_value_free(&fcall_ro_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_command_command_getkeys() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();
@@ -1010,6 +1037,20 @@ export fn test_command_command_getkeys() !void {
     try assert_true(command_executor_test_contains(getkeys_evalsha_ro_flags_reply.data, &"$2\r\nk1\r\n*2\r\n$2\r\nRO\r\n$6\r\naccess\r\n"[0: 32]));
     command_reply_cleanup(&getkeys_evalsha_ro_flags_reply);
     resp_value_free(&getkeys_evalsha_ro_flags_parsed.value);
+
+    var getkeys_fcall_parsed: RespParseResult = try parse_resp2(&"*8\r\n$7\r\nCOMMAND\r\n$7\r\nGETKEYS\r\n$5\r\nFCALL\r\n$7\r\nmissing\r\n$1\r\n2\r\n$2\r\nk1\r\n$2\r\nk2\r\n$3\r\narg\r\n"[0: 86]);
+    const getkeys_fcall_command: Command = try command_executor_test_command(&router, &getkeys_fcall_parsed);
+    var getkeys_fcall_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &getkeys_fcall_command, 1000u64);
+    try assert_true(command_executor_test_slice_eq(getkeys_fcall_reply.data, &"*2\r\n$2\r\nk1\r\n$2\r\nk2\r\n"[0: 20]));
+    command_reply_cleanup(&getkeys_fcall_reply);
+    resp_value_free(&getkeys_fcall_parsed.value);
+
+    var getkeys_fcall_ro_flags_parsed: RespParseResult = try parse_resp2(&"*7\r\n$7\r\nCOMMAND\r\n$15\r\nGETKEYSANDFLAGS\r\n$8\r\nFCALL_RO\r\n$7\r\nmissing\r\n$1\r\n1\r\n$2\r\nk1\r\n$3\r\narg\r\n"[0: 90]);
+    const getkeys_fcall_ro_flags_command: Command = try command_executor_test_command(&router, &getkeys_fcall_ro_flags_parsed);
+    var getkeys_fcall_ro_flags_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &getkeys_fcall_ro_flags_command, 1000u64);
+    try assert_true(command_executor_test_contains(getkeys_fcall_ro_flags_reply.data, &"$2\r\nk1\r\n*2\r\n$2\r\nRO\r\n$6\r\naccess\r\n"[0: 32]));
+    command_reply_cleanup(&getkeys_fcall_ro_flags_reply);
+    resp_value_free(&getkeys_fcall_ro_flags_parsed.value);
 
     var getkeys_eval_invalid_parsed: RespParseResult = try parse_resp2(&"*6\r\n$7\r\nCOMMAND\r\n$7\r\nGETKEYS\r\n$4\r\nEVAL\r\n$8\r\nreturn 1\r\n$1\r\nx\r\n$2\r\nk1\r\n"[0: 69]);
     const getkeys_eval_invalid_command: Command = try command_executor_test_command(&router, &getkeys_eval_invalid_parsed);

@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 109 | 0 | 3 | 107 |
+| Tier A: standalone core | 365 | 259 | 146 | 111 | 0 | 3 | 105 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `116` |
+| `partial` | `118` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `260` |
+| `deferred` | `258` |
 
 ## Group counts
 
@@ -229,8 +229,8 @@
 | `expireat` | `generic` | `full` | `-` | `-3` | `-` | `no` | `@keyspace, @write, @fast` |
 | `expiretime` | `generic` | `full` | `-` | `2` | `-` | `no` | `@keyspace, @read, @fast` |
 | `failover` | `server` | `deferred` | `v0.9.1` | `-1` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `fcall` | `scripting` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@slow, @scripting` |
-| `fcall_ro` | `scripting` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@slow, @scripting` |
+| `fcall` | `scripting` | `partial` | `-` | `-3` | `-` | `no` | `@slow, @scripting` |
+| `fcall_ro` | `scripting` | `partial` | `-` | `-3` | `-` | `no` | `@slow, @scripting` |
 | `flushall` | `server` | `partial` | `-` | `-1` | `-` | `no` | `@keyspace, @write, @slow, @dangerous` |
 | `flushdb` | `server` | `partial` | `-` | `-1` | `-` | `no` | `@keyspace, @write, @slow, @dangerous` |
 | `ft._list` | `search` | `deferred` | `v0.9.2` | `0` | `ft` | `no` | `@admin, @search, @slow` |

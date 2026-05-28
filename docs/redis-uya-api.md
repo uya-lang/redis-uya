@@ -1624,6 +1624,25 @@ EVALSHA_RO sha1 numkeys [key ...] [arg ...]
 - 当前实现为 partial，语义边界与 `EVAL_RO` 相同
 - `sha1` 查找大小写不敏感
 
+### `FCALL` / `FCALL_RO`
+
+格式：
+
+```text
+FCALL function numkeys [key ...] [arg ...]
+FCALL_RO function numkeys [key ...] [arg ...]
+```
+
+返回：
+
+- 当前返回 `ERR Function not found`，表示尚无已加载 function library
+
+说明：
+
+- 当前实现为 partial，仅提供空 function 库下的错误兼容面和 `COMMAND GETKEYS/GETKEYSANDFLAGS` 动态 key 解析
+- `FCALL_RO` 的 `COMMAND GETKEYSANDFLAGS` key 标记为只读访问；`FCALL` 标记为读写访问/更新
+- 当前不执行 Redis Functions，不支持 function library 存储或 Lua engine 调用
+
 ### `SCRIPT`
 
 格式：
@@ -1676,7 +1695,7 @@ FUNCTION KILL
 - `FUNCTION LIST` 支持 `LIBRARYNAME <pattern>` 与 `WITHCODE` 参数校验，但 function library 存储尚未实现，因此始终返回空数组
 - `FUNCTION FLUSH` 支持 `ASYNC|SYNC` 参数校验，但 function library 存储尚未实现，因此不会清理任何真实库状态
 - `COMMAND INFO/LIST/DOCS` 会暴露 `FUNCTION`、`FUNCTION|HELP`、`FUNCTION|LIST`、`FUNCTION|STATS`、`FUNCTION|FLUSH`、`FUNCTION|DELETE` 和 `FUNCTION|KILL`
-- 当前不支持 `FUNCTION LOAD/DUMP/RESTORE` 或 `FCALL/FCALL_RO`
+- 当前不支持 `FUNCTION LOAD/DUMP/RESTORE` 或真实 `FCALL/FCALL_RO` 执行
 
 ### `GEOADD`
 

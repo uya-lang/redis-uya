@@ -7300,6 +7300,16 @@ fn command_executor_function_kill(command: &Command) CommandReply {
     return command_executor_owned_error(&"NOTBUSY No scripts in execution right now."[0: 42]);
 }
 
+fn command_executor_fcall(command: &Command) CommandReply {
+    if command.argc < 3 {
+        if command.info.cmd_type == CommandType.command_fcall_ro {
+            return command_executor_owned_error(&"ERR wrong number of arguments for 'fcall_ro' command"[0: 52]);
+        }
+        return command_executor_owned_error(&"ERR wrong number of arguments for 'fcall' command"[0: 49]);
+    }
+    return command_executor_owned_error(&"ERR Function not found"[0: 22]);
+}
+
 fn command_executor_function(command: &Command) CommandReply {
     if command.argc < 2 {
         return command_executor_owned_error(&"ERR wrong number of arguments for 'function' command"[0: 52]);
@@ -12096,6 +12106,25 @@ fn command_executor_command_eval_numkeys(command: &Command) !usize {
     return numkeys;
 }
 
+fn command_executor_command_fcall_numkeys(command: &Command) !usize {
+    const full_argc: usize = command_executor_command_full_argc(command);
+    if full_argc < 3 {
+        return error.CommandWrongArity;
+    }
+    const numkeys_data: &[byte] = try command_executor_command_full_arg(command, 2);
+    const numkeys_i64: i64 = command_executor_parse_i64(numkeys_data) catch {
+        return error.CommandWrongArity;
+    };
+    if numkeys_i64 < 0 {
+        return error.CommandWrongArity;
+    }
+    const numkeys: usize = numkeys_i64 as usize;
+    if full_argc < 3 + numkeys {
+        return error.CommandWrongArity;
+    }
+    return numkeys;
+}
+
 fn command_executor_command_memory_usage_has_key(command: &Command) !bool {
     const full_argc: usize = command_executor_command_full_argc(command);
     if full_argc < 2 {
@@ -12501,6 +12530,43 @@ fn command_executor_command_getkeys_eval(command: &Command, buf: &Sds) !void {
     }
 }
 
+fn command_executor_command_getkeys_fcall(command: &Command, buf: &Sds) !void {
+    const numkeys: usize = command_executor_command_fcall_numkeys(command) catch {
+        try command_executor_resp_collection_prefix(buf, &"*"[0: 1], 0);
+        return;
+    };
+    try command_executor_resp_collection_prefix(buf, &"*"[0: 1], numkeys);
+    var key_index: usize = 3;
+    while key_index < 3 + numkeys {
+        const key: &[byte] = try command_executor_command_full_arg(command, key_index);
+        try command_executor_command_append_getkeys_key(buf, key);
+        key_index = key_index + 1;
+    }
+}
+
+fn command_executor_command_getkeysandflags_fcall(
+    runtime: &CommandRuntimeInfo,
+    command: &Command,
+    buf: &Sds,
+    read_only: bool,
+) !void {
+    const numkeys: usize = command_executor_command_fcall_numkeys(command) catch {
+        try command_executor_resp_collection_prefix(buf, &"*"[0: 1], 0);
+        return;
+    };
+    try command_executor_resp_collection_prefix(buf, &"*"[0: 1], numkeys);
+    var key_index: usize = 3;
+    while key_index < 3 + numkeys {
+        const key: &[byte] = try command_executor_command_full_arg(command, key_index);
+        if read_only {
+            try command_executor_command_append_getkeysandflags_item(buf, key, &"RO|access"[0: 9], runtime.protocol_version);
+        } else {
+            try command_executor_command_append_getkeysandflags_item(buf, key, &"RW|access|update"[0: 16], runtime.protocol_version);
+        }
+        key_index = key_index + 1;
+    }
+}
+
 fn command_executor_command_getkeysandflags_eval(
     runtime: &CommandRuntimeInfo,
     command: &Command,
@@ -12619,6 +12685,25 @@ fn command_executor_command_getkeys(runtime: &CommandRuntimeInfo, command: &Comm
             };
         } else {
             _ = command_executor_command_getkeys_eval(command, &buf) catch {
+                return command_executor_command_invalid_command_arity();
+            };
+        }
+        return command_executor_owned_raw(buf.buf[0: buf.len]);
+    }
+
+    if info.cmd_type == CommandType.command_fcall ||
+        info.cmd_type == CommandType.command_fcall_ro {
+        if with_flags {
+            _ = command_executor_command_getkeysandflags_fcall(
+                runtime,
+                command,
+                &buf,
+                info.cmd_type == CommandType.command_fcall_ro,
+            ) catch {
+                return command_executor_command_invalid_command_arity();
+            };
+        } else {
+            _ = command_executor_command_getkeys_fcall(command, &buf) catch {
                 return command_executor_command_invalid_command_arity();
             };
         }
@@ -13423,6 +13508,10 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_function {
         return command_executor_function(command);
+    }
+    if command.info.cmd_type == CommandType.command_fcall ||
+        command.info.cmd_type == CommandType.command_fcall_ro {
+        return command_executor_fcall(command);
     }
     if command.info.cmd_type == CommandType.command_move {
         return command_executor_move(runtime, command);

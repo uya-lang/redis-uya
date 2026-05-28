@@ -226,6 +226,12 @@ class RedisPySubsetClient:
     def evalsha_ro(self, sha1: str, numkeys: int, *parts: str):
         return self._request(b"EVALSHA_RO", sha1.encode(), str(numkeys).encode(), *(part.encode() for part in parts))
 
+    def fcall(self, function: bytes, numkeys: int, *parts: bytes):
+        return self._request(b"FCALL", function, str(numkeys).encode(), *parts)
+
+    def fcall_ro(self, function: bytes, numkeys: int, *parts: bytes):
+        return self._request(b"FCALL_RO", function, str(numkeys).encode(), *parts)
+
     def script_load(self, script: str) -> bytes:
         result = self._request(b"SCRIPT", b"LOAD", script.encode())
         assert isinstance(result, bytes)
@@ -969,6 +975,18 @@ def run_smoke() -> None:
             except RespError as exc:
                 if str(exc) != "NOSCRIPT No matching script. Please use EVAL.":
                     raise AssertionError(f"unexpected EVALSHA_RO error: {exc}") from exc
+            try:
+                client.fcall(b"missing", 0)
+                raise AssertionError("expected FCALL missing function to fail")
+            except RespError as exc:
+                if str(exc) != "ERR Function not found":
+                    raise AssertionError(f"unexpected FCALL error: {exc}") from exc
+            try:
+                client.fcall_ro(b"missing", 0)
+                raise AssertionError("expected FCALL_RO missing function to fail")
+            except RespError as exc:
+                if str(exc) != "ERR Function not found":
+                    raise AssertionError(f"unexpected FCALL_RO error: {exc}") from exc
             function_help = client.function_help()
             if b"FUNCTION HELP" not in function_help or b"FUNCTION LIST [LIBRARYNAME <pattern>] [WITHCODE]" not in function_help or b"FUNCTION KILL" not in function_help:
                 raise AssertionError(f"unexpected FUNCTION HELP result: {function_help!r}")

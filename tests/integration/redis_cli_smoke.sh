@@ -471,6 +471,18 @@ if [[ "$EVALSHA_RO_NOSCRIPT_RESULT" != "NOSCRIPT No matching script. Please use 
     exit 1
 fi
 
+FCALL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" fcall missing 0 2>&1 || true)"
+if [[ "$FCALL_RESULT" != "ERR Function not found" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected FCALL missing function error, got '$FCALL_RESULT'" >&2
+    exit 1
+fi
+
+FCALL_RO_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" fcall_ro missing 0 2>&1 || true)"
+if [[ "$FCALL_RO_RESULT" != "ERR Function not found" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected FCALL_RO missing function error, got '$FCALL_RO_RESULT'" >&2
+    exit 1
+fi
+
 FUNCTION_HELP_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function help)"
 if [[ "$FUNCTION_HELP_RESULT" != *"FUNCTION HELP"* || "$FUNCTION_HELP_RESULT" != *"FUNCTION LIST [LIBRARYNAME <pattern>] [WITHCODE]"* ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected FUNCTION HELP output, got '$FUNCTION_HELP_RESULT'" >&2

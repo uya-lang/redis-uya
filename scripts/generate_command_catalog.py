@@ -345,6 +345,8 @@ PARTIAL_NAMES = {
     "eval_ro",
     "evalsha",
     "evalsha_ro",
+    "fcall",
+    "fcall_ro",
     "function",
     "function|delete",
     "function|flush",

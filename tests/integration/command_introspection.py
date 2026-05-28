@@ -187,10 +187,10 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"bitmap commands missing from COMMAND INFO: {bitmap_info!r}")
 
-            script_info = send_command(sock, b"COMMAND", b"INFO", b"EVAL", b"EVAL_RO", b"EVALSHA", b"EVALSHA_RO", b"SCRIPT", b"SCRIPT|LOAD", b"SCRIPT|EXISTS", b"SCRIPT|FLUSH")
+            script_info = send_command(sock, b"COMMAND", b"INFO", b"EVAL", b"EVAL_RO", b"EVALSHA", b"EVALSHA_RO", b"FCALL", b"FCALL_RO", b"SCRIPT", b"SCRIPT|LOAD", b"SCRIPT|EXISTS", b"SCRIPT|FLUSH")
             if (
                 not isinstance(script_info, list)
-                or len(script_info) != 8
+                or len(script_info) != 10
                 or not isinstance(script_info[0], list)
                 or script_info[0][0] != b"eval"
                 or not isinstance(script_info[1], list)
@@ -200,13 +200,17 @@ def run_smoke() -> None:
                 or not isinstance(script_info[3], list)
                 or script_info[3][0] != b"evalsha_ro"
                 or not isinstance(script_info[4], list)
-                or script_info[4][0] != b"script"
+                or script_info[4][0] != b"fcall"
                 or not isinstance(script_info[5], list)
-                or script_info[5][0] != b"script|load"
+                or script_info[5][0] != b"fcall_ro"
                 or not isinstance(script_info[6], list)
-                or script_info[6][0] != b"script|exists"
+                or script_info[6][0] != b"script"
                 or not isinstance(script_info[7], list)
-                or script_info[7][0] != b"script|flush"
+                or script_info[7][0] != b"script|load"
+                or not isinstance(script_info[8], list)
+                or script_info[8][0] != b"script|exists"
+                or not isinstance(script_info[9], list)
+                or script_info[9][0] != b"script|flush"
             ):
                 raise AssertionError(f"scripting commands missing from COMMAND INFO: {script_info!r}")
 
@@ -464,6 +468,14 @@ def run_smoke() -> None:
                 or b"evalsha_ro" not in listed_eval
             ):
                 raise AssertionError(f"unexpected COMMAND LIST eval* result: {listed_eval!r}")
+
+            listed_fcall = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"FCALL*")
+            if (
+                not isinstance(listed_fcall, list)
+                or b"fcall" not in listed_fcall
+                or b"fcall_ro" not in listed_fcall
+            ):
+                raise AssertionError(f"unexpected COMMAND LIST fcall* result: {listed_fcall!r}")
 
             listed_script = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"SCRIPT*")
             if (

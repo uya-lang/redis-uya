@@ -365,6 +365,8 @@ PARTIAL_NAMES = {
     "wait",
     "xadd",
     "xdel",
+    "xgroup",
+    "xgroup|help",
     "xlen",
     "xrange",
     "xread",

@@ -1,7 +1,7 @@
 # redis-uya command matrix
 
 > version: v0.9.1-dev
-> date: 2026-05-26
+> date: 2026-05-28
 > source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`
 > runtime source: `src/command/catalog_generated.uya`
 
@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 87 | 0 | 3 | 129 |
+| Tier A: standalone core | 365 | 259 | 146 | 89 | 0 | 3 | 127 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `94` |
+| `partial` | `96` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `282` |
+| `deferred` | `280` |
 
 ## Group counts
 
@@ -564,12 +564,12 @@
 | `xclaim` | `stream` | `deferred` | `v0.9.1` | `-6` | `-` | `no` | `@write, @stream, @fast` |
 | `xdel` | `stream` | `partial` | `-` | `-3` | `-` | `no` | `@write, @stream, @fast` |
 | `xdelex` | `stream` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@write, @stream, @fast` |
-| `xgroup` | `stream` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@slow` |
+| `xgroup` | `stream` | `partial` | `-` | `-2` | `-` | `no` | `@slow` |
 | `xgroup|create` | `stream` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@write, @stream, @slow` |
 | `xgroup|createconsumer` | `stream` | `deferred` | `v0.9.1` | `5` | `-` | `no` | `@write, @stream, @slow` |
 | `xgroup|delconsumer` | `stream` | `deferred` | `v0.9.1` | `5` | `-` | `no` | `@write, @stream, @slow` |
 | `xgroup|destroy` | `stream` | `deferred` | `v0.9.1` | `4` | `-` | `no` | `@write, @stream, @slow` |
-| `xgroup|help` | `stream` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@stream, @slow` |
+| `xgroup|help` | `stream` | `partial` | `-` | `2` | `-` | `no` | `@stream, @slow` |
 | `xgroup|setid` | `stream` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@write, @stream, @slow` |
 | `xidmprecord` | `stream` | `deferred` | `v0.9.1` | `5` | `-` | `no` | `@write, @stream, @fast` |
 | `xinfo` | `stream` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@slow` |

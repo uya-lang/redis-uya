@@ -367,6 +367,8 @@ PARTIAL_NAMES = {
     "xdel",
     "xgroup",
     "xgroup|help",
+    "xinfo",
+    "xinfo|help",
     "xlen",
     "xrange",
     "xread",

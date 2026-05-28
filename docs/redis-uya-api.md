@@ -1677,6 +1677,7 @@ GEOSEARCH key FROMLONLAT longitude latitude BYBOX width height unit [ASC|DESC] [
 格式：
 
 ```text
+XACK key group id [id ...]
 XADD key id field value [field value ...]
 XDEL key id [id ...]
 XGROUP CREATE key groupname id-or-$ [MKSTREAM]
@@ -1696,6 +1697,7 @@ XTRIM key MAXLEN [=|~] count
 
 返回：
 
+- `XACK`：当前没有 consumer group 模型，因此对现有 stream key 返回 `NOGROUP No such consumer group`
 - `XADD`：成功时返回新增 entry id；`*` 会按当前毫秒时间和单毫秒递增序列生成 id
 - `XDEL`：返回被删除的 entry 数量；key 不存在返回 `0`
 - `XGROUP CREATE`：当前没有 consumer group 模型，因此只校验参数、stream key 与类型；对现有 stream key 返回 `ERR XGROUP CREATE is not supported yet`
@@ -1716,6 +1718,7 @@ XTRIM key MAXLEN [=|~] count
 - 当前实现为 partial：stream 内部暂用项目内 list-backed entry 存储，不是 Redis 原生 radix-tree/listpack 编码
 - `XADD` 当前只支持基础追加和显式完整 id / `*` 自动 id；不支持 `MAXLEN`、`MINID`、`LIMIT`、`NOMKSTREAM` 或 `field value` 之外的扩展选项
 - `XREAD` 当前只支持非阻塞读取；`BLOCK` 会返回明确错误，consumer group 相关语义仍未实现
+- `XACK` 当前只提供无 group 时的 `NOGROUP` 错误面，不维护 consumer group PEL
 - `XDEL` 当前只做精确 ID 删除，不维护 consumer group PEL
 - `XGROUP CREATE` 当前只提供 key/type 校验和明确未支持错误，不创建 consumer group；`XGROUP DESTROY` 当前只提供 empty-state 返回值，不维护 group；`XGROUP SETID` 当前只提供无 group 时的 `NOGROUP` 错误面；consumer 管理和 consumer group 状态仍未实现
 - `XINFO STREAM` 当前只支持 key-only 基础元数据，`XINFO GROUPS` 当前只支持 empty-state 空数组，`XINFO CONSUMERS` 当前只提供无 group 时的 `NOGROUP` 错误面；`FULL` 与真实 consumer group 状态仍未实现；`radix-tree-*` 字段为 list-backed partial 占位

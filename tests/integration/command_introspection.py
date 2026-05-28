@@ -262,28 +262,30 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"monitor command missing from COMMAND INFO: {monitor_info!r}")
 
-            stream_info = send_command(sock, b"COMMAND", b"INFO", b"XADD", b"XDEL", b"XGROUP", b"XINFO", b"XLEN", b"XRANGE", b"XREVRANGE", b"XREAD", b"XTRIM")
+            stream_info = send_command(sock, b"COMMAND", b"INFO", b"XACK", b"XADD", b"XDEL", b"XGROUP", b"XINFO", b"XLEN", b"XRANGE", b"XREVRANGE", b"XREAD", b"XTRIM")
             if (
                 not isinstance(stream_info, list)
-                or len(stream_info) != 9
+                or len(stream_info) != 10
                 or not isinstance(stream_info[0], list)
-                or stream_info[0][0] != b"xadd"
+                or stream_info[0][0] != b"xack"
                 or not isinstance(stream_info[1], list)
-                or stream_info[1][0] != b"xdel"
+                or stream_info[1][0] != b"xadd"
                 or not isinstance(stream_info[2], list)
-                or stream_info[2][0] != b"xgroup"
+                or stream_info[2][0] != b"xdel"
                 or not isinstance(stream_info[3], list)
-                or stream_info[3][0] != b"xinfo"
+                or stream_info[3][0] != b"xgroup"
                 or not isinstance(stream_info[4], list)
-                or stream_info[4][0] != b"xlen"
+                or stream_info[4][0] != b"xinfo"
                 or not isinstance(stream_info[5], list)
-                or stream_info[5][0] != b"xrange"
+                or stream_info[5][0] != b"xlen"
                 or not isinstance(stream_info[6], list)
-                or stream_info[6][0] != b"xrevrange"
+                or stream_info[6][0] != b"xrange"
                 or not isinstance(stream_info[7], list)
-                or stream_info[7][0] != b"xread"
+                or stream_info[7][0] != b"xrevrange"
                 or not isinstance(stream_info[8], list)
-                or stream_info[8][0] != b"xtrim"
+                or stream_info[8][0] != b"xread"
+                or not isinstance(stream_info[9], list)
+                or stream_info[9][0] != b"xtrim"
             ):
                 raise AssertionError(f"stream commands missing from COMMAND INFO: {stream_info!r}")
 
@@ -490,6 +492,7 @@ def run_smoke() -> None:
             listed_stream = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"X*")
             if (
                 not isinstance(listed_stream, list)
+                or b"xack" not in listed_stream
                 or b"xadd" not in listed_stream
                 or b"xdel" not in listed_stream
                 or b"xgroup" not in listed_stream
@@ -507,7 +510,6 @@ def run_smoke() -> None:
                 or b"xrevrange" not in listed_stream
                 or b"xread" not in listed_stream
                 or b"xtrim" not in listed_stream
-                or b"xack" in listed_stream
                 or b"xpending" in listed_stream
             ):
                 raise AssertionError(f"unexpected COMMAND LIST stream result: {listed_stream!r}")

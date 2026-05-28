@@ -167,6 +167,12 @@ def run_smoke() -> None:
             read = client.command(b"XREAD", b"COUNT", b"2", b"STREAMS", b"mystream", b"0-0")
             if read != [[b"mystream", [[first, [b"sensor", b"a", b"value", b"1"]], [second, [b"sensor", b"b"]]]]]:
                 raise AssertionError(f"unexpected XREAD payload: {read!r}")
+            try:
+                client.command(b"XACK", b"mystream", b"group", first)
+                raise AssertionError("XACK did not fail without consumer groups")
+            except RuntimeError as exc:
+                if "NOGROUP" not in str(exc):
+                    raise AssertionError(f"unexpected XACK error: {exc}") from exc
 
             if client.command(b"XDEL", b"mystream", first) != 1:
                 raise AssertionError("XDEL did not remove the first stream entry")

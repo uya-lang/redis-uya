@@ -363,6 +363,7 @@ PARTIAL_NAMES = {
     "subscribe",
     "unsubscribe",
     "wait",
+    "xack",
     "xadd",
     "xdel",
     "xgroup",

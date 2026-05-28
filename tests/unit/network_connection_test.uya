@@ -296,6 +296,9 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const function_flush_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$8\r\nFUNCTION\r\n$5\r\nFLUSH\r\n$5\r\nASYNC\r\n"[0: 40], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: function_flush_result.response_len], &"+OK\r\n"[0: 5]));
 
+    const function_delete_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$8\r\nFUNCTION\r\n$6\r\nDELETE\r\n$7\r\nmissing\r\n"[0: 43], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: function_delete_result.response_len], &"-ERR Library not found\r\n"[0: 24]));
+
     const evalsha_noscript_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$7\r\nEVALSHA\r\n$40\r\nd3c21d0c2b9ca22f82737626a27bcaf5d288f99f\r\n$1\r\n1\r\n$7\r\nlua-key\r\n"[0: 84], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: evalsha_noscript_result.response_len], &"-NOSCRIPT No matching script. Please use EVAL.\r\n"[0: 48]));
 

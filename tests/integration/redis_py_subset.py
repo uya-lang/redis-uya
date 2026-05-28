@@ -260,6 +260,9 @@ class RedisPySubsetClient:
             parts.append(mode)
         return self._request(*parts)
 
+    def function_delete(self, library_name: bytes):
+        return self._request(b"FUNCTION", b"DELETE", library_name)
+
     def memory_usage(self, key: str, samples: int | None = None) -> int | None:
         parts = [b"MEMORY", b"USAGE", key.encode()]
         if samples is not None:
@@ -978,6 +981,12 @@ def run_smoke() -> None:
                 raise AssertionError(f"unexpected FUNCTION STATS result: {function_stats!r}")
             if client.function_flush(b"SYNC") != "OK" or client.function_flush(b"ASYNC") != "OK":
                 raise AssertionError("expected FUNCTION FLUSH SYNC/ASYNC to return OK")
+            try:
+                client.function_delete(b"missing")
+                raise AssertionError("expected FUNCTION DELETE missing library to fail")
+            except RespError as exc:
+                if str(exc) != "ERR Library not found":
+                    raise AssertionError(f"unexpected FUNCTION DELETE error: {exc}") from exc
             memory_usage = client.memory_usage("key")
             if memory_usage is None or memory_usage <= 0:
                 raise AssertionError(f"unexpected MEMORY USAGE key: {memory_usage!r}")

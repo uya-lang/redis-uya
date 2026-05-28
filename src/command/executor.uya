@@ -7284,6 +7284,13 @@ fn command_executor_function_flush(command: &Command) CommandReply {
     return command_executor_simple(&"OK"[0: 2]);
 }
 
+fn command_executor_function_delete(command: &Command) CommandReply {
+    if command.argc != 3 {
+        return command_executor_owned_error(&"ERR wrong number of arguments for 'function|delete' command"[0: 59]);
+    }
+    return command_executor_owned_error(&"ERR Library not found"[0: 21]);
+}
+
 fn command_executor_function(command: &Command) CommandReply {
     if command.argc < 2 {
         return command_executor_owned_error(&"ERR wrong number of arguments for 'function' command"[0: 52]);
@@ -7309,6 +7316,9 @@ fn command_executor_function(command: &Command) CommandReply {
     }
     if command_executor_keyword_eq(subcommand, &"FLUSH"[0: 5]) {
         return command_executor_function_flush(command);
+    }
+    if command_executor_keyword_eq(subcommand, &"DELETE"[0: 6]) {
+        return command_executor_function_delete(command);
     }
 
     var err: Sds = sds_empty() catch {
@@ -11491,7 +11501,8 @@ fn command_executor_command_visible_function_subcommand(name: &[byte]) bool {
     return command_executor_slice_eq(name, &"help"[0: 4]) ||
         command_executor_slice_eq(name, &"list"[0: 4]) ||
         command_executor_slice_eq(name, &"stats"[0: 5]) ||
-        command_executor_slice_eq(name, &"flush"[0: 5]);
+        command_executor_slice_eq(name, &"flush"[0: 5]) ||
+        command_executor_slice_eq(name, &"delete"[0: 6]);
 }
 
 fn command_executor_command_visible_memory_subcommand(name: &[byte]) bool {

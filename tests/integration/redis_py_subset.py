@@ -287,6 +287,11 @@ class RedisPySubsetClient:
         assert isinstance(result, bytes)
         return result
 
+    def acl_users(self):
+        result = self._request(b"ACL", b"USERS")
+        assert isinstance(result, list)
+        return result
+
     def memory_usage(self, key: str, samples: int | None = None) -> int | None:
         parts = [b"MEMORY", b"USAGE", key.encode()]
         if samples is not None:
@@ -1007,6 +1012,8 @@ def run_smoke() -> None:
                 raise AssertionError(f"unexpected ACL HELP result: {acl_help!r}")
             if client.acl_whoami() != b"default":
                 raise AssertionError("expected ACL WHOAMI default user")
+            if client.acl_users() != [b"default"]:
+                raise AssertionError("expected ACL USERS default user list")
             function_help = client.function_help()
             if b"FUNCTION HELP" not in function_help or b"FUNCTION LIST [LIBRARYNAME <pattern>] [WITHCODE]" not in function_help or b"FUNCTION DUMP" not in function_help or b"FUNCTION KILL" not in function_help:
                 raise AssertionError(f"unexpected FUNCTION HELP result: {function_help!r}")

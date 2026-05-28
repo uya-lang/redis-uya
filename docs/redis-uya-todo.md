@@ -503,7 +503,7 @@
 - [x] Streams 第一批：已补 `XADD`、`XLEN`、`XRANGE`、`XREVRANGE`、`XREAD`，当前为 list-backed、非阻塞基础 stream partial；普通 AOF append 对 `XADD *` 回放会重新生成 ID，RDB 与 AOF rewrite 保存显式 ID
 - [x] Streams 第二批：`XTRIM` 已补 `MAXLEN [=|~] count` 基础裁剪 partial，`XDEL` 已补精确 ID 删除 partial，`XGROUP HELP` / `XINFO HELP` 已补帮助兼容面，`XACK` / `XCLAIM` / `XPENDING` 已补无 group 时的 `NOGROUP` 错误面 partial，`XGROUP CREATE` 已补 key/type 校验与明确未支持错误 partial，`XGROUP DESTROY` 已补 empty-state 返回 `0` partial，`XGROUP SETID` 已补无 group 时的 `NOGROUP` 错误面 partial，`XINFO STREAM` 已补 key-only 基础元数据和 `FULL [COUNT count]` entry 明细 partial，`XINFO GROUPS` 已补 empty-state 空数组 partial，`XINFO CONSUMERS` 已补无 group 时的 `NOGROUP` 错误面 partial；真实 consumer group 状态仍待后续批次补齐
 - [ ] Functions / Script 收口：只读脚本第一批已补 `EVAL_RO` / `EVALSHA_RO` single-call subset partial，Functions 第一批已补 `FUNCTION HELP/LIST/STATS/FLUSH/DELETE/DUMP/KILL` 与 `FCALL/FCALL_RO` 空库兼容面，后续继续补脚本缓存、错误中止、传播边界和 function library 最小面
-- [ ] ACL 第一批：`ACL HELP/WHOAMI` 默认用户控制面 partial 已补，后续继续补用户、密码、命令分类、最小权限拒绝路径
+- [ ] ACL 第一批：`ACL HELP/USERS/WHOAMI` 默认用户控制面 partial 已补，后续继续补用户、密码、命令分类、最小权限拒绝路径
 - [ ] 运维与诊断第一批：`CONFIG` 余量、`CLIENT` 余量、`MEMORY` 观测、`SLOWLOG`、`LATENCY`、`MONITOR`
 - [ ] 复制/持久化深化：RDB 二进制兼容推进、AOF rewrite 压测、复制断线重连、`WAIT` 语义、只读副本限制
 

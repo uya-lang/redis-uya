@@ -636,6 +636,7 @@ export fn test_command_command_catalog_core() !void {
 
     try command_executor_test_assert_catalog_status(&"acl"[0: 3], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"acl|help"[0: 8], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"acl|users"[0: 9], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"acl|whoami"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"config|set"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"config|rewrite"[0: 14], CommandCatalogStatus.status_partial);
@@ -722,6 +723,22 @@ export fn test_command_acl_help() !void {
     try assert_true(command_executor_test_slice_eq(whoami_extra_reply.data, &"ERR wrong number of arguments for 'acl|whoami' command"[0: 54]));
     command_reply_cleanup(&whoami_extra_reply);
     resp_value_free(&whoami_extra_parsed.value);
+
+    var users_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nACL\r\n$5\r\nUSERS\r\n"[0: 24]);
+    const users_command: Command = try command_executor_test_command(&router, &users_parsed);
+    var users_reply: CommandReply = command_execute_at(&engine, &users_command, 1000u64);
+    const users_len: usize = try connection_encode_reply(&users_reply, &out[0], 2048);
+    try assert_true(command_executor_test_slice_eq(out[0: users_len], &"*1\r\n$7\r\ndefault\r\n"[0: 17]));
+    command_reply_cleanup(&users_reply);
+    resp_value_free(&users_parsed.value);
+
+    var users_extra_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nACL\r\n$5\r\nUSERS\r\n$1\r\nX\r\n"[0: 31]);
+    const users_extra_command: Command = try command_executor_test_command(&router, &users_extra_parsed);
+    var users_extra_reply: CommandReply = command_execute_at(&engine, &users_extra_command, 1000u64);
+    try assert_eq_i32(users_extra_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(users_extra_reply.data, &"ERR wrong number of arguments for 'acl|users' command"[0: 53]));
+    command_reply_cleanup(&users_extra_reply);
+    resp_value_free(&users_extra_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

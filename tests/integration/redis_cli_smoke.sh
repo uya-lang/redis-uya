@@ -477,6 +477,12 @@ if [[ "$FUNCTION_HELP_RESULT" != *"FUNCTION HELP"* || "$FUNCTION_HELP_RESULT" !=
     exit 1
 fi
 
+FUNCTION_LIST_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function list)"
+if [[ -n "$FUNCTION_LIST_RESULT" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected empty FUNCTION LIST, got '$FUNCTION_LIST_RESULT'" >&2
+    exit 1
+fi
+
 MEMORY_USAGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" memory usage key)"
 if ! [[ "$MEMORY_USAGE_RESULT" =~ ^[0-9]+$ ]] || [[ "$MEMORY_USAGE_RESULT" == "0" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected MEMORY USAGE key to be a positive integer, got '$MEMORY_USAGE_RESULT'" >&2

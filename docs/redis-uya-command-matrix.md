@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 104 | 0 | 3 | 112 |
+| Tier A: standalone core | 365 | 259 | 146 | 105 | 0 | 3 | 111 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `111` |
+| `partial` | `112` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `265` |
+| `deferred` | `264` |
 
 ## Group counts
 
@@ -269,7 +269,7 @@
 | `function|flush` | `scripting` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@write, @slow, @scripting` |
 | `function|help` | `scripting` | `partial` | `-` | `2` | `-` | `no` | `@slow, @scripting` |
 | `function|kill` | `scripting` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@slow, @scripting` |
-| `function|list` | `scripting` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@slow, @scripting` |
+| `function|list` | `scripting` | `partial` | `-` | `-2` | `-` | `no` | `@slow, @scripting` |
 | `function|load` | `scripting` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@write, @slow, @scripting` |
 | `function|restore` | `scripting` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@write, @slow, @scripting` |
 | `function|stats` | `scripting` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@slow, @scripting` |

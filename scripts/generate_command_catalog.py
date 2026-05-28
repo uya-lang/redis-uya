@@ -347,6 +347,7 @@ PARTIAL_NAMES = {
     "evalsha_ro",
     "function",
     "function|help",
+    "function|list",
     "script",
     "script|exists",
     "script|flush",

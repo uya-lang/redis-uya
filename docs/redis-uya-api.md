@@ -1654,17 +1654,20 @@ SCRIPT FLUSH [ASYNC|SYNC]
 
 ```text
 FUNCTION HELP
+FUNCTION LIST [LIBRARYNAME <pattern>] [WITHCODE]
 ```
 
 返回：
 
 - 返回当前 `FUNCTION` 命令帮助数组
+- `FUNCTION LIST` 当前返回空数组，表示尚无已加载 function library
 
 说明：
 
-- 当前实现为 partial，仅执行 `FUNCTION HELP`
-- `COMMAND INFO/LIST/DOCS` 会暴露 `FUNCTION` 和 `FUNCTION|HELP`
-- 当前不支持 `FUNCTION LOAD/LIST/STATS/FLUSH/DELETE/DUMP/RESTORE/KILL` 或 `FCALL/FCALL_RO`
+- 当前实现为 partial，仅执行 `FUNCTION HELP` 和空库状态的 `FUNCTION LIST`
+- `FUNCTION LIST` 支持 `LIBRARYNAME <pattern>` 与 `WITHCODE` 参数校验，但 function library 存储尚未实现，因此始终返回空数组
+- `COMMAND INFO/LIST/DOCS` 会暴露 `FUNCTION`、`FUNCTION|HELP` 和 `FUNCTION|LIST`
+- 当前不支持 `FUNCTION LOAD/STATS/FLUSH/DELETE/DUMP/RESTORE/KILL` 或 `FCALL/FCALL_RO`
 
 ### `GEOADD`
 

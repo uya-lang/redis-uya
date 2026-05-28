@@ -7238,6 +7238,33 @@ fn command_executor_function_help() CommandReply {
     return command_executor_owned_array(reply_list);
 }
 
+fn command_executor_function_list(command: &Command) CommandReply {
+    var index: usize = 2;
+    var seen_libraryname: bool = false;
+    var seen_withcode: bool = false;
+    while index < command.argc {
+        const token: &[byte] = command_executor_arg(command, index) catch {
+            return command_executor_wrong_arity();
+        };
+        if command_executor_keyword_eq(token, &"LIBRARYNAME"[0: 11]) {
+            if seen_libraryname || index + 1 >= command.argc {
+                return command_executor_syntax_error();
+            }
+            seen_libraryname = true;
+            index = index + 2;
+        } else if command_executor_keyword_eq(token, &"WITHCODE"[0: 8]) {
+            if seen_withcode {
+                return command_executor_syntax_error();
+            }
+            seen_withcode = true;
+            index = index + 1;
+        } else {
+            return command_executor_syntax_error();
+        }
+    }
+    return command_executor_owned_raw(&"*0\r\n"[0: 4]);
+}
+
 fn command_executor_function(command: &Command) CommandReply {
     if command.argc < 2 {
         return command_executor_owned_error(&"ERR wrong number of arguments for 'function' command"[0: 52]);
@@ -7251,6 +7278,9 @@ fn command_executor_function(command: &Command) CommandReply {
             return command_executor_owned_error(&"ERR wrong number of arguments for 'function' command"[0: 52]);
         }
         return command_executor_function_help();
+    }
+    if command_executor_keyword_eq(subcommand, &"LIST"[0: 4]) {
+        return command_executor_function_list(command);
     }
 
     var err: Sds = sds_empty() catch {
@@ -11430,7 +11460,8 @@ fn command_executor_command_visible_script_subcommand(name: &[byte]) bool {
 }
 
 fn command_executor_command_visible_function_subcommand(name: &[byte]) bool {
-    return command_executor_slice_eq(name, &"help"[0: 4]);
+    return command_executor_slice_eq(name, &"help"[0: 4]) ||
+        command_executor_slice_eq(name, &"list"[0: 4]);
 }
 
 fn command_executor_command_visible_memory_subcommand(name: &[byte]) bool {

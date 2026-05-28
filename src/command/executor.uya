@@ -7242,6 +7242,74 @@ fn command_executor_function_help() CommandReply {
     return command_executor_owned_array(reply_list);
 }
 
+fn command_executor_acl_help() CommandReply {
+    var reply_list: &RedisObject = create_list_object() catch {
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"ACL <subcommand> [<arg> [value] [opt] ...]. Subcommands are:"[0: 60]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"CAT [<category>]"[0: 16]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    List all commands that belong to <category>, or all command categories"[0: 74]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    when no category is specified."[0: 34]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"DELUSER <username> [<username> ...]"[0: 35]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Delete a list of users."[0: 27]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"DRYRUN <username> <command> [<arg> ...]"[0: 39]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Returns whether the user can execute the given command without executing the command."[0: 89]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"GETUSER <username>"[0: 18]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Get the user's details."[0: 27]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"GENPASS [<bits>]"[0: 16]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Generate a secure 256-bit user password. The optional `bits` argument can"[0: 77]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    be used to specify a different size."[0: 40]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"LIST"[0: 4]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Show users details in config file format."[0: 45]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"LOAD"[0: 4]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Reload users from the ACL file."[0: 35]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"LOG [<count> | RESET]"[0: 21]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Show the ACL log entries."[0: 29]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"SAVE"[0: 4]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Save the current config to the ACL file."[0: 44]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"SETUSER <username> <attribute> [<attribute> ...]"[0: 48]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Create or modify a user with the specified attributes."[0: 58]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"USERS"[0: 5]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    List all the registered usernames."[0: 38]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"WHOAMI"[0: 6]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Return the current connection username."[0: 43]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"HELP"[0: 4]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Prints this help."[0: 21]) catch { object_free(reply_list); return command_executor_oom(); };
+    return command_executor_owned_array(reply_list);
+}
+
+fn command_executor_acl(command: &Command) CommandReply {
+    if command.argc < 2 {
+        return command_executor_wrong_arity();
+    }
+    const subcommand: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    if command_executor_keyword_eq(subcommand, &"HELP"[0: 4]) {
+        if command.argc != 2 {
+            return command_executor_owned_error(&"ERR wrong number of arguments for 'acl|help' command"[0: 52]);
+        }
+        return command_executor_acl_help();
+    }
+
+    var err: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&err);
+    }
+    _ = command_executor_info_append(&err, &"ERR unknown subcommand '"[0: 24]) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append(&err, subcommand) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append(&err, &"'. Try ACL HELP."[0: 16]) catch {
+        return command_executor_oom();
+    };
+    return command_executor_owned_error(err.buf[0: err.len]);
+}
+
 fn command_executor_function_list(command: &Command) CommandReply {
     var index: usize = 2;
     var seen_libraryname: bool = false;
@@ -11553,6 +11621,10 @@ fn command_executor_command_visible_function_subcommand(name: &[byte]) bool {
         command_executor_slice_eq(name, &"kill"[0: 4]);
 }
 
+fn command_executor_command_visible_acl_subcommand(name: &[byte]) bool {
+    return command_executor_slice_eq(name, &"help"[0: 4]);
+}
+
 fn command_executor_command_visible_memory_subcommand(name: &[byte]) bool {
     return command_executor_slice_eq(name, &"help"[0: 4]) ||
         command_executor_slice_eq(name, &"doctor"[0: 6]) ||
@@ -11601,6 +11673,9 @@ fn command_executor_command_visible_subcommand(parent_name: &[byte], subcommand_
     }
     if command_executor_slice_eq(parent_name, &"function"[0: 8]) {
         return command_executor_command_visible_function_subcommand(subcommand_name);
+    }
+    if command_executor_slice_eq(parent_name, &"acl"[0: 3]) {
+        return command_executor_command_visible_acl_subcommand(subcommand_name);
     }
     if command_executor_slice_eq(parent_name, &"memory"[0: 6]) {
         return command_executor_command_visible_memory_subcommand(subcommand_name);
@@ -13518,6 +13593,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_select {
         return command_executor_select(runtime, command);
+    }
+    if command.info.cmd_type == CommandType.command_acl {
+        return command_executor_acl(command);
     }
     if command.info.cmd_type == CommandType.command_object {
         return command_executor_object(runtime, engine, command, now_ms);

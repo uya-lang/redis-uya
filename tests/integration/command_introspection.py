@@ -144,6 +144,19 @@ def run_smoke() -> None:
             if not isinstance(listed, list) or b"client" not in listed or b"cluster" not in listed:
                 raise AssertionError(f"unexpected COMMAND LIST result: {listed!r}")
 
+            listed_acl = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"ACL*")
+            if (
+                not isinstance(listed_acl, list)
+                or b"acl" not in listed_acl
+                or b"acl|help" not in listed_acl
+                or b"acl|cat" in listed_acl
+            ):
+                raise AssertionError(f"unexpected COMMAND LIST acl* result: {listed_acl!r}")
+
+            acl_help = send_command(sock, b"ACL", b"HELP")
+            if not isinstance(acl_help, list) or b"CAT [<category>]" not in acl_help or b"WHOAMI" not in acl_help:
+                raise AssertionError(f"unexpected ACL HELP: {acl_help!r}")
+
             info = send_command(sock, b"COMMAND", b"INFO", b"GET", b"FOO", b"CLIENT|ID")
             if not isinstance(info, list) or len(info) != 3:
                 raise AssertionError(f"unexpected COMMAND INFO shape: {info!r}")
@@ -251,6 +264,17 @@ def run_smoke() -> None:
                 or function_info[7][0] != b"function|kill"
             ):
                 raise AssertionError(f"function commands missing from COMMAND INFO: {function_info!r}")
+
+            acl_info = send_command(sock, b"COMMAND", b"INFO", b"ACL", b"ACL|HELP")
+            if (
+                not isinstance(acl_info, list)
+                or len(acl_info) != 2
+                or not isinstance(acl_info[0], list)
+                or acl_info[0][0] != b"acl"
+                or not isinstance(acl_info[1], list)
+                or acl_info[1][0] != b"acl|help"
+            ):
+                raise AssertionError(f"acl commands missing from COMMAND INFO: {acl_info!r}")
 
             slowlog_info = send_command(sock, b"COMMAND", b"INFO", b"SLOWLOG", b"SLOWLOG|GET", b"SLOWLOG|LEN", b"SLOWLOG|RESET")
             if (
@@ -385,7 +409,7 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"list move commands missing from COMMAND INFO: {list_move_info!r}")
 
-            unsupported_info = send_command(sock, b"COMMAND", b"INFO", b"ACL", b"BLMOVE", b"CLUSTER|RESET")
+            unsupported_info = send_command(sock, b"COMMAND", b"INFO", b"ACL|CAT", b"BLMOVE", b"CLUSTER|RESET")
             if unsupported_info != [None, None, None]:
                 raise AssertionError(f"unsupported COMMAND INFO entries must be null: {unsupported_info!r}")
 
@@ -404,7 +428,7 @@ def run_smoke() -> None:
             if not isinstance(docs[1], list) or b"summary" not in docs[1]:
                 raise AssertionError(f"missing COMMAND DOCS summary: {docs!r}")
 
-            unsupported_docs = send_command(sock, b"COMMAND", b"DOCS", b"ACL", b"BLMOVE", b"CLUSTER|RESET")
+            unsupported_docs = send_command(sock, b"COMMAND", b"DOCS", b"ACL|CAT", b"BLMOVE", b"CLUSTER|RESET")
             if unsupported_docs != []:
                 raise AssertionError(f"unsupported COMMAND DOCS entries should be omitted: {unsupported_docs!r}")
 
@@ -414,9 +438,11 @@ def run_smoke() -> None:
                 or len(docs_all_resp2) <= count * 2
                 or b"get" not in docs_all_resp2
                 or b"client|id" not in docs_all_resp2
+                or b"acl" not in docs_all_resp2
+                or b"acl|help" not in docs_all_resp2
             ):
                 raise AssertionError(f"unexpected COMMAND DOCS all RESP2 payload: {docs_all_resp2!r}")
-            if b"acl" in docs_all_resp2 or b"blmove" in docs_all_resp2 or b"cluster|reset" in docs_all_resp2:
+            if b"acl|cat" in docs_all_resp2 or b"blmove" in docs_all_resp2 or b"cluster|reset" in docs_all_resp2:
                 raise AssertionError(f"unsupported commands leaked into COMMAND DOCS all RESP2: {docs_all_resp2!r}")
 
             listed_blocking = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"BL*")
@@ -621,9 +647,11 @@ def run_smoke() -> None:
                 or len(docs_all) <= count
                 or not isinstance(docs_all.get(b"get"), dict)
                 or not isinstance(docs_all.get(b"client|id"), dict)
+                or not isinstance(docs_all.get(b"acl"), dict)
+                or not isinstance(docs_all.get(b"acl|help"), dict)
             ):
                 raise AssertionError(f"unexpected COMMAND DOCS all RESP3 payload: {docs_all!r}")
-            if b"acl" in docs_all or b"blmove" in docs_all or b"cluster|reset" in docs_all:
+            if b"acl|cat" in docs_all or b"blmove" in docs_all or b"cluster|reset" in docs_all:
                 raise AssertionError(f"unsupported commands leaked into COMMAND DOCS all RESP3: {docs_all!r}")
 
             getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"SORT", b"mylist", b"ALPHA", b"STORE", b"out")

@@ -483,6 +483,12 @@ if [[ "$FCALL_RO_RESULT" != "ERR Function not found" ]]; then
     exit 1
 fi
 
+ACL_HELP_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl help)"
+if [[ "$ACL_HELP_RESULT" != *"ACL <subcommand> [<arg> [value] [opt] ...]. Subcommands are:"* || "$ACL_HELP_RESULT" != *"WHOAMI"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL HELP output, got '$ACL_HELP_RESULT'" >&2
+    exit 1
+fi
+
 FUNCTION_HELP_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function help)"
 if [[ "$FUNCTION_HELP_RESULT" != *"FUNCTION HELP"* || "$FUNCTION_HELP_RESULT" != *"FUNCTION LIST [LIBRARYNAME <pattern>] [WITHCODE]"* ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected FUNCTION HELP output, got '$FUNCTION_HELP_RESULT'" >&2

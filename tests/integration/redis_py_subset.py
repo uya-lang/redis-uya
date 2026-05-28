@@ -277,6 +277,11 @@ class RedisPySubsetClient:
     def function_kill(self):
         return self._request(b"FUNCTION", b"KILL")
 
+    def acl_help(self):
+        result = self._request(b"ACL", b"HELP")
+        assert isinstance(result, list)
+        return result
+
     def memory_usage(self, key: str, samples: int | None = None) -> int | None:
         parts = [b"MEMORY", b"USAGE", key.encode()]
         if samples is not None:
@@ -992,6 +997,9 @@ def run_smoke() -> None:
             except RespError as exc:
                 if str(exc) != "ERR Function not found":
                     raise AssertionError(f"unexpected FCALL_RO error: {exc}") from exc
+            acl_help = client.acl_help()
+            if b"ACL <subcommand> [<arg> [value] [opt] ...]. Subcommands are:" not in acl_help or b"WHOAMI" not in acl_help:
+                raise AssertionError(f"unexpected ACL HELP result: {acl_help!r}")
             function_help = client.function_help()
             if b"FUNCTION HELP" not in function_help or b"FUNCTION LIST [LIBRARYNAME <pattern>] [WITHCODE]" not in function_help or b"FUNCTION DUMP" not in function_help or b"FUNCTION KILL" not in function_help:
                 raise AssertionError(f"unexpected FUNCTION HELP result: {function_help!r}")

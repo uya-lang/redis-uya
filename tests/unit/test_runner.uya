@@ -94,6 +94,7 @@ use tests.unit.command_executor_test.test_command_command_catalog_core;
 use tests.unit.command_executor_test.test_command_command_getkeys;
 use tests.unit.command_executor_test.test_command_command_getkeys_bad_arity_error;
 use tests.unit.command_executor_test.test_command_command_getkeys_unknown_error;
+use tests.unit.command_executor_test.test_command_acl_help;
 use tests.unit.command_executor_test.test_command_cluster;
 use tests.unit.command_executor_test.test_command_cluster_redirects;
 use tests.unit.command_executor_test.test_command_replicaof;
@@ -587,6 +588,10 @@ export fn main() i32 {
     const before_exec_command_getkeys_unknown: i32 = failed;
     _ = test_command_command_getkeys_unknown_error() catch { printf("[FAIL] command_executor/command_getkeys_unknown\n" as *byte); failed = failed + 1; };
     if failed == before_exec_command_getkeys_unknown { printf("[PASS] command_executor/command_getkeys_unknown\n" as *byte); }
+
+    const before_exec_acl_help: i32 = failed;
+    _ = test_command_acl_help() catch { printf("[FAIL] command_executor/acl_help\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_acl_help { printf("[PASS] command_executor/acl_help\n" as *byte); }
 
     const before_exec_cluster: i32 = failed;
     _ = test_command_cluster() catch { printf("[FAIL] command_executor/cluster\n" as *byte); failed = failed + 1; };

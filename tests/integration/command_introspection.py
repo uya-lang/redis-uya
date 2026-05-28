@@ -225,10 +225,10 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"memory commands missing from COMMAND INFO: {memory_info!r}")
 
-            function_info = send_command(sock, b"COMMAND", b"INFO", b"FUNCTION", b"FUNCTION|HELP", b"FUNCTION|LIST", b"FUNCTION|STATS", b"FUNCTION|FLUSH", b"FUNCTION|DELETE")
+            function_info = send_command(sock, b"COMMAND", b"INFO", b"FUNCTION", b"FUNCTION|HELP", b"FUNCTION|LIST", b"FUNCTION|STATS", b"FUNCTION|FLUSH", b"FUNCTION|DELETE", b"FUNCTION|KILL")
             if (
                 not isinstance(function_info, list)
-                or len(function_info) != 6
+                or len(function_info) != 7
                 or not isinstance(function_info[0], list)
                 or function_info[0][0] != b"function"
                 or not isinstance(function_info[1], list)
@@ -241,6 +241,8 @@ def run_smoke() -> None:
                 or function_info[4][0] != b"function|flush"
                 or not isinstance(function_info[5], list)
                 or function_info[5][0] != b"function|delete"
+                or not isinstance(function_info[6], list)
+                or function_info[6][0] != b"function|kill"
             ):
                 raise AssertionError(f"function commands missing from COMMAND INFO: {function_info!r}")
 
@@ -484,6 +486,7 @@ def run_smoke() -> None:
                 or b"function|stats" not in listed_function
                 or b"function|flush" not in listed_function
                 or b"function|delete" not in listed_function
+                or b"function|kill" not in listed_function
                 or b"function|load" in listed_function
             ):
                 raise AssertionError(f"unexpected COMMAND LIST function* result: {listed_function!r}")

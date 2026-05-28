@@ -501,6 +501,12 @@ if [[ "$FUNCTION_DELETE_RESULT" != "ERR Library not found" ]]; then
     exit 1
 fi
 
+FUNCTION_KILL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function kill 2>&1 || true)"
+if [[ "$FUNCTION_KILL_RESULT" != "NOTBUSY No scripts in execution right now." ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected FUNCTION KILL no running script error, got '$FUNCTION_KILL_RESULT'" >&2
+    exit 1
+fi
+
 MEMORY_USAGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" memory usage key)"
 if ! [[ "$MEMORY_USAGE_RESULT" =~ ^[0-9]+$ ]] || [[ "$MEMORY_USAGE_RESULT" == "0" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected MEMORY USAGE key to be a positive integer, got '$MEMORY_USAGE_RESULT'" >&2

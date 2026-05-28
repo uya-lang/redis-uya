@@ -7235,6 +7235,8 @@ fn command_executor_function_help() CommandReply {
     _ = list_object_push_tail(reply_list, &"    Return function runtime stats. Currently empty until Redis Functions execution lands."[0: 89]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"FUNCTION FLUSH [ASYNC|SYNC]"[0: 27]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"    Flush loaded functions. Currently a no-op because function storage is not implemented."[0: 90]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"FUNCTION KILL"[0: 13]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Kill the currently executing function. Currently returns NOTBUSY because no function execution is implemented."[0: 114]) catch { object_free(reply_list); return command_executor_oom(); };
     return command_executor_owned_array(reply_list);
 }
 
@@ -7291,6 +7293,13 @@ fn command_executor_function_delete(command: &Command) CommandReply {
     return command_executor_owned_error(&"ERR Library not found"[0: 21]);
 }
 
+fn command_executor_function_kill(command: &Command) CommandReply {
+    if command.argc != 2 {
+        return command_executor_owned_error(&"ERR wrong number of arguments for 'function|kill' command"[0: 57]);
+    }
+    return command_executor_owned_error(&"NOTBUSY No scripts in execution right now."[0: 42]);
+}
+
 fn command_executor_function(command: &Command) CommandReply {
     if command.argc < 2 {
         return command_executor_owned_error(&"ERR wrong number of arguments for 'function' command"[0: 52]);
@@ -7319,6 +7328,9 @@ fn command_executor_function(command: &Command) CommandReply {
     }
     if command_executor_keyword_eq(subcommand, &"DELETE"[0: 6]) {
         return command_executor_function_delete(command);
+    }
+    if command_executor_keyword_eq(subcommand, &"KILL"[0: 4]) {
+        return command_executor_function_kill(command);
     }
 
     var err: Sds = sds_empty() catch {
@@ -11502,7 +11514,8 @@ fn command_executor_command_visible_function_subcommand(name: &[byte]) bool {
         command_executor_slice_eq(name, &"list"[0: 4]) ||
         command_executor_slice_eq(name, &"stats"[0: 5]) ||
         command_executor_slice_eq(name, &"flush"[0: 5]) ||
-        command_executor_slice_eq(name, &"delete"[0: 6]);
+        command_executor_slice_eq(name, &"delete"[0: 6]) ||
+        command_executor_slice_eq(name, &"kill"[0: 4]);
 }
 
 fn command_executor_command_visible_memory_subcommand(name: &[byte]) bool {

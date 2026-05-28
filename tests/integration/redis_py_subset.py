@@ -263,6 +263,9 @@ class RedisPySubsetClient:
     def function_delete(self, library_name: bytes):
         return self._request(b"FUNCTION", b"DELETE", library_name)
 
+    def function_kill(self):
+        return self._request(b"FUNCTION", b"KILL")
+
     def memory_usage(self, key: str, samples: int | None = None) -> int | None:
         parts = [b"MEMORY", b"USAGE", key.encode()]
         if samples is not None:
@@ -967,7 +970,7 @@ def run_smoke() -> None:
                 if str(exc) != "NOSCRIPT No matching script. Please use EVAL.":
                     raise AssertionError(f"unexpected EVALSHA_RO error: {exc}") from exc
             function_help = client.function_help()
-            if b"FUNCTION HELP" not in function_help or b"FUNCTION LIST [LIBRARYNAME <pattern>] [WITHCODE]" not in function_help:
+            if b"FUNCTION HELP" not in function_help or b"FUNCTION LIST [LIBRARYNAME <pattern>] [WITHCODE]" not in function_help or b"FUNCTION KILL" not in function_help:
                 raise AssertionError(f"unexpected FUNCTION HELP result: {function_help!r}")
             if client.function_list() != []:
                 raise AssertionError("expected empty FUNCTION LIST partial result")
@@ -987,6 +990,12 @@ def run_smoke() -> None:
             except RespError as exc:
                 if str(exc) != "ERR Library not found":
                     raise AssertionError(f"unexpected FUNCTION DELETE error: {exc}") from exc
+            try:
+                client.function_kill()
+                raise AssertionError("expected FUNCTION KILL with no running function to fail")
+            except RespError as exc:
+                if str(exc) != "NOTBUSY No scripts in execution right now.":
+                    raise AssertionError(f"unexpected FUNCTION KILL error: {exc}") from exc
             memory_usage = client.memory_usage("key")
             if memory_usage is None or memory_usage <= 0:
                 raise AssertionError(f"unexpected MEMORY USAGE key: {memory_usage!r}")

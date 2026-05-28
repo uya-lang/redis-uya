@@ -646,6 +646,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"function"[0: 8], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"function|help"[0: 13], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"function|list"[0: 13], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"function|stats"[0: 14], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xack"[0: 4], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xclaim"[0: 6], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xgroup"[0: 6], CommandCatalogStatus.status_partial);
@@ -735,6 +736,33 @@ export fn test_command_function_list() !void {
     try assert_true(command_executor_test_slice_eq(unknown_arg_reply.data, &"ERR syntax error"[0: 16]));
     command_reply_cleanup(&unknown_arg_reply);
     resp_value_free(&unknown_arg_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_command_function_stats() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+
+    var stats_parsed: RespParseResult = try parse_resp2(&"*2\r\n$8\r\nFUNCTION\r\n$5\r\nSTATS\r\n"[0: 29]);
+    const stats_command: Command = try command_executor_test_command(&router, &stats_parsed);
+    var stats_reply: CommandReply = command_execute_at(&engine, &stats_command, 1000u64);
+    try assert_eq_i32(stats_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    try assert_true(command_executor_test_contains(stats_reply.data, &"running_script"[0: 14]));
+    try assert_true(command_executor_test_contains(stats_reply.data, &"libraries_count"[0: 15]));
+    try assert_true(command_executor_test_contains(stats_reply.data, &"functions_count"[0: 15]));
+    command_reply_cleanup(&stats_reply);
+    resp_value_free(&stats_parsed.value);
+
+    var bad_arity_parsed: RespParseResult = try parse_resp2(&"*3\r\n$8\r\nFUNCTION\r\n$5\r\nSTATS\r\n$1\r\nX\r\n"[0: 36]);
+    const bad_arity_command: Command = try command_executor_test_command(&router, &bad_arity_parsed);
+    var bad_arity_reply: CommandReply = command_execute_at(&engine, &bad_arity_command, 1000u64);
+    try assert_eq_i32(bad_arity_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(bad_arity_reply.data, &"ERR wrong number of arguments for 'function' command"[0: 52]));
+    command_reply_cleanup(&bad_arity_reply);
+    resp_value_free(&bad_arity_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

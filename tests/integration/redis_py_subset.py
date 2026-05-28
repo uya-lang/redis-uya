@@ -249,6 +249,11 @@ class RedisPySubsetClient:
         assert isinstance(result, list)
         return result
 
+    def function_stats(self):
+        result = self._request(b"FUNCTION", b"STATS")
+        assert isinstance(result, list)
+        return result
+
     def memory_usage(self, key: str, samples: int | None = None) -> int | None:
         parts = [b"MEMORY", b"USAGE", key.encode()]
         if samples is not None:
@@ -957,6 +962,14 @@ def run_smoke() -> None:
                 raise AssertionError(f"unexpected FUNCTION HELP result: {function_help!r}")
             if client.function_list() != []:
                 raise AssertionError("expected empty FUNCTION LIST partial result")
+            function_stats = client.function_stats()
+            if (
+                b"running_script" not in function_stats
+                or b"engines" not in function_stats
+                or b"libraries_count" not in function_stats[3][1]
+                or b"functions_count" not in function_stats[3][1]
+            ):
+                raise AssertionError(f"unexpected FUNCTION STATS result: {function_stats!r}")
             memory_usage = client.memory_usage("key")
             if memory_usage is None or memory_usage <= 0:
                 raise AssertionError(f"unexpected MEMORY USAGE key: {memory_usage!r}")

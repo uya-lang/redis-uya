@@ -7265,6 +7265,10 @@ fn command_executor_function_list(command: &Command) CommandReply {
     return command_executor_owned_raw(&"*0\r\n"[0: 4]);
 }
 
+fn command_executor_function_stats() CommandReply {
+    return command_executor_owned_raw(&"*4\r\n$14\r\nrunning_script\r\n$-1\r\n$7\r\nengines\r\n*2\r\n$3\r\nLUA\r\n*4\r\n$15\r\nlibraries_count\r\n:0\r\n$15\r\nfunctions_count\r\n:0\r\n"[0: 112]);
+}
+
 fn command_executor_function(command: &Command) CommandReply {
     if command.argc < 2 {
         return command_executor_owned_error(&"ERR wrong number of arguments for 'function' command"[0: 52]);
@@ -7281,6 +7285,12 @@ fn command_executor_function(command: &Command) CommandReply {
     }
     if command_executor_keyword_eq(subcommand, &"LIST"[0: 4]) {
         return command_executor_function_list(command);
+    }
+    if command_executor_keyword_eq(subcommand, &"STATS"[0: 5]) {
+        if command.argc != 2 {
+            return command_executor_owned_error(&"ERR wrong number of arguments for 'function' command"[0: 52]);
+        }
+        return command_executor_function_stats();
     }
 
     var err: Sds = sds_empty() catch {
@@ -11461,7 +11471,8 @@ fn command_executor_command_visible_script_subcommand(name: &[byte]) bool {
 
 fn command_executor_command_visible_function_subcommand(name: &[byte]) bool {
     return command_executor_slice_eq(name, &"help"[0: 4]) ||
-        command_executor_slice_eq(name, &"list"[0: 4]);
+        command_executor_slice_eq(name, &"list"[0: 4]) ||
+        command_executor_slice_eq(name, &"stats"[0: 5]);
 }
 
 fn command_executor_command_visible_memory_subcommand(name: &[byte]) bool {

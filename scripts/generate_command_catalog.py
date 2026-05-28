@@ -348,6 +348,7 @@ PARTIAL_NAMES = {
     "function",
     "function|help",
     "function|list",
+    "function|stats",
     "script",
     "script|exists",
     "script|flush",

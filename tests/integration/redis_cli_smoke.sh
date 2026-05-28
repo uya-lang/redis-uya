@@ -483,6 +483,12 @@ if [[ -n "$FUNCTION_LIST_RESULT" ]]; then
     exit 1
 fi
 
+FUNCTION_STATS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function stats)"
+if [[ "$FUNCTION_STATS_RESULT" != *"running_script"* || "$FUNCTION_STATS_RESULT" != *"libraries_count"* || "$FUNCTION_STATS_RESULT" != *"functions_count"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected FUNCTION STATS empty-library counters, got '$FUNCTION_STATS_RESULT'" >&2
+    exit 1
+fi
+
 MEMORY_USAGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" memory usage key)"
 if ! [[ "$MEMORY_USAGE_RESULT" =~ ^[0-9]+$ ]] || [[ "$MEMORY_USAGE_RESULT" == "0" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected MEMORY USAGE key to be a positive integer, got '$MEMORY_USAGE_RESULT'" >&2

@@ -284,6 +284,7 @@ PARTIAL_NAMES = {
     "acl|getuser",
     "acl|help",
     "acl|list",
+    "acl|log",
     "acl|users",
     "acl|whoami",
     "auth",

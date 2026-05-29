@@ -80,6 +80,7 @@ ACL CAT [category]
 ACL GETUSER username
 ACL HELP
 ACL LIST
+ACL LOG [count | RESET]
 ACL USERS
 ACL WHOAMI
 ```
@@ -90,13 +91,14 @@ ACL WHOAMI
 - `ACL GETUSER default` 返回当前默认用户详情；未知用户名返回 null
 - `ACL HELP` 返回 Redis 兼容的 ACL 子命令帮助数组
 - `ACL LIST` 返回当前默认用户的 config file 格式描述；当前固定为 `user default on nopass ~* &* +@all`
+- `ACL LOG` 当前返回空数组；`ACL LOG RESET` 返回 `OK`
 - `ACL USERS` 返回当前已知用户名数组；当前仅包含 `default`
 - `ACL WHOAMI` 返回当前连接用户名；当前始终为 `default`
 
 说明：
 
-- 当前实现为 partial，仅暴露 `ACL CAT`、`ACL GETUSER`、`ACL HELP`、`ACL LIST`、`ACL USERS`、`ACL WHOAMI` 和 `COMMAND*` 可见面
-- `COMMAND INFO/LIST/DOCS` 会暴露 `ACL`、`ACL|CAT`、`ACL|GETUSER`、`ACL|HELP`、`ACL|LIST`、`ACL|USERS` 与 `ACL|WHOAMI`
+- 当前实现为 partial，仅暴露 `ACL CAT`、`ACL GETUSER`、`ACL HELP`、`ACL LIST`、`ACL LOG`、`ACL USERS`、`ACL WHOAMI` 和 `COMMAND*` 可见面
+- `COMMAND INFO/LIST/DOCS` 会暴露 `ACL`、`ACL|CAT`、`ACL|GETUSER`、`ACL|HELP`、`ACL|LIST`、`ACL|LOG`、`ACL|USERS` 与 `ACL|WHOAMI`
 - 当前不支持 ACL 用户存储、命令权限、key pattern 权限、ACL 日志、ACL 文件加载保存或真实权限拒绝路径；安全基线仍由 `requirepass` / `AUTH` 提供
 
 ### `COMMAND`

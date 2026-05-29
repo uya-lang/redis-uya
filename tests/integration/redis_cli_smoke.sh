@@ -513,6 +513,18 @@ if [[ "$ACL_GETUSER_RESULT" != *"flags"* || "$ACL_GETUSER_RESULT" != *"nopass"* 
     exit 1
 fi
 
+ACL_LOG_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl log)"
+if [[ -n "$ACL_LOG_RESULT" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected empty ACL LOG, got '$ACL_LOG_RESULT'" >&2
+    exit 1
+fi
+
+ACL_LOG_RESET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl log reset)"
+if [[ "$ACL_LOG_RESET_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL LOG RESET OK, got '$ACL_LOG_RESET_RESULT'" >&2
+    exit 1
+fi
+
 ACL_USERS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl users)"
 if [[ "$ACL_USERS_RESULT" != "default" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ACL USERS default, got '$ACL_USERS_RESULT'" >&2

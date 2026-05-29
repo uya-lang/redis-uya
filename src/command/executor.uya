@@ -7478,6 +7478,23 @@ fn command_executor_acl_file_unconfigured() CommandReply {
     return command_executor_owned_error(&"ERR This Redis instance is not configured to use an ACL file. You may want to specify users via the ACL SETUSER command and then issue a CONFIG REWRITE (assuming you have a Redis configuration file set) in order to store users in the Redis configuration."[0: 254]);
 }
 
+fn command_executor_acl_deluser(command: &Command) CommandReply {
+    if command.argc < 3 {
+        return command_executor_owned_error(&"ERR wrong number of arguments for 'acl|deluser' command"[0: 55]);
+    }
+    var index: usize = 2;
+    while index < command.argc {
+        const username: &[byte] = command_executor_arg(command, index) catch {
+            return command_executor_wrong_arity();
+        };
+        if command_executor_keyword_eq(username, &"default"[0: 7]) {
+            return command_executor_owned_error(&"ERR The 'default' user cannot be removed"[0: 40]);
+        }
+        index = index + 1;
+    }
+    return command_executor_integer(0);
+}
+
 fn command_executor_acl(command: &Command, now_ms: u64) CommandReply {
     if command.argc < 2 {
         return command_executor_wrong_arity();
@@ -7549,6 +7566,9 @@ fn command_executor_acl(command: &Command, now_ms: u64) CommandReply {
             return command_executor_owned_error(&"ERR wrong number of arguments for 'acl|load' command"[0: 52]);
         }
         return command_executor_acl_file_unconfigured();
+    }
+    if command_executor_keyword_eq(subcommand, &"DELUSER"[0: 7]) {
+        return command_executor_acl_deluser(command);
     }
 
     var err: Sds = sds_empty() catch {
@@ -11882,6 +11902,7 @@ fn command_executor_command_visible_function_subcommand(name: &[byte]) bool {
 
 fn command_executor_command_visible_acl_subcommand(name: &[byte]) bool {
     return command_executor_slice_eq(name, &"cat"[0: 3]) ||
+        command_executor_slice_eq(name, &"deluser"[0: 7]) ||
         command_executor_slice_eq(name, &"genpass"[0: 7]) ||
         command_executor_slice_eq(name, &"getuser"[0: 7]) ||
         command_executor_slice_eq(name, &"help"[0: 4]) ||

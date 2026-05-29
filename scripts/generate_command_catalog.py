@@ -281,6 +281,7 @@ FULL_NAMES = {
 PARTIAL_NAMES = {
     "acl",
     "acl|cat",
+    "acl|deluser",
     "acl|genpass",
     "acl|getuser",
     "acl|help",

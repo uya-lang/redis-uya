@@ -332,6 +332,11 @@ class RedisPySubsetClient:
     def acl_load(self):
         return self._request(b"ACL", b"LOAD")
 
+    def acl_deluser(self, *users: bytes):
+        result = self._request(b"ACL", b"DELUSER", *users)
+        assert isinstance(result, int)
+        return result
+
     def memory_usage(self, key: str, samples: int | None = None) -> int | None:
         parts = [b"MEMORY", b"USAGE", key.encode()]
         if samples is not None:
@@ -1083,6 +1088,14 @@ def run_smoke() -> None:
             except RespError as exc:
                 if "not configured to use an ACL file" not in str(exc):
                     raise AssertionError(f"unexpected ACL LOAD error: {exc}") from exc
+            if client.acl_deluser(b"missing") != 0:
+                raise AssertionError("expected ACL DELUSER missing to return 0")
+            try:
+                client.acl_deluser(b"default")
+                raise AssertionError("expected ACL DELUSER default to fail")
+            except RespError as exc:
+                if str(exc) != "ERR The 'default' user cannot be removed":
+                    raise AssertionError(f"unexpected ACL DELUSER default error: {exc}") from exc
             if client.acl_whoami() != b"default":
                 raise AssertionError("expected ACL WHOAMI default user")
             if client.acl_users() != [b"default"]:

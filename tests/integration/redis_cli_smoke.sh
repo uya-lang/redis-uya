@@ -549,6 +549,18 @@ if [[ "$ACL_LOAD_RESULT" != *"ERR This Redis instance is not configured to use a
     exit 1
 fi
 
+ACL_DELUSER_MISSING_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl deluser missing)"
+if [[ "$ACL_DELUSER_MISSING_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL DELUSER missing to return 0, got '$ACL_DELUSER_MISSING_RESULT'" >&2
+    exit 1
+fi
+
+ACL_DELUSER_DEFAULT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl deluser default 2>&1 || true)"
+if [[ "$ACL_DELUSER_DEFAULT_RESULT" != "ERR The 'default' user cannot be removed" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL DELUSER default error, got '$ACL_DELUSER_DEFAULT_RESULT'" >&2
+    exit 1
+fi
+
 ACL_USERS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl users)"
 if [[ "$ACL_USERS_RESULT" != "default" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ACL USERS default, got '$ACL_USERS_RESULT'" >&2

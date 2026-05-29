@@ -326,6 +326,12 @@ class RedisPySubsetClient:
         assert isinstance(result, bytes)
         return result
 
+    def acl_save(self):
+        return self._request(b"ACL", b"SAVE")
+
+    def acl_load(self):
+        return self._request(b"ACL", b"LOAD")
+
     def memory_usage(self, key: str, samples: int | None = None) -> int | None:
         parts = [b"MEMORY", b"USAGE", key.encode()]
         if samples is not None:
@@ -1065,6 +1071,18 @@ def run_smoke() -> None:
             acl_genpass_bits = client.acl_genpass(b"8")
             if len(acl_genpass_bits) != 2 or any(ch not in b"0123456789abcdef" for ch in acl_genpass_bits):
                 raise AssertionError(f"unexpected ACL GENPASS bits result: {acl_genpass_bits!r}")
+            try:
+                client.acl_save()
+                raise AssertionError("expected ACL SAVE to fail without aclfile")
+            except RespError as exc:
+                if "not configured to use an ACL file" not in str(exc):
+                    raise AssertionError(f"unexpected ACL SAVE error: {exc}") from exc
+            try:
+                client.acl_load()
+                raise AssertionError("expected ACL LOAD to fail without aclfile")
+            except RespError as exc:
+                if "not configured to use an ACL file" not in str(exc):
+                    raise AssertionError(f"unexpected ACL LOAD error: {exc}") from exc
             if client.acl_whoami() != b"default":
                 raise AssertionError("expected ACL WHOAMI default user")
             if client.acl_users() != [b"default"]:

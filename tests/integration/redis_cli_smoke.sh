@@ -537,6 +537,18 @@ if [[ ${#ACL_GENPASS_BITS_RESULT} -ne 2 || ! "$ACL_GENPASS_BITS_RESULT" =~ ^[0-9
     exit 1
 fi
 
+ACL_SAVE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl save 2>&1 || true)"
+if [[ "$ACL_SAVE_RESULT" != *"ERR This Redis instance is not configured to use an ACL file."* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL SAVE aclfile error, got '$ACL_SAVE_RESULT'" >&2
+    exit 1
+fi
+
+ACL_LOAD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl load 2>&1 || true)"
+if [[ "$ACL_LOAD_RESULT" != *"ERR This Redis instance is not configured to use an ACL file."* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL LOAD aclfile error, got '$ACL_LOAD_RESULT'" >&2
+    exit 1
+fi
+
 ACL_USERS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl users)"
 if [[ "$ACL_USERS_RESULT" != "default" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ACL USERS default, got '$ACL_USERS_RESULT'" >&2

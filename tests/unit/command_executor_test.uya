@@ -652,7 +652,9 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"acl|getuser"[0: 11], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"acl|help"[0: 8], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"acl|list"[0: 8], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"acl|load"[0: 8], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"acl|log"[0: 7], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"acl|save"[0: 8], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"acl|users"[0: 9], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"acl|whoami"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"config|set"[0: 10], CommandCatalogStatus.status_partial);
@@ -921,6 +923,38 @@ export fn test_command_acl_help() !void {
     try assert_true(command_executor_test_slice_eq(genpass_extra_reply.data, &"ERR unknown subcommand or wrong number of arguments for 'GENPASS'. Try ACL HELP."[0: 80]));
     command_reply_cleanup(&genpass_extra_reply);
     resp_value_free(&genpass_extra_parsed.value);
+
+    var save_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nACL\r\n$4\r\nSAVE\r\n"[0: 23]);
+    const save_command: Command = try command_executor_test_command(&router, &save_parsed);
+    var save_reply: CommandReply = command_execute_at(&engine, &save_command, 1000u64);
+    try assert_eq_i32(save_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_starts_with(save_reply.data, &"ERR This Redis instance is not configured to use an ACL file."[0: 61]));
+    command_reply_cleanup(&save_reply);
+    resp_value_free(&save_parsed.value);
+
+    var save_extra_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nACL\r\n$4\r\nSAVE\r\n$1\r\nX\r\n"[0: 30]);
+    const save_extra_command: Command = try command_executor_test_command(&router, &save_extra_parsed);
+    var save_extra_reply: CommandReply = command_execute_at(&engine, &save_extra_command, 1000u64);
+    try assert_eq_i32(save_extra_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(save_extra_reply.data, &"ERR wrong number of arguments for 'acl|save' command"[0: 52]));
+    command_reply_cleanup(&save_extra_reply);
+    resp_value_free(&save_extra_parsed.value);
+
+    var load_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nACL\r\n$4\r\nLOAD\r\n"[0: 23]);
+    const load_command: Command = try command_executor_test_command(&router, &load_parsed);
+    var load_reply: CommandReply = command_execute_at(&engine, &load_command, 1000u64);
+    try assert_eq_i32(load_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_starts_with(load_reply.data, &"ERR This Redis instance is not configured to use an ACL file."[0: 61]));
+    command_reply_cleanup(&load_reply);
+    resp_value_free(&load_parsed.value);
+
+    var load_extra_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nACL\r\n$4\r\nLOAD\r\n$1\r\nX\r\n"[0: 30]);
+    const load_extra_command: Command = try command_executor_test_command(&router, &load_extra_parsed);
+    var load_extra_reply: CommandReply = command_execute_at(&engine, &load_extra_command, 1000u64);
+    try assert_eq_i32(load_extra_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(load_extra_reply.data, &"ERR wrong number of arguments for 'acl|load' command"[0: 52]));
+    command_reply_cleanup(&load_extra_reply);
+    resp_value_free(&load_extra_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

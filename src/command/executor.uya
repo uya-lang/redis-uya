@@ -7474,6 +7474,10 @@ fn command_executor_acl_genpass(command: &Command, now_ms: u64) CommandReply {
     return command_executor_owned_bulk_copy(password.buf[0: password.len]);
 }
 
+fn command_executor_acl_file_unconfigured() CommandReply {
+    return command_executor_owned_error(&"ERR This Redis instance is not configured to use an ACL file. You may want to specify users via the ACL SETUSER command and then issue a CONFIG REWRITE (assuming you have a Redis configuration file set) in order to store users in the Redis configuration."[0: 254]);
+}
+
 fn command_executor_acl(command: &Command, now_ms: u64) CommandReply {
     if command.argc < 2 {
         return command_executor_wrong_arity();
@@ -7533,6 +7537,18 @@ fn command_executor_acl(command: &Command, now_ms: u64) CommandReply {
     }
     if command_executor_keyword_eq(subcommand, &"GENPASS"[0: 7]) {
         return command_executor_acl_genpass(command, now_ms);
+    }
+    if command_executor_keyword_eq(subcommand, &"SAVE"[0: 4]) {
+        if command.argc != 2 {
+            return command_executor_owned_error(&"ERR wrong number of arguments for 'acl|save' command"[0: 52]);
+        }
+        return command_executor_acl_file_unconfigured();
+    }
+    if command_executor_keyword_eq(subcommand, &"LOAD"[0: 4]) {
+        if command.argc != 2 {
+            return command_executor_owned_error(&"ERR wrong number of arguments for 'acl|load' command"[0: 52]);
+        }
+        return command_executor_acl_file_unconfigured();
     }
 
     var err: Sds = sds_empty() catch {
@@ -11870,7 +11886,9 @@ fn command_executor_command_visible_acl_subcommand(name: &[byte]) bool {
         command_executor_slice_eq(name, &"getuser"[0: 7]) ||
         command_executor_slice_eq(name, &"help"[0: 4]) ||
         command_executor_slice_eq(name, &"list"[0: 4]) ||
+        command_executor_slice_eq(name, &"load"[0: 4]) ||
         command_executor_slice_eq(name, &"log"[0: 3]) ||
+        command_executor_slice_eq(name, &"save"[0: 4]) ||
         command_executor_slice_eq(name, &"users"[0: 5]) ||
         command_executor_slice_eq(name, &"whoami"[0: 6]);
 }

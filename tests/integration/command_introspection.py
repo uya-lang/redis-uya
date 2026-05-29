@@ -343,6 +343,19 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"memory commands missing from COMMAND INFO: {memory_info!r}")
 
+            module_info = send_command(sock, b"COMMAND", b"INFO", b"MODULE", b"MODULE|HELP", b"MODULE|LIST")
+            if (
+                not isinstance(module_info, list)
+                or len(module_info) != 3
+                or not isinstance(module_info[0], list)
+                or module_info[0][0] != b"module"
+                or not isinstance(module_info[1], list)
+                or module_info[1][0] != b"module|help"
+                or not isinstance(module_info[2], list)
+                or module_info[2][0] != b"module|list"
+            ):
+                raise AssertionError(f"module commands missing from COMMAND INFO: {module_info!r}")
+
             function_info = send_command(sock, b"COMMAND", b"INFO", b"FUNCTION", b"FUNCTION|HELP", b"FUNCTION|LIST", b"FUNCTION|STATS", b"FUNCTION|FLUSH", b"FUNCTION|DELETE", b"FUNCTION|DUMP", b"FUNCTION|KILL")
             if (
                 not isinstance(function_info, list)
@@ -579,6 +592,9 @@ def run_smoke() -> None:
                 or b"acl|whoami" not in docs_all_resp2
                 or b"memory|malloc-stats" not in docs_all_resp2
                 or b"memory|purge" not in docs_all_resp2
+                or b"module" not in docs_all_resp2
+                or b"module|help" not in docs_all_resp2
+                or b"module|list" not in docs_all_resp2
             ):
                 raise AssertionError(f"unexpected COMMAND DOCS all RESP2 payload: {docs_all_resp2!r}")
             if b"function|load" in docs_all_resp2 or b"module|load" in docs_all_resp2 or b"blmove" in docs_all_resp2 or b"cluster|reset" in docs_all_resp2:
@@ -682,6 +698,18 @@ def run_smoke() -> None:
                 or b"memory|usage" not in listed_memory
             ):
                 raise AssertionError(f"unexpected COMMAND LIST memory* result: {listed_memory!r}")
+
+            listed_module = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"MODULE*")
+            if (
+                not isinstance(listed_module, list)
+                or b"module" not in listed_module
+                or b"module|help" not in listed_module
+                or b"module|list" not in listed_module
+                or b"module|load" in listed_module
+                or b"module|loadex" in listed_module
+                or b"module|unload" in listed_module
+            ):
+                raise AssertionError(f"unexpected COMMAND LIST module* result: {listed_module!r}")
 
             listed_slowlog = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"SLOWLOG*")
             if (
@@ -802,6 +830,9 @@ def run_smoke() -> None:
                 or not isinstance(docs_all.get(b"acl|whoami"), dict)
                 or not isinstance(docs_all.get(b"memory|malloc-stats"), dict)
                 or not isinstance(docs_all.get(b"memory|purge"), dict)
+                or not isinstance(docs_all.get(b"module"), dict)
+                or not isinstance(docs_all.get(b"module|help"), dict)
+                or not isinstance(docs_all.get(b"module|list"), dict)
             ):
                 raise AssertionError(f"unexpected COMMAND DOCS all RESP3 payload: {docs_all!r}")
             if b"function|load" in docs_all or b"module|load" in docs_all or b"blmove" in docs_all or b"cluster|reset" in docs_all:

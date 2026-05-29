@@ -189,6 +189,7 @@ export enum CommandType {
     command_fcall_ro,
     command_script,
     command_function,
+    command_module,
     command_geoadd,
     command_geodist,
     command_geosearch,
@@ -227,7 +228,7 @@ export const COMMAND_FLAG_READONLY: u64 = 1u64;
 export const COMMAND_FLAG_WRITE: u64 = 2u64;
 export const COMMAND_FLAG_FAST: u64 = 4u64;
 
-const MIN_COMMAND_COUNT: usize = 190;
+const MIN_COMMAND_COUNT: usize = 191;
 
 fn command_router_name_eq(a: &[byte], b: &[byte]) bool {
     return bytes_ascii_case_eq(a, b);
@@ -836,6 +837,9 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
     }
     if index == 189 {
         return command_router_info(CommandType.command_acl, &"ACL"[0: 3], -2, COMMAND_FLAG_READONLY, 0, 0, 0);
+    }
+    if index == 190 {
+        return command_router_info(CommandType.command_module, &"MODULE"[0: 6], -2, COMMAND_FLAG_READONLY, 0, 0, 0);
     }
     return error.CommandUnknown;
 }

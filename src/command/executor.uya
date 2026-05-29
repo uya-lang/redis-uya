@@ -7067,6 +7067,72 @@ fn command_executor_memory(runtime: &CommandRuntimeInfo, engine: &Engine, comman
     return command_executor_owned_error(err.buf[0: err.len]);
 }
 
+fn command_executor_module_help() CommandReply {
+    const reply_list: &RedisObject = create_list_object() catch {
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"MODULE <subcommand> [<arg> ...]. Subcommands are:"[0: 49]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"MODULE HELP"[0: 11]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"    Prints this help."[0: 21]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"MODULE LIST"[0: 11]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"    Return an empty module list; redis-uya does not load modules yet."[0: 69]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    return command_executor_owned_array(reply_list);
+}
+
+fn command_executor_module(command: &Command) CommandReply {
+    if command.argc < 2 {
+        return command_executor_owned_error(&"ERR wrong number of arguments for 'module' command"[0: 48]);
+    }
+
+    const subcommand: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_owned_error(&"ERR wrong number of arguments for 'module' command"[0: 48]);
+    };
+    if command_executor_keyword_eq(subcommand, &"HELP"[0: 4]) {
+        if command.argc != 2 {
+            return command_executor_owned_error(&"ERR wrong number of arguments for 'module|help' command"[0: 55]);
+        }
+        return command_executor_module_help();
+    }
+    if command_executor_keyword_eq(subcommand, &"LIST"[0: 4]) {
+        if command.argc != 2 {
+            return command_executor_owned_error(&"ERR wrong number of arguments for 'module|list' command"[0: 55]);
+        }
+        return command_executor_owned_raw(&"*0\r\n"[0: 4]);
+    }
+
+    var err: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&err);
+    }
+    _ = command_executor_info_append(&err, &"ERR unknown subcommand '"[0: 24]) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append(&err, subcommand) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append(&err, &"'. Try MODULE HELP."[0: 19]) catch {
+        return command_executor_oom();
+    };
+    return command_executor_owned_error(err.buf[0: err.len]);
+}
+
 fn command_executor_slowlog(command: &Command) CommandReply {
     if command.argc < 2 {
         return command_executor_owned_error(&"ERR wrong number of arguments for 'slowlog' command"[0: 49]);
@@ -12166,6 +12232,11 @@ fn command_executor_command_visible_memory_subcommand(name: &[byte]) bool {
         command_executor_slice_eq(name, &"usage"[0: 5]);
 }
 
+fn command_executor_command_visible_module_subcommand(name: &[byte]) bool {
+    return command_executor_slice_eq(name, &"help"[0: 4]) ||
+        command_executor_slice_eq(name, &"list"[0: 4]);
+}
+
 fn command_executor_command_visible_slowlog_subcommand(name: &[byte]) bool {
     return command_executor_slice_eq(name, &"help"[0: 4]) ||
         command_executor_slice_eq(name, &"get"[0: 3]) ||
@@ -12213,6 +12284,9 @@ fn command_executor_command_visible_subcommand(parent_name: &[byte], subcommand_
     }
     if command_executor_slice_eq(parent_name, &"memory"[0: 6]) {
         return command_executor_command_visible_memory_subcommand(subcommand_name);
+    }
+    if command_executor_slice_eq(parent_name, &"module"[0: 6]) {
+        return command_executor_command_visible_module_subcommand(subcommand_name);
     }
     if command_executor_slice_eq(parent_name, &"slowlog"[0: 7]) {
         return command_executor_command_visible_slowlog_subcommand(subcommand_name);
@@ -14136,6 +14210,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_memory {
         return command_executor_memory(runtime, engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_module {
+        return command_executor_module(command);
     }
     if command.info.cmd_type == CommandType.command_slowlog {
         return command_executor_slowlog(command);

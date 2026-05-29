@@ -369,6 +369,11 @@ class RedisPySubsetClient:
     def memory_purge(self):
         return self._request(b"MEMORY", b"PURGE")
 
+    def module_list(self):
+        result = self._request(b"MODULE", b"LIST")
+        assert isinstance(result, list)
+        return result
+
     def slowlog_len(self) -> int:
         return int(self._request(b"SLOWLOG", b"LEN"))
 
@@ -1180,6 +1185,8 @@ def run_smoke() -> None:
                 raise AssertionError(f"unexpected MEMORY MALLOC-STATS payload: {memory_malloc_stats!r}")
             if client.memory_purge() != "OK":
                 raise AssertionError("unexpected MEMORY PURGE result")
+            if client.module_list() != []:
+                raise AssertionError("unexpected MODULE LIST result")
             try:
                 client._request(b"MEMORY")
                 raise AssertionError("expected MEMORY without subcommand to fail")

@@ -2202,6 +2202,26 @@ MEMORY USAGE key [SAMPLES count]
 - `USAGE ... SAMPLES count` 当前只做参数兼容校验，不影响近似值计算
 - `MALLOC-STATS` 当前不是 Redis 原生 jemalloc 统计口径；`PURGE` 不会触发 Redis jemalloc purge 级别的 allocator 行为
 
+### `MODULE`
+
+格式：
+
+```text
+MODULE HELP
+MODULE LIST
+```
+
+返回：
+
+- `HELP`：返回当前支持的 `MODULE` 子命令说明
+- `LIST`：返回已加载模块数组；当前固定为空数组
+
+说明：
+
+- 当前实现为 partial：仅支持 `HELP`、`LIST` 和 `COMMAND*` 可见面
+- `COMMAND INFO/LIST/DOCS` 会暴露 `MODULE`、`MODULE|HELP` 与 `MODULE|LIST`
+- 当前不支持 module 加载、卸载或模块 API，因此 `MODULE LOAD`、`MODULE LOADEX` 与 `MODULE UNLOAD` 仍不进入可见命令目录
+
 ### `SLOWLOG`
 
 格式：

@@ -551,14 +551,16 @@ def run_smoke() -> None:
             if unsupported_info != [None, None, None, None]:
                 raise AssertionError(f"unsupported COMMAND INFO entries must be null: {unsupported_info!r}")
 
-            client_kill_info = send_command(sock, b"COMMAND", b"INFO", b"CLIENT|KILL", b"CLIENT|NO-TOUCH")
+            client_kill_info = send_command(sock, b"COMMAND", b"INFO", b"CLIENT|KILL", b"CLIENT|NO-EVICT", b"CLIENT|NO-TOUCH")
             if (
                 not isinstance(client_kill_info, list)
-                or len(client_kill_info) != 2
+                or len(client_kill_info) != 3
                 or not isinstance(client_kill_info[0], list)
                 or client_kill_info[0][0] != b"client|kill"
                 or not isinstance(client_kill_info[1], list)
-                or client_kill_info[1][0] != b"client|no-touch"
+                or client_kill_info[1][0] != b"client|no-evict"
+                or not isinstance(client_kill_info[2], list)
+                or client_kill_info[2][0] != b"client|no-touch"
             ):
                 raise AssertionError(f"implemented CLIENT subcommand disappeared from COMMAND INFO: {client_kill_info!r}")
 
@@ -578,6 +580,7 @@ def run_smoke() -> None:
                 or len(docs_all_resp2) <= count * 2
                 or b"get" not in docs_all_resp2
                 or b"client|id" not in docs_all_resp2
+                or b"client|no-evict" not in docs_all_resp2
                 or b"client|no-touch" not in docs_all_resp2
                 or b"acl" not in docs_all_resp2
                 or b"acl|cat" not in docs_all_resp2
@@ -608,8 +611,8 @@ def run_smoke() -> None:
                 not isinstance(listed_client, list)
                 or b"client" not in listed_client
                 or b"client|id" not in listed_client
+                or b"client|no-evict" not in listed_client
                 or b"client|no-touch" not in listed_client
-                or b"client|no-evict" in listed_client
                 or b"client|reply" in listed_client
                 or b"client|unblock" in listed_client
             ):
@@ -829,6 +832,7 @@ def run_smoke() -> None:
                 or len(docs_all) <= count
                 or not isinstance(docs_all.get(b"get"), dict)
                 or not isinstance(docs_all.get(b"client|id"), dict)
+                or not isinstance(docs_all.get(b"client|no-evict"), dict)
                 or not isinstance(docs_all.get(b"client|no-touch"), dict)
                 or not isinstance(docs_all.get(b"acl"), dict)
                 or not isinstance(docs_all.get(b"acl|cat"), dict)

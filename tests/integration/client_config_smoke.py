@@ -230,6 +230,17 @@ def run_smoke() -> None:
                     if "syntax" not in str(exc).lower():
                         raise
 
+                if send_command(sock, b"CLIENT", b"NO-EVICT", b"ON") != "OK":
+                    raise AssertionError("CLIENT NO-EVICT ON failed")
+                if send_command(sock, b"CLIENT", b"NO-EVICT", b"OFF") != "OK":
+                    raise AssertionError("CLIENT NO-EVICT OFF failed")
+                try:
+                    send_command(sock, b"CLIENT", b"NO-EVICT", b"BAD")
+                    raise AssertionError("CLIENT NO-EVICT invalid mode should fail")
+                except RespError as exc:
+                    if "syntax" not in str(exc).lower():
+                        raise
+
                 if send_command(sock, b"CLIENT", b"PAUSE", b"1000", b"ALL") != "OK":
                     raise AssertionError("CLIENT PAUSE failed")
                 peer_sock.settimeout(0.1)

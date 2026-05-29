@@ -307,6 +307,7 @@ PARTIAL_NAMES = {
     "client|kill",
     "client|info",
     "client|list",
+    "client|no-evict",
     "client|no-touch",
     "client|pause",
     "client|setname",

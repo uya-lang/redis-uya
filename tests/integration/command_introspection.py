@@ -149,6 +149,7 @@ def run_smoke() -> None:
                 not isinstance(listed_acl, list)
                 or b"acl" not in listed_acl
                 or b"acl|help" not in listed_acl
+                or b"acl|list" not in listed_acl
                 or b"acl|users" not in listed_acl
                 or b"acl|whoami" not in listed_acl
                 or b"acl|cat" in listed_acl
@@ -164,6 +165,9 @@ def run_smoke() -> None:
             acl_users = send_command(sock, b"ACL", b"USERS")
             if acl_users != [b"default"]:
                 raise AssertionError(f"unexpected ACL USERS: {acl_users!r}")
+            acl_list = send_command(sock, b"ACL", b"LIST")
+            if acl_list != [b"user default on nopass ~* &* +@all"]:
+                raise AssertionError(f"unexpected ACL LIST: {acl_list!r}")
 
             info = send_command(sock, b"COMMAND", b"INFO", b"GET", b"FOO", b"CLIENT|ID")
             if not isinstance(info, list) or len(info) != 3:
@@ -273,18 +277,20 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"function commands missing from COMMAND INFO: {function_info!r}")
 
-            acl_info = send_command(sock, b"COMMAND", b"INFO", b"ACL", b"ACL|HELP", b"ACL|USERS", b"ACL|WHOAMI")
+            acl_info = send_command(sock, b"COMMAND", b"INFO", b"ACL", b"ACL|HELP", b"ACL|LIST", b"ACL|USERS", b"ACL|WHOAMI")
             if (
                 not isinstance(acl_info, list)
-                or len(acl_info) != 4
+                or len(acl_info) != 5
                 or not isinstance(acl_info[0], list)
                 or acl_info[0][0] != b"acl"
                 or not isinstance(acl_info[1], list)
                 or acl_info[1][0] != b"acl|help"
                 or not isinstance(acl_info[2], list)
-                or acl_info[2][0] != b"acl|users"
+                or acl_info[2][0] != b"acl|list"
                 or not isinstance(acl_info[3], list)
-                or acl_info[3][0] != b"acl|whoami"
+                or acl_info[3][0] != b"acl|users"
+                or not isinstance(acl_info[4], list)
+                or acl_info[4][0] != b"acl|whoami"
             ):
                 raise AssertionError(f"acl commands missing from COMMAND INFO: {acl_info!r}")
 
@@ -452,6 +458,7 @@ def run_smoke() -> None:
                 or b"client|id" not in docs_all_resp2
                 or b"acl" not in docs_all_resp2
                 or b"acl|help" not in docs_all_resp2
+                or b"acl|list" not in docs_all_resp2
                 or b"acl|users" not in docs_all_resp2
                 or b"acl|whoami" not in docs_all_resp2
             ):
@@ -663,6 +670,7 @@ def run_smoke() -> None:
                 or not isinstance(docs_all.get(b"client|id"), dict)
                 or not isinstance(docs_all.get(b"acl"), dict)
                 or not isinstance(docs_all.get(b"acl|help"), dict)
+                or not isinstance(docs_all.get(b"acl|list"), dict)
                 or not isinstance(docs_all.get(b"acl|users"), dict)
                 or not isinstance(docs_all.get(b"acl|whoami"), dict)
             ):

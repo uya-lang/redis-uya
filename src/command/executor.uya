@@ -7307,6 +7307,16 @@ fn command_executor_acl(command: &Command) CommandReply {
         _ = list_object_push_tail(reply_list, &"default"[0: 7]) catch { object_free(reply_list); return command_executor_oom(); };
         return command_executor_owned_array(reply_list);
     }
+    if command_executor_keyword_eq(subcommand, &"LIST"[0: 4]) {
+        if command.argc != 2 {
+            return command_executor_owned_error(&"ERR wrong number of arguments for 'acl|list' command"[0: 52]);
+        }
+        var reply_list: &RedisObject = create_list_object() catch {
+            return command_executor_oom();
+        };
+        _ = list_object_push_tail(reply_list, &"user default on nopass ~* &* +@all"[0: 34]) catch { object_free(reply_list); return command_executor_oom(); };
+        return command_executor_owned_array(reply_list);
+    }
 
     var err: Sds = sds_empty() catch {
         return command_executor_oom();
@@ -11639,6 +11649,7 @@ fn command_executor_command_visible_function_subcommand(name: &[byte]) bool {
 
 fn command_executor_command_visible_acl_subcommand(name: &[byte]) bool {
     return command_executor_slice_eq(name, &"help"[0: 4]) ||
+        command_executor_slice_eq(name, &"list"[0: 4]) ||
         command_executor_slice_eq(name, &"users"[0: 5]) ||
         command_executor_slice_eq(name, &"whoami"[0: 6]);
 }

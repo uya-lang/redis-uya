@@ -501,6 +501,12 @@ if [[ "$ACL_USERS_RESULT" != "default" ]]; then
     exit 1
 fi
 
+ACL_LIST_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl list)"
+if [[ "$ACL_LIST_RESULT" != "user default on nopass ~* &* +@all" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL LIST default user config, got '$ACL_LIST_RESULT'" >&2
+    exit 1
+fi
+
 FUNCTION_HELP_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function help)"
 if [[ "$FUNCTION_HELP_RESULT" != *"FUNCTION HELP"* || "$FUNCTION_HELP_RESULT" != *"FUNCTION LIST [LIBRARYNAME <pattern>] [WITHCODE]"* ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected FUNCTION HELP output, got '$FUNCTION_HELP_RESULT'" >&2

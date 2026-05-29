@@ -337,6 +337,9 @@ class RedisPySubsetClient:
         assert isinstance(result, int)
         return result
 
+    def acl_dryrun(self, username: bytes, *command: bytes):
+        return self._request(b"ACL", b"DRYRUN", username, *command)
+
     def memory_usage(self, key: str, samples: int | None = None) -> int | None:
         parts = [b"MEMORY", b"USAGE", key.encode()]
         if samples is not None:
@@ -1096,6 +1099,14 @@ def run_smoke() -> None:
             except RespError as exc:
                 if str(exc) != "ERR The 'default' user cannot be removed":
                     raise AssertionError(f"unexpected ACL DELUSER default error: {exc}") from exc
+            if client.acl_dryrun(b"default", b"GET", b"missing") != "OK":
+                raise AssertionError("expected ACL DRYRUN default GET to return OK")
+            try:
+                client.acl_dryrun(b"missing", b"GET", b"k")
+                raise AssertionError("expected ACL DRYRUN missing user to fail")
+            except RespError as exc:
+                if str(exc) != "ERR User 'missing' not found":
+                    raise AssertionError(f"unexpected ACL DRYRUN missing user error: {exc}") from exc
             if client.acl_whoami() != b"default":
                 raise AssertionError("expected ACL WHOAMI default user")
             if client.acl_users() != [b"default"]:

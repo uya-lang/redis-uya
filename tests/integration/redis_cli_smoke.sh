@@ -561,6 +561,18 @@ if [[ "$ACL_DELUSER_DEFAULT_RESULT" != "ERR The 'default' user cannot be removed
     exit 1
 fi
 
+ACL_DRYRUN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl dryrun default get missing)"
+if [[ "$ACL_DRYRUN_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL DRYRUN default get to return OK, got '$ACL_DRYRUN_RESULT'" >&2
+    exit 1
+fi
+
+ACL_DRYRUN_MISSING_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl dryrun missing get k 2>&1 || true)"
+if [[ "$ACL_DRYRUN_MISSING_RESULT" != "ERR User 'missing' not found" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL DRYRUN missing user error, got '$ACL_DRYRUN_MISSING_RESULT'" >&2
+    exit 1
+fi
+
 ACL_USERS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl users)"
 if [[ "$ACL_USERS_RESULT" != "default" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ACL USERS default, got '$ACL_USERS_RESULT'" >&2

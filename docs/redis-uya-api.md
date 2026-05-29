@@ -78,6 +78,7 @@ AUTH default password
 ```text
 ACL CAT [category]
 ACL DELUSER username [username ...]
+ACL DRYRUN username command [arg ...]
 ACL GENPASS [bits]
 ACL GETUSER username
 ACL HELP
@@ -93,6 +94,7 @@ ACL WHOAMI
 
 - `ACL CAT` 返回 Redis 兼容的 ACL category 列表；`ACL CAT category` 返回当前可见命令目录中匹配该 category 的命令名
 - `ACL DELUSER missing` 当前返回 `0`；尝试删除 `default` 会返回 Redis 兼容错误
+- `ACL DRYRUN default command [arg ...]` 当前只做默认用户全权限检查和命令 arity 检查；未知用户和未知命令返回 Redis 兼容错误
 - `ACL GENPASS` 返回 256-bit 口径的 64 字符十六进制口令；`ACL GENPASS bits` 返回 `ceil(bits / 4)` 个十六进制字符，`bits` 取值范围为 `1..4096`
 - `ACL GETUSER default` 返回当前默认用户详情；未知用户名返回 null
 - `ACL HELP` 返回 Redis 兼容的 ACL 子命令帮助数组
@@ -105,8 +107,8 @@ ACL WHOAMI
 
 说明：
 
-- 当前实现为 partial，仅暴露 `ACL CAT`、`ACL DELUSER`、`ACL GENPASS`、`ACL GETUSER`、`ACL HELP`、`ACL LIST`、`ACL LOAD`、`ACL LOG`、`ACL SAVE`、`ACL USERS`、`ACL WHOAMI` 和 `COMMAND*` 可见面
-- `COMMAND INFO/LIST/DOCS` 会暴露 `ACL`、`ACL|CAT`、`ACL|DELUSER`、`ACL|GENPASS`、`ACL|GETUSER`、`ACL|HELP`、`ACL|LIST`、`ACL|LOAD`、`ACL|LOG`、`ACL|SAVE`、`ACL|USERS` 与 `ACL|WHOAMI`
+- 当前实现为 partial，仅暴露 `ACL CAT`、`ACL DELUSER`、`ACL DRYRUN`、`ACL GENPASS`、`ACL GETUSER`、`ACL HELP`、`ACL LIST`、`ACL LOAD`、`ACL LOG`、`ACL SAVE`、`ACL USERS`、`ACL WHOAMI` 和 `COMMAND*` 可见面
+- `COMMAND INFO/LIST/DOCS` 会暴露 `ACL`、`ACL|CAT`、`ACL|DELUSER`、`ACL|DRYRUN`、`ACL|GENPASS`、`ACL|GETUSER`、`ACL|HELP`、`ACL|LIST`、`ACL|LOAD`、`ACL|LOG`、`ACL|SAVE`、`ACL|USERS` 与 `ACL|WHOAMI`
 - 当前不支持 ACL 用户存储、命令权限、key pattern 权限、ACL 日志、ACL 文件加载保存或真实权限拒绝路径；安全基线仍由 `requirepass` / `AUTH` 提供
 
 ### `COMMAND`

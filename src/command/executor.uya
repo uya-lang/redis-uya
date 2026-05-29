@@ -7495,6 +7495,86 @@ fn command_executor_acl_deluser(command: &Command) CommandReply {
     return command_executor_integer(0);
 }
 
+fn command_executor_acl_dryrun_user_missing(username: &[byte]) CommandReply {
+    var err: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&err);
+    }
+    _ = command_executor_info_append(&err, &"ERR User '"[0: 10]) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append(&err, username) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append(&err, &"' not found"[0: 11]) catch {
+        return command_executor_oom();
+    };
+    return command_executor_owned_error(err.buf[0: err.len]);
+}
+
+fn command_executor_acl_dryrun_command_missing(name: &[byte]) CommandReply {
+    var err: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&err);
+    }
+    _ = command_executor_info_append(&err, &"ERR Command '"[0: 13]) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append(&err, name) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append(&err, &"' not found"[0: 11]) catch {
+        return command_executor_oom();
+    };
+    return command_executor_owned_error(err.buf[0: err.len]);
+}
+
+fn command_executor_acl_dryrun_arity_error(name: &[byte]) CommandReply {
+    var err: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&err);
+    }
+    _ = command_executor_info_append(&err, &"ERR wrong number of arguments for '"[0: 35]) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append(&err, name) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append(&err, &"' command"[0: 9]) catch {
+        return command_executor_oom();
+    };
+    return command_executor_owned_error(err.buf[0: err.len]);
+}
+
+fn command_executor_acl_dryrun(command: &Command) CommandReply {
+    if command.argc < 4 {
+        return command_executor_owned_error(&"ERR wrong number of arguments for 'acl|dryrun' command"[0: 54]);
+    }
+    const username: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    if !command_executor_slice_eq(username, &"default"[0: 7]) {
+        return command_executor_acl_dryrun_user_missing(username);
+    }
+    const dry_command_name: &[byte] = command_executor_arg(command, 3) catch {
+        return command_executor_wrong_arity();
+    };
+    const router: CommandRouter = command_router_new();
+    var dry_info: CommandInfo = command_router_lookup(&router, dry_command_name) catch {
+        return command_executor_acl_dryrun_command_missing(dry_command_name);
+    };
+    _ = command_validate_arity(&dry_info, command.argc - 3) catch {
+        return command_executor_acl_dryrun_arity_error(dry_info.name);
+    };
+    return command_executor_simple(&"OK"[0: 2]);
+}
+
 fn command_executor_acl(command: &Command, now_ms: u64) CommandReply {
     if command.argc < 2 {
         return command_executor_wrong_arity();
@@ -7569,6 +7649,9 @@ fn command_executor_acl(command: &Command, now_ms: u64) CommandReply {
     }
     if command_executor_keyword_eq(subcommand, &"DELUSER"[0: 7]) {
         return command_executor_acl_deluser(command);
+    }
+    if command_executor_keyword_eq(subcommand, &"DRYRUN"[0: 6]) {
+        return command_executor_acl_dryrun(command);
     }
 
     var err: Sds = sds_empty() catch {
@@ -11903,6 +11986,7 @@ fn command_executor_command_visible_function_subcommand(name: &[byte]) bool {
 fn command_executor_command_visible_acl_subcommand(name: &[byte]) bool {
     return command_executor_slice_eq(name, &"cat"[0: 3]) ||
         command_executor_slice_eq(name, &"deluser"[0: 7]) ||
+        command_executor_slice_eq(name, &"dryrun"[0: 6]) ||
         command_executor_slice_eq(name, &"genpass"[0: 7]) ||
         command_executor_slice_eq(name, &"getuser"[0: 7]) ||
         command_executor_slice_eq(name, &"help"[0: 4]) ||

@@ -282,6 +282,7 @@ PARTIAL_NAMES = {
     "acl",
     "acl|cat",
     "acl|deluser",
+    "acl|dryrun",
     "acl|genpass",
     "acl|getuser",
     "acl|help",

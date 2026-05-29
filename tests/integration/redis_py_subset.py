@@ -361,6 +361,11 @@ class RedisPySubsetClient:
         assert isinstance(result, bytes)
         return result
 
+    def memory_malloc_stats(self) -> bytes:
+        result = self._request(b"MEMORY", b"MALLOC-STATS")
+        assert isinstance(result, bytes)
+        return result
+
     def memory_purge(self):
         return self._request(b"MEMORY", b"PURGE")
 
@@ -1170,6 +1175,9 @@ def run_smoke() -> None:
             memory_doctor = client.memory_doctor()
             if b"diagnosis" not in memory_doctor and b"No obvious allocator" not in memory_doctor:
                 raise AssertionError(f"unexpected MEMORY DOCTOR payload: {memory_doctor!r}")
+            memory_malloc_stats = client.memory_malloc_stats()
+            if b"redis-uya allocator stats" not in memory_malloc_stats or b"allocator_slab_cached_bytes" not in memory_malloc_stats:
+                raise AssertionError(f"unexpected MEMORY MALLOC-STATS payload: {memory_malloc_stats!r}")
             if client.memory_purge() != "OK":
                 raise AssertionError("unexpected MEMORY PURGE result")
             try:

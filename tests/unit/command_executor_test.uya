@@ -5587,6 +5587,7 @@ export fn test_command_memory() !void {
     var memory_help_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &memory_help_command, 1000u64);
     const memory_help_len: usize = try connection_encode_reply(&memory_help_reply, &out[0], 1024);
     try assert_true(command_executor_test_contains(out[0: memory_help_len], &"MEMORY USAGE <key> [SAMPLES <count>]"[0: 36]));
+    try assert_true(command_executor_test_contains(out[0: memory_help_len], &"MEMORY MALLOC-STATS"[0: 19]));
     try assert_true(command_executor_test_contains(out[0: memory_help_len], &"MEMORY PURGE"[0: 12]));
     try assert_true(command_executor_test_contains(out[0: memory_help_len], &"MEMORY HELP"[0: 11]));
     command_reply_cleanup(&memory_help_reply);
@@ -5634,6 +5635,15 @@ export fn test_command_memory() !void {
     try assert_true(command_executor_test_contains(memory_stats_reply.data, &"$10\r\nkeys.count\r\n"[0: 17]));
     command_reply_cleanup(&memory_stats_reply);
     resp_value_free(&memory_stats_parsed.value);
+
+    var memory_malloc_stats_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nMEMORY\r\n$12\r\nMALLOC-STATS\r\n"[0: 35]);
+    const memory_malloc_stats_command: Command = try command_executor_test_command(&router, &memory_malloc_stats_parsed);
+    var memory_malloc_stats_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &memory_malloc_stats_command, 1000u64);
+    try assert_eq_i32(memory_malloc_stats_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_contains(memory_malloc_stats_reply.data, &"redis-uya allocator stats"[0: 25]));
+    try assert_true(command_executor_test_contains(memory_malloc_stats_reply.data, &"allocator_slab_cached_bytes"[0: 27]));
+    command_reply_cleanup(&memory_malloc_stats_reply);
+    resp_value_free(&memory_malloc_stats_parsed.value);
 
     var memory_purge_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nMEMORY\r\n$5\r\nPURGE\r\n"[0: 27]);
     const memory_purge_command: Command = try command_executor_test_command(&router, &memory_purge_parsed);
@@ -6563,6 +6573,14 @@ export fn test_command_error_paths() !void {
     try assert_true(command_executor_test_slice_eq(memory_purge_bad_arity_reply.data, &"ERR wrong number of arguments for 'memory|purge' command"[0: 56]));
     command_reply_cleanup(&memory_purge_bad_arity_reply);
     resp_value_free(&memory_purge_bad_arity_parsed.value);
+
+    var memory_malloc_stats_bad_arity_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nMEMORY\r\n$12\r\nMALLOC-STATS\r\n$1\r\nx\r\n"[0: 42]);
+    const memory_malloc_stats_bad_arity_command: Command = try command_executor_test_command(&router, &memory_malloc_stats_bad_arity_parsed);
+    var memory_malloc_stats_bad_arity_reply: CommandReply = command_execute_at(&engine, &memory_malloc_stats_bad_arity_command, 1000u64);
+    try assert_eq_i32(memory_malloc_stats_bad_arity_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(memory_malloc_stats_bad_arity_reply.data, &"ERR wrong number of arguments for 'memory|malloc-stats' command"[0: 63]));
+    command_reply_cleanup(&memory_malloc_stats_bad_arity_reply);
+    resp_value_free(&memory_malloc_stats_bad_arity_parsed.value);
 
     var memory_unknown_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nMEMORY\r\n$1\r\nX\r\n"[0: 23]);
     const memory_unknown_command: Command = try command_executor_test_command(&router, &memory_unknown_parsed);

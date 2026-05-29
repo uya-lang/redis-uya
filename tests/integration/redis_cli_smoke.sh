@@ -657,6 +657,12 @@ if [[ "$MEMORY_DOCTOR_RESULT" != *"diagnosis"* ]] && [[ "$MEMORY_DOCTOR_RESULT" 
     exit 1
 fi
 
+MEMORY_MALLOC_STATS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" memory malloc-stats)"
+if [[ "$MEMORY_MALLOC_STATS_RESULT" != *"redis-uya allocator stats"* ]] || [[ "$MEMORY_MALLOC_STATS_RESULT" != *"allocator_slab_cached_bytes"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected MEMORY MALLOC-STATS allocator text, got '$MEMORY_MALLOC_STATS_RESULT'" >&2
+    exit 1
+fi
+
 MEMORY_PURGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" memory purge)"
 if [[ "$MEMORY_PURGE_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected MEMORY PURGE OK, got '$MEMORY_PURGE_RESULT'" >&2

@@ -6842,6 +6842,14 @@ fn command_executor_memory_help() CommandReply {
         object_free(reply_list);
         return command_executor_oom();
     };
+    _ = list_object_push_tail(reply_list, &"MEMORY MALLOC-STATS"[0: 19]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"    Return redis-uya allocator counters in a Redis-compatible bulk report."[0: 74]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
     _ = list_object_push_tail(reply_list, &"MEMORY PURGE"[0: 12]) catch {
         object_free(reply_list);
         return command_executor_oom();
@@ -6937,6 +6945,30 @@ fn command_executor_memory_doctor(engine: &Engine) CommandReply {
     return command_executor_owned_bulk_copy(&"No obvious allocator, object-pool, or maxmemory anomaly was detected by redis-uya's minimal MEMORY DOCTOR." [0: 106]);
 }
 
+fn command_executor_memory_malloc_stats() CommandReply {
+    var buf: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&buf);
+    }
+
+    _ = command_executor_info_append(&buf, &"# redis-uya allocator stats\r\n"[0: 29]) catch { return command_executor_oom(); };
+    _ = command_executor_info_append_u64(&buf, &"used_memory:%u\r\n"[0: 16], used_memory() as u64) catch { return command_executor_oom(); };
+    _ = command_executor_info_append_u64(&buf, &"used_memory_peak:%u\r\n"[0: 21], used_memory_peak() as u64) catch { return command_executor_oom(); };
+    _ = command_executor_info_append_u64(&buf, &"total_allocated:%u\r\n"[0: 20], total_allocated_memory() as u64) catch { return command_executor_oom(); };
+    _ = command_executor_info_append_u64(&buf, &"total_freed:%u\r\n"[0: 16], total_freed_memory() as u64) catch { return command_executor_oom(); };
+    _ = command_executor_info_append_u64(&buf, &"allocator_total_allocations:%u\r\n"[0: 32], allocator_total_allocations() as u64) catch { return command_executor_oom(); };
+    _ = command_executor_info_append_u64(&buf, &"allocator_active_allocations:%u\r\n"[0: 33], allocator_active_allocations() as u64) catch { return command_executor_oom(); };
+    _ = command_executor_info_append_u64(&buf, &"allocator_slab_cached_blocks:%u\r\n"[0: 33], allocator_slab_cached_blocks() as u64) catch { return command_executor_oom(); };
+    _ = command_executor_info_append_u64(&buf, &"allocator_slab_cached_bytes:%u\r\n"[0: 32], allocator_slab_cached_bytes() as u64) catch { return command_executor_oom(); };
+    _ = command_executor_info_append_u64(&buf, &"allocator_slab_reuse_count:%u\r\n"[0: 31], allocator_slab_reuse_count() as u64) catch { return command_executor_oom(); };
+    _ = command_executor_info_append_u64(&buf, &"object_pool_cached_objects:%u\r\n"[0: 31], object_pool_cached_objects() as u64) catch { return command_executor_oom(); };
+    _ = command_executor_info_append_u64(&buf, &"object_pool_cached_list_nodes:%u\r\n"[0: 34], object_pool_cached_list_nodes() as u64) catch { return command_executor_oom(); };
+    _ = command_executor_info_append_u64(&buf, &"object_pool_reuse_count:%u\r\n"[0: 28], object_pool_reuse_count() as u64) catch { return command_executor_oom(); };
+    return command_executor_owned_bulk_copy(buf.buf[0: buf.len]);
+}
+
 fn command_executor_memory_purge() CommandReply {
     return command_executor_simple(&"OK"[0: 2]);
 }
@@ -7000,6 +7032,12 @@ fn command_executor_memory(runtime: &CommandRuntimeInfo, engine: &Engine, comman
             return command_executor_memory_wrong_subcommand_arity(&"stats"[0: 5]);
         }
         return command_executor_memory_stats(engine, runtime);
+    }
+    if command_executor_keyword_eq(subcommand, &"MALLOC-STATS"[0: 12]) {
+        if command.argc != 2 {
+            return command_executor_memory_wrong_subcommand_arity(&"malloc-stats"[0: 12]);
+        }
+        return command_executor_memory_malloc_stats();
     }
     if command_executor_keyword_eq(subcommand, &"PURGE"[0: 5]) {
         if command.argc != 2 {
@@ -12122,6 +12160,7 @@ fn command_executor_command_visible_acl_subcommand(name: &[byte]) bool {
 fn command_executor_command_visible_memory_subcommand(name: &[byte]) bool {
     return command_executor_slice_eq(name, &"help"[0: 4]) ||
         command_executor_slice_eq(name, &"doctor"[0: 6]) ||
+        command_executor_slice_eq(name, &"malloc-stats"[0: 12]) ||
         command_executor_slice_eq(name, &"purge"[0: 5]) ||
         command_executor_slice_eq(name, &"stats"[0: 5]) ||
         command_executor_slice_eq(name, &"usage"[0: 5]);

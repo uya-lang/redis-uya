@@ -129,6 +129,18 @@ fn command_executor_test_fill_bytes(data: &[byte], ch: byte) void {
     }
 }
 
+fn command_executor_test_is_lower_hex(data: &[byte]) bool {
+    var i: usize = 0;
+    while i < data.len {
+        const ch: byte = data.ptr[i];
+        if !((ch >= 48 as byte && ch <= 57 as byte) || (ch >= 97 as byte && ch <= 102 as byte)) {
+            return false;
+        }
+        i = i + 1;
+    }
+    return true;
+}
+
 fn command_executor_test_key_missing_at(engine: &Engine, key: &[byte], now_ms: u64) bool {
     const found: &RedisObject = lookup_key_at(engine, key, now_ms) catch |err| {
         if err == error.EngineKeyNotFound {
@@ -636,6 +648,7 @@ export fn test_command_command_catalog_core() !void {
 
     try command_executor_test_assert_catalog_status(&"acl"[0: 3], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"acl|cat"[0: 7], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"acl|genpass"[0: 11], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"acl|getuser"[0: 11], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"acl|help"[0: 8], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"acl|list"[0: 8], CommandCatalogStatus.status_partial);
@@ -866,6 +879,48 @@ export fn test_command_acl_help() !void {
     try assert_true(command_executor_test_slice_eq(log_extra_reply.data, &"ERR unknown subcommand or wrong number of arguments for 'log'. Try ACL HELP."[0: 76]));
     command_reply_cleanup(&log_extra_reply);
     resp_value_free(&log_extra_parsed.value);
+
+    var genpass_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nACL\r\n$7\r\nGENPASS\r\n"[0: 26]);
+    const genpass_command: Command = try command_executor_test_command(&router, &genpass_parsed);
+    var genpass_reply: CommandReply = command_execute_at(&engine, &genpass_command, 1000u64);
+    try assert_eq_i32(genpass_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_eq_i32(genpass_reply.data.len as i32, 64);
+    try assert_true(command_executor_test_is_lower_hex(genpass_reply.data));
+    command_reply_cleanup(&genpass_reply);
+    resp_value_free(&genpass_parsed.value);
+
+    var genpass_bits_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nACL\r\n$7\r\nGENPASS\r\n$1\r\n8\r\n"[0: 33]);
+    const genpass_bits_command: Command = try command_executor_test_command(&router, &genpass_bits_parsed);
+    var genpass_bits_reply: CommandReply = command_execute_at(&engine, &genpass_bits_command, 1000u64);
+    try assert_eq_i32(genpass_bits_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_eq_i32(genpass_bits_reply.data.len as i32, 2);
+    try assert_true(command_executor_test_is_lower_hex(genpass_bits_reply.data));
+    command_reply_cleanup(&genpass_bits_reply);
+    resp_value_free(&genpass_bits_parsed.value);
+
+    var genpass_zero_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nACL\r\n$7\r\nGENPASS\r\n$1\r\n0\r\n"[0: 33]);
+    const genpass_zero_command: Command = try command_executor_test_command(&router, &genpass_zero_parsed);
+    var genpass_zero_reply: CommandReply = command_execute_at(&engine, &genpass_zero_command, 1000u64);
+    try assert_eq_i32(genpass_zero_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(genpass_zero_reply.data, &"ERR ACL GENPASS argument must be the number of bits for the output password, a positive number up to 4096"[0: 105]));
+    command_reply_cleanup(&genpass_zero_reply);
+    resp_value_free(&genpass_zero_parsed.value);
+
+    var genpass_bad_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nACL\r\n$7\r\nGENPASS\r\n$1\r\nx\r\n"[0: 33]);
+    const genpass_bad_command: Command = try command_executor_test_command(&router, &genpass_bad_parsed);
+    var genpass_bad_reply: CommandReply = command_execute_at(&engine, &genpass_bad_command, 1000u64);
+    try assert_eq_i32(genpass_bad_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(genpass_bad_reply.data, &"ERR value is not an integer or out of range"[0: 43]));
+    command_reply_cleanup(&genpass_bad_reply);
+    resp_value_free(&genpass_bad_parsed.value);
+
+    var genpass_extra_parsed: RespParseResult = try parse_resp2(&"*4\r\n$3\r\nACL\r\n$7\r\nGENPASS\r\n$1\r\n8\r\n$1\r\n9\r\n"[0: 40]);
+    const genpass_extra_command: Command = try command_executor_test_command(&router, &genpass_extra_parsed);
+    var genpass_extra_reply: CommandReply = command_execute_at(&engine, &genpass_extra_command, 1000u64);
+    try assert_eq_i32(genpass_extra_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(genpass_extra_reply.data, &"ERR unknown subcommand or wrong number of arguments for 'GENPASS'. Try ACL HELP."[0: 80]));
+    command_reply_cleanup(&genpass_extra_reply);
+    resp_value_free(&genpass_extra_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

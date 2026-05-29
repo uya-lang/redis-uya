@@ -318,6 +318,14 @@ class RedisPySubsetClient:
         assert isinstance(result, list) or isinstance(result, str)
         return result
 
+    def acl_genpass(self, bits: bytes | None = None):
+        if bits is None:
+            result = self._request(b"ACL", b"GENPASS")
+        else:
+            result = self._request(b"ACL", b"GENPASS", bits)
+        assert isinstance(result, bytes)
+        return result
+
     def memory_usage(self, key: str, samples: int | None = None) -> int | None:
         parts = [b"MEMORY", b"USAGE", key.encode()]
         if samples is not None:
@@ -1051,6 +1059,12 @@ def run_smoke() -> None:
                 raise AssertionError("expected ACL LOG empty result")
             if client.acl_log(b"RESET") != "OK":
                 raise AssertionError("expected ACL LOG RESET OK")
+            acl_genpass = client.acl_genpass()
+            if len(acl_genpass) != 64 or any(ch not in b"0123456789abcdef" for ch in acl_genpass):
+                raise AssertionError(f"unexpected ACL GENPASS result: {acl_genpass!r}")
+            acl_genpass_bits = client.acl_genpass(b"8")
+            if len(acl_genpass_bits) != 2 or any(ch not in b"0123456789abcdef" for ch in acl_genpass_bits):
+                raise AssertionError(f"unexpected ACL GENPASS bits result: {acl_genpass_bits!r}")
             if client.acl_whoami() != b"default":
                 raise AssertionError("expected ACL WHOAMI default user")
             if client.acl_users() != [b"default"]:

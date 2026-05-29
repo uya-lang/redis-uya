@@ -525,6 +525,18 @@ if [[ "$ACL_LOG_RESET_RESULT" != "OK" ]]; then
     exit 1
 fi
 
+ACL_GENPASS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl genpass)"
+if [[ ${#ACL_GENPASS_RESULT} -ne 64 || ! "$ACL_GENPASS_RESULT" =~ ^[0-9a-f]+$ ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected 64 hex chars from ACL GENPASS, got '$ACL_GENPASS_RESULT'" >&2
+    exit 1
+fi
+
+ACL_GENPASS_BITS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl genpass 8)"
+if [[ ${#ACL_GENPASS_BITS_RESULT} -ne 2 || ! "$ACL_GENPASS_BITS_RESULT" =~ ^[0-9a-f]+$ ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected 2 hex chars from ACL GENPASS 8, got '$ACL_GENPASS_BITS_RESULT'" >&2
+    exit 1
+fi
+
 ACL_USERS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl users)"
 if [[ "$ACL_USERS_RESULT" != "default" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ACL USERS default, got '$ACL_USERS_RESULT'" >&2

@@ -7405,7 +7405,76 @@ fn command_executor_acl_log(command: &Command) CommandReply {
     return command_executor_owned_error(&"ERR unknown subcommand or wrong number of arguments for 'log'. Try ACL HELP."[0: 76]);
 }
 
-fn command_executor_acl(command: &Command) CommandReply {
+var command_executor_acl_genpass_counter: u64 = 0u64;
+
+fn command_executor_acl_genpass_hex_nibble(value: u64) byte {
+    const nibble: byte = (value & 15u64) as byte;
+    if nibble < 10 as byte {
+        return (48 as byte) + nibble;
+    }
+    return (97 as byte) + (nibble - 10 as byte);
+}
+
+fn command_executor_acl_genpass_next(state: u64) u64 {
+    var value: u64 = state;
+    value = value ^ (value << 13);
+    value = value ^ (value >> 7);
+    value = value ^ (value << 17);
+    if value == 0u64 {
+        return 0x9e3779b97f4a7c15u64;
+    }
+    return value;
+}
+
+fn command_executor_acl_genpass(command: &Command, now_ms: u64) CommandReply {
+    if command.argc > 3 {
+        return command_executor_owned_error(&"ERR unknown subcommand or wrong number of arguments for 'GENPASS'. Try ACL HELP."[0: 80]);
+    }
+
+    var bits: i64 = 256;
+    if command.argc == 3 {
+        const bits_arg: &[byte] = command_executor_arg(command, 2) catch {
+            return command_executor_wrong_arity();
+        };
+        bits = command_executor_parse_i64(bits_arg) catch {
+            return command_executor_invalid_integer();
+        };
+        if bits <= 0 || bits > 4096 {
+            return command_executor_owned_error(&"ERR ACL GENPASS argument must be the number of bits for the output password, a positive number up to 4096"[0: 105]);
+        }
+    }
+
+    const hex_len: usize = ((bits as usize) + 3) / 4;
+    var password: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&password);
+    }
+    _ = sds_grow(&password, hex_len) catch {
+        return command_executor_oom();
+    };
+
+    command_executor_acl_genpass_counter = command_executor_acl_genpass_counter + 1u64;
+    var state: u64 = now_ms ^
+        ((bits as u64) << 32) ^
+        (command_executor_acl_genpass_counter * 0x9e3779b97f4a7c15u64);
+    if state == 0u64 {
+        state = 0x6a09e667f3bcc909u64;
+    }
+
+    var i: usize = 0;
+    while i < hex_len {
+        state = command_executor_acl_genpass_next(state + i as u64);
+        password.buf.ptr[i] = command_executor_acl_genpass_hex_nibble(state);
+        i = i + 1;
+    }
+    password.len = hex_len;
+    password.buf.ptr[password.len] = 0 as byte;
+    return command_executor_owned_bulk_copy(password.buf[0: password.len]);
+}
+
+fn command_executor_acl(command: &Command, now_ms: u64) CommandReply {
     if command.argc < 2 {
         return command_executor_wrong_arity();
     }
@@ -7461,6 +7530,9 @@ fn command_executor_acl(command: &Command) CommandReply {
     }
     if command_executor_keyword_eq(subcommand, &"LOG"[0: 3]) {
         return command_executor_acl_log(command);
+    }
+    if command_executor_keyword_eq(subcommand, &"GENPASS"[0: 7]) {
+        return command_executor_acl_genpass(command, now_ms);
     }
 
     var err: Sds = sds_empty() catch {
@@ -11794,6 +11866,7 @@ fn command_executor_command_visible_function_subcommand(name: &[byte]) bool {
 
 fn command_executor_command_visible_acl_subcommand(name: &[byte]) bool {
     return command_executor_slice_eq(name, &"cat"[0: 3]) ||
+        command_executor_slice_eq(name, &"genpass"[0: 7]) ||
         command_executor_slice_eq(name, &"getuser"[0: 7]) ||
         command_executor_slice_eq(name, &"help"[0: 4]) ||
         command_executor_slice_eq(name, &"list"[0: 4]) ||
@@ -13772,7 +13845,7 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
         return command_executor_select(runtime, command);
     }
     if command.info.cmd_type == CommandType.command_acl {
-        return command_executor_acl(command);
+        return command_executor_acl(command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_object {
         return command_executor_object(runtime, engine, command, now_ms);

@@ -7373,6 +7373,19 @@ fn command_executor_acl_cat_commands(category: &[byte]) CommandReply {
     return command_executor_owned_array(reply_list);
 }
 
+fn command_executor_acl_getuser(command: &Command) CommandReply {
+    if command.argc != 3 {
+        return command_executor_owned_error(&"ERR wrong number of arguments for 'acl|getuser' command"[0: 55]);
+    }
+    const username: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    if !command_executor_slice_eq(username, &"default"[0: 7]) {
+        return command_executor_reply(CommandReplyType.reply_null_bulk, command_executor_empty_slice(), 0);
+    }
+    return command_executor_owned_raw(&"*12\r\n$5\r\nflags\r\n*2\r\n$2\r\non\r\n$6\r\nnopass\r\n$9\r\npasswords\r\n*0\r\n$8\r\ncommands\r\n$5\r\n+@all\r\n$4\r\nkeys\r\n$2\r\n~*\r\n$8\r\nchannels\r\n$2\r\n&*\r\n$9\r\nselectors\r\n*0\r\n"[0: 143]);
+}
+
 fn command_executor_acl(command: &Command) CommandReply {
     if command.argc < 2 {
         return command_executor_wrong_arity();
@@ -7423,6 +7436,9 @@ fn command_executor_acl(command: &Command) CommandReply {
             return command_executor_acl_cat_commands(category);
         }
         return command_executor_owned_error(&"ERR unknown subcommand or wrong number of arguments for 'cat'. Try ACL HELP."[0: 76]);
+    }
+    if command_executor_keyword_eq(subcommand, &"GETUSER"[0: 7]) {
+        return command_executor_acl_getuser(command);
     }
 
     var err: Sds = sds_empty() catch {
@@ -11756,6 +11772,7 @@ fn command_executor_command_visible_function_subcommand(name: &[byte]) bool {
 
 fn command_executor_command_visible_acl_subcommand(name: &[byte]) bool {
     return command_executor_slice_eq(name, &"cat"[0: 3]) ||
+        command_executor_slice_eq(name, &"getuser"[0: 7]) ||
         command_executor_slice_eq(name, &"help"[0: 4]) ||
         command_executor_slice_eq(name, &"list"[0: 4]) ||
         command_executor_slice_eq(name, &"users"[0: 5]) ||

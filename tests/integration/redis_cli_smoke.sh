@@ -507,6 +507,12 @@ if [[ "$ACL_CAT_STRING_RESULT" != *"get"* || "$ACL_CAT_STRING_RESULT" != *"set"*
     exit 1
 fi
 
+ACL_GETUSER_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl getuser default)"
+if [[ "$ACL_GETUSER_RESULT" != *"flags"* || "$ACL_GETUSER_RESULT" != *"nopass"* || "$ACL_GETUSER_RESULT" != *"+@all"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL GETUSER default details, got '$ACL_GETUSER_RESULT'" >&2
+    exit 1
+fi
+
 ACL_USERS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl users)"
 if [[ "$ACL_USERS_RESULT" != "default" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ACL USERS default, got '$ACL_USERS_RESULT'" >&2

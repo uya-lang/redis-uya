@@ -149,6 +149,7 @@ def run_smoke() -> None:
                 not isinstance(listed_acl, list)
                 or b"acl" not in listed_acl
                 or b"acl|cat" not in listed_acl
+                or b"acl|getuser" not in listed_acl
                 or b"acl|help" not in listed_acl
                 or b"acl|list" not in listed_acl
                 or b"acl|users" not in listed_acl
@@ -166,6 +167,18 @@ def run_smoke() -> None:
             acl_cat_string = send_command(sock, b"ACL", b"CAT", b"string")
             if not isinstance(acl_cat_string, list) or b"get" not in acl_cat_string or b"set" not in acl_cat_string:
                 raise AssertionError(f"unexpected ACL CAT string: {acl_cat_string!r}")
+            acl_getuser = send_command(sock, b"ACL", b"GETUSER", b"default")
+            if (
+                not isinstance(acl_getuser, list)
+                or acl_getuser[0] != b"flags"
+                or acl_getuser[1] != [b"on", b"nopass"]
+                or b"commands" not in acl_getuser
+                or b"+@all" not in acl_getuser
+            ):
+                raise AssertionError(f"unexpected ACL GETUSER default: {acl_getuser!r}")
+            acl_getuser_missing = send_command(sock, b"ACL", b"GETUSER", b"missing")
+            if acl_getuser_missing is not None:
+                raise AssertionError(f"unexpected ACL GETUSER missing: {acl_getuser_missing!r}")
             acl_whoami = send_command(sock, b"ACL", b"WHOAMI")
             if acl_whoami != b"default":
                 raise AssertionError(f"unexpected ACL WHOAMI: {acl_whoami!r}")
@@ -284,22 +297,24 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"function commands missing from COMMAND INFO: {function_info!r}")
 
-            acl_info = send_command(sock, b"COMMAND", b"INFO", b"ACL", b"ACL|CAT", b"ACL|HELP", b"ACL|LIST", b"ACL|USERS", b"ACL|WHOAMI")
+            acl_info = send_command(sock, b"COMMAND", b"INFO", b"ACL", b"ACL|CAT", b"ACL|GETUSER", b"ACL|HELP", b"ACL|LIST", b"ACL|USERS", b"ACL|WHOAMI")
             if (
                 not isinstance(acl_info, list)
-                or len(acl_info) != 6
+                or len(acl_info) != 7
                 or not isinstance(acl_info[0], list)
                 or acl_info[0][0] != b"acl"
                 or not isinstance(acl_info[1], list)
                 or acl_info[1][0] != b"acl|cat"
                 or not isinstance(acl_info[2], list)
-                or acl_info[2][0] != b"acl|help"
+                or acl_info[2][0] != b"acl|getuser"
                 or not isinstance(acl_info[3], list)
-                or acl_info[3][0] != b"acl|list"
+                or acl_info[3][0] != b"acl|help"
                 or not isinstance(acl_info[4], list)
-                or acl_info[4][0] != b"acl|users"
+                or acl_info[4][0] != b"acl|list"
                 or not isinstance(acl_info[5], list)
-                or acl_info[5][0] != b"acl|whoami"
+                or acl_info[5][0] != b"acl|users"
+                or not isinstance(acl_info[6], list)
+                or acl_info[6][0] != b"acl|whoami"
             ):
                 raise AssertionError(f"acl commands missing from COMMAND INFO: {acl_info!r}")
 
@@ -467,6 +482,7 @@ def run_smoke() -> None:
                 or b"client|id" not in docs_all_resp2
                 or b"acl" not in docs_all_resp2
                 or b"acl|cat" not in docs_all_resp2
+                or b"acl|getuser" not in docs_all_resp2
                 or b"acl|help" not in docs_all_resp2
                 or b"acl|list" not in docs_all_resp2
                 or b"acl|users" not in docs_all_resp2
@@ -680,6 +696,7 @@ def run_smoke() -> None:
                 or not isinstance(docs_all.get(b"client|id"), dict)
                 or not isinstance(docs_all.get(b"acl"), dict)
                 or not isinstance(docs_all.get(b"acl|cat"), dict)
+                or not isinstance(docs_all.get(b"acl|getuser"), dict)
                 or not isinstance(docs_all.get(b"acl|help"), dict)
                 or not isinstance(docs_all.get(b"acl|list"), dict)
                 or not isinstance(docs_all.get(b"acl|users"), dict)

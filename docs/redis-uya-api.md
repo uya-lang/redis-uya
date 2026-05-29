@@ -77,6 +77,7 @@ AUTH default password
 
 ```text
 ACL CAT [category]
+ACL GETUSER username
 ACL HELP
 ACL LIST
 ACL USERS
@@ -86,6 +87,7 @@ ACL WHOAMI
 返回：
 
 - `ACL CAT` 返回 Redis 兼容的 ACL category 列表；`ACL CAT category` 返回当前可见命令目录中匹配该 category 的命令名
+- `ACL GETUSER default` 返回当前默认用户详情；未知用户名返回 null
 - `ACL HELP` 返回 Redis 兼容的 ACL 子命令帮助数组
 - `ACL LIST` 返回当前默认用户的 config file 格式描述；当前固定为 `user default on nopass ~* &* +@all`
 - `ACL USERS` 返回当前已知用户名数组；当前仅包含 `default`
@@ -93,8 +95,8 @@ ACL WHOAMI
 
 说明：
 
-- 当前实现为 partial，仅暴露 `ACL CAT`、`ACL HELP`、`ACL LIST`、`ACL USERS`、`ACL WHOAMI` 和 `COMMAND*` 可见面
-- `COMMAND INFO/LIST/DOCS` 会暴露 `ACL`、`ACL|CAT`、`ACL|HELP`、`ACL|LIST`、`ACL|USERS` 与 `ACL|WHOAMI`
+- 当前实现为 partial，仅暴露 `ACL CAT`、`ACL GETUSER`、`ACL HELP`、`ACL LIST`、`ACL USERS`、`ACL WHOAMI` 和 `COMMAND*` 可见面
+- `COMMAND INFO/LIST/DOCS` 会暴露 `ACL`、`ACL|CAT`、`ACL|GETUSER`、`ACL|HELP`、`ACL|LIST`、`ACL|USERS` 与 `ACL|WHOAMI`
 - 当前不支持 ACL 用户存储、命令权限、key pattern 权限、ACL 日志、ACL 文件加载保存或真实权限拒绝路径；安全基线仍由 `requirepass` / `AUTH` 提供
 
 ### `COMMAND`

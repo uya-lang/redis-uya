@@ -7478,6 +7478,105 @@ fn command_executor_acl_file_unconfigured() CommandReply {
     return command_executor_owned_error(&"ERR This Redis instance is not configured to use an ACL file. You may want to specify users via the ACL SETUSER command and then issue a CONFIG REWRITE (assuming you have a Redis configuration file set) in order to store users in the Redis configuration."[0: 254]);
 }
 
+fn command_executor_acl_setuser_modifier_error(modifier: &[byte], suffix: &[byte]) CommandReply {
+    var err: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&err);
+    }
+    _ = command_executor_info_append(&err, &"ERR Error in ACL SETUSER modifier '"[0: 35]) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append(&err, modifier) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append(&err, suffix) catch {
+        return command_executor_oom();
+    };
+    return command_executor_owned_error(err.buf[0: err.len]);
+}
+
+fn command_executor_acl_setuser_noop_modifier(modifier: &[byte]) bool {
+    if command_executor_keyword_eq(modifier, &"ON"[0: 2]) ||
+        command_executor_keyword_eq(modifier, &"NOPASS"[0: 6]) ||
+        command_executor_keyword_eq(modifier, &"ALLKEYS"[0: 7]) ||
+        command_executor_keyword_eq(modifier, &"ALLCHANNELS"[0: 11]) ||
+        command_executor_keyword_eq(modifier, &"ALLCOMMANDS"[0: 11]) ||
+        command_executor_keyword_eq(modifier, &"~*"[0: 2]) ||
+        command_executor_keyword_eq(modifier, &"&*"[0: 2]) {
+        return true;
+    }
+    if modifier.len > 1 && modifier.ptr[0] == 43 as byte {
+        if modifier.len > 2 && modifier.ptr[1] == 64 as byte {
+            const category: &[byte] = modifier[2: modifier.len - 2];
+            return command_executor_keyword_eq(category, &"all"[0: 3]) ||
+                command_executor_acl_category_known(category);
+        }
+        const command_name: &[byte] = modifier[1: modifier.len - 1];
+        const router: CommandRouter = command_router_new();
+        _ = command_router_lookup(&router, command_name) catch {
+            return false;
+        };
+        return true;
+    }
+    return false;
+}
+
+fn command_executor_acl_setuser_mutating_modifier(modifier: &[byte]) bool {
+    if command_executor_keyword_eq(modifier, &"OFF"[0: 3]) ||
+        command_executor_keyword_eq(modifier, &"RESET"[0: 5]) ||
+        command_executor_keyword_eq(modifier, &"RESETPASS"[0: 9]) ||
+        command_executor_keyword_eq(modifier, &"RESETKEYS"[0: 9]) ||
+        command_executor_keyword_eq(modifier, &"RESETCHANNELS"[0: 13]) ||
+        command_executor_keyword_eq(modifier, &"CLEARSELECTORS"[0: 14]) ||
+        command_executor_keyword_eq(modifier, &"RESETSELECTORS"[0: 14]) {
+        return true;
+    }
+    if modifier.len > 0 {
+        const head: byte = modifier.ptr[0];
+        return head == 45 as byte ||
+            head == 62 as byte ||
+            head == 60 as byte ||
+            head == 35 as byte ||
+            head == 33 as byte ||
+            head == 37 as byte ||
+            head == 40 as byte;
+    }
+    return false;
+}
+
+fn command_executor_acl_setuser(command: &Command) CommandReply {
+    if command.argc < 3 {
+        return command_executor_owned_error(&"ERR wrong number of arguments for 'acl|setuser' command"[0: 55]);
+    }
+    const username: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    if !command_executor_keyword_eq(username, &"default"[0: 7]) {
+        return command_executor_owned_error(&"ERR ACL SETUSER redis-uya partial only supports the default user"[0: 64]);
+    }
+
+    var index: usize = 3;
+    while index < command.argc {
+        const modifier: &[byte] = command_executor_arg(command, index) catch {
+            return command_executor_wrong_arity();
+        };
+        if command_executor_acl_setuser_noop_modifier(modifier) {
+            index = index + 1;
+            continue;
+        }
+        if modifier.len > 1 && modifier.ptr[0] == 43 as byte {
+            return command_executor_acl_setuser_modifier_error(modifier, &"': Unknown command or category name in ACL"[0: 42]);
+        }
+        if command_executor_acl_setuser_mutating_modifier(modifier) {
+            return command_executor_owned_error(&"ERR ACL SETUSER redis-uya partial only supports default no-op modifiers"[0: 71]);
+        }
+        return command_executor_acl_setuser_modifier_error(modifier, &"': Syntax error"[0: 15]);
+    }
+    return command_executor_simple(&"OK"[0: 2]);
+}
+
 fn command_executor_acl_deluser(command: &Command) CommandReply {
     if command.argc < 3 {
         return command_executor_owned_error(&"ERR wrong number of arguments for 'acl|deluser' command"[0: 55]);
@@ -7652,6 +7751,9 @@ fn command_executor_acl(command: &Command, now_ms: u64) CommandReply {
     }
     if command_executor_keyword_eq(subcommand, &"DRYRUN"[0: 6]) {
         return command_executor_acl_dryrun(command);
+    }
+    if command_executor_keyword_eq(subcommand, &"SETUSER"[0: 7]) {
+        return command_executor_acl_setuser(command);
     }
 
     var err: Sds = sds_empty() catch {
@@ -11994,6 +12096,7 @@ fn command_executor_command_visible_acl_subcommand(name: &[byte]) bool {
         command_executor_slice_eq(name, &"load"[0: 4]) ||
         command_executor_slice_eq(name, &"log"[0: 3]) ||
         command_executor_slice_eq(name, &"save"[0: 4]) ||
+        command_executor_slice_eq(name, &"setuser"[0: 7]) ||
         command_executor_slice_eq(name, &"users"[0: 5]) ||
         command_executor_slice_eq(name, &"whoami"[0: 6]);
 }

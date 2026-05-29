@@ -162,9 +162,10 @@ def run_smoke() -> None:
                 or b"acl|load" not in listed_acl
                 or b"acl|log" not in listed_acl
                 or b"acl|save" not in listed_acl
+                or b"acl|setuser" not in listed_acl
                 or b"acl|users" not in listed_acl
                 or b"acl|whoami" not in listed_acl
-                or b"acl|setuser" in listed_acl
+                or b"function|load" in listed_acl
             ):
                 raise AssertionError(f"unexpected COMMAND LIST acl* result: {listed_acl!r}")
 
@@ -233,6 +234,15 @@ def run_smoke() -> None:
                 raise AssertionError("expected ACL DRYRUN missing user to fail")
             except RespError as exc:
                 if "User 'missing' not found" not in str(exc):
+                    raise
+            acl_setuser_default = send_command(sock, b"ACL", b"SETUSER", b"default", b"on", b"nopass", b"~*", b"&*", b"+@all")
+            if acl_setuser_default != "OK":
+                raise AssertionError(f"unexpected ACL SETUSER default: {acl_setuser_default!r}")
+            try:
+                send_command(sock, b"ACL", b"SETUSER", b"default", b"invalidattr")
+                raise AssertionError("expected ACL SETUSER invalid modifier to fail")
+            except RespError as exc:
+                if "Error in ACL SETUSER modifier 'invalidattr': Syntax error" not in str(exc):
                     raise
             acl_whoami = send_command(sock, b"ACL", b"WHOAMI")
             if acl_whoami != b"default":
@@ -352,10 +362,10 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"function commands missing from COMMAND INFO: {function_info!r}")
 
-            acl_info = send_command(sock, b"COMMAND", b"INFO", b"ACL", b"ACL|CAT", b"ACL|DELUSER", b"ACL|DRYRUN", b"ACL|GENPASS", b"ACL|GETUSER", b"ACL|HELP", b"ACL|LIST", b"ACL|LOAD", b"ACL|LOG", b"ACL|SAVE", b"ACL|USERS", b"ACL|WHOAMI")
+            acl_info = send_command(sock, b"COMMAND", b"INFO", b"ACL", b"ACL|CAT", b"ACL|DELUSER", b"ACL|DRYRUN", b"ACL|GENPASS", b"ACL|GETUSER", b"ACL|HELP", b"ACL|LIST", b"ACL|LOAD", b"ACL|LOG", b"ACL|SAVE", b"ACL|SETUSER", b"ACL|USERS", b"ACL|WHOAMI")
             if (
                 not isinstance(acl_info, list)
-                or len(acl_info) != 13
+                or len(acl_info) != 14
                 or not isinstance(acl_info[0], list)
                 or acl_info[0][0] != b"acl"
                 or not isinstance(acl_info[1], list)
@@ -379,9 +389,11 @@ def run_smoke() -> None:
                 or not isinstance(acl_info[10], list)
                 or acl_info[10][0] != b"acl|save"
                 or not isinstance(acl_info[11], list)
-                or acl_info[11][0] != b"acl|users"
+                or acl_info[11][0] != b"acl|setuser"
                 or not isinstance(acl_info[12], list)
-                or acl_info[12][0] != b"acl|whoami"
+                or acl_info[12][0] != b"acl|users"
+                or not isinstance(acl_info[13], list)
+                or acl_info[13][0] != b"acl|whoami"
             ):
                 raise AssertionError(f"acl commands missing from COMMAND INFO: {acl_info!r}")
 
@@ -518,7 +530,7 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"list move commands missing from COMMAND INFO: {list_move_info!r}")
 
-            unsupported_info = send_command(sock, b"COMMAND", b"INFO", b"ACL|SETUSER", b"BLMOVE", b"CLUSTER|RESET")
+            unsupported_info = send_command(sock, b"COMMAND", b"INFO", b"FUNCTION|LOAD", b"BLMOVE", b"CLUSTER|RESET")
             if unsupported_info != [None, None, None]:
                 raise AssertionError(f"unsupported COMMAND INFO entries must be null: {unsupported_info!r}")
 
@@ -537,7 +549,7 @@ def run_smoke() -> None:
             if not isinstance(docs[1], list) or b"summary" not in docs[1]:
                 raise AssertionError(f"missing COMMAND DOCS summary: {docs!r}")
 
-            unsupported_docs = send_command(sock, b"COMMAND", b"DOCS", b"ACL|SETUSER", b"BLMOVE", b"CLUSTER|RESET")
+            unsupported_docs = send_command(sock, b"COMMAND", b"DOCS", b"FUNCTION|LOAD", b"BLMOVE", b"CLUSTER|RESET")
             if unsupported_docs != []:
                 raise AssertionError(f"unsupported COMMAND DOCS entries should be omitted: {unsupported_docs!r}")
 
@@ -558,11 +570,12 @@ def run_smoke() -> None:
                 or b"acl|load" not in docs_all_resp2
                 or b"acl|log" not in docs_all_resp2
                 or b"acl|save" not in docs_all_resp2
+                or b"acl|setuser" not in docs_all_resp2
                 or b"acl|users" not in docs_all_resp2
                 or b"acl|whoami" not in docs_all_resp2
             ):
                 raise AssertionError(f"unexpected COMMAND DOCS all RESP2 payload: {docs_all_resp2!r}")
-            if b"acl|setuser" in docs_all_resp2 or b"blmove" in docs_all_resp2 or b"cluster|reset" in docs_all_resp2:
+            if b"function|load" in docs_all_resp2 or b"blmove" in docs_all_resp2 or b"cluster|reset" in docs_all_resp2:
                 raise AssertionError(f"unsupported commands leaked into COMMAND DOCS all RESP2: {docs_all_resp2!r}")
 
             listed_blocking = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"BL*")
@@ -778,11 +791,12 @@ def run_smoke() -> None:
                 or not isinstance(docs_all.get(b"acl|load"), dict)
                 or not isinstance(docs_all.get(b"acl|log"), dict)
                 or not isinstance(docs_all.get(b"acl|save"), dict)
+                or not isinstance(docs_all.get(b"acl|setuser"), dict)
                 or not isinstance(docs_all.get(b"acl|users"), dict)
                 or not isinstance(docs_all.get(b"acl|whoami"), dict)
             ):
                 raise AssertionError(f"unexpected COMMAND DOCS all RESP3 payload: {docs_all!r}")
-            if b"acl|setuser" in docs_all or b"blmove" in docs_all or b"cluster|reset" in docs_all:
+            if b"function|load" in docs_all or b"blmove" in docs_all or b"cluster|reset" in docs_all:
                 raise AssertionError(f"unsupported commands leaked into COMMAND DOCS all RESP3: {docs_all!r}")
 
             getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"SORT", b"mylist", b"ALPHA", b"STORE", b"out")

@@ -290,6 +290,7 @@ PARTIAL_NAMES = {
     "acl|load",
     "acl|log",
     "acl|save",
+    "acl|setuser",
     "acl|users",
     "acl|whoami",
     "auth",

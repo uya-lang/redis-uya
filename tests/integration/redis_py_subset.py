@@ -340,6 +340,9 @@ class RedisPySubsetClient:
     def acl_dryrun(self, username: bytes, *command: bytes):
         return self._request(b"ACL", b"DRYRUN", username, *command)
 
+    def acl_setuser(self, username: bytes, *modifiers: bytes):
+        return self._request(b"ACL", b"SETUSER", username, *modifiers)
+
     def memory_usage(self, key: str, samples: int | None = None) -> int | None:
         parts = [b"MEMORY", b"USAGE", key.encode()]
         if samples is not None:
@@ -1107,6 +1110,14 @@ def run_smoke() -> None:
             except RespError as exc:
                 if str(exc) != "ERR User 'missing' not found":
                     raise AssertionError(f"unexpected ACL DRYRUN missing user error: {exc}") from exc
+            if client.acl_setuser(b"default", b"on", b"nopass", b"~*", b"&*", b"+@all") != "OK":
+                raise AssertionError("expected ACL SETUSER default no-op modifiers to return OK")
+            try:
+                client.acl_setuser(b"default", b"invalidattr")
+                raise AssertionError("expected ACL SETUSER invalid modifier to fail")
+            except RespError as exc:
+                if str(exc) != "ERR Error in ACL SETUSER modifier 'invalidattr': Syntax error":
+                    raise AssertionError(f"unexpected ACL SETUSER invalid modifier error: {exc}") from exc
             if client.acl_whoami() != b"default":
                 raise AssertionError("expected ACL WHOAMI default user")
             if client.acl_users() != [b"default"]:

@@ -86,6 +86,7 @@ ACL LIST
 ACL LOAD
 ACL LOG [count | RESET]
 ACL SAVE
+ACL SETUSER username [attribute ...]
 ACL USERS
 ACL WHOAMI
 ```
@@ -102,13 +103,14 @@ ACL WHOAMI
 - `ACL LOAD` 当前按未配置 ACL 文件的 Redis 兼容错误返回，不会修改用户状态
 - `ACL LOG` 当前返回空数组；`ACL LOG RESET` 返回 `OK`
 - `ACL SAVE` 当前按未配置 ACL 文件的 Redis 兼容错误返回，不会写入 ACL 文件
+- `ACL SETUSER default [attribute ...]` 当前支持不会改变固定默认用户视图的 no-op 修饰符，例如 `on nopass ~* &* +@all`；其他用户和会改变权限状态的修饰符返回 partial 限制错误
 - `ACL USERS` 返回当前已知用户名数组；当前仅包含 `default`
 - `ACL WHOAMI` 返回当前连接用户名；当前始终为 `default`
 
 说明：
 
-- 当前实现为 partial，仅暴露 `ACL CAT`、`ACL DELUSER`、`ACL DRYRUN`、`ACL GENPASS`、`ACL GETUSER`、`ACL HELP`、`ACL LIST`、`ACL LOAD`、`ACL LOG`、`ACL SAVE`、`ACL USERS`、`ACL WHOAMI` 和 `COMMAND*` 可见面
-- `COMMAND INFO/LIST/DOCS` 会暴露 `ACL`、`ACL|CAT`、`ACL|DELUSER`、`ACL|DRYRUN`、`ACL|GENPASS`、`ACL|GETUSER`、`ACL|HELP`、`ACL|LIST`、`ACL|LOAD`、`ACL|LOG`、`ACL|SAVE`、`ACL|USERS` 与 `ACL|WHOAMI`
+- 当前实现为 partial，仅暴露 `ACL CAT`、`ACL DELUSER`、`ACL DRYRUN`、`ACL GENPASS`、`ACL GETUSER`、`ACL HELP`、`ACL LIST`、`ACL LOAD`、`ACL LOG`、`ACL SAVE`、`ACL SETUSER`、`ACL USERS`、`ACL WHOAMI` 和 `COMMAND*` 可见面
+- `COMMAND INFO/LIST/DOCS` 会暴露 `ACL`、`ACL|CAT`、`ACL|DELUSER`、`ACL|DRYRUN`、`ACL|GENPASS`、`ACL|GETUSER`、`ACL|HELP`、`ACL|LIST`、`ACL|LOAD`、`ACL|LOG`、`ACL|SAVE`、`ACL|SETUSER`、`ACL|USERS` 与 `ACL|WHOAMI`
 - 当前不支持 ACL 用户存储、命令权限、key pattern 权限、ACL 日志、ACL 文件加载保存或真实权限拒绝路径；安全基线仍由 `requirepass` / `AUTH` 提供
 
 ### `COMMAND`

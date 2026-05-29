@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 125 | 0 | 3 | 91 |
+| Tier A: standalone core | 365 | 259 | 146 | 126 | 0 | 3 | 90 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `132` |
+| `partial` | `133` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `244` |
+| `deferred` | `243` |
 
 ## Group counts
 
@@ -77,7 +77,7 @@
 | `acl|load` | `server` | `partial` | `-` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `acl|log` | `server` | `partial` | `-` | `-2` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `acl|save` | `server` | `partial` | `-` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `acl|setuser` | `server` | `deferred` | `v0.9.3` | `-3` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `acl|setuser` | `server` | `partial` | `-` | `-3` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `acl|users` | `server` | `partial` | `-` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `acl|whoami` | `server` | `partial` | `-` | `2` | `-` | `no` | `@slow` |
 | `append` | `string` | `full` | `-` | `3` | `-` | `no` | `@write, @string, @fast` |

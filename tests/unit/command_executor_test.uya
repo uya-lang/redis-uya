@@ -570,7 +570,7 @@ export fn test_command_command_catalog_core() !void {
     command_reply_cleanup(&info_reply);
     resp_value_free(&info_parsed.value);
 
-    var info_unsupported_parsed: RespParseResult = try parse_resp2(&"*5\r\n$7\r\nCOMMAND\r\n$4\r\nINFO\r\n$11\r\nACL|SETUSER\r\n$6\r\nBLMOVE\r\n$13\r\nCLUSTER|RESET\r\n"[0: 77]);
+    var info_unsupported_parsed: RespParseResult = try parse_resp2(&"*5\r\n$7\r\nCOMMAND\r\n$4\r\nINFO\r\n$13\r\nFUNCTION|LOAD\r\n$6\r\nBLMOVE\r\n$13\r\nCLUSTER|RESET\r\n"[0: 79]);
     const info_unsupported_command: Command = try command_executor_test_command(&router, &info_unsupported_parsed);
     var info_unsupported_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &info_unsupported_command, 1000u64);
     try assert_eq_i32(info_unsupported_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
@@ -599,7 +599,7 @@ export fn test_command_command_catalog_core() !void {
     command_reply_cleanup(&docs_all_reply);
     resp_value_free(&docs_all_parsed.value);
 
-    var docs_unsupported_parsed: RespParseResult = try parse_resp2(&"*5\r\n$7\r\nCOMMAND\r\n$4\r\nDOCS\r\n$11\r\nACL|SETUSER\r\n$6\r\nBLMOVE\r\n$13\r\nCLUSTER|RESET\r\n"[0: 77]);
+    var docs_unsupported_parsed: RespParseResult = try parse_resp2(&"*5\r\n$7\r\nCOMMAND\r\n$4\r\nDOCS\r\n$13\r\nFUNCTION|LOAD\r\n$6\r\nBLMOVE\r\n$13\r\nCLUSTER|RESET\r\n"[0: 79]);
     const docs_unsupported_command: Command = try command_executor_test_command(&router, &docs_unsupported_parsed);
     var docs_unsupported_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &docs_unsupported_command, 1000u64);
     try assert_eq_i32(docs_unsupported_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
@@ -657,6 +657,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"acl|load"[0: 8], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"acl|log"[0: 7], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"acl|save"[0: 8], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"acl|setuser"[0: 11], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"acl|users"[0: 9], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"acl|whoami"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"config|set"[0: 10], CommandCatalogStatus.status_partial);
@@ -1013,6 +1014,38 @@ export fn test_command_acl_help() !void {
     try assert_true(command_executor_test_slice_eq(dryrun_missing_command_reply.data, &"ERR Command 'NOPE' not found"[0: 28]));
     command_reply_cleanup(&dryrun_missing_command_reply);
     resp_value_free(&dryrun_missing_command_parsed.value);
+
+    var setuser_short_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n"[0: 26]);
+    const setuser_short_command: Command = try command_executor_test_command(&router, &setuser_short_parsed);
+    var setuser_short_reply: CommandReply = command_execute_at(&engine, &setuser_short_command, 1000u64);
+    try assert_eq_i32(setuser_short_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(setuser_short_reply.data, &"ERR wrong number of arguments for 'acl|setuser' command"[0: 55]));
+    command_reply_cleanup(&setuser_short_reply);
+    resp_value_free(&setuser_short_parsed.value);
+
+    var setuser_default_parsed: RespParseResult = try parse_resp2(&"*8\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$7\r\ndefault\r\n$2\r\non\r\n$6\r\nnopass\r\n$2\r\n~*\r\n$2\r\n&*\r\n$5\r\n+@all\r\n"[0: 86]);
+    const setuser_default_command: Command = try command_executor_test_command(&router, &setuser_default_parsed);
+    var setuser_default_reply: CommandReply = command_execute_at(&engine, &setuser_default_command, 1000u64);
+    try assert_eq_i32(setuser_default_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(setuser_default_reply.data, &"OK"[0: 2]));
+    command_reply_cleanup(&setuser_default_reply);
+    resp_value_free(&setuser_default_parsed.value);
+
+    var setuser_invalid_parsed: RespParseResult = try parse_resp2(&"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$7\r\ndefault\r\n$11\r\ninvalidattr\r\n"[0: 57]);
+    const setuser_invalid_command: Command = try command_executor_test_command(&router, &setuser_invalid_parsed);
+    var setuser_invalid_reply: CommandReply = command_execute_at(&engine, &setuser_invalid_command, 1000u64);
+    try assert_eq_i32(setuser_invalid_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(setuser_invalid_reply.data, &"ERR Error in ACL SETUSER modifier 'invalidattr': Syntax error"[0: 61]));
+    command_reply_cleanup(&setuser_invalid_reply);
+    resp_value_free(&setuser_invalid_parsed.value);
+
+    var setuser_other_parsed: RespParseResult = try parse_resp2(&"*5\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$5\r\nalice\r\n$2\r\non\r\n$6\r\nnopass\r\n"[0: 57]);
+    const setuser_other_command: Command = try command_executor_test_command(&router, &setuser_other_parsed);
+    var setuser_other_reply: CommandReply = command_execute_at(&engine, &setuser_other_command, 1000u64);
+    try assert_eq_i32(setuser_other_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(setuser_other_reply.data, &"ERR ACL SETUSER redis-uya partial only supports the default user"[0: 64]));
+    command_reply_cleanup(&setuser_other_reply);
+    resp_value_free(&setuser_other_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

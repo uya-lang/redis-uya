@@ -573,6 +573,18 @@ if [[ "$ACL_DRYRUN_MISSING_RESULT" != "ERR User 'missing' not found" ]]; then
     exit 1
 fi
 
+ACL_SETUSER_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser default on nopass '~*' '&*' '+@all')"
+if [[ "$ACL_SETUSER_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL SETUSER default to return OK, got '$ACL_SETUSER_RESULT'" >&2
+    exit 1
+fi
+
+ACL_SETUSER_INVALID_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser default invalidattr 2>&1 || true)"
+if [[ "$ACL_SETUSER_INVALID_RESULT" != "ERR Error in ACL SETUSER modifier 'invalidattr': Syntax error" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL SETUSER invalid modifier error, got '$ACL_SETUSER_INVALID_RESULT'" >&2
+    exit 1
+fi
+
 ACL_USERS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl users)"
 if [[ "$ACL_USERS_RESULT" != "default" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ACL USERS default, got '$ACL_USERS_RESULT'" >&2

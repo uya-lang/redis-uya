@@ -558,7 +558,7 @@ export fn test_command_command_catalog_core() !void {
     command_reply_cleanup(&info_reply);
     resp_value_free(&info_parsed.value);
 
-    var info_unsupported_parsed: RespParseResult = try parse_resp2(&"*5\r\n$7\r\nCOMMAND\r\n$4\r\nINFO\r\n$7\r\nACL|CAT\r\n$6\r\nBLMOVE\r\n$13\r\nCLUSTER|RESET\r\n"[0: 72]);
+    var info_unsupported_parsed: RespParseResult = try parse_resp2(&"*5\r\n$7\r\nCOMMAND\r\n$4\r\nINFO\r\n$11\r\nACL|DELUSER\r\n$6\r\nBLMOVE\r\n$13\r\nCLUSTER|RESET\r\n"[0: 77]);
     const info_unsupported_command: Command = try command_executor_test_command(&router, &info_unsupported_parsed);
     var info_unsupported_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &info_unsupported_command, 1000u64);
     try assert_eq_i32(info_unsupported_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
@@ -587,7 +587,7 @@ export fn test_command_command_catalog_core() !void {
     command_reply_cleanup(&docs_all_reply);
     resp_value_free(&docs_all_parsed.value);
 
-    var docs_unsupported_parsed: RespParseResult = try parse_resp2(&"*5\r\n$7\r\nCOMMAND\r\n$4\r\nDOCS\r\n$7\r\nACL|CAT\r\n$6\r\nBLMOVE\r\n$13\r\nCLUSTER|RESET\r\n"[0: 72]);
+    var docs_unsupported_parsed: RespParseResult = try parse_resp2(&"*5\r\n$7\r\nCOMMAND\r\n$4\r\nDOCS\r\n$11\r\nACL|DELUSER\r\n$6\r\nBLMOVE\r\n$13\r\nCLUSTER|RESET\r\n"[0: 77]);
     const docs_unsupported_command: Command = try command_executor_test_command(&router, &docs_unsupported_parsed);
     var docs_unsupported_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &docs_unsupported_command, 1000u64);
     try assert_eq_i32(docs_unsupported_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
@@ -635,6 +635,7 @@ export fn test_command_command_catalog_core() !void {
     resp_value_free(&list_hidden_parsed.value);
 
     try command_executor_test_assert_catalog_status(&"acl"[0: 3], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"acl|cat"[0: 7], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"acl|help"[0: 8], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"acl|list"[0: 8], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"acl|users"[0: 9], CommandCatalogStatus.status_partial);
@@ -756,6 +757,40 @@ export fn test_command_acl_help() !void {
     try assert_true(command_executor_test_slice_eq(list_extra_reply.data, &"ERR wrong number of arguments for 'acl|list' command"[0: 52]));
     command_reply_cleanup(&list_extra_reply);
     resp_value_free(&list_extra_parsed.value);
+
+    var cat_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nACL\r\n$3\r\nCAT\r\n"[0: 22]);
+    const cat_command: Command = try command_executor_test_command(&router, &cat_parsed);
+    var cat_reply: CommandReply = command_execute_at(&engine, &cat_command, 1000u64);
+    const cat_len: usize = try connection_encode_reply(&cat_reply, &out[0], 2048);
+    try assert_true(command_executor_test_contains(out[0: cat_len], &"$6\r\nstring\r\n"[0: 11]));
+    try assert_true(command_executor_test_contains(out[0: cat_len], &"$11\r\ntransaction\r\n"[0: 18]));
+    command_reply_cleanup(&cat_reply);
+    resp_value_free(&cat_parsed.value);
+
+    var cat_string_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nACL\r\n$3\r\nCAT\r\n$6\r\nstring\r\n"[0: 34]);
+    const cat_string_command: Command = try command_executor_test_command(&router, &cat_string_parsed);
+    var cat_string_reply: CommandReply = command_execute_at(&engine, &cat_string_command, 1000u64);
+    const cat_string_len: usize = try connection_encode_reply(&cat_string_reply, &out[0], 2048);
+    try assert_true(command_executor_test_contains(out[0: cat_string_len], &"$3\r\nget\r\n"[0: 9]));
+    try assert_true(command_executor_test_contains(out[0: cat_string_len], &"$3\r\nset\r\n"[0: 9]));
+    command_reply_cleanup(&cat_string_reply);
+    resp_value_free(&cat_string_parsed.value);
+
+    var cat_at_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nACL\r\n$3\r\nCAT\r\n$7\r\n@string\r\n"[0: 35]);
+    const cat_at_command: Command = try command_executor_test_command(&router, &cat_at_parsed);
+    var cat_at_reply: CommandReply = command_execute_at(&engine, &cat_at_command, 1000u64);
+    try assert_eq_i32(cat_at_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(cat_at_reply.data, &"ERR Unknown category '@string'"[0: 30]));
+    command_reply_cleanup(&cat_at_reply);
+    resp_value_free(&cat_at_parsed.value);
+
+    var cat_extra_parsed: RespParseResult = try parse_resp2(&"*4\r\n$3\r\nACL\r\n$3\r\nCAT\r\n$6\r\nstring\r\n$1\r\nX\r\n"[0: 41]);
+    const cat_extra_command: Command = try command_executor_test_command(&router, &cat_extra_parsed);
+    var cat_extra_reply: CommandReply = command_execute_at(&engine, &cat_extra_command, 1000u64);
+    try assert_eq_i32(cat_extra_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(cat_extra_reply.data, &"ERR unknown subcommand or wrong number of arguments for 'cat'. Try ACL HELP."[0: 76]));
+    command_reply_cleanup(&cat_extra_reply);
+    resp_value_free(&cat_extra_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

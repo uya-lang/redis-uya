@@ -495,6 +495,18 @@ if [[ "$ACL_WHOAMI_RESULT" != "default" ]]; then
     exit 1
 fi
 
+ACL_CAT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl cat)"
+if [[ "$ACL_CAT_RESULT" != *"string"* || "$ACL_CAT_RESULT" != *"transaction"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL CAT categories, got '$ACL_CAT_RESULT'" >&2
+    exit 1
+fi
+
+ACL_CAT_STRING_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl cat string)"
+if [[ "$ACL_CAT_STRING_RESULT" != *"get"* || "$ACL_CAT_STRING_RESULT" != *"set"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL CAT string commands, got '$ACL_CAT_STRING_RESULT'" >&2
+    exit 1
+fi
+
 ACL_USERS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl users)"
 if [[ "$ACL_USERS_RESULT" != "default" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ACL USERS default, got '$ACL_USERS_RESULT'" >&2

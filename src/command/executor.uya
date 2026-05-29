@@ -7278,6 +7278,101 @@ fn command_executor_acl_help() CommandReply {
     return command_executor_owned_array(reply_list);
 }
 
+fn command_executor_acl_category_known(category: &[byte]) bool {
+    return command_executor_keyword_eq(category, &"keyspace"[0: 8]) ||
+        command_executor_keyword_eq(category, &"read"[0: 4]) ||
+        command_executor_keyword_eq(category, &"write"[0: 5]) ||
+        command_executor_keyword_eq(category, &"set"[0: 3]) ||
+        command_executor_keyword_eq(category, &"sortedset"[0: 9]) ||
+        command_executor_keyword_eq(category, &"list"[0: 4]) ||
+        command_executor_keyword_eq(category, &"hash"[0: 4]) ||
+        command_executor_keyword_eq(category, &"string"[0: 6]) ||
+        command_executor_keyword_eq(category, &"bitmap"[0: 6]) ||
+        command_executor_keyword_eq(category, &"hyperloglog"[0: 11]) ||
+        command_executor_keyword_eq(category, &"geo"[0: 3]) ||
+        command_executor_keyword_eq(category, &"stream"[0: 6]) ||
+        command_executor_keyword_eq(category, &"pubsub"[0: 6]) ||
+        command_executor_keyword_eq(category, &"admin"[0: 5]) ||
+        command_executor_keyword_eq(category, &"fast"[0: 4]) ||
+        command_executor_keyword_eq(category, &"slow"[0: 4]) ||
+        command_executor_keyword_eq(category, &"blocking"[0: 8]) ||
+        command_executor_keyword_eq(category, &"dangerous"[0: 9]) ||
+        command_executor_keyword_eq(category, &"connection"[0: 10]) ||
+        command_executor_keyword_eq(category, &"transaction"[0: 11]) ||
+        command_executor_keyword_eq(category, &"scripting"[0: 9]);
+}
+
+fn command_executor_acl_unknown_category(category: &[byte]) CommandReply {
+    var err: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&err);
+    }
+    _ = command_executor_info_append(&err, &"ERR Unknown category '"[0: 22]) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append(&err, category) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append(&err, &"'"[0: 1]) catch {
+        return command_executor_oom();
+    };
+    return command_executor_owned_error(err.buf[0: err.len]);
+}
+
+fn command_executor_acl_cat_categories() CommandReply {
+    var reply_list: &RedisObject = create_list_object() catch {
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"keyspace"[0: 8]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"read"[0: 4]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"write"[0: 5]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"set"[0: 3]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"sortedset"[0: 9]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"list"[0: 4]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"hash"[0: 4]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"string"[0: 6]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"bitmap"[0: 6]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"hyperloglog"[0: 11]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"geo"[0: 3]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"stream"[0: 6]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"pubsub"[0: 6]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"admin"[0: 5]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"fast"[0: 4]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"slow"[0: 4]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"blocking"[0: 8]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"dangerous"[0: 9]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"connection"[0: 10]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"transaction"[0: 11]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"scripting"[0: 9]) catch { object_free(reply_list); return command_executor_oom(); };
+    return command_executor_owned_array(reply_list);
+}
+
+fn command_executor_acl_cat_commands(category: &[byte]) CommandReply {
+    if !command_executor_acl_category_known(category) {
+        return command_executor_acl_unknown_category(category);
+    }
+
+    const router: CommandRouter = command_router_new();
+    var reply_list: &RedisObject = create_list_object() catch {
+        return command_executor_oom();
+    };
+    var index: usize = 0;
+    while index < command_catalog_total_count() {
+        const entry: CommandCatalogEntry = command_catalog_entry(index) catch {
+            object_free(reply_list);
+            return command_executor_error(&"ERR command catalog error"[0: 25]);
+        };
+        if command_executor_command_entry_visible(&router, &entry) &&
+            command_catalog_has_acl_category(&entry, category) {
+            _ = list_object_push_tail(reply_list, entry.name) catch { object_free(reply_list); return command_executor_oom(); };
+        }
+        index = index + 1;
+    }
+    return command_executor_owned_array(reply_list);
+}
+
 fn command_executor_acl(command: &Command) CommandReply {
     if command.argc < 2 {
         return command_executor_wrong_arity();
@@ -7316,6 +7411,18 @@ fn command_executor_acl(command: &Command) CommandReply {
         };
         _ = list_object_push_tail(reply_list, &"user default on nopass ~* &* +@all"[0: 34]) catch { object_free(reply_list); return command_executor_oom(); };
         return command_executor_owned_array(reply_list);
+    }
+    if command_executor_keyword_eq(subcommand, &"CAT"[0: 3]) {
+        if command.argc == 2 {
+            return command_executor_acl_cat_categories();
+        }
+        if command.argc == 3 {
+            const category: &[byte] = command_executor_arg(command, 2) catch {
+                return command_executor_wrong_arity();
+            };
+            return command_executor_acl_cat_commands(category);
+        }
+        return command_executor_owned_error(&"ERR unknown subcommand or wrong number of arguments for 'cat'. Try ACL HELP."[0: 76]);
     }
 
     var err: Sds = sds_empty() catch {
@@ -11648,7 +11755,8 @@ fn command_executor_command_visible_function_subcommand(name: &[byte]) bool {
 }
 
 fn command_executor_command_visible_acl_subcommand(name: &[byte]) bool {
-    return command_executor_slice_eq(name, &"help"[0: 4]) ||
+    return command_executor_slice_eq(name, &"cat"[0: 3]) ||
+        command_executor_slice_eq(name, &"help"[0: 4]) ||
         command_executor_slice_eq(name, &"list"[0: 4]) ||
         command_executor_slice_eq(name, &"users"[0: 5]) ||
         command_executor_slice_eq(name, &"whoami"[0: 6]);

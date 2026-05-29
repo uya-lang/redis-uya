@@ -1344,6 +1344,7 @@ export fn test_connection_process_command_docs_all_large_reply() !void {
     try assert_true(network_connection_contains(out[0: docs_all.response_len], &"$9\r\nclient|id\r\n"[0: 15]));
     try assert_true(network_connection_contains(out[0: docs_all.response_len], &"$7\r\nsummary\r\n"[0: 13]));
     try assert_true(network_connection_contains(out[0: docs_all.response_len], &"$3\r\nacl\r\n"[0: 9]));
+    try assert_true(network_connection_contains(out[0: docs_all.response_len], &"$7\r\nacl|cat\r\n"[0: 13]));
     try assert_true(network_connection_contains(out[0: docs_all.response_len], &"$8\r\nacl|help\r\n"[0: 14]));
     try assert_true(network_connection_contains(out[0: docs_all.response_len], &"$8\r\nacl|list\r\n"[0: 14]));
     try assert_true(network_connection_contains(out[0: docs_all.response_len], &"$9\r\nacl|users\r\n"[0: 15]));

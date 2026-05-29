@@ -280,6 +280,7 @@ FULL_NAMES = {
 
 PARTIAL_NAMES = {
     "acl",
+    "acl|cat",
     "acl|help",
     "acl|list",
     "acl|users",

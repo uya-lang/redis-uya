@@ -297,6 +297,14 @@ class RedisPySubsetClient:
         assert isinstance(result, list)
         return result
 
+    def acl_cat(self, category: bytes | None = None):
+        if category is None:
+            result = self._request(b"ACL", b"CAT")
+        else:
+            result = self._request(b"ACL", b"CAT", category)
+        assert isinstance(result, list)
+        return result
+
     def memory_usage(self, key: str, samples: int | None = None) -> int | None:
         parts = [b"MEMORY", b"USAGE", key.encode()]
         if samples is not None:
@@ -1015,6 +1023,12 @@ def run_smoke() -> None:
             acl_help = client.acl_help()
             if b"ACL <subcommand> [<arg> [value] [opt] ...]. Subcommands are:" not in acl_help or b"WHOAMI" not in acl_help:
                 raise AssertionError(f"unexpected ACL HELP result: {acl_help!r}")
+            acl_cat = client.acl_cat()
+            if b"string" not in acl_cat or b"transaction" not in acl_cat:
+                raise AssertionError(f"unexpected ACL CAT result: {acl_cat!r}")
+            acl_cat_string = client.acl_cat(b"string")
+            if b"get" not in acl_cat_string or b"set" not in acl_cat_string:
+                raise AssertionError(f"unexpected ACL CAT string result: {acl_cat_string!r}")
             if client.acl_whoami() != b"default":
                 raise AssertionError("expected ACL WHOAMI default user")
             if client.acl_users() != [b"default"]:

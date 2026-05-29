@@ -6842,6 +6842,14 @@ fn command_executor_memory_help() CommandReply {
         object_free(reply_list);
         return command_executor_oom();
     };
+    _ = list_object_push_tail(reply_list, &"MEMORY PURGE"[0: 12]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"    Ask allocator to purge cached memory; redis-uya treats this as a no-op."[0: 75]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
     _ = list_object_push_tail(reply_list, &"MEMORY USAGE <key> [SAMPLES <count>]"[0: 36]) catch {
         object_free(reply_list);
         return command_executor_oom();
@@ -6929,6 +6937,10 @@ fn command_executor_memory_doctor(engine: &Engine) CommandReply {
     return command_executor_owned_bulk_copy(&"No obvious allocator, object-pool, or maxmemory anomaly was detected by redis-uya's minimal MEMORY DOCTOR." [0: 106]);
 }
 
+fn command_executor_memory_purge() CommandReply {
+    return command_executor_simple(&"OK"[0: 2]);
+}
+
 fn command_executor_memory_usage(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
     if command.argc < 3 {
         return command_executor_memory_wrong_subcommand_arity(&"usage"[0: 5]);
@@ -6988,6 +7000,12 @@ fn command_executor_memory(runtime: &CommandRuntimeInfo, engine: &Engine, comman
             return command_executor_memory_wrong_subcommand_arity(&"stats"[0: 5]);
         }
         return command_executor_memory_stats(engine, runtime);
+    }
+    if command_executor_keyword_eq(subcommand, &"PURGE"[0: 5]) {
+        if command.argc != 2 {
+            return command_executor_memory_wrong_subcommand_arity(&"purge"[0: 5]);
+        }
+        return command_executor_memory_purge();
     }
     if command_executor_keyword_eq(subcommand, &"USAGE"[0: 5]) {
         return command_executor_memory_usage(engine, command, now_ms);
@@ -12104,6 +12122,7 @@ fn command_executor_command_visible_acl_subcommand(name: &[byte]) bool {
 fn command_executor_command_visible_memory_subcommand(name: &[byte]) bool {
     return command_executor_slice_eq(name, &"help"[0: 4]) ||
         command_executor_slice_eq(name, &"doctor"[0: 6]) ||
+        command_executor_slice_eq(name, &"purge"[0: 5]) ||
         command_executor_slice_eq(name, &"stats"[0: 5]) ||
         command_executor_slice_eq(name, &"usage"[0: 5]);
 }

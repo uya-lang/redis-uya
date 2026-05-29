@@ -361,6 +361,9 @@ class RedisPySubsetClient:
         assert isinstance(result, bytes)
         return result
 
+    def memory_purge(self):
+        return self._request(b"MEMORY", b"PURGE")
+
     def slowlog_len(self) -> int:
         return int(self._request(b"SLOWLOG", b"LEN"))
 
@@ -1167,6 +1170,8 @@ def run_smoke() -> None:
             memory_doctor = client.memory_doctor()
             if b"diagnosis" not in memory_doctor and b"No obvious allocator" not in memory_doctor:
                 raise AssertionError(f"unexpected MEMORY DOCTOR payload: {memory_doctor!r}")
+            if client.memory_purge() != "OK":
+                raise AssertionError("unexpected MEMORY PURGE result")
             try:
                 client._request(b"MEMORY")
                 raise AssertionError("expected MEMORY without subcommand to fail")

@@ -657,6 +657,12 @@ if [[ "$MEMORY_DOCTOR_RESULT" != *"diagnosis"* ]] && [[ "$MEMORY_DOCTOR_RESULT" 
     exit 1
 fi
 
+MEMORY_PURGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" memory purge)"
+if [[ "$MEMORY_PURGE_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected MEMORY PURGE OK, got '$MEMORY_PURGE_RESULT'" >&2
+    exit 1
+fi
+
 SLOWLOG_RESET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" slowlog reset)"
 if [[ "$SLOWLOG_RESET_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected SLOWLOG RESET OK, got '$SLOWLOG_RESET_RESULT'" >&2

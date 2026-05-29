@@ -345,6 +345,7 @@ PARTIAL_NAMES = {
     "memory",
     "memory|doctor",
     "memory|help",
+    "memory|purge",
     "memory|stats",
     "memory|usage",
     "object",

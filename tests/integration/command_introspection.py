@@ -324,18 +324,20 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"scripting commands missing from COMMAND INFO: {script_info!r}")
 
-            memory_info = send_command(sock, b"COMMAND", b"INFO", b"MEMORY", b"MEMORY|DOCTOR", b"MEMORY|STATS", b"MEMORY|USAGE")
+            memory_info = send_command(sock, b"COMMAND", b"INFO", b"MEMORY", b"MEMORY|DOCTOR", b"MEMORY|PURGE", b"MEMORY|STATS", b"MEMORY|USAGE")
             if (
                 not isinstance(memory_info, list)
-                or len(memory_info) != 4
+                or len(memory_info) != 5
                 or not isinstance(memory_info[0], list)
                 or memory_info[0][0] != b"memory"
                 or not isinstance(memory_info[1], list)
                 or memory_info[1][0] != b"memory|doctor"
                 or not isinstance(memory_info[2], list)
-                or memory_info[2][0] != b"memory|stats"
+                or memory_info[2][0] != b"memory|purge"
                 or not isinstance(memory_info[3], list)
-                or memory_info[3][0] != b"memory|usage"
+                or memory_info[3][0] != b"memory|stats"
+                or not isinstance(memory_info[4], list)
+                or memory_info[4][0] != b"memory|usage"
             ):
                 raise AssertionError(f"memory commands missing from COMMAND INFO: {memory_info!r}")
 
@@ -530,8 +532,8 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"list move commands missing from COMMAND INFO: {list_move_info!r}")
 
-            unsupported_info = send_command(sock, b"COMMAND", b"INFO", b"FUNCTION|LOAD", b"BLMOVE", b"CLUSTER|RESET")
-            if unsupported_info != [None, None, None]:
+            unsupported_info = send_command(sock, b"COMMAND", b"INFO", b"FUNCTION|LOAD", b"MEMORY|MALLOC-STATS", b"BLMOVE", b"CLUSTER|RESET")
+            if unsupported_info != [None, None, None, None]:
                 raise AssertionError(f"unsupported COMMAND INFO entries must be null: {unsupported_info!r}")
 
             client_kill_info = send_command(sock, b"COMMAND", b"INFO", b"CLIENT|KILL")
@@ -549,7 +551,7 @@ def run_smoke() -> None:
             if not isinstance(docs[1], list) or b"summary" not in docs[1]:
                 raise AssertionError(f"missing COMMAND DOCS summary: {docs!r}")
 
-            unsupported_docs = send_command(sock, b"COMMAND", b"DOCS", b"FUNCTION|LOAD", b"BLMOVE", b"CLUSTER|RESET")
+            unsupported_docs = send_command(sock, b"COMMAND", b"DOCS", b"FUNCTION|LOAD", b"MEMORY|MALLOC-STATS", b"BLMOVE", b"CLUSTER|RESET")
             if unsupported_docs != []:
                 raise AssertionError(f"unsupported COMMAND DOCS entries should be omitted: {unsupported_docs!r}")
 
@@ -573,9 +575,10 @@ def run_smoke() -> None:
                 or b"acl|setuser" not in docs_all_resp2
                 or b"acl|users" not in docs_all_resp2
                 or b"acl|whoami" not in docs_all_resp2
+                or b"memory|purge" not in docs_all_resp2
             ):
                 raise AssertionError(f"unexpected COMMAND DOCS all RESP2 payload: {docs_all_resp2!r}")
-            if b"function|load" in docs_all_resp2 or b"blmove" in docs_all_resp2 or b"cluster|reset" in docs_all_resp2:
+            if b"function|load" in docs_all_resp2 or b"memory|malloc-stats" in docs_all_resp2 or b"blmove" in docs_all_resp2 or b"cluster|reset" in docs_all_resp2:
                 raise AssertionError(f"unsupported commands leaked into COMMAND DOCS all RESP2: {docs_all_resp2!r}")
 
             listed_blocking = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"BL*")
@@ -670,10 +673,10 @@ def run_smoke() -> None:
                 not isinstance(listed_memory, list)
                 or b"memory" not in listed_memory
                 or b"memory|doctor" not in listed_memory
+                or b"memory|purge" not in listed_memory
                 or b"memory|stats" not in listed_memory
                 or b"memory|usage" not in listed_memory
                 or b"memory|malloc-stats" in listed_memory
-                or b"memory|purge" in listed_memory
             ):
                 raise AssertionError(f"unexpected COMMAND LIST memory* result: {listed_memory!r}")
 
@@ -794,9 +797,10 @@ def run_smoke() -> None:
                 or not isinstance(docs_all.get(b"acl|setuser"), dict)
                 or not isinstance(docs_all.get(b"acl|users"), dict)
                 or not isinstance(docs_all.get(b"acl|whoami"), dict)
+                or not isinstance(docs_all.get(b"memory|purge"), dict)
             ):
                 raise AssertionError(f"unexpected COMMAND DOCS all RESP3 payload: {docs_all!r}")
-            if b"function|load" in docs_all or b"blmove" in docs_all or b"cluster|reset" in docs_all:
+            if b"function|load" in docs_all or b"memory|malloc-stats" in docs_all or b"blmove" in docs_all or b"cluster|reset" in docs_all:
                 raise AssertionError(f"unsupported commands leaked into COMMAND DOCS all RESP3: {docs_all!r}")
 
             getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"SORT", b"mylist", b"ALPHA", b"STORE", b"out")

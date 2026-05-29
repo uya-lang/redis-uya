@@ -333,6 +333,9 @@ export fn test_connection_process_ping_set_get_quit() !void {
     try assert_true(network_connection_contains(out_large[0: memory_stats_result.response_len], &"used_memory"[0: 11]));
     try assert_true(network_connection_contains(out_large[0: memory_stats_result.response_len], &"maxmemory_policy"[0: 16]));
 
+    const memory_purge_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$6\r\nMEMORY\r\n$5\r\nPURGE\r\n"[0: 27], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: memory_purge_result.response_len], &"+OK\r\n"[0: 5]));
+
     const setrange_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$8\r\nSETRANGE\r\n$3\r\nkey\r\n$1\r\n5\r\n$2\r\n__\r\n"[0: 42], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: setrange_result.response_len], &":7\r\n"[0: 4]));
 
@@ -1357,6 +1360,7 @@ export fn test_connection_process_command_docs_all_large_reply() !void {
     try assert_true(network_connection_contains(out[0: docs_all.response_len], &"$11\r\nacl|setuser\r\n"[0: 18]));
     try assert_true(network_connection_contains(out[0: docs_all.response_len], &"$9\r\nacl|users\r\n"[0: 15]));
     try assert_true(network_connection_contains(out[0: docs_all.response_len], &"$10\r\nacl|whoami\r\n"[0: 17]));
+    try assert_true(network_connection_contains(out[0: docs_all.response_len], &"$12\r\nmemory|purge\r\n"[0: 19]));
     try assert_true(network_connection_contains(out[0: docs_all.response_len], &"$5\r\nblpop\r\n"[0: 11]));
     const docs_all_len: u64 = try network_connection_parse_resp2_collection_len(out[0: docs_all.response_len], 42 as byte);
     try assert_true(docs_all_len > 100u64);

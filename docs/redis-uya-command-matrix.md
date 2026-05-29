@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 126 | 0 | 3 | 90 |
+| Tier A: standalone core | 365 | 259 | 146 | 127 | 0 | 3 | 89 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `133` |
+| `partial` | `134` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `243` |
+| `deferred` | `242` |
 
 ## Group counts
 
@@ -384,7 +384,7 @@
 | `memory|doctor` | `server` | `partial` | `-` | `2` | `-` | `no` | `@slow` |
 | `memory|help` | `server` | `partial` | `-` | `2` | `-` | `no` | `@slow` |
 | `memory|malloc-stats` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@slow` |
-| `memory|purge` | `server` | `deferred` | `v0.9.3` | `2` | `-` | `no` | `@slow` |
+| `memory|purge` | `server` | `partial` | `-` | `2` | `-` | `no` | `@slow` |
 | `memory|stats` | `server` | `partial` | `-` | `2` | `-` | `no` | `@slow` |
 | `memory|usage` | `server` | `partial` | `-` | `-3` | `-` | `no` | `@read, @slow` |
 | `mget` | `string` | `full` | `-` | `-2` | `-` | `no` | `@read, @string, @fast` |

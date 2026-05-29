@@ -5587,6 +5587,7 @@ export fn test_command_memory() !void {
     var memory_help_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &memory_help_command, 1000u64);
     const memory_help_len: usize = try connection_encode_reply(&memory_help_reply, &out[0], 1024);
     try assert_true(command_executor_test_contains(out[0: memory_help_len], &"MEMORY USAGE <key> [SAMPLES <count>]"[0: 36]));
+    try assert_true(command_executor_test_contains(out[0: memory_help_len], &"MEMORY PURGE"[0: 12]));
     try assert_true(command_executor_test_contains(out[0: memory_help_len], &"MEMORY HELP"[0: 11]));
     command_reply_cleanup(&memory_help_reply);
     resp_value_free(&memory_help_parsed.value);
@@ -5633,6 +5634,13 @@ export fn test_command_memory() !void {
     try assert_true(command_executor_test_contains(memory_stats_reply.data, &"$10\r\nkeys.count\r\n"[0: 17]));
     command_reply_cleanup(&memory_stats_reply);
     resp_value_free(&memory_stats_parsed.value);
+
+    var memory_purge_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nMEMORY\r\n$5\r\nPURGE\r\n"[0: 27]);
+    const memory_purge_command: Command = try command_executor_test_command(&router, &memory_purge_parsed);
+    const memory_purge_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &memory_purge_command, 1000u64);
+    try assert_eq_i32(memory_purge_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(memory_purge_reply.data, &"OK"[0: 2]));
+    resp_value_free(&memory_purge_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);
@@ -6547,6 +6555,14 @@ export fn test_command_error_paths() !void {
     try assert_eq_i32(memory_usage_negative_reply.typ as i32, CommandReplyType.reply_error as i32);
     try assert_true(command_executor_test_slice_eq(memory_usage_negative_reply.data, &"ERR syntax error"[0: 16]));
     resp_value_free(&memory_usage_negative_parsed.value);
+
+    var memory_purge_bad_arity_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nMEMORY\r\n$5\r\nPURGE\r\n$1\r\nx\r\n"[0: 34]);
+    const memory_purge_bad_arity_command: Command = try command_executor_test_command(&router, &memory_purge_bad_arity_parsed);
+    var memory_purge_bad_arity_reply: CommandReply = command_execute_at(&engine, &memory_purge_bad_arity_command, 1000u64);
+    try assert_eq_i32(memory_purge_bad_arity_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(memory_purge_bad_arity_reply.data, &"ERR wrong number of arguments for 'memory|purge' command"[0: 56]));
+    command_reply_cleanup(&memory_purge_bad_arity_reply);
+    resp_value_free(&memory_purge_bad_arity_parsed.value);
 
     var memory_unknown_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nMEMORY\r\n$1\r\nX\r\n"[0: 23]);
     const memory_unknown_command: Command = try command_executor_test_command(&router, &memory_unknown_parsed);

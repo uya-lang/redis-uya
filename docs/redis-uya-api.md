@@ -2179,6 +2179,7 @@ ROLE
 ```text
 MEMORY HELP
 MEMORY DOCTOR
+MEMORY PURGE
 MEMORY STATS
 MEMORY USAGE key [SAMPLES count]
 ```
@@ -2187,15 +2188,17 @@ MEMORY USAGE key [SAMPLES count]
 
 - `HELP`：返回当前支持的 `MEMORY` 子命令说明
 - `DOCTOR`：返回诊断文本 Bulk String
+- `PURGE`：返回 `OK`；当前作为 allocator purge 的 no-op 兼容面
 - `STATS`：返回交替的 `field/value` RESP Array
 - `USAGE`：命中返回近似字节数；key 不存在返回 Null Bulk
 
 说明：
 
-- 当前实现为 partial：仅支持 `HELP`、`DOCTOR`、`STATS`、`USAGE`
+- 当前实现为 partial：仅支持 `HELP`、`DOCTOR`、`PURGE`、`STATS`、`USAGE`
+- `COMMAND INFO/LIST/DOCS` 会暴露 `MEMORY`、`MEMORY|DOCTOR`、`MEMORY|HELP`、`MEMORY|PURGE`、`MEMORY|STATS` 与 `MEMORY|USAGE`
 - `USAGE` 基于 redis-uya 当前对象布局、dict entry/bucket、list node 和 SDS 容量返回近似运行时占用，不是 Redis 原生 jemalloc 口径
 - `USAGE ... SAMPLES count` 当前只做参数兼容校验，不影响近似值计算
-- 当前不支持 `MEMORY MALLOC-STATS`、`MEMORY PURGE`
+- 当前不支持 `MEMORY MALLOC-STATS`；`MEMORY PURGE` 不会触发 Redis jemalloc purge 级别的 allocator 行为
 
 ### `SLOWLOG`
 

@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 131 | 0 | 3 | 85 |
+| Tier A: standalone core | 365 | 259 | 146 | 132 | 0 | 3 | 84 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `138` |
+| `partial` | `139` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `238` |
+| `deferred` | `237` |
 
 ## Group counts
 
@@ -148,7 +148,7 @@
 | `client|kill` | `connection` | `partial` | `-` | `-3` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
 | `client|list` | `connection` | `partial` | `-` | `-2` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
 | `client|no-evict` | `connection` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
-| `client|no-touch` | `connection` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@slow, @connection` |
+| `client|no-touch` | `connection` | `partial` | `-` | `3` | `-` | `no` | `@slow, @connection` |
 | `client|pause` | `connection` | `partial` | `-` | `-3` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
 | `client|reply` | `connection` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@slow, @connection` |
 | `client|setinfo` | `connection` | `full` | `-` | `4` | `-` | `no` | `@slow, @connection` |

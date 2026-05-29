@@ -219,6 +219,17 @@ def run_smoke() -> None:
                 if send_command(sock, b"CLIENT", b"GETREDIR") != -1:
                     raise AssertionError("CLIENT GETREDIR should reset to -1 after TRACKING OFF")
 
+                if send_command(sock, b"CLIENT", b"NO-TOUCH", b"ON") != "OK":
+                    raise AssertionError("CLIENT NO-TOUCH ON failed")
+                if send_command(sock, b"CLIENT", b"NO-TOUCH", b"OFF") != "OK":
+                    raise AssertionError("CLIENT NO-TOUCH OFF failed")
+                try:
+                    send_command(sock, b"CLIENT", b"NO-TOUCH", b"BAD")
+                    raise AssertionError("CLIENT NO-TOUCH invalid mode should fail")
+                except RespError as exc:
+                    if "syntax" not in str(exc).lower():
+                        raise
+
                 if send_command(sock, b"CLIENT", b"PAUSE", b"1000", b"ALL") != "OK":
                     raise AssertionError("CLIENT PAUSE failed")
                 peer_sock.settimeout(0.1)

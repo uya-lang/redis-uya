@@ -132,6 +132,7 @@ export struct ConnectionTransaction {
     tracking_optin: bool,
     tracking_optout: bool,
     tracking_noloop: bool,
+    no_touch_enabled: bool,
     blocking_active: bool,
     blocking_deadline_ms: u64,
     monitoring: bool,
@@ -240,6 +241,7 @@ fn connection_transaction_empty() ConnectionTransaction {
         tracking_optin: false,
         tracking_optout: false,
         tracking_noloop: false,
+        no_touch_enabled: false,
         blocking_active: false,
         blocking_deadline_ms: 0u64,
         monitoring: false,
@@ -1479,6 +1481,7 @@ fn connection_reset_state(tx: &ConnectionTransaction) void {
     tx.client_lib_ver_len = 0;
     tx.authenticated = false;
     connection_client_tracking_clear(tx);
+    tx.no_touch_enabled = false;
     tx.blocking_active = false;
     tx.blocking_deadline_ms = 0u64;
     connection_client_registry_sync(tx);
@@ -2090,6 +2093,10 @@ fn connection_client_help_reply() CommandReply {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
+    _ = list_object_push_tail(reply_list, &"CLIENT NO-TOUCH <ON|OFF>"[0: 24]) catch {
+        object_free(reply_list);
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
     _ = list_object_push_tail(reply_list, &"CLIENT INFO"[0: 11]) catch {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
@@ -2126,7 +2133,7 @@ fn connection_client_help_reply() CommandReply {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
-    return connection_array_reply_owned(reply_list, 13);
+    return connection_array_reply_owned(reply_list, 14);
 }
 
 fn connection_client_info_reply(tx: &ConnectionTransaction) CommandReply {
@@ -2312,6 +2319,23 @@ fn connection_handle_client(tx: &ConnectionTransaction, command: &Command, now_m
         };
         connection_client_registry_sync(tx);
         return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+    }
+    if connection_keyword_eq(subcommand, &"NO-TOUCH"[0: 8]) {
+        if command.argc != 3 {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        }
+        const state: &[byte] = command_arg_data(command, 2) catch {
+            return connection_error_reply(&"ERR invalid request"[0: 19]);
+        };
+        if connection_keyword_eq(state, &"ON"[0: 2]) {
+            tx.no_touch_enabled = true;
+            return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+        }
+        if connection_keyword_eq(state, &"OFF"[0: 3]) {
+            tx.no_touch_enabled = false;
+            return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+        }
+        return connection_error_reply(&"ERR syntax error"[0: 16]);
     }
     if connection_keyword_eq(subcommand, &"SETINFO"[0: 7]) {
         if command.argc != 4 {

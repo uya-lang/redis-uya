@@ -2352,6 +2352,7 @@ CLIENT ID
 CLIENT GETNAME
 CLIENT GETREDIR
 CLIENT SETNAME name
+CLIENT NO-TOUCH ON|OFF
 CLIENT INFO
 CLIENT LIST
 CLIENT KILL ID id
@@ -2371,6 +2372,7 @@ CLIENT HELP
 - `CLIENT GETNAME`：未设置时返回 Null Bulk，已设置时返回 Bulk String
 - `CLIENT GETREDIR`：返回当前连接 tracking redirect 客户端 ID；未设置时返回 `-1`
 - `CLIENT SETNAME`：保存连接级客户端名，成功返回 `+OK`
+- `CLIENT NO-TOUCH`：保存当前连接的 no-touch 标志，成功返回 `+OK`
 - `CLIENT INFO`：返回当前连接的最小客户端信息行，包含 `id/name/resp/multi/sub/lib-name/lib-ver`
 - `CLIENT LIST`：返回当前活跃连接的最小信息行快照，每行包含 `id/name/resp/multi/sub/lib-name/lib-ver`
 - `CLIENT KILL ID id`：按连接 ID 关闭其他活跃连接；当前只支持 `ID` 过滤，返回整数 `0/1`
@@ -2388,6 +2390,7 @@ CLIENT HELP
 - `CLIENT KILL` 当前只支持 `ID <id>` 过滤，不支持更完整的 addr/type/user/maxage/skipme 组合
 - `CLIENT PAUSE` 当前保留发起暂停的控制连接可继续发送 `CLIENT UNPAUSE`；`WRITE` 语义还没有细分成仅写命令暂停
 - `CLIENT TRACKING` 当前只保存连接级状态，不发送 invalidation push，也不支持 `PREFIX`
+- `CLIENT NO-TOUCH` 当前只保存连接级兼容标志，尚未接入对象访问路径的 LRU/LFU touch 抑制
 
 ### `CLUSTER`
 

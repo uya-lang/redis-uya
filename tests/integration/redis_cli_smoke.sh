@@ -675,6 +675,12 @@ if [[ -n "$MODULE_LIST_RESULT" ]]; then
     exit 1
 fi
 
+CLIENT_NO_TOUCH_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" client no-touch on)"
+if [[ "$CLIENT_NO_TOUCH_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected CLIENT NO-TOUCH ON OK, got '$CLIENT_NO_TOUCH_RESULT'" >&2
+    exit 1
+fi
+
 SLOWLOG_RESET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" slowlog reset)"
 if [[ "$SLOWLOG_RESET_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected SLOWLOG RESET OK, got '$SLOWLOG_RESET_RESULT'" >&2

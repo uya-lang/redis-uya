@@ -245,6 +245,9 @@ class RedisPySubsetClient:
     def script_flush(self) -> bool:
         return self._request(b"SCRIPT", b"FLUSH") == "OK"
 
+    def script_kill(self):
+        return self._request(b"SCRIPT", b"KILL")
+
     def function_help(self):
         result = self._request(b"FUNCTION", b"HELP")
         assert isinstance(result, list)
@@ -1047,6 +1050,12 @@ def run_smoke() -> None:
                     raise AssertionError(f"unexpected EVAL_RO write error: {exc}") from exc
             assert client.evalsha_ro("D3C21D0C2B9CA22F82737626A27BCAF5D288F99F", 1, "lua-key") == b"value"
             assert client.script_flush()
+            try:
+                client.script_kill()
+                raise AssertionError("expected SCRIPT KILL with no running script to fail")
+            except RespError as exc:
+                if str(exc) != "NOTBUSY No scripts in execution right now.":
+                    raise AssertionError(f"unexpected SCRIPT KILL error: {exc}") from exc
             try:
                 client.evalsha("d3c21d0c2b9ca22f82737626a27bcaf5d288f99f", 1, "lua-key")
                 raise AssertionError("expected EVALSHA after SCRIPT FLUSH to fail")

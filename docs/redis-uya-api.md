@@ -1694,6 +1694,7 @@ SCRIPT HELP
 SCRIPT LOAD script
 SCRIPT EXISTS sha1 [sha1 ...]
 SCRIPT FLUSH [ASYNC|SYNC]
+SCRIPT KILL
 ```
 
 返回：
@@ -1702,12 +1703,13 @@ SCRIPT FLUSH [ASYNC|SYNC]
 - `LOAD`：返回脚本 SHA1
 - `EXISTS`：按输入顺序返回 `0/1`
 - `FLUSH`：成功返回 `+OK`
+- `KILL`：当前无长时间运行脚本，返回 `NOTBUSY No scripts in execution right now.`
 
 说明：
 
 - 当前实现为 partial：`LOAD` 只接受可由当前 `EVAL/EVALSHA` 执行的单条 `return redis.call(...)` 子集
 - `FLUSH ASYNC|SYNC` 当前都走同步清空路径，只保留参数兼容
-- 当前不支持 `SCRIPT DEBUG`、`SCRIPT KILL`
+- 当前不支持 `SCRIPT DEBUG`，`SCRIPT KILL` 只覆盖无运行脚本错误面
 
 ### `FUNCTION`
 

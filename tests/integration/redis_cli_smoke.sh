@@ -459,6 +459,12 @@ if [[ "$SCRIPT_FLUSH_RESULT" != "OK" ]]; then
     exit 1
 fi
 
+SCRIPT_KILL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" script kill 2>&1 || true)"
+if [[ "$SCRIPT_KILL_RESULT" != "NOTBUSY No scripts in execution right now." ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SCRIPT KILL no running script error, got '$SCRIPT_KILL_RESULT'" >&2
+    exit 1
+fi
+
 EVALSHA_NOSCRIPT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" evalsha d3c21d0c2b9ca22f82737626a27bcaf5d288f99f 1 lua-key 2>&1 || true)"
 if [[ "$EVALSHA_NOSCRIPT_RESULT" != "NOSCRIPT No matching script. Please use EVAL." ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected EVALSHA NOSCRIPT, got '$EVALSHA_NOSCRIPT_RESULT'" >&2

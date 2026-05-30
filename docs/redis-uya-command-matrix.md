@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 136 | 0 | 3 | 80 |
+| Tier A: standalone core | 365 | 259 | 146 | 137 | 0 | 3 | 79 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `143` |
+| `partial` | `144` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `233` |
+| `deferred` | `232` |
 
 ## Group counts
 
@@ -455,7 +455,7 @@
 | `script|exists` | `scripting` | `partial` | `-` | `-3` | `-` | `no` | `@slow, @scripting` |
 | `script|flush` | `scripting` | `partial` | `-` | `-2` | `-` | `no` | `@slow, @scripting` |
 | `script|help` | `scripting` | `partial` | `-` | `2` | `-` | `no` | `@slow, @scripting` |
-| `script|kill` | `scripting` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@slow, @scripting` |
+| `script|kill` | `scripting` | `partial` | `-` | `2` | `-` | `no` | `@slow, @scripting` |
 | `script|load` | `scripting` | `partial` | `-` | `3` | `-` | `no` | `@slow, @scripting` |
 | `sdiff` | `set` | `full` | `-` | `-2` | `-` | `no` | `@read, @set, @slow` |
 | `sdiffstore` | `set` | `full` | `-` | `-3` | `-` | `no` | `@write, @set, @slow` |

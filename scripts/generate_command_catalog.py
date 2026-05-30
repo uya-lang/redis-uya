@@ -383,6 +383,7 @@ PARTIAL_NAMES = {
     "script|exists",
     "script|flush",
     "script|help",
+    "script|kill",
     "script|load",
     "psync",
     "quit",

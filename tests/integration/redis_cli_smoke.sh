@@ -687,6 +687,12 @@ if [[ "$CLIENT_REPLY_RESULT" != "OK" ]]; then
     exit 1
 fi
 
+CLIENT_UNBLOCK_MISS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" client unblock 999999 timeout)"
+if [[ "$CLIENT_UNBLOCK_MISS_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected CLIENT UNBLOCK miss 0, got '$CLIENT_UNBLOCK_MISS_RESULT'" >&2
+    exit 1
+fi
+
 CLIENT_NO_TOUCH_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" client no-touch on)"
 if [[ "$CLIENT_NO_TOUCH_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected CLIENT NO-TOUCH ON OK, got '$CLIENT_NO_TOUCH_RESULT'" >&2

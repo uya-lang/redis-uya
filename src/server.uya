@@ -17,6 +17,8 @@ use src.network.connection.ConnectionProcessResult;
 use src.network.connection.ConnectionTransaction;
 use src.network.connection.connection_client_registry_client_id;
 use src.network.connection.connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_zero_copy_close_at;
+use src.network.connection.connection_encode_client_unblock_error_reply;
+use src.network.connection.connection_encode_client_unblock_timeout_reply;
 use src.network.connection.connection_client_registry_unregister_tx;
 use src.network.connection.connection_shift_buffer;
 use src.network.connection.connection_transaction_new;
@@ -1119,6 +1121,51 @@ fn server_client_pending_write(server: &RedisServer, slot: usize) bool {
     return server.clients[slot].output_sent < server.clients[slot].output_len;
 }
 
+fn server_client_unblock_by_id(server: &RedisServer, requester_slot: usize, target_id: i64, as_error: bool) bool {
+    const target_slot_i32: i32 = server_find_client_slot_by_client_id(server, target_id);
+    if target_slot_i32 < 0 {
+        return false;
+    }
+    const target_slot: usize = target_slot_i32 as usize;
+    if target_slot >= SERVER_MAX_CLIENTS {
+        return false;
+    }
+    if target_slot == requester_slot {
+        return false;
+    }
+
+    const target: &RedisClient = &server.clients[target_slot];
+    if target.fd < 0 || !target.transaction.blocking_active || target.blocked_request_len == 0 {
+        return false;
+    }
+
+    var response_len: usize = 0;
+    if as_error {
+        response_len = connection_encode_client_unblock_error_reply(&target.transaction, target.output, SERVER_OUTPUT_CAP) catch {
+            server_close_client_slot(server, target_slot);
+            return true;
+        };
+    } else {
+        response_len = connection_encode_client_unblock_timeout_reply(&server.router, &target.transaction, target.blocked_request[0: target.blocked_request_len], target.output, SERVER_OUTPUT_CAP) catch {
+            server_close_client_slot(server, target_slot);
+            return true;
+        };
+    }
+
+    target.transaction.blocking_active = false;
+    target.transaction.blocking_deadline_ms = 0u64;
+    target.blocked_request_len = 0;
+    target.output_len = response_len;
+    target.output_sent = 0;
+    if response_len > 0 && !server_send_all_immediate(target.fd, target.output as &const byte, response_len) {
+        server_close_client_slot(server, target_slot);
+        return true;
+    }
+    target.output_len = 0;
+    target.output_sent = 0;
+    return true;
+}
+
 fn server_update_client_events(server: &RedisServer, slot: usize) !void {
     if slot >= SERVER_MAX_CLIENTS {
         return;
@@ -1382,7 +1429,7 @@ fn server_async_writev_all_future(fd: i32, head: &const byte, head_len: usize, b
                 continue;
             }
 
-            const response_len: usize = result.response_len;
+            var response_len: usize = result.response_len;
             const response_head_len: usize = result.response_head_len;
             const zero_copy_body: &[byte] = result.zero_copy_body;
             const zero_copy_tail_len: usize = result.zero_copy_tail_len;
@@ -1423,11 +1470,21 @@ fn server_async_writev_all_future(fd: i32, head: &const byte, head_len: usize, b
                 server.client_pause_owner_id = result.client_pause_owner_id;
             }
             if result.request_client_kill {
-                const kill_slot_i32: i32 = server_find_client_slot_by_client_id(server, result.client_kill_id);
-                if kill_slot_i32 >= 0 {
-                    const kill_slot: usize = kill_slot_i32 as usize;
-                    if kill_slot < SERVER_MAX_CLIENTS && kill_slot != slot {
-                        server_close_client_slot(server, kill_slot);
+                if result.client_pause_timeout_ms == 1u64 {
+                    if !server_client_unblock_by_id(server, slot, result.client_kill_id, result.client_pause_write_only) {
+                        client.output[0] = 58 as byte;
+                        client.output[1] = 48 as byte;
+                        client.output[2] = 13 as byte;
+                        client.output[3] = 10 as byte;
+                        response_len = 4;
+                    }
+                } else {
+                    const kill_slot_i32: i32 = server_find_client_slot_by_client_id(server, result.client_kill_id);
+                    if kill_slot_i32 >= 0 {
+                        const kill_slot: usize = kill_slot_i32 as usize;
+                        if kill_slot < SERVER_MAX_CLIENTS && kill_slot != slot {
+                            server_close_client_slot(server, kill_slot);
+                        }
                     }
                 }
             }

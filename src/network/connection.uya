@@ -2201,6 +2201,10 @@ fn connection_client_help_reply() CommandReply {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
+    _ = list_object_push_tail(reply_list, &"CLIENT UNBLOCK <id> [TIMEOUT|ERROR]"[0: 35]) catch {
+        object_free(reply_list);
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
     _ = list_object_push_tail(reply_list, &"CLIENT PAUSE <timeout-ms> [WRITE|ALL]"[0: 37]) catch {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
@@ -2225,7 +2229,7 @@ fn connection_client_help_reply() CommandReply {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
-    return connection_array_reply_owned(reply_list, 17);
+    return connection_array_reply_owned(reply_list, 18);
 }
 
 fn connection_client_info_reply(tx: &ConnectionTransaction) CommandReply {
@@ -2540,6 +2544,40 @@ fn connection_handle_client(tx: &ConnectionTransaction, command: &Command, now_m
         reply.request_client_kill = true;
         reply.client_kill_id = target_id;
         return reply;
+    }
+    if connection_keyword_eq(subcommand, &"UNBLOCK"[0: 7]) {
+        if command.argc != 3 && command.argc != 4 {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        }
+        const id_arg: &[byte] = command_arg_data(command, 2) catch {
+            return connection_error_reply(&"ERR invalid request"[0: 19]);
+        };
+        const target_id_u64: u64 = connection_parse_u64(id_arg) catch {
+            return connection_error_reply(&"ERR invalid client ID"[0: 21]);
+        };
+        var unblock_error: bool = false;
+        if command.argc == 4 {
+            const mode: &[byte] = command_arg_data(command, 3) catch {
+                return connection_error_reply(&"ERR invalid request"[0: 19]);
+            };
+            if connection_keyword_eq(mode, &"TIMEOUT"[0: 7]) {
+                unblock_error = false;
+            } else if connection_keyword_eq(mode, &"ERROR"[0: 5]) {
+                unblock_error = true;
+            } else {
+                return connection_error_reply(&"ERR syntax error"[0: 16]);
+            }
+        }
+        const target_id: i64 = target_id_u64 as i64;
+        if target_id == connection_client_id(tx) || !connection_client_registry_has_client_id(target_id) {
+            return connection_make_reply(CommandReplyType.reply_integer, connection_reply_empty_slice(), 0);
+        }
+        var unblock_reply: CommandReply = connection_make_reply(CommandReplyType.reply_integer, connection_reply_empty_slice(), 1);
+        unblock_reply.request_client_kill = true;
+        unblock_reply.client_kill_id = target_id;
+        unblock_reply.client_pause_timeout_ms = 1u64;
+        unblock_reply.client_pause_write_only = unblock_error;
+        return unblock_reply;
     }
     if connection_keyword_eq(subcommand, &"PAUSE"[0: 5]) {
         if command.argc != 3 && command.argc != 4 {
@@ -3484,6 +3522,40 @@ export fn connection_encode_reply_with_protocol(reply: &CommandReply, out: &byte
 
 export fn connection_encode_reply(reply: &CommandReply, out: &byte, out_cap: usize) !usize {
     return connection_encode_reply_with_protocol(reply, out, out_cap, 2);
+}
+
+export fn connection_encode_client_unblock_timeout_reply(
+    router: &CommandRouter,
+    tx: &ConnectionTransaction,
+    input: &[byte],
+    out: &byte,
+    out_cap: usize,
+) !usize {
+    const parsed_result: !RespParseResult = connection_parse_input_for_protocol(tx, input);
+    const parsed: RespParseResult = parsed_result catch {
+        const fallback_reply: CommandReply = connection_make_reply(CommandReplyType.reply_null_array, connection_reply_empty_slice(), 0);
+        return connection_encode_reply_with_protocol(&fallback_reply, out, out_cap, tx.protocol_version);
+    };
+    defer {
+        resp_value_free(&parsed.value);
+    }
+
+    const command_result: !Command = command_from_resp(router, &parsed.value);
+    const command: Command = command_result catch {
+        const fallback_reply_2: CommandReply = connection_make_reply(CommandReplyType.reply_null_array, connection_reply_empty_slice(), 0);
+        return connection_encode_reply_with_protocol(&fallback_reply_2, out, out_cap, tx.protocol_version);
+    };
+    if command.info.cmd_type == CommandType.command_brpoplpush {
+        const bulk_reply: CommandReply = connection_make_reply(CommandReplyType.reply_null_bulk, connection_reply_empty_slice(), 0);
+        return connection_encode_reply_with_protocol(&bulk_reply, out, out_cap, tx.protocol_version);
+    }
+    const array_reply: CommandReply = connection_make_reply(CommandReplyType.reply_null_array, connection_reply_empty_slice(), 0);
+    return connection_encode_reply_with_protocol(&array_reply, out, out_cap, tx.protocol_version);
+}
+
+export fn connection_encode_client_unblock_error_reply(tx: &ConnectionTransaction, out: &byte, out_cap: usize) !usize {
+    const err_reply: CommandReply = connection_error_reply(&"UNBLOCKED client unblocked via CLIENT UNBLOCK"[0: 45]);
+    return connection_encode_reply_with_protocol(&err_reply, out, out_cap, tx.protocol_version);
 }
 
 fn connection_script_help() CommandReply {
@@ -4839,6 +4911,8 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_in
         if result.request_client_kill {
             request_client_kill = true;
             client_kill_id = result.client_kill_id;
+            client_pause_timeout_ms = result.client_pause_timeout_ms;
+            client_pause_write_only = result.client_pause_write_only;
         }
         if result.request_client_pause {
             request_client_pause = true;
@@ -4853,7 +4927,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_in
             request_maxclients_set = true;
             maxclients_after = result.maxclients_after;
         }
-        if close_after || request_shutdown || request_client_pause || tx.blocking_active {
+        if close_after || request_shutdown || request_client_kill || request_client_pause || tx.blocking_active {
             break;
         }
         batch_index = batch_index + 1;

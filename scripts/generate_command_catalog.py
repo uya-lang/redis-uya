@@ -315,6 +315,7 @@ PARTIAL_NAMES = {
     "client|setname",
     "client|tracking",
     "client|trackinginfo",
+    "client|unblock",
     "client|unpause",
     "cluster",
     "cluster|info",

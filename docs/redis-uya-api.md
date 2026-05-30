@@ -2359,6 +2359,7 @@ CLIENT NO-TOUCH ON|OFF
 CLIENT INFO
 CLIENT LIST
 CLIENT KILL ID id
+CLIENT UNBLOCK id [TIMEOUT|ERROR]
 CLIENT PAUSE timeout-ms [WRITE|ALL]
 CLIENT UNPAUSE
 CLIENT TRACKING ON [REDIRECT id] [BCAST] [OPTIN] [OPTOUT] [NOLOOP]
@@ -2382,6 +2383,7 @@ CLIENT HELP
 - `CLIENT INFO`：返回当前连接的最小客户端信息行，包含 `id/name/resp/multi/sub/lib-name/lib-ver`
 - `CLIENT LIST`：返回当前活跃连接的最小信息行快照，每行包含 `id/name/resp/multi/sub/lib-name/lib-ver`
 - `CLIENT KILL ID id`：按连接 ID 关闭其他活跃连接；当前只支持 `ID` 过滤，返回整数 `0/1`
+- `CLIENT UNBLOCK id [TIMEOUT|ERROR]`：解除处于阻塞 pop 等待中的其他连接；默认 `TIMEOUT` 向目标连接返回对应阻塞命令的空结果，`ERROR` 向目标连接返回 `UNBLOCKED` 错误，当前命令返回整数 `0/1`
 - `CLIENT PAUSE timeout-ms [WRITE|ALL]`：暂停其他连接的命令处理；当前 `WRITE`/`ALL` 都按全局暂停处理，返回 `+OK`
 - `CLIENT UNPAUSE`：提前解除当前 pause 状态，返回 `+OK`
 - `CLIENT TRACKING`：当前支持连接级 `ON/OFF`、`REDIRECT`、`BCAST`、`OPTIN`、`OPTOUT`、`NOLOOP` 标志存储，返回 `+OK`
@@ -2395,6 +2397,7 @@ CLIENT HELP
 - `CLIENT GETREDIR` 直接读取当前连接的 `tracking_redirect_id`
 - `CLIENT REPLY` 当前按连接维护 `OFF`/`SKIP` 状态，覆盖普通命令、事务控制命令和 `CLIENT` 子命令回复抑制；Pub/Sub push 与 monitor 推送不受影响
 - `CLIENT KILL` 当前只支持 `ID <id>` 过滤，不支持更完整的 addr/type/user/maxage/skipme 组合
+- `CLIENT UNBLOCK` 当前支持阻塞 pop 等待路径的 `TIMEOUT` / `ERROR` 解除，不支持更复杂的模块阻塞客户端类型
 - `CLIENT PAUSE` 当前保留发起暂停的控制连接可继续发送 `CLIENT UNPAUSE`；`WRITE` 语义还没有细分成仅写命令暂停
 - `CLIENT TRACKING` 当前只保存连接级状态，不发送 invalidation push，也不支持 `PREFIX`
 - `CLIENT CACHING` 当前只保存连接级兼容标志，尚未提供 server-assisted client-side caching invalidation

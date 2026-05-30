@@ -117,6 +117,15 @@ def send_command(sock: socket.socket, *parts: bytes):
     return read_resp(sock)
 
 
+def send_only(sock: socket.socket, *parts: bytes) -> None:
+    request = [f"*{len(parts)}\r\n".encode()]
+    for part in parts:
+        request.append(f"${len(part)}\r\n".encode())
+        request.append(part)
+        request.append(b"\r\n")
+    sock.sendall(b"".join(request))
+
+
 def send_command_expect_no_reply(sock: socket.socket, *parts: bytes) -> None:
     request = [f"*{len(parts)}\r\n".encode()]
     for part in parts:
@@ -308,6 +317,34 @@ def run_smoke() -> None:
                 peer_sock.settimeout(2.0)
                 if read_resp(peer_sock) != "PONG":
                     raise AssertionError("peer command did not resume after CLIENT UNPAUSE")
+
+                with connect_with_retry(port, time.monotonic() + 5.0) as blocked_sock:
+                    blocked_id = send_command(blocked_sock, b"CLIENT", b"ID")
+                    if not isinstance(blocked_id, int) or blocked_id <= 0:
+                        raise AssertionError(f"unexpected blocked CLIENT ID: {blocked_id!r}")
+                    send_only(blocked_sock, b"BLPOP", b"client-unblock-timeout", b"0")
+                    time.sleep(0.1)
+                    if send_command(sock, b"CLIENT", b"UNBLOCK", str(blocked_id).encode(), b"TIMEOUT") != 1:
+                        raise AssertionError("CLIENT UNBLOCK TIMEOUT did not report one unblocked client")
+                    if read_resp(blocked_sock) is not None:
+                        raise AssertionError("CLIENT UNBLOCK TIMEOUT should return a null blocking reply")
+                    if send_command(sock, b"CLIENT", b"UNBLOCK", str(blocked_id).encode(), b"TIMEOUT") != 0:
+                        raise AssertionError("CLIENT UNBLOCK should return 0 once the target is no longer blocked")
+
+                with connect_with_retry(port, time.monotonic() + 5.0) as blocked_error_sock:
+                    blocked_error_id = send_command(blocked_error_sock, b"CLIENT", b"ID")
+                    if not isinstance(blocked_error_id, int) or blocked_error_id <= 0:
+                        raise AssertionError(f"unexpected blocked error CLIENT ID: {blocked_error_id!r}")
+                    send_only(blocked_error_sock, b"BLPOP", b"client-unblock-error", b"0")
+                    time.sleep(0.1)
+                    if send_command(sock, b"CLIENT", b"UNBLOCK", str(blocked_error_id).encode(), b"ERROR") != 1:
+                        raise AssertionError("CLIENT UNBLOCK ERROR did not report one unblocked client")
+                    try:
+                        read_resp(blocked_error_sock)
+                        raise AssertionError("CLIENT UNBLOCK ERROR should deliver an error reply")
+                    except RespError as exc:
+                        if "UNBLOCKED" not in str(exc):
+                            raise
 
                 with connect_with_retry(port, time.monotonic() + 5.0) as victim_sock:
                     victim_id = send_command(victim_sock, b"CLIENT", b"ID")

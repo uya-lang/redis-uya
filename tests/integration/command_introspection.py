@@ -551,20 +551,22 @@ def run_smoke() -> None:
             if unsupported_info != [None, None, None, None]:
                 raise AssertionError(f"unsupported COMMAND INFO entries must be null: {unsupported_info!r}")
 
-            client_kill_info = send_command(sock, b"COMMAND", b"INFO", b"CLIENT|KILL", b"CLIENT|REPLY", b"CLIENT|CACHING", b"CLIENT|NO-EVICT", b"CLIENT|NO-TOUCH")
+            client_kill_info = send_command(sock, b"COMMAND", b"INFO", b"CLIENT|KILL", b"CLIENT|UNBLOCK", b"CLIENT|REPLY", b"CLIENT|CACHING", b"CLIENT|NO-EVICT", b"CLIENT|NO-TOUCH")
             if (
                 not isinstance(client_kill_info, list)
-                or len(client_kill_info) != 5
+                or len(client_kill_info) != 6
                 or not isinstance(client_kill_info[0], list)
                 or client_kill_info[0][0] != b"client|kill"
                 or not isinstance(client_kill_info[1], list)
-                or client_kill_info[1][0] != b"client|reply"
+                or client_kill_info[1][0] != b"client|unblock"
                 or not isinstance(client_kill_info[2], list)
-                or client_kill_info[2][0] != b"client|caching"
+                or client_kill_info[2][0] != b"client|reply"
                 or not isinstance(client_kill_info[3], list)
-                or client_kill_info[3][0] != b"client|no-evict"
+                or client_kill_info[3][0] != b"client|caching"
                 or not isinstance(client_kill_info[4], list)
-                or client_kill_info[4][0] != b"client|no-touch"
+                or client_kill_info[4][0] != b"client|no-evict"
+                or not isinstance(client_kill_info[5], list)
+                or client_kill_info[5][0] != b"client|no-touch"
             ):
                 raise AssertionError(f"implemented CLIENT subcommand disappeared from COMMAND INFO: {client_kill_info!r}")
 
@@ -584,6 +586,7 @@ def run_smoke() -> None:
                 or len(docs_all_resp2) <= count * 2
                 or b"get" not in docs_all_resp2
                 or b"client|reply" not in docs_all_resp2
+                or b"client|unblock" not in docs_all_resp2
                 or b"client|caching" not in docs_all_resp2
                 or b"client|id" not in docs_all_resp2
                 or b"client|no-evict" not in docs_all_resp2
@@ -621,7 +624,7 @@ def run_smoke() -> None:
                 or b"client|id" not in listed_client
                 or b"client|no-evict" not in listed_client
                 or b"client|no-touch" not in listed_client
-                or b"client|unblock" in listed_client
+                or b"client|unblock" not in listed_client
             ):
                 raise AssertionError(f"unexpected COMMAND LIST client* result: {listed_client!r}")
 
@@ -839,6 +842,7 @@ def run_smoke() -> None:
                 or len(docs_all) <= count
                 or not isinstance(docs_all.get(b"get"), dict)
                 or not isinstance(docs_all.get(b"client|reply"), dict)
+                or not isinstance(docs_all.get(b"client|unblock"), dict)
                 or not isinstance(docs_all.get(b"client|caching"), dict)
                 or not isinstance(docs_all.get(b"client|id"), dict)
                 or not isinstance(docs_all.get(b"client|no-evict"), dict)

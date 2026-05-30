@@ -3563,6 +3563,8 @@ fn connection_script_help() CommandReply {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
     _ = list_object_push_tail(reply_list, &"SCRIPT <subcommand> [<arg> [value] [opt] ...]. Subcommands are:"[0: 63]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = list_object_push_tail(reply_list, &"DEBUG YES|SYNC|NO"[0: 17]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = list_object_push_tail(reply_list, &"    Set Lua debugger mode. Currently a compatibility no-op."[0: 61]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
     _ = list_object_push_tail(reply_list, &"EXISTS <sha1> [<sha1> ...]"[0: 26]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
     _ = list_object_push_tail(reply_list, &"    Return information about the existence of the scripts in the script cache."[0: 76]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
     _ = list_object_push_tail(reply_list, &"FLUSH [ASYNC|SYNC]"[0: 19]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
@@ -3573,7 +3575,7 @@ fn connection_script_help() CommandReply {
     _ = list_object_push_tail(reply_list, &"    Load a supported script into the script cache without executing it."[0: 69]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
     _ = list_object_push_tail(reply_list, &"HELP"[0: 4]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
     _ = list_object_push_tail(reply_list, &"    Prints this help." [0: 22]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
-    return connection_array_reply_owned(reply_list, 10usize);
+    return connection_array_reply_owned(reply_list, 12usize);
 }
 
 fn connection_script_unknown_subcommand(subcommand: &[byte]) CommandReply {
@@ -3605,6 +3607,20 @@ fn connection_handle_script(command: &Command) CommandReply {
             return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
         }
         return connection_script_help();
+    }
+    if connection_keyword_eq(subcommand, &"DEBUG"[0: 5]) {
+        if command.argc != 3 {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        }
+        const mode: &[byte] = command_arg_data(command, 2) catch {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        };
+        if !connection_keyword_eq(mode, &"YES"[0: 3]) &&
+            !connection_keyword_eq(mode, &"SYNC"[0: 4]) &&
+            !connection_keyword_eq(mode, &"NO"[0: 2]) {
+            return connection_error_reply(&"ERR syntax error"[0: 16]);
+        }
+        return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
     }
     if connection_keyword_eq(subcommand, &"LOAD"[0: 4]) {
         if command.argc != 3 {

@@ -12197,6 +12197,7 @@ fn command_executor_command_visible_pubsub_subcommand(name: &[byte]) bool {
 
 fn command_executor_command_visible_script_subcommand(name: &[byte]) bool {
     return command_executor_slice_eq(name, &"help"[0: 4]) ||
+        command_executor_slice_eq(name, &"debug"[0: 5]) ||
         command_executor_slice_eq(name, &"exists"[0: 6]) ||
         command_executor_slice_eq(name, &"flush"[0: 5]) ||
         command_executor_slice_eq(name, &"kill"[0: 4]) ||

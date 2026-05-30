@@ -380,6 +380,7 @@ PARTIAL_NAMES = {
     "function|list",
     "function|stats",
     "script",
+    "script|debug",
     "script|exists",
     "script|flush",
     "script|help",

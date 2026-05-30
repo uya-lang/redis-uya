@@ -245,6 +245,9 @@ class RedisPySubsetClient:
     def script_flush(self) -> bool:
         return self._request(b"SCRIPT", b"FLUSH") == "OK"
 
+    def script_debug(self, mode: bytes):
+        return self._request(b"SCRIPT", b"DEBUG", mode)
+
     def script_kill(self):
         return self._request(b"SCRIPT", b"KILL")
 
@@ -1039,6 +1042,9 @@ def run_smoke() -> None:
             assert client.geosearch("geo", "FROMMEMBER", "Palermo", "BYRADIUS", "200", "km", "WITHDIST") == [[b"Palermo", b"0.0000"], [b"Catania", b"166.2742"]]
             assert client.eval("return redis.call('SET', KEYS[1], ARGV[1])", 1, "lua-key", "value") == "OK"
             assert client.script_exists("d8f2fad9f8e86a53d2a6ebd960b33c4972cacc37") == [1]
+            assert client.script_debug(b"YES") == "OK"
+            assert client.script_debug(b"SYNC") == "OK"
+            assert client.script_debug(b"NO") == "OK"
             assert client.script_load("return redis.call('GET', KEYS[1])") == b"d3c21d0c2b9ca22f82737626a27bcaf5d288f99f"
             assert client.evalsha("D3C21D0C2B9CA22F82737626A27BCAF5D288F99F", 1, "lua-key") == b"value"
             assert client.eval_ro("return redis.call('GET', KEYS[1])", 1, "lua-key") == b"value"

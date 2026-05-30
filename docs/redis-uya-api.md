@@ -1691,6 +1691,7 @@ FCALL_RO function numkeys [key ...] [arg ...]
 
 ```text
 SCRIPT HELP
+SCRIPT DEBUG YES|SYNC|NO
 SCRIPT LOAD script
 SCRIPT EXISTS sha1 [sha1 ...]
 SCRIPT FLUSH [ASYNC|SYNC]
@@ -1700,6 +1701,7 @@ SCRIPT KILL
 返回：
 
 - `HELP`：返回当前支持的子命令说明
+- `DEBUG`：接受 `YES` / `SYNC` / `NO` 并返回 `+OK`
 - `LOAD`：返回脚本 SHA1
 - `EXISTS`：按输入顺序返回 `0/1`
 - `FLUSH`：成功返回 `+OK`
@@ -1709,7 +1711,8 @@ SCRIPT KILL
 
 - 当前实现为 partial：`LOAD` 只接受可由当前 `EVAL/EVALSHA` 执行的单条 `return redis.call(...)` 子集
 - `FLUSH ASYNC|SYNC` 当前都走同步清空路径，只保留参数兼容
-- 当前不支持 `SCRIPT DEBUG`，`SCRIPT KILL` 只覆盖无运行脚本错误面
+- `SCRIPT DEBUG` 当前是 no-op 兼容面，不提供 Redis Lua debugger
+- `SCRIPT KILL` 当前只覆盖无运行脚本错误面
 
 ### `FUNCTION`
 

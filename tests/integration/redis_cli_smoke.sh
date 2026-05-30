@@ -423,6 +423,12 @@ if [[ "$SCRIPT_EXISTS_RESULT" != "1" ]]; then
     exit 1
 fi
 
+SCRIPT_DEBUG_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" script debug no)"
+if [[ "$SCRIPT_DEBUG_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SCRIPT DEBUG NO OK, got '$SCRIPT_DEBUG_RESULT'" >&2
+    exit 1
+fi
+
 SCRIPT_LOAD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" script load "return redis.call('GET', KEYS[1])")"
 if [[ "$SCRIPT_LOAD_RESULT" != "d3c21d0c2b9ca22f82737626a27bcaf5d288f99f" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected SCRIPT LOAD sha, got '$SCRIPT_LOAD_RESULT'" >&2

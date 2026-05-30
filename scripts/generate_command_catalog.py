@@ -311,6 +311,7 @@ PARTIAL_NAMES = {
     "client|no-evict",
     "client|no-touch",
     "client|pause",
+    "client|reply",
     "client|setname",
     "client|tracking",
     "client|trackinginfo",

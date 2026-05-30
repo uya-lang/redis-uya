@@ -2351,6 +2351,7 @@ CONFIG RESETSTAT
 CLIENT ID
 CLIENT GETNAME
 CLIENT GETREDIR
+CLIENT REPLY ON|OFF|SKIP
 CLIENT CACHING YES|NO
 CLIENT SETNAME name
 CLIENT NO-EVICT ON|OFF
@@ -2373,6 +2374,7 @@ CLIENT HELP
 - `CLIENT ID`：当前连接的整数 ID；服务端按连接事务分配递增 ID，测试重置后的首个连接从 `1` 开始
 - `CLIENT GETNAME`：未设置时返回 Null Bulk，已设置时返回 Bulk String
 - `CLIENT GETREDIR`：返回当前连接 tracking redirect 客户端 ID；未设置时返回 `-1`
+- `CLIENT REPLY`：`ON` 重新开启回复并返回 `+OK`；`OFF` 关闭后续命令回复，`SKIP` 跳过紧随其后的一个命令回复；`OFF` 与 `SKIP` 自身不回包
 - `CLIENT CACHING`：保存当前连接的 caching 标志，成功返回 `+OK`
 - `CLIENT SETNAME`：保存连接级客户端名，成功返回 `+OK`
 - `CLIENT NO-EVICT`：保存当前连接的 no-evict 标志，成功返回 `+OK`
@@ -2391,6 +2393,7 @@ CLIENT HELP
 
 - 客户端名和 `SETINFO` 元数据存放在连接级 `ConnectionTransaction`
 - `CLIENT GETREDIR` 直接读取当前连接的 `tracking_redirect_id`
+- `CLIENT REPLY` 当前按连接维护 `OFF`/`SKIP` 状态，覆盖普通命令、事务控制命令和 `CLIENT` 子命令回复抑制；Pub/Sub push 与 monitor 推送不受影响
 - `CLIENT KILL` 当前只支持 `ID <id>` 过滤，不支持更完整的 addr/type/user/maxage/skipme 组合
 - `CLIENT PAUSE` 当前保留发起暂停的控制连接可继续发送 `CLIENT UNPAUSE`；`WRITE` 语义还没有细分成仅写命令暂停
 - `CLIENT TRACKING` 当前只保存连接级状态，不发送 invalidation push，也不支持 `PREFIX`

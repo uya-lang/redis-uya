@@ -117,6 +117,27 @@ def send_command(sock: socket.socket, *parts: bytes):
     return read_resp(sock)
 
 
+def send_command_expect_no_reply(sock: socket.socket, *parts: bytes) -> None:
+    request = [f"*{len(parts)}\r\n".encode()]
+    for part in parts:
+        request.append(f"${len(part)}\r\n".encode())
+        request.append(part)
+        request.append(b"\r\n")
+    sock.sendall(b"".join(request))
+    previous_timeout = sock.gettimeout()
+    try:
+        sock.settimeout(0.1)
+        try:
+            unexpected = read_resp(sock)
+        except TimeoutError:
+            return
+        except socket.timeout:
+            return
+        raise AssertionError(f"expected no reply, got {unexpected!r}")
+    finally:
+        sock.settimeout(previous_timeout)
+
+
 def array_pairs_to_dict(raw: list[bytes]) -> dict[str, str]:
     result: dict[str, str] = {}
     i = 0
@@ -226,6 +247,24 @@ def run_smoke() -> None:
                 try:
                     send_command(sock, b"CLIENT", b"CACHING", b"BAD")
                     raise AssertionError("CLIENT CACHING invalid mode should fail")
+                except RespError as exc:
+                    if "syntax" not in str(exc).lower():
+                        raise
+
+                send_command_expect_no_reply(sock, b"CLIENT", b"REPLY", b"SKIP")
+                send_command_expect_no_reply(sock, b"PING")
+                if send_command(sock, b"PING") != "PONG":
+                    raise AssertionError("CLIENT REPLY SKIP should suppress exactly one reply")
+
+                send_command_expect_no_reply(sock, b"CLIENT", b"REPLY", b"OFF")
+                send_command_expect_no_reply(sock, b"CLIENT", b"SETNAME", b"reply-off-client")
+                if send_command(sock, b"CLIENT", b"REPLY", b"ON") != "OK":
+                    raise AssertionError("CLIENT REPLY ON failed")
+                if send_command(sock, b"CLIENT", b"GETNAME") != b"reply-off-client":
+                    raise AssertionError("CLIENT REPLY OFF should still execute hidden commands")
+                try:
+                    send_command(sock, b"CLIENT", b"REPLY", b"BAD")
+                    raise AssertionError("CLIENT REPLY invalid mode should fail")
                 except RespError as exc:
                     if "syntax" not in str(exc).lower():
                         raise

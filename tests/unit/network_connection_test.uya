@@ -1169,6 +1169,17 @@ export fn test_connection_process_client_commands() !void {
     const get_name: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$7\r\nGETNAME\r\n"[0: 29], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: get_name.response_len], &"$6\r\nworker\r\n"[0: 12]));
 
+    const caching_yes: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$6\r\nCLIENT\r\n$7\r\nCACHING\r\n$3\r\nYES\r\n"[0: 38], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: caching_yes.response_len], &"+OK\r\n"[0: 5]));
+    try assert_eq_i32(tx.caching_enabled as i32, 1);
+
+    const caching_no: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$6\r\nCLIENT\r\n$7\r\nCACHING\r\n$2\r\nNO\r\n"[0: 37], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: caching_no.response_len], &"+OK\r\n"[0: 5]));
+    try assert_eq_i32(tx.caching_enabled as i32, 0);
+
+    const caching_bad: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$6\r\nCLIENT\r\n$7\r\nCACHING\r\n$3\r\nBAD\r\n"[0: 38], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: caching_bad.response_len], &"-ERR syntax error\r\n"[0: 19]));
+
     const no_touch_on: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$6\r\nCLIENT\r\n$8\r\nNO-TOUCH\r\n$2\r\nON\r\n"[0: 38], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: no_touch_on.response_len], &"+OK\r\n"[0: 5]));
     try assert_eq_i32(tx.no_touch_enabled as i32, 1);
@@ -1323,6 +1334,10 @@ export fn test_connection_process_reset() !void {
     try assert_true(network_connection_slice_eq(out[0: no_evict_on.response_len], &"+OK\r\n"[0: 5]));
     try assert_eq_i32(tx.no_evict_enabled as i32, 1);
 
+    const caching_yes: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*3\r\n$6\r\nCLIENT\r\n$7\r\nCACHING\r\n$3\r\nYES\r\n"[0: 38], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: caching_yes.response_len], &"+OK\r\n"[0: 5]));
+    try assert_eq_i32(tx.caching_enabled as i32, 1);
+
     const subscribe_resp3: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*2\r\n$9\r\nSUBSCRIBE\r\n$3\r\nfoo\r\n"[0: 28], &out[0], 512, 1000u64);
     try assert_true(network_connection_contains(out[0: subscribe_resp3.response_len], &"subscribe"[0: 9]));
 
@@ -1343,6 +1358,7 @@ export fn test_connection_process_reset() !void {
     try assert_eq_i32(tx.client_name_len as i32, 0);
     try assert_eq_i32(tx.client_lib_name_len as i32, 0);
     try assert_eq_i32(tx.tracking_enabled as i32, 0);
+    try assert_eq_i32(tx.caching_enabled as i32, 0);
     try assert_eq_i32(tx.no_evict_enabled as i32, 0);
     try assert_eq_i32(tx.no_touch_enabled as i32, 0);
     try assert_eq_i32(tx.authenticated as i32, 0);
@@ -1384,6 +1400,7 @@ export fn test_connection_process_command_docs_all_large_reply() !void {
     try assert_true(docs_all.response_len > 0);
     try assert_true(network_connection_contains(out[0: docs_all.response_len], &"$3\r\nget\r\n"[0: 9]));
     try assert_true(network_connection_contains(out[0: docs_all.response_len], &"$9\r\nclient|id\r\n"[0: 15]));
+    try assert_true(network_connection_contains(out[0: docs_all.response_len], &"$14\r\nclient|caching\r\n"[0: 21]));
     try assert_true(network_connection_contains(out[0: docs_all.response_len], &"$15\r\nclient|no-evict\r\n"[0: 22]));
     try assert_true(network_connection_contains(out[0: docs_all.response_len], &"$15\r\nclient|no-touch\r\n"[0: 22]));
     try assert_true(network_connection_contains(out[0: docs_all.response_len], &"$7\r\nsummary\r\n"[0: 13]));

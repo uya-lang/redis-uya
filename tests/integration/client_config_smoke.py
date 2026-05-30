@@ -219,6 +219,17 @@ def run_smoke() -> None:
                 if send_command(sock, b"CLIENT", b"GETREDIR") != -1:
                     raise AssertionError("CLIENT GETREDIR should reset to -1 after TRACKING OFF")
 
+                if send_command(sock, b"CLIENT", b"CACHING", b"YES") != "OK":
+                    raise AssertionError("CLIENT CACHING YES failed")
+                if send_command(sock, b"CLIENT", b"CACHING", b"NO") != "OK":
+                    raise AssertionError("CLIENT CACHING NO failed")
+                try:
+                    send_command(sock, b"CLIENT", b"CACHING", b"BAD")
+                    raise AssertionError("CLIENT CACHING invalid mode should fail")
+                except RespError as exc:
+                    if "syntax" not in str(exc).lower():
+                        raise
+
                 if send_command(sock, b"CLIENT", b"NO-TOUCH", b"ON") != "OK":
                     raise AssertionError("CLIENT NO-TOUCH ON failed")
                 if send_command(sock, b"CLIENT", b"NO-TOUCH", b"OFF") != "OK":

@@ -2351,6 +2351,7 @@ CONFIG RESETSTAT
 CLIENT ID
 CLIENT GETNAME
 CLIENT GETREDIR
+CLIENT CACHING YES|NO
 CLIENT SETNAME name
 CLIENT NO-EVICT ON|OFF
 CLIENT NO-TOUCH ON|OFF
@@ -2372,6 +2373,7 @@ CLIENT HELP
 - `CLIENT ID`：当前连接的整数 ID；服务端按连接事务分配递增 ID，测试重置后的首个连接从 `1` 开始
 - `CLIENT GETNAME`：未设置时返回 Null Bulk，已设置时返回 Bulk String
 - `CLIENT GETREDIR`：返回当前连接 tracking redirect 客户端 ID；未设置时返回 `-1`
+- `CLIENT CACHING`：保存当前连接的 caching 标志，成功返回 `+OK`
 - `CLIENT SETNAME`：保存连接级客户端名，成功返回 `+OK`
 - `CLIENT NO-EVICT`：保存当前连接的 no-evict 标志，成功返回 `+OK`
 - `CLIENT NO-TOUCH`：保存当前连接的 no-touch 标志，成功返回 `+OK`
@@ -2392,6 +2394,7 @@ CLIENT HELP
 - `CLIENT KILL` 当前只支持 `ID <id>` 过滤，不支持更完整的 addr/type/user/maxage/skipme 组合
 - `CLIENT PAUSE` 当前保留发起暂停的控制连接可继续发送 `CLIENT UNPAUSE`；`WRITE` 语义还没有细分成仅写命令暂停
 - `CLIENT TRACKING` 当前只保存连接级状态，不发送 invalidation push，也不支持 `PREFIX`
+- `CLIENT CACHING` 当前只保存连接级兼容标志，尚未提供 server-assisted client-side caching invalidation
 - `CLIENT NO-EVICT` 当前只保存连接级兼容标志，尚未接入 `maxmemory` 淘汰候选保护
 - `CLIENT NO-TOUCH` 当前只保存连接级兼容标志，尚未接入对象访问路径的 LRU/LFU touch 抑制
 

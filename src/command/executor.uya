@@ -12131,6 +12131,7 @@ fn command_executor_command_visible_top_level_name(router: &CommandRouter, name:
 
 fn command_executor_command_visible_client_subcommand(name: &[byte]) bool {
     return command_executor_slice_eq(name, &"help"[0: 4]) ||
+        command_executor_slice_eq(name, &"caching"[0: 7]) ||
         command_executor_slice_eq(name, &"id"[0: 2]) ||
         command_executor_slice_eq(name, &"getname"[0: 7]) ||
         command_executor_slice_eq(name, &"getredir"[0: 8]) ||

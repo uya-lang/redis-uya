@@ -303,6 +303,7 @@ PARTIAL_NAMES = {
     "bzpopmax",
     "bzpopmin",
     "client",
+    "client|caching",
     "client|getname",
     "client|kill",
     "client|info",

@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 133 | 0 | 3 | 83 |
+| Tier A: standalone core | 365 | 259 | 146 | 134 | 0 | 3 | 82 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `140` |
+| `partial` | `141` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `236` |
+| `deferred` | `235` |
 
 ## Group counts
 
@@ -139,7 +139,7 @@
 | `cf.reserve` | `cf` | `deferred` | `v0.9.2` | `-3` | `cf` | `no` | `@cuckoo, @write, @fast` |
 | `cf.scandump` | `cf` | `deferred` | `v0.9.2` | `3` | `cf` | `no` | `@cuckoo, @write, @slow` |
 | `client` | `connection` | `partial` | `-` | `-2` | `-` | `no` | `@slow` |
-| `client|caching` | `connection` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@slow, @connection` |
+| `client|caching` | `connection` | `partial` | `-` | `3` | `-` | `no` | `@slow, @connection` |
 | `client|getname` | `connection` | `partial` | `-` | `2` | `-` | `no` | `@slow, @connection` |
 | `client|getredir` | `connection` | `full` | `-` | `2` | `-` | `no` | `@slow, @connection` |
 | `client|help` | `connection` | `full` | `-` | `2` | `-` | `no` | `@slow, @connection` |

@@ -127,6 +127,7 @@ server open
 - `CLIENT LIST` 通过连接级注册表返回当前活跃连接的信息行快照，连接关闭时由 `server.uya` 注销
 - `CLIENT KILL` / `PAUSE` / `UNPAUSE` 通过 `ConnectionProcessResult` 把控制请求传回 `server.uya`，由 server 侧关闭目标连接或更新全局 pause 状态
 - `CLIENT TRACKING` 当前只维护连接级 flags/redirect 状态，并通过 `CLIENT GETREDIR` / `CLIENT TRACKINGINFO` 暴露，不包含 invalidation push 通道
+- `CLIENT CACHING` 当前只维护连接级兼容标志；server-assisted client-side caching invalidation 还未实现
 - `CLIENT NO-EVICT` 当前只维护连接级兼容标志；`maxmemory` 淘汰候选保护还未接入存储层
 - `CLIENT NO-TOUCH` 当前只维护连接级兼容标志；存储层的 LRU/LFU touch 抑制还未接入命令执行路径
 - `CommandRuntimeInfo.protocol_version` 由连接层注入，供 `COMMAND DOCS` 等控制面在 RESP2/RESP3 下切换集合和 map 形态

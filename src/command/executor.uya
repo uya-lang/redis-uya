@@ -9920,6 +9920,69 @@ fn command_executor_geodist(engine: &Engine, command: &Command, now_ms: u64) Com
     return command_executor_geo_format_bulk(command_executor_geo_distance_meters(&point_a, &point_b) / unit_scale, &"%.4f"[0: 4]);
 }
 
+fn command_executor_geopos(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 3 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+
+    const obj_result: !&RedisObject = lookup_key_at(engine, key, now_ms);
+    var obj: &RedisObject = null as &RedisObject;
+    if obj_result.error_id == 0 {
+        obj = obj_result.value;
+        if obj.obj_type != ObjectType.object_zset {
+            return command_executor_wrongtype();
+        }
+    }
+
+    var raw: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&raw);
+    }
+    const result_count: usize = command.argc - 2;
+    _ = command_executor_resp_collection_prefix(&raw, &"*"[0: 1], result_count) catch {
+        return command_executor_oom();
+    };
+
+    var index: usize = 2;
+    while index < command.argc {
+        const member: &[byte] = command_executor_arg(command, index) catch {
+            return command_executor_wrong_arity();
+        };
+        if obj == null {
+            _ = command_executor_command_append_null(&raw, 2) catch {
+                return command_executor_oom();
+            };
+            index = index + 1;
+            continue;
+        }
+        const point_result: !CommandExecutorGeoPoint = command_executor_geo_decode_member(obj, member);
+        if point_result.error_id != 0 {
+            _ = command_executor_command_append_null(&raw, 2) catch {
+                return command_executor_oom();
+            };
+            index = index + 1;
+            continue;
+        }
+        const point: CommandExecutorGeoPoint = point_result.value;
+        _ = command_executor_resp_collection_prefix(&raw, &"*"[0: 1], 2) catch {
+            return command_executor_oom();
+        };
+        _ = command_executor_geo_append_formatted_bulk(&raw, point.lon, &"%.6f"[0: 4]) catch {
+            return command_executor_oom();
+        };
+        _ = command_executor_geo_append_formatted_bulk(&raw, point.lat, &"%.6f"[0: 4]) catch {
+            return command_executor_oom();
+        };
+        index = index + 1;
+    }
+    return command_executor_owned_raw(raw.buf[0: raw.len]);
+}
+
 fn command_executor_geosearch(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
     if command.argc < 7 {
         return command_executor_wrong_arity();
@@ -14014,6 +14077,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_geodist {
         return command_executor_geodist(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_geopos {
+        return command_executor_geopos(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_geosearch {
         return command_executor_geosearch(engine, command, now_ms);

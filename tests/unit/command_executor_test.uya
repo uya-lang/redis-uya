@@ -2536,6 +2536,20 @@ export fn test_command_set_get_del_exists() !void {
     command_reply_cleanup(&geodist_reply);
     resp_value_free(&geodist_parsed.value);
 
+    var geopos_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nGEOPOS\r\n$3\r\ngeo\r\n$7\r\nPalermo\r\n$7\r\nMissing\r\n$7\r\nCatania\r\n"[0: 64]);
+    const geopos_command: Command = try command_executor_test_command(&router, &geopos_parsed);
+    var geopos_reply: CommandReply = command_execute_at(&engine, &geopos_command, 1000u64);
+    try assert_true(command_executor_test_slice_eq(geopos_reply.data, &"*3\r\n*2\r\n$9\r\n13.361389\r\n$9\r\n38.115555\r\n$-1\r\n*2\r\n$9\r\n15.087268\r\n$9\r\n37.502668\r\n"[0: 77]));
+    command_reply_cleanup(&geopos_reply);
+    resp_value_free(&geopos_parsed.value);
+
+    var geopos_missing_key_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nGEOPOS\r\n$7\r\nmissing\r\n$7\r\nPalermo\r\n"[0: 42]);
+    const geopos_missing_key_command: Command = try command_executor_test_command(&router, &geopos_missing_key_parsed);
+    var geopos_missing_key_reply: CommandReply = command_execute_at(&engine, &geopos_missing_key_command, 1000u64);
+    try assert_true(command_executor_test_slice_eq(geopos_missing_key_reply.data, &"*1\r\n$-1\r\n"[0: 9]));
+    command_reply_cleanup(&geopos_missing_key_reply);
+    resp_value_free(&geopos_missing_key_parsed.value);
+
     var geosearch_parsed: RespParseResult = try parse_resp2(&"*8\r\n$9\r\nGEOSEARCH\r\n$3\r\ngeo\r\n$10\r\nFROMLONLAT\r\n$2\r\n15\r\n$2\r\n37\r\n$8\r\nBYRADIUS\r\n$3\r\n200\r\n$2\r\nkm\r\n"[0: 92]);
     const geosearch_command: Command = try command_executor_test_command(&router, &geosearch_parsed);
     var geosearch_reply: CommandReply = command_execute_at(&engine, &geosearch_command, 1000u64);
@@ -6534,6 +6548,13 @@ export fn test_command_error_paths() !void {
     try assert_eq_i32(geodist_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
     try assert_true(command_executor_test_slice_eq(geodist_wrongtype_reply.data, &"WRONGTYPE Operation against a key holding the wrong kind of value"[0: 65]));
     resp_value_free(&geodist_wrongtype_parsed.value);
+
+    var geopos_wrongtype_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nGEOPOS\r\n$3\r\nkey\r\n$1\r\na\r\n"[0: 32]);
+    const geopos_wrongtype_command: Command = try command_executor_test_command(&router, &geopos_wrongtype_parsed);
+    const geopos_wrongtype_reply: CommandReply = command_execute_at(&engine, &geopos_wrongtype_command, 1000u64);
+    try assert_eq_i32(geopos_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(geopos_wrongtype_reply.data, &"WRONGTYPE Operation against a key holding the wrong kind of value"[0: 65]));
+    resp_value_free(&geopos_wrongtype_parsed.value);
 
     var geosearch_missing_member_parsed: RespParseResult = try parse_resp2(&"*7\r\n$9\r\nGEOSEARCH\r\n$3\r\ngeo\r\n$10\r\nFROMMEMBER\r\n$7\r\nMissing\r\n$8\r\nBYRADIUS\r\n$3\r\n200\r\n$2\r\nkm\r\n"[0: 89]);
     const geosearch_missing_member_command: Command = try command_executor_test_command(&router, &geosearch_missing_member_parsed);

@@ -1786,6 +1786,25 @@ GEODIST key member1 member2 [M|KM|FT|MI]
 - 当前实现为 partial，但距离计算走 exact great-circle path
 - 当前支持 `M`、`KM`、`FT`、`MI`
 
+### `GEOPOS`
+
+格式：
+
+```text
+GEOPOS key member [member ...]
+```
+
+返回：
+
+- 按请求顺序返回每个 member 的坐标数组
+- member 不存在或 key 不存在时，对应位置返回 Null Bulk
+
+说明：
+
+- 当前实现为 partial，坐标来自 exact zset-backed packed coordinate score
+- 返回坐标会按当前 packed score 解码并量化到 `1e-6` 的经纬度字符串
+- key 存在但不是 Geo/ZSet 类型时返回 `WRONGTYPE`
+
 ### `GEOSEARCH`
 
 格式：

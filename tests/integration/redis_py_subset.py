@@ -209,6 +209,11 @@ class RedisPySubsetClient:
         assert result is None or isinstance(result, bytes)
         return result
 
+    def geopos(self, key: str, *members: str):
+        result = self._request(b"GEOPOS", key.encode(), *(member.encode() for member in members))
+        assert isinstance(result, list)
+        return result
+
     def geosearch(self, key: str, *parts: str):
         result = self._request(b"GEOSEARCH", key.encode(), *(part.encode() for part in parts))
         assert isinstance(result, list)
@@ -1044,6 +1049,7 @@ def run_smoke() -> None:
             assert client.pfcount("emptyhll") == 0
             assert client.geoadd("geo", "13.361389", "38.115556", "Palermo", "15.087269", "37.502669", "Catania") == 2
             assert client.geodist("geo", "Palermo", "Catania", "km") == b"166.2742"
+            assert client.geopos("geo", "Palermo", "Missing", "Catania") == [[b"13.361389", b"38.115555"], None, [b"15.087268", b"37.502668"]]
             assert client.geosearch("geo", "FROMLONLAT", "15", "37", "BYRADIUS", "200", "km") == [b"Palermo", b"Catania"]
             assert client.geosearch("geo", "FROMMEMBER", "Palermo", "BYRADIUS", "200", "km", "WITHDIST") == [[b"Palermo", b"0.0000"], [b"Catania", b"166.2742"]]
             assert client.eval("return redis.call('SET', KEYS[1], ARGV[1])", 1, "lua-key", "value") == "OK"

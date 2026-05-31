@@ -265,6 +265,9 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const georadius_ro_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*6\r\n$12\r\nGEORADIUS_RO\r\n$3\r\ngeo\r\n$2\r\n15\r\n$2\r\n37\r\n$3\r\n200\r\n$2\r\nkm\r\n"[0: 65], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: georadius_ro_result.response_len], &"*2\r\n$7\r\nPalermo\r\n$7\r\nCatania\r\n"[0: 30]));
 
+    const georadiusbymember_ro_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$20\r\nGEORADIUSBYMEMBER_RO\r\n$3\r\ngeo\r\n$7\r\nPalermo\r\n$3\r\n200\r\n$2\r\nkm\r\n"[0: 70], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: georadiusbymember_ro_result.response_len], &"*2\r\n$7\r\nPalermo\r\n$7\r\nCatania\r\n"[0: 30]));
+
     const eval_set_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$4\r\nEVAL\r\n$42\r\nreturn redis.call('SET', KEYS[1], ARGV[1])\r\n$1\r\n1\r\n$7\r\nlua-key\r\n$5\r\nvalue\r\n"[0: 94], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: eval_set_result.response_len], &"+OK\r\n"[0: 5]));
 

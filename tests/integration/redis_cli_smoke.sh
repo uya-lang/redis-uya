@@ -423,6 +423,12 @@ if [[ "$GEORADIUS_RO_RESULT" != $'Palermo\nCatania' ]]; then
     exit 1
 fi
 
+GEORADIUSBYMEMBER_RO_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" georadiusbymember_ro geo Palermo 200 km)"
+if [[ "$GEORADIUSBYMEMBER_RO_RESULT" != $'Palermo\nCatania' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected GEORADIUSBYMEMBER_RO Palermo/Catania, got '$GEORADIUSBYMEMBER_RO_RESULT'" >&2
+    exit 1
+fi
+
 EVAL_SET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" eval "return redis.call('SET', KEYS[1], ARGV[1])" 1 lua-key value)"
 if [[ "$EVAL_SET_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected EVAL set OK, got '$EVAL_SET_RESULT'" >&2

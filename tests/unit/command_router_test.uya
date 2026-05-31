@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 193);
+    try assert_eq_i32(command_router_count(&router) as i32, 194);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -254,6 +254,10 @@ export fn test_command_router_lookup_and_case() !void {
     const georadius_ro: CommandInfo = try command_router_lookup(&router, &"GEORADIUS_RO"[0: 12]);
     try assert_eq_i32(georadius_ro.cmd_type as i32, CommandType.command_georadius_ro as i32);
     try assert_eq_i32(georadius_ro.arity, -6);
+
+    const georadiusbymember_ro: CommandInfo = try command_router_lookup(&router, &"GEORADIUSBYMEMBER_RO"[0: 20]);
+    try assert_eq_i32(georadiusbymember_ro.cmd_type as i32, CommandType.command_georadiusbymember_ro as i32);
+    try assert_eq_i32(georadiusbymember_ro.arity, -5);
 
     const geosearch: CommandInfo = try command_router_lookup(&router, &"GEOSEARCH"[0: 9]);
     try assert_eq_i32(geosearch.cmd_type as i32, CommandType.command_geosearch as i32);
@@ -854,6 +858,7 @@ export fn test_command_router_arity_validation() !void {
     const geodist: CommandInfo = try command_router_lookup(&router, &"GEODIST"[0: 7]);
     const geopos: CommandInfo = try command_router_lookup(&router, &"GEOPOS"[0: 6]);
     const georadius_ro: CommandInfo = try command_router_lookup(&router, &"GEORADIUS_RO"[0: 12]);
+    const georadiusbymember_ro: CommandInfo = try command_router_lookup(&router, &"GEORADIUSBYMEMBER_RO"[0: 20]);
     const geosearch: CommandInfo = try command_router_lookup(&router, &"GEOSEARCH"[0: 9]);
     const zscore: CommandInfo = try command_router_lookup(&router, &"ZSCORE"[0: 6]);
     const zmscore: CommandInfo = try command_router_lookup(&router, &"ZMSCORE"[0: 7]);
@@ -1011,6 +1016,8 @@ export fn test_command_router_arity_validation() !void {
     try command_validate_arity(&geopos, 5);
     try command_validate_arity(&georadius_ro, 6);
     try command_validate_arity(&georadius_ro, 10);
+    try command_validate_arity(&georadiusbymember_ro, 5);
+    try command_validate_arity(&georadiusbymember_ro, 9);
     try command_validate_arity(&geosearch, 7);
     try command_validate_arity(&geosearch, 13);
     try command_validate_arity(&zscore, 3);

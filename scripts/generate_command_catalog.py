@@ -378,6 +378,7 @@ PARTIAL_NAMES = {
     "function|help",
     "function|kill",
     "function|list",
+    "function|restore",
     "function|stats",
     "script",
     "script|debug",

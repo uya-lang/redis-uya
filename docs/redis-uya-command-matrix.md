@@ -1,7 +1,7 @@
 # redis-uya command matrix
 
 > version: v0.9.1-dev
-> date: 2026-05-30
+> date: 2026-05-31
 > source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`
 > runtime source: `src/command/catalog_generated.uya`
 
@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 138 | 0 | 3 | 78 |
+| Tier A: standalone core | 365 | 259 | 146 | 139 | 0 | 3 | 77 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `145` |
+| `partial` | `146` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `231` |
+| `deferred` | `230` |
 
 ## Group counts
 
@@ -271,7 +271,7 @@
 | `function|kill` | `scripting` | `partial` | `-` | `2` | `-` | `no` | `@slow, @scripting` |
 | `function|list` | `scripting` | `partial` | `-` | `-2` | `-` | `no` | `@slow, @scripting` |
 | `function|load` | `scripting` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@write, @slow, @scripting` |
-| `function|restore` | `scripting` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@write, @slow, @scripting` |
+| `function|restore` | `scripting` | `partial` | `-` | `-3` | `-` | `no` | `@write, @slow, @scripting` |
 | `function|stats` | `scripting` | `partial` | `-` | `2` | `-` | `no` | `@slow, @scripting` |
 | `geoadd` | `geo` | `partial` | `-` | `-5` | `-` | `no` | `@write, @geo, @slow` |
 | `geodist` | `geo` | `partial` | `-` | `-4` | `-` | `no` | `@read, @geo, @slow` |

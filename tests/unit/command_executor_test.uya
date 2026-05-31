@@ -678,6 +678,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"function|help"[0: 13], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"function|kill"[0: 13], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"function|list"[0: 13], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"function|restore"[0: 16], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"function|stats"[0: 14], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xack"[0: 4], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xclaim"[0: 6], CommandCatalogStatus.status_partial);
@@ -1064,6 +1065,7 @@ export fn test_command_function_help() !void {
     try assert_true(command_executor_test_contains(out[0: help_len], &"FUNCTION HELP"[0: 13]));
     try assert_true(command_executor_test_contains(out[0: help_len], &"FUNCTION LIST"[0: 13]));
     try assert_true(command_executor_test_contains(out[0: help_len], &"FUNCTION DUMP"[0: 13]));
+    try assert_true(command_executor_test_contains(out[0: help_len], &"FUNCTION RESTORE"[0: 16]));
     try assert_true(command_executor_test_contains(out[0: help_len], &"FUNCTION KILL"[0: 13]));
     command_reply_cleanup(&help_reply);
     resp_value_free(&help_parsed.value);
@@ -1277,6 +1279,85 @@ export fn test_command_function_dump() !void {
     var extra_reply: CommandReply = command_execute_at(&engine, &extra_command, 1000u64);
     try assert_eq_i32(extra_reply.typ as i32, CommandReplyType.reply_error as i32);
     try assert_true(command_executor_test_slice_eq(extra_reply.data, &"ERR wrong number of arguments for 'function|dump' command"[0: 57]));
+    command_reply_cleanup(&extra_reply);
+    resp_value_free(&extra_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_command_function_restore() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+
+    var restore_input: [byte: 48] = [
+        42 as byte, 51 as byte, 13 as byte, 10 as byte,
+        36 as byte, 56 as byte, 13 as byte, 10 as byte,
+        70 as byte, 85 as byte, 78 as byte, 67 as byte, 84 as byte, 73 as byte, 79 as byte, 78 as byte, 13 as byte, 10 as byte,
+        36 as byte, 55 as byte, 13 as byte, 10 as byte,
+        82 as byte, 69 as byte, 83 as byte, 84 as byte, 79 as byte, 82 as byte, 69 as byte, 13 as byte, 10 as byte,
+        36 as byte, 49 as byte, 48 as byte, 13 as byte, 10 as byte,
+        0x0a as byte, 0x00 as byte, 0x5d as byte, 0x9b as byte, 0x5c as byte, 0x40 as byte, 0x0f as byte, 0x7f as byte, 0xa2 as byte, 0xda as byte,
+        13 as byte, 10 as byte,
+    ];
+    var restore_parsed: RespParseResult = try parse_resp2(restore_input[0: 48]);
+    const restore_command: Command = try command_executor_test_command(&router, &restore_parsed);
+    var restore_reply: CommandReply = command_execute_at(&engine, &restore_command, 1000u64);
+    try assert_eq_i32(restore_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(restore_reply.data, &"OK"[0: 2]));
+    command_reply_cleanup(&restore_reply);
+    resp_value_free(&restore_parsed.value);
+
+    var restore_replace_input: [byte: 61] = [
+        42 as byte, 52 as byte, 13 as byte, 10 as byte,
+        36 as byte, 56 as byte, 13 as byte, 10 as byte,
+        70 as byte, 85 as byte, 78 as byte, 67 as byte, 84 as byte, 73 as byte, 79 as byte, 78 as byte, 13 as byte, 10 as byte,
+        36 as byte, 55 as byte, 13 as byte, 10 as byte,
+        82 as byte, 69 as byte, 83 as byte, 84 as byte, 79 as byte, 82 as byte, 69 as byte, 13 as byte, 10 as byte,
+        36 as byte, 49 as byte, 48 as byte, 13 as byte, 10 as byte,
+        0x0a as byte, 0x00 as byte, 0x5d as byte, 0x9b as byte, 0x5c as byte, 0x40 as byte, 0x0f as byte, 0x7f as byte, 0xa2 as byte, 0xda as byte,
+        13 as byte, 10 as byte,
+        36 as byte, 55 as byte, 13 as byte, 10 as byte,
+        82 as byte, 69 as byte, 80 as byte, 76 as byte, 65 as byte, 67 as byte, 69 as byte, 13 as byte, 10 as byte,
+    ];
+    var restore_replace_parsed: RespParseResult = try parse_resp2(restore_replace_input[0: 61]);
+    const restore_replace_command: Command = try command_executor_test_command(&router, &restore_replace_parsed);
+    var restore_replace_reply: CommandReply = command_execute_at(&engine, &restore_replace_command, 1000u64);
+    try assert_eq_i32(restore_replace_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(restore_replace_reply.data, &"OK"[0: 2]));
+    command_reply_cleanup(&restore_replace_reply);
+    resp_value_free(&restore_replace_parsed.value);
+
+    var bad_payload_parsed: RespParseResult = try parse_resp2(&"*3\r\n$8\r\nFUNCTION\r\n$7\r\nRESTORE\r\n$3\r\nbad\r\n"[0: 40]);
+    const bad_payload_command: Command = try command_executor_test_command(&router, &bad_payload_parsed);
+    var bad_payload_reply: CommandReply = command_execute_at(&engine, &bad_payload_command, 1000u64);
+    try assert_eq_i32(bad_payload_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(bad_payload_reply.data, &"ERR DUMP payload version or checksum are wrong"[0: 46]));
+    command_reply_cleanup(&bad_payload_reply);
+    resp_value_free(&bad_payload_parsed.value);
+
+    var missing_payload_parsed: RespParseResult = try parse_resp2(&"*2\r\n$8\r\nFUNCTION\r\n$7\r\nRESTORE\r\n"[0: 31]);
+    const missing_payload_command: Command = try command_executor_test_command(&router, &missing_payload_parsed);
+    var missing_payload_reply: CommandReply = command_execute_at(&engine, &missing_payload_command, 1000u64);
+    try assert_eq_i32(missing_payload_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(missing_payload_reply.data, &"ERR wrong number of arguments for 'function|restore' command"[0: 60]));
+    command_reply_cleanup(&missing_payload_reply);
+    resp_value_free(&missing_payload_parsed.value);
+
+    var bad_policy_parsed: RespParseResult = try parse_resp2(&"*4\r\n$8\r\nFUNCTION\r\n$7\r\nRESTORE\r\n$3\r\nbad\r\n$1\r\nX\r\n"[0: 47]);
+    const bad_policy_command: Command = try command_executor_test_command(&router, &bad_policy_parsed);
+    var bad_policy_reply: CommandReply = command_execute_at(&engine, &bad_policy_command, 1000u64);
+    try assert_eq_i32(bad_policy_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(bad_policy_reply.data, &"ERR Wrong restore policy given, value should be either FLUSH, APPEND or REPLACE."[0: 80]));
+    command_reply_cleanup(&bad_policy_reply);
+    resp_value_free(&bad_policy_parsed.value);
+
+    var extra_parsed: RespParseResult = try parse_resp2(&"*5\r\n$8\r\nFUNCTION\r\n$7\r\nRESTORE\r\n$3\r\nbad\r\n$7\r\nREPLACE\r\n$1\r\nX\r\n"[0: 60]);
+    const extra_command: Command = try command_executor_test_command(&router, &extra_parsed);
+    var extra_reply: CommandReply = command_execute_at(&engine, &extra_command, 1000u64);
+    try assert_eq_i32(extra_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(extra_reply.data, &"ERR unknown subcommand or wrong number of arguments for 'RESTORE'. Try FUNCTION HELP."[0: 85]));
     command_reply_cleanup(&extra_reply);
     resp_value_free(&extra_parsed.value);
 

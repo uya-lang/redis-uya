@@ -1725,6 +1725,7 @@ FUNCTION STATS
 FUNCTION FLUSH [ASYNC|SYNC]
 FUNCTION DELETE <library-name>
 FUNCTION DUMP
+FUNCTION RESTORE serialized-value [FLUSH|APPEND|REPLACE]
 FUNCTION KILL
 ```
 
@@ -1736,15 +1737,17 @@ FUNCTION KILL
 - `FUNCTION FLUSH` 当前返回 `OK`，空库状态下为 no-op
 - `FUNCTION DELETE` 当前返回 `ERR Library not found`，表示尚无可删除的 function library
 - `FUNCTION DUMP` 当前返回 Redis 兼容的空库序列化 payload
+- `FUNCTION RESTORE` 当前只接受 Redis 兼容空库序列化 payload，成功返回 `+OK`
 - `FUNCTION KILL` 当前返回 `NOTBUSY No scripts in execution right now.`，表示没有正在运行的 function/script
 
 说明：
 
-- 当前实现为 partial，仅执行 `FUNCTION HELP`、空库状态的 `FUNCTION LIST`、空库统计的 `FUNCTION STATS`、no-op `FUNCTION FLUSH`、空库错误面的 `FUNCTION DELETE`、空库序列化的 `FUNCTION DUMP` 和无运行脚本状态的 `FUNCTION KILL`
+- 当前实现为 partial，仅执行 `FUNCTION HELP`、空库状态的 `FUNCTION LIST`、空库统计的 `FUNCTION STATS`、no-op `FUNCTION FLUSH`、空库错误面的 `FUNCTION DELETE`、空库序列化的 `FUNCTION DUMP`、空库 payload 的 `FUNCTION RESTORE` 和无运行脚本状态的 `FUNCTION KILL`
 - `FUNCTION LIST` 支持 `LIBRARYNAME <pattern>` 与 `WITHCODE` 参数校验，但 function library 存储尚未实现，因此始终返回空数组
 - `FUNCTION FLUSH` 支持 `ASYNC|SYNC` 参数校验，但 function library 存储尚未实现，因此不会清理任何真实库状态
-- `COMMAND INFO/LIST/DOCS` 会暴露 `FUNCTION`、`FUNCTION|HELP`、`FUNCTION|LIST`、`FUNCTION|STATS`、`FUNCTION|FLUSH`、`FUNCTION|DELETE`、`FUNCTION|DUMP` 和 `FUNCTION|KILL`
-- 当前不支持 `FUNCTION LOAD/RESTORE` 或真实 `FCALL/FCALL_RO` 执行
+- `FUNCTION RESTORE` 支持 `FLUSH|APPEND|REPLACE` 参数校验，但当前只接受空库 dump；非空或非法 payload 返回 `ERR DUMP payload version or checksum are wrong`
+- `COMMAND INFO/LIST/DOCS` 会暴露 `FUNCTION`、`FUNCTION|HELP`、`FUNCTION|LIST`、`FUNCTION|STATS`、`FUNCTION|FLUSH`、`FUNCTION|DELETE`、`FUNCTION|DUMP`、`FUNCTION|RESTORE` 和 `FUNCTION|KILL`
+- 当前不支持 `FUNCTION LOAD`、非空 `FUNCTION RESTORE` 或真实 `FCALL/FCALL_RO` 执行
 
 ### `GEOADD`
 

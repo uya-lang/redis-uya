@@ -280,6 +280,12 @@ class RedisPySubsetClient:
         assert isinstance(result, bytes)
         return result
 
+    def function_restore(self, payload: bytes, policy: bytes | None = None):
+        parts = [b"FUNCTION", b"RESTORE", payload]
+        if policy is not None:
+            parts.append(policy)
+        return self._request(*parts)
+
     def function_kill(self):
         return self._request(b"FUNCTION", b"KILL")
 
@@ -1153,7 +1159,13 @@ def run_smoke() -> None:
             if client.acl_list() != [b"user default on nopass ~* &* +@all"]:
                 raise AssertionError("expected ACL LIST default user config")
             function_help = client.function_help()
-            if b"FUNCTION HELP" not in function_help or b"FUNCTION LIST [LIBRARYNAME <pattern>] [WITHCODE]" not in function_help or b"FUNCTION DUMP" not in function_help or b"FUNCTION KILL" not in function_help:
+            if (
+                b"FUNCTION HELP" not in function_help
+                or b"FUNCTION LIST [LIBRARYNAME <pattern>] [WITHCODE]" not in function_help
+                or b"FUNCTION DUMP" not in function_help
+                or not any(item.startswith(b"FUNCTION RESTORE") for item in function_help)
+                or b"FUNCTION KILL" not in function_help
+            ):
                 raise AssertionError(f"unexpected FUNCTION HELP result: {function_help!r}")
             if client.function_list() != []:
                 raise AssertionError("expected empty FUNCTION LIST partial result")
@@ -1173,8 +1185,23 @@ def run_smoke() -> None:
             except RespError as exc:
                 if str(exc) != "ERR Library not found":
                     raise AssertionError(f"unexpected FUNCTION DELETE error: {exc}") from exc
-            if client.function_dump() != bytes.fromhex("0a005d9b5c400f7fa2da"):
+            empty_function_dump = client.function_dump()
+            if empty_function_dump != bytes.fromhex("0a005d9b5c400f7fa2da"):
                 raise AssertionError("expected FUNCTION DUMP empty-library payload")
+            if client.function_restore(empty_function_dump) != "OK" or client.function_restore(empty_function_dump, b"REPLACE") != "OK":
+                raise AssertionError("expected FUNCTION RESTORE empty-library payload to return OK")
+            try:
+                client.function_restore(b"bad")
+                raise AssertionError("expected FUNCTION RESTORE bad payload to fail")
+            except RespError as exc:
+                if str(exc) != "ERR DUMP payload version or checksum are wrong":
+                    raise AssertionError(f"unexpected FUNCTION RESTORE payload error: {exc}") from exc
+            try:
+                client.function_restore(b"bad", b"BAD")
+                raise AssertionError("expected FUNCTION RESTORE bad policy to fail")
+            except RespError as exc:
+                if str(exc) != "ERR Wrong restore policy given, value should be either FLUSH, APPEND or REPLACE.":
+                    raise AssertionError(f"unexpected FUNCTION RESTORE policy error: {exc}") from exc
             try:
                 client.function_kill()
                 raise AssertionError("expected FUNCTION KILL with no running function to fail")

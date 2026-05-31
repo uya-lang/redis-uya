@@ -7359,6 +7359,8 @@ fn command_executor_function_help() CommandReply {
     _ = list_object_push_tail(reply_list, &"    Flush loaded functions. Currently a no-op because function storage is not implemented."[0: 90]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"FUNCTION DUMP"[0: 13]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"    Return a serialized payload of loaded libraries. Currently returns the Redis-compatible empty-library dump."[0: 111]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"FUNCTION RESTORE <serialized-value> [FLUSH|APPEND|REPLACE]"[0: 58]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Restore loaded functions. Currently accepts only the empty-library dump."[0: 76]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"FUNCTION KILL"[0: 13]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"    Kill the currently executing function. Currently returns NOTBUSY because no function execution is implemented."[0: 114]) catch { object_free(reply_list); return command_executor_oom(); };
     return command_executor_owned_array(reply_list);
@@ -7975,6 +7977,48 @@ fn command_executor_function_dump(command: &Command) CommandReply {
     return command_executor_owned_bulk_copy(payload[0: 10]);
 }
 
+fn command_executor_function_restore_payload_is_empty_dump(payload: &[byte]) bool {
+    var expected: [byte: 10] = [
+        0x0a as byte,
+        0x00 as byte,
+        0x5d as byte,
+        0x9b as byte,
+        0x5c as byte,
+        0x40 as byte,
+        0x0f as byte,
+        0x7f as byte,
+        0xa2 as byte,
+        0xda as byte,
+    ];
+    return command_executor_slice_eq(payload, expected[0: 10]);
+}
+
+fn command_executor_function_restore(command: &Command) CommandReply {
+    if command.argc < 3 {
+        return command_executor_owned_error(&"ERR wrong number of arguments for 'function|restore' command"[0: 60]);
+    }
+    if command.argc > 4 {
+        return command_executor_owned_error(&"ERR unknown subcommand or wrong number of arguments for 'RESTORE'. Try FUNCTION HELP."[0: 85]);
+    }
+    const payload: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    if command.argc == 4 {
+        const policy: &[byte] = command_executor_arg(command, 3) catch {
+            return command_executor_wrong_arity();
+        };
+        if !command_executor_keyword_eq(policy, &"FLUSH"[0: 5]) &&
+            !command_executor_keyword_eq(policy, &"APPEND"[0: 6]) &&
+            !command_executor_keyword_eq(policy, &"REPLACE"[0: 7]) {
+            return command_executor_owned_error(&"ERR Wrong restore policy given, value should be either FLUSH, APPEND or REPLACE."[0: 80]);
+        }
+    }
+    if !command_executor_function_restore_payload_is_empty_dump(payload) {
+        return command_executor_owned_error(&"ERR DUMP payload version or checksum are wrong"[0: 46]);
+    }
+    return command_executor_simple(&"OK"[0: 2]);
+}
+
 fn command_executor_fcall(command: &Command) CommandReply {
     if command.argc < 3 {
         if command.info.cmd_type == CommandType.command_fcall_ro {
@@ -8016,6 +8060,9 @@ fn command_executor_function(command: &Command) CommandReply {
     }
     if command_executor_keyword_eq(subcommand, &"DUMP"[0: 4]) {
         return command_executor_function_dump(command);
+    }
+    if command_executor_keyword_eq(subcommand, &"RESTORE"[0: 7]) {
+        return command_executor_function_restore(command);
     }
     if command_executor_keyword_eq(subcommand, &"KILL"[0: 4]) {
         return command_executor_function_kill(command);
@@ -12211,6 +12258,7 @@ fn command_executor_command_visible_function_subcommand(name: &[byte]) bool {
         command_executor_slice_eq(name, &"flush"[0: 5]) ||
         command_executor_slice_eq(name, &"delete"[0: 6]) ||
         command_executor_slice_eq(name, &"dump"[0: 4]) ||
+        command_executor_slice_eq(name, &"restore"[0: 7]) ||
         command_executor_slice_eq(name, &"kill"[0: 4]);
 }
 

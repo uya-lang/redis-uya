@@ -645,6 +645,18 @@ if [[ "$FUNCTION_DUMP_HEX" != "0a005d9b5c400f7fa2da0a" ]]; then
     exit 1
 fi
 
+FUNCTION_RESTORE_RESULT="$(printf '\x0a\x00\x5d\x9b\x5c\x40\x0f\x7f\xa2\xda' | redis-cli --raw -h 127.0.0.1 -p "$PORT" -x function restore)"
+if [[ "$FUNCTION_RESTORE_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected FUNCTION RESTORE empty-library payload OK, got '$FUNCTION_RESTORE_RESULT'" >&2
+    exit 1
+fi
+
+FUNCTION_RESTORE_BAD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function restore bad 2>&1 || true)"
+if [[ "$FUNCTION_RESTORE_BAD_RESULT" != "ERR DUMP payload version or checksum are wrong" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected FUNCTION RESTORE bad payload error, got '$FUNCTION_RESTORE_BAD_RESULT'" >&2
+    exit 1
+fi
+
 FUNCTION_KILL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function kill 2>&1 || true)"
 if [[ "$FUNCTION_KILL_RESULT" != "NOTBUSY No scripts in execution right now." ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected FUNCTION KILL no running script error, got '$FUNCTION_KILL_RESULT'" >&2

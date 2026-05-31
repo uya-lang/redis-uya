@@ -364,6 +364,7 @@ PARTIAL_NAMES = {
     "pubsub|shardnumsub",
     "geoadd",
     "geodist",
+    "geohash",
     "geopos",
     "georadius_ro",
     "georadiusbymember_ro",

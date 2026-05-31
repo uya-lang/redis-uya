@@ -411,6 +411,12 @@ if [[ "$GEOPOS_RESULT" != $'13.361389\n38.115555\n\n15.087268\n37.502668' ]]; th
     exit 1
 fi
 
+GEOHASH_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" geohash geo Palermo Missing Catania)"
+if [[ "$GEOHASH_RESULT" != $'sqc8b49rny0\n\nsqdtr74hyu0' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected GEOHASH Palermo/Missing/Catania hashes, got '$GEOHASH_RESULT'" >&2
+    exit 1
+fi
+
 GEOSEARCH_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" geosearch geo FROMLONLAT 15 37 BYRADIUS 200 km)"
 if [[ "$GEOSEARCH_RESULT" != $'Palermo\nCatania' ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected GEOSEARCH Palermo/Catania, got '$GEOSEARCH_RESULT'" >&2

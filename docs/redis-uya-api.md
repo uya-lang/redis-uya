@@ -1805,6 +1805,26 @@ GEOPOS key member [member ...]
 - 返回坐标会按当前 packed score 解码并量化到 `1e-6` 的经纬度字符串
 - key 存在但不是 Geo/ZSet 类型时返回 `WRONGTYPE`
 
+### `GEOHASH`
+
+格式：
+
+```text
+GEOHASH key member [member ...]
+```
+
+返回：
+
+- 按请求顺序返回每个 member 的 11 字节 geohash 字符串
+- member 不存在或 key 不存在时，对应位置返回 Null Bulk
+
+说明：
+
+- 当前实现为 partial，坐标来自 exact zset-backed packed coordinate score
+- geohash 字符串基于当前解码坐标生成，前 10 字符按标准 base32 geohash 网格编码，最后 1 字符按 Redis 兼容面固定补 `0`
+- 因当前内部不是 Redis 原生 geohash score，极靠近 geohash cell 边界的结果可能与 Redis 原生编码有细微差异
+- key 存在但不是 Geo/ZSet 类型时返回 `WRONGTYPE`
+
 ### `GEOSEARCH`
 
 格式：

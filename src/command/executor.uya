@@ -1814,6 +1814,7 @@ const COMMAND_EXECUTOR_GEO_MIN_LAT: f64 = -85.05112878;
 const COMMAND_EXECUTOR_GEO_DEG_TO_RAD: f64 = 0.01745329251994329577;
 const COMMAND_EXECUTOR_GEO_EARTH_RADIUS_M: f64 = 6372797.560856;
 const COMMAND_EXECUTOR_GEO_METERS_PER_DEGREE: f64 = 111320.0;
+const COMMAND_EXECUTOR_GEOHASH_LEN: usize = 11;
 
 struct CommandExecutorGeoPoint {
     lon: f64,
@@ -2100,6 +2101,51 @@ fn command_executor_geo_append_formatted_bulk(buf: &Sds, value: f64, fmt: &[byte
         return error.AllocOutOfMemory;
     }
     try command_executor_command_append_bulk(buf, tmp[0: written as usize]);
+}
+
+fn command_executor_geo_append_geohash(buf: &Sds, point: &CommandExecutorGeoPoint) !void {
+    const alphabet: &[byte] = &"0123456789bcdefghjkmnpqrstuvwxyz"[0: 32];
+    var hash: [byte: COMMAND_EXECUTOR_GEOHASH_LEN] = [];
+    var lon_min: f64 = -180.0;
+    var lon_max: f64 = 180.0;
+    var lat_min: f64 = -90.0;
+    var lat_max: f64 = 90.0;
+    var lon: f64 = point.lon;
+    if lon >= 180.0 {
+        lon = -180.0;
+    }
+    var bit_index: usize = 0;
+    var out_index: usize = 0;
+    while out_index < 10 {
+        var value: usize = 0;
+        var bit: usize = 0;
+        while bit < 5 {
+            value = value << 1;
+            if (bit_index % 2usize) == 0usize {
+                const mid_lon: f64 = (lon_min + lon_max) / 2.0;
+                if lon >= mid_lon {
+                    value = value | 1usize;
+                    lon_min = mid_lon;
+                } else {
+                    lon_max = mid_lon;
+                }
+            } else {
+                const mid_lat: f64 = (lat_min + lat_max) / 2.0;
+                if point.lat >= mid_lat {
+                    value = value | 1usize;
+                    lat_min = mid_lat;
+                } else {
+                    lat_max = mid_lat;
+                }
+            }
+            bit = bit + 1;
+            bit_index = bit_index + 1;
+        }
+        hash[out_index] = alphabet.ptr[value];
+        out_index = out_index + 1;
+    }
+    hash[10] = 48 as byte;
+    try command_executor_command_append_bulk(buf, hash[0: COMMAND_EXECUTOR_GEOHASH_LEN]);
 }
 
 fn command_executor_geo_decode_member(obj: &RedisObject, member: &[byte]) !CommandExecutorGeoPoint {
@@ -9983,6 +10029,63 @@ fn command_executor_geopos(engine: &Engine, command: &Command, now_ms: u64) Comm
     return command_executor_owned_raw(raw.buf[0: raw.len]);
 }
 
+fn command_executor_geohash(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 3 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+
+    const obj_result: !&RedisObject = lookup_key_at(engine, key, now_ms);
+    var obj: &RedisObject = null as &RedisObject;
+    if obj_result.error_id == 0 {
+        obj = obj_result.value;
+        if obj.obj_type != ObjectType.object_zset {
+            return command_executor_wrongtype();
+        }
+    }
+
+    var raw: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&raw);
+    }
+    const result_count: usize = command.argc - 2;
+    _ = command_executor_resp_collection_prefix(&raw, &"*"[0: 1], result_count) catch {
+        return command_executor_oom();
+    };
+
+    var index: usize = 2;
+    while index < command.argc {
+        const member: &[byte] = command_executor_arg(command, index) catch {
+            return command_executor_wrong_arity();
+        };
+        if obj == null {
+            _ = command_executor_command_append_null(&raw, 2) catch {
+                return command_executor_oom();
+            };
+            index = index + 1;
+            continue;
+        }
+        const point_result: !CommandExecutorGeoPoint = command_executor_geo_decode_member(obj, member);
+        if point_result.error_id != 0 {
+            _ = command_executor_command_append_null(&raw, 2) catch {
+                return command_executor_oom();
+            };
+            index = index + 1;
+            continue;
+        }
+        const point: CommandExecutorGeoPoint = point_result.value;
+        _ = command_executor_geo_append_geohash(&raw, &point) catch {
+            return command_executor_oom();
+        };
+        index = index + 1;
+    }
+    return command_executor_owned_raw(raw.buf[0: raw.len]);
+}
+
 fn command_executor_geo_search_run(engine: &Engine, key: &[byte], options: &CommandExecutorGeoSearchOptions, now_ms: u64) CommandReply {
     const obj_result: !&RedisObject = lookup_key_at(engine, key, now_ms);
     const obj: &RedisObject = obj_result catch {
@@ -14280,6 +14383,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_geopos {
         return command_executor_geopos(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_geohash {
+        return command_executor_geohash(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_georadius_ro {
         return command_executor_georadius_ro(engine, command, now_ms);

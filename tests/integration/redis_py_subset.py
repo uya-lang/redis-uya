@@ -214,6 +214,11 @@ class RedisPySubsetClient:
         assert isinstance(result, list)
         return result
 
+    def geohash(self, key: str, *members: str):
+        result = self._request(b"GEOHASH", key.encode(), *(member.encode() for member in members))
+        assert isinstance(result, list)
+        return result
+
     def geosearch(self, key: str, *parts: str):
         result = self._request(b"GEOSEARCH", key.encode(), *(part.encode() for part in parts))
         assert isinstance(result, list)
@@ -1060,6 +1065,7 @@ def run_smoke() -> None:
             assert client.geoadd("geo", "13.361389", "38.115556", "Palermo", "15.087269", "37.502669", "Catania") == 2
             assert client.geodist("geo", "Palermo", "Catania", "km") == b"166.2742"
             assert client.geopos("geo", "Palermo", "Missing", "Catania") == [[b"13.361389", b"38.115555"], None, [b"15.087268", b"37.502668"]]
+            assert client.geohash("geo", "Palermo", "Missing", "Catania") == [b"sqc8b49rny0", None, b"sqdtr74hyu0"]
             assert client.geosearch("geo", "FROMLONLAT", "15", "37", "BYRADIUS", "200", "km") == [b"Palermo", b"Catania"]
             assert client.georadius_ro("geo", "15", "37", "200", "km") == [b"Palermo", b"Catania"]
             assert client.georadiusbymember_ro("geo", "Palermo", "200", "km") == [b"Palermo", b"Catania"]

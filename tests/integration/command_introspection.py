@@ -264,10 +264,10 @@ def run_smoke() -> None:
             if not isinstance(info[2], list) or info[2][0] != b"client|id":
                 raise AssertionError(f"COMMAND INFO CLIENT|ID returned wrong payload: {info!r}")
 
-            bitmap_info = send_command(sock, b"COMMAND", b"INFO", b"GETBIT", b"SETBIT", b"BITCOUNT", b"BITPOS", b"BITOP", b"BITFIELD", b"BITFIELD_RO", b"PFADD", b"PFCOUNT", b"PFMERGE", b"GEOADD", b"GEODIST", b"GEOHASH", b"GEOPOS", b"GEORADIUS", b"GEORADIUS_RO", b"GEORADIUSBYMEMBER_RO", b"GEOSEARCH")
+            bitmap_info = send_command(sock, b"COMMAND", b"INFO", b"GETBIT", b"SETBIT", b"BITCOUNT", b"BITPOS", b"BITOP", b"BITFIELD", b"BITFIELD_RO", b"PFADD", b"PFCOUNT", b"PFMERGE", b"GEOADD", b"GEODIST", b"GEOHASH", b"GEOPOS", b"GEORADIUS", b"GEORADIUS_RO", b"GEORADIUSBYMEMBER", b"GEORADIUSBYMEMBER_RO", b"GEOSEARCH")
             if (
                 not isinstance(bitmap_info, list)
-                or len(bitmap_info) != 18
+                or len(bitmap_info) != 19
                 or not isinstance(bitmap_info[0], list)
                 or bitmap_info[0][0] != b"getbit"
                 or not isinstance(bitmap_info[1], list)
@@ -301,9 +301,11 @@ def run_smoke() -> None:
                 or not isinstance(bitmap_info[15], list)
                 or bitmap_info[15][0] != b"georadius_ro"
                 or not isinstance(bitmap_info[16], list)
-                or bitmap_info[16][0] != b"georadiusbymember_ro"
+                or bitmap_info[16][0] != b"georadiusbymember"
                 or not isinstance(bitmap_info[17], list)
-                or bitmap_info[17][0] != b"geosearch"
+                or bitmap_info[17][0] != b"georadiusbymember_ro"
+                or not isinstance(bitmap_info[18], list)
+                or bitmap_info[18][0] != b"geosearch"
             ):
                 raise AssertionError(f"bitmap commands missing from COMMAND INFO: {bitmap_info!r}")
 
@@ -683,6 +685,7 @@ def run_smoke() -> None:
                 or b"geopos" not in listed_geo
                 or b"georadius" not in listed_geo
                 or b"georadius_ro" not in listed_geo
+                or b"georadiusbymember" not in listed_geo
                 or b"georadiusbymember_ro" not in listed_geo
                 or b"geosearch" not in listed_geo
             ):

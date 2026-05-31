@@ -368,6 +368,7 @@ PARTIAL_NAMES = {
     "geopos",
     "georadius",
     "georadius_ro",
+    "georadiusbymember",
     "georadiusbymember_ro",
     "geosearch",
     "eval",

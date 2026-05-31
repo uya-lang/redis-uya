@@ -239,6 +239,11 @@ class RedisPySubsetClient:
         assert isinstance(result, list)
         return result
 
+    def georadiusbymember(self, key: str, member: str, radius: str, unit: str, *parts: str):
+        result = self._request(b"GEORADIUSBYMEMBER", key.encode(), member.encode(), radius.encode(), unit.encode(), *(part.encode() for part in parts))
+        assert isinstance(result, list)
+        return result
+
     def eval(self, script: str, numkeys: int, *parts: str):
         return self._request(b"EVAL", script.encode(), str(numkeys).encode(), *(part.encode() for part in parts))
 
@@ -1074,6 +1079,7 @@ def run_smoke() -> None:
             assert client.geosearch("geo", "FROMLONLAT", "15", "37", "BYRADIUS", "200", "km") == [b"Palermo", b"Catania"]
             assert client.georadius("geo", "15", "37", "200", "km") == [b"Palermo", b"Catania"]
             assert client.georadius_ro("geo", "15", "37", "200", "km") == [b"Palermo", b"Catania"]
+            assert client.georadiusbymember("geo", "Palermo", "200", "km") == [b"Palermo", b"Catania"]
             assert client.georadiusbymember_ro("geo", "Palermo", "200", "km") == [b"Palermo", b"Catania"]
             assert client.geosearch("geo", "FROMMEMBER", "Palermo", "BYRADIUS", "200", "km", "WITHDIST") == [[b"Palermo", b"0.0000"], [b"Catania", b"166.2742"]]
             assert client.eval("return redis.call('SET', KEYS[1], ARGV[1])", 1, "lua-key", "value") == "OK"

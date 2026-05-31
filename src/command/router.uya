@@ -196,6 +196,7 @@ export enum CommandType {
     command_geopos,
     command_georadius,
     command_georadius_ro,
+    command_georadiusbymember,
     command_georadiusbymember_ro,
     command_geosearch,
     command_lmove,
@@ -233,7 +234,7 @@ export const COMMAND_FLAG_READONLY: u64 = 1u64;
 export const COMMAND_FLAG_WRITE: u64 = 2u64;
 export const COMMAND_FLAG_FAST: u64 = 4u64;
 
-const MIN_COMMAND_COUNT: usize = 196;
+const MIN_COMMAND_COUNT: usize = 197;
 
 fn command_router_name_eq(a: &[byte], b: &[byte]) bool {
     return bytes_ascii_case_eq(a, b);
@@ -860,6 +861,9 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
     }
     if index == 195 {
         return command_router_info(CommandType.command_georadius, &"GEORADIUS"[0: 9], -6, COMMAND_FLAG_WRITE, 1, 1, 1);
+    }
+    if index == 196 {
+        return command_router_info(CommandType.command_georadiusbymember, &"GEORADIUSBYMEMBER"[0: 17], -5, COMMAND_FLAG_WRITE, 1, 1, 1);
     }
     return error.CommandUnknown;
 }

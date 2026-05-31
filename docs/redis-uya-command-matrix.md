@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 144 | 0 | 3 | 72 |
+| Tier A: standalone core | 365 | 259 | 146 | 145 | 0 | 3 | 71 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `151` |
+| `partial` | `152` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `225` |
+| `deferred` | `224` |
 
 ## Group counts
 
@@ -279,7 +279,7 @@
 | `geopos` | `geo` | `partial` | `-` | `-2` | `-` | `no` | `@read, @geo, @slow` |
 | `georadius` | `geo` | `partial` | `-` | `-6` | `-` | `no` | `@write, @geo, @slow` |
 | `georadius_ro` | `geo` | `partial` | `-` | `-6` | `-` | `no` | `@read, @geo, @slow` |
-| `georadiusbymember` | `geo` | `deferred` | `v0.9.2` | `-5` | `-` | `no` | `@write, @geo, @slow` |
+| `georadiusbymember` | `geo` | `partial` | `-` | `-5` | `-` | `no` | `@write, @geo, @slow` |
 | `georadiusbymember_ro` | `geo` | `partial` | `-` | `-5` | `-` | `no` | `@read, @geo, @slow` |
 | `geosearch` | `geo` | `partial` | `-` | `-7` | `-` | `no` | `@read, @geo, @slow` |
 | `geosearchstore` | `geo` | `deferred` | `v0.9.2` | `-8` | `-` | `no` | `@write, @geo, @slow` |

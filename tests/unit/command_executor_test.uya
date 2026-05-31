@@ -682,6 +682,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"function|stats"[0: 14], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"geohash"[0: 7], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"georadius"[0: 9], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"georadiusbymember"[0: 17], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"georadius_ro"[0: 12], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"georadiusbymember_ro"[0: 20], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xack"[0: 4], CommandCatalogStatus.status_partial);
@@ -2588,6 +2589,13 @@ export fn test_command_set_get_del_exists() !void {
     try assert_true(command_executor_test_slice_eq(georadius_ro_withcoord_reply.data, &"*1\r\n*2\r\n$7\r\nCatania\r\n*2\r\n$9\r\n15.087268\r\n$9\r\n37.502668\r\n"[0: 55]));
     command_reply_cleanup(&georadius_ro_withcoord_reply);
     resp_value_free(&georadius_ro_withcoord_parsed.value);
+
+    var georadiusbymember_parsed: RespParseResult = try parse_resp2(&"*5\r\n$17\r\nGEORADIUSBYMEMBER\r\n$3\r\ngeo\r\n$7\r\nPalermo\r\n$3\r\n200\r\n$2\r\nkm\r\n"[0: 67]);
+    const georadiusbymember_command: Command = try command_executor_test_command(&router, &georadiusbymember_parsed);
+    var georadiusbymember_reply: CommandReply = command_execute_at(&engine, &georadiusbymember_command, 1000u64);
+    try assert_true(command_executor_test_slice_eq(georadiusbymember_reply.data, &"*2\r\n$7\r\nPalermo\r\n$7\r\nCatania\r\n"[0: 30]));
+    command_reply_cleanup(&georadiusbymember_reply);
+    resp_value_free(&georadiusbymember_parsed.value);
 
     var georadiusbymember_ro_parsed: RespParseResult = try parse_resp2(&"*5\r\n$20\r\nGEORADIUSBYMEMBER_RO\r\n$3\r\ngeo\r\n$7\r\nPalermo\r\n$3\r\n200\r\n$2\r\nkm\r\n"[0: 70]);
     const georadiusbymember_ro_command: Command = try command_executor_test_command(&router, &georadiusbymember_ro_parsed);
@@ -6622,6 +6630,20 @@ export fn test_command_error_paths() !void {
     try assert_eq_i32(georadius_store_reply.typ as i32, CommandReplyType.reply_error as i32);
     try assert_true(command_executor_test_slice_eq(georadius_store_reply.data, &"ERR syntax error"[0: 16]));
     resp_value_free(&georadius_store_parsed.value);
+
+    var georadiusbymember_wrongtype_parsed: RespParseResult = try parse_resp2(&"*5\r\n$17\r\nGEORADIUSBYMEMBER\r\n$3\r\nkey\r\n$1\r\na\r\n$1\r\n1\r\n$1\r\nm\r\n"[0: 58]);
+    const georadiusbymember_wrongtype_command: Command = try command_executor_test_command(&router, &georadiusbymember_wrongtype_parsed);
+    const georadiusbymember_wrongtype_reply: CommandReply = command_execute_at(&engine, &georadiusbymember_wrongtype_command, 1000u64);
+    try assert_eq_i32(georadiusbymember_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(georadiusbymember_wrongtype_reply.data, &"WRONGTYPE Operation against a key holding the wrong kind of value"[0: 65]));
+    resp_value_free(&georadiusbymember_wrongtype_parsed.value);
+
+    var georadiusbymember_store_parsed: RespParseResult = try parse_resp2(&"*7\r\n$17\r\nGEORADIUSBYMEMBER\r\n$3\r\ngeo\r\n$7\r\nPalermo\r\n$3\r\n200\r\n$2\r\nkm\r\n$5\r\nSTORE\r\n$3\r\nout\r\n"[0: 87]);
+    const georadiusbymember_store_command: Command = try command_executor_test_command(&router, &georadiusbymember_store_parsed);
+    const georadiusbymember_store_reply: CommandReply = command_execute_at(&engine, &georadiusbymember_store_command, 1000u64);
+    try assert_eq_i32(georadiusbymember_store_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(georadiusbymember_store_reply.data, &"ERR syntax error"[0: 16]));
+    resp_value_free(&georadiusbymember_store_parsed.value);
 
     var geohash_wrongtype_parsed: RespParseResult = try parse_resp2(&"*3\r\n$7\r\nGEOHASH\r\n$3\r\nkey\r\n$1\r\na\r\n"[0: 33]);
     const geohash_wrongtype_command: Command = try command_executor_test_command(&router, &geohash_wrongtype_parsed);

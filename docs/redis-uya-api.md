@@ -1888,6 +1888,27 @@ GEORADIUS_RO key longitude latitude radius M|KM|FT|MI [WITHCOORD] [WITHDIST] [WI
 - 当前 `WITHHASH` 返回当前 packed score 整数，不是 Redis 原生 geohash 整数
 - 当前 `WITHCOORD` 返回量化到 `1e-6` 的经纬度字符串
 
+### `GEORADIUSBYMEMBER`
+
+格式：
+
+```text
+GEORADIUSBYMEMBER key member radius M|KM|FT|MI [WITHCOORD] [WITHDIST] [WITHHASH] [COUNT count [ANY]] [ASC|DESC]
+```
+
+返回：
+
+- 默认返回 member 数组
+- 带附加选项时返回嵌套数组，顺序为 `member`, `dist`, `hash`, `coord`
+
+说明：
+
+- 当前实现为 partial，复用 `GEOSEARCH key FROMMEMBER member BYRADIUS radius unit ...` 的执行路径
+- 当前只覆盖未带 `STORE` / `STOREDIST` 的 legacy 查询兼容面；`STORE` 或 `STOREDIST` 会返回语法错误，暂不写入目标 key
+- center member 不存在时返回 `ERR could not decode requested zset member`
+- 当前 `WITHHASH` 返回当前 packed score 整数，不是 Redis 原生 geohash 整数
+- 当前 `WITHCOORD` 返回量化到 `1e-6` 的经纬度字符串
+
 ### `GEORADIUSBYMEMBER_RO`
 
 格式：

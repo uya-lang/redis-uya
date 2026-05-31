@@ -271,6 +271,9 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const georadius_ro_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*6\r\n$12\r\nGEORADIUS_RO\r\n$3\r\ngeo\r\n$2\r\n15\r\n$2\r\n37\r\n$3\r\n200\r\n$2\r\nkm\r\n"[0: 65], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: georadius_ro_result.response_len], &"*2\r\n$7\r\nPalermo\r\n$7\r\nCatania\r\n"[0: 30]));
 
+    const georadiusbymember_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$17\r\nGEORADIUSBYMEMBER\r\n$3\r\ngeo\r\n$7\r\nPalermo\r\n$3\r\n200\r\n$2\r\nkm\r\n"[0: 67], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: georadiusbymember_result.response_len], &"*2\r\n$7\r\nPalermo\r\n$7\r\nCatania\r\n"[0: 30]));
+
     const georadiusbymember_ro_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$20\r\nGEORADIUSBYMEMBER_RO\r\n$3\r\ngeo\r\n$7\r\nPalermo\r\n$3\r\n200\r\n$2\r\nkm\r\n"[0: 70], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: georadiusbymember_ro_result.response_len], &"*2\r\n$7\r\nPalermo\r\n$7\r\nCatania\r\n"[0: 30]));
 

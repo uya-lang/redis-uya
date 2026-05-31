@@ -366,6 +366,7 @@ PARTIAL_NAMES = {
     "geodist",
     "geohash",
     "geopos",
+    "georadius",
     "georadius_ro",
     "georadiusbymember_ro",
     "geosearch",

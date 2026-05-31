@@ -1828,6 +1828,26 @@ GEOSEARCH key FROMLONLAT longitude latitude BYBOX width height unit [ASC|DESC] [
 - 当前 `WITHCOORD` 返回量化到 `1e-6` 的经纬度字符串
 - 当前接受 `COUNT ... ANY` 语法，但不会像 Redis 原生实现那样做提早截断优化
 
+### `GEORADIUS_RO`
+
+格式：
+
+```text
+GEORADIUS_RO key longitude latitude radius M|KM|FT|MI [WITHCOORD] [WITHDIST] [WITHHASH] [COUNT count [ANY]] [ASC|DESC]
+```
+
+返回：
+
+- 默认返回 member 数组
+- 带附加选项时返回嵌套数组，顺序为 `member`, `dist`, `hash`, `coord`
+
+说明：
+
+- 当前实现为 partial，复用 `GEOSEARCH key FROMLONLAT longitude latitude BYRADIUS radius unit ...` 的执行路径
+- 当前为只读兼容面，不支持 `STORE` 或 `STOREDIST`
+- 当前 `WITHHASH` 返回当前 packed score 整数，不是 Redis 原生 geohash 整数
+- 当前 `WITHCOORD` 返回量化到 `1e-6` 的经纬度字符串
+
 ### Streams 第一批
 
 格式：

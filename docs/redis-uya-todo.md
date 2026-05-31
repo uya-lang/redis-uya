@@ -486,7 +486,7 @@
 - [x] Blocking list / zset：已补 `BLPOP`、`BRPOP`、`BRPOPLPUSH`、`BZPOPMIN`、`BZPOPMAX`、`BZMPOP`
 - [x] 常用 list / zset 缺口：已补 `LMOVE`、`LMPOP`、`RPOPLPUSH`、`ZRANK`、`ZREVRANK`、`ZSCORE`、`ZMSCORE`、`ZPOPMIN`、`ZPOPMAX`
 - [x] 常用 bitmap / bitfield：已补 `SETBIT`、`GETBIT`、`BITCOUNT`、`BITPOS`、`BITOP`、`BITFIELD`、`BITFIELD_RO`
-- [x] 常用 HLL / GEO：已补 `PFADD`、`PFCOUNT`、`PFMERGE`（exact set-backed partial），以及 `GEOADD`、`GEODIST`、`GEOPOS`、`GEOSEARCH`（exact zset-backed partial）
+- [x] 常用 HLL / GEO：已补 `PFADD`、`PFCOUNT`、`PFMERGE`（exact set-backed partial），以及 `GEOADD`、`GEODIST`、`GEOPOS`、`GEOSEARCH`、`GEORADIUS_RO`（exact zset-backed partial）
 - [x] Scripting 第一批：已补 `EVAL`、`EVALSHA`、`SCRIPT LOAD/EXISTS/FLUSH`，当前为 single-call script subset partial
 - [x] Server / Connection 缺口第一批：已补 `MEMORY HELP/STATS/USAGE/DOCTOR/MALLOC-STATS/PURGE`（runtime-approx/no-op partial）、`SLOWLOG HELP/LEN/GET/RESET`（in-process ring partial）、`LATENCY HELP/LATEST/HISTORY/RESET/DOCTOR/HISTOGRAM/GRAPH`（empty-event compatibility partial）与 `MONITOR`（流式命令观测 partial）
 

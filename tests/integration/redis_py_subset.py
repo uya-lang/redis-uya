@@ -219,6 +219,11 @@ class RedisPySubsetClient:
         assert isinstance(result, list)
         return result
 
+    def georadius_ro(self, key: str, longitude: str, latitude: str, radius: str, unit: str, *parts: str):
+        result = self._request(b"GEORADIUS_RO", key.encode(), longitude.encode(), latitude.encode(), radius.encode(), unit.encode(), *(part.encode() for part in parts))
+        assert isinstance(result, list)
+        return result
+
     def eval(self, script: str, numkeys: int, *parts: str):
         return self._request(b"EVAL", script.encode(), str(numkeys).encode(), *(part.encode() for part in parts))
 
@@ -1051,6 +1056,7 @@ def run_smoke() -> None:
             assert client.geodist("geo", "Palermo", "Catania", "km") == b"166.2742"
             assert client.geopos("geo", "Palermo", "Missing", "Catania") == [[b"13.361389", b"38.115555"], None, [b"15.087268", b"37.502668"]]
             assert client.geosearch("geo", "FROMLONLAT", "15", "37", "BYRADIUS", "200", "km") == [b"Palermo", b"Catania"]
+            assert client.georadius_ro("geo", "15", "37", "200", "km") == [b"Palermo", b"Catania"]
             assert client.geosearch("geo", "FROMMEMBER", "Palermo", "BYRADIUS", "200", "km", "WITHDIST") == [[b"Palermo", b"0.0000"], [b"Catania", b"166.2742"]]
             assert client.eval("return redis.call('SET', KEYS[1], ARGV[1])", 1, "lua-key", "value") == "OK"
             assert client.script_exists("d8f2fad9f8e86a53d2a6ebd960b33c4972cacc37") == [1]

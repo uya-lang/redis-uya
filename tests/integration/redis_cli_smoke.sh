@@ -2067,9 +2067,21 @@ if [[ "$RESTORE_RESULT" != "OK" ]]; then
     exit 1
 fi
 
+RESTORE_ASKING_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" -x restore-asking dump-asking 0 < "$DUMP_FILE")"
+if [[ "$RESTORE_ASKING_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected RESTORE-ASKING OK, got '$RESTORE_ASKING_RESULT'" >&2
+    exit 1
+fi
+
 DUMP_GET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" get dump-dst)"
 if [[ "$DUMP_GET_RESULT" != "value" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected dump-dst value, got '$DUMP_GET_RESULT'" >&2
+    exit 1
+fi
+
+DUMP_ASKING_GET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" get dump-asking)"
+if [[ "$DUMP_ASKING_GET_RESULT" != "value" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected dump-asking value, got '$DUMP_ASKING_GET_RESULT'" >&2
     exit 1
 fi
 
@@ -2079,9 +2091,9 @@ if ! [[ "$DUMP_PTTL_RESULT" =~ ^[0-9]+$ ]] || [[ "$DUMP_PTTL_RESULT" -le 0 ]] ||
     exit 1
 fi
 
-DUMP_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del dump-src dump-dst)"
-if [[ "$DUMP_DEL_RESULT" != "2" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected dump keys DEL 2, got '$DUMP_DEL_RESULT'" >&2
+DUMP_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del dump-src dump-dst dump-asking)"
+if [[ "$DUMP_DEL_RESULT" != "3" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected dump keys DEL 3, got '$DUMP_DEL_RESULT'" >&2
     exit 1
 fi
 

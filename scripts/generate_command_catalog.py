@@ -399,6 +399,7 @@ PARTIAL_NAMES = {
     "quit",
     "replicaof",
     "restore",
+    "restore-asking",
     "save",
     "select",
     "sort",

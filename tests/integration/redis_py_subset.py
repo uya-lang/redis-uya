@@ -951,6 +951,9 @@ class RedisPySubsetClient:
     def restore(self, key: str, ttl_ms: int, payload: bytes) -> bool:
         return self._request(b"RESTORE", key.encode(), str(ttl_ms).encode(), payload) == "OK"
 
+    def restore_asking(self, key: str, ttl_ms: int, payload: bytes) -> bool:
+        return self._request(b"RESTORE-ASKING", key.encode(), str(ttl_ms).encode(), payload) == "OK"
+
     def save(self) -> bool:
         return self._request(b"SAVE") == "OK"
 
@@ -1614,10 +1617,12 @@ def run_smoke() -> None:
                 raise AssertionError(f"unexpected dump payload: {dump_payload!r}")
             assert client.restore("dump-dst", 1500, dump_payload)
             assert client.get("dump-dst") == b"value"
+            assert client.restore_asking("dump-asking", 0, dump_payload)
+            assert client.get("dump-asking") == b"value"
             dump_pttl = client.pttl("dump-dst")
             if dump_pttl <= 0 or dump_pttl > 1500:
                 raise AssertionError(f"unexpected dump restore pttl: {dump_pttl}")
-            assert client.delete("dump-src", "dump-dst") == 2
+            assert client.delete("dump-src", "dump-dst", "dump-asking") == 3
 
             assert client.bgrewriteaof()
             assert client.quit()

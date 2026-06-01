@@ -1219,6 +1219,25 @@ RESTORE key ttl serialized-value
 - `ttl` 为相对毫秒 TTL，`0` 表示不过期
 - 当前实现不支持 `REPLACE` / `ABSTTL` / `IDLETIME` / `FREQ`
 
+### `RESTORE-ASKING`
+
+格式：
+
+```text
+RESTORE-ASKING key ttl serialized-value
+```
+
+返回：
+
+- 成功：`+OK`
+- target 已存在：`-BUSYKEY ...`
+- payload 非法：错误
+
+说明：
+
+- 当前实现为迁移兼容 partial，复用 `RESTORE` 的单 DB RDB payload 写入路径
+- 当前不支持集群 ASKING 状态校验，也不支持 `REPLACE` / `ABSTTL` / `IDLETIME` / `FREQ`
+
 ### `SELECT`
 
 格式：

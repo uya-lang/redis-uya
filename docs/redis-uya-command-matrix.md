@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 147 | 0 | 3 | 69 |
+| Tier A: standalone core | 365 | 259 | 146 | 148 | 0 | 3 | 68 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `154` |
+| `partial` | `155` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `222` |
+| `deferred` | `221` |
 
 ## Group counts
 
@@ -440,7 +440,7 @@
 | `replicaof` | `server` | `partial` | `-` | `3` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `reset` | `connection` | `full` | `-` | `1` | `-` | `no` | `@fast, @connection` |
 | `restore` | `generic` | `partial` | `-` | `-4` | `-` | `no` | `@keyspace, @write, @slow, @dangerous` |
-| `restore-asking` | `server` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@keyspace, @write, @slow, @dangerous` |
+| `restore-asking` | `server` | `partial` | `-` | `-4` | `-` | `no` | `@keyspace, @write, @slow, @dangerous` |
 | `role` | `server` | `full` | `-` | `1` | `-` | `no` | `@admin, @fast, @dangerous` |
 | `rpop` | `list` | `full` | `-` | `-2` | `-` | `no` | `@write, @list, @fast` |
 | `rpoplpush` | `list` | `full` | `-` | `3` | `-` | `no` | `@write, @list, @slow` |

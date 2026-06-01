@@ -647,6 +647,7 @@ export fn test_command_command_catalog_core() !void {
     resp_value_free(&list_hidden_parsed.value);
 
     try command_executor_test_assert_catalog_status(&"copy"[0: 4], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"restore-asking"[0: 14], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"acl"[0: 3], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"acl|cat"[0: 7], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"acl|deluser"[0: 11], CommandCatalogStatus.status_partial);

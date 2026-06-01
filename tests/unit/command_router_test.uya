@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 197);
+    try assert_eq_i32(command_router_count(&router) as i32, 198);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -274,6 +274,10 @@ export fn test_command_router_lookup_and_case() !void {
     const geosearch: CommandInfo = try command_router_lookup(&router, &"GEOSEARCH"[0: 9]);
     try assert_eq_i32(geosearch.cmd_type as i32, CommandType.command_geosearch as i32);
     try assert_eq_i32(geosearch.arity, -7);
+
+    const geosearchstore: CommandInfo = try command_router_lookup(&router, &"GEOSEARCHSTORE"[0: 14]);
+    try assert_eq_i32(geosearchstore.cmd_type as i32, CommandType.command_geosearchstore as i32);
+    try assert_eq_i32(geosearchstore.arity, -8);
 
     const zrank: CommandInfo = try command_router_lookup(&router, &"ZRANK"[0: 5]);
     try assert_eq_i32(zrank.cmd_type as i32, CommandType.command_zrank as i32);
@@ -875,6 +879,7 @@ export fn test_command_router_arity_validation() !void {
     const georadiusbymember: CommandInfo = try command_router_lookup(&router, &"GEORADIUSBYMEMBER"[0: 17]);
     const georadiusbymember_ro: CommandInfo = try command_router_lookup(&router, &"GEORADIUSBYMEMBER_RO"[0: 20]);
     const geosearch: CommandInfo = try command_router_lookup(&router, &"GEOSEARCH"[0: 9]);
+    const geosearchstore: CommandInfo = try command_router_lookup(&router, &"GEOSEARCHSTORE"[0: 14]);
     const zscore: CommandInfo = try command_router_lookup(&router, &"ZSCORE"[0: 6]);
     const zmscore: CommandInfo = try command_router_lookup(&router, &"ZMSCORE"[0: 7]);
     const zpopmax: CommandInfo = try command_router_lookup(&router, &"ZPOPMAX"[0: 7]);
@@ -1041,6 +1046,8 @@ export fn test_command_router_arity_validation() !void {
     try command_validate_arity(&georadiusbymember_ro, 9);
     try command_validate_arity(&geosearch, 7);
     try command_validate_arity(&geosearch, 13);
+    try command_validate_arity(&geosearchstore, 8);
+    try command_validate_arity(&geosearchstore, 12);
     try command_validate_arity(&zscore, 3);
     try command_validate_arity(&zmscore, 3);
     try command_validate_arity(&zmscore, 5);

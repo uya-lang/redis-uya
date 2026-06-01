@@ -1845,6 +1845,7 @@ struct CommandExecutorGeoSearchOptions {
     withcoord: bool,
     withdist: bool,
     withhash: bool,
+    storedist: bool,
 }
 
 fn command_executor_normalize_index_range(total_len: usize, start: i64, stop: i64) CommandExecutorIndexRange {
@@ -2171,6 +2172,7 @@ fn command_executor_geo_search_defaults() CommandExecutorGeoSearchOptions {
         withcoord: false,
         withdist: false,
         withhash: false,
+        storedist: false,
     };
 }
 
@@ -10214,6 +10216,159 @@ fn command_executor_geo_search_run(engine: &Engine, key: &[byte], options: &Comm
     return command_executor_owned_raw(raw.buf[0: raw.len]);
 }
 
+fn command_executor_geo_store_add_result(
+    stored: &RedisObject,
+    member: &[byte],
+    point: &CommandExecutorGeoPoint,
+    distance_m: f64,
+    options: &CommandExecutorGeoSearchOptions,
+) CommandReply {
+    var score: i64 = point.packed;
+    if options.storedist {
+        score = (distance_m / options.unit_scale) as i64;
+    }
+    _ = zset_object_add_member(stored, score, member) catch |err| {
+        if err == error.AllocOutOfMemory {
+            return command_executor_oom();
+        }
+        return command_executor_error(&"ERR zset add failed"[0: 20]);
+    };
+    return command_executor_integer(1);
+}
+
+fn command_executor_geo_search_store_run(engine: &Engine, destination: &[byte], source: &[byte], options: &CommandExecutorGeoSearchOptions, now_ms: u64) CommandReply {
+    const obj_result: !&RedisObject = lookup_key_at(engine, source, now_ms);
+    const obj: &RedisObject = obj_result catch {
+        if options.from_member {
+            return command_executor_error(&"ERR could not decode requested zset member"[0: 41]);
+        }
+        _ = delete_key(engine, destination);
+        return command_executor_integer(0);
+    };
+    if obj.obj_type != ObjectType.object_zset {
+        return command_executor_wrongtype();
+    }
+
+    var center: CommandExecutorGeoPoint = CommandExecutorGeoPoint{ lon: options.center_lon, lat: options.center_lat, packed: 0 };
+    if options.from_member {
+        center = command_executor_geo_decode_member(obj, options.center_member) catch {
+            return command_executor_error(&"ERR could not decode requested zset member"[0: 41]);
+        };
+    }
+
+    const sorted_members: &RedisObject = zset_object_range_reply(obj, 0, -1) catch |err| {
+        if err == error.AllocOutOfMemory {
+            return command_executor_oom();
+        }
+        return command_executor_wrongtype();
+    };
+    defer {
+        object_free(sorted_members);
+    }
+
+    const stored: &RedisObject = create_zset_object() catch {
+        return command_executor_oom();
+    };
+
+    var result_count: usize = 0;
+    if options.order == CommandExecutorGeoOrder.geo_order_none {
+        var node: &ListNode = sorted_members.list_head;
+        while node != null {
+            const member: &[byte] = node.value.value.buf[0: node.value.value.len];
+            const point: CommandExecutorGeoPoint = command_executor_geo_decode_member(obj, member) catch {
+                object_free(stored);
+                return command_executor_wrongtype();
+            };
+            const distance_m: f64 = command_executor_geo_distance_meters(&center, &point);
+            if command_executor_geo_search_candidate(&center, &point, options) {
+                const add_reply: CommandReply = command_executor_geo_store_add_result(stored, member, &point, distance_m, options);
+                if add_reply.typ != CommandReplyType.reply_integer {
+                    object_free(stored);
+                    return add_reply;
+                }
+                result_count = result_count + 1;
+                if options.has_count && result_count >= options.count_limit {
+                    break;
+                }
+            }
+            node = node.next;
+        }
+    } else {
+        const emitted: &RedisObject = create_set_object() catch {
+            object_free(stored);
+            return command_executor_oom();
+        };
+        defer {
+            object_free(emitted);
+        }
+
+        while !options.has_count || result_count < options.count_limit {
+            var best_found: bool = false;
+            var best_member: &[byte] = command_executor_empty_slice();
+            var best_point: CommandExecutorGeoPoint = CommandExecutorGeoPoint{ lon: 0.0, lat: 0.0, packed: 0 };
+            var best_distance: f64 = 0.0;
+
+            var node_search: &ListNode = sorted_members.list_head;
+            while node_search != null {
+                const member_search: &[byte] = node_search.value.value.buf[0: node_search.value.value.len];
+                const already_emitted: bool = command_executor_set_contains(emitted, member_search) catch {
+                    object_free(stored);
+                    return command_executor_oom();
+                };
+                if already_emitted {
+                    node_search = node_search.next;
+                    continue;
+                }
+                const point_search: CommandExecutorGeoPoint = command_executor_geo_decode_member(obj, member_search) catch {
+                    object_free(stored);
+                    return command_executor_wrongtype();
+                };
+                const distance_search: f64 = command_executor_geo_distance_meters(&center, &point_search);
+                if !command_executor_geo_search_candidate(&center, &point_search, options) {
+                    node_search = node_search.next;
+                    continue;
+                }
+                if !best_found ||
+                    (options.order == CommandExecutorGeoOrder.geo_order_asc && distance_search < best_distance) ||
+                    (options.order == CommandExecutorGeoOrder.geo_order_desc && distance_search > best_distance) {
+                    best_found = true;
+                    best_member = member_search;
+                    best_point.lon = point_search.lon;
+                    best_point.lat = point_search.lat;
+                    best_point.packed = point_search.packed;
+                    best_distance = distance_search;
+                }
+                node_search = node_search.next;
+            }
+            if !best_found {
+                break;
+            }
+            const best_add_reply: CommandReply = command_executor_geo_store_add_result(stored, best_member, &best_point, best_distance, options);
+            if best_add_reply.typ != CommandReplyType.reply_integer {
+                object_free(stored);
+                return best_add_reply;
+            }
+            _ = set_object_add_member(emitted, best_member) catch {
+                object_free(stored);
+                return command_executor_oom();
+            };
+            result_count = result_count + 1;
+        }
+    }
+
+    if result_count == 0 {
+        object_free(stored);
+        _ = delete_key(engine, destination);
+        return command_executor_integer(0);
+    }
+
+    _ = set_key_at(engine, destination, stored, now_ms) catch {
+        object_free(stored);
+        return command_executor_oom();
+    };
+    return command_executor_integer(result_count as i64);
+}
+
 fn command_executor_geosearch(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
     if command.argc < 7 {
         return command_executor_wrong_arity();
@@ -10374,6 +10529,164 @@ fn command_executor_geosearch(engine: &Engine, command: &Command, now_ms: u64) C
     }
 
     return command_executor_geo_search_run(engine, key, &options, now_ms);
+}
+
+fn command_executor_geosearchstore(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 8 {
+        return command_executor_wrong_arity();
+    }
+    const destination: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const source: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    var options: CommandExecutorGeoSearchOptions = command_executor_geo_search_defaults();
+
+    var index: usize = 3;
+    const from_token: &[byte] = command_executor_arg(command, index) catch {
+        return command_executor_wrong_arity();
+    };
+    if command_executor_keyword_eq(from_token, &"FROMMEMBER"[0: 10]) {
+        if index + 1 >= command.argc {
+            return command_executor_wrong_arity();
+        }
+        options.from_member = true;
+        options.center_member = command_executor_arg(command, index + 1) catch {
+            return command_executor_wrong_arity();
+        };
+        index = index + 2;
+    } else if command_executor_keyword_eq(from_token, &"FROMLONLAT"[0: 10]) {
+        if index + 2 >= command.argc {
+            return command_executor_wrong_arity();
+        }
+        options.center_lon = command_executor_parse_f64(command_executor_arg(command, index + 1) catch {
+            return command_executor_wrong_arity();
+        }) catch {
+            return command_executor_error(&"ERR value is not a valid float"[0: 30]);
+        };
+        options.center_lat = command_executor_parse_f64(command_executor_arg(command, index + 2) catch {
+            return command_executor_wrong_arity();
+        }) catch {
+            return command_executor_error(&"ERR value is not a valid float"[0: 30]);
+        };
+        if !command_executor_geo_validate_lonlat(options.center_lon, options.center_lat) {
+            return command_executor_geo_invalid_lonlat(options.center_lon, options.center_lat);
+        }
+        index = index + 3;
+    } else {
+        return command_executor_wrong_arity();
+    }
+
+    const by_token: &[byte] = command_executor_arg(command, index) catch {
+        return command_executor_wrong_arity();
+    };
+    if command_executor_keyword_eq(by_token, &"BYRADIUS"[0: 8]) {
+        if index + 2 >= command.argc {
+            return command_executor_wrong_arity();
+        }
+        const radius: f64 = command_executor_parse_f64(command_executor_arg(command, index + 1) catch {
+            return command_executor_wrong_arity();
+        }) catch {
+            return command_executor_error(&"ERR value is not a valid float"[0: 30]);
+        };
+        const unit: &[byte] = command_executor_arg(command, index + 2) catch {
+            return command_executor_wrong_arity();
+        };
+        const unit_scale: f64 = command_executor_geo_unit_scale(unit) catch {
+            return command_executor_error(&"ERR unsupported unit provided. please use M, KM, FT, MI"[0: 57]);
+        };
+        options.by_radius = true;
+        options.radius_m = radius * unit_scale;
+        options.unit_scale = unit_scale;
+        index = index + 3;
+    } else if command_executor_keyword_eq(by_token, &"BYBOX"[0: 5]) {
+        if index + 3 >= command.argc {
+            return command_executor_wrong_arity();
+        }
+        const width: f64 = command_executor_parse_f64(command_executor_arg(command, index + 1) catch {
+            return command_executor_wrong_arity();
+        }) catch {
+            return command_executor_error(&"ERR value is not a valid float"[0: 30]);
+        };
+        const height: f64 = command_executor_parse_f64(command_executor_arg(command, index + 2) catch {
+            return command_executor_wrong_arity();
+        }) catch {
+            return command_executor_error(&"ERR value is not a valid float"[0: 30]);
+        };
+        const unit: &[byte] = command_executor_arg(command, index + 3) catch {
+            return command_executor_wrong_arity();
+        };
+        const unit_scale: f64 = command_executor_geo_unit_scale(unit) catch {
+            return command_executor_error(&"ERR unsupported unit provided. please use M, KM, FT, MI"[0: 57]);
+        };
+        options.by_radius = false;
+        options.box_width_m = width * unit_scale;
+        options.box_height_m = height * unit_scale;
+        options.unit_scale = unit_scale;
+        index = index + 4;
+    } else {
+        return command_executor_wrong_arity();
+    }
+
+    while index < command.argc {
+        const token: &[byte] = command_executor_arg(command, index) catch {
+            return command_executor_wrong_arity();
+        };
+        if command_executor_keyword_eq(token, &"ASC"[0: 3]) {
+            if options.order != CommandExecutorGeoOrder.geo_order_none {
+                return command_executor_syntax_error();
+            }
+            options.order = CommandExecutorGeoOrder.geo_order_asc;
+            index = index + 1;
+            continue;
+        }
+        if command_executor_keyword_eq(token, &"DESC"[0: 4]) {
+            if options.order != CommandExecutorGeoOrder.geo_order_none {
+                return command_executor_syntax_error();
+            }
+            options.order = CommandExecutorGeoOrder.geo_order_desc;
+            index = index + 1;
+            continue;
+        }
+        if command_executor_keyword_eq(token, &"COUNT"[0: 5]) {
+            if options.has_count || index + 1 >= command.argc {
+                return command_executor_syntax_error();
+            }
+            const count_i64: i64 = command_executor_parse_i64(command_executor_arg(command, index + 1) catch {
+                return command_executor_wrong_arity();
+            }) catch {
+                return command_executor_invalid_integer();
+            };
+            if count_i64 <= 0 {
+                return command_executor_error(&"ERR COUNT must be > 0"[0: 22]);
+            }
+            options.has_count = true;
+            options.count_limit = count_i64 as usize;
+            index = index + 2;
+            if index < command.argc {
+                const any_token: &[byte] = command_executor_arg(command, index) catch {
+                    return command_executor_wrong_arity();
+                };
+                if command_executor_keyword_eq(any_token, &"ANY"[0: 3]) {
+                    options.any = true;
+                    index = index + 1;
+                }
+            }
+            continue;
+        }
+        if command_executor_keyword_eq(token, &"STOREDIST"[0: 9]) {
+            if options.storedist {
+                return command_executor_syntax_error();
+            }
+            options.storedist = true;
+            index = index + 1;
+            continue;
+        }
+        return command_executor_syntax_error();
+    }
+
+    return command_executor_geo_search_store_run(engine, destination, source, &options, now_ms);
 }
 
 fn command_executor_georadius_ro(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
@@ -14401,6 +14714,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_geosearch {
         return command_executor_geosearch(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_geosearchstore {
+        return command_executor_geosearchstore(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_setrange {
         return command_executor_setrange(engine, command, now_ms);

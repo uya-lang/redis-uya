@@ -371,6 +371,7 @@ PARTIAL_NAMES = {
     "georadiusbymember",
     "georadiusbymember_ro",
     "geosearch",
+    "geosearchstore",
     "eval",
     "eval_ro",
     "evalsha",

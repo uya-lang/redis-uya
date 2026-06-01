@@ -1848,6 +1848,31 @@ GEOSEARCH key FROMLONLAT longitude latitude BYBOX width height unit [ASC|DESC] [
 - 当前 `WITHCOORD` 返回量化到 `1e-6` 的经纬度字符串
 - 当前接受 `COUNT ... ANY` 语法，但不会像 Redis 原生实现那样做提早截断优化
 
+### `GEOSEARCHSTORE`
+
+格式：
+
+```text
+GEOSEARCHSTORE destination source FROMMEMBER member BYRADIUS radius unit [ASC|DESC] [COUNT count [ANY]] [STOREDIST]
+GEOSEARCHSTORE destination source FROMLONLAT longitude latitude BYRADIUS radius unit [ASC|DESC] [COUNT count [ANY]] [STOREDIST]
+GEOSEARCHSTORE destination source FROMMEMBER member BYBOX width height unit [ASC|DESC] [COUNT count [ANY]] [STOREDIST]
+GEOSEARCHSTORE destination source FROMLONLAT longitude latitude BYBOX width height unit [ASC|DESC] [COUNT count [ANY]] [STOREDIST]
+```
+
+返回：
+
+- 返回写入 `destination` 的 member 数量，Integer
+- 没有匹配结果时删除 `destination` 并返回 `0`
+
+说明：
+
+- 当前实现为 partial，复用 `GEOSEARCH` 的 `FROMMEMBER/FROMLONLAT`、`BYRADIUS/BYBOX`、`ASC/DESC`、`COUNT` 查询语义
+- 默认写入的 zset score 为当前 packed coordinate score，不是 Redis 原生 geohash score
+- `STOREDIST` 会按请求单位写入截断后的整数距离 score；由于 redis-uya 当前 zset score 是 `i64`，暂不保存 Redis 原生浮点距离
+- 当前接受 `COUNT ... ANY` 语法，但不会像 Redis 原生实现那样做提早截断优化
+- 当前不支持 `WITHDIST`、`WITHCOORD` 或 `WITHHASH`，这些只读返回修饰符会返回语法错误
+- source key 不存在且使用 `FROMLONLAT` 时删除 `destination` 并返回 `0`；使用 `FROMMEMBER` 且 source/member 不存在时返回 `ERR could not decode requested zset member`
+
 ### `GEORADIUS`
 
 格式：

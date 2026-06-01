@@ -1,7 +1,7 @@
 # redis-uya command matrix
 
 > version: v0.9.1-dev
-> date: 2026-05-31
+> date: 2026-06-01
 > source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`
 > runtime source: `src/command/catalog_generated.uya`
 
@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 145 | 0 | 3 | 71 |
+| Tier A: standalone core | 365 | 259 | 146 | 146 | 0 | 3 | 70 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `152` |
+| `partial` | `153` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `224` |
+| `deferred` | `223` |
 
 ## Group counts
 
@@ -282,7 +282,7 @@
 | `georadiusbymember` | `geo` | `partial` | `-` | `-5` | `-` | `no` | `@write, @geo, @slow` |
 | `georadiusbymember_ro` | `geo` | `partial` | `-` | `-5` | `-` | `no` | `@read, @geo, @slow` |
 | `geosearch` | `geo` | `partial` | `-` | `-7` | `-` | `no` | `@read, @geo, @slow` |
-| `geosearchstore` | `geo` | `deferred` | `v0.9.2` | `-8` | `-` | `no` | `@write, @geo, @slow` |
+| `geosearchstore` | `geo` | `partial` | `-` | `-8` | `-` | `no` | `@write, @geo, @slow` |
 | `get` | `string` | `full` | `-` | `2` | `-` | `no` | `@read, @string, @fast` |
 | `getbit` | `bitmap` | `full` | `-` | `3` | `-` | `no` | `@read, @bitmap, @fast` |
 | `getdel` | `string` | `full` | `-` | `2` | `-` | `no` | `@write, @string, @fast` |

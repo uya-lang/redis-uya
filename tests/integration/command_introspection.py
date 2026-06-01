@@ -264,10 +264,10 @@ def run_smoke() -> None:
             if not isinstance(info[2], list) or info[2][0] != b"client|id":
                 raise AssertionError(f"COMMAND INFO CLIENT|ID returned wrong payload: {info!r}")
 
-            bitmap_info = send_command(sock, b"COMMAND", b"INFO", b"GETBIT", b"SETBIT", b"BITCOUNT", b"BITPOS", b"BITOP", b"BITFIELD", b"BITFIELD_RO", b"PFADD", b"PFCOUNT", b"PFMERGE", b"GEOADD", b"GEODIST", b"GEOHASH", b"GEOPOS", b"GEORADIUS", b"GEORADIUS_RO", b"GEORADIUSBYMEMBER", b"GEORADIUSBYMEMBER_RO", b"GEOSEARCH")
+            bitmap_info = send_command(sock, b"COMMAND", b"INFO", b"GETBIT", b"SETBIT", b"BITCOUNT", b"BITPOS", b"BITOP", b"BITFIELD", b"BITFIELD_RO", b"PFADD", b"PFCOUNT", b"PFMERGE", b"GEOADD", b"GEODIST", b"GEOHASH", b"GEOPOS", b"GEORADIUS", b"GEORADIUS_RO", b"GEORADIUSBYMEMBER", b"GEORADIUSBYMEMBER_RO", b"GEOSEARCH", b"GEOSEARCHSTORE")
             if (
                 not isinstance(bitmap_info, list)
-                or len(bitmap_info) != 19
+                or len(bitmap_info) != 20
                 or not isinstance(bitmap_info[0], list)
                 or bitmap_info[0][0] != b"getbit"
                 or not isinstance(bitmap_info[1], list)
@@ -306,6 +306,8 @@ def run_smoke() -> None:
                 or bitmap_info[17][0] != b"georadiusbymember_ro"
                 or not isinstance(bitmap_info[18], list)
                 or bitmap_info[18][0] != b"geosearch"
+                or not isinstance(bitmap_info[19], list)
+                or bitmap_info[19][0] != b"geosearchstore"
             ):
                 raise AssertionError(f"bitmap commands missing from COMMAND INFO: {bitmap_info!r}")
 
@@ -688,6 +690,7 @@ def run_smoke() -> None:
                 or b"georadiusbymember" not in listed_geo
                 or b"georadiusbymember_ro" not in listed_geo
                 or b"geosearch" not in listed_geo
+                or b"geosearchstore" not in listed_geo
             ):
                 raise AssertionError(f"unexpected COMMAND LIST geo* result: {listed_geo!r}")
 

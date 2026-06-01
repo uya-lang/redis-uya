@@ -423,6 +423,30 @@ if [[ "$GEOSEARCH_RESULT" != $'Palermo\nCatania' ]]; then
     exit 1
 fi
 
+GEOSEARCHSTORE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" geosearchstore geodst geo FROMLONLAT 15 37 BYRADIUS 200 km)"
+if [[ "$GEOSEARCHSTORE_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected GEOSEARCHSTORE 2, got '$GEOSEARCHSTORE_RESULT'" >&2
+    exit 1
+fi
+
+GEOSEARCHSTORE_ZRANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrange geodst 0 -1)"
+if [[ "$GEOSEARCHSTORE_ZRANGE_RESULT" != $'Palermo\nCatania' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected GEOSEARCHSTORE destination Palermo/Catania, got '$GEOSEARCHSTORE_ZRANGE_RESULT'" >&2
+    exit 1
+fi
+
+GEOSEARCHSTORE_DIST_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" geosearchstore distdst geo FROMMEMBER Palermo BYRADIUS 200 km STOREDIST)"
+if [[ "$GEOSEARCHSTORE_DIST_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected GEOSEARCHSTORE STOREDIST 2, got '$GEOSEARCHSTORE_DIST_RESULT'" >&2
+    exit 1
+fi
+
+GEOSEARCHSTORE_DIST_SCORE="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zscore distdst Catania)"
+if [[ "$GEOSEARCHSTORE_DIST_SCORE" != "166" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected GEOSEARCHSTORE STOREDIST score 166, got '$GEOSEARCHSTORE_DIST_SCORE'" >&2
+    exit 1
+fi
+
 GEORADIUS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" georadius geo 15 37 200 km)"
 if [[ "$GEORADIUS_RESULT" != $'Palermo\nCatania' ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected GEORADIUS Palermo/Catania, got '$GEORADIUS_RESULT'" >&2

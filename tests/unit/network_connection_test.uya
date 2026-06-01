@@ -268,6 +268,9 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const geosearch_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*8\r\n$9\r\nGEOSEARCH\r\n$3\r\ngeo\r\n$10\r\nFROMLONLAT\r\n$2\r\n15\r\n$2\r\n37\r\n$8\r\nBYRADIUS\r\n$3\r\n200\r\n$2\r\nkm\r\n"[0: 92], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: geosearch_result.response_len], &"*2\r\n$7\r\nPalermo\r\n$7\r\nCatania\r\n"[0: 30]));
 
+    const geosearchstore_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*9\r\n$14\r\nGEOSEARCHSTORE\r\n$6\r\ngeodst\r\n$3\r\ngeo\r\n$10\r\nFROMLONLAT\r\n$2\r\n15\r\n$2\r\n37\r\n$8\r\nBYRADIUS\r\n$3\r\n200\r\n$2\r\nkm\r\n"[0: 110], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: geosearchstore_result.response_len], &":2\r\n"[0: 4]));
+
     const georadius_ro_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*6\r\n$12\r\nGEORADIUS_RO\r\n$3\r\ngeo\r\n$2\r\n15\r\n$2\r\n37\r\n$3\r\n200\r\n$2\r\nkm\r\n"[0: 65], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: georadius_ro_result.response_len], &"*2\r\n$7\r\nPalermo\r\n$7\r\nCatania\r\n"[0: 30]));
 
@@ -414,8 +417,8 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const pf_cleanup_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$3\r\nDEL\r\n$3\r\nhll\r\n$3\r\ndst\r\n"[0: 31], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: pf_cleanup_result.response_len], &":2\r\n"[0: 4]));
 
-    const geo_cleanup_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$3\r\nDEL\r\n$3\r\ngeo\r\n"[0: 22], &out[0], 256, 1000u64);
-    try assert_true(network_connection_slice_eq(out[0: geo_cleanup_result.response_len], &":1\r\n"[0: 4]));
+    const geo_cleanup_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$3\r\nDEL\r\n$3\r\ngeo\r\n$6\r\ngeodst\r\n"[0: 34], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: geo_cleanup_result.response_len], &":2\r\n"[0: 4]));
 
     const lua_cleanup_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$3\r\nDEL\r\n$7\r\nlua-key\r\n"[0: 26], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: lua_cleanup_result.response_len], &":1\r\n"[0: 4]));

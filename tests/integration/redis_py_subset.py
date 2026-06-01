@@ -113,6 +113,9 @@ class RedisPySubsetClient:
     def get(self, key: str) -> bytes | None:
         return self._request(b"GET", key.encode())
 
+    def copy(self, source: str, destination: str, *parts: str) -> int:
+        return int(self._request(b"COPY", source.encode(), destination.encode(), *(part.encode() for part in parts)))
+
     def incr(self, key: str) -> int:
         return int(self._request(b"INCR", key.encode()))
 
@@ -1010,6 +1013,12 @@ def run_smoke() -> None:
             assert client.set("key", "value")
             assert client.randomkey() == b"key"
             assert client.get("key") == b"value"
+            assert client.copy("key", "keycopy") == 1
+            assert client.get("keycopy") == b"value"
+            assert client.copy("key", "keycopy") == 0
+            assert client.copy("key", "keycopy", "REPLACE") == 1
+            assert client.copy("missing", "none") == 0
+            assert client.delete("keycopy") == 1
             assert client.incr("counter") == 1
             assert client.incrby("counter", 4) == 5
             assert client.decr("counter") == 4

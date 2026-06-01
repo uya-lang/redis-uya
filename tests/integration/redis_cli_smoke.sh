@@ -91,6 +91,42 @@ if [[ "$GET_RESULT" != "value" ]]; then
     exit 1
 fi
 
+COPY_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" copy key keycopy)"
+if [[ "$COPY_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected COPY 1, got '$COPY_RESULT'" >&2
+    exit 1
+fi
+
+COPY_GET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" get keycopy)"
+if [[ "$COPY_GET_RESULT" != "value" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected copied value, got '$COPY_GET_RESULT'" >&2
+    exit 1
+fi
+
+COPY_CONFLICT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" copy key keycopy)"
+if [[ "$COPY_CONFLICT_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected COPY conflict 0, got '$COPY_CONFLICT_RESULT'" >&2
+    exit 1
+fi
+
+COPY_REPLACE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" copy key keycopy replace)"
+if [[ "$COPY_REPLACE_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected COPY REPLACE 1, got '$COPY_REPLACE_RESULT'" >&2
+    exit 1
+fi
+
+COPY_MISSING_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" copy missing none)"
+if [[ "$COPY_MISSING_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected COPY missing 0, got '$COPY_MISSING_RESULT'" >&2
+    exit 1
+fi
+
+COPY_CLEANUP_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del keycopy)"
+if [[ "$COPY_CLEANUP_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected keycopy cleanup 1, got '$COPY_CLEANUP_RESULT'" >&2
+    exit 1
+fi
+
 INCR_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" incr counter)"
 if [[ "$INCR_RESULT" != "1" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected incr 1, got '$INCR_RESULT'" >&2

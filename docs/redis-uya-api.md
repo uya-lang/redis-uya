@@ -1128,6 +1128,27 @@ RENAMENX key newkey
 - source 不存在：`-ERR no such key`
 - source 和 target 相同：错误
 
+### `COPY`
+
+格式：
+
+```text
+COPY source destination [DB destination-db] [REPLACE]
+```
+
+返回：
+
+- source 存在且复制成功：`1`
+- source 不存在：`0`
+- target 已存在且未指定 `REPLACE`：`0`
+- source 和 destination 相同：错误
+
+说明：
+
+- 当前实现为单 DB partial；`DB 0` 作为当前唯一数据库兼容参数接受，非 `0` DB 返回 `ERR DB index is out of range`
+- 复制会深拷贝当前对象并保留 source 的 TTL；source 没有 TTL 时会清理 destination 的旧 TTL
+- 当前覆盖 String/Hash/List/Set/ZSet/Stream 等项目内对象类型的复制，`COMMAND GETKEYS*` 将 source 标记为 `RO/access`、destination 标记为 `OW/update`
+
 ### `LASTSAVE`
 
 格式：

@@ -69,6 +69,7 @@ export enum CommandType {
     command_flushall,
     command_dump,
     command_restore,
+    command_copy,
     command_select,
     command_acl,
     command_object,
@@ -235,7 +236,7 @@ export const COMMAND_FLAG_READONLY: u64 = 1u64;
 export const COMMAND_FLAG_WRITE: u64 = 2u64;
 export const COMMAND_FLAG_FAST: u64 = 4u64;
 
-const MIN_COMMAND_COUNT: usize = 198;
+const MIN_COMMAND_COUNT: usize = 199;
 
 fn command_router_name_eq(a: &[byte], b: &[byte]) bool {
     return bytes_ascii_case_eq(a, b);
@@ -868,6 +869,9 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
     }
     if index == 197 {
         return command_router_info(CommandType.command_geosearchstore, &"GEOSEARCHSTORE"[0: 14], -8, COMMAND_FLAG_WRITE, 2, 2, 1);
+    }
+    if index == 198 {
+        return command_router_info(CommandType.command_copy, &"COPY"[0: 4], -3, COMMAND_FLAG_WRITE, 1, 2, 1);
     }
     return error.CommandUnknown;
 }

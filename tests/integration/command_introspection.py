@@ -169,6 +169,10 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"unexpected COMMAND LIST acl* result: {listed_acl!r}")
 
+            listed_copy = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"CO*")
+            if not isinstance(listed_copy, list) or b"copy" not in listed_copy:
+                raise AssertionError(f"unexpected COMMAND LIST co* result: {listed_copy!r}")
+
             acl_help = send_command(sock, b"ACL", b"HELP")
             if not isinstance(acl_help, list) or b"CAT [<category>]" not in acl_help or b"WHOAMI" not in acl_help:
                 raise AssertionError(f"unexpected ACL HELP: {acl_help!r}")
@@ -254,8 +258,8 @@ def run_smoke() -> None:
             if acl_list != [b"user default on nopass ~* &* +@all"]:
                 raise AssertionError(f"unexpected ACL LIST: {acl_list!r}")
 
-            info = send_command(sock, b"COMMAND", b"INFO", b"GET", b"FOO", b"CLIENT|ID")
-            if not isinstance(info, list) or len(info) != 3:
+            info = send_command(sock, b"COMMAND", b"INFO", b"GET", b"FOO", b"CLIENT|ID", b"COPY")
+            if not isinstance(info, list) or len(info) != 4:
                 raise AssertionError(f"unexpected COMMAND INFO shape: {info!r}")
             if info[1] is not None:
                 raise AssertionError(f"COMMAND INFO should return null for unknown command: {info!r}")
@@ -263,6 +267,8 @@ def run_smoke() -> None:
                 raise AssertionError(f"COMMAND INFO GET returned wrong payload: {info!r}")
             if not isinstance(info[2], list) or info[2][0] != b"client|id":
                 raise AssertionError(f"COMMAND INFO CLIENT|ID returned wrong payload: {info!r}")
+            if not isinstance(info[3], list) or info[3][0] != b"copy":
+                raise AssertionError(f"COMMAND INFO COPY returned wrong payload: {info!r}")
 
             bitmap_info = send_command(sock, b"COMMAND", b"INFO", b"GETBIT", b"SETBIT", b"BITCOUNT", b"BITPOS", b"BITOP", b"BITFIELD", b"BITFIELD_RO", b"PFADD", b"PFCOUNT", b"PFMERGE", b"GEOADD", b"GEODIST", b"GEOHASH", b"GEOPOS", b"GEORADIUS", b"GEORADIUS_RO", b"GEORADIUSBYMEMBER", b"GEORADIUSBYMEMBER_RO", b"GEOSEARCH", b"GEOSEARCHSTORE")
             if (
@@ -625,6 +631,7 @@ def run_smoke() -> None:
                 or b"acl|setuser" not in docs_all_resp2
                 or b"acl|users" not in docs_all_resp2
                 or b"acl|whoami" not in docs_all_resp2
+                or b"copy" not in docs_all_resp2
                 or b"memory|malloc-stats" not in docs_all_resp2
                 or b"memory|purge" not in docs_all_resp2
                 or b"module" not in docs_all_resp2
@@ -886,6 +893,7 @@ def run_smoke() -> None:
                 or not isinstance(docs_all.get(b"acl|setuser"), dict)
                 or not isinstance(docs_all.get(b"acl|users"), dict)
                 or not isinstance(docs_all.get(b"acl|whoami"), dict)
+                or not isinstance(docs_all.get(b"copy"), dict)
                 or not isinstance(docs_all.get(b"memory|malloc-stats"), dict)
                 or not isinstance(docs_all.get(b"memory|purge"), dict)
                 or not isinstance(docs_all.get(b"module"), dict)
@@ -900,11 +908,28 @@ def run_smoke() -> None:
             if getkeys != [b"mylist", b"out"]:
                 raise AssertionError(f"unexpected COMMAND GETKEYS result: {getkeys!r}")
 
+            copy_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"COPY", b"src", b"dst")
+            if copy_getkeys != [b"src", b"dst"]:
+                raise AssertionError(f"unexpected COMMAND GETKEYS COPY result: {copy_getkeys!r}")
+
             getkeysandflags = send_command(sock, b"COMMAND", b"GETKEYSANDFLAGS", b"RENAME", b"src", b"dst")
             if not isinstance(getkeysandflags, list) or len(getkeysandflags) != 2:
                 raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS shape: {getkeysandflags!r}")
             if getkeysandflags[0][0] != b"src" or getkeysandflags[1][0] != b"dst":
                 raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS keys: {getkeysandflags!r}")
+
+            copy_getkeysandflags = send_command(sock, b"COMMAND", b"GETKEYSANDFLAGS", b"COPY", b"src", b"dst")
+            if not isinstance(copy_getkeysandflags, list) or len(copy_getkeysandflags) != 2:
+                raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS COPY shape: {copy_getkeysandflags!r}")
+            if (
+                copy_getkeysandflags[0][0] != b"src"
+                or b"RO" not in copy_getkeysandflags[0][1]
+                or b"access" not in copy_getkeysandflags[0][1]
+                or copy_getkeysandflags[1][0] != b"dst"
+                or b"OW" not in copy_getkeysandflags[1][1]
+                or b"update" not in copy_getkeysandflags[1][1]
+            ):
+                raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS COPY keys: {copy_getkeysandflags!r}")
 
             memory_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"MEMORY", b"USAGE", b"mkey")
             if memory_getkeys != [b"mkey"]:

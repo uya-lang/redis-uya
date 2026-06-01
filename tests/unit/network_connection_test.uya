@@ -145,6 +145,15 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const get_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n"[0: 22], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: get_result.response_len], &"$5\r\nvalue\r\n"[0: 11]));
 
+    const copy_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$4\r\nCOPY\r\n$3\r\nkey\r\n$7\r\nkeycopy\r\n"[0: 36], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: copy_result.response_len], &":1\r\n"[0: 4]));
+
+    const copy_get_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$3\r\nGET\r\n$7\r\nkeycopy\r\n"[0: 26], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: copy_get_result.response_len], &"$5\r\nvalue\r\n"[0: 11]));
+
+    const copy_cleanup_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$3\r\nDEL\r\n$7\r\nkeycopy\r\n"[0: 26], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: copy_cleanup_result.response_len], &":1\r\n"[0: 4]));
+
     const incr_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$4\r\nINCR\r\n$7\r\ncounter\r\n"[0: 28], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: incr_result.response_len], &":1\r\n"[0: 4]));
 
@@ -1128,6 +1137,27 @@ export fn test_connection_process_watch_unwatch() !void {
 
     const get_ok: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$3\r\nGET\r\n$7\r\nwatched\r\n"[0: 26], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: get_ok.response_len], &"$2\r\nok\r\n"[0: 8]));
+
+    const set_copy_source: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$3\r\nSET\r\n$7\r\nsrc2cpy\r\n$5\r\nvalue\r\n"[0: 37], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: set_copy_source.response_len], &"+OK\r\n"[0: 5]));
+
+    const watch_copy_target: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$5\r\nWATCH\r\n$8\r\ncopydest\r\n"[0: 29], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: watch_copy_target.response_len], &"+OK\r\n"[0: 5]));
+
+    const copy_multi: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$5\r\nMULTI\r\n"[0: 15], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: copy_multi.response_len], &"+OK\r\n"[0: 5]));
+
+    const queued_copy_get: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$3\r\nGET\r\n$8\r\ncopydest\r\n"[0: 27], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: queued_copy_get.response_len], &"+QUEUED\r\n"[0: 9]));
+
+    const outside_copy: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$4\r\nCOPY\r\n$7\r\nsrc2cpy\r\n$8\r\ncopydest\r\n"[0: 41], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: outside_copy.response_len], &":1\r\n"[0: 4]));
+
+    const copy_exec_abort: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$4\r\nEXEC\r\n"[0: 14], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: copy_exec_abort.response_len], &"*-1\r\n"[0: 5]));
+
+    const get_copy_dest: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$3\r\nGET\r\n$8\r\ncopydest\r\n"[0: 27], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: get_copy_dest.response_len], &"$5\r\nvalue\r\n"[0: 11]));
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

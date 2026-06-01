@@ -50,7 +50,7 @@
 - RESP2 最小子集解析：Simple String、Error、Integer、Bulk String、Array、Incomplete、非法输入
 - RESP3 最小协议闭环：`HELLO 2/3` 连接级协议切换，支持 Null、Boolean、Map 等常用 RESP3 类型解析和 RESP3 Null 回复
 - 命令路由：最小命令表、大小写匹配、参数数量校验、未知命令错误、RESP Array 转命令
-- String/Key/Control 命令执行：`PING`、`GET`、`SET`、`DEL`、`EXISTS`、`KEYS`、`RANDOMKEY`、`EXPIRE`、`EXPIREAT`、`EXPIRETIME`、`PEXPIRE`、`PEXPIREAT`、`PEXPIRETIME`、`PERSIST`、`TTL`、`PTTL`、`TIME`、`ROLE`、`INFO` 多 section、`CONFIG GET/HELP/RESETSTAT`、`CLIENT` 兼容子集、`AUTH`、`SAVE`
+- String/Key/Control 命令执行：`PING`、`GET`、`SET`、`DEL`、`EXISTS`、`COPY`、`KEYS`、`RANDOMKEY`、`EXPIRE`、`EXPIREAT`、`EXPIRETIME`、`PEXPIRE`、`PEXPIREAT`、`PEXPIRETIME`、`PERSIST`、`TTL`、`PTTL`、`TIME`、`ROLE`、`INFO` 多 section、`CONFIG GET/HELP/RESETSTAT`、`CLIENT` 兼容子集、`AUTH`、`SAVE`
 - String TTL 扩展：`GETEX`、`SETEX`、`PSETEX`
 - Hash 最小对象：基于项目内 `Dict` 的最小 hash value 容器
 - Hash 命令子集：`HSET`、`HGET`、`HDEL`、`HEXISTS`、`HLEN`、`HMGET`、`HSETNX`、`HSTRLEN`
@@ -278,6 +278,7 @@ build/redis-uya 6380 1
 - String 第四批多 key：`MGET`、`MSET`、`MSETNX`
 - String 第五批范围读写：`GETRANGE`、`SETRANGE`
 - String 第六批浮点计数：`INCRBYFLOAT`
+- Key 复制 partial：`COPY source destination [DB 0] [REPLACE]` 当前可用，支持当前单 DB 内深拷贝对象、保留 source TTL、已存在目标的 `REPLACE` 覆盖和 `COMMAND GETKEYS*` 可见面；非 `0` DB 按当前单 DB 模型返回 `ERR DB index is out of range`
 - Bitmap / Bitfield 第一批：`GETBIT`、`SETBIT`、`BITCOUNT`、`BITPOS`、`BITOP`、`BITFIELD`、`BITFIELD_RO`
 - HyperLogLog 第一批 partial：`PFADD`、`PFCOUNT`、`PFMERGE` 当前可用，但内部暂以 exact set-backed cardinality 近似 Redis 语义，尚未落地 Redis 原生 dense/sparse HLL 字符串编码
 - Geo 第一批 partial：`GEOADD`、`GEODIST`、`GEOHASH`、`GEOPOS`、`GEOSEARCH`、`GEOSEARCHSTORE`、`GEORADIUS`、`GEORADIUS_RO`、`GEORADIUSBYMEMBER`、`GEORADIUSBYMEMBER_RO` 当前可用，但内部暂以 exact zset-backed packed coordinate score 实现，`GEOSEARCHSTORE` 支持目标写入和 `STOREDIST` 整数距离 score，暂不保存 Redis 原生浮点距离，legacy radius 命令复用 `GEOSEARCH ... BYRADIUS` 路径且不支持 `STORE/STOREDIST`，`GEOPOS` 和 `WITHCOORD` 返回当前 packed score 解码后的 `1e-6` 量化坐标，`GEOHASH` 基于当前解码坐标生成 Redis 兼容 geohash 字符串，`WITHHASH` 返回当前 packed score，而不是 Redis 原生 geohash 整数

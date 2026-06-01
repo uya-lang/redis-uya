@@ -646,6 +646,7 @@ export fn test_command_command_catalog_core() !void {
     command_reply_cleanup(&list_hidden_reply);
     resp_value_free(&list_hidden_parsed.value);
 
+    try command_executor_test_assert_catalog_status(&"copy"[0: 4], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"acl"[0: 3], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"acl|cat"[0: 7], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"acl|deluser"[0: 11], CommandCatalogStatus.status_partial);
@@ -1432,6 +1433,21 @@ export fn test_command_command_getkeys() !void {
     command_reply_cleanup(&getkeys_flags_reply);
     resp_value_free(&getkeys_flags_parsed.value);
 
+    var getkeys_copy_parsed: RespParseResult = try parse_resp2(&"*5\r\n$7\r\nCOMMAND\r\n$7\r\nGETKEYS\r\n$4\r\nCOPY\r\n$3\r\nsrc\r\n$3\r\ndst\r\n"[0: 58]);
+    const getkeys_copy_command: Command = try command_executor_test_command(&router, &getkeys_copy_parsed);
+    var getkeys_copy_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &getkeys_copy_command, 1000u64);
+    try assert_true(command_executor_test_slice_eq(getkeys_copy_reply.data, &"*2\r\n$3\r\nsrc\r\n$3\r\ndst\r\n"[0: 22]));
+    command_reply_cleanup(&getkeys_copy_reply);
+    resp_value_free(&getkeys_copy_parsed.value);
+
+    var getkeys_copy_flags_parsed: RespParseResult = try parse_resp2(&"*5\r\n$7\r\nCOMMAND\r\n$15\r\nGETKEYSANDFLAGS\r\n$4\r\nCOPY\r\n$3\r\nsrc\r\n$3\r\ndst\r\n"[0: 67]);
+    const getkeys_copy_flags_command: Command = try command_executor_test_command(&router, &getkeys_copy_flags_parsed);
+    var getkeys_copy_flags_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &getkeys_copy_flags_command, 1000u64);
+    try assert_true(command_executor_test_contains(getkeys_copy_flags_reply.data, &"$3\r\nsrc\r\n*2\r\n$2\r\nRO\r\n$6\r\naccess\r\n"[0: 33]));
+    try assert_true(command_executor_test_contains(getkeys_copy_flags_reply.data, &"$3\r\ndst\r\n*2\r\n$2\r\nOW\r\n$6\r\nupdate\r\n"[0: 33]));
+    command_reply_cleanup(&getkeys_copy_flags_reply);
+    resp_value_free(&getkeys_copy_flags_parsed.value);
+
     var getkeys_watch_parsed: RespParseResult = try parse_resp2(&"*4\r\n$7\r\nCOMMAND\r\n$15\r\nGETKEYSANDFLAGS\r\n$5\r\nWATCH\r\n$3\r\nkey\r\n"[0: 59]);
     const getkeys_watch_command: Command = try command_executor_test_command(&router, &getkeys_watch_parsed);
     var getkeys_watch_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &getkeys_watch_command, 1000u64);
@@ -1888,6 +1904,13 @@ export fn test_command_save_rdb() !void {
     _ = command_execute_with_runtime_at(&engine, &runtime, &set_command, 1000u64);
     resp_value_free(&set_parsed.value);
 
+    var copy_parsed: RespParseResult = try parse_resp2(&"*3\r\n$4\r\nCOPY\r\n$3\r\nkey\r\n$7\r\nkeycopy\r\n"[0: 36]);
+    const copy_command: Command = try command_executor_test_command(&router, &copy_parsed);
+    const copy_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &copy_command, 1000u64);
+    try assert_eq_i32(copy_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(copy_reply.integer as i32, 1);
+    resp_value_free(&copy_parsed.value);
+
     var save_parsed: RespParseResult = try parse_resp2(&"*1\r\n$4\r\nSAVE\r\n"[0: 14]);
     const save_command: Command = try command_executor_test_command(&router, &save_parsed);
     const save_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &save_command, 1000u64);
@@ -1900,6 +1923,8 @@ export fn test_command_save_rdb() !void {
     try rdb_load_file_at(path, &replay_engine, 1000u64);
     const found: &RedisObject = try lookup_key_at(&replay_engine, &"key"[0: 3], 1000u64);
     try assert_true(command_executor_test_slice_eq(found.value.buf[0: found.value.len], &"value"[0: 5]));
+    const copy_found: &RedisObject = try lookup_key_at(&replay_engine, &"keycopy"[0: 7], 1000u64);
+    try assert_true(command_executor_test_slice_eq(copy_found.value.buf[0: copy_found.value.len], &"value"[0: 5]));
     engine_free(&replay_engine);
 
     _ = unlink(path);
@@ -2882,11 +2907,29 @@ export fn test_command_maxmemory_noeviction() !void {
     resp_value_free(&set_parsed.value);
 
     runtime.config.maxmemory = 0;
+    const source_obj: &RedisObject = try create_string_object(&"value"[0: 5]);
+    try set_key_at(&engine, &"source"[0: 6], source_obj, 1000u64);
+
+    runtime.config.maxmemory = 1;
+    var copy_parsed: RespParseResult = try parse_resp2(&"*3\r\n$4\r\nCOPY\r\n$6\r\nsource\r\n$6\r\ncopied\r\n"[0: 38]);
+    const copy_command: Command = try command_executor_test_command(&router, &copy_parsed);
+    const copy_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &copy_command, 1000u64);
+    try assert_eq_i32(copy_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(copy_reply.data, &"maxmemory"[0: 9]));
+    resp_value_free(&copy_parsed.value);
+
+    runtime.config.maxmemory = 0;
     var get_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n"[0: 22]);
     const get_command: Command = try command_executor_test_command(&router, &get_parsed);
     const get_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &get_command, 1000u64);
     try assert_eq_i32(get_reply.typ as i32, CommandReplyType.reply_null_bulk as i32);
     resp_value_free(&get_parsed.value);
+
+    var copied_get_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nGET\r\n$6\r\ncopied\r\n"[0: 25]);
+    const copied_get_command: Command = try command_executor_test_command(&router, &copied_get_parsed);
+    const copied_get_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &copied_get_command, 1000u64);
+    try assert_eq_i32(copied_get_reply.typ as i32, CommandReplyType.reply_null_bulk as i32);
+    resp_value_free(&copied_get_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);
@@ -5571,6 +5614,76 @@ export fn test_command_rename_renamenx_lastsave() !void {
     try assert_eq_i32(renamenx_reply.typ as i32, CommandReplyType.reply_integer as i32);
     try assert_eq_i32(renamenx_reply.integer as i32, 1);
     resp_value_free(&renamenx_parsed.value);
+
+    var copy_parsed: RespParseResult = try parse_resp2(&"*3\r\n$4\r\nCOPY\r\n$4\r\nnext\r\n$4\r\ncopy\r\n"[0: 34]);
+    const copy_command: Command = try command_executor_test_command(&router, &copy_parsed);
+    const copy_reply: CommandReply = command_execute_at(&engine, &copy_command, 1000u64);
+    try assert_eq_i32(copy_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(copy_reply.integer as i32, 1);
+    resp_value_free(&copy_parsed.value);
+
+    var copy_get_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nGET\r\n$4\r\ncopy\r\n"[0: 23]);
+    const copy_get_command: Command = try command_executor_test_command(&router, &copy_get_parsed);
+    const copy_get_reply: CommandReply = command_execute_at(&engine, &copy_get_command, 1000u64);
+    try assert_eq_i32(copy_get_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(copy_get_reply.data, &"value"[0: 5]));
+    resp_value_free(&copy_get_parsed.value);
+
+    var copy_ttl_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nTTL\r\n$4\r\ncopy\r\n"[0: 23]);
+    const copy_ttl_command: Command = try command_executor_test_command(&router, &copy_ttl_parsed);
+    const copy_ttl_reply: CommandReply = command_execute_at(&engine, &copy_ttl_command, 1000u64);
+    try assert_eq_i32(copy_ttl_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(copy_ttl_reply.integer as i32, 5);
+    resp_value_free(&copy_ttl_parsed.value);
+
+    var copy_conflict_parsed: RespParseResult = try parse_resp2(&"*3\r\n$4\r\nCOPY\r\n$4\r\nnext\r\n$4\r\ncopy\r\n"[0: 34]);
+    const copy_conflict_command: Command = try command_executor_test_command(&router, &copy_conflict_parsed);
+    const copy_conflict_reply: CommandReply = command_execute_at(&engine, &copy_conflict_command, 1000u64);
+    try assert_eq_i32(copy_conflict_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(copy_conflict_reply.integer as i32, 0);
+    resp_value_free(&copy_conflict_parsed.value);
+
+    var copy_replace_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nCOPY\r\n$4\r\nnext\r\n$4\r\ncopy\r\n$7\r\nREPLACE\r\n"[0: 47]);
+    const copy_replace_command: Command = try command_executor_test_command(&router, &copy_replace_parsed);
+    const copy_replace_reply: CommandReply = command_execute_at(&engine, &copy_replace_command, 1000u64);
+    try assert_eq_i32(copy_replace_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(copy_replace_reply.integer as i32, 1);
+    resp_value_free(&copy_replace_parsed.value);
+
+    var copy_db0_parsed: RespParseResult = try parse_resp2(&"*5\r\n$4\r\nCOPY\r\n$4\r\nnext\r\n$7\r\ndbcopy0\r\n$2\r\nDB\r\n$1\r\n0\r\n"[0: 52]);
+    const copy_db0_command: Command = try command_executor_test_command(&router, &copy_db0_parsed);
+    const copy_db0_reply: CommandReply = command_execute_at(&engine, &copy_db0_command, 1000u64);
+    try assert_eq_i32(copy_db0_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(copy_db0_reply.integer as i32, 1);
+    resp_value_free(&copy_db0_parsed.value);
+
+    var copy_db0_get_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nGET\r\n$7\r\ndbcopy0\r\n"[0: 26]);
+    const copy_db0_get_command: Command = try command_executor_test_command(&router, &copy_db0_get_parsed);
+    const copy_db0_get_reply: CommandReply = command_execute_at(&engine, &copy_db0_get_command, 1000u64);
+    try assert_eq_i32(copy_db0_get_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(copy_db0_get_reply.data, &"value"[0: 5]));
+    resp_value_free(&copy_db0_get_parsed.value);
+
+    var copy_missing_parsed: RespParseResult = try parse_resp2(&"*3\r\n$4\r\nCOPY\r\n$7\r\nmissing\r\n$4\r\nnone\r\n"[0: 37]);
+    const copy_missing_command: Command = try command_executor_test_command(&router, &copy_missing_parsed);
+    const copy_missing_reply: CommandReply = command_execute_at(&engine, &copy_missing_command, 1000u64);
+    try assert_eq_i32(copy_missing_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(copy_missing_reply.integer as i32, 0);
+    resp_value_free(&copy_missing_parsed.value);
+
+    var copy_same_parsed: RespParseResult = try parse_resp2(&"*3\r\n$4\r\nCOPY\r\n$4\r\nnext\r\n$4\r\nnext\r\n"[0: 34]);
+    const copy_same_command: Command = try command_executor_test_command(&router, &copy_same_parsed);
+    const copy_same_reply: CommandReply = command_execute_at(&engine, &copy_same_command, 1000u64);
+    try assert_eq_i32(copy_same_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(copy_same_reply.data, &"ERR source and destination objects are the same"[0: 47]));
+    resp_value_free(&copy_same_parsed.value);
+
+    var copy_db_bad_parsed: RespParseResult = try parse_resp2(&"*5\r\n$4\r\nCOPY\r\n$4\r\nnext\r\n$5\r\nother\r\n$2\r\nDB\r\n$1\r\n1\r\n"[0: 50]);
+    const copy_db_bad_command: Command = try command_executor_test_command(&router, &copy_db_bad_parsed);
+    const copy_db_bad_reply: CommandReply = command_execute_at(&engine, &copy_db_bad_command, 1000u64);
+    try assert_eq_i32(copy_db_bad_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(copy_db_bad_reply.data, &"ERR DB index is out of range"[0: 28]));
+    resp_value_free(&copy_db_bad_parsed.value);
 
     runtime.lastsave_ms = 5500u64;
     var lastsave_parsed: RespParseResult = try parse_resp2(&"*1\r\n$8\r\nLASTSAVE\r\n"[0: 18]);

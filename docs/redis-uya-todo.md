@@ -447,6 +447,7 @@
 - [x] Key/Server 第十一批模式读取：`KEYS`
 - [x] Key/Server 第十二批只读排序：`SORT_RO`
 - [x] Key/Server 第十批：`SORT`
+- [x] Key/Server 第十三批复制：`COPY`
 - [x] Security baseline：`AUTH`、`requirepass`、`SHUTDOWN`
 
 验收项：
@@ -486,7 +487,7 @@
 - [x] Blocking list / zset：已补 `BLPOP`、`BRPOP`、`BRPOPLPUSH`、`BZPOPMIN`、`BZPOPMAX`、`BZMPOP`
 - [x] 常用 list / zset 缺口：已补 `LMOVE`、`LMPOP`、`RPOPLPUSH`、`ZRANK`、`ZREVRANK`、`ZSCORE`、`ZMSCORE`、`ZPOPMIN`、`ZPOPMAX`
 - [x] 常用 bitmap / bitfield：已补 `SETBIT`、`GETBIT`、`BITCOUNT`、`BITPOS`、`BITOP`、`BITFIELD`、`BITFIELD_RO`
-- [x] 常用 HLL / GEO：已补 `PFADD`、`PFCOUNT`、`PFMERGE`（exact set-backed partial），以及 `GEOADD`、`GEODIST`、`GEOHASH`、`GEOPOS`、`GEOSEARCH`、`GEOSEARCHSTORE`、`GEORADIUS`、`GEORADIUS_RO`、`GEORADIUSBYMEMBER`、`GEORADIUSBYMEMBER_RO`（exact zset-backed partial；`GEOSEARCHSTORE STOREDIST` 当前写入整数距离 score）
+- [x] 常用 HLL / GEO / Key：已补 `PFADD`、`PFCOUNT`、`PFMERGE`（exact set-backed partial），以及 `GEOADD`、`GEODIST`、`GEOHASH`、`GEOPOS`、`GEOSEARCH`、`GEOSEARCHSTORE`、`GEORADIUS`、`GEORADIUS_RO`、`GEORADIUSBYMEMBER`、`GEORADIUSBYMEMBER_RO`（exact zset-backed partial；`GEOSEARCHSTORE STOREDIST` 当前写入整数距离 score），`COPY`（当前单 DB 深拷贝 partial，支持 `REPLACE`、`DB 0` 与 TTL 保留）
 - [x] Scripting 第一批：已补 `EVAL`、`EVALSHA`、`SCRIPT LOAD/EXISTS/FLUSH`，当前为 single-call script subset partial
 - [x] Server / Connection 缺口第一批：已补 `MEMORY HELP/STATS/USAGE/DOCTOR/MALLOC-STATS/PURGE`（runtime-approx/no-op partial）、`SLOWLOG HELP/LEN/GET/RESET`（in-process ring partial）、`LATENCY HELP/LATEST/HISTORY/RESET/DOCTOR/HISTOGRAM/GRAPH`（empty-event compatibility partial）与 `MONITOR`（流式命令观测 partial）
 

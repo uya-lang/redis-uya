@@ -1409,6 +1409,9 @@ fn command_executor_growth_write_command(command: &Command) bool {
     if cmd_type == CommandType.command_sort {
         return command_executor_sort_has_store(command);
     }
+    if cmd_type == CommandType.command_copy {
+        return command.argc >= 3;
+    }
     return false;
 }
 
@@ -1442,7 +1445,65 @@ fn command_executor_write_is_noop(engine: &Engine, command: &Command, now_ms: u6
             index = index + 2;
         }
     }
+    if command.info.cmd_type == CommandType.command_copy {
+        const source: &[byte] = command_executor_arg(command, 1) catch {
+            return false;
+        };
+        const target: &[byte] = command_executor_arg(command, 2) catch {
+            return false;
+        };
+        if command_executor_slice_eq(source, target) {
+            return true;
+        }
+        _ = lookup_key_no_touch_at(engine, source, now_ms) catch {
+            return true;
+        };
+        var replace: bool = false;
+        var index: usize = 3;
+        while index < command.argc {
+            const option: &[byte] = command_executor_arg(command, index) catch {
+                return false;
+            };
+            if command_executor_keyword_eq(option, &"REPLACE"[0: 7]) {
+                replace = true;
+                index = index + 1;
+                continue;
+            }
+            if command_executor_keyword_eq(option, &"DB"[0: 2]) {
+                if index + 1 >= command.argc {
+                    return true;
+                }
+                const db_index: i64 = command_executor_parse_i64(command_executor_arg(command, index + 1) catch {
+                    return true;
+                }) catch {
+                    return true;
+                };
+                if db_index != 0 {
+                    return true;
+                }
+                index = index + 2;
+                continue;
+            }
+            return true;
+        }
+        if !replace && command_executor_key_exists(engine, target, now_ms) {
+            return true;
+        }
+    }
     return false;
+}
+
+fn command_executor_estimate_copy_growth(engine: &Engine, command: &Command, now_ms: u64) usize {
+    const source: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_estimate_request_growth(command);
+    };
+    const target: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_estimate_request_growth(command);
+    };
+    const obj: &RedisObject = lookup_key_no_touch_at(engine, source, now_ms) catch {
+        return command_executor_estimate_request_growth(command);
+    };
+    return 512usize + command_executor_estimate_sds_allocation(target.len) + command_executor_memory_object_usage(obj);
 }
 
 fn command_executor_prepare_maxmemory(engine: &Engine, runtime: &CommandRuntimeInfo, command: &Command, now_ms: u64) bool {
@@ -1456,7 +1517,10 @@ fn command_executor_prepare_maxmemory(engine: &Engine, runtime: &CommandRuntimeI
         return true;
     }
 
-    const estimated: usize = command_executor_estimate_request_growth(command);
+    var estimated: usize = command_executor_estimate_request_growth(command);
+    if command.info.cmd_type == CommandType.command_copy {
+        estimated = command_executor_estimate_copy_growth(engine, command, now_ms);
+    }
     if command_executor_memory_fits(runtime.config.maxmemory, estimated) {
         return true;
     }
@@ -6708,6 +6772,84 @@ fn command_executor_rename_common(engine: &Engine, command: &Command, now_ms: u6
             return command_executor_error(&"ERR rename failed"[0: 17]);
         }
     }
+}
+
+fn command_executor_copy_store(engine: &Engine, source: &[byte], target: &[byte], source_obj: &RedisObject, now_ms: u64) CommandReply {
+    const cloned: &RedisObject = object_clone(source_obj) catch |err| {
+        if err == error.AllocOutOfMemory {
+            return command_executor_oom();
+        }
+        return command_executor_wrongtype();
+    };
+    _ = set_key_at(engine, target, cloned, now_ms) catch {
+        object_free(cloned);
+        return command_executor_oom();
+    };
+    const expire_at: u64 = get_key_expire_at(engine, source) catch {
+        _ = clear_key_expire(engine, target);
+        return command_executor_integer(1);
+    };
+    _ = set_key_expire_at(engine, target, expire_at) catch {
+        return command_executor_oom();
+    };
+    return command_executor_integer(1);
+}
+
+fn command_executor_copy(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 3 {
+        return command_executor_wrong_arity();
+    }
+    const source: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const target: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    if command_executor_slice_eq(source, target) {
+        return command_executor_error(&"ERR source and destination objects are the same"[0: 47]);
+    }
+
+    var replace: bool = false;
+    var db_index: i64 = 0;
+    var index: usize = 3;
+    while index < command.argc {
+        const option: &[byte] = command_executor_arg(command, index) catch {
+            return command_executor_wrong_arity();
+        };
+        if command_executor_keyword_eq(option, &"REPLACE"[0: 7]) {
+            replace = true;
+            index = index + 1;
+            continue;
+        }
+        if command_executor_keyword_eq(option, &"DB"[0: 2]) {
+            if index + 1 >= command.argc {
+                return command_executor_syntax_error();
+            }
+            db_index = command_executor_parse_i64(command_executor_arg(command, index + 1) catch {
+                return command_executor_wrong_arity();
+            }) catch {
+                return command_executor_invalid_integer();
+            };
+            index = index + 2;
+            continue;
+        }
+        return command_executor_syntax_error();
+    }
+    if db_index != 0 {
+        return command_executor_error(&"ERR DB index is out of range"[0: 28]);
+    }
+
+    const source_obj: &RedisObject = lookup_key_at(engine, source, now_ms) catch {
+        return command_executor_integer(0);
+    };
+    if !replace {
+        const target_obj: &RedisObject = lookup_key_at(engine, target, now_ms) catch {
+            return command_executor_copy_store(engine, source, target, source_obj, now_ms);
+        };
+        _ = target_obj;
+        return command_executor_integer(0);
+    }
+    return command_executor_copy_store(engine, source, target, source_obj, now_ms);
 }
 
 fn command_executor_select(runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
@@ -13658,8 +13800,11 @@ fn command_executor_command_key_flags(info: &CommandInfo, key_ordinal: usize) &[
     if info.cmd_type == CommandType.command_unlink {
         return &"RM|delete"[0: 9];
     }
-    if info.cmd_type == CommandType.command_rename || info.cmd_type == CommandType.command_renamenx {
+    if info.cmd_type == CommandType.command_rename || info.cmd_type == CommandType.command_renamenx || info.cmd_type == CommandType.command_copy {
         if key_ordinal == 0 {
+            if info.cmd_type == CommandType.command_copy {
+                return &"RO|access"[0: 9];
+            }
             return &"RW|access|delete"[0: 16];
         }
         return &"OW|update"[0: 9];
@@ -14947,6 +15092,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_renamenx {
         return command_executor_rename_common(engine, command, now_ms, false);
+    }
+    if command.info.cmd_type == CommandType.command_copy {
+        return command_executor_copy(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_lastsave {
         if command.argc != 1 {

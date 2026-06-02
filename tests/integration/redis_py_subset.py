@@ -311,6 +311,13 @@ class RedisPySubsetClient:
     def function_delete(self, library_name: bytes):
         return self._request(b"FUNCTION", b"DELETE", library_name)
 
+    def function_load(self, code: bytes, replace: bool = False):
+        parts = [b"FUNCTION", b"LOAD"]
+        if replace:
+            parts.append(b"REPLACE")
+        parts.append(code)
+        return self._request(*parts)
+
     def function_dump(self):
         result = self._request(b"FUNCTION", b"DUMP")
         assert isinstance(result, bytes)
@@ -1217,6 +1224,7 @@ def run_smoke() -> None:
             if (
                 b"FUNCTION HELP" not in function_help
                 or b"FUNCTION LIST [LIBRARYNAME <pattern>] [WITHCODE]" not in function_help
+                or b"FUNCTION LOAD [REPLACE] <function-code>" not in function_help
                 or b"FUNCTION DUMP" not in function_help
                 or not any(item.startswith(b"FUNCTION RESTORE") for item in function_help)
                 or b"FUNCTION KILL" not in function_help
@@ -1240,6 +1248,18 @@ def run_smoke() -> None:
             except RespError as exc:
                 if str(exc) != "ERR Library not found":
                     raise AssertionError(f"unexpected FUNCTION DELETE error: {exc}") from exc
+            try:
+                client.function_load(b"return 1")
+                raise AssertionError("expected FUNCTION LOAD to return partial unsupported error")
+            except RespError as exc:
+                if str(exc) != "ERR FUNCTION LOAD is not supported by redis-uya partial":
+                    raise AssertionError(f"unexpected FUNCTION LOAD error: {exc}") from exc
+            try:
+                client.function_load(b"return 1", replace=True)
+                raise AssertionError("expected FUNCTION LOAD REPLACE to return partial unsupported error")
+            except RespError as exc:
+                if str(exc) != "ERR FUNCTION LOAD is not supported by redis-uya partial":
+                    raise AssertionError(f"unexpected FUNCTION LOAD REPLACE error: {exc}") from exc
             empty_function_dump = client.function_dump()
             if empty_function_dump != bytes.fromhex("0a005d9b5c400f7fa2da"):
                 raise AssertionError("expected FUNCTION DUMP empty-library payload")

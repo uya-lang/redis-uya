@@ -322,8 +322,8 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const script_kill_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$6\r\nSCRIPT\r\n$4\r\nKILL\r\n"[0: 26], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: script_kill_result.response_len], &"-NOTBUSY No scripts in execution right now.\r\n"[0: 45]));
 
-    var function_out: [byte: 1024] = [];
-    const function_help_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$8\r\nFUNCTION\r\n$4\r\nHELP\r\n"[0: 28], &function_out[0], 1024, 1000u64);
+    var function_out: [byte: 2048] = [];
+    const function_help_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$8\r\nFUNCTION\r\n$4\r\nHELP\r\n"[0: 28], &function_out[0], 2048, 1000u64);
     try assert_true(network_connection_contains(function_out[0: function_help_result.response_len], &"FUNCTION HELP"[0: 13]));
 
     const function_list_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$8\r\nFUNCTION\r\n$4\r\nLIST\r\n"[0: 28], &out[0], 512, 1000u64);
@@ -337,6 +337,9 @@ export fn test_connection_process_ping_set_get_quit() !void {
 
     const function_delete_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$8\r\nFUNCTION\r\n$6\r\nDELETE\r\n$7\r\nmissing\r\n"[0: 43], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: function_delete_result.response_len], &"-ERR Library not found\r\n"[0: 24]));
+
+    const function_load_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$8\r\nFUNCTION\r\n$4\r\nLOAD\r\n$8\r\nreturn 1\r\n"[0: 42], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: function_load_result.response_len], &"-ERR FUNCTION LOAD is not supported by redis-uya partial\r\n"[0: 58]));
 
     var function_dump_expected: [byte: 17] = [
         0x24 as byte, 0x31 as byte, 0x30 as byte, 0x0d as byte, 0x0a as byte,

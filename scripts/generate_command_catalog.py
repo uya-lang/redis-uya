@@ -385,6 +385,7 @@ PARTIAL_NAMES = {
     "function|flush",
     "function|help",
     "function|kill",
+    "function|load",
     "function|list",
     "function|restore",
     "function|stats",

@@ -7547,6 +7547,8 @@ fn command_executor_function_help() CommandReply {
     _ = list_object_push_tail(reply_list, &"    Return function runtime stats. Currently empty until Redis Functions execution lands."[0: 89]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"FUNCTION FLUSH [ASYNC|SYNC]"[0: 27]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"    Flush loaded functions. Currently a no-op because function storage is not implemented."[0: 90]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"FUNCTION LOAD [REPLACE] <function-code>"[0: 39]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Load a function library. Currently unsupported."[0: 51]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"FUNCTION DUMP"[0: 13]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"    Return a serialized payload of loaded libraries. Currently returns the Redis-compatible empty-library dump."[0: 111]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"FUNCTION RESTORE <serialized-value> [FLUSH|APPEND|REPLACE]"[0: 58]) catch { object_free(reply_list); return command_executor_oom(); };
@@ -8141,6 +8143,31 @@ fn command_executor_function_delete(command: &Command) CommandReply {
     return command_executor_owned_error(&"ERR Library not found"[0: 21]);
 }
 
+fn command_executor_function_load(command: &Command) CommandReply {
+    if command.argc < 3 {
+        return command_executor_owned_error(&"ERR wrong number of arguments for 'function|load' command"[0: 57]);
+    }
+    if command.argc > 4 {
+        return command_executor_owned_error(&"ERR unknown subcommand or wrong number of arguments for 'LOAD'. Try FUNCTION HELP."[0: 82]);
+    }
+    if command.argc == 4 {
+        const replace: &[byte] = command_executor_arg(command, 2) catch {
+            return command_executor_wrong_arity();
+        };
+        if !command_executor_keyword_eq(replace, &"REPLACE"[0: 7]) {
+            return command_executor_syntax_error();
+        }
+        _ = command_executor_arg(command, 3) catch {
+            return command_executor_wrong_arity();
+        };
+    } else {
+        _ = command_executor_arg(command, 2) catch {
+            return command_executor_wrong_arity();
+        };
+    }
+    return command_executor_owned_error(&"ERR FUNCTION LOAD is not supported by redis-uya partial"[0: 55]);
+}
+
 fn command_executor_function_kill(command: &Command) CommandReply {
     if command.argc != 2 {
         return command_executor_owned_error(&"ERR wrong number of arguments for 'function|kill' command"[0: 57]);
@@ -8247,6 +8274,9 @@ fn command_executor_function(command: &Command) CommandReply {
     }
     if command_executor_keyword_eq(subcommand, &"DELETE"[0: 6]) {
         return command_executor_function_delete(command);
+    }
+    if command_executor_keyword_eq(subcommand, &"LOAD"[0: 4]) {
+        return command_executor_function_load(command);
     }
     if command_executor_keyword_eq(subcommand, &"DUMP"[0: 4]) {
         return command_executor_function_dump(command);
@@ -13078,6 +13108,7 @@ fn command_executor_command_visible_function_subcommand(name: &[byte]) bool {
         command_executor_slice_eq(name, &"stats"[0: 5]) ||
         command_executor_slice_eq(name, &"flush"[0: 5]) ||
         command_executor_slice_eq(name, &"delete"[0: 6]) ||
+        command_executor_slice_eq(name, &"load"[0: 4]) ||
         command_executor_slice_eq(name, &"dump"[0: 4]) ||
         command_executor_slice_eq(name, &"restore"[0: 7]) ||
         command_executor_slice_eq(name, &"kill"[0: 4]);

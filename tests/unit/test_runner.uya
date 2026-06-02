@@ -150,6 +150,7 @@ use tests.unit.command_executor_test.test_command_function_list;
 use tests.unit.command_executor_test.test_command_function_stats;
 use tests.unit.command_executor_test.test_command_function_flush;
 use tests.unit.command_executor_test.test_command_function_delete;
+use tests.unit.command_executor_test.test_command_function_load;
 use tests.unit.command_executor_test.test_command_function_kill;
 use tests.unit.command_executor_test.test_command_function_dump;
 use tests.unit.command_executor_test.test_command_function_restore;
@@ -814,6 +815,10 @@ export fn main() i32 {
     const before_exec_function_delete: i32 = failed;
     _ = test_command_function_delete() catch { printf("[FAIL] command_executor/function_delete\n" as *byte); failed = failed + 1; };
     if failed == before_exec_function_delete { printf("[PASS] command_executor/function_delete\n" as *byte); }
+
+    const before_exec_function_load: i32 = failed;
+    _ = test_command_function_load() catch { printf("[FAIL] command_executor/function_load\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_function_load { printf("[PASS] command_executor/function_load\n" as *byte); }
 
     const before_exec_function_kill: i32 = failed;
     _ = test_command_function_kill() catch { printf("[FAIL] command_executor/function_kill\n" as *byte); failed = failed + 1; };

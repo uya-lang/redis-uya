@@ -1,7 +1,7 @@
 # redis-uya command matrix
 
 > version: v0.9.1-dev
-> date: 2026-06-01
+> date: 2026-06-02
 > source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`
 > runtime source: `src/command/catalog_generated.uya`
 
@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 148 | 0 | 3 | 68 |
+| Tier A: standalone core | 365 | 259 | 146 | 149 | 0 | 3 | 67 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `155` |
+| `partial` | `156` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `221` |
+| `deferred` | `220` |
 
 ## Group counts
 
@@ -81,24 +81,24 @@
 | `acl|users` | `server` | `partial` | `-` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `acl|whoami` | `server` | `partial` | `-` | `2` | `-` | `no` | `@slow` |
 | `append` | `string` | `full` | `-` | `3` | `-` | `no` | `@write, @string, @fast` |
-| `arcount` | `array` | `deferred` | `v0.9.2` | `2` | `array` | `no` | `@array` |
-| `ardel` | `array` | `deferred` | `v0.9.2` | `-3` | `array` | `no` | `ARRAY` |
-| `ardelrange` | `array` | `deferred` | `v0.9.2` | `-4` | `array` | `no` | `ARRAY` |
-| `arget` | `array` | `deferred` | `v0.9.2` | `3` | `array` | `no` | `ARRAY` |
-| `argetrange` | `array` | `deferred` | `v0.9.2` | `4` | `array` | `no` | `ARRAY` |
-| `argrep` | `array` | `deferred` | `v0.9.2` | `-6` | `array` | `no` | `@array` |
-| `arinfo` | `array` | `deferred` | `v0.9.2` | `-2` | `array` | `no` | `ARRAY` |
-| `arinsert` | `array` | `deferred` | `v0.9.2` | `-3` | `array` | `no` | `ARRAY` |
-| `arlastitems` | `array` | `deferred` | `v0.9.2` | `-3` | `array` | `no` | `ARRAY` |
-| `arlen` | `array` | `deferred` | `v0.9.2` | `2` | `array` | `no` | `ARRAY` |
-| `armget` | `array` | `deferred` | `v0.9.2` | `-3` | `array` | `no` | `ARRAY` |
-| `armset` | `array` | `deferred` | `v0.9.2` | `-4` | `array` | `no` | `ARRAY` |
-| `arnext` | `array` | `deferred` | `v0.9.2` | `2` | `array` | `no` | `ARRAY` |
-| `arop` | `array` | `deferred` | `v0.9.2` | `-5` | `array` | `no` | `ARRAY` |
-| `arring` | `array` | `deferred` | `v0.9.2` | `-4` | `array` | `no` | `ARRAY` |
-| `arscan` | `array` | `deferred` | `v0.9.2` | `-4` | `array` | `no` | `ARRAY` |
-| `arseek` | `array` | `deferred` | `v0.9.2` | `3` | `array` | `no` | `ARRAY` |
-| `arset` | `array` | `deferred` | `v0.9.2` | `-4` | `array` | `no` | `ARRAY` |
+| `arcount` | `array` | `deferred` | `v0.9.2` | `2` | `array` | `no` | `@read, @array, @fast` |
+| `ardel` | `array` | `deferred` | `v0.9.2` | `-3` | `array` | `no` | `@write, @array, @fast` |
+| `ardelrange` | `array` | `deferred` | `v0.9.2` | `-4` | `array` | `no` | `@write, @array, @slow` |
+| `arget` | `array` | `deferred` | `v0.9.2` | `3` | `array` | `no` | `@read, @array, @fast` |
+| `argetrange` | `array` | `deferred` | `v0.9.2` | `4` | `array` | `no` | `@read, @array, @slow` |
+| `argrep` | `array` | `deferred` | `v0.9.2` | `-6` | `array` | `no` | `@read, @array, @slow` |
+| `arinfo` | `array` | `deferred` | `v0.9.2` | `-2` | `array` | `no` | `@read, @array, @slow` |
+| `arinsert` | `array` | `deferred` | `v0.9.2` | `-3` | `array` | `no` | `@write, @array, @fast` |
+| `arlastitems` | `array` | `deferred` | `v0.9.2` | `-3` | `array` | `no` | `@read, @array, @slow` |
+| `arlen` | `array` | `deferred` | `v0.9.2` | `2` | `array` | `no` | `@read, @array, @fast` |
+| `armget` | `array` | `deferred` | `v0.9.2` | `-3` | `array` | `no` | `@read, @array, @fast` |
+| `armset` | `array` | `deferred` | `v0.9.2` | `-4` | `array` | `no` | `@write, @array, @fast` |
+| `arnext` | `array` | `deferred` | `v0.9.2` | `2` | `array` | `no` | `@read, @array, @fast` |
+| `arop` | `array` | `deferred` | `v0.9.2` | `-5` | `array` | `no` | `@read, @array, @slow` |
+| `arring` | `array` | `deferred` | `v0.9.2` | `-4` | `array` | `no` | `@write, @array, @slow` |
+| `arscan` | `array` | `deferred` | `v0.9.2` | `-4` | `array` | `no` | `@read, @array, @slow` |
+| `arseek` | `array` | `deferred` | `v0.9.2` | `3` | `array` | `no` | `@write, @array, @fast` |
+| `arset` | `array` | `deferred` | `v0.9.2` | `-4` | `array` | `no` | `@write, @array, @fast` |
 | `asking` | `cluster` | `standalone-error` | `v1.1.0` | `1` | `-` | `no` | `@fast, @connection` |
 | `auth` | `connection` | `partial` | `-` | `-2` | `-` | `no` | `@fast, @connection` |
 | `bf.add` | `bf` | `deferred` | `v0.9.2` | `3` | `bf` | `no` | `@bloom, @write, @slow` |
@@ -270,7 +270,7 @@
 | `function|help` | `scripting` | `partial` | `-` | `2` | `-` | `no` | `@slow, @scripting` |
 | `function|kill` | `scripting` | `partial` | `-` | `2` | `-` | `no` | `@slow, @scripting` |
 | `function|list` | `scripting` | `partial` | `-` | `-2` | `-` | `no` | `@slow, @scripting` |
-| `function|load` | `scripting` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@write, @slow, @scripting` |
+| `function|load` | `scripting` | `partial` | `-` | `-3` | `-` | `no` | `@write, @slow, @scripting` |
 | `function|restore` | `scripting` | `partial` | `-` | `-3` | `-` | `no` | `@write, @slow, @scripting` |
 | `function|stats` | `scripting` | `partial` | `-` | `2` | `-` | `no` | `@slow, @scripting` |
 | `geoadd` | `geo` | `partial` | `-` | `-5` | `-` | `no` | `@write, @geo, @slow` |

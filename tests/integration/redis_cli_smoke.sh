@@ -706,7 +706,7 @@ if [[ "$ACL_LIST_RESULT" != "user default on nopass ~* &* +@all" ]]; then
 fi
 
 FUNCTION_HELP_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function help)"
-if [[ "$FUNCTION_HELP_RESULT" != *"FUNCTION HELP"* || "$FUNCTION_HELP_RESULT" != *"FUNCTION LIST [LIBRARYNAME <pattern>] [WITHCODE]"* ]]; then
+if [[ "$FUNCTION_HELP_RESULT" != *"FUNCTION HELP"* || "$FUNCTION_HELP_RESULT" != *"FUNCTION LIST [LIBRARYNAME <pattern>] [WITHCODE]"* || "$FUNCTION_HELP_RESULT" != *"FUNCTION LOAD [REPLACE] <function-code>"* ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected FUNCTION HELP output, got '$FUNCTION_HELP_RESULT'" >&2
     exit 1
 fi
@@ -732,6 +732,18 @@ fi
 FUNCTION_DELETE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function delete missing 2>&1 || true)"
 if [[ "$FUNCTION_DELETE_RESULT" != "ERR Library not found" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected FUNCTION DELETE missing library error, got '$FUNCTION_DELETE_RESULT'" >&2
+    exit 1
+fi
+
+FUNCTION_LOAD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function load "return 1" 2>&1 || true)"
+if [[ "$FUNCTION_LOAD_RESULT" != "ERR FUNCTION LOAD is not supported by redis-uya partial" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected FUNCTION LOAD partial error, got '$FUNCTION_LOAD_RESULT'" >&2
+    exit 1
+fi
+
+FUNCTION_LOAD_REPLACE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function load replace "return 1" 2>&1 || true)"
+if [[ "$FUNCTION_LOAD_REPLACE_RESULT" != "ERR FUNCTION LOAD is not supported by redis-uya partial" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected FUNCTION LOAD REPLACE partial error, got '$FUNCTION_LOAD_REPLACE_RESULT'" >&2
     exit 1
 fi
 

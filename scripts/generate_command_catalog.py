@@ -296,6 +296,7 @@ PARTIAL_NAMES = {
     "auth",
     "bgrewriteaof",
     "bgsave",
+    "blmove",
     "blpop",
     "brpop",
     "brpoplpush",

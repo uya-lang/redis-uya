@@ -138,6 +138,12 @@ def run_smoke() -> None:
                 raise AssertionError("BRPOP immediate result mismatch")
             if send_command(sock, b"BRPOPLPUSH", b"blk", b"dst", b"1") is not None:
                 raise AssertionError("BRPOPLPUSH on missing source should be null")
+            if send_command(sock, b"RPUSH", b"mov", b"a", b"b") != 2:
+                raise AssertionError("RPUSH mov failed")
+            if send_command(sock, b"BLMOVE", b"mov", b"dst", b"RIGHT", b"LEFT", b"1") != b"b":
+                raise AssertionError("BLMOVE immediate result mismatch")
+            if send_command(sock, b"LRANGE", b"dst", b"0", b"-1") != [b"b"]:
+                raise AssertionError("BLMOVE destination mismatch")
 
         with connect_with_retry(port, time.monotonic() + 5.0) as blocked_sock, connect_with_retry(port, time.monotonic() + 5.0) as wake_sock:
             send_only(blocked_sock, b"BLPOP", b"miss", b"wait", b"0")
@@ -169,6 +175,18 @@ def run_smoke() -> None:
             if moved != [b"move-me"]:
                 raise AssertionError(f"unexpected movedst contents: {moved!r}")
 
+        with connect_with_retry(port, time.monotonic() + 5.0) as blocked_sock, connect_with_retry(port, time.monotonic() + 5.0) as wake_sock:
+            send_only(blocked_sock, b"BLMOVE", b"movesrc2", b"movedst2", b"LEFT", b"RIGHT", b"0")
+            time.sleep(0.1)
+            if send_command(wake_sock, b"LPUSH", b"movesrc2", b"move-left") != 1:
+                raise AssertionError("LPUSH move-left failed")
+            blocked_reply = read_resp(blocked_sock)
+            if blocked_reply != b"move-left":
+                raise AssertionError(f"unexpected BLMOVE unblock reply: {blocked_reply!r}")
+            moved = send_command(wake_sock, b"LRANGE", b"movedst2", b"0", b"-1")
+            if moved != [b"move-left"]:
+                raise AssertionError(f"unexpected movedst2 contents: {moved!r}")
+
         with connect_with_retry(port, time.monotonic() + 5.0) as timeout_sock:
             started = time.monotonic()
             send_only(timeout_sock, b"BLPOP", b"timeout-key", b"0.2")
@@ -178,6 +196,16 @@ def run_smoke() -> None:
                 raise AssertionError(f"BLPOP timeout should return null array, got {timeout_reply!r}")
             if elapsed < 0.15:
                 raise AssertionError(f"BLPOP timeout returned too early: {elapsed:.3f}s")
+
+        with connect_with_retry(port, time.monotonic() + 5.0) as timeout_sock:
+            started = time.monotonic()
+            send_only(timeout_sock, b"BLMOVE", b"timeout-src", b"timeout-dst", b"LEFT", b"RIGHT", b"0.2")
+            timeout_reply = read_resp(timeout_sock)
+            elapsed = time.monotonic() - started
+            if timeout_reply is not None:
+                raise AssertionError(f"BLMOVE timeout should return null bulk, got {timeout_reply!r}")
+            if elapsed < 0.15:
+                raise AssertionError(f"BLMOVE timeout returned too early: {elapsed:.3f}s")
     finally:
         stop_process(proc)
         aof_path.unlink(missing_ok=True)

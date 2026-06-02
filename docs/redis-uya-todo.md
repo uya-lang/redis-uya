@@ -485,7 +485,7 @@
 
 ### U3. 先补 Redis Open Source 核心，而不是先扩模块
 
-- [x] Blocking list / zset：已补 `BLPOP`、`BRPOP`、`BRPOPLPUSH`、`BZPOPMIN`、`BZPOPMAX`、`BZMPOP`
+- [x] Blocking list / zset：已补 `BLPOP`、`BRPOP`、`BRPOPLPUSH`、`BLMOVE`、`BZPOPMIN`、`BZPOPMAX`、`BZMPOP`
 - [x] 常用 list / zset 缺口：已补 `LMOVE`、`LMPOP`、`RPOPLPUSH`、`ZRANK`、`ZREVRANK`、`ZSCORE`、`ZMSCORE`、`ZPOPMIN`、`ZPOPMAX`
 - [x] 常用 bitmap / bitfield：已补 `SETBIT`、`GETBIT`、`BITCOUNT`、`BITPOS`、`BITOP`、`BITFIELD`、`BITFIELD_RO`
 - [x] 常用 HLL / GEO / Key：已补 `PFADD`、`PFCOUNT`、`PFMERGE`（exact set-backed partial），以及 `GEOADD`、`GEODIST`、`GEOHASH`、`GEOPOS`、`GEOSEARCH`、`GEOSEARCHSTORE`、`GEORADIUS`、`GEORADIUS_RO`、`GEORADIUSBYMEMBER`、`GEORADIUSBYMEMBER_RO`（exact zset-backed partial；`GEOSEARCHSTORE STOREDIST` 当前写入整数距离 score），`COPY`（当前单 DB 深拷贝 partial，支持 `REPLACE`、`DB 0` 与 TTL 保留），`RESTORE-ASKING`（复用 `RESTORE` 的单 DB RDB payload 写入 partial）

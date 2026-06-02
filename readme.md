@@ -56,7 +56,7 @@
 - Hash 命令子集：`HSET`、`HGET`、`HDEL`、`HEXISTS`、`HLEN`、`HMGET`、`HSETNX`、`HSTRLEN`
 - List 最小对象：基于双向链表的最小 list value 容器
 - List 命令子集：`LPUSH`、`LPOP`、`LRANGE`
-- Blocking list/zset 第一批：`BLPOP`、`BRPOP`、`BRPOPLPUSH`、`BZPOPMIN`、`BZPOPMAX`、`BZMPOP` 已支持立即命中、server-side block/unblock、超时返回与 AOF replay
+- Blocking list/zset 第一批：`BLPOP`、`BRPOP`、`BRPOPLPUSH`、`BLMOVE`、`BZPOPMIN`、`BZPOPMAX`、`BZMPOP` 已支持立即命中、server-side block/unblock、超时返回与 AOF replay
 - Set 最小对象：基于项目内 `Dict` 的最小 set value 容器
 - Set 命令子集：`SADD`、`SCARD`、`SISMEMBER`、`SMISMEMBER`、`SMEMBERS`、`SREM`、`SMOVE`、`SSCAN`
 - ZSet 最小对象：基于项目内 `Dict` 的最小 zset value 容器，支持按 score 排序范围读取

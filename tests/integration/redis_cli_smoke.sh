@@ -1125,15 +1125,21 @@ if [[ "$LMOVE_SAME_RESULT" != "a" ]]; then
     exit 1
 fi
 
+BLMOVE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" blmove src dst RIGHT RIGHT 1)"
+if [[ "$BLMOVE_RESULT" != "b" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected BLMOVE b, got '$BLMOVE_RESULT'" >&2
+    exit 1
+fi
+
 SRC_RANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lrange src 0 -1)"
-if [[ "$SRC_RANGE_RESULT" != $'b' ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected src range b, got '$SRC_RANGE_RESULT'" >&2
+if [[ -n "$SRC_RANGE_RESULT" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected empty src range, got '$SRC_RANGE_RESULT'" >&2
     exit 1
 fi
 
 DST_RANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lrange dst 0 -1)"
-if [[ "$DST_RANGE_RESULT" != $'a\nc' ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected dst range a/c, got '$DST_RANGE_RESULT'" >&2
+if [[ "$DST_RANGE_RESULT" != $'a\nc\nb' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected dst range a/c/b, got '$DST_RANGE_RESULT'" >&2
     exit 1
 fi
 

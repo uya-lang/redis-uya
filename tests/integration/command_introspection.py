@@ -572,21 +572,23 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"BZMPOP missing from COMMAND INFO: {blocking_zset_info!r}")
 
-            list_move_info = send_command(sock, b"COMMAND", b"INFO", b"LMOVE", b"RPOPLPUSH", b"LMPOP")
+            list_move_info = send_command(sock, b"COMMAND", b"INFO", b"LMOVE", b"BLMOVE", b"RPOPLPUSH", b"LMPOP")
             if (
                 not isinstance(list_move_info, list)
-                or len(list_move_info) != 3
+                or len(list_move_info) != 4
                 or not isinstance(list_move_info[0], list)
                 or list_move_info[0][0] != b"lmove"
                 or not isinstance(list_move_info[1], list)
-                or list_move_info[1][0] != b"rpoplpush"
+                or list_move_info[1][0] != b"blmove"
                 or not isinstance(list_move_info[2], list)
-                or list_move_info[2][0] != b"lmpop"
+                or list_move_info[2][0] != b"rpoplpush"
+                or not isinstance(list_move_info[3], list)
+                or list_move_info[3][0] != b"lmpop"
             ):
                 raise AssertionError(f"list move commands missing from COMMAND INFO: {list_move_info!r}")
 
-            unsupported_info = send_command(sock, b"COMMAND", b"INFO", b"MODULE|LOAD", b"BLMOVE", b"CLUSTER|RESET")
-            if unsupported_info != [None, None, None]:
+            unsupported_info = send_command(sock, b"COMMAND", b"INFO", b"MODULE|LOAD", b"CLUSTER|RESET")
+            if unsupported_info != [None, None]:
                 raise AssertionError(f"unsupported COMMAND INFO entries must be null: {unsupported_info!r}")
 
             client_kill_info = send_command(sock, b"COMMAND", b"INFO", b"CLIENT|KILL", b"CLIENT|UNBLOCK", b"CLIENT|REPLY", b"CLIENT|CACHING", b"CLIENT|NO-EVICT", b"CLIENT|NO-TOUCH")
@@ -614,7 +616,7 @@ def run_smoke() -> None:
             if not isinstance(docs[1], list) or b"summary" not in docs[1]:
                 raise AssertionError(f"missing COMMAND DOCS summary: {docs!r}")
 
-            unsupported_docs = send_command(sock, b"COMMAND", b"DOCS", b"MODULE|LOAD", b"BLMOVE", b"CLUSTER|RESET")
+            unsupported_docs = send_command(sock, b"COMMAND", b"DOCS", b"MODULE|LOAD", b"CLUSTER|RESET")
             if unsupported_docs != []:
                 raise AssertionError(f"unsupported COMMAND DOCS entries should be omitted: {unsupported_docs!r}")
 
@@ -644,6 +646,7 @@ def run_smoke() -> None:
                 or b"acl|users" not in docs_all_resp2
                 or b"acl|whoami" not in docs_all_resp2
                 or b"function|load" not in docs_all_resp2
+                or b"blmove" not in docs_all_resp2
                 or b"copy" not in docs_all_resp2
                 or b"restore-asking" not in docs_all_resp2
                 or b"memory|malloc-stats" not in docs_all_resp2
@@ -653,7 +656,7 @@ def run_smoke() -> None:
                 or b"module|list" not in docs_all_resp2
             ):
                 raise AssertionError(f"unexpected COMMAND DOCS all RESP2 payload: {docs_all_resp2!r}")
-            if b"module|load" in docs_all_resp2 or b"blmove" in docs_all_resp2 or b"cluster|reset" in docs_all_resp2:
+            if b"module|load" in docs_all_resp2 or b"cluster|reset" in docs_all_resp2:
                 raise AssertionError(f"unsupported commands leaked into COMMAND DOCS all RESP2: {docs_all_resp2!r}")
 
             listed_client = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"CLIENT*")
@@ -673,7 +676,7 @@ def run_smoke() -> None:
             if (
                 not isinstance(listed_blocking, list)
                 or b"blpop" not in listed_blocking
-                or b"blmove" in listed_blocking
+                or b"blmove" not in listed_blocking
                 or b"blmpop" in listed_blocking
             ):
                 raise AssertionError(f"unexpected blocking COMMAND LIST result: {listed_blocking!r}")
@@ -908,6 +911,7 @@ def run_smoke() -> None:
                 or not isinstance(docs_all.get(b"acl|users"), dict)
                 or not isinstance(docs_all.get(b"acl|whoami"), dict)
                 or not isinstance(docs_all.get(b"function|load"), dict)
+                or not isinstance(docs_all.get(b"blmove"), dict)
                 or not isinstance(docs_all.get(b"copy"), dict)
                 or not isinstance(docs_all.get(b"restore-asking"), dict)
                 or not isinstance(docs_all.get(b"memory|malloc-stats"), dict)
@@ -917,7 +921,7 @@ def run_smoke() -> None:
                 or not isinstance(docs_all.get(b"module|list"), dict)
             ):
                 raise AssertionError(f"unexpected COMMAND DOCS all RESP3 payload: {docs_all!r}")
-            if b"module|load" in docs_all or b"blmove" in docs_all or b"cluster|reset" in docs_all:
+            if b"module|load" in docs_all or b"cluster|reset" in docs_all:
                 raise AssertionError(f"unsupported commands leaked into COMMAND DOCS all RESP3: {docs_all!r}")
 
             getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"SORT", b"mylist", b"ALPHA", b"STORE", b"out")
@@ -927,6 +931,10 @@ def run_smoke() -> None:
             copy_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"COPY", b"src", b"dst")
             if copy_getkeys != [b"src", b"dst"]:
                 raise AssertionError(f"unexpected COMMAND GETKEYS COPY result: {copy_getkeys!r}")
+
+            blmove_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"BLMOVE", b"src", b"dst", b"LEFT", b"RIGHT", b"1")
+            if blmove_getkeys != [b"src", b"dst"]:
+                raise AssertionError(f"unexpected COMMAND GETKEYS BLMOVE result: {blmove_getkeys!r}")
 
             restore_asking_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"RESTORE-ASKING", b"dst", b"0", b"payload")
             if restore_asking_getkeys != [b"dst"]:
@@ -950,6 +958,20 @@ def run_smoke() -> None:
                 or b"update" not in copy_getkeysandflags[1][1]
             ):
                 raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS COPY keys: {copy_getkeysandflags!r}")
+
+            blmove_getkeysandflags = send_command(sock, b"COMMAND", b"GETKEYSANDFLAGS", b"BLMOVE", b"src", b"dst", b"LEFT", b"RIGHT", b"1")
+            if not isinstance(blmove_getkeysandflags, list) or len(blmove_getkeysandflags) != 2:
+                raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS BLMOVE shape: {blmove_getkeysandflags!r}")
+            if (
+                blmove_getkeysandflags[0][0] != b"src"
+                or b"RW" not in blmove_getkeysandflags[0][1]
+                or b"access" not in blmove_getkeysandflags[0][1]
+                or b"delete" not in blmove_getkeysandflags[0][1]
+                or blmove_getkeysandflags[1][0] != b"dst"
+                or b"RW" not in blmove_getkeysandflags[1][1]
+                or b"insert" not in blmove_getkeysandflags[1][1]
+            ):
+                raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS BLMOVE keys: {blmove_getkeysandflags!r}")
 
             memory_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"MEMORY", b"USAGE", b"mkey")
             if memory_getkeys != [b"mkey"]:

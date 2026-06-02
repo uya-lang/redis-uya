@@ -633,6 +633,25 @@ BRPOPLPUSH source destination timeout
 - 当前支持 source 缺失时阻塞、source 就绪后从尾部弹出并推入 destination 头部
 - AOF replay 复用相同命令序列，要求前序状态已由同一 AOF 正确重建
 
+### `BLMOVE`
+
+格式：
+
+```text
+BLMOVE source destination LEFT|RIGHT LEFT|RIGHT timeout
+```
+
+返回：
+
+- 命中时返回被搬移元素，Bulk String
+- 超时返回 Null Bulk
+
+说明：
+
+- 当前支持 source 缺失时阻塞、source 就绪后按方向从 source 弹出并按方向推入 destination
+- 语义复用 `LMOVE` 的方向、同 key 搬移、错类型和目标列表创建逻辑
+- AOF replay 复用相同命令序列，要求前序状态已由同一 AOF 正确重建
+
 ### `LINDEX`
 
 格式：

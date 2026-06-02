@@ -718,6 +718,18 @@ class RedisPySubsetClient:
         assert result is None or isinstance(result, bytes)
         return result
 
+    def blmove(self, source: str, destination: str, wherefrom: str, whereto: str, timeout: float) -> bytes | None:
+        result = self._request(
+            b"BLMOVE",
+            source.encode(),
+            destination.encode(),
+            wherefrom.encode(),
+            whereto.encode(),
+            str(timeout).encode(),
+        )
+        assert result is None or isinstance(result, bytes)
+        return result
+
     def rpoplpush(self, source: str, destination: str) -> bytes | None:
         result = self._request(b"RPOPLPUSH", source.encode(), destination.encode())
         assert result is None or isinstance(result, bytes)
@@ -1511,9 +1523,10 @@ def run_smoke() -> None:
             assert client.rpoplpush("src", "dst") == b"c"
             assert client.lmove("src", "dst", "LEFT", "RIGHT") == b"a"
             assert client.lmove("dst", "dst", "RIGHT", "LEFT") == b"a"
-            assert client.lrange("src", 0, -1) == [b"b"]
-            assert client.lrange("dst", 0, -1) == [b"a", b"c"]
-            assert client.delete("src", "dst") == 2
+            assert client.blmove("src", "dst", "RIGHT", "RIGHT", 1) == b"b"
+            assert client.lrange("src", 0, -1) == []
+            assert client.lrange("dst", 0, -1) == [b"a", b"c", b"b"]
+            assert client.delete("src", "dst") == 1
             assert client.rpush("lmpop", "a", "b", "c") == 3
             assert client.lmpop("LEFT", "missing", "lmpop", count=2) == [b"lmpop", [b"a", b"b"]]
             assert client.lmpop("RIGHT", "lmpop") == [b"lmpop", [b"c"]]

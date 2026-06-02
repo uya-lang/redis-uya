@@ -5652,6 +5652,46 @@ fn command_executor_lmove(engine: &Engine, command: &Command, now_ms: u64) Comma
     return command_executor_list_move_internal(engine, source, destination, now_ms, pop_left, push_left);
 }
 
+fn command_executor_blmove(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 6 {
+        return command_executor_wrong_arity();
+    }
+    const source: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const destination: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    const wherefrom: &[byte] = command_executor_arg(command, 3) catch {
+        return command_executor_wrong_arity();
+    };
+    const whereto: &[byte] = command_executor_arg(command, 4) catch {
+        return command_executor_wrong_arity();
+    };
+    const timeout_data: &[byte] = command_executor_arg(command, 5) catch {
+        return command_executor_wrong_arity();
+    };
+    _ = command_executor_validate_blocking_timeout(timeout_data) catch {
+        return command_executor_error(&"ERR value is not a valid float"[0: 30]);
+    };
+
+    var pop_left: bool = false;
+    if command_executor_keyword_eq(wherefrom, &"LEFT"[0: 4]) {
+        pop_left = true;
+    } else if !command_executor_keyword_eq(wherefrom, &"RIGHT"[0: 5]) {
+        return command_executor_syntax_error();
+    }
+
+    var push_left: bool = false;
+    if command_executor_keyword_eq(whereto, &"LEFT"[0: 4]) {
+        push_left = true;
+    } else if !command_executor_keyword_eq(whereto, &"RIGHT"[0: 5]) {
+        return command_executor_syntax_error();
+    }
+
+    return command_executor_list_move_internal(engine, source, destination, now_ms, pop_left, push_left);
+}
+
 fn command_executor_rpoplpush(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
     if command.argc != 3 {
         return command_executor_wrong_arity();
@@ -13855,7 +13895,10 @@ fn command_executor_command_key_flags(info: &CommandInfo, key_ordinal: usize) &[
         }
         return &"RO|access"[0: 9];
     }
-    if info.cmd_type == CommandType.command_lmove || info.cmd_type == CommandType.command_rpoplpush || info.cmd_type == CommandType.command_brpoplpush {
+    if info.cmd_type == CommandType.command_lmove ||
+        info.cmd_type == CommandType.command_blmove ||
+        info.cmd_type == CommandType.command_rpoplpush ||
+        info.cmd_type == CommandType.command_brpoplpush {
         if key_ordinal == 0 {
             return &"RW|access|delete"[0: 16];
         }
@@ -15012,6 +15055,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_lmove {
         return command_executor_lmove(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_blmove {
+        return command_executor_blmove(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_lmpop {
         return command_executor_lmpop(engine, command, now_ms);

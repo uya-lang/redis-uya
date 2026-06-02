@@ -854,6 +854,15 @@ export fn test_connection_process_blocking_list_commands() !void {
     const brpop_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$5\r\nBRPOP\r\n$4\r\nmiss\r\n$3\r\nblk\r\n$1\r\n1\r\n"[0: 44], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: brpop_result.response_len], &"*2\r\n$3\r\nblk\r\n$1\r\nb\r\n"[0: 22]));
 
+    const seed_move_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$5\r\nRPUSH\r\n$3\r\nmov\r\n$1\r\na\r\n$1\r\nb\r\n"[0: 38], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: seed_move_result.response_len], &":2\r\n"[0: 4]));
+
+    const blmove_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*6\r\n$6\r\nBLMOVE\r\n$3\r\nmov\r\n$3\r\ndst\r\n$5\r\nRIGHT\r\n$4\r\nLEFT\r\n$1\r\n1\r\n"[0: 62], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: blmove_result.response_len], &"$1\r\nb\r\n"[0: 7]));
+
+    const dst_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$6\r\nLRANGE\r\n$3\r\ndst\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 40], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: dst_result.response_len], &"*1\r\n$1\r\nb\r\n"[0: 11]));
+
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);
 }

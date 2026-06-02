@@ -674,6 +674,7 @@ fn connection_blocking_clear(tx: &ConnectionTransaction) void {
 fn connection_command_is_blocking_pop(cmd_type: CommandType) bool {
     return cmd_type == CommandType.command_blpop ||
         cmd_type == CommandType.command_brpop ||
+        cmd_type == CommandType.command_blmove ||
         cmd_type == CommandType.command_brpoplpush ||
         cmd_type == CommandType.command_bzpopmax ||
         cmd_type == CommandType.command_bzpopmin ||
@@ -704,7 +705,8 @@ fn connection_should_block_pop_command(engine: &Engine, command: &Command, now_m
         return true;
     }
 
-    if command.info.cmd_type == CommandType.command_brpoplpush {
+    if command.info.cmd_type == CommandType.command_blmove ||
+        command.info.cmd_type == CommandType.command_brpoplpush {
         const source: &[byte] = command_arg_data(command, 1) catch {
             return false;
         };
@@ -3188,7 +3190,8 @@ fn connection_should_append_aof(command: &Command, reply: &CommandReply) bool {
     if command.info.cmd_type == CommandType.command_blpop || command.info.cmd_type == CommandType.command_brpop {
         return reply.typ == CommandReplyType.reply_array_bulk || reply.typ == CommandReplyType.reply_raw_bytes;
     }
-    if command.info.cmd_type == CommandType.command_brpoplpush {
+    if command.info.cmd_type == CommandType.command_blmove ||
+        command.info.cmd_type == CommandType.command_brpoplpush {
         return reply.typ == CommandReplyType.reply_bulk_string;
     }
     if command.info.cmd_type == CommandType.command_bzpopmax || command.info.cmd_type == CommandType.command_bzpopmin {
@@ -3545,7 +3548,8 @@ export fn connection_encode_client_unblock_timeout_reply(
         const fallback_reply_2: CommandReply = connection_make_reply(CommandReplyType.reply_null_array, connection_reply_empty_slice(), 0);
         return connection_encode_reply_with_protocol(&fallback_reply_2, out, out_cap, tx.protocol_version);
     };
-    if command.info.cmd_type == CommandType.command_brpoplpush {
+    if command.info.cmd_type == CommandType.command_blmove ||
+        command.info.cmd_type == CommandType.command_brpoplpush {
         const bulk_reply: CommandReply = connection_make_reply(CommandReplyType.reply_null_bulk, connection_reply_empty_slice(), 0);
         return connection_encode_reply_with_protocol(&bulk_reply, out, out_cap, tx.protocol_version);
     }

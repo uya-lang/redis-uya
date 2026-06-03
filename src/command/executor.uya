@@ -11433,6 +11433,106 @@ fn command_executor_zrange(engine: &Engine, command: &Command, now_ms: u64) Comm
     return reply;
 }
 
+fn command_executor_zrevrange(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 4 && command.argc != 5 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const start_data: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    const stop_data: &[byte] = command_executor_arg(command, 3) catch {
+        return command_executor_wrong_arity();
+    };
+    const start: i64 = command_executor_parse_i64(start_data) catch {
+        return command_executor_invalid_integer();
+    };
+    const stop: i64 = command_executor_parse_i64(stop_data) catch {
+        return command_executor_invalid_integer();
+    };
+
+    var with_scores: bool = false;
+    if command.argc == 5 {
+        const option: &[byte] = command_executor_arg(command, 4) catch {
+            return command_executor_wrong_arity();
+        };
+        if !command_executor_keyword_eq(option, &"WITHSCORES"[0: 10]) {
+            return command_executor_syntax_error();
+        }
+        with_scores = true;
+    }
+
+    const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+        return command_executor_array_bulk(null as &ListNode, 0);
+    };
+    if obj.obj_type != ObjectType.object_zset {
+        return command_executor_wrongtype();
+    }
+
+    const sorted: &RedisObject = zset_object_range_reply(obj, 0, -1) catch |err| {
+        if err == error.AllocOutOfMemory {
+            return command_executor_oom();
+        }
+        return command_executor_wrongtype();
+    };
+    const reversed: &RedisObject = create_list_object() catch {
+        object_free(sorted);
+        return command_executor_oom();
+    };
+    var node: &ListNode = sorted.list_tail;
+    while node != null {
+        const member: &[byte] = node.value.value.buf[0: node.value.value.len];
+        _ = list_object_push_tail(reversed, member) catch {
+            object_free(sorted);
+            object_free(reversed);
+            return command_executor_oom();
+        };
+        node = node.prev;
+    }
+    object_free(sorted);
+
+    const view: ListRangeView = list_object_range(reversed, start, stop) catch {
+        object_free(reversed);
+        return command_executor_wrongtype();
+    };
+    if !with_scores {
+        var reply: CommandReply = command_executor_array_bulk(view.head, view.count);
+        reply.owned_object = reversed;
+        return reply;
+    }
+
+    const scored: &RedisObject = create_list_object() catch {
+        object_free(reversed);
+        return command_executor_oom();
+    };
+    var current: &ListNode = view.head;
+    var emitted: usize = 0;
+    while current != null && emitted < view.count {
+        const member_scored: &[byte] = current.value.value.buf[0: current.value.value.len];
+        const score: i64 = zset_object_get_score(obj, member_scored) catch {
+            object_free(reversed);
+            object_free(scored);
+            return command_executor_wrongtype();
+        };
+        _ = list_object_push_tail(scored, member_scored) catch {
+            object_free(reversed);
+            object_free(scored);
+            return command_executor_oom();
+        };
+        _ = command_executor_list_push_i64(scored, score) catch {
+            object_free(reversed);
+            object_free(scored);
+            return command_executor_oom();
+        };
+        current = current.next;
+        emitted = emitted + 1;
+    }
+    object_free(reversed);
+    return command_executor_owned_array(scored);
+}
+
 fn command_executor_zrem(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
     if command.argc < 3 {
         return command_executor_wrong_arity();
@@ -15528,6 +15628,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_zrange {
         return command_executor_zrange(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_zrevrange {
+        return command_executor_zrevrange(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_zrem {
         return command_executor_zrem(engine, command, now_ms);

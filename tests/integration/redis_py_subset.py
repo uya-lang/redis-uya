@@ -837,6 +837,14 @@ class RedisPySubsetClient:
         assert isinstance(result, list)
         return result
 
+    def zrevrange(self, key: str, start: int, stop: int, withscores: bool = False) -> list[bytes]:
+        parts: list[bytes] = [b"ZREVRANGE", key.encode(), str(start).encode(), str(stop).encode()]
+        if withscores:
+            parts.append(b"WITHSCORES")
+        result = self._request(*parts)
+        assert isinstance(result, list)
+        return result
+
     def zrem(self, key: str, *members: str) -> int:
         return int(self._request(b"ZREM", key.encode(), *(member.encode() for member in members)))
 
@@ -1610,6 +1618,8 @@ def run_smoke() -> None:
             assert client.zscore("zset", "missing") is None
             assert client.zmscore("zset", "a", "missing", "b") == [b"4", None, b"2"]
             assert client.zrange("zset", 0, -1) == [b"b", b"a"]
+            assert client.zrevrange("zset", 0, -1) == [b"a", b"b"]
+            assert client.zrevrange("zset", 0, 1, withscores=True) == [b"a", b"4", b"b", b"2"]
             assert client.zrangebyscore("zset", 2, 4) == [b"b", b"a"]
             assert client.zrevrangebyscore("zset", 4, 2) == [b"a", b"b"]
             assert client.zrem("zset", "a") == 1

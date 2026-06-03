@@ -652,6 +652,12 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const zrange_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$6\r\nZRANGE\r\n$4\r\nzset\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 41], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: zrange_result.response_len], &"*2\r\n$1\r\na\r\n$1\r\nb\r\n"[0: 18]));
 
+    const zrevrange_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$9\r\nZREVRANGE\r\n$4\r\nzset\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 44], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: zrevrange_result.response_len], &"*2\r\n$1\r\nb\r\n$1\r\na\r\n"[0: 18]));
+
+    const zrevrange_scores_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$9\r\nZREVRANGE\r\n$4\r\nzset\r\n$1\r\n0\r\n$2\r\n-1\r\n$10\r\nWITHSCORES\r\n"[0: 61], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: zrevrange_scores_result.response_len], &"*4\r\n$1\r\nb\r\n$1\r\n2\r\n$1\r\na\r\n$1\r\n1\r\n"[0: 32]));
+
     const zscore_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$6\r\nZSCORE\r\n$4\r\nzset\r\n$1\r\na\r\n"[0: 33], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: zscore_result.response_len], &"$1\r\n1\r\n"[0: 7]));
 

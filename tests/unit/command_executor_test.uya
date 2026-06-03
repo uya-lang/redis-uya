@@ -4878,6 +4878,38 @@ export fn test_command_zadd_zrem_zrange() !void {
     command_reply_cleanup(&zrange_reply);
     resp_value_free(&zrange_parsed.value);
 
+    var zrevrange_parsed: RespParseResult = try parse_resp2(&"*4\r\n$9\r\nZREVRANGE\r\n$4\r\nzset\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 44]);
+    const zrevrange_command: Command = try command_executor_test_command(&router, &zrevrange_parsed);
+    var zrevrange_reply: CommandReply = command_execute_at(&engine, &zrevrange_command, 1000u64);
+    const zrevrange_len: usize = try connection_encode_reply(&zrevrange_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: zrevrange_len], &"*3\r\n$1\r\nc\r\n$1\r\nb\r\n$1\r\na\r\n"[0: 25]));
+    command_reply_cleanup(&zrevrange_reply);
+    resp_value_free(&zrevrange_parsed.value);
+
+    var zrevrange_window_parsed: RespParseResult = try parse_resp2(&"*4\r\n$9\r\nZREVRANGE\r\n$4\r\nzset\r\n$1\r\n1\r\n$1\r\n2\r\n"[0: 43]);
+    const zrevrange_window_command: Command = try command_executor_test_command(&router, &zrevrange_window_parsed);
+    var zrevrange_window_reply: CommandReply = command_execute_at(&engine, &zrevrange_window_command, 1000u64);
+    const zrevrange_window_len: usize = try connection_encode_reply(&zrevrange_window_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: zrevrange_window_len], &"*2\r\n$1\r\nb\r\n$1\r\na\r\n"[0: 18]));
+    command_reply_cleanup(&zrevrange_window_reply);
+    resp_value_free(&zrevrange_window_parsed.value);
+
+    var zrevrange_scores_parsed: RespParseResult = try parse_resp2(&"*5\r\n$9\r\nZREVRANGE\r\n$4\r\nzset\r\n$1\r\n0\r\n$1\r\n1\r\n$10\r\nWITHSCORES\r\n"[0: 60]);
+    const zrevrange_scores_command: Command = try command_executor_test_command(&router, &zrevrange_scores_parsed);
+    var zrevrange_scores_reply: CommandReply = command_execute_at(&engine, &zrevrange_scores_command, 1000u64);
+    const zrevrange_scores_len: usize = try connection_encode_reply(&zrevrange_scores_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: zrevrange_scores_len], &"*4\r\n$1\r\nc\r\n$1\r\n3\r\n$1\r\nb\r\n$1\r\n2\r\n"[0: 32]));
+    command_reply_cleanup(&zrevrange_scores_reply);
+    resp_value_free(&zrevrange_scores_parsed.value);
+
+    var zrevrange_missing_parsed: RespParseResult = try parse_resp2(&"*4\r\n$9\r\nZREVRANGE\r\n$7\r\nmissing\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 47]);
+    const zrevrange_missing_command: Command = try command_executor_test_command(&router, &zrevrange_missing_parsed);
+    var zrevrange_missing_reply: CommandReply = command_execute_at(&engine, &zrevrange_missing_command, 1000u64);
+    const zrevrange_missing_len: usize = try connection_encode_reply(&zrevrange_missing_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: zrevrange_missing_len], &"*0\r\n"[0: 4]));
+    command_reply_cleanup(&zrevrange_missing_reply);
+    resp_value_free(&zrevrange_missing_parsed.value);
+
     var zadd_update_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nZADD\r\n$4\r\nzset\r\n$1\r\n5\r\n$1\r\na\r\n"[0: 38]);
     const zadd_update_command: Command = try command_executor_test_command(&router, &zadd_update_parsed);
     const zadd_update_reply: CommandReply = command_execute_at(&engine, &zadd_update_command, 1000u64);

@@ -1016,6 +1016,25 @@ ZCOUNT key min max
 - 返回闭区间 `[min, max]` 内的成员个数，Integer
 - 当前项目内 ZSet score 使用整数语义
 
+### `ZREVRANGE`
+
+格式：
+
+```text
+ZREVRANGE key start stop [WITHSCORES]
+```
+
+返回：
+
+- 返回按 score 降序排列后的索引区间成员
+- 带 `WITHSCORES` 时返回 member / score 交错数组
+
+说明：
+
+- 当前支持正负索引、闭区间 `[start, stop]` 和 `WITHSCORES`
+- 当前不支持通过 `ZREVRANGE ... BYSCORE/BYLEX/LIMIT` 复用新版 `ZRANGE` 扩展语法；score 范围请使用 `ZREVRANGEBYSCORE`
+- 当前项目内 ZSet score 使用整数语义
+
 ### `ZRANGEBYSCORE`
 
 格式：

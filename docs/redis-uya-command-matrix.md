@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 152 | 0 | 3 | 64 |
+| Tier A: standalone core | 365 | 259 | 146 | 153 | 0 | 3 | 63 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `159` |
+| `partial` | `160` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `217` |
+| `deferred` | `216` |
 
 ## Group counts
 
@@ -610,7 +610,7 @@
 | `zremrangebylex` | `sorted-set` | `deferred` | `v0.9.1` | `4` | `-` | `no` | `@write, @sortedset, @slow` |
 | `zremrangebyrank` | `sorted-set` | `full` | `-` | `4` | `-` | `no` | `@write, @sortedset, @slow` |
 | `zremrangebyscore` | `sorted-set` | `full` | `-` | `4` | `-` | `no` | `@write, @sortedset, @slow` |
-| `zrevrange` | `sorted-set` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@read, @sortedset, @slow` |
+| `zrevrange` | `sorted-set` | `partial` | `-` | `-4` | `-` | `no` | `@read, @sortedset, @slow` |
 | `zrevrangebylex` | `sorted-set` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@read, @sortedset, @slow` |
 | `zrevrangebyscore` | `sorted-set` | `full` | `-` | `-4` | `-` | `no` | `@read, @sortedset, @slow` |
 | `zrevrank` | `sorted-set` | `full` | `-` | `-3` | `-` | `no` | `@read, @sortedset, @fast` |

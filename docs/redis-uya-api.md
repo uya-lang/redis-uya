@@ -139,7 +139,7 @@ COMMAND DOCS [command-name [command-name ...]]
 - 当前 `COMMAND` 家族与 `docs/redis-uya-command-matrix.md` 共用 `src/command/catalog_generated*` 生成目录
 - 目录基线当前覆盖 Redis 8.6 官方命令页中的 `531` 个官方命令名
 - `COMMAND DOCS` 当前命令名定向查询和无参数全量 docs 查询都可用；全量返回使用当前扩大的连接输出缓冲完成 RESP2/RESP3 大响应发送第一批闭环
-- `COMMAND GETKEYS` 当前支持当前运行时命令表里的 key 提取，覆盖多 key、成对 key、`RENAME` 双 key、`SORT ... STORE` / `BZMPOP` movablekeys 和错误路径
+- `COMMAND GETKEYS` 当前支持当前运行时命令表里的 key 提取，覆盖多 key、成对 key、`RENAME` 双 key、`SORT ... STORE` / `BLMPOP` / `BZMPOP` movablekeys 和错误路径
 - `COMMAND GETKEYSANDFLAGS` 当前支持当前运行时命令表里的 key/flag 提取，覆盖 `RO/OW/RW/RM` 及 `access/update/insert/delete` 基础组合
 
 ### `PING`
@@ -651,6 +651,26 @@ BLMOVE source destination LEFT|RIGHT LEFT|RIGHT timeout
 - 当前支持 source 缺失时阻塞、source 就绪后按方向从 source 弹出并按方向推入 destination
 - 语义复用 `LMOVE` 的方向、同 key 搬移、错类型和目标列表创建逻辑
 - AOF replay 复用相同命令序列，要求前序状态已由同一 AOF 正确重建
+
+### `BLMPOP`
+
+格式：
+
+```text
+BLMPOP timeout numkeys key [key ...] LEFT|RIGHT [COUNT count]
+```
+
+返回：
+
+- 命中时返回两段 RESP Array：`[key, [element1, element2 ...]]`
+- 超时返回 Null Array
+
+说明：
+
+- 当前支持多 key 顺序探测、`LEFT` / `RIGHT` 方向选择、可选 `COUNT` 和秒级整数或浮点 timeout
+- 当前支持 server-side block/unblock，并在命中后删除已弹出的元素；key 被清空时会一并删除
+- 当前 `COMMAND GETKEYS` / `COMMAND GETKEYSANDFLAGS` 已暴露 `BLMPOP` 的 movablekeys 提取结果
+- 弹出语义复用 `LMPOP`，空源在连接层会先进入 blocking 状态，超时后返回 Null Array
 
 ### `LINDEX`
 

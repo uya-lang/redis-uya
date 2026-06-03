@@ -1535,6 +1535,21 @@ export fn test_command_command_getkeys() !void {
     command_reply_cleanup(&getkeys_lmpop_flags_reply);
     resp_value_free(&getkeys_lmpop_flags_parsed.value);
 
+    var getkeys_blmpop_parsed: RespParseResult = try parse_resp2(&"*10\r\n$7\r\nCOMMAND\r\n$7\r\nGETKEYS\r\n$6\r\nBLMPOP\r\n$1\r\n1\r\n$1\r\n2\r\n$1\r\na\r\n$1\r\nb\r\n$4\r\nLEFT\r\n$5\r\nCOUNT\r\n$1\r\n2\r\n"[0: 99]);
+    const getkeys_blmpop_command: Command = try command_executor_test_command(&router, &getkeys_blmpop_parsed);
+    var getkeys_blmpop_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &getkeys_blmpop_command, 1000u64);
+    try assert_true(command_executor_test_slice_eq(getkeys_blmpop_reply.data, &"*2\r\n$1\r\na\r\n$1\r\nb\r\n"[0: 18]));
+    command_reply_cleanup(&getkeys_blmpop_reply);
+    resp_value_free(&getkeys_blmpop_parsed.value);
+
+    var getkeys_blmpop_flags_parsed: RespParseResult = try parse_resp2(&"*10\r\n$7\r\nCOMMAND\r\n$15\r\nGETKEYSANDFLAGS\r\n$6\r\nBLMPOP\r\n$1\r\n1\r\n$1\r\n2\r\n$1\r\na\r\n$1\r\nb\r\n$5\r\nRIGHT\r\n$5\r\nCOUNT\r\n$1\r\n2\r\n"[0: 109]);
+    const getkeys_blmpop_flags_command: Command = try command_executor_test_command(&router, &getkeys_blmpop_flags_parsed);
+    var getkeys_blmpop_flags_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &getkeys_blmpop_flags_command, 1000u64);
+    try assert_true(command_executor_test_contains(getkeys_blmpop_flags_reply.data, &"$1\r\na\r\n*3\r\n$2\r\nRW\r\n$6\r\naccess\r\n$6\r\ndelete\r\n"[0: 43]));
+    try assert_true(command_executor_test_contains(getkeys_blmpop_flags_reply.data, &"$1\r\nb\r\n*3\r\n$2\r\nRW\r\n$6\r\naccess\r\n$6\r\ndelete\r\n"[0: 43]));
+    command_reply_cleanup(&getkeys_blmpop_flags_reply);
+    resp_value_free(&getkeys_blmpop_flags_parsed.value);
+
     var getkeys_bzmpop_parsed: RespParseResult = try parse_resp2(&"*10\r\n$7\r\nCOMMAND\r\n$7\r\nGETKEYS\r\n$6\r\nBZMPOP\r\n$1\r\n1\r\n$1\r\n2\r\n$1\r\na\r\n$1\r\nb\r\n$3\r\nMIN\r\n$5\r\nCOUNT\r\n$1\r\n2\r\n"[0: 104]);
     const getkeys_bzmpop_command: Command = try command_executor_test_command(&router, &getkeys_bzmpop_parsed);
     var getkeys_bzmpop_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &getkeys_bzmpop_command, 1000u64);
@@ -4233,6 +4248,81 @@ export fn test_command_lmove_rpoplpush() !void {
     try assert_eq_i32(lmpop_bad_count_reply.typ as i32, CommandReplyType.reply_error as i32);
     try assert_true(command_executor_test_slice_eq(lmpop_bad_count_reply.data, &"ERR count should be greater than 0"[0: 34]));
     resp_value_free(&lmpop_bad_count_parsed.value);
+
+    var rpush_blmpop_parsed: RespParseResult = try parse_resp2(&"*5\r\n$5\r\nRPUSH\r\n$6\r\nblmpop\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\nc\r\n"[0: 48]);
+    const rpush_blmpop_command: Command = try command_executor_test_command(&router, &rpush_blmpop_parsed);
+    _ = command_execute_at(&engine, &rpush_blmpop_command, 1000u64);
+    resp_value_free(&rpush_blmpop_parsed.value);
+
+    var blmpop_parsed: RespParseResult = try parse_resp2(&"*8\r\n$6\r\nBLMPOP\r\n$1\r\n1\r\n$1\r\n2\r\n$4\r\nmiss\r\n$6\r\nblmpop\r\n$4\r\nLEFT\r\n$5\r\nCOUNT\r\n$1\r\n2\r\n"[0: 80]);
+    const blmpop_command: Command = try command_executor_test_command(&router, &blmpop_parsed);
+    var blmpop_reply: CommandReply = command_execute_at(&engine, &blmpop_command, 1000u64);
+    try assert_eq_i32(blmpop_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    try assert_true(command_executor_test_slice_eq(blmpop_reply.data, &"*2\r\n$6\r\nblmpop\r\n*2\r\n$1\r\na\r\n$1\r\nb\r\n"[0: 34]));
+    command_reply_cleanup(&blmpop_reply);
+    resp_value_free(&blmpop_parsed.value);
+
+    var lrange_blmpop_after_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nLRANGE\r\n$6\r\nblmpop\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 43]);
+    const lrange_blmpop_after_command: Command = try command_executor_test_command(&router, &lrange_blmpop_after_parsed);
+    var lrange_blmpop_after_reply: CommandReply = command_execute_at(&engine, &lrange_blmpop_after_command, 1000u64);
+    const lrange_blmpop_after_len: usize = try connection_encode_reply(&lrange_blmpop_after_reply, &out[0], 512);
+    try assert_true(command_executor_test_slice_eq(out[0: lrange_blmpop_after_len], &"*1\r\n$1\r\nc\r\n"[0: 11]));
+    command_reply_cleanup(&lrange_blmpop_after_reply);
+    resp_value_free(&lrange_blmpop_after_parsed.value);
+
+    var blmpop_right_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nBLMPOP\r\n$1\r\n1\r\n$1\r\n1\r\n$6\r\nblmpop\r\n$5\r\nRIGHT\r\n"[0: 53]);
+    const blmpop_right_command: Command = try command_executor_test_command(&router, &blmpop_right_parsed);
+    var blmpop_right_reply: CommandReply = command_execute_at(&engine, &blmpop_right_command, 1000u64);
+    try assert_eq_i32(blmpop_right_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    try assert_true(command_executor_test_slice_eq(blmpop_right_reply.data, &"*2\r\n$6\r\nblmpop\r\n*1\r\n$1\r\nc\r\n"[0: 27]));
+    command_reply_cleanup(&blmpop_right_reply);
+    resp_value_free(&blmpop_right_parsed.value);
+
+    var blmpop_missing_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nBLMPOP\r\n$3\r\n0.1\r\n$1\r\n1\r\n$6\r\nblmpop\r\n$4\r\nLEFT\r\n"[0: 54]);
+    const blmpop_missing_command: Command = try command_executor_test_command(&router, &blmpop_missing_parsed);
+    const blmpop_missing_reply: CommandReply = command_execute_at(&engine, &blmpop_missing_command, 1000u64);
+    try assert_eq_i32(blmpop_missing_reply.typ as i32, CommandReplyType.reply_null_array as i32);
+    resp_value_free(&blmpop_missing_parsed.value);
+
+    var set_blmpop_bad_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$6\r\nbadblm\r\n$1\r\nx\r\n"[0: 32]);
+    const set_blmpop_bad_command: Command = try command_executor_test_command(&router, &set_blmpop_bad_parsed);
+    _ = command_execute_at(&engine, &set_blmpop_bad_command, 1000u64);
+    resp_value_free(&set_blmpop_bad_parsed.value);
+
+    var blmpop_wrongtype_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nBLMPOP\r\n$1\r\n1\r\n$1\r\n1\r\n$6\r\nbadblm\r\n$4\r\nLEFT\r\n"[0: 52]);
+    const blmpop_wrongtype_command: Command = try command_executor_test_command(&router, &blmpop_wrongtype_parsed);
+    const blmpop_wrongtype_reply: CommandReply = command_execute_at(&engine, &blmpop_wrongtype_command, 1000u64);
+    try assert_eq_i32(blmpop_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(blmpop_wrongtype_reply.data, &"WRONGTYPE Operation against a key holding the wrong kind of value"[0: 65]));
+    resp_value_free(&blmpop_wrongtype_parsed.value);
+
+    var blmpop_bad_count_parsed: RespParseResult = try parse_resp2(&"*7\r\n$6\r\nBLMPOP\r\n$1\r\n1\r\n$1\r\n1\r\n$1\r\na\r\n$4\r\nLEFT\r\n$5\r\nCOUNT\r\n$1\r\n0\r\n"[0: 65]);
+    const blmpop_bad_count_command: Command = try command_executor_test_command(&router, &blmpop_bad_count_parsed);
+    const blmpop_bad_count_reply: CommandReply = command_execute_at(&engine, &blmpop_bad_count_command, 1000u64);
+    try assert_eq_i32(blmpop_bad_count_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(blmpop_bad_count_reply.data, &"ERR count should be greater than 0"[0: 34]));
+    resp_value_free(&blmpop_bad_count_parsed.value);
+
+    var blmpop_bad_timeout_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nBLMPOP\r\n$2\r\n-1\r\n$1\r\n1\r\n$1\r\na\r\n$4\r\nLEFT\r\n"[0: 48]);
+    const blmpop_bad_timeout_command: Command = try command_executor_test_command(&router, &blmpop_bad_timeout_parsed);
+    const blmpop_bad_timeout_reply: CommandReply = command_execute_at(&engine, &blmpop_bad_timeout_command, 1000u64);
+    try assert_eq_i32(blmpop_bad_timeout_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(blmpop_bad_timeout_reply.data, &"ERR value is not a valid float"[0: 30]));
+    resp_value_free(&blmpop_bad_timeout_parsed.value);
+
+    var blmpop_bad_numkeys_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nBLMPOP\r\n$1\r\n1\r\n$1\r\n0\r\n$1\r\na\r\n$4\r\nLEFT\r\n"[0: 47]);
+    const blmpop_bad_numkeys_command: Command = try command_executor_test_command(&router, &blmpop_bad_numkeys_parsed);
+    const blmpop_bad_numkeys_reply: CommandReply = command_execute_at(&engine, &blmpop_bad_numkeys_command, 1000u64);
+    try assert_eq_i32(blmpop_bad_numkeys_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(blmpop_bad_numkeys_reply.data, &"ERR numkeys should be greater than 0"[0: 36]));
+    resp_value_free(&blmpop_bad_numkeys_parsed.value);
+
+    var blmpop_syntax_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nBLMPOP\r\n$1\r\n1\r\n$1\r\n1\r\n$1\r\na\r\n$2\r\nUP\r\n"[0: 45]);
+    const blmpop_syntax_command: Command = try command_executor_test_command(&router, &blmpop_syntax_parsed);
+    const blmpop_syntax_reply: CommandReply = command_execute_at(&engine, &blmpop_syntax_command, 1000u64);
+    try assert_eq_i32(blmpop_syntax_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(blmpop_syntax_reply.data, &"ERR syntax error"[0: 16]));
+    resp_value_free(&blmpop_syntax_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

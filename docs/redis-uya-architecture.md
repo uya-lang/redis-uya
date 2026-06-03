@@ -104,7 +104,7 @@ server open
 - 默认关注 `EPOLLIN`
 - 当写回遇到 `EAGAIN` 时，保留剩余输出并切换到 `EPOLLOUT`
 - 输出全部发完后恢复到 `EPOLLIN`
-- `BLPOP` / `BRPOP` / `BRPOPLPUSH` / `BZPOPMIN` / `BZPOPMAX` / `BZMPOP` 在 source 未就绪时不会消费后续 pipeline 命令；当前连接会先进入 blocked 状态，等待 server 主循环在 key 就绪或 timeout 后重放同一条原始请求
+- `BLPOP` / `BRPOP` / `BRPOPLPUSH` / `BLMOVE` / `BLMPOP` / `BZPOPMIN` / `BZPOPMAX` / `BZMPOP` 在 source 未就绪时不会消费后续 pipeline 命令；当前连接会先进入 blocked 状态，等待 server 主循环在 key 就绪或 timeout 后重放同一条原始请求
 - 空闲客户端不再阻塞活跃客户端
 - `v0.8.0` 已新增 `io_uring` 主机能力评估报告，但生产事件循环仍绑定在 epoll 路径；后续只有在独立原型和 benchmark 证明收益后才考虑切换
 

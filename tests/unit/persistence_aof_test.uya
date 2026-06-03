@@ -467,6 +467,24 @@ export fn test_aof_replay_blocking_list_commands() !void {
         256,
         1000u64,
     );
+    _ = try connection_process_input_with_aof_at(
+        &engine,
+        &router,
+        &writer,
+        &"*5\r\n$5\r\nRPUSH\r\n$4\r\nmpop\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\nc\r\n"[0: 46],
+        &out[0],
+        256,
+        1000u64,
+    );
+    _ = try connection_process_input_with_aof_at(
+        &engine,
+        &router,
+        &writer,
+        &"*7\r\n$6\r\nBLMPOP\r\n$1\r\n1\r\n$1\r\n1\r\n$4\r\nmpop\r\n$5\r\nRIGHT\r\n$5\r\nCOUNT\r\n$1\r\n2\r\n"[0: 69],
+        &out[0],
+        256,
+        1000u64,
+    );
     aof_close(&writer);
     engine_free(&engine);
 
@@ -477,6 +495,11 @@ export fn test_aof_replay_blocking_list_commands() !void {
     try assert_eq_i32(dst_obj.obj_type as i32, ObjectType.object_list as i32);
     const dst_value: &RedisObject = try list_object_index_value(dst_obj, 0);
     try assert_true(aof_test_slice_eq(dst_value.value.buf[0: dst_value.value.len], &"b"[0: 1]));
+    const mpop_obj: &RedisObject = try lookup_key_at(&replay_engine, &"mpop"[0: 4], 2000u64);
+    try assert_eq_i32(mpop_obj.obj_type as i32, ObjectType.object_list as i32);
+    try assert_eq_i32(mpop_obj.list_len as i32, 1);
+    const mpop_value: &RedisObject = try list_object_index_value(mpop_obj, 0);
+    try assert_true(aof_test_slice_eq(mpop_value.value.buf[0: mpop_value.value.len], &"a"[0: 1]));
     engine_free(&replay_engine);
     _ = unlink(path);
     try assert_eq_i32(used_memory() as i32, 0);

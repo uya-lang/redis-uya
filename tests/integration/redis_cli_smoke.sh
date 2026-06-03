@@ -1167,6 +1167,30 @@ if [[ -n "$LMPOP_MISSING_RESULT" ]]; then
     exit 1
 fi
 
+BLMPOP_SEED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" rpush blmpop a b c)"
+if [[ "$BLMPOP_SEED_RESULT" != "3" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected blmpop seed RPUSH 3, got '$BLMPOP_SEED_RESULT'" >&2
+    exit 1
+fi
+
+BLMPOP_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" blmpop 1 2 miss blmpop LEFT COUNT 2)"
+if [[ "$BLMPOP_RESULT" != $'blmpop\na\nb' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected BLMPOP left blmpop/a/b, got '$BLMPOP_RESULT'" >&2
+    exit 1
+fi
+
+BLMPOP_RIGHT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" blmpop 1 1 blmpop RIGHT)"
+if [[ "$BLMPOP_RIGHT_RESULT" != $'blmpop\nc' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected BLMPOP right blmpop/c, got '$BLMPOP_RIGHT_RESULT'" >&2
+    exit 1
+fi
+
+BLMPOP_MISSING_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" blmpop 0.1 1 blmpop LEFT)"
+if [[ -n "$BLMPOP_MISSING_RESULT" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected missing BLMPOP to be empty, got '$BLMPOP_MISSING_RESULT'" >&2
+    exit 1
+fi
+
 ZADD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zadd zset 2 b 1 a)"
 if [[ "$ZADD_RESULT" != "2" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ZADD 2, got '$ZADD_RESULT'" >&2

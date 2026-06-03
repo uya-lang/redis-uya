@@ -744,6 +744,15 @@ class RedisPySubsetClient:
         assert result is None or isinstance(result, list)
         return result
 
+    def blmpop(self, timeout: float, direction: str, *keys: str, count: int | None = None) -> list[bytes | list[bytes]] | None:
+        parts: list[bytes] = [b"BLMPOP", str(timeout).encode(), str(len(keys)).encode(), *(key.encode() for key in keys), direction.encode()]
+        if count is not None:
+            parts.append(b"COUNT")
+            parts.append(str(count).encode())
+        result = self._request(*parts)
+        assert result is None or isinstance(result, list)
+        return result
+
     def sadd(self, key: str, *members: str) -> int:
         return int(self._request(b"SADD", key.encode(), *(member.encode() for member in members)))
 
@@ -1531,6 +1540,10 @@ def run_smoke() -> None:
             assert client.lmpop("LEFT", "missing", "lmpop", count=2) == [b"lmpop", [b"a", b"b"]]
             assert client.lmpop("RIGHT", "lmpop") == [b"lmpop", [b"c"]]
             assert client.lmpop("LEFT", "lmpop") is None
+            assert client.rpush("blmpop", "a", "b", "c") == 3
+            assert client.blmpop(1, "LEFT", "missing", "blmpop", count=2) == [b"blmpop", [b"a", b"b"]]
+            assert client.blmpop(1, "RIGHT", "blmpop") == [b"blmpop", [b"c"]]
+            assert client.blmpop(0.1, "LEFT", "blmpop") is None
 
             assert client.sadd("set", "a", "b") == 2
             assert client.smembers("set") == {b"a", b"b"}

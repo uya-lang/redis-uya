@@ -835,6 +835,22 @@ export fn test_connection_process_lmpop() !void {
     const lmpop_missing_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$5\r\nLMPOP\r\n$1\r\n1\r\n$5\r\nlmpop\r\n$4\r\nLEFT\r\n"[0: 43], &out[0], 128, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: lmpop_missing_result.response_len], &"*-1\r\n"[0: 5]));
 
+    const seed_blmpop_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$5\r\nRPUSH\r\n$6\r\nblmpop\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\nc\r\n"[0: 48], &out[0], 128, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: seed_blmpop_result.response_len], &":3\r\n"[0: 4]));
+
+    const blmpop_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*8\r\n$6\r\nBLMPOP\r\n$1\r\n1\r\n$1\r\n2\r\n$4\r\nmiss\r\n$6\r\nblmpop\r\n$4\r\nLEFT\r\n$5\r\nCOUNT\r\n$1\r\n2\r\n"[0: 80], &out[0], 128, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: blmpop_result.response_len], &"*2\r\n$6\r\nblmpop\r\n*2\r\n$1\r\na\r\n$1\r\nb\r\n"[0: 34]));
+
+    const blmpop_tail_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$6\r\nBLMPOP\r\n$1\r\n1\r\n$1\r\n1\r\n$6\r\nblmpop\r\n$5\r\nRIGHT\r\n"[0: 53], &out[0], 128, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: blmpop_tail_result.response_len], &"*2\r\n$6\r\nblmpop\r\n*1\r\n$1\r\nc\r\n"[0: 27]));
+
+    var blmpop_tx: ConnectionTransaction = connection_transaction_new();
+    const blmpop_block_result: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &blmpop_tx, &"*5\r\n$6\r\nBLMPOP\r\n$3\r\n0.1\r\n$1\r\n1\r\n$6\r\nblmpop\r\n$4\r\nLEFT\r\n"[0: 54], &out[0], 128, 1000u64);
+    try assert_eq_i32(blmpop_block_result.response_len as i32, 0);
+    const blmpop_missing_result: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &blmpop_tx, &"*5\r\n$6\r\nBLMPOP\r\n$3\r\n0.1\r\n$1\r\n1\r\n$6\r\nblmpop\r\n$4\r\nLEFT\r\n"[0: 54], &out[0], 128, 1200u64);
+    try assert_true(network_connection_slice_eq(out[0: blmpop_missing_result.response_len], &"*-1\r\n"[0: 5]));
+    connection_transaction_reset(&blmpop_tx);
+
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);
 }

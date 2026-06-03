@@ -675,6 +675,7 @@ fn connection_command_is_blocking_pop(cmd_type: CommandType) bool {
     return cmd_type == CommandType.command_blpop ||
         cmd_type == CommandType.command_brpop ||
         cmd_type == CommandType.command_blmove ||
+        cmd_type == CommandType.command_blmpop ||
         cmd_type == CommandType.command_brpoplpush ||
         cmd_type == CommandType.command_bzpopmax ||
         cmd_type == CommandType.command_bzpopmin ||
@@ -777,6 +778,39 @@ fn connection_should_block_pop_command(engine: &Engine, command: &Command, now_m
                 return false;
             }
             index_bzm = index_bzm + 1;
+        }
+        return true;
+    }
+
+    if command.info.cmd_type == CommandType.command_blmpop {
+        const numkeys_data_blm: &[byte] = command_arg_data(command, 2) catch {
+            return false;
+        };
+        const numkeys_u64_blm: u64 = connection_parse_u64(numkeys_data_blm) catch {
+            return false;
+        };
+        if numkeys_u64_blm == 0u64 {
+            return false;
+        }
+        var index_blm: usize = 3;
+        const end_blm: usize = 3 + numkeys_u64_blm as usize;
+        while index_blm < end_blm {
+            const key_blm: &[byte] = command_arg_data(command, index_blm) catch {
+                return false;
+            };
+            const obj_result_blm: !&RedisObject = lookup_key_at(engine, key_blm, now_ms);
+            if obj_result_blm.error_id != 0 {
+                index_blm = index_blm + 1;
+                continue;
+            }
+            const obj_blm: &RedisObject = obj_result_blm.value;
+            if obj_blm.obj_type != ObjectType.object_list {
+                return false;
+            }
+            if obj_blm.list_len > 0 {
+                return false;
+            }
+            index_blm = index_blm + 1;
         }
         return true;
     }
@@ -3197,7 +3231,8 @@ fn connection_should_append_aof(command: &Command, reply: &CommandReply) bool {
     if command.info.cmd_type == CommandType.command_bzpopmax || command.info.cmd_type == CommandType.command_bzpopmin {
         return reply.typ == CommandReplyType.reply_array_bulk || reply.typ == CommandReplyType.reply_raw_bytes;
     }
-    if command.info.cmd_type == CommandType.command_bzmpop {
+    if command.info.cmd_type == CommandType.command_bzmpop ||
+        command.info.cmd_type == CommandType.command_blmpop {
         return reply.typ == CommandReplyType.reply_array_bulk || reply.typ == CommandReplyType.reply_raw_bytes;
     }
     if command.info.cmd_type == CommandType.command_getex {
@@ -3253,7 +3288,8 @@ fn connection_execute_blocking_pop_command_at(
     const reply_off_before: bool = tx.reply_off_enabled;
     const reply_skip_before: bool = tx.reply_skip_next;
     var timeout_index: usize = command.argc - 1;
-    if command.info.cmd_type == CommandType.command_bzmpop {
+    if command.info.cmd_type == CommandType.command_bzmpop ||
+        command.info.cmd_type == CommandType.command_blmpop {
         timeout_index = 1;
     }
     const timeout_data: &[byte] = command_arg_data(command, timeout_index) catch {

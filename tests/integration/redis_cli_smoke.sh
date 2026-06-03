@@ -1269,6 +1269,30 @@ if [[ "$ZRANGE_RESULT" != $'b\na' ]]; then
     exit 1
 fi
 
+ZMSET_ZADD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zadd zmset 2 b 1 a 3 c)"
+if [[ "$ZMSET_ZADD_RESULT" != "3" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected zmset ZADD 3, got '$ZMSET_ZADD_RESULT'" >&2
+    exit 1
+fi
+
+ZMPOP_MIN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zmpop 2 missing zmset MIN COUNT 2)"
+if [[ "$ZMPOP_MIN_RESULT" != $'zmset\na\n1\nb\n2' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZMPOP MIN COUNT payload, got '$ZMPOP_MIN_RESULT'" >&2
+    exit 1
+fi
+
+ZMPOP_MAX_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zmpop 1 zmset MAX)"
+if [[ "$ZMPOP_MAX_RESULT" != $'zmset\nc\n3' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZMPOP MAX payload, got '$ZMPOP_MAX_RESULT'" >&2
+    exit 1
+fi
+
+ZMPOP_MISSING_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zmpop 1 zmset MIN)"
+if [[ -n "$ZMPOP_MISSING_RESULT" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected missing ZMPOP to be empty, got '$ZMPOP_MISSING_RESULT'" >&2
+    exit 1
+fi
+
 BZSET_ZADD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zadd bzset 2 b 1 a 3 c)"
 if [[ "$BZSET_ZADD_RESULT" != "3" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected bzset ZADD 3, got '$BZSET_ZADD_RESULT'" >&2

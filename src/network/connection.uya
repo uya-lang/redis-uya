@@ -3231,7 +3231,8 @@ fn connection_should_append_aof(command: &Command, reply: &CommandReply) bool {
     if command.info.cmd_type == CommandType.command_bzpopmax || command.info.cmd_type == CommandType.command_bzpopmin {
         return reply.typ == CommandReplyType.reply_array_bulk || reply.typ == CommandReplyType.reply_raw_bytes;
     }
-    if command.info.cmd_type == CommandType.command_bzmpop ||
+    if command.info.cmd_type == CommandType.command_zmpop ||
+        command.info.cmd_type == CommandType.command_bzmpop ||
         command.info.cmd_type == CommandType.command_blmpop {
         return reply.typ == CommandReplyType.reply_array_bulk || reply.typ == CommandReplyType.reply_raw_bytes;
     }

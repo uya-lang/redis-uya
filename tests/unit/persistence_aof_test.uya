@@ -25,6 +25,7 @@ use src.storage.object.list_object_index_value;
 use src.storage.object.set_object_len;
 use src.storage.object.set_object_members_reply;
 use src.storage.object.zset_object_len;
+use src.storage.object.zset_object_get_score;
 use src.storage.object.object_free;
 use src.memory.allocator.used_memory;
 use src.memory.allocator.reset_memory_stats_for_test;
@@ -560,6 +561,25 @@ export fn test_aof_replay_blocking_zset_commands() !void {
         256,
         1000u64,
     );
+    _ = try connection_process_input_with_aof_at(
+        &engine,
+        &router,
+        &writer,
+        &"*8\r\n$4\r\nZADD\r\n$3\r\nzm3\r\n$1\r\n1\r\n$1\r\na\r\n$1\r\n2\r\n$1\r\nb\r\n$1\r\n3\r\n$1\r\nc\r\n"[0: 65],
+        &out[0],
+        256,
+        1000u64,
+    );
+    const zmpop_result: ConnectionProcessResult = try connection_process_input_with_aof_at(
+        &engine,
+        &router,
+        &writer,
+        &"*6\r\n$5\r\nZMPOP\r\n$1\r\n1\r\n$3\r\nzm3\r\n$3\r\nMIN\r\n$5\r\nCOUNT\r\n$1\r\n2\r\n"[0: 58],
+        &out[0],
+        256,
+        1000u64,
+    );
+    try assert_true(aof_test_slice_eq(out[0: zmpop_result.response_len], &"*2\r\n$3\r\nzm3\r\n*2\r\n*2\r\n$1\r\na\r\n$1\r\n1\r\n*2\r\n$1\r\nb\r\n$1\r\n2\r\n"[0: 53]));
     aof_close(&writer);
     engine_free(&engine);
 
@@ -567,6 +587,10 @@ export fn test_aof_replay_blocking_zset_commands() !void {
     try aof_replay_file_at(path, &replay_engine, &router, 2000u64);
     try assert_true(aof_key_missing_at(&replay_engine, &"zs"[0: 2], 2000u64));
     try assert_true(aof_key_missing_at(&replay_engine, &"zs2"[0: 3], 2000u64));
+    const zm3_obj: &RedisObject = try lookup_key_at(&replay_engine, &"zm3"[0: 3], 2000u64);
+    try assert_eq_i32(zm3_obj.obj_type as i32, ObjectType.object_zset as i32);
+    try assert_eq_i32((try zset_object_len(zm3_obj)) as i32, 1);
+    try assert_eq_i32((try zset_object_get_score(zm3_obj, &"c"[0: 1])) as i32, 3);
     engine_free(&replay_engine);
     _ = unlink(path);
     try assert_eq_i32(used_memory() as i32, 0);

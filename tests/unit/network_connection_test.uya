@@ -697,6 +697,15 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const bzpopmax_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$8\r\nBZPOPMAX\r\n$6\r\nzblock\r\n$1\r\n1\r\n"[0: 37], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: bzpopmax_result.response_len], &"*3\r\n$6\r\nzblock\r\n$1\r\nb\r\n$1\r\n2\r\n"[0: 30]));
 
+    const zmpop_seed_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*8\r\n$4\r\nZADD\r\n$3\r\nzm2\r\n$1\r\n1\r\n$1\r\na\r\n$1\r\n2\r\n$1\r\nb\r\n$1\r\n3\r\n$1\r\nc\r\n"[0: 65], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: zmpop_seed_result.response_len], &":3\r\n"[0: 4]));
+
+    const zmpop_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*7\r\n$5\r\nZMPOP\r\n$1\r\n2\r\n$4\r\nmiss\r\n$3\r\nzm2\r\n$3\r\nMIN\r\n$5\r\nCOUNT\r\n$1\r\n2\r\n"[0: 68], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: zmpop_result.response_len], &"*2\r\n$3\r\nzm2\r\n*2\r\n*2\r\n$1\r\na\r\n$1\r\n1\r\n*2\r\n$1\r\nb\r\n$1\r\n2\r\n"[0: 53]));
+
+    const zmpop_last_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$5\r\nZMPOP\r\n$1\r\n1\r\n$3\r\nzm2\r\n$3\r\nMAX\r\n"[0: 40], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: zmpop_last_result.response_len], &"*2\r\n$3\r\nzm2\r\n*1\r\n*2\r\n$1\r\nc\r\n$1\r\n3\r\n"[0: 35]));
+
     const zblock2_seed_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*8\r\n$4\r\nZADD\r\n$7\r\nzblock2\r\n$1\r\n1\r\n$1\r\na\r\n$1\r\n2\r\n$1\r\nb\r\n$1\r\n3\r\n$1\r\nc\r\n"[0: 69], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: zblock2_seed_result.response_len], &":3\r\n"[0: 4]));
 

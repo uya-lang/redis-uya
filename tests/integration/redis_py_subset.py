@@ -903,6 +903,15 @@ class RedisPySubsetClient:
         assert isinstance(result, list)
         return result
 
+    def zmpop(self, direction: str, *keys: str, count: int | None = None) -> list[bytes | list[list[bytes]]] | None:
+        parts: list[bytes] = [b"ZMPOP", str(len(keys)).encode(), *(key.encode() for key in keys), direction.encode()]
+        if count is not None:
+            parts.append(b"COUNT")
+            parts.append(str(count).encode())
+        result = self._request(*parts)
+        assert result is None or isinstance(result, list)
+        return result
+
     def zrangebyscore(self, key: str, minimum: int, maximum: int) -> list[bytes]:
         result = self._request(b"ZRANGEBYSCORE", key.encode(), str(minimum).encode(), str(maximum).encode())
         assert isinstance(result, list)
@@ -1604,6 +1613,10 @@ def run_smoke() -> None:
             assert client.zrangebyscore("zset", 2, 4) == [b"b", b"a"]
             assert client.zrevrangebyscore("zset", 4, 2) == [b"a", b"b"]
             assert client.zrem("zset", "a") == 1
+            assert client.zadd("zmset", {"b": 2, "a": 1, "c": 3}) == 3
+            assert client.zmpop("MIN", "missing", "zmset", count=2) == [b"zmset", [[b"a", b"1"], [b"b", b"2"]]]
+            assert client.zmpop("MAX", "zmset") == [b"zmset", [[b"c", b"3"]]]
+            assert client.zmpop("MIN", "zmset") is None
             assert client.zadd("bzset", {"b": 2, "a": 1, "c": 3}) == 3
             assert client._request(b"BZMPOP", b"1", b"2", b"missing", b"bzset", b"MIN", b"COUNT", b"2") == [b"bzset", [[b"a", b"1"], [b"b", b"2"]]]
             assert client._request(b"BZMPOP", b"1", b"1", b"bzset", b"MAX") == [b"bzset", [[b"c", b"3"]]]

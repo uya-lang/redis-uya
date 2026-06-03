@@ -540,10 +540,10 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"unexpected XINFO HELP: {xinfo_help!r}")
 
-            zset_info = send_command(sock, b"COMMAND", b"INFO", b"ZRANK", b"ZREVRANK", b"ZSCORE", b"ZMSCORE", b"ZPOPMAX", b"ZPOPMIN", b"BZPOPMAX", b"BZPOPMIN")
+            zset_info = send_command(sock, b"COMMAND", b"INFO", b"ZRANK", b"ZREVRANK", b"ZSCORE", b"ZMSCORE", b"ZPOPMAX", b"ZPOPMIN", b"ZMPOP", b"BZPOPMAX", b"BZPOPMIN")
             if (
                 not isinstance(zset_info, list)
-                or len(zset_info) != 8
+                or len(zset_info) != 9
                 or not isinstance(zset_info[0], list)
                 or zset_info[0][0] != b"zrank"
                 or not isinstance(zset_info[1], list)
@@ -557,9 +557,11 @@ def run_smoke() -> None:
                 or not isinstance(zset_info[5], list)
                 or zset_info[5][0] != b"zpopmin"
                 or not isinstance(zset_info[6], list)
-                or zset_info[6][0] != b"bzpopmax"
+                or zset_info[6][0] != b"zmpop"
                 or not isinstance(zset_info[7], list)
-                or zset_info[7][0] != b"bzpopmin"
+                or zset_info[7][0] != b"bzpopmax"
+                or not isinstance(zset_info[8], list)
+                or zset_info[8][0] != b"bzpopmin"
             ):
                 raise AssertionError(f"zset score/pop commands missing from COMMAND INFO: {zset_info!r}")
 
@@ -650,6 +652,7 @@ def run_smoke() -> None:
                 or b"function|load" not in docs_all_resp2
                 or b"blmove" not in docs_all_resp2
                 or b"blmpop" not in docs_all_resp2
+                or b"zmpop" not in docs_all_resp2
                 or b"copy" not in docs_all_resp2
                 or b"restore-asking" not in docs_all_resp2
                 or b"memory|malloc-stats" not in docs_all_resp2
@@ -856,6 +859,10 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"unexpected COMMAND LIST zpop result: {listed_zpop!r}")
 
+            listed_zmpop = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"ZMPOP")
+            if listed_zmpop != [b"zmpop"]:
+                raise AssertionError(f"unexpected COMMAND LIST zmpop result: {listed_zmpop!r}")
+
             listed_bz = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"BZ*")
             if (
                 not isinstance(listed_bz, list)
@@ -916,6 +923,7 @@ def run_smoke() -> None:
                 or not isinstance(docs_all.get(b"function|load"), dict)
                 or not isinstance(docs_all.get(b"blmove"), dict)
                 or not isinstance(docs_all.get(b"blmpop"), dict)
+                or not isinstance(docs_all.get(b"zmpop"), dict)
                 or not isinstance(docs_all.get(b"copy"), dict)
                 or not isinstance(docs_all.get(b"restore-asking"), dict)
                 or not isinstance(docs_all.get(b"memory|malloc-stats"), dict)
@@ -943,6 +951,10 @@ def run_smoke() -> None:
             blmpop_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"BLMPOP", b"1", b"2", b"a", b"b", b"LEFT", b"COUNT", b"2")
             if blmpop_getkeys != [b"a", b"b"]:
                 raise AssertionError(f"unexpected COMMAND GETKEYS BLMPOP result: {blmpop_getkeys!r}")
+
+            zmpop_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"ZMPOP", b"2", b"a", b"b", b"MIN", b"COUNT", b"2")
+            if zmpop_getkeys != [b"a", b"b"]:
+                raise AssertionError(f"unexpected COMMAND GETKEYS ZMPOP result: {zmpop_getkeys!r}")
 
             restore_asking_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"RESTORE-ASKING", b"dst", b"0", b"payload")
             if restore_asking_getkeys != [b"dst"]:
@@ -995,6 +1007,21 @@ def run_smoke() -> None:
                 or b"delete" not in blmpop_getkeysandflags[1][1]
             ):
                 raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS BLMPOP keys: {blmpop_getkeysandflags!r}")
+
+            zmpop_getkeysandflags = send_command(sock, b"COMMAND", b"GETKEYSANDFLAGS", b"ZMPOP", b"2", b"a", b"b", b"MAX", b"COUNT", b"2")
+            if not isinstance(zmpop_getkeysandflags, list) or len(zmpop_getkeysandflags) != 2:
+                raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS ZMPOP shape: {zmpop_getkeysandflags!r}")
+            if (
+                zmpop_getkeysandflags[0][0] != b"a"
+                or b"RW" not in zmpop_getkeysandflags[0][1]
+                or b"access" not in zmpop_getkeysandflags[0][1]
+                or b"delete" not in zmpop_getkeysandflags[0][1]
+                or zmpop_getkeysandflags[1][0] != b"b"
+                or b"RW" not in zmpop_getkeysandflags[1][1]
+                or b"access" not in zmpop_getkeysandflags[1][1]
+                or b"delete" not in zmpop_getkeysandflags[1][1]
+            ):
+                raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS ZMPOP keys: {zmpop_getkeysandflags!r}")
 
             memory_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"MEMORY", b"USAGE", b"mkey")
             if memory_getkeys != [b"mkey"]:

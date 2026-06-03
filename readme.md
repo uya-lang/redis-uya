@@ -83,7 +83,7 @@
 - 控制面兼容子集：`CLIENT ID/GETNAME/GETREDIR/REPLY/UNBLOCK/CACHING/SETNAME/NO-EVICT/NO-TOUCH/INFO/LIST/SETINFO/HELP/KILL/PAUSE/UNPAUSE/TRACKING/TRACKINGINFO`、`HELLO SETNAME`、`RESET`、`CONFIG GET/HELP/RESETSTAT/SET/REWRITE`
 - 安全基线：`requirepass`、`AUTH`、`SHUTDOWN`
 - `v0.9.1` 命令全集矩阵第一批：基于 Redis 8.6 官方命令页生成 `531` 个官方命令名目录，落地 `docs/redis-uya-command-matrix.md` 与 `src/command/catalog_generated*`
-- `COMMAND` 控制面第一批已收口：`COMMAND`、`COMMAND COUNT`、`COMMAND LIST`、`COMMAND INFO`、`COMMAND DOCS`、`COMMAND GETKEYS`、`COMMAND GETKEYSANDFLAGS` 共用同一份运行时目录；`COMMAND DOCS` 无参数时已支持全量 docs 输出，并打通 RESP2/RESP3 大响应发送第一批闭环，`GETKEYS*` 当前也已覆盖 `BLMPOP` / `BZMPOP` 的 movablekeys 提取
+- `COMMAND` 控制面第一批已收口：`COMMAND`、`COMMAND COUNT`、`COMMAND LIST`、`COMMAND INFO`、`COMMAND DOCS`、`COMMAND GETKEYS`、`COMMAND GETKEYSANDFLAGS` 共用同一份运行时目录；`COMMAND DOCS` 无参数时已支持全量 docs 输出，并打通 RESP2/RESP3 大响应发送第一批闭环，`GETKEYS*` 当前也已覆盖 `BLMPOP` / `ZMPOP` / `BZMPOP` 的 movablekeys 提取
 - v0.5 兼容性回归：覆盖 RESP3 Null、WATCH 中止、事务内控制命令错误、RESP3 Pub/Sub Push、CLIENT/CONFIG 组合路径
 - `maxmemory` noeviction 基线：启动参数可设置最大内存，超预算增量写命令返回 OOM 且不落库
 - `allkeys-lru` 淘汰基线：对象记录最近访问时间，超预算写入可淘汰最久未访问 key 后继续执行

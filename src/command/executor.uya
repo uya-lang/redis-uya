@@ -9804,6 +9804,93 @@ fn command_executor_bzmpop(engine: &Engine, command: &Command, now_ms: u64) Comm
     return command_executor_reply(CommandReplyType.reply_null_array, command_executor_empty_slice(), 0);
 }
 
+fn command_executor_zmpop(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 4 {
+        return command_executor_wrong_arity();
+    }
+
+    const numkeys_data: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const numkeys_i64: i64 = command_executor_parse_i64(numkeys_data) catch {
+        return command_executor_error(&"ERR numkeys should be greater than 0"[0: 36]);
+    };
+    if numkeys_i64 <= 0 {
+        return command_executor_error(&"ERR numkeys should be greater than 0"[0: 36]);
+    }
+
+    const numkeys: usize = numkeys_i64 as usize;
+    const keys_end: usize = 2 + numkeys;
+    if command.argc <= keys_end {
+        return command_executor_syntax_error();
+    }
+
+    const direction: &[byte] = command_executor_arg(command, keys_end) catch {
+        return command_executor_syntax_error();
+    };
+    var reverse: bool = false;
+    if command_executor_keyword_eq(direction, &"MIN"[0: 3]) {
+        reverse = false;
+    } else if command_executor_keyword_eq(direction, &"MAX"[0: 3]) {
+        reverse = true;
+    } else {
+        return command_executor_syntax_error();
+    }
+
+    var requested_count: usize = 1;
+    if command.argc == keys_end + 3 {
+        const option: &[byte] = command_executor_arg(command, keys_end + 1) catch {
+            return command_executor_syntax_error();
+        };
+        if !command_executor_keyword_eq(option, &"COUNT"[0: 5]) {
+            return command_executor_syntax_error();
+        }
+        const count_data: &[byte] = command_executor_arg(command, keys_end + 2) catch {
+            return command_executor_syntax_error();
+        };
+        const count_i64: i64 = command_executor_parse_i64(count_data) catch {
+            return command_executor_error(&"ERR count should be greater than 0"[0: 34]);
+        };
+        if count_i64 <= 0 {
+            return command_executor_error(&"ERR count should be greater than 0"[0: 34]);
+        }
+        requested_count = count_i64 as usize;
+    } else if command.argc != keys_end + 1 {
+        return command_executor_syntax_error();
+    }
+
+    var key_index: usize = 2;
+    while key_index < keys_end {
+        const key: &[byte] = command_executor_arg(command, key_index) catch {
+            return command_executor_wrong_arity();
+        };
+        const obj_result: !&RedisObject = lookup_key_at(engine, key, now_ms);
+        if obj_result.error_id != 0 {
+            key_index = key_index + 1;
+            continue;
+        }
+        const obj: &RedisObject = obj_result.value;
+        if obj.obj_type != ObjectType.object_zset {
+            return command_executor_wrongtype();
+        }
+        const available: usize = zset_object_len(obj) catch {
+            return command_executor_wrongtype();
+        };
+        if available == 0 {
+            key_index = key_index + 1;
+            continue;
+        }
+
+        var actual_count: usize = requested_count;
+        if actual_count > available {
+            actual_count = available;
+        }
+        return command_executor_bzmpop_key(engine, key, obj, reverse, actual_count);
+    }
+
+    return command_executor_reply(CommandReplyType.reply_null_array, command_executor_empty_slice(), 0);
+}
+
 fn command_executor_zrangebyscore(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
     if command.argc != 4 {
         return command_executor_wrong_arity();
@@ -14037,7 +14124,8 @@ fn command_executor_command_key_flags(info: &CommandInfo, key_ordinal: usize) &[
         info.cmd_type == CommandType.command_blmpop {
         return &"RW|access|delete"[0: 16];
     }
-    if info.cmd_type == CommandType.command_bzmpop {
+    if info.cmd_type == CommandType.command_zmpop ||
+        info.cmd_type == CommandType.command_bzmpop {
         return &"RW|access|delete"[0: 16];
     }
     if info.cmd_type == CommandType.command_sinterstore {
@@ -14481,7 +14569,8 @@ fn command_executor_command_getkeys(runtime: &CommandRuntimeInfo, command: &Comm
         return command_executor_owned_raw(buf.buf[0: buf.len]);
     }
 
-    if info.cmd_type == CommandType.command_lmpop {
+    if info.cmd_type == CommandType.command_lmpop ||
+        info.cmd_type == CommandType.command_zmpop {
         if with_flags {
             _ = command_executor_command_getkeysandflags_lmpop(runtime, command, &buf) catch {
                 return command_executor_command_invalid_command_arity();
@@ -15331,6 +15420,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_zpopmin {
         return command_executor_zpop(engine, command, now_ms, false);
+    }
+    if command.info.cmd_type == CommandType.command_zmpop {
+        return command_executor_zmpop(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_bzpopmax {
         return command_executor_bzpop(engine, command, now_ms, true);

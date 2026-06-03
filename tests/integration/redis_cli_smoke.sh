@@ -1209,6 +1209,36 @@ if [[ "$ZCOUNT_RESULT" != "2" ]]; then
     exit 1
 fi
 
+ZADD_LEX_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zadd lex 0 alpha 0 beta 0 charlie 0 delta)"
+if [[ "$ZADD_LEX_RESULT" != "4" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZADD lex 4, got '$ZADD_LEX_RESULT'" >&2
+    exit 1
+fi
+
+ZLEXCOUNT_CLOSED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zlexcount lex '[alpha' '[charlie')"
+if [[ "$ZLEXCOUNT_CLOSED_RESULT" != "3" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZLEXCOUNT closed 3, got '$ZLEXCOUNT_CLOSED_RESULT'" >&2
+    exit 1
+fi
+
+ZLEXCOUNT_EXCL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zlexcount lex '(alpha' '[delta')"
+if [[ "$ZLEXCOUNT_EXCL_RESULT" != "3" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZLEXCOUNT exclusive 3, got '$ZLEXCOUNT_EXCL_RESULT'" >&2
+    exit 1
+fi
+
+ZLEXCOUNT_INF_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zlexcount lex - +)"
+if [[ "$ZLEXCOUNT_INF_RESULT" != "4" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZLEXCOUNT -/+ 4, got '$ZLEXCOUNT_INF_RESULT'" >&2
+    exit 1
+fi
+
+ZLEXCOUNT_MISSING_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zlexcount missing - +)"
+if [[ "$ZLEXCOUNT_MISSING_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZLEXCOUNT missing 0, got '$ZLEXCOUNT_MISSING_RESULT'" >&2
+    exit 1
+fi
+
 ZINCRBY_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zincrby zset 3 a)"
 if [[ "$ZINCRBY_RESULT" != "4" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ZINCRBY 4, got '$ZINCRBY_RESULT'" >&2

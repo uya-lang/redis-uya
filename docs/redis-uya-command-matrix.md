@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 153 | 0 | 3 | 63 |
+| Tier A: standalone core | 365 | 259 | 146 | 154 | 0 | 3 | 62 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `160` |
+| `partial` | `161` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `216` |
+| `deferred` | `215` |
 
 ## Group counts
 
@@ -595,7 +595,7 @@
 | `zinter` | `sorted-set` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @sortedset, @slow` |
 | `zintercard` | `sorted-set` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @sortedset, @slow` |
 | `zinterstore` | `sorted-set` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@write, @sortedset, @slow` |
-| `zlexcount` | `sorted-set` | `deferred` | `v0.9.1` | `4` | `-` | `no` | `@read, @sortedset, @fast` |
+| `zlexcount` | `sorted-set` | `partial` | `-` | `4` | `-` | `no` | `@read, @sortedset, @fast` |
 | `zmpop` | `sorted-set` | `partial` | `-` | `-4` | `-` | `no` | `@write, @sortedset, @slow` |
 | `zmscore` | `sorted-set` | `full` | `-` | `-3` | `-` | `no` | `@read, @sortedset, @fast` |
 | `zpopmax` | `sorted-set` | `full` | `-` | `-2` | `-` | `no` | `@write, @sortedset, @fast` |

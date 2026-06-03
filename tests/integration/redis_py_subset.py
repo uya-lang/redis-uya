@@ -859,6 +859,9 @@ class RedisPySubsetClient:
     def zcount(self, key: str, minimum: int, maximum: int) -> int:
         return int(self._request(b"ZCOUNT", key.encode(), str(minimum).encode(), str(maximum).encode()))
 
+    def zlexcount(self, key: str, minimum: str, maximum: str) -> int:
+        return int(self._request(b"ZLEXCOUNT", key.encode(), minimum.encode(), maximum.encode()))
+
     def zrank(self, key: str, member: str, withscore: bool = False) -> int | tuple[int, bytes] | None:
         parts: list[bytes] = [b"ZRANK", key.encode(), member.encode()]
         if withscore:
@@ -1607,6 +1610,12 @@ def run_smoke() -> None:
             assert client.zadd("zset", {"b": 2, "a": 1}) == 2
             assert client.zcard("zset") == 2
             assert client.zcount("zset", 1, 2) == 2
+            assert client.zadd("lex", {"alpha": 0, "beta": 0, "charlie": 0, "delta": 0}) == 4
+            assert client.zlexcount("lex", "[alpha", "[charlie") == 3
+            assert client.zlexcount("lex", "(alpha", "[delta") == 3
+            assert client.zlexcount("lex", "-", "+") == 4
+            assert client.zlexcount("missing", "-", "+") == 0
+            assert client.delete("lex") == 1
             assert client.zincrby("zset", 3, "a") == b"4"
             assert client.zcount("zset", 4, 4) == 1
             assert client.zrank("zset", "b") == 0

@@ -156,6 +156,7 @@ use src.storage.sds.sds_cat_fmt;
 use src.storage.sds.sds_fmt_bytes;
 use src.storage.sds.sds_fmt_i64;
 use src.storage.sds.sds_fmt_u64;
+use src.util.bytes.bytes_cmp;
 use src.version.redis_uya_version;
 use libc.strtod;
 use libc.snprintf;
@@ -254,6 +255,13 @@ struct SortPatternParts {
 struct SortEmitWindow {
     start: i64,
     count: usize,
+}
+
+struct CommandExecutorZLexBound {
+    negative_infinity: bool,
+    positive_infinity: bool,
+    exclusive: bool,
+    value: &[byte],
 }
 
 export fn command_runtime_default() CommandRuntimeInfo {
@@ -9239,6 +9247,123 @@ fn command_executor_zcount(engine: &Engine, command: &Command, now_ms: u64) Comm
     return command_executor_integer(count);
 }
 
+fn command_executor_zlex_parse_bound(data: &[byte]) !CommandExecutorZLexBound {
+    if data.len == 1 && data.ptr[0] == '-' as byte {
+        return CommandExecutorZLexBound{
+            negative_infinity: true,
+            positive_infinity: false,
+            exclusive: false,
+            value: command_executor_empty_slice(),
+        };
+    }
+    if data.len == 1 && data.ptr[0] == '+' as byte {
+        return CommandExecutorZLexBound{
+            negative_infinity: false,
+            positive_infinity: true,
+            exclusive: false,
+            value: command_executor_empty_slice(),
+        };
+    }
+    if data.len == 0 {
+        return error.CommandInvalidRequest;
+    }
+    if data.ptr[0] == '[' as byte {
+        return CommandExecutorZLexBound{
+            negative_infinity: false,
+            positive_infinity: false,
+            exclusive: false,
+            value: data[1: data.len - 1],
+        };
+    }
+    if data.ptr[0] == '(' as byte {
+        return CommandExecutorZLexBound{
+            negative_infinity: false,
+            positive_infinity: false,
+            exclusive: true,
+            value: data[1: data.len - 1],
+        };
+    }
+    return error.CommandInvalidRequest;
+}
+
+fn command_executor_zlex_member_after_min(member: &[byte], bound: &CommandExecutorZLexBound) bool {
+    if bound.negative_infinity {
+        return true;
+    }
+    if bound.positive_infinity {
+        return false;
+    }
+    const cmp: i32 = bytes_cmp(member, bound.value);
+    if bound.exclusive {
+        return cmp > 0;
+    }
+    return cmp >= 0;
+}
+
+fn command_executor_zlex_member_before_max(member: &[byte], bound: &CommandExecutorZLexBound) bool {
+    if bound.positive_infinity {
+        return true;
+    }
+    if bound.negative_infinity {
+        return false;
+    }
+    const cmp: i32 = bytes_cmp(member, bound.value);
+    if bound.exclusive {
+        return cmp < 0;
+    }
+    return cmp <= 0;
+}
+
+fn command_executor_zlex_member_in_range(member: &[byte], min_bound: &CommandExecutorZLexBound, max_bound: &CommandExecutorZLexBound) bool {
+    return command_executor_zlex_member_after_min(member, min_bound) && command_executor_zlex_member_before_max(member, max_bound);
+}
+
+fn command_executor_zlexcount(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 4 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const min_data: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    const max_data: &[byte] = command_executor_arg(command, 3) catch {
+        return command_executor_wrong_arity();
+    };
+    const min_bound: CommandExecutorZLexBound = command_executor_zlex_parse_bound(min_data) catch {
+        return command_executor_error(&"ERR min or max not valid string range item"[0: 42]);
+    };
+    const max_bound: CommandExecutorZLexBound = command_executor_zlex_parse_bound(max_data) catch {
+        return command_executor_error(&"ERR min or max not valid string range item"[0: 42]);
+    };
+
+    const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+        return command_executor_integer(0);
+    };
+    if obj.obj_type != ObjectType.object_zset {
+        return command_executor_wrongtype();
+    }
+
+    const sorted_members: &RedisObject = zset_object_range_reply(obj, 0, -1) catch |err| {
+        if err == error.AllocOutOfMemory {
+            return command_executor_oom();
+        }
+        return command_executor_wrongtype();
+    };
+    var count: i64 = 0;
+    var node: &ListNode = sorted_members.list_head;
+    while node != null {
+        const member: &[byte] = node.value.value.buf[0: node.value.value.len];
+        if command_executor_zlex_member_in_range(member, &min_bound, &max_bound) {
+            count = count + 1;
+        }
+        node = node.next;
+    }
+    object_free(sorted_members);
+    return command_executor_integer(count);
+}
+
 fn command_executor_zset_score_or_missing(obj: &RedisObject, member: &[byte], score_out: &i64) !bool {
     const score_result: !i64 = zset_object_get_score(obj, member);
     const score: i64 = score_result catch |err| {
@@ -15502,6 +15627,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_zcount {
         return command_executor_zcount(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_zlexcount {
+        return command_executor_zlexcount(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_zrank {
         return command_executor_zrank(engine, command, now_ms, false);

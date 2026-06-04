@@ -1353,6 +1353,30 @@ if [[ "$ZMSCORE_RESULT" != $'4\n\n2' ]]; then
     exit 1
 fi
 
+ZRANDMEMBER_SINGLE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrandmember zset)"
+if [[ "$ZRANDMEMBER_SINGLE_RESULT" != "b" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZRANDMEMBER b, got '$ZRANDMEMBER_SINGLE_RESULT'" >&2
+    exit 1
+fi
+
+ZRANDMEMBER_COUNT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrandmember zset 2)"
+if [[ "$ZRANDMEMBER_COUNT_RESULT" != $'b\na' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZRANDMEMBER count b/a, got '$ZRANDMEMBER_COUNT_RESULT'" >&2
+    exit 1
+fi
+
+ZRANDMEMBER_SCORES_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrandmember zset 2 withscores)"
+if [[ "$ZRANDMEMBER_SCORES_RESULT" != $'b\n2\na\n4' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZRANDMEMBER WITHSCORES b/2/a/4, got '$ZRANDMEMBER_SCORES_RESULT'" >&2
+    exit 1
+fi
+
+ZRANDMEMBER_REPEAT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrandmember zset -3)"
+if [[ "$ZRANDMEMBER_REPEAT_RESULT" != $'b\na\nb' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZRANDMEMBER repeat b/a/b, got '$ZRANDMEMBER_REPEAT_RESULT'" >&2
+    exit 1
+fi
+
 ZRANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrange zset 0 -1)"
 if [[ "$ZRANGE_RESULT" != $'b\na' ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ZRANGE b/a after ZINCRBY, got '$ZRANGE_RESULT'" >&2

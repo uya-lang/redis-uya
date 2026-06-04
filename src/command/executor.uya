@@ -9927,6 +9927,126 @@ fn command_executor_zpop(engine: &Engine, command: &Command, now_ms: u64, revers
     return command_executor_zpop_key(engine, key, requested_count, now_ms, reverse);
 }
 
+fn command_executor_zrandmember(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 2 || command.argc > 4 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+
+    var count_enabled: bool = false;
+    var allow_duplicates: bool = false;
+    var requested_count: usize = 1;
+    var withscores: bool = false;
+    if command.argc >= 3 {
+        count_enabled = true;
+        const count_data: &[byte] = command_executor_arg(command, 2) catch {
+            return command_executor_wrong_arity();
+        };
+        const count_i64: i64 = command_executor_parse_i64(count_data) catch {
+            return command_executor_invalid_integer();
+        };
+        if count_i64 < 0 {
+            allow_duplicates = true;
+            requested_count = (0 - count_i64) as usize;
+        } else {
+            requested_count = count_i64 as usize;
+        }
+    }
+    if command.argc == 4 {
+        const option: &[byte] = command_executor_arg(command, 3) catch {
+            return command_executor_wrong_arity();
+        };
+        if !command_executor_keyword_eq(option, &"WITHSCORES"[0: 10]) {
+            return command_executor_syntax_error();
+        }
+        withscores = true;
+    }
+
+    const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+        if count_enabled {
+            return command_executor_array_bulk(null as &ListNode, 0);
+        }
+        return command_executor_reply(CommandReplyType.reply_null_bulk, command_executor_empty_slice(), 0);
+    };
+    if obj.obj_type != ObjectType.object_zset {
+        return command_executor_wrongtype();
+    }
+
+    const sorted_members: &RedisObject = zset_object_range_reply(obj, 0, -1) catch |err| {
+        if err == error.AllocOutOfMemory {
+            return command_executor_oom();
+        }
+        return command_executor_wrongtype();
+    };
+    const available: usize = list_object_len(sorted_members) catch {
+        object_free(sorted_members);
+        return command_executor_wrongtype();
+    };
+    if available == 0 {
+        object_free(sorted_members);
+        if count_enabled {
+            return command_executor_array_bulk(null as &ListNode, 0);
+        }
+        return command_executor_reply(CommandReplyType.reply_null_bulk, command_executor_empty_slice(), 0);
+    }
+    if !count_enabled {
+        const member: &[byte] = sorted_members.list_head.value.value.buf[0: sorted_members.list_head.value.value.len];
+        const reply_obj: &RedisObject = create_string_object(member) catch {
+            object_free(sorted_members);
+            return command_executor_oom();
+        };
+        object_free(sorted_members);
+        const data: &[byte] = reply_obj.value.buf[0: reply_obj.value.len];
+        var reply: CommandReply = command_executor_bulk(data);
+        reply.owned_object = reply_obj;
+        return reply;
+    }
+    if requested_count == 0 {
+        object_free(sorted_members);
+        return command_executor_array_bulk(null as &ListNode, 0);
+    }
+
+    var actual_count: usize = requested_count;
+    if !allow_duplicates && actual_count > available {
+        actual_count = available;
+    }
+    const reply_list: &RedisObject = create_list_object() catch {
+        object_free(sorted_members);
+        return command_executor_oom();
+    };
+    var emitted: usize = 0;
+    var node: &ListNode = sorted_members.list_head;
+    while emitted < actual_count {
+        if node == null {
+            node = sorted_members.list_head;
+        }
+        const member_data: &[byte] = node.value.value.buf[0: node.value.value.len];
+        _ = list_object_push_tail(reply_list, member_data) catch {
+            object_free(sorted_members);
+            object_free(reply_list);
+            return command_executor_oom();
+        };
+        if withscores {
+            const score: i64 = zset_object_get_score(obj, member_data) catch {
+                object_free(sorted_members);
+                object_free(reply_list);
+                return command_executor_wrongtype();
+            };
+            _ = command_executor_list_push_i64(reply_list, score) catch {
+                object_free(sorted_members);
+                object_free(reply_list);
+                return command_executor_oom();
+            };
+        }
+        node = node.next;
+        emitted = emitted + 1;
+    }
+    object_free(sorted_members);
+    return command_executor_owned_array(reply_list);
+}
+
 fn command_executor_bzpop(engine: &Engine, command: &Command, now_ms: u64, reverse: bool) CommandReply {
     if command.argc < 3 {
         return command_executor_wrong_arity();
@@ -15903,6 +16023,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_zpopmin {
         return command_executor_zpop(engine, command, now_ms, false);
+    }
+    if command.info.cmd_type == CommandType.command_zrandmember {
+        return command_executor_zrandmember(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_zmpop {
         return command_executor_zmpop(engine, command, now_ms);

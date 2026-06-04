@@ -1140,6 +1140,26 @@ ZREVRANGEBYSCORE key max min
 - 返回 score 落在闭区间 `[min, max]` 内的成员，按 score 降序
 - 当前项目内 ZSet score 使用整数语义
 
+### `ZRANDMEMBER`
+
+格式：
+
+```text
+ZRANDMEMBER key [count [WITHSCORES]]
+```
+
+返回：
+
+- 未提供 `count` 时返回一个 Bulk String；key 缺失或为空时返回 Null Bulk
+- 提供 `count` 时返回成员数组；key 缺失或为空时返回空数组
+- `WITHSCORES` 返回 `member, score` 交错数组
+
+说明：
+
+- 当前实现为 deterministic partial：按项目内 `(score, member)` 排序视图取值，不提供 Redis 原生随机分布
+- 正数 `count` 去重并按集合大小封顶；负数 `count` 允许按排序视图循环重复
+- 当前项目内 ZSet score 使用整数语义
+
 ### `ZREMRANGEBYRANK`
 
 格式：

@@ -870,6 +870,14 @@ class RedisPySubsetClient:
         assert isinstance(result, list)
         return result
 
+    def zrevrangebylex(self, key: str, maximum: str, minimum: str, offset: int | None = None, count: int | None = None) -> list[bytes]:
+        parts: list[bytes] = [b"ZREVRANGEBYLEX", key.encode(), maximum.encode(), minimum.encode()]
+        if offset is not None and count is not None:
+            parts.extend([b"LIMIT", str(offset).encode(), str(count).encode()])
+        result = self._request(*parts)
+        assert isinstance(result, list)
+        return result
+
     def zremrangebylex(self, key: str, minimum: str, maximum: str) -> int:
         return int(self._request(b"ZREMRANGEBYLEX", key.encode(), minimum.encode(), maximum.encode()))
 
@@ -1629,6 +1637,9 @@ def run_smoke() -> None:
             assert client.zrangebylex("lex", "[alpha", "[charlie") == [b"alpha", b"beta", b"charlie"]
             assert client.zrangebylex("lex", "-", "+", offset=1, count=2) == [b"beta", b"charlie"]
             assert client.zrangebylex("lex", "(beta", "+", offset=0, count=-1) == [b"charlie", b"delta"]
+            assert client.zrevrangebylex("lex", "[delta", "(alpha") == [b"delta", b"charlie", b"beta"]
+            assert client.zrevrangebylex("lex", "+", "-", offset=1, count=2) == [b"charlie", b"beta"]
+            assert client.zrevrangebylex("lex", "[charlie", "-", offset=0, count=-1) == [b"charlie", b"beta", b"alpha"]
             assert client.zremrangebylex("lex", "[alpha", "[charlie") == 3
             assert client.zrangebylex("lex", "-", "+") == [b"delta"]
             assert client.zremrangebylex("lex", "-", "+") == 1

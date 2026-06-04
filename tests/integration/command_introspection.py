@@ -540,10 +540,10 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"unexpected XINFO HELP: {xinfo_help!r}")
 
-            zset_info = send_command(sock, b"COMMAND", b"INFO", b"ZRANK", b"ZREVRANK", b"ZSCORE", b"ZMSCORE", b"ZPOPMAX", b"ZPOPMIN", b"ZMPOP", b"ZLEXCOUNT", b"ZRANGEBYLEX", b"ZREMRANGEBYLEX", b"ZREVRANGE", b"BZPOPMAX", b"BZPOPMIN")
+            zset_info = send_command(sock, b"COMMAND", b"INFO", b"ZRANK", b"ZREVRANK", b"ZSCORE", b"ZMSCORE", b"ZPOPMAX", b"ZPOPMIN", b"ZMPOP", b"ZLEXCOUNT", b"ZRANGEBYLEX", b"ZREMRANGEBYLEX", b"ZREVRANGE", b"ZREVRANGEBYLEX", b"BZPOPMAX", b"BZPOPMIN")
             if (
                 not isinstance(zset_info, list)
-                or len(zset_info) != 13
+                or len(zset_info) != 14
                 or not isinstance(zset_info[0], list)
                 or zset_info[0][0] != b"zrank"
                 or not isinstance(zset_info[1], list)
@@ -567,9 +567,11 @@ def run_smoke() -> None:
                 or not isinstance(zset_info[10], list)
                 or zset_info[10][0] != b"zrevrange"
                 or not isinstance(zset_info[11], list)
-                or zset_info[11][0] != b"bzpopmax"
+                or zset_info[11][0] != b"zrevrangebylex"
                 or not isinstance(zset_info[12], list)
-                or zset_info[12][0] != b"bzpopmin"
+                or zset_info[12][0] != b"bzpopmax"
+                or not isinstance(zset_info[13], list)
+                or zset_info[13][0] != b"bzpopmin"
             ):
                 raise AssertionError(f"zset score/pop commands missing from COMMAND INFO: {zset_info!r}")
 
@@ -665,6 +667,7 @@ def run_smoke() -> None:
                 or b"zrangebylex" not in docs_all_resp2
                 or b"zremrangebylex" not in docs_all_resp2
                 or b"zrevrange" not in docs_all_resp2
+                or b"zrevrangebylex" not in docs_all_resp2
                 or b"copy" not in docs_all_resp2
                 or b"restore-asking" not in docs_all_resp2
                 or b"memory|malloc-stats" not in docs_all_resp2
@@ -901,6 +904,7 @@ def run_smoke() -> None:
             if (
                 not isinstance(listed_zrev, list)
                 or b"zrevrange" not in listed_zrev
+                or b"zrevrangebylex" not in listed_zrev
                 or b"zrevrank" not in listed_zrev
                 or b"zrevrangebyscore" not in listed_zrev
             ):
@@ -971,6 +975,7 @@ def run_smoke() -> None:
                 or not isinstance(docs_all.get(b"zrangebylex"), dict)
                 or not isinstance(docs_all.get(b"zremrangebylex"), dict)
                 or not isinstance(docs_all.get(b"zrevrange"), dict)
+                or not isinstance(docs_all.get(b"zrevrangebylex"), dict)
                 or not isinstance(docs_all.get(b"copy"), dict)
                 or not isinstance(docs_all.get(b"restore-asking"), dict)
                 or not isinstance(docs_all.get(b"memory|malloc-stats"), dict)

@@ -1257,6 +1257,24 @@ if [[ "$ZRANGEBYLEX_UNLIMITED_RESULT" != $'charlie\ndelta' ]]; then
     exit 1
 fi
 
+ZREVRANGEBYLEX_CLOSED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrevrangebylex lex '[delta' '(alpha')"
+if [[ "$ZREVRANGEBYLEX_CLOSED_RESULT" != $'delta\ncharlie\nbeta' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZREVRANGEBYLEX delta/charlie/beta, got '$ZREVRANGEBYLEX_CLOSED_RESULT'" >&2
+    exit 1
+fi
+
+ZREVRANGEBYLEX_LIMIT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrevrangebylex lex + - limit 1 2)"
+if [[ "$ZREVRANGEBYLEX_LIMIT_RESULT" != $'charlie\nbeta' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZREVRANGEBYLEX LIMIT charlie/beta, got '$ZREVRANGEBYLEX_LIMIT_RESULT'" >&2
+    exit 1
+fi
+
+ZREVRANGEBYLEX_UNLIMITED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrevrangebylex lex '[charlie' - limit 0 -1)"
+if [[ "$ZREVRANGEBYLEX_UNLIMITED_RESULT" != $'charlie\nbeta\nalpha' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZREVRANGEBYLEX unlimited charlie/beta/alpha, got '$ZREVRANGEBYLEX_UNLIMITED_RESULT'" >&2
+    exit 1
+fi
+
 ZREMRANGEBYLEX_CLOSED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zremrangebylex lex '[alpha' '[charlie')"
 if [[ "$ZREMRANGEBYLEX_CLOSED_RESULT" != "3" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ZREMRANGEBYLEX alpha..charlie 3, got '$ZREMRANGEBYLEX_CLOSED_RESULT'" >&2

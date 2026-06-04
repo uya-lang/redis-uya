@@ -1094,6 +1094,26 @@ ZREVRANGE key start stop [WITHSCORES]
 - 当前不支持通过 `ZREVRANGE ... BYSCORE/BYLEX/LIMIT` 复用新版 `ZRANGE` 扩展语法；score 范围请使用 `ZREVRANGEBYSCORE`
 - 当前项目内 ZSet score 使用整数语义
 
+### `ZREVRANGEBYLEX`
+
+格式：
+
+```text
+ZREVRANGEBYLEX key max min [LIMIT offset count]
+```
+
+返回：
+
+- 返回 member 字典序落在 `[min, max]` 内的成员数组，结果按字典序反向返回
+- key 不存在时返回空数组
+
+说明：
+
+- 当前支持 Redis lex 边界 token：`-`、`+`、`[value`、`(value`
+- 当前支持 `LIMIT offset count`；`offset` 必须非负，`count < 0` 表示不限制数量
+- 当前按项目内 ZSet 的 `(score, member)` 排序视图扫描并按 member 边界返回；与 Redis 一样，lex 范围命令的有效业务语义应使用同分 sorted set
+- 参数顺序遵循 Redis 历史命令：先传 `max`，再传 `min`
+
 ### `ZRANGEBYSCORE`
 
 格式：

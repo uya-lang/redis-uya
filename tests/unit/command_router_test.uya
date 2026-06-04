@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 206);
+    try assert_eq_i32(command_router_count(&router) as i32, 207);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -563,6 +563,10 @@ export fn test_command_router_lookup_and_case() !void {
     try assert_eq_i32(zremrangebyrank.cmd_type as i32, CommandType.command_zremrangebyrank as i32);
     try assert_eq_i32(zremrangebyrank.arity, 4);
 
+    const zremrangebylex: CommandInfo = try command_router_lookup(&router, &"ZREMRANGEBYLEX"[0: 14]);
+    try assert_eq_i32(zremrangebylex.cmd_type as i32, CommandType.command_zremrangebylex as i32);
+    try assert_eq_i32(zremrangebylex.arity, 4);
+
     const zremrangebyscore: CommandInfo = try command_router_lookup(&router, &"zremrangebyscore"[0: 16]);
     try assert_eq_i32(zremrangebyscore.cmd_type as i32, CommandType.command_zremrangebyscore as i32);
     try assert_eq_i32(zremrangebyscore.arity, 4);
@@ -925,6 +929,7 @@ export fn test_command_router_arity_validation() !void {
     const zrevrange: CommandInfo = try command_router_lookup(&router, &"ZREVRANGE"[0: 9]);
     const zlexcount: CommandInfo = try command_router_lookup(&router, &"ZLEXCOUNT"[0: 9]);
     const zrangebylex: CommandInfo = try command_router_lookup(&router, &"ZRANGEBYLEX"[0: 11]);
+    const zremrangebylex: CommandInfo = try command_router_lookup(&router, &"ZREMRANGEBYLEX"[0: 14]);
     const lmove: CommandInfo = try command_router_lookup(&router, &"LMOVE"[0: 5]);
     const rpoplpush: CommandInfo = try command_router_lookup(&router, &"RPOPLPUSH"[0: 9]);
     const incrbyfloat: CommandInfo = try command_router_lookup(&router, &"INCRBYFLOAT"[0: 11]);
@@ -1109,6 +1114,7 @@ export fn test_command_router_arity_validation() !void {
     try command_validate_arity(&zlexcount, 4);
     try command_validate_arity(&zrangebylex, 4);
     try command_validate_arity(&zrangebylex, 7);
+    try command_validate_arity(&zremrangebylex, 4);
     try command_validate_arity(&lmove, 5);
     try command_validate_arity(&rpoplpush, 3);
     try command_validate_arity(&setrange, 4);

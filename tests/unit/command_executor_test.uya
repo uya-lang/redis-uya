@@ -5454,6 +5454,54 @@ export fn test_command_zremrangebyrank_zremrangebyscore_zscan() !void {
     try assert_eq_i32(zcard_empty_reply.integer as i32, 0);
     resp_value_free(&zcard_empty_parsed.value);
 
+    var zadd_lexdel_parsed: RespParseResult = try parse_resp2(&"*10\r\n$4\r\nZADD\r\n$6\r\nlexdel\r\n$1\r\n0\r\n$5\r\nalpha\r\n$1\r\n0\r\n$4\r\nbeta\r\n$1\r\n0\r\n$7\r\ncharlie\r\n$1\r\n0\r\n$5\r\ndelta\r\n"[0: 100]);
+    const zadd_lexdel_command: Command = try command_executor_test_command(&router, &zadd_lexdel_parsed);
+    _ = command_execute_at(&engine, &zadd_lexdel_command, 1000u64);
+    resp_value_free(&zadd_lexdel_parsed.value);
+
+    var zremrangebylex_closed_parsed: RespParseResult = try parse_resp2(&"*4\r\n$14\r\nZREMRANGEBYLEX\r\n$6\r\nlexdel\r\n$6\r\n[alpha\r\n$8\r\n[charlie\r\n"[0: 63]);
+    const zremrangebylex_closed_command: Command = try command_executor_test_command(&router, &zremrangebylex_closed_parsed);
+    const zremrangebylex_closed_reply: CommandReply = command_execute_at(&engine, &zremrangebylex_closed_command, 1000u64);
+    try assert_eq_i32(zremrangebylex_closed_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(zremrangebylex_closed_reply.integer as i32, 3);
+    resp_value_free(&zremrangebylex_closed_parsed.value);
+
+    var zrange_lexdel_after_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nZRANGE\r\n$6\r\nlexdel\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 43]);
+    const zrange_lexdel_after_command: Command = try command_executor_test_command(&router, &zrange_lexdel_after_parsed);
+    const zrange_lexdel_after_reply: CommandReply = command_execute_at(&engine, &zrange_lexdel_after_command, 1000u64);
+    const zrange_lexdel_after_len: usize = try connection_encode_reply(&zrange_lexdel_after_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: zrange_lexdel_after_len], &"*1\r\n$5\r\ndelta\r\n"[0: 15]));
+    command_reply_cleanup(&zrange_lexdel_after_reply);
+    resp_value_free(&zrange_lexdel_after_parsed.value);
+
+    var zremrangebylex_all_parsed: RespParseResult = try parse_resp2(&"*4\r\n$14\r\nZREMRANGEBYLEX\r\n$6\r\nlexdel\r\n$1\r\n-\r\n$1\r\n+\r\n"[0: 51]);
+    const zremrangebylex_all_command: Command = try command_executor_test_command(&router, &zremrangebylex_all_parsed);
+    const zremrangebylex_all_reply: CommandReply = command_execute_at(&engine, &zremrangebylex_all_command, 1000u64);
+    try assert_eq_i32(zremrangebylex_all_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(zremrangebylex_all_reply.integer as i32, 1);
+    resp_value_free(&zremrangebylex_all_parsed.value);
+
+    var zcard_lexdel_empty_parsed: RespParseResult = try parse_resp2(&"*2\r\n$5\r\nZCARD\r\n$6\r\nlexdel\r\n"[0: 27]);
+    const zcard_lexdel_empty_command: Command = try command_executor_test_command(&router, &zcard_lexdel_empty_parsed);
+    const zcard_lexdel_empty_reply: CommandReply = command_execute_at(&engine, &zcard_lexdel_empty_command, 1000u64);
+    try assert_eq_i32(zcard_lexdel_empty_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(zcard_lexdel_empty_reply.integer as i32, 0);
+    resp_value_free(&zcard_lexdel_empty_parsed.value);
+
+    var zremrangebylex_missing_parsed: RespParseResult = try parse_resp2(&"*4\r\n$14\r\nZREMRANGEBYLEX\r\n$7\r\nmissing\r\n$1\r\n-\r\n$1\r\n+\r\n"[0: 52]);
+    const zremrangebylex_missing_command: Command = try command_executor_test_command(&router, &zremrangebylex_missing_parsed);
+    const zremrangebylex_missing_reply: CommandReply = command_execute_at(&engine, &zremrangebylex_missing_command, 1000u64);
+    try assert_eq_i32(zremrangebylex_missing_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(zremrangebylex_missing_reply.integer as i32, 0);
+    resp_value_free(&zremrangebylex_missing_parsed.value);
+
+    var zremrangebylex_bad_parsed: RespParseResult = try parse_resp2(&"*4\r\n$14\r\nZREMRANGEBYLEX\r\n$7\r\nmissing\r\n$5\r\nalpha\r\n$1\r\n+\r\n"[0: 56]);
+    const zremrangebylex_bad_command: Command = try command_executor_test_command(&router, &zremrangebylex_bad_parsed);
+    const zremrangebylex_bad_reply: CommandReply = command_execute_at(&engine, &zremrangebylex_bad_command, 1000u64);
+    try assert_eq_i32(zremrangebylex_bad_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(zremrangebylex_bad_reply.data, &"not valid string range"[0: 22]));
+    resp_value_free(&zremrangebylex_bad_parsed.value);
+
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);
 }

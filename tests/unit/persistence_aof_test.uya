@@ -580,6 +580,25 @@ export fn test_aof_replay_blocking_zset_commands() !void {
         1000u64,
     );
     try assert_true(aof_test_slice_eq(out[0: zmpop_result.response_len], &"*2\r\n$3\r\nzm3\r\n*2\r\n*2\r\n$1\r\na\r\n$1\r\n1\r\n*2\r\n$1\r\nb\r\n$1\r\n2\r\n"[0: 53]));
+    _ = try connection_process_input_with_aof_at(
+        &engine,
+        &router,
+        &writer,
+        &"*10\r\n$4\r\nZADD\r\n$5\r\nlexrm\r\n$1\r\n0\r\n$5\r\nalpha\r\n$1\r\n0\r\n$4\r\nbeta\r\n$1\r\n0\r\n$7\r\ncharlie\r\n$1\r\n0\r\n$5\r\ndelta\r\n"[0: 99],
+        &out[0],
+        256,
+        1000u64,
+    );
+    const zremrangebylex_result: ConnectionProcessResult = try connection_process_input_with_aof_at(
+        &engine,
+        &router,
+        &writer,
+        &"*4\r\n$14\r\nZREMRANGEBYLEX\r\n$5\r\nlexrm\r\n$6\r\n[alpha\r\n$8\r\n[charlie\r\n"[0: 62],
+        &out[0],
+        256,
+        1000u64,
+    );
+    try assert_true(aof_test_slice_eq(out[0: zremrangebylex_result.response_len], &":3\r\n"[0: 4]));
     aof_close(&writer);
     engine_free(&engine);
 
@@ -591,6 +610,10 @@ export fn test_aof_replay_blocking_zset_commands() !void {
     try assert_eq_i32(zm3_obj.obj_type as i32, ObjectType.object_zset as i32);
     try assert_eq_i32((try zset_object_len(zm3_obj)) as i32, 1);
     try assert_eq_i32((try zset_object_get_score(zm3_obj, &"c"[0: 1])) as i32, 3);
+    const lexrm_obj: &RedisObject = try lookup_key_at(&replay_engine, &"lexrm"[0: 5], 2000u64);
+    try assert_eq_i32(lexrm_obj.obj_type as i32, ObjectType.object_zset as i32);
+    try assert_eq_i32((try zset_object_len(lexrm_obj)) as i32, 1);
+    try assert_eq_i32((try zset_object_get_score(lexrm_obj, &"delta"[0: 5])) as i32, 0);
     engine_free(&replay_engine);
     _ = unlink(path);
     try assert_eq_i32(used_memory() as i32, 0);

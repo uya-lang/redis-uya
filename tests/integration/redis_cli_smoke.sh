@@ -1257,6 +1257,30 @@ if [[ "$ZRANGEBYLEX_UNLIMITED_RESULT" != $'charlie\ndelta' ]]; then
     exit 1
 fi
 
+ZREMRANGEBYLEX_CLOSED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zremrangebylex lex '[alpha' '[charlie')"
+if [[ "$ZREMRANGEBYLEX_CLOSED_RESULT" != "3" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZREMRANGEBYLEX alpha..charlie 3, got '$ZREMRANGEBYLEX_CLOSED_RESULT'" >&2
+    exit 1
+fi
+
+ZRANGEBYLEX_AFTER_REM_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrangebylex lex - +)"
+if [[ "$ZRANGEBYLEX_AFTER_REM_RESULT" != "delta" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected lex delta after ZREMRANGEBYLEX, got '$ZRANGEBYLEX_AFTER_REM_RESULT'" >&2
+    exit 1
+fi
+
+ZREMRANGEBYLEX_ALL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zremrangebylex lex - +)"
+if [[ "$ZREMRANGEBYLEX_ALL_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZREMRANGEBYLEX all 1, got '$ZREMRANGEBYLEX_ALL_RESULT'" >&2
+    exit 1
+fi
+
+ZREMRANGEBYLEX_MISSING_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zremrangebylex missing - +)"
+if [[ "$ZREMRANGEBYLEX_MISSING_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZREMRANGEBYLEX missing 0, got '$ZREMRANGEBYLEX_MISSING_RESULT'" >&2
+    exit 1
+fi
+
 ZINCRBY_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zincrby zset 3 a)"
 if [[ "$ZINCRBY_RESULT" != "4" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ZINCRBY 4, got '$ZINCRBY_RESULT'" >&2

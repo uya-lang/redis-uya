@@ -1055,6 +1055,26 @@ ZRANGEBYLEX key min max [LIMIT offset count]
 - 当前按项目内 ZSet 的 `(score, member)` 排序视图扫描并按 member 边界返回；与 Redis 一样，lex 范围命令的有效业务语义应使用同分 sorted set
 - 当前不支持 `REV` 或 `BYSCORE` 等新版 `ZRANGE` 复合语法
 
+### `ZREMRANGEBYLEX`
+
+格式：
+
+```text
+ZREMRANGEBYLEX key min max
+```
+
+返回：
+
+- 返回被删除的成员数量
+- key 不存在时返回 `0`
+
+说明：
+
+- 当前支持 Redis lex 边界 token：`-`、`+`、`[value`、`(value`
+- 当前按项目内 ZSet 的 `(score, member)` 排序视图扫描并按 member 边界删除；与 Redis 一样，lex 范围命令的有效业务语义应使用同分 sorted set
+- 删除最后一个成员后会删除整个 key
+- 非法边界返回 `ERR min or max not valid string range item`
+
 ### `ZREVRANGE`
 
 格式：

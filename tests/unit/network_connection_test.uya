@@ -1202,6 +1202,29 @@ export fn test_connection_process_watch_unwatch() !void {
     const get_copy_dest: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$3\r\nGET\r\n$8\r\ncopydest\r\n"[0: 27], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: get_copy_dest.response_len], &"$5\r\nvalue\r\n"[0: 11]));
 
+    const zadd_watchlex: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*10\r\n$4\r\nZADD\r\n$8\r\nwatchlex\r\n$1\r\n0\r\n$5\r\nalpha\r\n$1\r\n0\r\n$4\r\nbeta\r\n$1\r\n0\r\n$7\r\ncharlie\r\n$1\r\n0\r\n$5\r\ndelta\r\n"[0: 102], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: zadd_watchlex.response_len], &":4\r\n"[0: 4]));
+
+    const watch_lex: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$5\r\nWATCH\r\n$8\r\nwatchlex\r\n"[0: 29], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: watch_lex.response_len], &"+OK\r\n"[0: 5]));
+    try assert_eq_i32(engine_watch_client_count(&engine) as i32, 1);
+
+    const lex_multi: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$5\r\nMULTI\r\n"[0: 15], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: lex_multi.response_len], &"+OK\r\n"[0: 5]));
+
+    const queued_lex_read: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$11\r\nZRANGEBYLEX\r\n$8\r\nwatchlex\r\n$1\r\n-\r\n$1\r\n+\r\n"[0: 50], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: queued_lex_read.response_len], &"+QUEUED\r\n"[0: 9]));
+
+    const outside_zremrangebylex: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$14\r\nZREMRANGEBYLEX\r\n$8\r\nwatchlex\r\n$6\r\n[alpha\r\n$8\r\n[charlie\r\n"[0: 65], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: outside_zremrangebylex.response_len], &":3\r\n"[0: 4]));
+
+    const lex_exec_abort: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$4\r\nEXEC\r\n"[0: 14], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: lex_exec_abort.response_len], &"*-1\r\n"[0: 5]));
+    try assert_eq_i32(engine_watch_client_count(&engine) as i32, 0);
+
+    const lex_after_rem: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$11\r\nZRANGEBYLEX\r\n$8\r\nwatchlex\r\n$1\r\n-\r\n$1\r\n+\r\n"[0: 50], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: lex_after_rem.response_len], &"*1\r\n$5\r\ndelta\r\n"[0: 15]));
+
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);
 }

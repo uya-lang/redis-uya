@@ -870,6 +870,9 @@ class RedisPySubsetClient:
         assert isinstance(result, list)
         return result
 
+    def zremrangebylex(self, key: str, minimum: str, maximum: str) -> int:
+        return int(self._request(b"ZREMRANGEBYLEX", key.encode(), minimum.encode(), maximum.encode()))
+
     def zrank(self, key: str, member: str, withscore: bool = False) -> int | tuple[int, bytes] | None:
         parts: list[bytes] = [b"ZRANK", key.encode(), member.encode()]
         if withscore:
@@ -1626,7 +1629,12 @@ def run_smoke() -> None:
             assert client.zrangebylex("lex", "[alpha", "[charlie") == [b"alpha", b"beta", b"charlie"]
             assert client.zrangebylex("lex", "-", "+", offset=1, count=2) == [b"beta", b"charlie"]
             assert client.zrangebylex("lex", "(beta", "+", offset=0, count=-1) == [b"charlie", b"delta"]
-            assert client.delete("lex") == 1
+            assert client.zremrangebylex("lex", "[alpha", "[charlie") == 3
+            assert client.zrangebylex("lex", "-", "+") == [b"delta"]
+            assert client.zremrangebylex("lex", "-", "+") == 1
+            assert client.zcard("lex") == 0
+            assert client.zremrangebylex("missing", "-", "+") == 0
+            assert client.delete("lex") == 0
             assert client.zincrby("zset", 3, "a") == b"4"
             assert client.zcount("zset", 4, 4) == 1
             assert client.zrank("zset", "b") == 0

@@ -85,6 +85,7 @@ use src.storage.engine.lookup_key_at;
 use src.storage.engine.lookup_key_no_touch_at;
 use src.storage.engine.set_key_at;
 use src.storage.engine.delete_key;
+use src.storage.engine.touch_key_watch_version;
 use src.storage.engine.set_key_expire_at;
 use src.storage.engine.clear_key_expire;
 use src.storage.engine.persist_key_expire;
@@ -9453,6 +9454,68 @@ fn command_executor_zrangebylex(engine: &Engine, command: &Command, now_ms: u64)
     return command_executor_owned_array(ranged);
 }
 
+fn command_executor_zremrangebylex(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 4 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const min_data: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    const max_data: &[byte] = command_executor_arg(command, 3) catch {
+        return command_executor_wrong_arity();
+    };
+    const min_bound: CommandExecutorZLexBound = command_executor_zlex_parse_bound(min_data) catch {
+        return command_executor_error(&"ERR min or max not valid string range item"[0: 42]);
+    };
+    const max_bound: CommandExecutorZLexBound = command_executor_zlex_parse_bound(max_data) catch {
+        return command_executor_error(&"ERR min or max not valid string range item"[0: 42]);
+    };
+
+    const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+        return command_executor_integer(0);
+    };
+    if obj.obj_type != ObjectType.object_zset {
+        return command_executor_wrongtype();
+    }
+
+    const sorted_members: &RedisObject = zset_object_range_reply(obj, 0, -1) catch |err| {
+        if err == error.AllocOutOfMemory {
+            return command_executor_oom();
+        }
+        return command_executor_wrongtype();
+    };
+    var removed: i64 = 0;
+    var node: &ListNode = sorted_members.list_head;
+    while node != null {
+        const member: &[byte] = node.value.value.buf[0: node.value.value.len];
+        if command_executor_zlex_member_in_range(member, &min_bound, &max_bound) {
+            const deleted: bool = zset_object_remove_member(obj, member) catch {
+                object_free(sorted_members);
+                return command_executor_wrongtype();
+            };
+            if deleted {
+                removed = removed + 1;
+            }
+        }
+        node = node.next;
+    }
+    object_free(sorted_members);
+    if removed > 0 {
+        const remaining: usize = zset_object_len(obj) catch {
+            return command_executor_wrongtype();
+        };
+        if remaining == 0 {
+            _ = delete_key(engine, key);
+        } else {
+            _ = touch_key_watch_version(engine, key) catch {};
+        }
+    }
+    return command_executor_integer(removed);
+}
+
 fn command_executor_zset_score_or_missing(obj: &RedisObject, member: &[byte], score_out: &i64) !bool {
     const score_result: !i64 = zset_object_get_score(obj, member);
     const score: i64 = score_result catch |err| {
@@ -10199,6 +10262,8 @@ fn command_executor_zremrangebyrank(engine: &Engine, command: &Command, now_ms: 
         };
         if remaining == 0 {
             _ = delete_key(engine, key);
+        } else {
+            _ = touch_key_watch_version(engine, key) catch {};
         }
     }
     return command_executor_integer(removed);
@@ -10258,6 +10323,8 @@ fn command_executor_zremrangebyscore(engine: &Engine, command: &Command, now_ms:
         };
         if remaining == 0 {
             _ = delete_key(engine, key);
+        } else {
+            _ = touch_key_watch_version(engine, key) catch {};
         }
     }
     return command_executor_integer(removed);
@@ -14499,6 +14566,7 @@ fn command_executor_command_key_flags(info: &CommandInfo, key_ordinal: usize) &[
         info.cmd_type == CommandType.command_hdel ||
         info.cmd_type == CommandType.command_srem ||
         info.cmd_type == CommandType.command_zrem ||
+        info.cmd_type == CommandType.command_zremrangebylex ||
         info.cmd_type == CommandType.command_zremrangebyrank ||
         info.cmd_type == CommandType.command_zremrangebyscore {
         return &"RW|delete"[0: 9];
@@ -15722,6 +15790,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_zrangebylex {
         return command_executor_zrangebylex(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_zremrangebylex {
+        return command_executor_zremrangebylex(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_zrank {
         return command_executor_zrank(engine, command, now_ms, false);

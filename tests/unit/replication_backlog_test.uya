@@ -57,6 +57,15 @@ export fn test_replication_backlog_append_and_trim() !void {
     try assert_true(replication_backlog_first_offset(&backlog) > 1u64);
     try assert_true(!replication_backlog_can_continue(&backlog, backlog.replid[0: 40], 0u64));
 
+    const before_zremrangebylex_offset: u64 = backlog.master_offset;
+    var zremrangebylex_parsed: RespParseResult = try parse_resp2(&"*4\r\n$14\r\nZREMRANGEBYLEX\r\n$5\r\nlexrm\r\n$6\r\n[alpha\r\n$8\r\n[charlie\r\n"[0: 62]);
+    const zremrangebylex_command: Command = try replication_backlog_test_command(&router, &zremrangebylex_parsed);
+    try replication_backlog_append_command_at(&backlog, &zremrangebylex_command, &"*4\r\n$14\r\nZREMRANGEBYLEX\r\n$5\r\nlexrm\r\n$6\r\n[alpha\r\n$8\r\n[charlie\r\n"[0: 62], 1000u64);
+    resp_value_free(&zremrangebylex_parsed.value);
+
+    try assert_eq_i32((backlog.master_offset - before_zremrangebylex_offset) as i32, 62);
+    try assert_true(replication_backlog_history_len(&backlog) <= 32);
+
     replication_backlog_free(&backlog);
     try assert_eq_i32(used_memory() as i32, 0);
 }

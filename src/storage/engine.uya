@@ -124,6 +124,10 @@ fn engine_touch_watch_version(engine: &Engine, key: &[byte]) !void {
     _ = try dict_insert(&engine.db.watch_versions, key, engine.watch_seq as usize);
 }
 
+export fn touch_key_watch_version(engine: &Engine, key: &[byte]) !void {
+    try engine_touch_watch_version(engine, key);
+}
+
 export fn set_key_at(engine: &Engine, key: &[byte], obj: &RedisObject, now_ms: u64) !void {
     object_touch_for_memory_policy(obj, now_ms);
 

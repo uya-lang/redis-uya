@@ -1,7 +1,7 @@
 # redis-uya command matrix
 
 > version: v0.9.1-dev
-> date: 2026-06-03
+> date: 2026-06-04
 > source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`
 > runtime source: `src/command/catalog_generated.uya`
 
@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 155 | 0 | 3 | 61 |
+| Tier A: standalone core | 365 | 259 | 146 | 156 | 0 | 3 | 60 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `162` |
+| `partial` | `163` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `214` |
+| `deferred` | `213` |
 
 ## Group counts
 
@@ -607,7 +607,7 @@
 | `zrangestore` | `sorted-set` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@write, @sortedset, @slow` |
 | `zrank` | `sorted-set` | `full` | `-` | `-3` | `-` | `no` | `@read, @sortedset, @fast` |
 | `zrem` | `sorted-set` | `full` | `-` | `-3` | `-` | `no` | `@write, @sortedset, @fast` |
-| `zremrangebylex` | `sorted-set` | `deferred` | `v0.9.1` | `4` | `-` | `no` | `@write, @sortedset, @slow` |
+| `zremrangebylex` | `sorted-set` | `partial` | `-` | `4` | `-` | `no` | `@write, @sortedset, @slow` |
 | `zremrangebyrank` | `sorted-set` | `full` | `-` | `4` | `-` | `no` | `@write, @sortedset, @slow` |
 | `zremrangebyscore` | `sorted-set` | `full` | `-` | `4` | `-` | `no` | `@write, @sortedset, @slow` |
 | `zrevrange` | `sorted-set` | `partial` | `-` | `-4` | `-` | `no` | `@read, @sortedset, @slow` |

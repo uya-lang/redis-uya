@@ -862,6 +862,14 @@ class RedisPySubsetClient:
     def zlexcount(self, key: str, minimum: str, maximum: str) -> int:
         return int(self._request(b"ZLEXCOUNT", key.encode(), minimum.encode(), maximum.encode()))
 
+    def zrangebylex(self, key: str, minimum: str, maximum: str, offset: int | None = None, count: int | None = None) -> list[bytes]:
+        parts: list[bytes] = [b"ZRANGEBYLEX", key.encode(), minimum.encode(), maximum.encode()]
+        if offset is not None and count is not None:
+            parts.extend([b"LIMIT", str(offset).encode(), str(count).encode()])
+        result = self._request(*parts)
+        assert isinstance(result, list)
+        return result
+
     def zrank(self, key: str, member: str, withscore: bool = False) -> int | tuple[int, bytes] | None:
         parts: list[bytes] = [b"ZRANK", key.encode(), member.encode()]
         if withscore:
@@ -1615,6 +1623,9 @@ def run_smoke() -> None:
             assert client.zlexcount("lex", "(alpha", "[delta") == 3
             assert client.zlexcount("lex", "-", "+") == 4
             assert client.zlexcount("missing", "-", "+") == 0
+            assert client.zrangebylex("lex", "[alpha", "[charlie") == [b"alpha", b"beta", b"charlie"]
+            assert client.zrangebylex("lex", "-", "+", offset=1, count=2) == [b"beta", b"charlie"]
+            assert client.zrangebylex("lex", "(beta", "+", offset=0, count=-1) == [b"charlie", b"delta"]
             assert client.delete("lex") == 1
             assert client.zincrby("zset", 3, "a") == b"4"
             assert client.zcount("zset", 4, 4) == 1

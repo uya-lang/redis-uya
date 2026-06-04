@@ -1239,6 +1239,24 @@ if [[ "$ZLEXCOUNT_MISSING_RESULT" != "0" ]]; then
     exit 1
 fi
 
+ZRANGEBYLEX_CLOSED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrangebylex lex '[alpha' '[charlie')"
+if [[ "$ZRANGEBYLEX_CLOSED_RESULT" != $'alpha\nbeta\ncharlie' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZRANGEBYLEX alpha/beta/charlie, got '$ZRANGEBYLEX_CLOSED_RESULT'" >&2
+    exit 1
+fi
+
+ZRANGEBYLEX_LIMIT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrangebylex lex - + limit 1 2)"
+if [[ "$ZRANGEBYLEX_LIMIT_RESULT" != $'beta\ncharlie' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZRANGEBYLEX LIMIT beta/charlie, got '$ZRANGEBYLEX_LIMIT_RESULT'" >&2
+    exit 1
+fi
+
+ZRANGEBYLEX_UNLIMITED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrangebylex lex '(beta' + limit 0 -1)"
+if [[ "$ZRANGEBYLEX_UNLIMITED_RESULT" != $'charlie\ndelta' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZRANGEBYLEX unlimited charlie/delta, got '$ZRANGEBYLEX_UNLIMITED_RESULT'" >&2
+    exit 1
+fi
+
 ZINCRBY_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zincrby zset 3 a)"
 if [[ "$ZINCRBY_RESULT" != "4" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ZINCRBY 4, got '$ZINCRBY_RESULT'" >&2

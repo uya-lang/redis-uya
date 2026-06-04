@@ -60,7 +60,7 @@
 - Set 最小对象：基于项目内 `Dict` 的最小 set value 容器
 - Set 命令子集：`SADD`、`SCARD`、`SISMEMBER`、`SMISMEMBER`、`SMEMBERS`、`SREM`、`SMOVE`、`SSCAN`
 - ZSet 最小对象：基于项目内 `Dict` 的最小 zset value 容器，支持按 score 排序范围读取
-- ZSet 命令子集：`ZADD`、`ZRANGE`、`ZREVRANGE`、`ZLEXCOUNT`、`ZREM`
+- ZSet 命令子集：`ZADD`、`ZRANGE`、`ZRANGEBYLEX`、`ZREVRANGE`、`ZLEXCOUNT`、`ZREM`
 - Key 迭代子集：`SCAN`，支持 cursor 返回与 `COUNT` 最小参数
 - TCP 服务闭环：loopback 监听、连接读写缓冲、请求解析执行写回、`QUIT`、`maxclients`、Python socket smoke
 - 服务运行循环：单线程 epoll 多连接、100ms cron 主动过期采样循环、空闲连接不阻塞其他客户端
@@ -303,7 +303,7 @@ build/redis-uya 6380 1
 - Set 第三批集合写回：`SINTERSTORE`、`SDIFFSTORE`、`SUNIONSTORE`
 - Set 第四批读路径：`SCARD`、`SISMEMBER`、`SMISMEMBER`、`SSCAN`
 - ZSet 第一批数值与计数：`ZINCRBY`、`ZCARD`、`ZCOUNT`
-- ZSet 第二批范围读取：`ZLEXCOUNT`、`ZREVRANGE`、`ZRANGEBYSCORE`、`ZREVRANGEBYSCORE`
+- ZSet 第二批范围读取：`ZLEXCOUNT`、`ZRANGEBYLEX`、`ZREVRANGE`、`ZRANGEBYSCORE`、`ZREVRANGEBYSCORE`
 - ZSet 第三批范围删除与扫描：`ZREMRANGEBYRANK`、`ZREMRANGEBYSCORE`、`ZSCAN`
 - Key/Server 第三批：`RENAME`、`RENAMENX`、`LASTSAVE`
 - Key/Server 第四批：`FLUSHDB`、`FLUSHALL`

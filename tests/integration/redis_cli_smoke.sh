@@ -1395,6 +1395,24 @@ if [[ "$ZINTERCARD_LIMIT_RESULT" != "1" ]]; then
     exit 1
 fi
 
+ZINTER_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zinter 2 zset zdiff2)"
+if [[ "$ZINTER_RESULT" != "b" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZINTER b, got '$ZINTER_RESULT'" >&2
+    exit 1
+fi
+
+ZINTER_SCORES_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zinter 2 zset zdiff2 withscores)"
+if [[ "$ZINTER_SCORES_RESULT" != $'b\n4' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZINTER WITHSCORES b/4, got '$ZINTER_SCORES_RESULT'" >&2
+    exit 1
+fi
+
+ZINTER_MISSING_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zinter 2 zset missing)"
+if [[ -n "$ZINTER_MISSING_RESULT" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected empty ZINTER missing source, got '$ZINTER_MISSING_RESULT'" >&2
+    exit 1
+fi
+
 ZUNION_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zunion 2 zset zdiff2)"
 if [[ "$ZUNION_RESULT" != $'a\nb\nd' ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ZUNION a/b/d, got '$ZUNION_RESULT'" >&2

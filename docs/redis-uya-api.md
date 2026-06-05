@@ -1199,6 +1199,27 @@ ZDIFFSTORE destination numkeys key [key ...]
 - 后续源 key 缺失时按空 zset 处理
 - 当前项目内 ZSet score 使用整数语义
 
+### `ZINTER`
+
+格式：
+
+```text
+ZINTER numkeys key [key ...] [WITHSCORES]
+```
+
+返回：
+
+- 返回多个 zset 的交集成员
+- 交集成员 score 按 SUM 聚合
+- `WITHSCORES` 返回 `member, score` 交错数组
+
+说明：
+
+- 当前实现为 read-only partial，按聚合结果的 `(score, member)` 排序视图输出
+- 任一源 key 缺失时返回空数组
+- 当前尚未实现 `WEIGHTS` / `AGGREGATE` 选项
+- 当前项目内 ZSet score 使用整数语义
+
 ### `ZINTERCARD`
 
 格式：
@@ -1214,7 +1235,7 @@ ZINTERCARD numkeys key [key ...] [LIMIT limit]
 
 说明：
 
-- 当前实现为 read-only partial，只计算成员交集基数，不包含 `ZINTER` / `ZINTERSTORE` 的权重和聚合语义
+- 当前实现为 read-only partial，只计算成员交集基数，不包含 `ZINTERSTORE` 的写回语义
 - 任一源 key 缺失时返回 `0`
 - `LIMIT` 不能为负数
 - 当前项目内 ZSet score 使用整数语义

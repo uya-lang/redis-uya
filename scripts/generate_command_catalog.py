@@ -414,6 +414,7 @@ PARTIAL_NAMES = {
     "subscribe",
     "unsubscribe",
     "wait",
+    "zdiff",
     "zmpop",
     "zrandmember",
     "zlexcount",

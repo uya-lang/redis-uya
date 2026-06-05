@@ -952,6 +952,14 @@ class RedisPySubsetClient:
         assert result is None or isinstance(result, bytes) or isinstance(result, list)
         return result
 
+    def zdiff(self, *keys: str, withscores: bool = False) -> list[bytes]:
+        parts: list[bytes] = [b"ZDIFF", str(len(keys)).encode(), *(key.encode() for key in keys)]
+        if withscores:
+            parts.append(b"WITHSCORES")
+        result = self._request(*parts)
+        assert isinstance(result, list)
+        return result
+
     def zrangebyscore(self, key: str, minimum: int, maximum: int) -> list[bytes]:
         result = self._request(b"ZRANGEBYSCORE", key.encode(), str(minimum).encode(), str(maximum).encode())
         assert isinstance(result, list)
@@ -1670,6 +1678,10 @@ def run_smoke() -> None:
             assert client.zrandmember("zset", 2) == [b"b", b"a"]
             assert client.zrandmember("zset", 2, withscores=True) == [b"b", b"2", b"a", b"4"]
             assert client.zrandmember("zset", -3) == [b"b", b"a", b"b"]
+            assert client.zadd("zdiff2", {"b": 2, "d": 5}) == 2
+            assert client.zdiff("zset", "zdiff2") == [b"a"]
+            assert client.zdiff("zset", "zdiff2", withscores=True) == [b"a", b"4"]
+            assert client.delete("zdiff2") == 1
             assert client.zrange("zset", 0, -1) == [b"b", b"a"]
             assert client.zrevrange("zset", 0, -1) == [b"a", b"b"]
             assert client.zrevrange("zset", 0, 1, withscores=True) == [b"a", b"4", b"b", b"2"]

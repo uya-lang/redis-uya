@@ -1377,6 +1377,24 @@ if [[ "$ZRANDMEMBER_REPEAT_RESULT" != $'b\na\nb' ]]; then
     exit 1
 fi
 
+ZDIFF_ZADD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zadd zdiff2 2 b 5 d)"
+if [[ "$ZDIFF_ZADD_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZADD zdiff2 2, got '$ZDIFF_ZADD_RESULT'" >&2
+    exit 1
+fi
+
+ZDIFF_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zdiff 2 zset zdiff2)"
+if [[ "$ZDIFF_RESULT" != "a" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZDIFF a, got '$ZDIFF_RESULT'" >&2
+    exit 1
+fi
+
+ZDIFF_SCORES_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zdiff 2 zset zdiff2 withscores)"
+if [[ "$ZDIFF_SCORES_RESULT" != $'a\n4' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZDIFF WITHSCORES a/4, got '$ZDIFF_SCORES_RESULT'" >&2
+    exit 1
+fi
+
 ZRANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrange zset 0 -1)"
 if [[ "$ZRANGE_RESULT" != $'b\na' ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ZRANGE b/a after ZINCRBY, got '$ZRANGE_RESULT'" >&2

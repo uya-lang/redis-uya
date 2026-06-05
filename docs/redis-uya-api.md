@@ -1160,6 +1160,26 @@ ZRANDMEMBER key [count [WITHSCORES]]
 - 正数 `count` 去重并按集合大小封顶；负数 `count` 允许按排序视图循环重复
 - 当前项目内 ZSet score 使用整数语义
 
+### `ZDIFF`
+
+格式：
+
+```text
+ZDIFF numkeys key [key ...] [WITHSCORES]
+```
+
+返回：
+
+- 返回存在于第一个 zset 且不存在于后续 zset 的成员
+- `WITHSCORES` 返回 `member, score` 交错数组，score 来自第一个 zset
+
+说明：
+
+- 当前实现为 read-only partial，按第一个 zset 的 `(score, member)` 排序视图输出
+- 第一个 key 缺失时返回空数组；后续 key 缺失时按空 zset 处理
+- 当前不包含 `ZDIFFSTORE` 写回命令
+- 当前项目内 ZSet score 使用整数语义
+
 ### `ZREMRANGEBYRANK`
 
 格式：

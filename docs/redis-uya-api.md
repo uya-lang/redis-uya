@@ -1177,7 +1177,26 @@ ZDIFF numkeys key [key ...] [WITHSCORES]
 
 - 当前实现为 read-only partial，按第一个 zset 的 `(score, member)` 排序视图输出
 - 第一个 key 缺失时返回空数组；后续 key 缺失时按空 zset 处理
-- 当前不包含 `ZDIFFSTORE` 写回命令
+- 当前项目内 ZSet score 使用整数语义
+
+### `ZDIFFSTORE`
+
+格式：
+
+```text
+ZDIFFSTORE destination numkeys key [key ...]
+```
+
+返回：
+
+- 返回写入 `destination` 的成员数量
+- 写入存在于第一个 zset 且不存在于后续 zset 的成员，score 来自第一个 zset
+
+说明：
+
+- 当前实现为 write partial，按第一个 zset 的 `(score, member)` 排序视图生成结果
+- 第一个源 key 缺失或结果为空时删除 `destination` 并返回 `0`
+- 后续源 key 缺失时按空 zset 处理
 - 当前项目内 ZSet score 使用整数语义
 
 ### `ZREMRANGEBYRANK`

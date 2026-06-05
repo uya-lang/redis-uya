@@ -696,6 +696,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"georadiusbymember_ro"[0: 20], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"geosearchstore"[0: 14], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"zdiff"[0: 5], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"zdiffstore"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"zrandmember"[0: 11], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xack"[0: 4], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xclaim"[0: 6], CommandCatalogStatus.status_partial);
@@ -5205,6 +5206,73 @@ export fn test_command_zrangebyscore_zrevrangebyscore() !void {
     try assert_eq_i32(zdiff_bad_option_reply.typ as i32, CommandReplyType.reply_error as i32);
     try assert_true(command_executor_test_slice_eq(zdiff_bad_option_reply.data, &"ERR syntax error"[0: 16]));
     resp_value_free(&zdiff_bad_option_parsed.value);
+
+    var zdiffstore_parsed: RespParseResult = try parse_resp2(&"*5\r\n$10\r\nZDIFFSTORE\r\n$5\r\nzdout\r\n$1\r\n2\r\n$4\r\nzset\r\n$2\r\nz2\r\n"[0: 57]);
+    const zdiffstore_command: Command = try command_executor_test_command(&router, &zdiffstore_parsed);
+    const zdiffstore_reply: CommandReply = command_execute_at(&engine, &zdiffstore_command, 1000u64);
+    try assert_eq_i32(zdiffstore_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(zdiffstore_reply.integer as i32, 2);
+    resp_value_free(&zdiffstore_parsed.value);
+
+    var zdiffstore_range_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nZRANGE\r\n$5\r\nzdout\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 42]);
+    const zdiffstore_range_command: Command = try command_executor_test_command(&router, &zdiffstore_range_parsed);
+    var zdiffstore_range_reply: CommandReply = command_execute_at(&engine, &zdiffstore_range_command, 1000u64);
+    const zdiffstore_range_len: usize = try connection_encode_reply(&zdiffstore_range_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: zdiffstore_range_len], &"*2\r\n$1\r\na\r\n$1\r\nc\r\n"[0: 18]));
+    command_reply_cleanup(&zdiffstore_range_reply);
+    resp_value_free(&zdiffstore_range_parsed.value);
+
+    var zdiffstore_score_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nZSCORE\r\n$5\r\nzdout\r\n$1\r\na\r\n"[0: 34]);
+    const zdiffstore_score_command: Command = try command_executor_test_command(&router, &zdiffstore_score_parsed);
+    var zdiffstore_score_reply: CommandReply = command_execute_at(&engine, &zdiffstore_score_command, 1000u64);
+    const zdiffstore_score_len: usize = try connection_encode_reply(&zdiffstore_score_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: zdiffstore_score_len], &"$1\r\n1\r\n"[0: 7]));
+    command_reply_cleanup(&zdiffstore_score_reply);
+    resp_value_free(&zdiffstore_score_parsed.value);
+
+    var zdiffstore_missing_first_parsed: RespParseResult = try parse_resp2(&"*5\r\n$10\r\nZDIFFSTORE\r\n$5\r\nzdout\r\n$1\r\n2\r\n$7\r\nmissing\r\n$2\r\nz2\r\n"[0: 60]);
+    const zdiffstore_missing_first_command: Command = try command_executor_test_command(&router, &zdiffstore_missing_first_parsed);
+    const zdiffstore_missing_first_reply: CommandReply = command_execute_at(&engine, &zdiffstore_missing_first_command, 1000u64);
+    try assert_eq_i32(zdiffstore_missing_first_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(zdiffstore_missing_first_reply.integer as i32, 0);
+    resp_value_free(&zdiffstore_missing_first_parsed.value);
+
+    var zdiffstore_deleted_range_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nZRANGE\r\n$5\r\nzdout\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 42]);
+    const zdiffstore_deleted_range_command: Command = try command_executor_test_command(&router, &zdiffstore_deleted_range_parsed);
+    var zdiffstore_deleted_range_reply: CommandReply = command_execute_at(&engine, &zdiffstore_deleted_range_command, 1000u64);
+    const zdiffstore_deleted_range_len: usize = try connection_encode_reply(&zdiffstore_deleted_range_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: zdiffstore_deleted_range_len], &"*0\r\n"[0: 4]));
+    command_reply_cleanup(&zdiffstore_deleted_range_reply);
+    resp_value_free(&zdiffstore_deleted_range_parsed.value);
+
+    var zdiffstore_missing_other_parsed: RespParseResult = try parse_resp2(&"*5\r\n$10\r\nZDIFFSTORE\r\n$5\r\nzdall\r\n$1\r\n2\r\n$4\r\nzset\r\n$7\r\nmissing\r\n"[0: 62]);
+    const zdiffstore_missing_other_command: Command = try command_executor_test_command(&router, &zdiffstore_missing_other_parsed);
+    const zdiffstore_missing_other_reply: CommandReply = command_execute_at(&engine, &zdiffstore_missing_other_command, 1000u64);
+    try assert_eq_i32(zdiffstore_missing_other_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(zdiffstore_missing_other_reply.integer as i32, 3);
+    resp_value_free(&zdiffstore_missing_other_parsed.value);
+
+    var zdiffstore_all_range_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nZRANGE\r\n$5\r\nzdall\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 42]);
+    const zdiffstore_all_range_command: Command = try command_executor_test_command(&router, &zdiffstore_all_range_parsed);
+    var zdiffstore_all_range_reply: CommandReply = command_execute_at(&engine, &zdiffstore_all_range_command, 1000u64);
+    const zdiffstore_all_range_len: usize = try connection_encode_reply(&zdiffstore_all_range_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: zdiffstore_all_range_len], &"*3\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\nc\r\n"[0: 25]));
+    command_reply_cleanup(&zdiffstore_all_range_reply);
+    resp_value_free(&zdiffstore_all_range_parsed.value);
+
+    var zdiffstore_bad_numkeys_parsed: RespParseResult = try parse_resp2(&"*4\r\n$10\r\nZDIFFSTORE\r\n$3\r\nbad\r\n$1\r\n0\r\n$4\r\nzset\r\n"[0: 47]);
+    const zdiffstore_bad_numkeys_command: Command = try command_executor_test_command(&router, &zdiffstore_bad_numkeys_parsed);
+    const zdiffstore_bad_numkeys_reply: CommandReply = command_execute_at(&engine, &zdiffstore_bad_numkeys_command, 1000u64);
+    try assert_eq_i32(zdiffstore_bad_numkeys_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(zdiffstore_bad_numkeys_reply.data, &"ERR numkeys should be greater than 0"[0: 36]));
+    resp_value_free(&zdiffstore_bad_numkeys_parsed.value);
+
+    var zdiffstore_bad_extra_parsed: RespParseResult = try parse_resp2(&"*6\r\n$10\r\nZDIFFSTORE\r\n$3\r\nbad\r\n$1\r\n2\r\n$4\r\nzset\r\n$2\r\nz2\r\n$3\r\nBAD\r\n"[0: 64]);
+    const zdiffstore_bad_extra_command: Command = try command_executor_test_command(&router, &zdiffstore_bad_extra_parsed);
+    const zdiffstore_bad_extra_reply: CommandReply = command_execute_at(&engine, &zdiffstore_bad_extra_command, 1000u64);
+    try assert_eq_i32(zdiffstore_bad_extra_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(zdiffstore_bad_extra_reply.data, &"ERR syntax error"[0: 16]));
+    resp_value_free(&zdiffstore_bad_extra_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

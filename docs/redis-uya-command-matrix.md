@@ -1,7 +1,7 @@
 # redis-uya command matrix
 
 > version: v0.9.1-dev
-> date: 2026-06-04
+> date: 2026-06-05
 > source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`
 > runtime source: `src/command/catalog_generated.uya`
 
@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 159 | 0 | 3 | 57 |
+| Tier A: standalone core | 365 | 259 | 146 | 160 | 0 | 3 | 56 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `166` |
+| `partial` | `167` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `210` |
+| `deferred` | `209` |
 
 ## Group counts
 
@@ -590,7 +590,7 @@
 | `zcard` | `sorted-set` | `full` | `-` | `2` | `-` | `no` | `@read, @sortedset, @fast` |
 | `zcount` | `sorted-set` | `full` | `-` | `4` | `-` | `no` | `@read, @sortedset, @fast` |
 | `zdiff` | `sorted-set` | `partial` | `-` | `-3` | `-` | `no` | `@read, @sortedset, @slow` |
-| `zdiffstore` | `sorted-set` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@write, @sortedset, @slow` |
+| `zdiffstore` | `sorted-set` | `partial` | `-` | `-4` | `-` | `no` | `@write, @sortedset, @slow` |
 | `zincrby` | `sorted-set` | `full` | `-` | `4` | `-` | `no` | `@write, @sortedset, @fast` |
 | `zinter` | `sorted-set` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @sortedset, @slow` |
 | `zintercard` | `sorted-set` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @sortedset, @slow` |

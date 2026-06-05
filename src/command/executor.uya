@@ -9360,6 +9360,124 @@ fn command_executor_zdiff(engine: &Engine, command: &Command, now_ms: u64) Comma
     return command_executor_owned_array(reply_list);
 }
 
+fn command_executor_zset_store_result(engine: &Engine, target: &[byte], result_zset: &RedisObject, now_ms: u64) CommandReply {
+    const len: usize = zset_object_len(result_zset) catch {
+        object_free(result_zset);
+        return command_executor_wrongtype();
+    };
+    if len == 0 {
+        object_free(result_zset);
+        _ = delete_key(engine, target);
+        return command_executor_integer(0);
+    }
+    _ = set_key_at(engine, target, result_zset, now_ms) catch {
+        object_free(result_zset);
+        return command_executor_oom();
+    };
+    return command_executor_integer(len as i64);
+}
+
+fn command_executor_zdiffstore(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 4 {
+        return command_executor_wrong_arity();
+    }
+    const target: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const numkeys_data: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    const numkeys_i64: i64 = command_executor_parse_i64(numkeys_data) catch {
+        return command_executor_error(&"ERR numkeys should be greater than 0"[0: 36]);
+    };
+    if numkeys_i64 <= 0 {
+        return command_executor_error(&"ERR numkeys should be greater than 0"[0: 36]);
+    }
+    const numkeys: usize = numkeys_i64 as usize;
+    const keys_end: usize = 3 + numkeys;
+    if command.argc != keys_end {
+        return command_executor_syntax_error();
+    }
+
+    const first_key: &[byte] = command_executor_arg(command, 3) catch {
+        return command_executor_wrong_arity();
+    };
+    const first_obj: &RedisObject = lookup_key_at(engine, first_key, now_ms) catch {
+        _ = delete_key(engine, target);
+        return command_executor_integer(0);
+    };
+    if first_obj.obj_type != ObjectType.object_zset {
+        return command_executor_wrongtype();
+    }
+
+    const sorted_members: &RedisObject = zset_object_range_reply(first_obj, 0, -1) catch |err| {
+        if err == error.AllocOutOfMemory {
+            return command_executor_oom();
+        }
+        return command_executor_wrongtype();
+    };
+    const result_zset: &RedisObject = create_zset_object() catch {
+        object_free(sorted_members);
+        return command_executor_oom();
+    };
+
+    var node: &ListNode = sorted_members.list_head;
+    while node != null {
+        const member: &[byte] = node.value.value.buf[0: node.value.value.len];
+        var seen_elsewhere: bool = false;
+        var key_index: usize = 4;
+        while key_index < keys_end {
+            const key: &[byte] = command_executor_arg(command, key_index) catch {
+                object_free(sorted_members);
+                object_free(result_zset);
+                return command_executor_wrong_arity();
+            };
+            const obj_result: !&RedisObject = lookup_key_at(engine, key, now_ms);
+            const obj: &RedisObject = obj_result catch {
+                key_index = key_index + 1;
+                null as &RedisObject;
+            };
+            if obj == null {
+                continue;
+            }
+            if obj.obj_type != ObjectType.object_zset {
+                object_free(sorted_members);
+                object_free(result_zset);
+                return command_executor_wrongtype();
+            }
+            var other_score: i64 = 0;
+            const present: bool = command_executor_zset_score_or_missing(obj, member, &other_score) catch {
+                object_free(sorted_members);
+                object_free(result_zset);
+                return command_executor_wrongtype();
+            };
+            if present {
+                seen_elsewhere = true;
+                break;
+            }
+            key_index = key_index + 1;
+        }
+        if !seen_elsewhere {
+            const score: i64 = zset_object_get_score(first_obj, member) catch {
+                object_free(sorted_members);
+                object_free(result_zset);
+                return command_executor_wrongtype();
+            };
+            _ = zset_object_add_member(result_zset, score, member) catch |err| {
+                object_free(sorted_members);
+                object_free(result_zset);
+                if err == error.AllocOutOfMemory {
+                    return command_executor_oom();
+                }
+                return command_executor_wrongtype();
+            };
+        }
+        node = node.next;
+    }
+    object_free(sorted_members);
+    return command_executor_zset_store_result(engine, target, result_zset, now_ms);
+}
+
 fn command_executor_zlex_parse_bound(data: &[byte]) !CommandExecutorZLexBound {
     if data.len == 1 && data.ptr[0] == '-' as byte {
         return CommandExecutorZLexBound{
@@ -16108,6 +16226,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_zdiff {
         return command_executor_zdiff(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_zdiffstore {
+        return command_executor_zdiffstore(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_zlexcount {
         return command_executor_zlexcount(engine, command, now_ms);

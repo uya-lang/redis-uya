@@ -1395,6 +1395,30 @@ if [[ "$ZDIFF_SCORES_RESULT" != $'a\n4' ]]; then
     exit 1
 fi
 
+ZDIFFSTORE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zdiffstore zdiffdst 2 zset zdiff2)"
+if [[ "$ZDIFFSTORE_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZDIFFSTORE count 1, got '$ZDIFFSTORE_RESULT'" >&2
+    exit 1
+fi
+
+ZDIFFSTORE_RANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrange zdiffdst 0 -1)"
+if [[ "$ZDIFFSTORE_RANGE_RESULT" != "a" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZDIFFSTORE target a, got '$ZDIFFSTORE_RANGE_RESULT'" >&2
+    exit 1
+fi
+
+ZDIFFSTORE_SCORE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zscore zdiffdst a)"
+if [[ "$ZDIFFSTORE_SCORE_RESULT" != "4" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZDIFFSTORE score 4, got '$ZDIFFSTORE_SCORE_RESULT'" >&2
+    exit 1
+fi
+
+ZDIFFSTORE_EMPTY_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zdiffstore zdiffdst 2 missing zdiff2)"
+if [[ "$ZDIFFSTORE_EMPTY_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZDIFFSTORE missing-first count 0, got '$ZDIFFSTORE_EMPTY_RESULT'" >&2
+    exit 1
+fi
+
 ZRANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrange zset 0 -1)"
 if [[ "$ZRANGE_RESULT" != $'b\na' ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ZRANGE b/a after ZINCRBY, got '$ZRANGE_RESULT'" >&2

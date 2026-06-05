@@ -1240,6 +1240,27 @@ ZUNION numkeys key [key ...] [WITHSCORES]
 - 当前尚未实现 `WEIGHTS` / `AGGREGATE` 选项
 - 当前项目内 ZSet score 使用整数语义
 
+### `ZUNIONSTORE`
+
+格式：
+
+```text
+ZUNIONSTORE destination numkeys key [key ...]
+```
+
+返回：
+
+- 返回写入 `destination` 的成员数量
+- 写入多个 zset 的并集成员
+- 重复成员 score 按 SUM 聚合
+
+说明：
+
+- 当前实现为 write partial，按聚合结果写回项目内 zset
+- 源 key 缺失时按空 zset 处理；结果为空时删除 `destination` 并返回 `0`
+- 当前尚未实现 `WEIGHTS` / `AGGREGATE` 选项
+- 当前项目内 ZSet score 使用整数语义
+
 ### `ZREMRANGEBYRANK`
 
 格式：

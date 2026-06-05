@@ -1413,6 +1413,30 @@ if [[ "$ZUNION_MISSING_RESULT" != $'b\nd' ]]; then
     exit 1
 fi
 
+ZUNIONSTORE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zunionstore zuniondst 2 zset zdiff2)"
+if [[ "$ZUNIONSTORE_RESULT" != "3" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZUNIONSTORE count 3, got '$ZUNIONSTORE_RESULT'" >&2
+    exit 1
+fi
+
+ZUNIONSTORE_RANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrange zuniondst 0 -1)"
+if [[ "$ZUNIONSTORE_RANGE_RESULT" != $'a\nb\nd' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZUNIONSTORE target a/b/d, got '$ZUNIONSTORE_RANGE_RESULT'" >&2
+    exit 1
+fi
+
+ZUNIONSTORE_SCORE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zscore zuniondst b)"
+if [[ "$ZUNIONSTORE_SCORE_RESULT" != "4" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZUNIONSTORE score 4, got '$ZUNIONSTORE_SCORE_RESULT'" >&2
+    exit 1
+fi
+
+ZUNIONSTORE_EMPTY_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zunionstore zuniondst 1 missing)"
+if [[ "$ZUNIONSTORE_EMPTY_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZUNIONSTORE missing-only count 0, got '$ZUNIONSTORE_EMPTY_RESULT'" >&2
+    exit 1
+fi
+
 ZDIFF_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zdiff 2 zset zdiff2)"
 if [[ "$ZDIFF_RESULT" != "a" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ZDIFF a, got '$ZDIFF_RESULT'" >&2

@@ -106,7 +106,7 @@ server open
 - 输出全部发完后恢复到 `EPOLLIN`
 - `BLPOP` / `BRPOP` / `BRPOPLPUSH` / `BLMOVE` / `BLMPOP` / `BZPOPMIN` / `BZPOPMAX` / `BZMPOP` 在 source 未就绪时不会消费后续 pipeline 命令；当前连接会先进入 blocked 状态，等待 server 主循环在 key 就绪或 timeout 后重放同一条原始请求
 - `ZMPOP` 是非阻塞 sorted-set multi-pop，执行层复用 zset pop 编码与删除路径；连接层只在成功返回数组时追加 AOF，空结果不落盘
-- `ZDIFF` / `ZUNION` 这类 sorted-set 多 key 读命令在执行层扫描项目内 zset `(score, member)` 排序视图；`ZUNION` 当前按整数 score SUM 聚合，复杂权重/聚合选项仍保留为后续完整语义
+- `ZDIFF` / `ZUNION` / `ZUNIONSTORE` 这类 sorted-set 多 key 命令在执行层扫描项目内 zset `(score, member)` 排序视图；`ZUNION` / `ZUNIONSTORE` 当前按整数 score SUM 聚合，复杂权重/聚合选项仍保留为后续完整语义
 - 空闲客户端不再阻塞活跃客户端
 - `v0.8.0` 已新增 `io_uring` 主机能力评估报告，但生产事件循环仍绑定在 epoll 路径；后续只有在独立原型和 benchmark 证明收益后才考虑切换
 

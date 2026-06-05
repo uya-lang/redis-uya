@@ -699,6 +699,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"zdiffstore"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"zintercard"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"zunion"[0: 6], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"zunionstore"[0: 11], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"zrandmember"[0: 11], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xack"[0: 4], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xclaim"[0: 6], CommandCatalogStatus.status_partial);
@@ -5288,6 +5289,80 @@ export fn test_command_zrangebyscore_zrevrangebyscore() !void {
     try assert_eq_i32(zunion_bad_option_reply.typ as i32, CommandReplyType.reply_error as i32);
     try assert_true(command_executor_test_slice_eq(zunion_bad_option_reply.data, &"ERR syntax error"[0: 16]));
     resp_value_free(&zunion_bad_option_parsed.value);
+
+    var zunionstore_parsed: RespParseResult = try parse_resp2(&"*5\r\n$11\r\nZUNIONSTORE\r\n$5\r\nzudst\r\n$1\r\n2\r\n$4\r\nzset\r\n$2\r\nz2\r\n"[0: 58]);
+    const zunionstore_command: Command = try command_executor_test_command(&router, &zunionstore_parsed);
+    const zunionstore_reply: CommandReply = command_execute_at(&engine, &zunionstore_command, 1000u64);
+    try assert_eq_i32(zunionstore_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(zunionstore_reply.integer as i32, 4);
+    resp_value_free(&zunionstore_parsed.value);
+
+    var zunionstore_range_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nZRANGE\r\n$5\r\nzudst\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 42]);
+    const zunionstore_range_command: Command = try command_executor_test_command(&router, &zunionstore_range_parsed);
+    var zunionstore_range_reply: CommandReply = command_execute_at(&engine, &zunionstore_range_command, 1000u64);
+    const zunionstore_range_len: usize = try connection_encode_reply(&zunionstore_range_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: zunionstore_range_len], &"*4\r\n$1\r\na\r\n$1\r\nc\r\n$1\r\nb\r\n$1\r\nd\r\n"[0: 32]));
+    command_reply_cleanup(&zunionstore_range_reply);
+    resp_value_free(&zunionstore_range_parsed.value);
+
+    var zunionstore_score_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nZSCORE\r\n$5\r\nzudst\r\n$1\r\nb\r\n"[0: 34]);
+    const zunionstore_score_command: Command = try command_executor_test_command(&router, &zunionstore_score_parsed);
+    var zunionstore_score_reply: CommandReply = command_execute_at(&engine, &zunionstore_score_command, 1000u64);
+    const zunionstore_score_len: usize = try connection_encode_reply(&zunionstore_score_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: zunionstore_score_len], &"$1\r\n4\r\n"[0: 7]));
+    command_reply_cleanup(&zunionstore_score_reply);
+    resp_value_free(&zunionstore_score_parsed.value);
+
+    var zunionstore_missing_parsed: RespParseResult = try parse_resp2(&"*5\r\n$11\r\nZUNIONSTORE\r\n$5\r\nzudst\r\n$1\r\n2\r\n$7\r\nmissing\r\n$2\r\nz2\r\n"[0: 61]);
+    const zunionstore_missing_command: Command = try command_executor_test_command(&router, &zunionstore_missing_parsed);
+    const zunionstore_missing_reply: CommandReply = command_execute_at(&engine, &zunionstore_missing_command, 1000u64);
+    try assert_eq_i32(zunionstore_missing_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(zunionstore_missing_reply.integer as i32, 2);
+    resp_value_free(&zunionstore_missing_parsed.value);
+
+    var zunionstore_missing_range_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nZRANGE\r\n$5\r\nzudst\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 42]);
+    const zunionstore_missing_range_command: Command = try command_executor_test_command(&router, &zunionstore_missing_range_parsed);
+    var zunionstore_missing_range_reply: CommandReply = command_execute_at(&engine, &zunionstore_missing_range_command, 1000u64);
+    const zunionstore_missing_range_len: usize = try connection_encode_reply(&zunionstore_missing_range_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: zunionstore_missing_range_len], &"*2\r\n$1\r\nb\r\n$1\r\nd\r\n"[0: 18]));
+    command_reply_cleanup(&zunionstore_missing_range_reply);
+    resp_value_free(&zunionstore_missing_range_parsed.value);
+
+    var zunionstore_empty_parsed: RespParseResult = try parse_resp2(&"*4\r\n$11\r\nZUNIONSTORE\r\n$5\r\nzudst\r\n$1\r\n1\r\n$7\r\nmissing\r\n"[0: 53]);
+    const zunionstore_empty_command: Command = try command_executor_test_command(&router, &zunionstore_empty_parsed);
+    const zunionstore_empty_reply: CommandReply = command_execute_at(&engine, &zunionstore_empty_command, 1000u64);
+    try assert_eq_i32(zunionstore_empty_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(zunionstore_empty_reply.integer as i32, 0);
+    resp_value_free(&zunionstore_empty_parsed.value);
+
+    var zunionstore_deleted_range_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nZRANGE\r\n$5\r\nzudst\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 42]);
+    const zunionstore_deleted_range_command: Command = try command_executor_test_command(&router, &zunionstore_deleted_range_parsed);
+    var zunionstore_deleted_range_reply: CommandReply = command_execute_at(&engine, &zunionstore_deleted_range_command, 1000u64);
+    const zunionstore_deleted_range_len: usize = try connection_encode_reply(&zunionstore_deleted_range_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: zunionstore_deleted_range_len], &"*0\r\n"[0: 4]));
+    command_reply_cleanup(&zunionstore_deleted_range_reply);
+    resp_value_free(&zunionstore_deleted_range_parsed.value);
+
+    var zunionstore_wrongtype_parsed: RespParseResult = try parse_resp2(&"*5\r\n$11\r\nZUNIONSTORE\r\n$5\r\nzubad\r\n$1\r\n2\r\n$4\r\nzset\r\n$3\r\nbad\r\n"[0: 59]);
+    const zunionstore_wrongtype_command: Command = try command_executor_test_command(&router, &zunionstore_wrongtype_parsed);
+    const zunionstore_wrongtype_reply: CommandReply = command_execute_at(&engine, &zunionstore_wrongtype_command, 1000u64);
+    try assert_eq_i32(zunionstore_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(zunionstore_wrongtype_reply.data, &"WRONGTYPE"[0: 9]));
+    resp_value_free(&zunionstore_wrongtype_parsed.value);
+
+    var zunionstore_bad_numkeys_parsed: RespParseResult = try parse_resp2(&"*4\r\n$11\r\nZUNIONSTORE\r\n$3\r\nbad\r\n$1\r\n0\r\n$4\r\nzset\r\n"[0: 48]);
+    const zunionstore_bad_numkeys_command: Command = try command_executor_test_command(&router, &zunionstore_bad_numkeys_parsed);
+    const zunionstore_bad_numkeys_reply: CommandReply = command_execute_at(&engine, &zunionstore_bad_numkeys_command, 1000u64);
+    try assert_eq_i32(zunionstore_bad_numkeys_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(zunionstore_bad_numkeys_reply.data, &"ERR numkeys should be greater than 0"[0: 36]));
+    resp_value_free(&zunionstore_bad_numkeys_parsed.value);
+
+    var zunionstore_bad_extra_parsed: RespParseResult = try parse_resp2(&"*6\r\n$11\r\nZUNIONSTORE\r\n$3\r\nbad\r\n$1\r\n2\r\n$4\r\nzset\r\n$2\r\nz2\r\n$7\r\nWEIGHTS\r\n"[0: 69]);
+    const zunionstore_bad_extra_command: Command = try command_executor_test_command(&router, &zunionstore_bad_extra_parsed);
+    const zunionstore_bad_extra_reply: CommandReply = command_execute_at(&engine, &zunionstore_bad_extra_command, 1000u64);
+    try assert_eq_i32(zunionstore_bad_extra_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(zunionstore_bad_extra_reply.data, &"ERR syntax error"[0: 16]));
+    resp_value_free(&zunionstore_bad_extra_parsed.value);
 
     var zdiff_parsed: RespParseResult = try parse_resp2(&"*4\r\n$5\r\nZDIFF\r\n$1\r\n2\r\n$4\r\nzset\r\n$2\r\nz2\r\n"[0: 40]);
     const zdiff_command: Command = try command_executor_test_command(&router, &zdiff_parsed);

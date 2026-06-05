@@ -977,6 +977,9 @@ class RedisPySubsetClient:
         assert isinstance(result, list)
         return result
 
+    def zunionstore(self, destination: str, *keys: str) -> int:
+        return int(self._request(b"ZUNIONSTORE", destination.encode(), str(len(keys)).encode(), *(key.encode() for key in keys)))
+
     def zrangebyscore(self, key: str, minimum: int, maximum: int) -> list[bytes]:
         result = self._request(b"ZRANGEBYSCORE", key.encode(), str(minimum).encode(), str(maximum).encode())
         assert isinstance(result, list)
@@ -1701,6 +1704,11 @@ def run_smoke() -> None:
             assert client.zunion("zset", "zdiff2") == [b"a", b"b", b"d"]
             assert client.zunion("zset", "zdiff2", withscores=True) == [b"a", b"4", b"b", b"4", b"d", b"5"]
             assert client.zunion("missing", "zdiff2") == [b"b", b"d"]
+            assert client.zunionstore("zuniondst", "zset", "zdiff2") == 3
+            assert client.zrange("zuniondst", 0, -1) == [b"a", b"b", b"d"]
+            assert client.zscore("zuniondst", "b") == b"4"
+            assert client.zunionstore("zuniondst", "missing") == 0
+            assert client.zrange("zuniondst", 0, -1) == []
             assert client.zdiff("zset", "zdiff2") == [b"a"]
             assert client.zdiff("zset", "zdiff2", withscores=True) == [b"a", b"4"]
             assert client.zdiffstore("zdiffdst", "zset", "zdiff2") == 1

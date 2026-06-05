@@ -9621,41 +9621,12 @@ fn command_executor_zintercard(engine: &Engine, command: &Command, now_ms: u64) 
     return command_executor_integer(count as i64);
 }
 
-fn command_executor_zunion(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
-    if command.argc < 3 {
-        return command_executor_wrong_arity();
-    }
-    const numkeys_data: &[byte] = command_executor_arg(command, 1) catch {
-        return command_executor_wrong_arity();
-    };
-    const numkeys_i64: i64 = command_executor_parse_i64(numkeys_data) catch {
-        return command_executor_error(&"ERR numkeys should be greater than 0"[0: 36]);
-    };
-    if numkeys_i64 <= 0 {
-        return command_executor_error(&"ERR numkeys should be greater than 0"[0: 36]);
-    }
-    const numkeys: usize = numkeys_i64 as usize;
-    const keys_end: usize = 2 + numkeys;
-    if command.argc != keys_end && command.argc != keys_end + 1 {
-        return command_executor_syntax_error();
-    }
-
-    var withscores: bool = false;
-    if command.argc == keys_end + 1 {
-        const option: &[byte] = command_executor_arg(command, keys_end) catch {
-            return command_executor_syntax_error();
-        };
-        if !command_executor_keyword_eq(option, &"WITHSCORES"[0: 10]) {
-            return command_executor_syntax_error();
-        }
-        withscores = true;
-    }
-
+fn command_executor_zunion_build_result(engine: &Engine, command: &Command, keys_start: usize, keys_end: usize, now_ms: u64) CommandReply {
     const result_zset: &RedisObject = create_zset_object() catch {
         return command_executor_oom();
     };
 
-    var key_index: usize = 2;
+    var key_index: usize = keys_start;
     while key_index < keys_end {
         const key: &[byte] = command_executor_arg(command, key_index) catch {
             object_free(result_zset);
@@ -9713,6 +9684,47 @@ fn command_executor_zunion(engine: &Engine, command: &Command, now_ms: u64) Comm
         key_index = key_index + 1;
     }
 
+    var reply: CommandReply = command_executor_integer(0);
+    reply.owned_object = result_zset;
+    return reply;
+}
+
+fn command_executor_zunion(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 3 {
+        return command_executor_wrong_arity();
+    }
+    const numkeys_data: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const numkeys_i64: i64 = command_executor_parse_i64(numkeys_data) catch {
+        return command_executor_error(&"ERR numkeys should be greater than 0"[0: 36]);
+    };
+    if numkeys_i64 <= 0 {
+        return command_executor_error(&"ERR numkeys should be greater than 0"[0: 36]);
+    }
+    const numkeys: usize = numkeys_i64 as usize;
+    const keys_end: usize = 2 + numkeys;
+    if command.argc != keys_end && command.argc != keys_end + 1 {
+        return command_executor_syntax_error();
+    }
+
+    var withscores: bool = false;
+    if command.argc == keys_end + 1 {
+        const option: &[byte] = command_executor_arg(command, keys_end) catch {
+            return command_executor_syntax_error();
+        };
+        if !command_executor_keyword_eq(option, &"WITHSCORES"[0: 10]) {
+            return command_executor_syntax_error();
+        }
+        withscores = true;
+    }
+
+    const build_reply: CommandReply = command_executor_zunion_build_result(engine, command, 2, keys_end, now_ms);
+    if build_reply.owned_object == null {
+        return build_reply;
+    }
+    const result_zset: &RedisObject = build_reply.owned_object;
+
     const sorted_members: &RedisObject = zset_object_range_reply(result_zset, 0, -1) catch |err| {
         object_free(result_zset);
         if err == error.AllocOutOfMemory {
@@ -9756,6 +9768,36 @@ fn command_executor_zunion(engine: &Engine, command: &Command, now_ms: u64) Comm
     object_free(sorted_members);
     object_free(result_zset);
     return command_executor_owned_array(reply_list);
+}
+
+fn command_executor_zunionstore(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 4 {
+        return command_executor_wrong_arity();
+    }
+    const target: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const numkeys_data: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    const numkeys_i64: i64 = command_executor_parse_i64(numkeys_data) catch {
+        return command_executor_error(&"ERR numkeys should be greater than 0"[0: 36]);
+    };
+    if numkeys_i64 <= 0 {
+        return command_executor_error(&"ERR numkeys should be greater than 0"[0: 36]);
+    }
+    const numkeys: usize = numkeys_i64 as usize;
+    const keys_end: usize = 3 + numkeys;
+    if command.argc != keys_end {
+        return command_executor_syntax_error();
+    }
+
+    const build_reply: CommandReply = command_executor_zunion_build_result(engine, command, 3, keys_end, now_ms);
+    if build_reply.owned_object == null {
+        return build_reply;
+    }
+    const result_zset: &RedisObject = build_reply.owned_object;
+    return command_executor_zset_store_result(engine, target, result_zset, now_ms);
 }
 
 fn command_executor_zlex_parse_bound(data: &[byte]) !CommandExecutorZLexBound {
@@ -16515,6 +16557,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_zunion {
         return command_executor_zunion(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_zunionstore {
+        return command_executor_zunionstore(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_zlexcount {
         return command_executor_zlexcount(engine, command, now_ms);

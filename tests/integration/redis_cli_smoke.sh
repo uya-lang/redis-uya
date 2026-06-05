@@ -1443,6 +1443,36 @@ if [[ -n "$ZINTERSTORE_DELETED_RESULT" ]]; then
     exit 1
 fi
 
+ZRANGESTORE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrangestore zrangestoredst zset 0 1)"
+if [[ "$ZRANGESTORE_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZRANGESTORE count 2, got '$ZRANGESTORE_RESULT'" >&2
+    exit 1
+fi
+
+ZRANGESTORE_RANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrange zrangestoredst 0 -1)"
+if [[ "$ZRANGESTORE_RANGE_RESULT" != $'b\na' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZRANGESTORE target b/a, got '$ZRANGESTORE_RANGE_RESULT'" >&2
+    exit 1
+fi
+
+ZRANGESTORE_SCORE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zscore zrangestoredst a)"
+if [[ "$ZRANGESTORE_SCORE_RESULT" != "4" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZRANGESTORE score 4, got '$ZRANGESTORE_SCORE_RESULT'" >&2
+    exit 1
+fi
+
+ZRANGESTORE_MISSING_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrangestore zrangestoredst missing 0 -1)"
+if [[ "$ZRANGESTORE_MISSING_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZRANGESTORE missing count 0, got '$ZRANGESTORE_MISSING_RESULT'" >&2
+    exit 1
+fi
+
+ZRANGESTORE_DELETED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrange zrangestoredst 0 -1)"
+if [[ -n "$ZRANGESTORE_DELETED_RESULT" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected empty ZRANGESTORE target after missing source, got '$ZRANGESTORE_DELETED_RESULT'" >&2
+    exit 1
+fi
+
 ZUNION_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zunion 2 zset zdiff2)"
 if [[ "$ZUNION_RESULT" != $'a\nb\nd' ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ZUNION a/b/d, got '$ZUNION_RESULT'" >&2

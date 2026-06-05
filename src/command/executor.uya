@@ -12707,6 +12707,72 @@ fn command_executor_zrange(engine: &Engine, command: &Command, now_ms: u64) Comm
     return reply;
 }
 
+fn command_executor_zrangestore(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 5 {
+        return command_executor_wrong_arity();
+    }
+    if command.argc != 5 {
+        return command_executor_syntax_error();
+    }
+    const target: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const source: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    const start_data: &[byte] = command_executor_arg(command, 3) catch {
+        return command_executor_wrong_arity();
+    };
+    const stop_data: &[byte] = command_executor_arg(command, 4) catch {
+        return command_executor_wrong_arity();
+    };
+    const start: i64 = command_executor_parse_i64(start_data) catch {
+        return command_executor_invalid_integer();
+    };
+    const stop: i64 = command_executor_parse_i64(stop_data) catch {
+        return command_executor_invalid_integer();
+    };
+
+    const result_zset: &RedisObject = create_zset_object() catch {
+        return command_executor_oom();
+    };
+    const source_obj: &RedisObject = lookup_key_at(engine, source, now_ms) catch {
+        return command_executor_zset_store_result(engine, target, result_zset, now_ms);
+    };
+    if source_obj.obj_type != ObjectType.object_zset {
+        object_free(result_zset);
+        return command_executor_wrongtype();
+    }
+
+    const ranged: &RedisObject = zset_object_range_reply(source_obj, start, stop) catch |err| {
+        object_free(result_zset);
+        if err == error.AllocOutOfMemory {
+            return command_executor_oom();
+        }
+        return command_executor_wrongtype();
+    };
+    var node: &ListNode = ranged.list_head;
+    while node != null {
+        const member: &[byte] = node.value.value.buf[0: node.value.value.len];
+        const score: i64 = zset_object_get_score(source_obj, member) catch {
+            object_free(ranged);
+            object_free(result_zset);
+            return command_executor_wrongtype();
+        };
+        _ = zset_object_add_member(result_zset, score, member) catch |err| {
+            object_free(ranged);
+            object_free(result_zset);
+            if err == error.AllocOutOfMemory {
+                return command_executor_oom();
+            }
+            return command_executor_wrongtype();
+        };
+        node = node.next;
+    }
+    object_free(ranged);
+    return command_executor_zset_store_result(engine, target, result_zset, now_ms);
+}
+
 fn command_executor_zrevrange(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
     if command.argc != 4 && command.argc != 5 {
         return command_executor_wrong_arity();
@@ -16846,6 +16912,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_zrangebyscore {
         return command_executor_zrangebyscore(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_zrangestore {
+        return command_executor_zrangestore(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_zrevrangebyscore {
         return command_executor_zrevrangebyscore(engine, command, now_ms);

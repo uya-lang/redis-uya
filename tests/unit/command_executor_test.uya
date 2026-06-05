@@ -703,6 +703,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"zunion"[0: 6], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"zunionstore"[0: 11], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"zrandmember"[0: 11], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"zrangestore"[0: 11], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xack"[0: 4], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xclaim"[0: 6], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xgroup"[0: 6], CommandCatalogStatus.status_partial);
@@ -5152,6 +5153,70 @@ export fn test_command_zrangebyscore_zrevrangebyscore() !void {
     try assert_true(command_executor_test_slice_eq(out[0: zrangebyscore_len], &"*2\r\n$1\r\nb\r\n$1\r\nc\r\n"[0: 18]));
     command_reply_cleanup(&zrangebyscore_reply);
     resp_value_free(&zrangebyscore_parsed.value);
+
+    var zrangestore_parsed: RespParseResult = try parse_resp2(&"*5\r\n$11\r\nZRANGESTORE\r\n$5\r\nzrdst\r\n$4\r\nzset\r\n$1\r\n0\r\n$1\r\n1\r\n"[0: 57]);
+    const zrangestore_command: Command = try command_executor_test_command(&router, &zrangestore_parsed);
+    const zrangestore_reply: CommandReply = command_execute_at(&engine, &zrangestore_command, 1000u64);
+    try assert_eq_i32(zrangestore_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(zrangestore_reply.integer as i32, 2);
+    resp_value_free(&zrangestore_parsed.value);
+
+    var zrangestore_range_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nZRANGE\r\n$5\r\nzrdst\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 42]);
+    const zrangestore_range_command: Command = try command_executor_test_command(&router, &zrangestore_range_parsed);
+    var zrangestore_range_reply: CommandReply = command_execute_at(&engine, &zrangestore_range_command, 1000u64);
+    const zrangestore_range_len: usize = try connection_encode_reply(&zrangestore_range_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: zrangestore_range_len], &"*2\r\n$1\r\na\r\n$1\r\nb\r\n"[0: 18]));
+    command_reply_cleanup(&zrangestore_range_reply);
+    resp_value_free(&zrangestore_range_parsed.value);
+
+    var zrangestore_score_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nZSCORE\r\n$5\r\nzrdst\r\n$1\r\nb\r\n"[0: 34]);
+    const zrangestore_score_command: Command = try command_executor_test_command(&router, &zrangestore_score_parsed);
+    var zrangestore_score_reply: CommandReply = command_execute_at(&engine, &zrangestore_score_command, 1000u64);
+    const zrangestore_score_len: usize = try connection_encode_reply(&zrangestore_score_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: zrangestore_score_len], &"$1\r\n2\r\n"[0: 7]));
+    command_reply_cleanup(&zrangestore_score_reply);
+    resp_value_free(&zrangestore_score_parsed.value);
+
+    var zrangestore_missing_parsed: RespParseResult = try parse_resp2(&"*5\r\n$11\r\nZRANGESTORE\r\n$5\r\nzrdst\r\n$7\r\nmissing\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 61]);
+    const zrangestore_missing_command: Command = try command_executor_test_command(&router, &zrangestore_missing_parsed);
+    const zrangestore_missing_reply: CommandReply = command_execute_at(&engine, &zrangestore_missing_command, 1000u64);
+    try assert_eq_i32(zrangestore_missing_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(zrangestore_missing_reply.integer as i32, 0);
+    resp_value_free(&zrangestore_missing_parsed.value);
+
+    var zrangestore_deleted_range_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nZRANGE\r\n$5\r\nzrdst\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 42]);
+    const zrangestore_deleted_range_command: Command = try command_executor_test_command(&router, &zrangestore_deleted_range_parsed);
+    var zrangestore_deleted_range_reply: CommandReply = command_execute_at(&engine, &zrangestore_deleted_range_command, 1000u64);
+    const zrangestore_deleted_range_len: usize = try connection_encode_reply(&zrangestore_deleted_range_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: zrangestore_deleted_range_len], &"*0\r\n"[0: 4]));
+    command_reply_cleanup(&zrangestore_deleted_range_reply);
+    resp_value_free(&zrangestore_deleted_range_parsed.value);
+
+    var zrangestore_bad_string_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$3\r\nbad\r\n$1\r\nx\r\n"[0: 29]);
+    const zrangestore_bad_string_command: Command = try command_executor_test_command(&router, &zrangestore_bad_string_parsed);
+    _ = command_execute_at(&engine, &zrangestore_bad_string_command, 1000u64);
+    resp_value_free(&zrangestore_bad_string_parsed.value);
+
+    var zrangestore_wrongtype_parsed: RespParseResult = try parse_resp2(&"*5\r\n$11\r\nZRANGESTORE\r\n$5\r\nzrbad\r\n$3\r\nbad\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 57]);
+    const zrangestore_wrongtype_command: Command = try command_executor_test_command(&router, &zrangestore_wrongtype_parsed);
+    const zrangestore_wrongtype_reply: CommandReply = command_execute_at(&engine, &zrangestore_wrongtype_command, 1000u64);
+    try assert_eq_i32(zrangestore_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(zrangestore_wrongtype_reply.data, &"WRONGTYPE"[0: 9]));
+    resp_value_free(&zrangestore_wrongtype_parsed.value);
+
+    var zrangestore_bad_integer_parsed: RespParseResult = try parse_resp2(&"*5\r\n$11\r\nZRANGESTORE\r\n$3\r\nbad\r\n$4\r\nzset\r\n$1\r\nx\r\n$2\r\n-1\r\n"[0: 56]);
+    const zrangestore_bad_integer_command: Command = try command_executor_test_command(&router, &zrangestore_bad_integer_parsed);
+    const zrangestore_bad_integer_reply: CommandReply = command_execute_at(&engine, &zrangestore_bad_integer_command, 1000u64);
+    try assert_eq_i32(zrangestore_bad_integer_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(zrangestore_bad_integer_reply.data, &"ERR value is not an integer or out of range"[0: 43]));
+    resp_value_free(&zrangestore_bad_integer_parsed.value);
+
+    var zrangestore_bad_option_parsed: RespParseResult = try parse_resp2(&"*6\r\n$11\r\nZRANGESTORE\r\n$3\r\nbad\r\n$4\r\nzset\r\n$1\r\n0\r\n$1\r\n1\r\n$3\r\nREV\r\n"[0: 64]);
+    const zrangestore_bad_option_command: Command = try command_executor_test_command(&router, &zrangestore_bad_option_parsed);
+    const zrangestore_bad_option_reply: CommandReply = command_execute_at(&engine, &zrangestore_bad_option_command, 1000u64);
+    try assert_eq_i32(zrangestore_bad_option_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(zrangestore_bad_option_reply.data, &"ERR syntax error"[0: 16]));
+    resp_value_free(&zrangestore_bad_option_parsed.value);
 
     var zrevrangebyscore_parsed: RespParseResult = try parse_resp2(&"*4\r\n$16\r\nZREVRANGEBYSCORE\r\n$4\r\nzset\r\n$1\r\n3\r\n$1\r\n2\r\n"[0: 51]);
     const zrevrangebyscore_command: Command = try command_executor_test_command(&router, &zrevrangebyscore_parsed);

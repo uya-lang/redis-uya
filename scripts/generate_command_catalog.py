@@ -425,6 +425,7 @@ PARTIAL_NAMES = {
     "zrandmember",
     "zlexcount",
     "zrangebylex",
+    "zrangestore",
     "zremrangebylex",
     "zrevrange",
     "zrevrangebylex",

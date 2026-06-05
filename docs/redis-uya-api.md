@@ -1055,6 +1055,26 @@ ZRANGEBYLEX key min max [LIMIT offset count]
 - 当前按项目内 ZSet 的 `(score, member)` 排序视图扫描并按 member 边界返回；与 Redis 一样，lex 范围命令的有效业务语义应使用同分 sorted set
 - 当前不支持 `REV` 或 `BYSCORE` 等新版 `ZRANGE` 复合语法
 
+### `ZRANGESTORE`
+
+格式：
+
+```text
+ZRANGESTORE destination source start stop
+```
+
+返回：
+
+- 返回写入 `destination` 的成员数量
+- 写入 `source` 中 rank 落在闭区间 `[start, stop]` 内的成员，并保留原始 score
+
+说明：
+
+- 当前实现为 rank-range write partial，范围语义与当前 `ZRANGE key start stop` 对齐
+- `source` 缺失或结果为空时删除 `destination` 并返回 `0`
+- 当前尚未实现 `BYSCORE` / `BYLEX` / `REV` / `LIMIT` 选项
+- 当前项目内 ZSet score 使用整数语义
+
 ### `ZREMRANGEBYLEX`
 
 格式：

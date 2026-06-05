@@ -115,6 +115,7 @@ export enum CommandType {
     command_hkeys,
     command_hvals,
     command_hgetall,
+    command_hrandfield,
     command_zadd,
     command_zrange,
     command_zrevrange,
@@ -253,7 +254,7 @@ export const COMMAND_FLAG_READONLY: u64 = 1u64;
 export const COMMAND_FLAG_WRITE: u64 = 2u64;
 export const COMMAND_FLAG_FAST: u64 = 4u64;
 
-const MIN_COMMAND_COUNT: usize = 217;
+const MIN_COMMAND_COUNT: usize = 218;
 
 fn command_router_name_eq(a: &[byte], b: &[byte]) bool {
     return bytes_ascii_case_eq(a, b);
@@ -943,6 +944,9 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
     }
     if index == 216 {
         return command_router_info(CommandType.command_zrangestore, &"ZRANGESTORE"[0: 11], -5, COMMAND_FLAG_WRITE, 0, 0, 0);
+    }
+    if index == 217 {
+        return command_router_info(CommandType.command_hrandfield, &"HRANDFIELD"[0: 10], -2, COMMAND_FLAG_READONLY, 1, 1, 1);
     }
     return error.CommandUnknown;
 }

@@ -629,6 +629,16 @@ class RedisPySubsetClient:
         assert isinstance(result, list)
         return result
 
+    def hrandfield(self, key: str, count: int | None = None, withvalues: bool = False) -> bytes | list[bytes] | None:
+        parts: list[bytes] = [b"HRANDFIELD", key.encode()]
+        if count is not None:
+            parts.append(str(count).encode())
+            if withvalues:
+                parts.append(b"WITHVALUES")
+        result = self._request(*parts)
+        assert result is None or isinstance(result, bytes) or isinstance(result, list)
+        return result
+
     def hdel(self, key: str, *fields: str) -> int:
         return int(self._request(b"HDEL", key.encode(), *(field.encode() for field in fields)))
 
@@ -1578,6 +1588,12 @@ def run_smoke() -> None:
             hgetall = client.hgetall("hash")
             if len(hgetall) != 6:
                 raise AssertionError(f"unexpected hgetall size: {hgetall!r}")
+            assert client.hrandfield("hash") == b"counter"
+            assert client.hrandfield("hash", 2) == [b"counter", b"field"]
+            assert client.hrandfield("hash", 2, withvalues=True) == [b"counter", b"2", b"field", b"value"]
+            assert client.hrandfield("hash", -4) == [b"counter", b"field", b"ratio", b"counter"]
+            assert client.hrandfield("missing") is None
+            assert client.hrandfield("missing", 2) == []
             assert client.hexists("hash", "field") == 1
             assert client.hexists("hash", "missing") == 0
             assert client.hlen("hash") == 3

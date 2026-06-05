@@ -266,8 +266,8 @@ def run_smoke() -> None:
             if acl_list != [b"user default on nopass ~* &* +@all"]:
                 raise AssertionError(f"unexpected ACL LIST: {acl_list!r}")
 
-            info = send_command(sock, b"COMMAND", b"INFO", b"GET", b"FOO", b"CLIENT|ID", b"COPY", b"RESTORE-ASKING")
-            if not isinstance(info, list) or len(info) != 5:
+            info = send_command(sock, b"COMMAND", b"INFO", b"GET", b"FOO", b"CLIENT|ID", b"COPY", b"RESTORE-ASKING", b"HRANDFIELD")
+            if not isinstance(info, list) or len(info) != 6:
                 raise AssertionError(f"unexpected COMMAND INFO shape: {info!r}")
             if info[1] is not None:
                 raise AssertionError(f"COMMAND INFO should return null for unknown command: {info!r}")
@@ -279,6 +279,8 @@ def run_smoke() -> None:
                 raise AssertionError(f"COMMAND INFO COPY returned wrong payload: {info!r}")
             if not isinstance(info[4], list) or info[4][0] != b"restore-asking":
                 raise AssertionError(f"COMMAND INFO RESTORE-ASKING returned wrong payload: {info!r}")
+            if not isinstance(info[5], list) or info[5][0] != b"hrandfield":
+                raise AssertionError(f"COMMAND INFO HRANDFIELD returned wrong payload: {info!r}")
 
             bitmap_info = send_command(sock, b"COMMAND", b"INFO", b"GETBIT", b"SETBIT", b"BITCOUNT", b"BITPOS", b"BITOP", b"BITFIELD", b"BITFIELD_RO", b"PFADD", b"PFCOUNT", b"PFMERGE", b"GEOADD", b"GEODIST", b"GEOHASH", b"GEOPOS", b"GEORADIUS", b"GEORADIUS_RO", b"GEORADIUSBYMEMBER", b"GEORADIUSBYMEMBER_RO", b"GEOSEARCH", b"GEOSEARCHSTORE")
             if (
@@ -678,6 +680,7 @@ def run_smoke() -> None:
                 or b"acl|users" not in docs_all_resp2
                 or b"acl|whoami" not in docs_all_resp2
                 or b"function|load" not in docs_all_resp2
+                or b"hrandfield" not in docs_all_resp2
                 or b"blmove" not in docs_all_resp2
                 or b"blmpop" not in docs_all_resp2
                 or b"zmpop" not in docs_all_resp2
@@ -909,6 +912,10 @@ def run_smoke() -> None:
             if listed_zrand != [b"zrandmember"]:
                 raise AssertionError(f"unexpected COMMAND LIST zrand result: {listed_zrand!r}")
 
+            listed_hrand = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"HRAND*")
+            if listed_hrand != [b"hrandfield"]:
+                raise AssertionError(f"unexpected COMMAND LIST hrand result: {listed_hrand!r}")
+
             listed_zdiff = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"ZDIFF*")
             if listed_zdiff != [b"zdiff", b"zdiffstore"]:
                 raise AssertionError(f"unexpected COMMAND LIST zdiff result: {listed_zdiff!r}")
@@ -1012,6 +1019,7 @@ def run_smoke() -> None:
                 or not isinstance(docs_all.get(b"acl|users"), dict)
                 or not isinstance(docs_all.get(b"acl|whoami"), dict)
                 or not isinstance(docs_all.get(b"function|load"), dict)
+                or not isinstance(docs_all.get(b"hrandfield"), dict)
                 or not isinstance(docs_all.get(b"blmove"), dict)
                 or not isinstance(docs_all.get(b"blmpop"), dict)
                 or not isinstance(docs_all.get(b"zmpop"), dict)

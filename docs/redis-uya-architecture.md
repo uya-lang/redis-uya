@@ -105,6 +105,7 @@ server open
 - 当写回遇到 `EAGAIN` 时，保留剩余输出并切换到 `EPOLLOUT`
 - 输出全部发完后恢复到 `EPOLLIN`
 - `BLPOP` / `BRPOP` / `BRPOPLPUSH` / `BLMOVE` / `BLMPOP` / `BZPOPMIN` / `BZPOPMAX` / `BZMPOP` 在 source 未就绪时不会消费后续 pipeline 命令；当前连接会先进入 blocked 状态，等待 server 主循环在 key 就绪或 timeout 后重放同一条原始请求
+- `HRANDFIELD` 当前复用 hash field 字典序视图提供 deterministic random-field partial，支持 `count`、负数重复与 `WITHVALUES`，真实随机采样保留为后续完整语义
 - `ZMPOP` 是非阻塞 sorted-set multi-pop，执行层复用 zset pop 编码与删除路径；连接层只在成功返回数组时追加 AOF，空结果不落盘
 - `ZRANGESTORE` 当前复用 rank-based `ZRANGE` 视图写回项目内 zset，保留源 member 的整数 score；`BYSCORE` / `BYLEX` / `REV` / `LIMIT` 仍保留为后续完整语义
 - `ZDIFF` / `ZINTER` / `ZINTERSTORE` / `ZUNION` / `ZUNIONSTORE` 这类 sorted-set 多 key 命令在执行层扫描项目内 zset `(score, member)` 排序视图；`ZINTER` / `ZINTERSTORE` / `ZUNION` / `ZUNIONSTORE` 当前按整数 score SUM 聚合，复杂权重/聚合选项仍保留为后续完整语义

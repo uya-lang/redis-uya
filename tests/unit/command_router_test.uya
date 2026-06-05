@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 217);
+    try assert_eq_i32(command_router_count(&router) as i32, 218);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -779,6 +779,10 @@ export fn test_command_router_lookup_and_case() !void {
     try assert_eq_i32(hgetall.cmd_type as i32, CommandType.command_hgetall as i32);
     try assert_eq_i32(hgetall.arity, 2);
 
+    const hrandfield: CommandInfo = try command_router_lookup(&router, &"HRANDFIELD"[0: 10]);
+    try assert_eq_i32(hrandfield.cmd_type as i32, CommandType.command_hrandfield as i32);
+    try assert_eq_i32(hrandfield.arity, -2);
+
     const hdel: CommandInfo = try command_router_lookup(&router, &"HDEL"[0: 4]);
     try assert_eq_i32(hdel.cmd_type as i32, CommandType.command_hdel as i32);
     try assert_eq_i32(hdel.arity, -3);
@@ -990,6 +994,7 @@ export fn test_command_router_arity_validation() !void {
     const hkeys: CommandInfo = try command_router_lookup(&router, &"HKEYS"[0: 5]);
     const hvals: CommandInfo = try command_router_lookup(&router, &"HVALS"[0: 5]);
     const hgetall: CommandInfo = try command_router_lookup(&router, &"HGETALL"[0: 7]);
+    const hrandfield: CommandInfo = try command_router_lookup(&router, &"HRANDFIELD"[0: 10]);
     const hdel: CommandInfo = try command_router_lookup(&router, &"HDEL"[0: 4]);
     const hexists: CommandInfo = try command_router_lookup(&router, &"HEXISTS"[0: 7]);
     const hlen: CommandInfo = try command_router_lookup(&router, &"HLEN"[0: 4]);
@@ -1205,6 +1210,9 @@ export fn test_command_router_arity_validation() !void {
     try command_validate_arity(&hkeys, 2);
     try command_validate_arity(&hvals, 2);
     try command_validate_arity(&hgetall, 2);
+    try command_validate_arity(&hrandfield, 2);
+    try command_validate_arity(&hrandfield, 3);
+    try command_validate_arity(&hrandfield, 4);
     try command_validate_arity(&hdel, 3);
     try command_validate_arity(&hdel, 4);
     try command_validate_arity(&hexists, 3);

@@ -339,6 +339,7 @@ PARTIAL_NAMES = {
     "flushall",
     "flushdb",
     "hello",
+    "hrandfield",
     "info",
     "latency",
     "latency|doctor",

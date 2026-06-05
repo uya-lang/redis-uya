@@ -53,7 +53,7 @@
 - String/Key/Control 命令执行：`PING`、`GET`、`SET`、`DEL`、`EXISTS`、`COPY`、`KEYS`、`RANDOMKEY`、`EXPIRE`、`EXPIREAT`、`EXPIRETIME`、`PEXPIRE`、`PEXPIREAT`、`PEXPIRETIME`、`PERSIST`、`TTL`、`PTTL`、`TIME`、`ROLE`、`INFO` 多 section、`CONFIG GET/HELP/RESETSTAT`、`CLIENT` 兼容子集、`AUTH`、`SAVE`
 - String TTL 扩展：`GETEX`、`SETEX`、`PSETEX`
 - Hash 最小对象：基于项目内 `Dict` 的最小 hash value 容器
-- Hash 命令子集：`HSET`、`HGET`、`HDEL`、`HEXISTS`、`HLEN`、`HMGET`、`HSETNX`、`HSTRLEN`
+- Hash 命令子集：`HSET`、`HGET`、`HDEL`、`HEXISTS`、`HLEN`、`HMGET`、`HSETNX`、`HSTRLEN`、`HRANDFIELD`
 - List 最小对象：基于双向链表的最小 list value 容器
 - List 命令子集：`LPUSH`、`LPOP`、`LRANGE`
 - Blocking list/zset 第一批：`BLPOP`、`BRPOP`、`BRPOPLPUSH`、`BLMOVE`、`BLMPOP`、`BZPOPMIN`、`BZPOPMAX`、`BZMPOP` 已支持立即命中、server-side block/unblock、超时返回与 AOF replay
@@ -293,7 +293,7 @@ build/redis-uya 6380 1
 - Monitor 第一批 partial：`MONITOR` 当前可让连接进入流式观测模式，并向 monitor 客户端推送后续成功执行的普通命令；当前监控行使用 redis-uya 占位端点，不包含 Redis 原生客户端地址、DB 切换真值或微秒精度时间
 - Streams partial：`XACK`、`XADD`、`XCLAIM`、`XDEL`、`XGROUP CREATE`、`XGROUP DESTROY`、`XGROUP HELP`、`XGROUP SETID`、`XINFO HELP`、`XINFO GROUPS`、`XINFO CONSUMERS`、`XINFO STREAM`、`XLEN`、`XPENDING`、`XRANGE`、`XREVRANGE`、`XREAD`、`XTRIM` 当前可用；当前只支持基础追加、精确 ID 删除、XGROUP/XINFO 帮助兼容面、无 group 时的 `XACK` / `XCLAIM` / `XPENDING` `NOGROUP` 错误、`XGROUP CREATE` key/type 校验与明确未支持错误、`XGROUP DESTROY` 空状态返回 `0`、`XGROUP SETID` 无 group 时的 `NOGROUP` 错误、基础 stream 元数据、`XINFO STREAM FULL [COUNT count]` entry 明细、空 consumer group 列表、无 group 时的 `XINFO CONSUMERS` `NOGROUP` 错误、长度、范围读取、非阻塞读取和 `XTRIM MAXLEN [=|~] count` 头部裁剪，尚不支持 `XADD` trim / `NOMKSTREAM` 等选项、真实 consumer group 状态和 Redis 原生 radix-tree/listpack 编码。项目内 RDB 与 AOF rewrite 会保存显式 stream ID；普通 AOF append 仍记录原始请求，因此 `XADD *` 回放会重新生成 ID，只承诺恢复条目内容与顺序
 - Hash 第一批数值：`HINCRBY`、`HINCRBYFLOAT`
-- Hash 第二批视图：`HKEYS`、`HVALS`、`HGETALL`
+- Hash 第二批视图：`HKEYS`、`HVALS`、`HGETALL`、`HRANDFIELD`
 - Hash 第三批扫描：`HSCAN`
 - List 第一批基础：`RPUSH`、`RPOP`、`LINDEX`、`LSET`、`LLEN`
 - List 第二批变异：`LINSERT`、`LTRIM`、`LREM`

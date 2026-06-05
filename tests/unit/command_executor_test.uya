@@ -695,6 +695,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"georadius_ro"[0: 12], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"georadiusbymember_ro"[0: 20], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"geosearchstore"[0: 14], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"hrandfield"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"zdiff"[0: 5], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"zdiffstore"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"zinter"[0: 6], CommandCatalogStatus.status_partial);
@@ -3231,6 +3232,78 @@ export fn test_command_hkeys_hvals_hgetall() !void {
     try assert_true(command_executor_test_contains(out[0: hgetall_len], &"$5\r\nratio\r\n$3\r\n1.5\r\n"[0: 20]));
     command_reply_cleanup(&hgetall_reply);
     resp_value_free(&hgetall_parsed.value);
+
+    var hrandfield_single_parsed: RespParseResult = try parse_resp2(&"*2\r\n$10\r\nHRANDFIELD\r\n$4\r\nhash\r\n"[0: 31]);
+    const hrandfield_single_command: Command = try command_executor_test_command(&router, &hrandfield_single_parsed);
+    var hrandfield_single_reply: CommandReply = command_execute_at(&engine, &hrandfield_single_command, 1000u64);
+    try assert_eq_i32(hrandfield_single_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(hrandfield_single_reply.data, &"counter"[0: 7]));
+    command_reply_cleanup(&hrandfield_single_reply);
+    resp_value_free(&hrandfield_single_parsed.value);
+
+    var hrandfield_count_parsed: RespParseResult = try parse_resp2(&"*3\r\n$10\r\nHRANDFIELD\r\n$4\r\nhash\r\n$1\r\n2\r\n"[0: 38]);
+    const hrandfield_count_command: Command = try command_executor_test_command(&router, &hrandfield_count_parsed);
+    var hrandfield_count_reply: CommandReply = command_execute_at(&engine, &hrandfield_count_command, 1000u64);
+    const hrandfield_count_len: usize = try connection_encode_reply(&hrandfield_count_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: hrandfield_count_len], &"*2\r\n$7\r\ncounter\r\n$5\r\nfield\r\n"[0: 28]));
+    command_reply_cleanup(&hrandfield_count_reply);
+    resp_value_free(&hrandfield_count_parsed.value);
+
+    var hrandfield_values_parsed: RespParseResult = try parse_resp2(&"*4\r\n$10\r\nHRANDFIELD\r\n$4\r\nhash\r\n$1\r\n2\r\n$10\r\nWITHVALUES\r\n"[0: 55]);
+    const hrandfield_values_command: Command = try command_executor_test_command(&router, &hrandfield_values_parsed);
+    var hrandfield_values_reply: CommandReply = command_execute_at(&engine, &hrandfield_values_command, 1000u64);
+    const hrandfield_values_len: usize = try connection_encode_reply(&hrandfield_values_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: hrandfield_values_len], &"*4\r\n$7\r\ncounter\r\n$1\r\n2\r\n$5\r\nfield\r\n$5\r\nvalue\r\n"[0: 46]));
+    command_reply_cleanup(&hrandfield_values_reply);
+    resp_value_free(&hrandfield_values_parsed.value);
+
+    var hrandfield_repeat_parsed: RespParseResult = try parse_resp2(&"*3\r\n$10\r\nHRANDFIELD\r\n$4\r\nhash\r\n$2\r\n-4\r\n"[0: 39]);
+    const hrandfield_repeat_command: Command = try command_executor_test_command(&router, &hrandfield_repeat_parsed);
+    var hrandfield_repeat_reply: CommandReply = command_execute_at(&engine, &hrandfield_repeat_command, 1000u64);
+    const hrandfield_repeat_len: usize = try connection_encode_reply(&hrandfield_repeat_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: hrandfield_repeat_len], &"*4\r\n$7\r\ncounter\r\n$5\r\nfield\r\n$5\r\nratio\r\n$7\r\ncounter\r\n"[0: 52]));
+    command_reply_cleanup(&hrandfield_repeat_reply);
+    resp_value_free(&hrandfield_repeat_parsed.value);
+
+    var hrandfield_missing_single_parsed: RespParseResult = try parse_resp2(&"*2\r\n$10\r\nHRANDFIELD\r\n$7\r\nmissing\r\n"[0: 34]);
+    const hrandfield_missing_single_command: Command = try command_executor_test_command(&router, &hrandfield_missing_single_parsed);
+    const hrandfield_missing_single_reply: CommandReply = command_execute_at(&engine, &hrandfield_missing_single_command, 1000u64);
+    try assert_eq_i32(hrandfield_missing_single_reply.typ as i32, CommandReplyType.reply_null_bulk as i32);
+    resp_value_free(&hrandfield_missing_single_parsed.value);
+
+    var hrandfield_missing_count_parsed: RespParseResult = try parse_resp2(&"*3\r\n$10\r\nHRANDFIELD\r\n$7\r\nmissing\r\n$1\r\n2\r\n"[0: 41]);
+    const hrandfield_missing_count_command: Command = try command_executor_test_command(&router, &hrandfield_missing_count_parsed);
+    var hrandfield_missing_count_reply: CommandReply = command_execute_at(&engine, &hrandfield_missing_count_command, 1000u64);
+    const hrandfield_missing_count_len: usize = try connection_encode_reply(&hrandfield_missing_count_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: hrandfield_missing_count_len], &"*0\r\n"[0: 4]));
+    command_reply_cleanup(&hrandfield_missing_count_reply);
+    resp_value_free(&hrandfield_missing_count_parsed.value);
+
+    var hrandfield_bad_count_parsed: RespParseResult = try parse_resp2(&"*3\r\n$10\r\nHRANDFIELD\r\n$4\r\nhash\r\n$1\r\nx\r\n"[0: 38]);
+    const hrandfield_bad_count_command: Command = try command_executor_test_command(&router, &hrandfield_bad_count_parsed);
+    const hrandfield_bad_count_reply: CommandReply = command_execute_at(&engine, &hrandfield_bad_count_command, 1000u64);
+    try assert_eq_i32(hrandfield_bad_count_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(hrandfield_bad_count_reply.data, &"ERR value is not an integer or out of range"[0: 43]));
+    resp_value_free(&hrandfield_bad_count_parsed.value);
+
+    var hrandfield_bad_option_parsed: RespParseResult = try parse_resp2(&"*4\r\n$10\r\nHRANDFIELD\r\n$4\r\nhash\r\n$1\r\n2\r\n$3\r\nBAD\r\n"[0: 47]);
+    const hrandfield_bad_option_command: Command = try command_executor_test_command(&router, &hrandfield_bad_option_parsed);
+    const hrandfield_bad_option_reply: CommandReply = command_execute_at(&engine, &hrandfield_bad_option_command, 1000u64);
+    try assert_eq_i32(hrandfield_bad_option_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(hrandfield_bad_option_reply.data, &"ERR syntax error"[0: 16]));
+    resp_value_free(&hrandfield_bad_option_parsed.value);
+
+    var hrandfield_set_str_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$3\r\nstr\r\n$5\r\nvalue\r\n"[0: 33]);
+    const hrandfield_set_str_command: Command = try command_executor_test_command(&router, &hrandfield_set_str_parsed);
+    _ = command_execute_at(&engine, &hrandfield_set_str_command, 1000u64);
+    resp_value_free(&hrandfield_set_str_parsed.value);
+
+    var hrandfield_wrongtype_parsed: RespParseResult = try parse_resp2(&"*2\r\n$10\r\nHRANDFIELD\r\n$3\r\nstr\r\n"[0: 30]);
+    const hrandfield_wrongtype_command: Command = try command_executor_test_command(&router, &hrandfield_wrongtype_parsed);
+    const hrandfield_wrongtype_reply: CommandReply = command_execute_at(&engine, &hrandfield_wrongtype_command, 1000u64);
+    try assert_eq_i32(hrandfield_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(hrandfield_wrongtype_reply.data, &"WRONGTYPE"[0: 9]));
+    resp_value_free(&hrandfield_wrongtype_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

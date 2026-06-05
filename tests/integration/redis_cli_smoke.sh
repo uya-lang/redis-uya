@@ -1767,6 +1767,30 @@ if [[ "$HGETALL_RESULT" != "6" ]]; then
     exit 1
 fi
 
+HRANDFIELD_SINGLE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hrandfield hash)"
+if [[ "$HRANDFIELD_SINGLE_RESULT" != "counter" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HRANDFIELD counter, got '$HRANDFIELD_SINGLE_RESULT'" >&2
+    exit 1
+fi
+
+HRANDFIELD_COUNT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hrandfield hash 2)"
+if [[ "$HRANDFIELD_COUNT_RESULT" != $'counter\nfield' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HRANDFIELD counter/field, got '$HRANDFIELD_COUNT_RESULT'" >&2
+    exit 1
+fi
+
+HRANDFIELD_VALUES_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hrandfield hash 2 withvalues)"
+if [[ "$HRANDFIELD_VALUES_RESULT" != $'counter\n2\nfield\nvalue' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HRANDFIELD WITHVALUES counter/2/field/value, got '$HRANDFIELD_VALUES_RESULT'" >&2
+    exit 1
+fi
+
+HRANDFIELD_REPEAT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hrandfield hash -4)"
+if [[ "$HRANDFIELD_REPEAT_RESULT" != $'counter\nfield\nratio\ncounter' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HRANDFIELD repeat counter/field/ratio/counter, got '$HRANDFIELD_REPEAT_RESULT'" >&2
+    exit 1
+fi
+
 HEXISTS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hexists hash field)"
 if [[ "$HEXISTS_RESULT" != "1" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected HEXISTS 1, got '$HEXISTS_RESULT'" >&2

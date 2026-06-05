@@ -454,6 +454,25 @@ HGETALL key
 - 返回 `field, value, field, value...` 交替展开的 RESP Array
 - key 不存在时返回空 Array
 
+### `HRANDFIELD`
+
+格式：
+
+```text
+HRANDFIELD key [count [WITHVALUES]]
+```
+
+返回：
+
+- 未传 `count` 时返回一个 field，key 不存在时返回 Null Bulk
+- 传 `count` 时返回 field 数组，key 不存在时返回空数组
+- 传 `WITHVALUES` 时返回 `field, value, field, value...` 交替展开的数组
+
+说明：
+
+- 当前实现为 deterministic random-field partial，按 field 字典序稳定返回
+- `count > 0` 时最多返回 hash 中已有 field 数量；`count < 0` 时允许按稳定顺序循环重复
+
 ### `HDEL`
 
 格式：

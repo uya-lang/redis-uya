@@ -9823,6 +9823,36 @@ fn command_executor_zinter(engine: &Engine, command: &Command, now_ms: u64) Comm
     return command_executor_zset_result_array(build_reply.owned_object, withscores);
 }
 
+fn command_executor_zinterstore(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 4 {
+        return command_executor_wrong_arity();
+    }
+    const target: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const numkeys_data: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    const numkeys_i64: i64 = command_executor_parse_i64(numkeys_data) catch {
+        return command_executor_error(&"ERR numkeys should be greater than 0"[0: 36]);
+    };
+    if numkeys_i64 <= 0 {
+        return command_executor_error(&"ERR numkeys should be greater than 0"[0: 36]);
+    }
+    const numkeys: usize = numkeys_i64 as usize;
+    const keys_end: usize = 3 + numkeys;
+    if command.argc != keys_end {
+        return command_executor_syntax_error();
+    }
+
+    const build_reply: CommandReply = command_executor_zinter_build_result(engine, command, 3, keys_end, now_ms);
+    if build_reply.owned_object == null {
+        return build_reply;
+    }
+    const result_zset: &RedisObject = build_reply.owned_object;
+    return command_executor_zset_store_result(engine, target, result_zset, now_ms);
+}
+
 fn command_executor_zunion_build_result(engine: &Engine, command: &Command, keys_start: usize, keys_end: usize, now_ms: u64) CommandReply {
     const result_zset: &RedisObject = create_zset_object() catch {
         return command_executor_oom();
@@ -16759,6 +16789,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_zintercard {
         return command_executor_zintercard(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_zinterstore {
+        return command_executor_zinterstore(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_zunion {
         return command_executor_zunion(engine, command, now_ms);

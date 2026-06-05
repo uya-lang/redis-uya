@@ -1240,6 +1240,27 @@ ZINTERCARD numkeys key [key ...] [LIMIT limit]
 - `LIMIT` 不能为负数
 - 当前项目内 ZSet score 使用整数语义
 
+### `ZINTERSTORE`
+
+格式：
+
+```text
+ZINTERSTORE destination numkeys key [key ...]
+```
+
+返回：
+
+- 返回写入 `destination` 的成员数量
+- 写入多个 zset 的交集成员
+- 交集成员 score 按 SUM 聚合
+
+说明：
+
+- 当前实现为 write partial，按聚合结果写回项目内 zset
+- 任一源 key 缺失或结果为空时删除 `destination` 并返回 `0`
+- 当前尚未实现 `WEIGHTS` / `AGGREGATE` 选项
+- 当前项目内 ZSet score 使用整数语义
+
 ### `ZUNION`
 
 格式：

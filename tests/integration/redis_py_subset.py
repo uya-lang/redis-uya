@@ -969,6 +969,14 @@ class RedisPySubsetClient:
     def zdiffstore(self, destination: str, *keys: str) -> int:
         return int(self._request(b"ZDIFFSTORE", destination.encode(), str(len(keys)).encode(), *(key.encode() for key in keys)))
 
+    def zunion(self, *keys: str, withscores: bool = False) -> list[bytes]:
+        parts: list[bytes] = [b"ZUNION", str(len(keys)).encode(), *(key.encode() for key in keys)]
+        if withscores:
+            parts.append(b"WITHSCORES")
+        result = self._request(*parts)
+        assert isinstance(result, list)
+        return result
+
     def zrangebyscore(self, key: str, minimum: int, maximum: int) -> list[bytes]:
         result = self._request(b"ZRANGEBYSCORE", key.encode(), str(minimum).encode(), str(maximum).encode())
         assert isinstance(result, list)
@@ -1690,6 +1698,9 @@ def run_smoke() -> None:
             assert client.zadd("zdiff2", {"b": 2, "d": 5}) == 2
             assert client.zintercard("zset", "zdiff2") == 1
             assert client.zintercard("zset", "zdiff2", limit=1) == 1
+            assert client.zunion("zset", "zdiff2") == [b"a", b"b", b"d"]
+            assert client.zunion("zset", "zdiff2", withscores=True) == [b"a", b"4", b"b", b"4", b"d", b"5"]
+            assert client.zunion("missing", "zdiff2") == [b"b", b"d"]
             assert client.zdiff("zset", "zdiff2") == [b"a"]
             assert client.zdiff("zset", "zdiff2", withscores=True) == [b"a", b"4"]
             assert client.zdiffstore("zdiffdst", "zset", "zdiff2") == 1

@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 161 | 0 | 3 | 55 |
+| Tier A: standalone core | 365 | 259 | 146 | 162 | 0 | 3 | 54 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `168` |
+| `partial` | `169` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `208` |
+| `deferred` | `207` |
 
 ## Group counts
 
@@ -616,5 +616,5 @@
 | `zrevrank` | `sorted-set` | `full` | `-` | `-3` | `-` | `no` | `@read, @sortedset, @fast` |
 | `zscan` | `sorted-set` | `full` | `-` | `-3` | `-` | `yes` | `@read, @sortedset, @slow` |
 | `zscore` | `sorted-set` | `full` | `-` | `3` | `-` | `no` | `@read, @sortedset, @fast` |
-| `zunion` | `sorted-set` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @sortedset, @slow` |
+| `zunion` | `sorted-set` | `partial` | `-` | `-3` | `-` | `no` | `@read, @sortedset, @slow` |
 | `zunionstore` | `sorted-set` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@write, @sortedset, @slow` |

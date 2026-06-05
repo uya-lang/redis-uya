@@ -540,10 +540,10 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"unexpected XINFO HELP: {xinfo_help!r}")
 
-            zset_info = send_command(sock, b"COMMAND", b"INFO", b"ZRANK", b"ZREVRANK", b"ZSCORE", b"ZMSCORE", b"ZDIFF", b"ZDIFFSTORE", b"ZINTERCARD", b"ZPOPMAX", b"ZPOPMIN", b"ZRANDMEMBER", b"ZMPOP", b"ZLEXCOUNT", b"ZRANGEBYLEX", b"ZREMRANGEBYLEX", b"ZREVRANGE", b"ZREVRANGEBYLEX", b"BZPOPMAX", b"BZPOPMIN")
+            zset_info = send_command(sock, b"COMMAND", b"INFO", b"ZRANK", b"ZREVRANK", b"ZSCORE", b"ZMSCORE", b"ZDIFF", b"ZDIFFSTORE", b"ZINTERCARD", b"ZUNION", b"ZPOPMAX", b"ZPOPMIN", b"ZRANDMEMBER", b"ZMPOP", b"ZLEXCOUNT", b"ZRANGEBYLEX", b"ZREMRANGEBYLEX", b"ZREVRANGE", b"ZREVRANGEBYLEX", b"BZPOPMAX", b"BZPOPMIN")
             if (
                 not isinstance(zset_info, list)
-                or len(zset_info) != 18
+                or len(zset_info) != 19
                 or not isinstance(zset_info[0], list)
                 or zset_info[0][0] != b"zrank"
                 or not isinstance(zset_info[1], list)
@@ -559,27 +559,29 @@ def run_smoke() -> None:
                 or not isinstance(zset_info[6], list)
                 or zset_info[6][0] != b"zintercard"
                 or not isinstance(zset_info[7], list)
-                or zset_info[7][0] != b"zpopmax"
+                or zset_info[7][0] != b"zunion"
                 or not isinstance(zset_info[8], list)
-                or zset_info[8][0] != b"zpopmin"
+                or zset_info[8][0] != b"zpopmax"
                 or not isinstance(zset_info[9], list)
-                or zset_info[9][0] != b"zrandmember"
+                or zset_info[9][0] != b"zpopmin"
                 or not isinstance(zset_info[10], list)
-                or zset_info[10][0] != b"zmpop"
+                or zset_info[10][0] != b"zrandmember"
                 or not isinstance(zset_info[11], list)
-                or zset_info[11][0] != b"zlexcount"
+                or zset_info[11][0] != b"zmpop"
                 or not isinstance(zset_info[12], list)
-                or zset_info[12][0] != b"zrangebylex"
+                or zset_info[12][0] != b"zlexcount"
                 or not isinstance(zset_info[13], list)
-                or zset_info[13][0] != b"zremrangebylex"
+                or zset_info[13][0] != b"zrangebylex"
                 or not isinstance(zset_info[14], list)
-                or zset_info[14][0] != b"zrevrange"
+                or zset_info[14][0] != b"zremrangebylex"
                 or not isinstance(zset_info[15], list)
-                or zset_info[15][0] != b"zrevrangebylex"
+                or zset_info[15][0] != b"zrevrange"
                 or not isinstance(zset_info[16], list)
-                or zset_info[16][0] != b"bzpopmax"
+                or zset_info[16][0] != b"zrevrangebylex"
                 or not isinstance(zset_info[17], list)
-                or zset_info[17][0] != b"bzpopmin"
+                or zset_info[17][0] != b"bzpopmax"
+                or not isinstance(zset_info[18], list)
+                or zset_info[18][0] != b"bzpopmin"
             ):
                 raise AssertionError(f"zset score/pop commands missing from COMMAND INFO: {zset_info!r}")
 
@@ -674,6 +676,7 @@ def run_smoke() -> None:
                 or b"zdiff" not in docs_all_resp2
                 or b"zdiffstore" not in docs_all_resp2
                 or b"zintercard" not in docs_all_resp2
+                or b"zunion" not in docs_all_resp2
                 or b"zrandmember" not in docs_all_resp2
                 or b"zlexcount" not in docs_all_resp2
                 or b"zrangebylex" not in docs_all_resp2
@@ -902,6 +905,10 @@ def run_smoke() -> None:
             if listed_zinter != [b"zintercard"]:
                 raise AssertionError(f"unexpected COMMAND LIST zinter result: {listed_zinter!r}")
 
+            listed_zunion = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"ZUNION*")
+            if listed_zunion != [b"zunion"]:
+                raise AssertionError(f"unexpected COMMAND LIST zunion result: {listed_zunion!r}")
+
             listed_zlex = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"ZLEX*")
             if listed_zlex != [b"zlexcount"]:
                 raise AssertionError(f"unexpected COMMAND LIST zlex result: {listed_zlex!r}")
@@ -998,6 +1005,7 @@ def run_smoke() -> None:
                 or not isinstance(docs_all.get(b"zdiff"), dict)
                 or not isinstance(docs_all.get(b"zdiffstore"), dict)
                 or not isinstance(docs_all.get(b"zintercard"), dict)
+                or not isinstance(docs_all.get(b"zunion"), dict)
                 or not isinstance(docs_all.get(b"zrandmember"), dict)
                 or not isinstance(docs_all.get(b"zlexcount"), dict)
                 or not isinstance(docs_all.get(b"zrangebylex"), dict)

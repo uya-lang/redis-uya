@@ -1219,6 +1219,27 @@ ZINTERCARD numkeys key [key ...] [LIMIT limit]
 - `LIMIT` 不能为负数
 - 当前项目内 ZSet score 使用整数语义
 
+### `ZUNION`
+
+格式：
+
+```text
+ZUNION numkeys key [key ...] [WITHSCORES]
+```
+
+返回：
+
+- 返回多个 zset 的并集成员
+- 重复成员 score 按 SUM 聚合
+- `WITHSCORES` 返回 `member, score` 交错数组
+
+说明：
+
+- 当前实现为 read-only partial，按聚合结果的 `(score, member)` 排序视图输出
+- 源 key 缺失时按空 zset 处理；所有源 key 缺失时返回空数组
+- 当前尚未实现 `WEIGHTS` / `AGGREGATE` 选项
+- 当前项目内 ZSet score 使用整数语义
+
 ### `ZREMRANGEBYRANK`
 
 格式：

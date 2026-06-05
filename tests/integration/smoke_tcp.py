@@ -450,6 +450,8 @@ def run_smoke() -> None:
             roundtrip(sock, b"*4\r\n$11\r\nZRANDMEMBER\r\n$4\r\nzset\r\n$1\r\n2\r\n$10\r\nWITHSCORES\r\n", b"*4\r\n$1\r\na\r\n$1\r\n1\r\n$1\r\nb\r\n$1\r\n2\r\n")
             roundtrip(sock, b"*3\r\n$11\r\nZRANDMEMBER\r\n$4\r\nzset\r\n$2\r\n-3\r\n", b"*3\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\na\r\n")
             roundtrip(sock, b"*6\r\n$4\r\nZADD\r\n$2\r\nz2\r\n$1\r\n2\r\n$1\r\nb\r\n$1\r\n4\r\n$1\r\nd\r\n", b":2\r\n")
+            roundtrip(sock, b"*4\r\n$10\r\nZINTERCARD\r\n$1\r\n2\r\n$4\r\nzset\r\n$2\r\nz2\r\n", b":1\r\n")
+            roundtrip(sock, b"*6\r\n$10\r\nZINTERCARD\r\n$1\r\n2\r\n$4\r\nzset\r\n$2\r\nz2\r\n$5\r\nLIMIT\r\n$1\r\n1\r\n", b":1\r\n")
             roundtrip(sock, b"*4\r\n$5\r\nZDIFF\r\n$1\r\n2\r\n$4\r\nzset\r\n$2\r\nz2\r\n", b"*1\r\n$1\r\na\r\n")
             roundtrip(sock, b"*5\r\n$5\r\nZDIFF\r\n$1\r\n2\r\n$4\r\nzset\r\n$2\r\nz2\r\n$10\r\nWITHSCORES\r\n", b"*2\r\n$1\r\na\r\n$1\r\n1\r\n")
             roundtrip(sock, b"*5\r\n$10\r\nZDIFFSTORE\r\n$4\r\nzdst\r\n$1\r\n2\r\n$4\r\nzset\r\n$2\r\nz2\r\n", b":1\r\n")

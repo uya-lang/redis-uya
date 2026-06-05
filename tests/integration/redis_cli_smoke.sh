@@ -1383,6 +1383,18 @@ if [[ "$ZDIFF_ZADD_RESULT" != "2" ]]; then
     exit 1
 fi
 
+ZINTERCARD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zintercard 2 zset zdiff2)"
+if [[ "$ZINTERCARD_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZINTERCARD 1, got '$ZINTERCARD_RESULT'" >&2
+    exit 1
+fi
+
+ZINTERCARD_LIMIT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zintercard 2 zset zdiff2 limit 1)"
+if [[ "$ZINTERCARD_LIMIT_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZINTERCARD LIMIT 1, got '$ZINTERCARD_LIMIT_RESULT'" >&2
+    exit 1
+fi
+
 ZDIFF_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zdiff 2 zset zdiff2)"
 if [[ "$ZDIFF_RESULT" != "a" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ZDIFF a, got '$ZDIFF_RESULT'" >&2

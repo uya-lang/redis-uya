@@ -1199,6 +1199,26 @@ ZDIFFSTORE destination numkeys key [key ...]
 - 后续源 key 缺失时按空 zset 处理
 - 当前项目内 ZSet score 使用整数语义
 
+### `ZINTERCARD`
+
+格式：
+
+```text
+ZINTERCARD numkeys key [key ...] [LIMIT limit]
+```
+
+返回：
+
+- 返回多个 zset 的交集成员数量
+- `LIMIT` 大于 0 时达到限制后提前返回该限制值
+
+说明：
+
+- 当前实现为 read-only partial，只计算成员交集基数，不包含 `ZINTER` / `ZINTERSTORE` 的权重和聚合语义
+- 任一源 key 缺失时返回 `0`
+- `LIMIT` 不能为负数
+- 当前项目内 ZSet score 使用整数语义
+
 ### `ZREMRANGEBYRANK`
 
 格式：

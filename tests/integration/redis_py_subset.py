@@ -859,6 +859,12 @@ class RedisPySubsetClient:
     def zcount(self, key: str, minimum: int, maximum: int) -> int:
         return int(self._request(b"ZCOUNT", key.encode(), str(minimum).encode(), str(maximum).encode()))
 
+    def zintercard(self, *keys: str, limit: int | None = None) -> int:
+        parts: list[bytes] = [b"ZINTERCARD", str(len(keys)).encode(), *(key.encode() for key in keys)]
+        if limit is not None:
+            parts.extend([b"LIMIT", str(limit).encode()])
+        return int(self._request(*parts))
+
     def zlexcount(self, key: str, minimum: str, maximum: str) -> int:
         return int(self._request(b"ZLEXCOUNT", key.encode(), minimum.encode(), maximum.encode()))
 
@@ -1682,6 +1688,8 @@ def run_smoke() -> None:
             assert client.zrandmember("zset", 2, withscores=True) == [b"b", b"2", b"a", b"4"]
             assert client.zrandmember("zset", -3) == [b"b", b"a", b"b"]
             assert client.zadd("zdiff2", {"b": 2, "d": 5}) == 2
+            assert client.zintercard("zset", "zdiff2") == 1
+            assert client.zintercard("zset", "zdiff2", limit=1) == 1
             assert client.zdiff("zset", "zdiff2") == [b"a"]
             assert client.zdiff("zset", "zdiff2", withscores=True) == [b"a", b"4"]
             assert client.zdiffstore("zdiffdst", "zset", "zdiff2") == 1

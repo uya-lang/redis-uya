@@ -697,6 +697,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"geosearchstore"[0: 14], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"zdiff"[0: 5], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"zdiffstore"[0: 10], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"zintercard"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"zrandmember"[0: 11], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xack"[0: 4], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xclaim"[0: 6], CommandCatalogStatus.status_partial);
@@ -5160,6 +5161,79 @@ export fn test_command_zrangebyscore_zrevrangebyscore() !void {
     const zadd_z2_command: Command = try command_executor_test_command(&router, &zadd_z2_parsed);
     _ = command_execute_at(&engine, &zadd_z2_command, 1000u64);
     resp_value_free(&zadd_z2_parsed.value);
+
+    var zadd_z3_parsed: RespParseResult = try parse_resp2(&"*6\r\n$4\r\nZADD\r\n$2\r\nz3\r\n$1\r\n2\r\n$1\r\nb\r\n$1\r\n3\r\n$1\r\nc\r\n"[0: 50]);
+    const zadd_z3_command: Command = try command_executor_test_command(&router, &zadd_z3_parsed);
+    _ = command_execute_at(&engine, &zadd_z3_command, 1000u64);
+    resp_value_free(&zadd_z3_parsed.value);
+
+    var bad_string_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$3\r\nbad\r\n$1\r\nx\r\n"[0: 29]);
+    const bad_string_command: Command = try command_executor_test_command(&router, &bad_string_parsed);
+    _ = command_execute_at(&engine, &bad_string_command, 1000u64);
+    resp_value_free(&bad_string_parsed.value);
+
+    var zintercard_parsed: RespParseResult = try parse_resp2(&"*5\r\n$10\r\nZINTERCARD\r\n$1\r\n3\r\n$4\r\nzset\r\n$2\r\nz2\r\n$2\r\nz3\r\n"[0: 54]);
+    const zintercard_command: Command = try command_executor_test_command(&router, &zintercard_parsed);
+    const zintercard_reply: CommandReply = command_execute_at(&engine, &zintercard_command, 1000u64);
+    try assert_eq_i32(zintercard_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(zintercard_reply.integer as i32, 1);
+    resp_value_free(&zintercard_parsed.value);
+
+    var zintercard_limit_parsed: RespParseResult = try parse_resp2(&"*7\r\n$10\r\nZINTERCARD\r\n$1\r\n3\r\n$4\r\nzset\r\n$2\r\nz2\r\n$2\r\nz3\r\n$5\r\nLIMIT\r\n$1\r\n1\r\n"[0: 72]);
+    const zintercard_limit_command: Command = try command_executor_test_command(&router, &zintercard_limit_parsed);
+    const zintercard_limit_reply: CommandReply = command_execute_at(&engine, &zintercard_limit_command, 1000u64);
+    try assert_eq_i32(zintercard_limit_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(zintercard_limit_reply.integer as i32, 1);
+    resp_value_free(&zintercard_limit_parsed.value);
+
+    var zintercard_single_limit_parsed: RespParseResult = try parse_resp2(&"*5\r\n$10\r\nZINTERCARD\r\n$1\r\n1\r\n$4\r\nzset\r\n$5\r\nLIMIT\r\n$1\r\n2\r\n"[0: 56]);
+    const zintercard_single_limit_command: Command = try command_executor_test_command(&router, &zintercard_single_limit_parsed);
+    const zintercard_single_limit_reply: CommandReply = command_execute_at(&engine, &zintercard_single_limit_command, 1000u64);
+    try assert_eq_i32(zintercard_single_limit_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(zintercard_single_limit_reply.integer as i32, 2);
+    resp_value_free(&zintercard_single_limit_parsed.value);
+
+    var zintercard_missing_parsed: RespParseResult = try parse_resp2(&"*4\r\n$10\r\nZINTERCARD\r\n$1\r\n2\r\n$4\r\nzset\r\n$7\r\nmissing\r\n"[0: 51]);
+    const zintercard_missing_command: Command = try command_executor_test_command(&router, &zintercard_missing_parsed);
+    const zintercard_missing_reply: CommandReply = command_execute_at(&engine, &zintercard_missing_command, 1000u64);
+    try assert_eq_i32(zintercard_missing_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(zintercard_missing_reply.integer as i32, 0);
+    resp_value_free(&zintercard_missing_parsed.value);
+
+    var zintercard_wrongtype_parsed: RespParseResult = try parse_resp2(&"*4\r\n$10\r\nZINTERCARD\r\n$1\r\n2\r\n$7\r\nmissing\r\n$3\r\nbad\r\n"[0: 50]);
+    const zintercard_wrongtype_command: Command = try command_executor_test_command(&router, &zintercard_wrongtype_parsed);
+    const zintercard_wrongtype_reply: CommandReply = command_execute_at(&engine, &zintercard_wrongtype_command, 1000u64);
+    try assert_eq_i32(zintercard_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(zintercard_wrongtype_reply.data, &"WRONGTYPE"[0: 9]));
+    resp_value_free(&zintercard_wrongtype_parsed.value);
+
+    var zintercard_zero_numkeys_parsed: RespParseResult = try parse_resp2(&"*3\r\n$10\r\nZINTERCARD\r\n$1\r\n0\r\n$4\r\nzset\r\n"[0: 38]);
+    const zintercard_zero_numkeys_command: Command = try command_executor_test_command(&router, &zintercard_zero_numkeys_parsed);
+    const zintercard_zero_numkeys_reply: CommandReply = command_execute_at(&engine, &zintercard_zero_numkeys_command, 1000u64);
+    try assert_eq_i32(zintercard_zero_numkeys_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(zintercard_zero_numkeys_reply.data, &"ERR numkeys should be greater than 0"[0: 36]));
+    resp_value_free(&zintercard_zero_numkeys_parsed.value);
+
+    var zintercard_mismatch_parsed: RespParseResult = try parse_resp2(&"*4\r\n$10\r\nZINTERCARD\r\n$1\r\n3\r\n$4\r\nzset\r\n$2\r\nz2\r\n"[0: 46]);
+    const zintercard_mismatch_command: Command = try command_executor_test_command(&router, &zintercard_mismatch_parsed);
+    const zintercard_mismatch_reply: CommandReply = command_execute_at(&engine, &zintercard_mismatch_command, 1000u64);
+    try assert_eq_i32(zintercard_mismatch_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(zintercard_mismatch_reply.data, &"ERR Number of keys can't be greater than number of args"[0: 55]));
+    resp_value_free(&zintercard_mismatch_parsed.value);
+
+    var zintercard_negative_limit_parsed: RespParseResult = try parse_resp2(&"*6\r\n$10\r\nZINTERCARD\r\n$1\r\n2\r\n$4\r\nzset\r\n$2\r\nz2\r\n$5\r\nLIMIT\r\n$2\r\n-1\r\n"[0: 65]);
+    const zintercard_negative_limit_command: Command = try command_executor_test_command(&router, &zintercard_negative_limit_parsed);
+    const zintercard_negative_limit_reply: CommandReply = command_execute_at(&engine, &zintercard_negative_limit_command, 1000u64);
+    try assert_eq_i32(zintercard_negative_limit_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(zintercard_negative_limit_reply.data, &"ERR LIMIT can't be negative"[0: 27]));
+    resp_value_free(&zintercard_negative_limit_parsed.value);
+
+    var zintercard_syntax_parsed: RespParseResult = try parse_resp2(&"*5\r\n$10\r\nZINTERCARD\r\n$1\r\n2\r\n$4\r\nzset\r\n$2\r\nz2\r\n$3\r\nfoo\r\n"[0: 55]);
+    const zintercard_syntax_command: Command = try command_executor_test_command(&router, &zintercard_syntax_parsed);
+    const zintercard_syntax_reply: CommandReply = command_execute_at(&engine, &zintercard_syntax_command, 1000u64);
+    try assert_eq_i32(zintercard_syntax_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(zintercard_syntax_reply.data, &"ERR syntax error"[0: 16]));
+    resp_value_free(&zintercard_syntax_parsed.value);
 
     var zdiff_parsed: RespParseResult = try parse_resp2(&"*4\r\n$5\r\nZDIFF\r\n$1\r\n2\r\n$4\r\nzset\r\n$2\r\nz2\r\n"[0: 40]);
     const zdiff_command: Command = try command_executor_test_command(&router, &zdiff_parsed);

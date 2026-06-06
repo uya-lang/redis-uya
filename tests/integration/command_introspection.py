@@ -558,56 +558,59 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"unexpected XINFO HELP: {xinfo_help!r}")
 
-            zset_info = send_command(sock, b"COMMAND", b"INFO", b"ZRANK", b"ZREVRANK", b"ZSCORE", b"ZMSCORE", b"ZDIFF", b"ZDIFFSTORE", b"ZINTER", b"ZINTERCARD", b"ZINTERSTORE", b"ZUNION", b"ZUNIONSTORE", b"ZPOPMAX", b"ZPOPMIN", b"ZRANDMEMBER", b"ZMPOP", b"ZLEXCOUNT", b"ZRANGEBYLEX", b"ZRANGESTORE", b"ZREMRANGEBYLEX", b"ZREVRANGE", b"ZREVRANGEBYLEX", b"BZPOPMAX", b"BZPOPMIN")
+            zset_info = send_command(sock, b"COMMAND", b"INFO", b"ZRANGE", b"ZRANK", b"ZREVRANK", b"ZSCORE", b"ZMSCORE", b"ZDIFF", b"ZDIFFSTORE", b"ZINTER", b"ZINTERCARD", b"ZINTERSTORE", b"ZUNION", b"ZUNIONSTORE", b"ZPOPMAX", b"ZPOPMIN", b"ZRANDMEMBER", b"ZMPOP", b"ZLEXCOUNT", b"ZRANGEBYLEX", b"ZRANGESTORE", b"ZREMRANGEBYLEX", b"ZREVRANGE", b"ZREVRANGEBYLEX", b"BZPOPMAX", b"BZPOPMIN")
             if (
                 not isinstance(zset_info, list)
-                or len(zset_info) != 23
+                or len(zset_info) != 24
                 or not isinstance(zset_info[0], list)
-                or zset_info[0][0] != b"zrank"
+                or zset_info[0][0] != b"zrange"
+                or zset_info[0][1] != -4
                 or not isinstance(zset_info[1], list)
-                or zset_info[1][0] != b"zrevrank"
+                or zset_info[1][0] != b"zrank"
                 or not isinstance(zset_info[2], list)
-                or zset_info[2][0] != b"zscore"
+                or zset_info[2][0] != b"zrevrank"
                 or not isinstance(zset_info[3], list)
-                or zset_info[3][0] != b"zmscore"
+                or zset_info[3][0] != b"zscore"
                 or not isinstance(zset_info[4], list)
-                or zset_info[4][0] != b"zdiff"
+                or zset_info[4][0] != b"zmscore"
                 or not isinstance(zset_info[5], list)
-                or zset_info[5][0] != b"zdiffstore"
+                or zset_info[5][0] != b"zdiff"
                 or not isinstance(zset_info[6], list)
-                or zset_info[6][0] != b"zinter"
+                or zset_info[6][0] != b"zdiffstore"
                 or not isinstance(zset_info[7], list)
-                or zset_info[7][0] != b"zintercard"
+                or zset_info[7][0] != b"zinter"
                 or not isinstance(zset_info[8], list)
-                or zset_info[8][0] != b"zinterstore"
+                or zset_info[8][0] != b"zintercard"
                 or not isinstance(zset_info[9], list)
-                or zset_info[9][0] != b"zunion"
+                or zset_info[9][0] != b"zinterstore"
                 or not isinstance(zset_info[10], list)
-                or zset_info[10][0] != b"zunionstore"
+                or zset_info[10][0] != b"zunion"
                 or not isinstance(zset_info[11], list)
-                or zset_info[11][0] != b"zpopmax"
+                or zset_info[11][0] != b"zunionstore"
                 or not isinstance(zset_info[12], list)
-                or zset_info[12][0] != b"zpopmin"
+                or zset_info[12][0] != b"zpopmax"
                 or not isinstance(zset_info[13], list)
-                or zset_info[13][0] != b"zrandmember"
+                or zset_info[13][0] != b"zpopmin"
                 or not isinstance(zset_info[14], list)
-                or zset_info[14][0] != b"zmpop"
+                or zset_info[14][0] != b"zrandmember"
                 or not isinstance(zset_info[15], list)
-                or zset_info[15][0] != b"zlexcount"
+                or zset_info[15][0] != b"zmpop"
                 or not isinstance(zset_info[16], list)
-                or zset_info[16][0] != b"zrangebylex"
+                or zset_info[16][0] != b"zlexcount"
                 or not isinstance(zset_info[17], list)
-                or zset_info[17][0] != b"zrangestore"
+                or zset_info[17][0] != b"zrangebylex"
                 or not isinstance(zset_info[18], list)
-                or zset_info[18][0] != b"zremrangebylex"
+                or zset_info[18][0] != b"zrangestore"
                 or not isinstance(zset_info[19], list)
-                or zset_info[19][0] != b"zrevrange"
+                or zset_info[19][0] != b"zremrangebylex"
                 or not isinstance(zset_info[20], list)
-                or zset_info[20][0] != b"zrevrangebylex"
+                or zset_info[20][0] != b"zrevrange"
                 or not isinstance(zset_info[21], list)
-                or zset_info[21][0] != b"bzpopmax"
+                or zset_info[21][0] != b"zrevrangebylex"
                 or not isinstance(zset_info[22], list)
-                or zset_info[22][0] != b"bzpopmin"
+                or zset_info[22][0] != b"bzpopmax"
+                or not isinstance(zset_info[23], list)
+                or zset_info[23][0] != b"bzpopmin"
             ):
                 raise AssertionError(f"zset score/pop commands missing from COMMAND INFO: {zset_info!r}")
 

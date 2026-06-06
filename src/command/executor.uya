@@ -12874,9 +12874,79 @@ fn command_executor_zadd(engine: &Engine, command: &Command, now_ms: u64) Comman
     return command_executor_integer(added);
 }
 
+fn command_executor_zrange_rank_reply(obj: &RedisObject, start: i64, stop: i64, reverse: bool, with_scores: bool) CommandReply {
+    var ranked: &RedisObject = zset_object_range_reply(obj, 0, -1) catch |err| {
+        if err == error.AllocOutOfMemory {
+            return command_executor_oom();
+        }
+        return command_executor_wrongtype();
+    };
+
+    if reverse {
+        const reversed: &RedisObject = create_list_object() catch {
+            object_free(ranked);
+            return command_executor_oom();
+        };
+        var reverse_node: &ListNode = ranked.list_tail;
+        while reverse_node != null {
+            const member: &[byte] = reverse_node.value.value.buf[0: reverse_node.value.value.len];
+            _ = list_object_push_tail(reversed, member) catch {
+                object_free(ranked);
+                object_free(reversed);
+                return command_executor_oom();
+            };
+            reverse_node = reverse_node.prev;
+        }
+        object_free(ranked);
+        ranked = reversed;
+    }
+
+    const view: ListRangeView = list_object_range(ranked, start, stop) catch {
+        object_free(ranked);
+        return command_executor_wrongtype();
+    };
+    if !with_scores {
+        var reply: CommandReply = command_executor_array_bulk(view.head, view.count);
+        reply.owned_object = ranked;
+        return reply;
+    }
+
+    const scored: &RedisObject = create_list_object() catch {
+        object_free(ranked);
+        return command_executor_oom();
+    };
+    var current: &ListNode = view.head;
+    var emitted: usize = 0;
+    while current != null && emitted < view.count {
+        const member_scored: &[byte] = current.value.value.buf[0: current.value.value.len];
+        const score: i64 = zset_object_get_score(obj, member_scored) catch {
+            object_free(ranked);
+            object_free(scored);
+            return command_executor_wrongtype();
+        };
+        _ = list_object_push_tail(scored, member_scored) catch {
+            object_free(ranked);
+            object_free(scored);
+            return command_executor_oom();
+        };
+        _ = command_executor_list_push_i64(scored, score) catch {
+            object_free(ranked);
+            object_free(scored);
+            return command_executor_oom();
+        };
+        current = current.next;
+        emitted = emitted + 1;
+    }
+    object_free(ranked);
+    return command_executor_owned_array(scored);
+}
+
 fn command_executor_zrange(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
-    if command.argc != 4 {
+    if command.argc < 4 {
         return command_executor_wrong_arity();
+    }
+    if command.argc > 6 {
+        return command_executor_syntax_error();
     }
     const key: &[byte] = command_executor_arg(command, 1) catch {
         return command_executor_wrong_arity();
@@ -12893,26 +12963,40 @@ fn command_executor_zrange(engine: &Engine, command: &Command, now_ms: u64) Comm
     const stop: i64 = command_executor_parse_i64(stop_data) catch {
         return command_executor_invalid_integer();
     };
+
+    var reverse: bool = false;
+    var with_scores: bool = false;
+    var index: usize = 4;
+    while index < command.argc {
+        const option: &[byte] = command_executor_arg(command, index) catch {
+            return command_executor_wrong_arity();
+        };
+        if command_executor_keyword_eq(option, &"REV"[0: 3]) {
+            if reverse {
+                return command_executor_syntax_error();
+            }
+            reverse = true;
+            index = index + 1;
+            continue;
+        }
+        if command_executor_keyword_eq(option, &"WITHSCORES"[0: 10]) {
+            if with_scores {
+                return command_executor_syntax_error();
+            }
+            with_scores = true;
+            index = index + 1;
+            continue;
+        }
+        return command_executor_syntax_error();
+    }
+
     const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
         return command_executor_array_bulk(null as &ListNode, 0);
     };
     if obj.obj_type != ObjectType.object_zset {
         return command_executor_wrongtype();
     }
-
-    const ranged: &RedisObject = zset_object_range_reply(obj, start, stop) catch |err| {
-        if err == error.AllocOutOfMemory {
-            return command_executor_oom();
-        }
-        return command_executor_wrongtype();
-    };
-    const count: usize = list_object_len(ranged) catch {
-        object_free(ranged);
-        return command_executor_wrongtype();
-    };
-    var reply: CommandReply = command_executor_array_bulk(ranged.list_head, count);
-    reply.owned_object = ranged;
-    return reply;
+    return command_executor_zrange_rank_reply(obj, start, stop, reverse, with_scores);
 }
 
 fn command_executor_zrangestore(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
@@ -13018,67 +13102,7 @@ fn command_executor_zrevrange(engine: &Engine, command: &Command, now_ms: u64) C
     if obj.obj_type != ObjectType.object_zset {
         return command_executor_wrongtype();
     }
-
-    const sorted: &RedisObject = zset_object_range_reply(obj, 0, -1) catch |err| {
-        if err == error.AllocOutOfMemory {
-            return command_executor_oom();
-        }
-        return command_executor_wrongtype();
-    };
-    const reversed: &RedisObject = create_list_object() catch {
-        object_free(sorted);
-        return command_executor_oom();
-    };
-    var node: &ListNode = sorted.list_tail;
-    while node != null {
-        const member: &[byte] = node.value.value.buf[0: node.value.value.len];
-        _ = list_object_push_tail(reversed, member) catch {
-            object_free(sorted);
-            object_free(reversed);
-            return command_executor_oom();
-        };
-        node = node.prev;
-    }
-    object_free(sorted);
-
-    const view: ListRangeView = list_object_range(reversed, start, stop) catch {
-        object_free(reversed);
-        return command_executor_wrongtype();
-    };
-    if !with_scores {
-        var reply: CommandReply = command_executor_array_bulk(view.head, view.count);
-        reply.owned_object = reversed;
-        return reply;
-    }
-
-    const scored: &RedisObject = create_list_object() catch {
-        object_free(reversed);
-        return command_executor_oom();
-    };
-    var current: &ListNode = view.head;
-    var emitted: usize = 0;
-    while current != null && emitted < view.count {
-        const member_scored: &[byte] = current.value.value.buf[0: current.value.value.len];
-        const score: i64 = zset_object_get_score(obj, member_scored) catch {
-            object_free(reversed);
-            object_free(scored);
-            return command_executor_wrongtype();
-        };
-        _ = list_object_push_tail(scored, member_scored) catch {
-            object_free(reversed);
-            object_free(scored);
-            return command_executor_oom();
-        };
-        _ = command_executor_list_push_i64(scored, score) catch {
-            object_free(reversed);
-            object_free(scored);
-            return command_executor_oom();
-        };
-        current = current.next;
-        emitted = emitted + 1;
-    }
-    object_free(reversed);
-    return command_executor_owned_array(scored);
+    return command_executor_zrange_rank_reply(obj, start, stop, true, with_scores);
 }
 
 fn command_executor_zrem(engine: &Engine, command: &Command, now_ms: u64) CommandReply {

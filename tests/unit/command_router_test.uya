@@ -741,7 +741,7 @@ export fn test_command_router_lookup_and_case() !void {
 
     const zrange: CommandInfo = try command_router_lookup(&router, &"zrange"[0: 6]);
     try assert_eq_i32(zrange.cmd_type as i32, CommandType.command_zrange as i32);
-    try assert_eq_i32(zrange.arity, 4);
+    try assert_eq_i32(zrange.arity, -4);
 
     const zrem: CommandInfo = try command_router_lookup(&router, &"ZREM"[0: 4]);
     try assert_eq_i32(zrem.cmd_type as i32, CommandType.command_zrem as i32);
@@ -1096,6 +1096,8 @@ export fn test_command_router_arity_validation() !void {
     try command_validate_arity(&zadd, 4);
     try command_validate_arity(&zadd, 6);
     try command_validate_arity(&zrange, 4);
+    try command_validate_arity(&zrange, 5);
+    try command_validate_arity(&zrange, 6);
     try command_validate_arity(&zrem, 3);
     try command_validate_arity(&scan, 2);
     try command_validate_arity(&scan, 4);

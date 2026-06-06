@@ -5016,6 +5016,37 @@ export fn test_command_zadd_zrem_zrange() !void {
     command_reply_cleanup(&zrange_reply);
     resp_value_free(&zrange_parsed.value);
 
+    var zrange_scores_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nZRANGE\r\n$4\r\nzset\r\n$1\r\n0\r\n$1\r\n1\r\n$10\r\nWITHSCORES\r\n"[0: 57]);
+    const zrange_scores_command: Command = try command_executor_test_command(&router, &zrange_scores_parsed);
+    var zrange_scores_reply: CommandReply = command_execute_at(&engine, &zrange_scores_command, 1000u64);
+    const zrange_scores_len: usize = try connection_encode_reply(&zrange_scores_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: zrange_scores_len], &"*4\r\n$1\r\na\r\n$1\r\n1\r\n$1\r\nb\r\n$1\r\n2\r\n"[0: 32]));
+    command_reply_cleanup(&zrange_scores_reply);
+    resp_value_free(&zrange_scores_parsed.value);
+
+    var zrange_rev_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nZRANGE\r\n$4\r\nzset\r\n$1\r\n0\r\n$2\r\n-1\r\n$3\r\nREV\r\n"[0: 50]);
+    const zrange_rev_command: Command = try command_executor_test_command(&router, &zrange_rev_parsed);
+    var zrange_rev_reply: CommandReply = command_execute_at(&engine, &zrange_rev_command, 1000u64);
+    const zrange_rev_len: usize = try connection_encode_reply(&zrange_rev_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: zrange_rev_len], &"*3\r\n$1\r\nc\r\n$1\r\nb\r\n$1\r\na\r\n"[0: 25]));
+    command_reply_cleanup(&zrange_rev_reply);
+    resp_value_free(&zrange_rev_parsed.value);
+
+    var zrange_rev_scores_parsed: RespParseResult = try parse_resp2(&"*6\r\n$6\r\nZRANGE\r\n$4\r\nzset\r\n$1\r\n0\r\n$1\r\n1\r\n$3\r\nREV\r\n$10\r\nWITHSCORES\r\n"[0: 66]);
+    const zrange_rev_scores_command: Command = try command_executor_test_command(&router, &zrange_rev_scores_parsed);
+    var zrange_rev_scores_reply: CommandReply = command_execute_at(&engine, &zrange_rev_scores_command, 1000u64);
+    const zrange_rev_scores_len: usize = try connection_encode_reply(&zrange_rev_scores_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: zrange_rev_scores_len], &"*4\r\n$1\r\nc\r\n$1\r\n3\r\n$1\r\nb\r\n$1\r\n2\r\n"[0: 32]));
+    command_reply_cleanup(&zrange_rev_scores_reply);
+    resp_value_free(&zrange_rev_scores_parsed.value);
+
+    var zrange_dup_rev_parsed: RespParseResult = try parse_resp2(&"*6\r\n$6\r\nZRANGE\r\n$4\r\nzset\r\n$1\r\n0\r\n$1\r\n1\r\n$3\r\nREV\r\n$3\r\nREV\r\n"[0: 58]);
+    const zrange_dup_rev_command: Command = try command_executor_test_command(&router, &zrange_dup_rev_parsed);
+    const zrange_dup_rev_reply: CommandReply = command_execute_at(&engine, &zrange_dup_rev_command, 1000u64);
+    try assert_eq_i32(zrange_dup_rev_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(zrange_dup_rev_reply.data, &"ERR syntax error"[0: 16]));
+    resp_value_free(&zrange_dup_rev_parsed.value);
+
     var zrevrange_parsed: RespParseResult = try parse_resp2(&"*4\r\n$9\r\nZREVRANGE\r\n$4\r\nzset\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 44]);
     const zrevrange_command: Command = try command_executor_test_command(&router, &zrevrange_parsed);
     var zrevrange_reply: CommandReply = command_execute_at(&engine, &zrevrange_command, 1000u64);

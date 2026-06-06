@@ -1623,6 +1623,24 @@ if [[ "$ZRANGE_RESULT" != $'b\na' ]]; then
     exit 1
 fi
 
+ZRANGE_WITHSCORES_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrange zset 0 1 withscores)"
+if [[ "$ZRANGE_WITHSCORES_RESULT" != $'b\n2\na\n4' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZRANGE WITHSCORES b/2/a/4 after ZINCRBY, got '$ZRANGE_WITHSCORES_RESULT'" >&2
+    exit 1
+fi
+
+ZRANGE_REV_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrange zset 0 -1 rev)"
+if [[ "$ZRANGE_REV_RESULT" != $'a\nb' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZRANGE REV a/b after ZINCRBY, got '$ZRANGE_REV_RESULT'" >&2
+    exit 1
+fi
+
+ZRANGE_REV_WITHSCORES_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrange zset 0 1 rev withscores)"
+if [[ "$ZRANGE_REV_WITHSCORES_RESULT" != $'a\n4\nb\n2' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZRANGE REV WITHSCORES a/4/b/2 after ZINCRBY, got '$ZRANGE_REV_WITHSCORES_RESULT'" >&2
+    exit 1
+fi
+
 ZREVRANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrevrange zset 0 -1)"
 if [[ "$ZREVRANGE_RESULT" != $'a\nb' ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ZREVRANGE a/b after ZINCRBY, got '$ZREVRANGE_RESULT'" >&2
@@ -2109,9 +2127,11 @@ if [[ "$COUNTER_DEL_RESULT" != "1" ]]; then
     exit 1
 fi
 
-TEMP_STRING_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del fcounter nx-key gs-key sx-key allones srca srcb dstbit bf hll dsthll emptyhll geo lua-key slow-k)"
-if [[ "$TEMP_STRING_DEL_RESULT" != "15" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected temp string DEL 15, got '$TEMP_STRING_DEL_RESULT'" >&2
+redis-cli --raw -h 127.0.0.1 -p "$PORT" del sx-key >/dev/null
+
+TEMP_STRING_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del fcounter nx-key gs-key allones srca srcb dstbit bf hll dsthll emptyhll geo lua-key slow-k)"
+if [[ "$TEMP_STRING_DEL_RESULT" != "14" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected temp string DEL 14, got '$TEMP_STRING_DEL_RESULT'" >&2
     exit 1
 fi
 

@@ -387,7 +387,7 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
         return command_router_info(CommandType.command_zadd, &"ZADD"[0: 4], -4, COMMAND_FLAG_WRITE, 1, 1, 1);
     }
     if index == 28 {
-        return command_router_info(CommandType.command_zrange, &"ZRANGE"[0: 6], 4, COMMAND_FLAG_READONLY, 1, 1, 1);
+        return command_router_info(CommandType.command_zrange, &"ZRANGE"[0: 6], -4, COMMAND_FLAG_READONLY, 1, 1, 1);
     }
     if index == 29 {
         return command_router_info(CommandType.command_zrem, &"ZREM"[0: 4], -3, COMMAND_FLAG_WRITE, 1, 1, 1);

@@ -109,6 +109,7 @@ server open
 - `ZMPOP` 是非阻塞 sorted-set multi-pop，执行层复用 zset pop 编码与删除路径；连接层只在成功返回数组时追加 AOF，空结果不落盘
 - `ZRANGESTORE` 当前复用 rank-based `ZRANGE` 视图写回项目内 zset，保留源 member 的整数 score；`BYSCORE` / `BYLEX` / `REV` / `LIMIT` 仍保留为后续完整语义
 - `ZDIFF` / `ZINTER` / `ZINTERSTORE` / `ZUNION` / `ZUNIONSTORE` 这类 sorted-set 多 key 命令在执行层扫描项目内 zset `(score, member)` 排序视图；`ZINTER` / `ZINTERSTORE` / `ZUNION` / `ZUNIONSTORE` 当前按整数 score SUM 聚合，复杂权重/聚合选项仍保留为后续完整语义
+- `WAIT` / `WAITAOF` 由执行层提供当前复制/持久化等待兼容面；`WAIT` 在无副本 ACK 收敛路径下返回 `0`，`WAITAOF` 返回 `[local, replicas]`，其中本地确认按 `numlocal` 归一到 `0/1`，副本 AOF ACK 当前固定为 `0`
 - 空闲客户端不再阻塞活跃客户端
 - `v0.8.0` 已新增 `io_uring` 主机能力评估报告，但生产事件循环仍绑定在 epoll 路径；后续只有在独立原型和 benchmark 证明收益后才考虑切换
 
@@ -179,6 +180,7 @@ server open
 - 写命令直接追加 RESP2 原始请求
 - `EXPIRE`、`EXPIREAT`、`PEXPIRE`、`SETEX`、`PSETEX` 会在 AOF 里规范化为绝对时间 `PEXPIREAT`
 - `GETEX` 在带 TTL / `PERSIST` 选项时只把状态变更写入 AOF；相对 TTL 选项同样折算成绝对 `PEXPIREAT`
+- `WAITAOF` 当前只读取本地兼容状态并返回确认数组，不触发 AOF flush/fsync，也不追加到 AOF 或 replication backlog
 - 回放按流式解析逐条执行
 - `BGREWRITEAOF` 使用子进程写出规范化 AOF 快照，父进程继续追加旧 AOF 并记录 rewrite 增量缓冲，子进程结束后合并并原子替换
 - 截断、非法协议、非法命令、执行错误都会安全失败

@@ -107,7 +107,7 @@
 
 - `v0.9.1`：审计整改与真实性修复已完成，当前已修复 `maxmemory` 集成测试口径、收回当前 `CLIENT/CONFIG` 子命令矩阵真值、统一运行时版本串，并恢复 benchmark / DoD 校验转绿。
 - `v0.9.2`：继续补 Redis Open Source 单机核心缺口；`PFADD/PFCOUNT/PFMERGE` 已以 exact set-backed partial 形态落地，`GEOADD/GEODIST/GEOHASH/GEOPOS/GEOSEARCH/GEOSEARCHSTORE/GEORADIUS/GEORADIUS_RO/GEORADIUSBYMEMBER/GEORADIUSBYMEMBER_RO` 已以 exact zset-backed partial 形态落地，`EVAL/EVALSHA/SCRIPT LOAD|EXISTS|FLUSH` 已以 single-call script subset partial 形态落地，`MEMORY HELP/STATS/USAGE/DOCTOR/MALLOC-STATS/PURGE` 已以 runtime-approx/no-op partial 形态落地，`SLOWLOG HELP/LEN/GET/RESET` 已以 in-process ring partial 形态落地，`LATENCY HELP/LATEST/HISTORY/RESET/DOCTOR/HISTOGRAM/GRAPH` 已以 empty-event compatibility partial 形态落地，`MONITOR` 已以流式命令观测 partial 形态落地。
-- `v0.9.3`：收口 Streams、Functions/Script、ACL 与运维诊断第一批，再推进持久化/复制边界深化；`XACK/XADD/XCLAIM/XDEL/XGROUP CREATE/XGROUP DESTROY/XGROUP HELP/XGROUP SETID/XINFO HELP/XINFO GROUPS/XINFO CONSUMERS/XINFO STREAM/XLEN/XPENDING/XRANGE/XREVRANGE/XREAD` 已以基础 stream partial 形态落地，`XTRIM` 已以 `MAXLEN` 基础裁剪 partial 形态落地，`EVAL_RO/EVALSHA_RO` 已以 single-call read-only script subset partial 形态落地，`SCRIPT DEBUG` 已以 no-op 兼容面 partial 形态落地，`SCRIPT KILL` 已以无运行脚本 `NOTBUSY` 错误面 partial 形态落地，`FUNCTION HELP/LIST/STATS/FLUSH/DELETE/LOAD/DUMP/RESTORE/KILL` 与 `FCALL/FCALL_RO` 已以空库/错误面兼容 partial 形态落地，`ACL CAT/DELUSER/DRYRUN/GENPASS/GETUSER/HELP/LIST/LOAD/LOG/SAVE/SETUSER/USERS/WHOAMI` 已以默认用户控制面 partial 形态落地，`MODULE HELP/LIST` 已以空模块兼容 partial 形态落地，`CLIENT REPLY/UNBLOCK/CACHING/NO-EVICT/NO-TOUCH` 已以连接级/回复面/阻塞解除 partial 形态落地。
+- `v0.9.3`：收口 Streams、Functions/Script、ACL 与运维诊断第一批，再推进持久化/复制边界深化；`XACK/XADD/XCLAIM/XDEL/XGROUP CREATE/XGROUP DESTROY/XGROUP HELP/XGROUP SETID/XINFO HELP/XINFO GROUPS/XINFO CONSUMERS/XINFO STREAM/XLEN/XPENDING/XRANGE/XREVRANGE/XREAD` 已以基础 stream partial 形态落地，`XTRIM` 已以 `MAXLEN` 基础裁剪 partial 形态落地，`EVAL_RO/EVALSHA_RO` 已以 single-call read-only script subset partial 形态落地，`SCRIPT DEBUG` 已以 no-op 兼容面 partial 形态落地，`SCRIPT KILL` 已以无运行脚本 `NOTBUSY` 错误面 partial 形态落地，`FUNCTION HELP/LIST/STATS/FLUSH/DELETE/LOAD/DUMP/RESTORE/KILL` 与 `FCALL/FCALL_RO` 已以空库/错误面兼容 partial 形态落地，`ACL CAT/DELUSER/DRYRUN/GENPASS/GETUSER/HELP/LIST/LOAD/LOG/SAVE/SETUSER/USERS/WHOAMI` 已以默认用户控制面 partial 形态落地，`MODULE HELP/LIST` 已以空模块兼容 partial 形态落地，`CLIENT REPLY/UNBLOCK/CACHING/NO-EVICT/NO-TOUCH` 已以连接级/回复面/阻塞解除 partial 形态落地，`WAITAOF` 已以本地/AOF 确认数组 partial 形态落地。
 
 当前阶段尚未生产可用。
 
@@ -279,6 +279,7 @@ build/redis-uya 6380 1
 - String 第五批范围读写：`GETRANGE`、`SETRANGE`
 - String 第六批浮点计数：`INCRBYFLOAT`
 - Key 复制/恢复 partial：`COPY source destination [DB 0] [REPLACE]` 当前可用，支持当前单 DB 内深拷贝对象、保留 source TTL、已存在目标的 `REPLACE` 覆盖和 `COMMAND GETKEYS*` 可见面；`RESTORE-ASKING key ttl serialized-value` 当前复用 `RESTORE` 的单 DB RDB payload 写入路径；非 `0` DB 按当前单 DB 模型返回 `ERR DB index is out of range`
+- Key 复制等待 partial：`WAIT` 当前在无副本 ACK 收敛路径下返回 `0`；`WAITAOF numlocal numreplicas timeout` 当前返回 `[local, replicas]`，`numlocal > 0` 时本地确认返回 `1`，副本 AOF 确认固定返回 `0`，暂不做真实阻塞等待或副本 AOF ACK 收敛
 - Bitmap / Bitfield 第一批：`GETBIT`、`SETBIT`、`BITCOUNT`、`BITPOS`、`BITOP`、`BITFIELD`、`BITFIELD_RO`
 - HyperLogLog 第一批 partial：`PFADD`、`PFCOUNT`、`PFMERGE` 当前可用，但内部暂以 exact set-backed cardinality 近似 Redis 语义，尚未落地 Redis 原生 dense/sparse HLL 字符串编码
 - Geo 第一批 partial：`GEOADD`、`GEODIST`、`GEOHASH`、`GEOPOS`、`GEOSEARCH`、`GEOSEARCHSTORE`、`GEORADIUS`、`GEORADIUS_RO`、`GEORADIUSBYMEMBER`、`GEORADIUSBYMEMBER_RO` 当前可用，但内部暂以 exact zset-backed packed coordinate score 实现，`GEOSEARCHSTORE` 支持目标写入和 `STOREDIST` 整数距离 score，暂不保存 Redis 原生浮点距离，legacy radius 命令复用 `GEOSEARCH ... BYRADIUS` 路径且不支持 `STORE/STOREDIST`，`GEOPOS` 和 `WITHCOORD` 返回当前 packed score 解码后的 `1e-6` 量化坐标，`GEOHASH` 基于当前解码坐标生成 Redis 兼容 geohash 字符串，`WITHHASH` 返回当前 packed score，而不是 Redis 原生 geohash 整数
@@ -311,7 +312,7 @@ build/redis-uya 6380 1
 - Key/Server 第六批：`DUMP`、`RESTORE`
 - Key/Server 第七批：`SELECT`、`OBJECT`
 - Key/Server 第八批：`MOVE`
-- Key/Server 第九批：`WAIT`
+- Key/Server 第九批：`WAIT`、`WAITAOF`
 - Key/Server 第十批通用 key 管理：`TOUCH`、`UNLINK`
 - Key/Server 第十一批模式读取：`KEYS`
 - Key/Server 第十批：`SORT`

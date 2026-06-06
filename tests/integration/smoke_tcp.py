@@ -204,6 +204,13 @@ def run_smoke() -> None:
             wait_negative_reply = recv_line(sock)
             if wait_negative_reply != b"-ERR timeout is negative\r\n":
                 raise AssertionError(f"unexpected WAIT negative reply: {wait_negative_reply!r}")
+            roundtrip(sock, b"*4\r\n$7\r\nWAITAOF\r\n$1\r\n1\r\n$1\r\n0\r\n$1\r\n0\r\n", b"*2\r\n:1\r\n:0\r\n")
+            roundtrip(sock, b"*4\r\n$7\r\nWAITAOF\r\n$1\r\n0\r\n$1\r\n0\r\n$1\r\n0\r\n", b"*2\r\n:0\r\n:0\r\n")
+            roundtrip(sock, b"*4\r\n$7\r\nWAITAOF\r\n$1\r\n1\r\n$1\r\n1\r\n$2\r\n10\r\n", b"*2\r\n:1\r\n:0\r\n")
+            sock.sendall(b"*4\r\n$7\r\nWAITAOF\r\n$1\r\n1\r\n$1\r\n0\r\n$2\r\n-1\r\n")
+            waitaof_negative_reply = recv_line(sock)
+            if waitaof_negative_reply != b"-ERR timeout is negative\r\n":
+                raise AssertionError(f"unexpected WAITAOF negative reply: {waitaof_negative_reply!r}")
             roundtrip(sock, b"*5\r\n$5\r\nRPUSH\r\n$8\r\nsortnums\r\n$1\r\n3\r\n$1\r\n1\r\n$1\r\n2\r\n", b":3\r\n")
             roundtrip(sock, b"*2\r\n$4\r\nSORT\r\n$8\r\nsortnums\r\n", b"*3\r\n$1\r\n1\r\n$1\r\n2\r\n$1\r\n3\r\n")
             roundtrip(sock, b"*3\r\n$3\r\nSET\r\n$7\r\nsortw_1\r\n$2\r\n20\r\n", b"+OK\r\n")

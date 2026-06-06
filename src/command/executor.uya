@@ -8515,6 +8515,7 @@ fn command_executor_wait(runtime: &CommandRuntimeInfo, command: &Command) Comman
     const replicas: i64 = command_executor_parse_i64(replicas_data) catch {
         return command_executor_invalid_integer();
     };
+    _ = replicas;
     const timeout_ms: i64 = command_executor_parse_i64(timeout_data) catch {
         return command_executor_invalid_integer();
     };
@@ -8525,6 +8526,57 @@ fn command_executor_wait(runtime: &CommandRuntimeInfo, command: &Command) Comman
         return command_executor_integer(0);
     }
     return command_executor_integer(0);
+}
+
+fn command_executor_waitaof(runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
+    _ = runtime;
+    if command.argc != 4 {
+        return command_executor_wrong_arity();
+    }
+    const local_data: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const replicas_data: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    const timeout_data: &[byte] = command_executor_arg(command, 3) catch {
+        return command_executor_wrong_arity();
+    };
+    const local: i64 = command_executor_parse_i64(local_data) catch {
+        return command_executor_invalid_integer();
+    };
+    const replicas: i64 = command_executor_parse_i64(replicas_data) catch {
+        return command_executor_invalid_integer();
+    };
+    const timeout_ms: i64 = command_executor_parse_i64(timeout_data) catch {
+        return command_executor_invalid_integer();
+    };
+    if timeout_ms < 0 {
+        return command_executor_error(&"ERR timeout is negative"[0: 23]);
+    }
+
+    var raw: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&raw);
+    }
+    _ = command_executor_resp_append_array_header(&raw, 2) catch {
+        return command_executor_oom();
+    };
+    if local <= 0 {
+        _ = command_executor_resp_append_integer(&raw, 0) catch {
+            return command_executor_oom();
+        };
+    } else {
+        _ = command_executor_resp_append_integer(&raw, 1) catch {
+            return command_executor_oom();
+        };
+    }
+    _ = command_executor_resp_append_integer(&raw, 0) catch {
+        return command_executor_oom();
+    };
+    return command_executor_owned_raw(raw.buf[0: raw.len]);
 }
 
 fn command_executor_sort_reply_from_members(engine: &Engine, ordered: &RedisObject, options: &SortOptions, now_ms: u64) CommandReply {
@@ -17101,6 +17153,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_wait {
         return command_executor_wait(runtime, command);
+    }
+    if command.info.cmd_type == CommandType.command_waitaof {
+        return command_executor_waitaof(runtime, command);
     }
     if command.info.cmd_type == CommandType.command_sort {
         return command_executor_sort(engine, command, now_ms);

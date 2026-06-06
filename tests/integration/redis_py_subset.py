@@ -558,6 +558,12 @@ class RedisPySubsetClient:
     def wait(self, replicas: int, timeout_ms: int) -> int:
         return int(self._request(b"WAIT", str(replicas).encode(), str(timeout_ms).encode()))
 
+    def waitaof(self, local: int, replicas: int, timeout_ms: int) -> list[int]:
+        result = self._request(b"WAITAOF", str(local).encode(), str(replicas).encode(), str(timeout_ms).encode())
+        if not isinstance(result, list):
+            raise AssertionError(f"unexpected WAITAOF result: {result!r}")
+        return [int(item) for item in result]
+
     def sort(self, key: str, *parts: str) :
         encoded: list[bytes] = [b"SORT", key.encode()]
         for part in parts:
@@ -1514,6 +1520,18 @@ def run_smoke() -> None:
             except RespError as exc:
                 if str(exc) != "ERR timeout is negative":
                     raise AssertionError(f"unexpected WAIT timeout error: {exc}") from exc
+            if client.waitaof(1, 0, 0) != [1, 0]:
+                raise AssertionError("expected WAITAOF 1 0 0 to return [1, 0]")
+            if client.waitaof(0, 0, 0) != [0, 0]:
+                raise AssertionError("expected WAITAOF 0 0 0 to return [0, 0]")
+            if client.waitaof(1, 1, 10) != [1, 0]:
+                raise AssertionError("expected WAITAOF 1 1 10 to return [1, 0] without replicas")
+            try:
+                client.waitaof(1, 0, -1)
+                raise AssertionError("expected WAITAOF negative timeout to fail")
+            except RespError as exc:
+                if str(exc) != "ERR timeout is negative":
+                    raise AssertionError(f"unexpected WAITAOF timeout error: {exc}") from exc
             assert client.rpush("sortnums", "3", "1", "2") == 3
             assert client.sort("sortnums") == [b"1", b"2", b"3"]
             assert client.set("sortw_1", "20")

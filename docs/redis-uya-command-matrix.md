@@ -1,7 +1,7 @@
 # redis-uya command matrix
 
 > version: v0.9.1-dev
-> date: 2026-06-05
+> date: 2026-06-06
 > source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`
 > runtime source: `src/command/catalog_generated.uya`
 
@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 167 | 0 | 3 | 49 |
+| Tier A: standalone core | 365 | 259 | 146 | 168 | 0 | 3 | 48 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `174` |
+| `partial` | `175` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `202` |
+| `deferred` | `201` |
 
 ## Group counts
 
@@ -554,7 +554,7 @@
 | `vsetattr` | `vector_set` | `deferred` | `v0.9.2` | `0` | `vector_set` | `no` | `-` |
 | `vsim` | `vector_set` | `deferred` | `v0.9.2` | `0` | `vector_set` | `no` | `-` |
 | `wait` | `generic` | `partial` | `-` | `3` | `-` | `no` | `@slow, @blocking, @connection` |
-| `waitaof` | `generic` | `deferred` | `v0.9.1` | `4` | `-` | `no` | `@slow, @blocking, @connection` |
+| `waitaof` | `generic` | `partial` | `-` | `4` | `-` | `no` | `@slow, @blocking, @connection` |
 | `watch` | `transactions` | `full` | `-` | `-2` | `-` | `no` | `@fast, @transaction` |
 | `xack` | `stream` | `partial` | `-` | `-4` | `-` | `no` | `@write, @stream, @fast` |
 | `xackdel` | `stream` | `deferred` | `v0.9.1` | `-6` | `-` | `no` | `@write, @stream, @fast` |

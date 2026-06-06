@@ -1678,6 +1678,26 @@ WAIT numreplicas timeout
 - 当前单机实现下尚未引入副本 ACK 收敛路径，因此在参数合法时返回 `:0`
 - `numreplicas <= 0` 时也直接返回 `:0`
 
+### `WAITAOF`
+
+格式：
+
+```text
+WAITAOF numlocal numreplicas timeout
+```
+
+返回：
+
+- 成功：返回 `[local, replicas]` 两元素 Array
+- `numlocal` / `numreplicas` / `timeout` 非整数：`-ERR value is not an integer or out of range`
+- `timeout < 0`：`-ERR timeout is negative`
+
+说明：
+
+- 当前 partial 不执行真实阻塞等待，也不等待副本 AOF ACK
+- `numlocal > 0` 时返回本地确认 `1`，`numlocal <= 0` 时返回 `0`
+- 副本确认当前固定返回 `0`
+
 ### `SORT`
 
 格式：

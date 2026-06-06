@@ -2133,6 +2133,30 @@ if [[ "$WAIT_NEGATIVE_RESULT" != "ERR timeout is negative" ]]; then
     exit 1
 fi
 
+WAITAOF_LOCAL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" waitaof 1 0 0)"
+if [[ "$WAITAOF_LOCAL_RESULT" != $'1\n0' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected WAITAOF 1 0 0 to return local=1 replicas=0, got '$WAITAOF_LOCAL_RESULT'" >&2
+    exit 1
+fi
+
+WAITAOF_ZERO_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" waitaof 0 0 0)"
+if [[ "$WAITAOF_ZERO_RESULT" != $'0\n0' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected WAITAOF 0 0 0 to return local=0 replicas=0, got '$WAITAOF_ZERO_RESULT'" >&2
+    exit 1
+fi
+
+WAITAOF_ONE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" waitaof 1 1 10)"
+if [[ "$WAITAOF_ONE_RESULT" != $'1\n0' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected WAITAOF 1 1 10 to return local=1 replicas=0, got '$WAITAOF_ONE_RESULT'" >&2
+    exit 1
+fi
+
+WAITAOF_NEGATIVE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" waitaof 1 0 -1 2>&1 || true)"
+if [[ "$WAITAOF_NEGATIVE_RESULT" != "ERR timeout is negative" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected WAITAOF negative timeout error, got '$WAITAOF_NEGATIVE_RESULT'" >&2
+    exit 1
+fi
+
 SORT_SEED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" rpush sortnums 3 1 2)"
 if [[ "$SORT_SEED_RESULT" != "3" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected RPUSH sortnums 3, got '$SORT_SEED_RESULT'" >&2

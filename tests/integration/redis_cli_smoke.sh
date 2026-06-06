@@ -1437,6 +1437,12 @@ if [[ "$ZINTER_SCORES_RESULT" != $'b\n4' ]]; then
     exit 1
 fi
 
+ZINTER_WEIGHTED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zinter 2 zset zdiff2 weights 2 3 aggregate max withscores)"
+if [[ "$ZINTER_WEIGHTED_RESULT" != $'b\n6' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZINTER weighted MAX b/6, got '$ZINTER_WEIGHTED_RESULT'" >&2
+    exit 1
+fi
+
 ZINTER_MISSING_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zinter 2 zset missing)"
 if [[ -n "$ZINTER_MISSING_RESULT" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected empty ZINTER missing source, got '$ZINTER_MISSING_RESULT'" >&2
@@ -1458,6 +1464,18 @@ fi
 ZINTERSTORE_SCORE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zscore zinterdst b)"
 if [[ "$ZINTERSTORE_SCORE_RESULT" != "4" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ZINTERSTORE score 4, got '$ZINTERSTORE_SCORE_RESULT'" >&2
+    exit 1
+fi
+
+ZINTERSTORE_WEIGHTED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zinterstore zinterdst 2 zset zdiff2 weights 5 2 aggregate min)"
+if [[ "$ZINTERSTORE_WEIGHTED_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZINTERSTORE weighted count 1, got '$ZINTERSTORE_WEIGHTED_RESULT'" >&2
+    exit 1
+fi
+
+ZINTERSTORE_WEIGHTED_SCORE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zscore zinterdst b)"
+if [[ "$ZINTERSTORE_WEIGHTED_SCORE_RESULT" != "4" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZINTERSTORE weighted score 4, got '$ZINTERSTORE_WEIGHTED_SCORE_RESULT'" >&2
     exit 1
 fi
 
@@ -1515,6 +1533,12 @@ if [[ "$ZUNION_SCORES_RESULT" != $'a\n4\nb\n4\nd\n5' ]]; then
     exit 1
 fi
 
+ZUNION_WEIGHTED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zunion 2 zset zdiff2 weights 4 1 aggregate min withscores)"
+if [[ "$ZUNION_WEIGHTED_RESULT" != $'b\n2\nd\n5\na\n16' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZUNION weighted MIN b/2/d/5/a/16, got '$ZUNION_WEIGHTED_RESULT'" >&2
+    exit 1
+fi
+
 ZUNION_MISSING_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zunion 2 missing zdiff2)"
 if [[ "$ZUNION_MISSING_RESULT" != $'b\nd' ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ZUNION missing source b/d, got '$ZUNION_MISSING_RESULT'" >&2
@@ -1536,6 +1560,18 @@ fi
 ZUNIONSTORE_SCORE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zscore zuniondst b)"
 if [[ "$ZUNIONSTORE_SCORE_RESULT" != "4" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ZUNIONSTORE score 4, got '$ZUNIONSTORE_SCORE_RESULT'" >&2
+    exit 1
+fi
+
+ZUNIONSTORE_WEIGHTED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zunionstore zuniondst 2 zset zdiff2 weights 2 3 aggregate max)"
+if [[ "$ZUNIONSTORE_WEIGHTED_RESULT" != "3" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZUNIONSTORE weighted count 3, got '$ZUNIONSTORE_WEIGHTED_RESULT'" >&2
+    exit 1
+fi
+
+ZUNIONSTORE_WEIGHTED_SCORE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zscore zuniondst b)"
+if [[ "$ZUNIONSTORE_WEIGHTED_SCORE_RESULT" != "6" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZUNIONSTORE weighted score 6, got '$ZUNIONSTORE_WEIGHTED_SCORE_RESULT'" >&2
     exit 1
 fi
 

@@ -265,6 +265,20 @@ struct CommandExecutorZLexBound {
     value: &[byte],
 }
 
+enum CommandExecutorZAggregateMode {
+    zaggregate_sum,
+    zaggregate_min,
+    zaggregate_max,
+}
+
+struct CommandExecutorZAggregateOptions {
+    keys_start: usize,
+    keys_end: usize,
+    weights_start: usize,
+    aggregate: CommandExecutorZAggregateMode,
+    withscores: bool,
+}
+
 export fn command_runtime_default() CommandRuntimeInfo {
     return CommandRuntimeInfo{
         config: default_config(),
@@ -9803,17 +9817,111 @@ fn command_executor_zset_result_array(result_zset: &RedisObject, withscores: boo
     return command_executor_owned_array(reply_list);
 }
 
-fn command_executor_zinter_build_result(engine: &Engine, command: &Command, keys_start: usize, keys_end: usize, now_ms: u64) CommandReply {
+fn command_executor_zaggregate_parse_options(command: &Command, keys_start: usize, keys_end: usize, allow_withscores: bool) !CommandExecutorZAggregateOptions {
+    var options: CommandExecutorZAggregateOptions = CommandExecutorZAggregateOptions{
+        keys_start: keys_start,
+        keys_end: keys_end,
+        weights_start: 0,
+        aggregate: CommandExecutorZAggregateMode.zaggregate_sum,
+        withscores: false,
+    };
+    const numkeys: usize = keys_end - keys_start;
+    var index: usize = keys_end;
+    while index < command.argc {
+        const option: &[byte] = command_executor_arg(command, index) catch {
+            return error.InvalidCommand;
+        };
+        if command_executor_keyword_eq(option, &"WEIGHTS"[0: 7]) {
+            if options.weights_start != 0 {
+                return error.InvalidCommand;
+            }
+            if index + 1 + numkeys > command.argc {
+                return error.InvalidCommand;
+            }
+            options.weights_start = index + 1;
+            var weight_index: usize = 0;
+            while weight_index < numkeys {
+                const weight_data: &[byte] = command_executor_arg(command, options.weights_start + weight_index) catch {
+                    return error.InvalidCommand;
+                };
+                _ = command_executor_parse_i64(weight_data) catch {
+                    return error.InvalidCommand;
+                };
+                weight_index = weight_index + 1;
+            }
+            index = index + 1 + numkeys;
+            continue;
+        }
+        if command_executor_keyword_eq(option, &"AGGREGATE"[0: 9]) {
+            if index + 1 >= command.argc {
+                return error.InvalidCommand;
+            }
+            const mode_data: &[byte] = command_executor_arg(command, index + 1) catch {
+                return error.InvalidCommand;
+            };
+            if command_executor_keyword_eq(mode_data, &"SUM"[0: 3]) {
+                options.aggregate = CommandExecutorZAggregateMode.zaggregate_sum;
+            } else if command_executor_keyword_eq(mode_data, &"MIN"[0: 3]) {
+                options.aggregate = CommandExecutorZAggregateMode.zaggregate_min;
+            } else if command_executor_keyword_eq(mode_data, &"MAX"[0: 3]) {
+                options.aggregate = CommandExecutorZAggregateMode.zaggregate_max;
+            } else {
+                return error.InvalidCommand;
+            }
+            index = index + 2;
+            continue;
+        }
+        if allow_withscores && command_executor_keyword_eq(option, &"WITHSCORES"[0: 10]) {
+            if options.withscores {
+                return error.InvalidCommand;
+            }
+            options.withscores = true;
+            index = index + 1;
+            continue;
+        }
+        return error.InvalidCommand;
+    }
+    return options;
+}
+
+fn command_executor_zaggregate_weight(command: &Command, options: &CommandExecutorZAggregateOptions, key_arg_index: usize) !i64 {
+    if options.weights_start == 0 {
+        return 1i64;
+    }
+    const weight_arg_index: usize = options.weights_start + (key_arg_index - options.keys_start);
+    const weight_data: &[byte] = command_executor_arg(command, weight_arg_index) catch {
+        return error.InvalidCommand;
+    };
+    return command_executor_parse_i64(weight_data);
+}
+
+fn command_executor_zaggregate_apply(current_score: i64, next_score: i64, aggregate: CommandExecutorZAggregateMode) i64 {
+    if aggregate == CommandExecutorZAggregateMode.zaggregate_min {
+        if next_score < current_score {
+            return next_score;
+        }
+        return current_score;
+    }
+    if aggregate == CommandExecutorZAggregateMode.zaggregate_max {
+        if next_score > current_score {
+            return next_score;
+        }
+        return current_score;
+    }
+    return current_score + next_score;
+}
+
+fn command_executor_zinter_build_result(engine: &Engine, command: &Command, options: &CommandExecutorZAggregateOptions, now_ms: u64) CommandReply {
     const result_zset: &RedisObject = create_zset_object() catch {
         return command_executor_oom();
     };
 
     var missing_any: bool = false;
     var candidate: &RedisObject = null as &RedisObject;
-    var candidate_arg_index: usize = keys_start;
+    var candidate_arg_index: usize = options.keys_start;
     var candidate_len: usize = 0;
-    var arg_index_check: usize = keys_start;
-    while arg_index_check < keys_end {
+    var arg_index_check: usize = options.keys_start;
+    while arg_index_check < options.keys_end {
         const key_check: &[byte] = command_executor_arg(command, arg_index_check) catch {
             object_free(result_zset);
             return command_executor_wrong_arity();
@@ -9860,14 +9968,20 @@ fn command_executor_zinter_build_result(engine: &Engine, command: &Command, keys
     var node: &ListNode = members.list_head;
     while node != null {
         const member: &[byte] = node.value.value.buf[0: node.value.value.len];
-        var total_score: i64 = zset_object_get_score(candidate, member) catch {
+        const candidate_score: i64 = zset_object_get_score(candidate, member) catch {
             object_free(members);
             object_free(result_zset);
             return command_executor_wrongtype();
         };
+        const candidate_weight: i64 = command_executor_zaggregate_weight(command, options, candidate_arg_index) catch {
+            object_free(members);
+            object_free(result_zset);
+            return command_executor_syntax_error();
+        };
+        var total_score: i64 = candidate_score * candidate_weight;
         var present_everywhere: bool = true;
-        var arg_index: usize = keys_start;
-        while arg_index < keys_end {
+        var arg_index: usize = options.keys_start;
+        while arg_index < options.keys_end {
             if arg_index == candidate_arg_index {
                 arg_index = arg_index + 1;
                 continue;
@@ -9900,7 +10014,12 @@ fn command_executor_zinter_build_result(engine: &Engine, command: &Command, keys
                 present_everywhere = false;
                 break;
             }
-            total_score = total_score + score;
+            const weight: i64 = command_executor_zaggregate_weight(command, options, arg_index) catch {
+                object_free(members);
+                object_free(result_zset);
+                return command_executor_syntax_error();
+            };
+            total_score = command_executor_zaggregate_apply(total_score, score * weight, options.aggregate);
             arg_index = arg_index + 1;
         }
         if present_everywhere {
@@ -9937,26 +10056,19 @@ fn command_executor_zinter(engine: &Engine, command: &Command, now_ms: u64) Comm
     }
     const numkeys: usize = numkeys_i64 as usize;
     const keys_end: usize = 2 + numkeys;
-    if command.argc != keys_end && command.argc != keys_end + 1 {
+    if command.argc < keys_end {
         return command_executor_syntax_error();
     }
 
-    var withscores: bool = false;
-    if command.argc == keys_end + 1 {
-        const option: &[byte] = command_executor_arg(command, keys_end) catch {
-            return command_executor_syntax_error();
-        };
-        if !command_executor_keyword_eq(option, &"WITHSCORES"[0: 10]) {
-            return command_executor_syntax_error();
-        }
-        withscores = true;
-    }
+    const options: CommandExecutorZAggregateOptions = command_executor_zaggregate_parse_options(command, 2, keys_end, true) catch {
+        return command_executor_syntax_error();
+    };
 
-    const build_reply: CommandReply = command_executor_zinter_build_result(engine, command, 2, keys_end, now_ms);
+    const build_reply: CommandReply = command_executor_zinter_build_result(engine, command, &options, now_ms);
     if build_reply.owned_object == null {
         return build_reply;
     }
-    return command_executor_zset_result_array(build_reply.owned_object, withscores);
+    return command_executor_zset_result_array(build_reply.owned_object, options.withscores);
 }
 
 fn command_executor_zinterstore(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
@@ -9977,11 +10089,14 @@ fn command_executor_zinterstore(engine: &Engine, command: &Command, now_ms: u64)
     }
     const numkeys: usize = numkeys_i64 as usize;
     const keys_end: usize = 3 + numkeys;
-    if command.argc != keys_end {
+    if command.argc < keys_end {
         return command_executor_syntax_error();
     }
+    const options: CommandExecutorZAggregateOptions = command_executor_zaggregate_parse_options(command, 3, keys_end, false) catch {
+        return command_executor_syntax_error();
+    };
 
-    const build_reply: CommandReply = command_executor_zinter_build_result(engine, command, 3, keys_end, now_ms);
+    const build_reply: CommandReply = command_executor_zinter_build_result(engine, command, &options, now_ms);
     if build_reply.owned_object == null {
         return build_reply;
     }
@@ -9989,13 +10104,13 @@ fn command_executor_zinterstore(engine: &Engine, command: &Command, now_ms: u64)
     return command_executor_zset_store_result(engine, target, result_zset, now_ms);
 }
 
-fn command_executor_zunion_build_result(engine: &Engine, command: &Command, keys_start: usize, keys_end: usize, now_ms: u64) CommandReply {
+fn command_executor_zunion_build_result(engine: &Engine, command: &Command, options: &CommandExecutorZAggregateOptions, now_ms: u64) CommandReply {
     const result_zset: &RedisObject = create_zset_object() catch {
         return command_executor_oom();
     };
 
-    var key_index: usize = keys_start;
-    while key_index < keys_end {
+    var key_index: usize = options.keys_start;
+    while key_index < options.keys_end {
         const key: &[byte] = command_executor_arg(command, key_index) catch {
             object_free(result_zset);
             return command_executor_wrong_arity();
@@ -10028,15 +10143,20 @@ fn command_executor_zunion_build_result(engine: &Engine, command: &Command, keys
                 object_free(result_zset);
                 return command_executor_wrongtype();
             };
+            const weight: i64 = command_executor_zaggregate_weight(command, options, key_index) catch {
+                object_free(members);
+                object_free(result_zset);
+                return command_executor_syntax_error();
+            };
             var current_score: i64 = 0;
             const present: bool = command_executor_zset_score_or_missing(result_zset, member, &current_score) catch {
                 object_free(members);
                 object_free(result_zset);
                 return command_executor_wrongtype();
             };
-            var next_score: i64 = score;
+            var next_score: i64 = score * weight;
             if present {
-                next_score = current_score + score;
+                next_score = command_executor_zaggregate_apply(current_score, next_score, options.aggregate);
             }
             _ = zset_object_add_member(result_zset, next_score, member) catch |err| {
                 object_free(members);
@@ -10072,70 +10192,19 @@ fn command_executor_zunion(engine: &Engine, command: &Command, now_ms: u64) Comm
     }
     const numkeys: usize = numkeys_i64 as usize;
     const keys_end: usize = 2 + numkeys;
-    if command.argc != keys_end && command.argc != keys_end + 1 {
+    if command.argc < keys_end {
         return command_executor_syntax_error();
     }
 
-    var withscores: bool = false;
-    if command.argc == keys_end + 1 {
-        const option: &[byte] = command_executor_arg(command, keys_end) catch {
-            return command_executor_syntax_error();
-        };
-        if !command_executor_keyword_eq(option, &"WITHSCORES"[0: 10]) {
-            return command_executor_syntax_error();
-        }
-        withscores = true;
-    }
+    const options: CommandExecutorZAggregateOptions = command_executor_zaggregate_parse_options(command, 2, keys_end, true) catch {
+        return command_executor_syntax_error();
+    };
 
-    const build_reply: CommandReply = command_executor_zunion_build_result(engine, command, 2, keys_end, now_ms);
+    const build_reply: CommandReply = command_executor_zunion_build_result(engine, command, &options, now_ms);
     if build_reply.owned_object == null {
         return build_reply;
     }
-    const result_zset: &RedisObject = build_reply.owned_object;
-
-    const sorted_members: &RedisObject = zset_object_range_reply(result_zset, 0, -1) catch |err| {
-        object_free(result_zset);
-        if err == error.AllocOutOfMemory {
-            return command_executor_oom();
-        }
-        return command_executor_wrongtype();
-    };
-    if !withscores {
-        object_free(result_zset);
-        return command_executor_owned_array(sorted_members);
-    }
-
-    const reply_list: &RedisObject = create_list_object() catch {
-        object_free(sorted_members);
-        object_free(result_zset);
-        return command_executor_oom();
-    };
-    var reply_node: &ListNode = sorted_members.list_head;
-    while reply_node != null {
-        const member: &[byte] = reply_node.value.value.buf[0: reply_node.value.value.len];
-        _ = list_object_push_tail(reply_list, member) catch {
-            object_free(sorted_members);
-            object_free(result_zset);
-            object_free(reply_list);
-            return command_executor_oom();
-        };
-        const score: i64 = zset_object_get_score(result_zset, member) catch {
-            object_free(sorted_members);
-            object_free(result_zset);
-            object_free(reply_list);
-            return command_executor_wrongtype();
-        };
-        _ = command_executor_list_push_i64(reply_list, score) catch {
-            object_free(sorted_members);
-            object_free(result_zset);
-            object_free(reply_list);
-            return command_executor_oom();
-        };
-        reply_node = reply_node.next;
-    }
-    object_free(sorted_members);
-    object_free(result_zset);
-    return command_executor_owned_array(reply_list);
+    return command_executor_zset_result_array(build_reply.owned_object, options.withscores);
 }
 
 fn command_executor_zunionstore(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
@@ -10156,11 +10225,14 @@ fn command_executor_zunionstore(engine: &Engine, command: &Command, now_ms: u64)
     }
     const numkeys: usize = numkeys_i64 as usize;
     const keys_end: usize = 3 + numkeys;
-    if command.argc != keys_end {
+    if command.argc < keys_end {
         return command_executor_syntax_error();
     }
+    const options: CommandExecutorZAggregateOptions = command_executor_zaggregate_parse_options(command, 3, keys_end, false) catch {
+        return command_executor_syntax_error();
+    };
 
-    const build_reply: CommandReply = command_executor_zunion_build_result(engine, command, 3, keys_end, now_ms);
+    const build_reply: CommandReply = command_executor_zunion_build_result(engine, command, &options, now_ms);
     if build_reply.owned_object == null {
         return build_reply;
     }

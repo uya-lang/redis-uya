@@ -903,8 +903,12 @@ class RedisPySubsetClient:
     def zcount(self, key: str, minimum: int, maximum: int) -> int:
         return int(self._request(b"ZCOUNT", key.encode(), str(minimum).encode(), str(maximum).encode()))
 
-    def zinter(self, *keys: str, withscores: bool = False) -> list[bytes]:
+    def zinter(self, *keys: str, withscores: bool = False, weights: list[int] | None = None, aggregate: str | None = None) -> list[bytes]:
         parts: list[bytes] = [b"ZINTER", str(len(keys)).encode(), *(key.encode() for key in keys)]
+        if weights is not None:
+            parts.extend([b"WEIGHTS", *(str(weight).encode() for weight in weights)])
+        if aggregate is not None:
+            parts.extend([b"AGGREGATE", aggregate.encode()])
         if withscores:
             parts.append(b"WITHSCORES")
         result = self._request(*parts)
@@ -1021,19 +1025,33 @@ class RedisPySubsetClient:
     def zdiffstore(self, destination: str, *keys: str) -> int:
         return int(self._request(b"ZDIFFSTORE", destination.encode(), str(len(keys)).encode(), *(key.encode() for key in keys)))
 
-    def zinterstore(self, destination: str, *keys: str) -> int:
-        return int(self._request(b"ZINTERSTORE", destination.encode(), str(len(keys)).encode(), *(key.encode() for key in keys)))
+    def zinterstore(self, destination: str, *keys: str, weights: list[int] | None = None, aggregate: str | None = None) -> int:
+        parts: list[bytes] = [b"ZINTERSTORE", destination.encode(), str(len(keys)).encode(), *(key.encode() for key in keys)]
+        if weights is not None:
+            parts.extend([b"WEIGHTS", *(str(weight).encode() for weight in weights)])
+        if aggregate is not None:
+            parts.extend([b"AGGREGATE", aggregate.encode()])
+        return int(self._request(*parts))
 
-    def zunion(self, *keys: str, withscores: bool = False) -> list[bytes]:
+    def zunion(self, *keys: str, withscores: bool = False, weights: list[int] | None = None, aggregate: str | None = None) -> list[bytes]:
         parts: list[bytes] = [b"ZUNION", str(len(keys)).encode(), *(key.encode() for key in keys)]
+        if weights is not None:
+            parts.extend([b"WEIGHTS", *(str(weight).encode() for weight in weights)])
+        if aggregate is not None:
+            parts.extend([b"AGGREGATE", aggregate.encode()])
         if withscores:
             parts.append(b"WITHSCORES")
         result = self._request(*parts)
         assert isinstance(result, list)
         return result
 
-    def zunionstore(self, destination: str, *keys: str) -> int:
-        return int(self._request(b"ZUNIONSTORE", destination.encode(), str(len(keys)).encode(), *(key.encode() for key in keys)))
+    def zunionstore(self, destination: str, *keys: str, weights: list[int] | None = None, aggregate: str | None = None) -> int:
+        parts: list[bytes] = [b"ZUNIONSTORE", destination.encode(), str(len(keys)).encode(), *(key.encode() for key in keys)]
+        if weights is not None:
+            parts.extend([b"WEIGHTS", *(str(weight).encode() for weight in weights)])
+        if aggregate is not None:
+            parts.extend([b"AGGREGATE", aggregate.encode()])
+        return int(self._request(*parts))
 
     def zrangebyscore(self, key: str, minimum: int, maximum: int) -> list[bytes]:
         result = self._request(b"ZRANGEBYSCORE", key.encode(), str(minimum).encode(), str(maximum).encode())
@@ -1827,9 +1845,12 @@ def run_smoke() -> None:
             assert client.zintercard("zset", "zdiff2", limit=1) == 1
             assert client.zinter("zset", "zdiff2") == [b"b"]
             assert client.zinter("zset", "zdiff2", withscores=True) == [b"b", b"4"]
+            assert client.zinter("zset", "zdiff2", withscores=True, weights=[2, 3], aggregate="MAX") == [b"b", b"6"]
             assert client.zinter("zset", "missing") == []
             assert client.zinterstore("zinterdst", "zset", "zdiff2") == 1
             assert client.zrange("zinterdst", 0, -1) == [b"b"]
+            assert client.zscore("zinterdst", "b") == b"4"
+            assert client.zinterstore("zinterdst", "zset", "zdiff2", weights=[5, 2], aggregate="MIN") == 1
             assert client.zscore("zinterdst", "b") == b"4"
             assert client.zinterstore("zinterdst", "zset", "missing") == 0
             assert client.zrange("zinterdst", 0, -1) == []
@@ -1840,10 +1861,13 @@ def run_smoke() -> None:
             assert client.zrange("zrangestoredst", 0, -1) == []
             assert client.zunion("zset", "zdiff2") == [b"a", b"b", b"d"]
             assert client.zunion("zset", "zdiff2", withscores=True) == [b"a", b"4", b"b", b"4", b"d", b"5"]
+            assert client.zunion("zset", "zdiff2", withscores=True, weights=[4, 1], aggregate="MIN") == [b"b", b"2", b"d", b"5", b"a", b"16"]
             assert client.zunion("missing", "zdiff2") == [b"b", b"d"]
             assert client.zunionstore("zuniondst", "zset", "zdiff2") == 3
             assert client.zrange("zuniondst", 0, -1) == [b"a", b"b", b"d"]
             assert client.zscore("zuniondst", "b") == b"4"
+            assert client.zunionstore("zuniondst", "zset", "zdiff2", weights=[2, 3], aggregate="MAX") == 3
+            assert client.zscore("zuniondst", "b") == b"6"
             assert client.zunionstore("zuniondst", "missing") == 0
             assert client.zrange("zuniondst", 0, -1) == []
             assert client.zdiff("zset", "zdiff2") == [b"a"]

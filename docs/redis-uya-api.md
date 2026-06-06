@@ -1243,20 +1243,21 @@ ZDIFFSTORE destination numkeys key [key ...]
 格式：
 
 ```text
-ZINTER numkeys key [key ...] [WITHSCORES]
+ZINTER numkeys key [key ...] [WEIGHTS weight [weight ...]] [AGGREGATE SUM|MIN|MAX] [WITHSCORES]
 ```
 
 返回：
 
 - 返回多个 zset 的交集成员
-- 交集成员 score 按 SUM 聚合
+- 交集成员 score 默认按 SUM 聚合
+- `WEIGHTS` 支持每个 key 一个整数权重；`AGGREGATE` 支持 `SUM`、`MIN`、`MAX`
 - `WITHSCORES` 返回 `member, score` 交错数组
 
 说明：
 
 - 当前实现为 read-only partial，按聚合结果的 `(score, member)` 排序视图输出
 - 任一源 key 缺失时返回空数组
-- 当前尚未实现 `WEIGHTS` / `AGGREGATE` 选项
+- 当前 `WEIGHTS` 仅支持整数权重，不支持 Redis 原生浮点权重
 - 当前项目内 ZSet score 使用整数语义
 
 ### `ZINTERCARD`
@@ -1284,20 +1285,21 @@ ZINTERCARD numkeys key [key ...] [LIMIT limit]
 格式：
 
 ```text
-ZINTERSTORE destination numkeys key [key ...]
+ZINTERSTORE destination numkeys key [key ...] [WEIGHTS weight [weight ...]] [AGGREGATE SUM|MIN|MAX]
 ```
 
 返回：
 
 - 返回写入 `destination` 的成员数量
 - 写入多个 zset 的交集成员
-- 交集成员 score 按 SUM 聚合
+- 交集成员 score 默认按 SUM 聚合
+- `WEIGHTS` 支持每个 key 一个整数权重；`AGGREGATE` 支持 `SUM`、`MIN`、`MAX`
 
 说明：
 
 - 当前实现为 write partial，按聚合结果写回项目内 zset
 - 任一源 key 缺失或结果为空时删除 `destination` 并返回 `0`
-- 当前尚未实现 `WEIGHTS` / `AGGREGATE` 选项
+- 当前 `WEIGHTS` 仅支持整数权重，不支持 Redis 原生浮点权重
 - 当前项目内 ZSet score 使用整数语义
 
 ### `ZUNION`
@@ -1305,20 +1307,21 @@ ZINTERSTORE destination numkeys key [key ...]
 格式：
 
 ```text
-ZUNION numkeys key [key ...] [WITHSCORES]
+ZUNION numkeys key [key ...] [WEIGHTS weight [weight ...]] [AGGREGATE SUM|MIN|MAX] [WITHSCORES]
 ```
 
 返回：
 
 - 返回多个 zset 的并集成员
-- 重复成员 score 按 SUM 聚合
+- 重复成员 score 默认按 SUM 聚合
+- `WEIGHTS` 支持每个 key 一个整数权重；`AGGREGATE` 支持 `SUM`、`MIN`、`MAX`
 - `WITHSCORES` 返回 `member, score` 交错数组
 
 说明：
 
 - 当前实现为 read-only partial，按聚合结果的 `(score, member)` 排序视图输出
 - 源 key 缺失时按空 zset 处理；所有源 key 缺失时返回空数组
-- 当前尚未实现 `WEIGHTS` / `AGGREGATE` 选项
+- 当前 `WEIGHTS` 仅支持整数权重，不支持 Redis 原生浮点权重
 - 当前项目内 ZSet score 使用整数语义
 
 ### `ZUNIONSTORE`
@@ -1326,20 +1329,21 @@ ZUNION numkeys key [key ...] [WITHSCORES]
 格式：
 
 ```text
-ZUNIONSTORE destination numkeys key [key ...]
+ZUNIONSTORE destination numkeys key [key ...] [WEIGHTS weight [weight ...]] [AGGREGATE SUM|MIN|MAX]
 ```
 
 返回：
 
 - 返回写入 `destination` 的成员数量
 - 写入多个 zset 的并集成员
-- 重复成员 score 按 SUM 聚合
+- 重复成员 score 默认按 SUM 聚合
+- `WEIGHTS` 支持每个 key 一个整数权重；`AGGREGATE` 支持 `SUM`、`MIN`、`MAX`
 
 说明：
 
 - 当前实现为 write partial，按聚合结果写回项目内 zset
 - 源 key 缺失时按空 zset 处理；结果为空时删除 `destination` 并返回 `0`
-- 当前尚未实现 `WEIGHTS` / `AGGREGATE` 选项
+- 当前 `WEIGHTS` 仅支持整数权重，不支持 Redis 原生浮点权重
 - 当前项目内 ZSet score 使用整数语义
 
 ### `ZREMRANGEBYRANK`

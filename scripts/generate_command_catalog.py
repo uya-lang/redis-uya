@@ -459,6 +459,10 @@ PARTIAL_NAMES = {
     "pfmerge",
 }
 
+STANDALONE_ERROR_NAMES = {
+    "debug",
+}
+
 ALIAS_NAMES = {
     "hmset": "hset",
     "slaveof": "replicaof",
@@ -860,6 +864,8 @@ def classify_status(entry: CommandEntry) -> tuple[str, str]:
         return "partial", target_version_for(entry, "partial")
     if entry.name in FULL_NAMES:
         return "full", target_version_for(entry, "full")
+    if entry.name in STANDALONE_ERROR_NAMES:
+        return "standalone-error", target_version_for(entry, "standalone-error")
     if entry.group in {"cluster", "sentinel"}:
         return "standalone-error", target_version_for(entry, "standalone-error")
     return "deferred", target_version_for(entry, "deferred")

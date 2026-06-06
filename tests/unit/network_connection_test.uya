@@ -483,6 +483,10 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const lolwut_bad_version_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$6\r\nLOLWUT\r\n$7\r\nVERSION\r\n$3\r\nbad\r\n"[0: 38], &out[0], 512, 1000u64);
     try assert_true(network_connection_contains(out[0: lolwut_bad_version_result.response_len], &"value is not an integer"[0: 23]));
 
+    const debug_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$5\r\nDEBUG\r\n$4\r\nHELP\r\n"[0: 25], &out[0], 512, 1000u64);
+    try assert_true(network_connection_contains(out[0: debug_result.response_len], &"DEBUG command not allowed"[0: 25]));
+    try assert_eq_i32(debug_result.request_bgsave as i32, 0);
+
     const wait_zero_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$4\r\nWAIT\r\n$1\r\n0\r\n$1\r\n0\r\n"[0: 31], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: wait_zero_result.response_len], &":0\r\n"[0: 4]));
 

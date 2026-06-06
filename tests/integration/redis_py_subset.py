@@ -568,6 +568,9 @@ class RedisPySubsetClient:
             raise AssertionError(f"unexpected LOLWUT result: {result!r}")
         return result
 
+    def debug(self, *args: bytes):
+        return self._request(b"DEBUG", *args)
+
     def wait(self, replicas: int, timeout_ms: int) -> int:
         return int(self._request(b"WAIT", str(replicas).encode(), str(timeout_ms).encode()))
 
@@ -1555,6 +1558,12 @@ def run_smoke() -> None:
             except RespError as exc:
                 if str(exc) != "ERR value is not an integer or out of range":
                     raise AssertionError(f"unexpected LOLWUT integer error: {exc}") from exc
+            try:
+                client.debug(b"HELP")
+                raise AssertionError("expected DEBUG HELP to be disabled")
+            except RespError as exc:
+                if str(exc) != "ERR DEBUG command not allowed by redis-uya standalone profile":
+                    raise AssertionError(f"unexpected DEBUG error: {exc}") from exc
             if client.wait(0, 0) != 0:
                 raise AssertionError("expected WAIT 0 0 to return 0")
             if client.wait(1, 10) != 0:

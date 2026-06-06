@@ -2169,6 +2169,12 @@ if [[ "$LOLWUT_BAD_RESULT" != "ERR value is not an integer or out of range" ]]; 
     exit 1
 fi
 
+DEBUG_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" debug help 2>&1 || true)"
+if [[ "$DEBUG_RESULT" != "ERR DEBUG command not allowed by redis-uya standalone profile" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected DEBUG disabled error, got '$DEBUG_RESULT'" >&2
+    exit 1
+fi
+
 WAIT_ZERO_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" wait 0 0)"
 if [[ "$WAIT_ZERO_RESULT" != "0" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected WAIT 0 0 to return 0, got '$WAIT_ZERO_RESULT'" >&2

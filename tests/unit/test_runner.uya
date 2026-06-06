@@ -159,6 +159,7 @@ use tests.unit.command_executor_test.test_command_fcall;
 use tests.unit.command_executor_test.test_command_move;
 use tests.unit.command_executor_test.test_command_swapdb;
 use tests.unit.command_executor_test.test_command_lolwut;
+use tests.unit.command_executor_test.test_command_debug;
 use tests.unit.command_executor_test.test_command_wait;
 use tests.unit.command_executor_test.test_command_sort;
 use tests.unit.command_executor_test.test_command_error_paths;
@@ -854,6 +855,10 @@ export fn main() i32 {
     const before_exec_lolwut: i32 = failed;
     _ = test_command_lolwut() catch { printf("[FAIL] command_executor/lolwut\n" as *byte); failed = failed + 1; };
     if failed == before_exec_lolwut { printf("[PASS] command_executor/lolwut\n" as *byte); }
+
+    const before_exec_debug: i32 = failed;
+    _ = test_command_debug() catch { printf("[FAIL] command_executor/debug\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_debug { printf("[PASS] command_executor/debug\n" as *byte); }
 
     const before_exec_wait: i32 = failed;
     _ = test_command_wait() catch { printf("[FAIL] command_executor/wait\n" as *byte); failed = failed + 1; };

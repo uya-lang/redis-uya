@@ -700,6 +700,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"swapdb"[0: 6], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"lolwut"[0: 6], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"replconf"[0: 8], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"debug"[0: 5], CommandCatalogStatus.status_standalone_error);
     try command_executor_test_assert_catalog_status(&"zdiff"[0: 5], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"zdiffstore"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"zinter"[0: 6], CommandCatalogStatus.status_partial);
@@ -7351,6 +7352,30 @@ export fn test_command_lolwut() !void {
     try assert_eq_i32(bad_version_reply.typ as i32, CommandReplyType.reply_error as i32);
     try assert_true(command_executor_test_slice_eq(bad_version_reply.data, &"ERR value is not an integer or out of range"[0: 43]));
     resp_value_free(&bad_version_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_command_debug() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var runtime: CommandRuntimeInfo = command_runtime_default();
+
+    var help_parsed: RespParseResult = try parse_resp2(&"*2\r\n$5\r\nDEBUG\r\n$4\r\nHELP\r\n"[0: 25]);
+    const help_command: Command = try command_executor_test_command(&router, &help_parsed);
+    const help_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &help_command, 1000u64);
+    try assert_eq_i32(help_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(help_reply.data, &"ERR DEBUG command not allowed by redis-uya standalone profile"[0: 61]));
+    resp_value_free(&help_parsed.value);
+
+    var object_parsed: RespParseResult = try parse_resp2(&"*3\r\n$5\r\nDEBUG\r\n$6\r\nOBJECT\r\n$3\r\nkey\r\n"[0: 36]);
+    const object_command: Command = try command_executor_test_command(&router, &object_parsed);
+    const object_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &object_command, 1000u64);
+    try assert_eq_i32(object_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(object_reply.data, &"ERR DEBUG command not allowed by redis-uya standalone profile"[0: 61]));
+    resp_value_free(&object_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

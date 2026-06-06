@@ -8559,6 +8559,12 @@ fn command_executor_lolwut(runtime: &CommandRuntimeInfo, command: &Command) Comm
     return command_executor_owned_bulk(obj);
 }
 
+fn command_executor_debug(runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
+    _ = runtime;
+    _ = command;
+    return command_executor_error(&"ERR DEBUG command not allowed by redis-uya standalone profile"[0: 61]);
+}
+
 fn command_executor_wait(runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
     _ = runtime;
     if command.argc != 3 {
@@ -17220,6 +17226,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_lolwut {
         return command_executor_lolwut(runtime, command);
+    }
+    if command.info.cmd_type == CommandType.command_debug {
+        return command_executor_debug(runtime, command);
     }
     if command.info.cmd_type == CommandType.command_wait {
         return command_executor_wait(runtime, command);

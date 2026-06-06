@@ -2912,6 +2912,24 @@ QUIT
 - 当前只在普通命令成功执行后推送；脚本内部实际命令、事务队列展开和控制面特殊分支不会完整等价 Redis 原生 `MONITOR`
 - monitor 模式下同一连接只允许 `RESET` / `QUIT`
 
+### `DEBUG`
+
+格式：
+
+```text
+DEBUG subcommand [arg ...]
+```
+
+返回：
+
+- 当前所有带子命令形式统一返回：`-ERR DEBUG command not allowed by redis-uya standalone profile`
+
+说明：
+
+- 当前实现为 `standalone-error`：`DEBUG` 已进入运行时路由和 `COMMAND*` 可见面，但 redis-uya 单机安全 profile 不开放 Redis 内部调试/破坏性子命令
+- `DEBUG` 不写入 AOF 或复制 backlog，也不会改变运行时状态
+- 后续如需要开发态内部调试能力，必须先引入显式配置开关、权限边界和独立测试矩阵
+
 ### `INFO`
 
 格式：

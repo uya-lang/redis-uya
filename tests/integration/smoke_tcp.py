@@ -222,6 +222,10 @@ def run_smoke() -> None:
             lolwut_bad_reply = recv_line(sock)
             if lolwut_bad_reply != b"-ERR value is not an integer or out of range\r\n":
                 raise AssertionError(f"unexpected LOLWUT bad integer reply: {lolwut_bad_reply!r}")
+            sock.sendall(b"*2\r\n$5\r\nDEBUG\r\n$4\r\nHELP\r\n")
+            debug_reply = recv_line(sock)
+            if debug_reply != b"-ERR DEBUG command not allowed by redis-uya standalone profile\r\n":
+                raise AssertionError(f"unexpected DEBUG reply: {debug_reply!r}")
             roundtrip(sock, b"*3\r\n$4\r\nWAIT\r\n$1\r\n0\r\n$1\r\n0\r\n", b":0\r\n")
             roundtrip(sock, b"*3\r\n$4\r\nWAIT\r\n$1\r\n1\r\n$2\r\n10\r\n", b":0\r\n")
             sock.sendall(b"*3\r\n$4\r\nWAIT\r\n$1\r\n1\r\n$2\r\n-1\r\n")

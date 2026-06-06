@@ -1179,13 +1179,14 @@ ZREVRANGEBYLEX key max min [LIMIT offset count]
 格式：
 
 ```text
-ZRANGEBYSCORE key min max [WITHSCORES]
+ZRANGEBYSCORE key min max [WITHSCORES] [LIMIT offset count]
 ```
 
 返回：
 
 - 返回 score 落在闭区间 `[min, max]` 内的成员，按 score 升序
 - 带 `WITHSCORES` 时返回 member / score 交错数组
+- 当前支持 `LIMIT offset count`；`offset` 必须非负，`count < 0` 表示不限制数量
 - 当前项目内 ZSet score 使用整数语义
 
 ### `ZREVRANGEBYSCORE`
@@ -1193,13 +1194,14 @@ ZRANGEBYSCORE key min max [WITHSCORES]
 格式：
 
 ```text
-ZREVRANGEBYSCORE key max min [WITHSCORES]
+ZREVRANGEBYSCORE key max min [WITHSCORES] [LIMIT offset count]
 ```
 
 返回：
 
 - 返回 score 落在闭区间 `[min, max]` 内的成员，按 score 降序
 - 带 `WITHSCORES` 时返回 member / score 交错数组
+- 当前支持 `LIMIT offset count`；`offset` 必须非负，`count < 0` 表示不限制数量
 - 当前项目内 ZSet score 使用整数语义
 
 ### `ZRANDMEMBER`

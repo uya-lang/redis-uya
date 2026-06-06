@@ -11369,12 +11369,12 @@ fn command_executor_zmpop(engine: &Engine, command: &Command, now_ms: u64) Comma
     return command_executor_reply(CommandReplyType.reply_null_array, command_executor_empty_slice(), 0);
 }
 
-fn command_executor_zset_members_with_scores_reply(obj: &RedisObject, members: &RedisObject, count: usize) CommandReply {
+fn command_executor_zset_members_with_scores_reply(obj: &RedisObject, members: &RedisObject, head: &ListNode, count: usize) CommandReply {
     const scored: &RedisObject = create_list_object() catch {
         object_free(members);
         return command_executor_oom();
     };
-    var current: &ListNode = members.list_head;
+    var current: &ListNode = head;
     var emitted: usize = 0;
     while current != null && emitted < count {
         const member: &[byte] = current.value.value.buf[0: current.value.value.len];
@@ -11404,9 +11404,6 @@ fn command_executor_zrangebyscore(engine: &Engine, command: &Command, now_ms: u6
     if command.argc < 4 {
         return command_executor_wrong_arity();
     }
-    if command.argc > 5 {
-        return command_executor_syntax_error();
-    }
     const key: &[byte] = command_executor_arg(command, 1) catch {
         return command_executor_wrong_arity();
     };
@@ -11423,14 +11420,47 @@ fn command_executor_zrangebyscore(engine: &Engine, command: &Command, now_ms: u6
         return command_executor_invalid_integer();
     };
     var with_scores: bool = false;
-    if command.argc == 5 {
-        const option: &[byte] = command_executor_arg(command, 4) catch {
+    var limit_enabled: bool = false;
+    var limit_offset: usize = 0;
+    var limit_count: i64 = -1;
+    var option_index: usize = 4;
+    while option_index < command.argc {
+        const option: &[byte] = command_executor_arg(command, option_index) catch {
             return command_executor_wrong_arity();
         };
-        if !command_executor_keyword_eq(option, &"WITHSCORES"[0: 10]) {
-            return command_executor_syntax_error();
+        if command_executor_keyword_eq(option, &"WITHSCORES"[0: 10]) {
+            if with_scores {
+                return command_executor_syntax_error();
+            }
+            with_scores = true;
+            option_index = option_index + 1;
+            continue;
         }
-        with_scores = true;
+        if command_executor_keyword_eq(option, &"LIMIT"[0: 5]) {
+            if limit_enabled || option_index + 2 >= command.argc {
+                return command_executor_syntax_error();
+            }
+            const offset_data: &[byte] = command_executor_arg(command, option_index + 1) catch {
+                return command_executor_wrong_arity();
+            };
+            const count_data: &[byte] = command_executor_arg(command, option_index + 2) catch {
+                return command_executor_wrong_arity();
+            };
+            const offset_i64: i64 = command_executor_parse_i64(offset_data) catch {
+                return command_executor_invalid_integer();
+            };
+            if offset_i64 < 0 {
+                return command_executor_error(&"ERR offset out of range"[0: 23]);
+            }
+            limit_enabled = true;
+            limit_offset = offset_i64 as usize;
+            limit_count = command_executor_parse_i64(count_data) catch {
+                return command_executor_invalid_integer();
+            };
+            option_index = option_index + 3;
+            continue;
+        }
+        return command_executor_syntax_error();
     }
     if min_score > max_score {
         return command_executor_array_bulk(null as &ListNode, 0);
@@ -11451,10 +11481,24 @@ fn command_executor_zrangebyscore(engine: &Engine, command: &Command, now_ms: u6
         object_free(ranged);
         return command_executor_wrongtype();
     };
-    if with_scores {
-        return command_executor_zset_members_with_scores_reply(obj, ranged, count);
+    var reply_head: &ListNode = ranged.list_head;
+    var reply_count: usize = count;
+    if limit_enabled {
+        var limit_stop: i64 = -1;
+        if limit_count >= 0 {
+            limit_stop = (limit_offset as i64) + limit_count - 1;
+        }
+        const view: ListRangeView = list_object_range(ranged, limit_offset as i64, limit_stop) catch {
+            object_free(ranged);
+            return command_executor_wrongtype();
+        };
+        reply_head = view.head;
+        reply_count = view.count;
     }
-    var reply: CommandReply = command_executor_array_bulk(ranged.list_head, count);
+    if with_scores {
+        return command_executor_zset_members_with_scores_reply(obj, ranged, reply_head, reply_count);
+    }
+    var reply: CommandReply = command_executor_array_bulk(reply_head, reply_count);
     reply.owned_object = ranged;
     return reply;
 }
@@ -11582,9 +11626,6 @@ fn command_executor_zrevrangebyscore(engine: &Engine, command: &Command, now_ms:
     if command.argc < 4 {
         return command_executor_wrong_arity();
     }
-    if command.argc > 5 {
-        return command_executor_syntax_error();
-    }
     const key: &[byte] = command_executor_arg(command, 1) catch {
         return command_executor_wrong_arity();
     };
@@ -11601,14 +11642,47 @@ fn command_executor_zrevrangebyscore(engine: &Engine, command: &Command, now_ms:
         return command_executor_invalid_integer();
     };
     var with_scores: bool = false;
-    if command.argc == 5 {
-        const option: &[byte] = command_executor_arg(command, 4) catch {
+    var limit_enabled: bool = false;
+    var limit_offset: usize = 0;
+    var limit_count: i64 = -1;
+    var option_index: usize = 4;
+    while option_index < command.argc {
+        const option: &[byte] = command_executor_arg(command, option_index) catch {
             return command_executor_wrong_arity();
         };
-        if !command_executor_keyword_eq(option, &"WITHSCORES"[0: 10]) {
-            return command_executor_syntax_error();
+        if command_executor_keyword_eq(option, &"WITHSCORES"[0: 10]) {
+            if with_scores {
+                return command_executor_syntax_error();
+            }
+            with_scores = true;
+            option_index = option_index + 1;
+            continue;
         }
-        with_scores = true;
+        if command_executor_keyword_eq(option, &"LIMIT"[0: 5]) {
+            if limit_enabled || option_index + 2 >= command.argc {
+                return command_executor_syntax_error();
+            }
+            const offset_data: &[byte] = command_executor_arg(command, option_index + 1) catch {
+                return command_executor_wrong_arity();
+            };
+            const count_data: &[byte] = command_executor_arg(command, option_index + 2) catch {
+                return command_executor_wrong_arity();
+            };
+            const offset_i64: i64 = command_executor_parse_i64(offset_data) catch {
+                return command_executor_invalid_integer();
+            };
+            if offset_i64 < 0 {
+                return command_executor_error(&"ERR offset out of range"[0: 23]);
+            }
+            limit_enabled = true;
+            limit_offset = offset_i64 as usize;
+            limit_count = command_executor_parse_i64(count_data) catch {
+                return command_executor_invalid_integer();
+            };
+            option_index = option_index + 3;
+            continue;
+        }
+        return command_executor_syntax_error();
     }
     if min_score > max_score {
         return command_executor_array_bulk(null as &ListNode, 0);
@@ -11629,10 +11703,24 @@ fn command_executor_zrevrangebyscore(engine: &Engine, command: &Command, now_ms:
         object_free(ranged);
         return command_executor_wrongtype();
     };
-    if with_scores {
-        return command_executor_zset_members_with_scores_reply(obj, ranged, count);
+    var reply_head: &ListNode = ranged.list_head;
+    var reply_count: usize = count;
+    if limit_enabled {
+        var limit_stop: i64 = -1;
+        if limit_count >= 0 {
+            limit_stop = (limit_offset as i64) + limit_count - 1;
+        }
+        const view: ListRangeView = list_object_range(ranged, limit_offset as i64, limit_stop) catch {
+            object_free(ranged);
+            return command_executor_wrongtype();
+        };
+        reply_head = view.head;
+        reply_count = view.count;
     }
-    var reply: CommandReply = command_executor_array_bulk(ranged.list_head, count);
+    if with_scores {
+        return command_executor_zset_members_with_scores_reply(obj, ranged, reply_head, reply_count);
+    }
+    var reply: CommandReply = command_executor_array_bulk(reply_head, reply_count);
     reply.owned_object = ranged;
     return reply;
 }

@@ -1509,6 +1509,18 @@ if [[ "$ZRANGESTORE_SCORE_RESULT" != "4" ]]; then
     exit 1
 fi
 
+ZRANGESTORE_REV_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrangestore zrangestorerev zset 0 1 rev)"
+if [[ "$ZRANGESTORE_REV_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZRANGESTORE REV count 2, got '$ZRANGESTORE_REV_RESULT'" >&2
+    exit 1
+fi
+
+ZRANGESTORE_REV_RANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrange zrangestorerev 0 -1)"
+if [[ "$ZRANGESTORE_REV_RANGE_RESULT" != $'b\na' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZRANGESTORE REV target b/a, got '$ZRANGESTORE_REV_RANGE_RESULT'" >&2
+    exit 1
+fi
+
 ZRANGESTORE_MISSING_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrangestore zrangestoredst missing 0 -1)"
 if [[ "$ZRANGESTORE_MISSING_RESULT" != "0" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ZRANGESTORE missing count 0, got '$ZRANGESTORE_MISSING_RESULT'" >&2
@@ -1701,9 +1713,9 @@ if [[ "$BZSET_EXISTS_RESULT" != "0" ]]; then
     exit 1
 fi
 
-ZSET_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del zset)"
-if [[ "$ZSET_DEL_RESULT" != "1" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected zset DEL 1, got '$ZSET_DEL_RESULT'" >&2
+ZSET_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del zset zrangestorerev)"
+if [[ "$ZSET_DEL_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected zset DEL 2, got '$ZSET_DEL_RESULT'" >&2
     exit 1
 fi
 

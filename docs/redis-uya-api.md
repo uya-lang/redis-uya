@@ -1100,7 +1100,7 @@ ZRANGEBYLEX key min max [LIMIT offset count]
 格式：
 
 ```text
-ZRANGESTORE destination source start stop
+ZRANGESTORE destination source start stop [REV]
 ```
 
 返回：
@@ -1110,9 +1110,9 @@ ZRANGESTORE destination source start stop
 
 说明：
 
-- 当前实现为 rank-range write partial，范围语义与当前 `ZRANGE key start stop` 对齐
+- 当前实现为 rank-range write partial，范围语义与当前 `ZRANGE key start stop [REV]` 对齐
 - `source` 缺失或结果为空时删除 `destination` 并返回 `0`
-- 当前尚未实现 `BYSCORE` / `BYLEX` / `REV` / `LIMIT` 选项
+- 当前支持 `REV`；尚未实现 `BYSCORE` / `BYLEX` / `LIMIT` 选项
 - 当前项目内 ZSet score 使用整数语义
 
 ### `ZREMRANGEBYLEX`

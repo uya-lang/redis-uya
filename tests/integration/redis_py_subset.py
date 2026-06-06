@@ -883,8 +883,11 @@ class RedisPySubsetClient:
         assert isinstance(result, list)
         return result
 
-    def zrangestore(self, destination: str, source: str, start: int, stop: int) -> int:
-        return int(self._request(b"ZRANGESTORE", destination.encode(), source.encode(), str(start).encode(), str(stop).encode()))
+    def zrangestore(self, destination: str, source: str, start: int, stop: int, rev: bool = False) -> int:
+        parts: list[bytes] = [b"ZRANGESTORE", destination.encode(), source.encode(), str(start).encode(), str(stop).encode()]
+        if rev:
+            parts.append(b"REV")
+        return int(self._request(*parts))
 
     def zrevrange(self, key: str, start: int, stop: int, withscores: bool = False) -> list[bytes]:
         parts: list[bytes] = [b"ZREVRANGE", key.encode(), str(start).encode(), str(stop).encode()]
@@ -1862,8 +1865,11 @@ def run_smoke() -> None:
             assert client.zrangestore("zrangestoredst", "zset", 0, 1) == 2
             assert client.zrange("zrangestoredst", 0, -1) == [b"b", b"a"]
             assert client.zscore("zrangestoredst", "a") == b"4"
+            assert client.zrangestore("zrangestorerev", "zset", 0, 1, rev=True) == 2
+            assert client.zrange("zrangestorerev", 0, -1) == [b"b", b"a"]
             assert client.zrangestore("zrangestoredst", "missing", 0, -1) == 0
             assert client.zrange("zrangestoredst", 0, -1) == []
+            assert client.delete("zrangestorerev") == 1
             assert client.zunion("zset", "zdiff2") == [b"a", b"b", b"d"]
             assert client.zunion("zset", "zdiff2", withscores=True) == [b"a", b"4", b"b", b"4", b"d", b"5"]
             assert client.zunion("zset", "zdiff2", withscores=True, weights=[4, 1], aggregate="MIN") == [b"b", b"2", b"d", b"5", b"a", b"16"]

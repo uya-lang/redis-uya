@@ -449,6 +449,7 @@
 - [x] Key/Server 第十批：`SORT`
 - [x] Key/Server 第十三批复制：`COPY`
 - [x] Key/Server 第十四批恢复迁移入口：`RESTORE-ASKING`
+- [x] Key/Server 第十五批诊断：`LOLWUT`
 - [x] Security baseline：`AUTH`、`requirepass`、`SHUTDOWN`
 
 验收项：

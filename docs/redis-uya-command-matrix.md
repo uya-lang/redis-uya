@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 169 | 0 | 3 | 47 |
+| Tier A: standalone core | 365 | 259 | 146 | 170 | 0 | 3 | 46 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `176` |
+| `partial` | `177` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `200` |
+| `deferred` | `199` |
 
 ## Group counts
 
@@ -371,7 +371,7 @@
 | `llen` | `list` | `full` | `-` | `2` | `-` | `no` | `@read, @list, @fast` |
 | `lmove` | `list` | `full` | `-` | `5` | `-` | `no` | `@write, @list, @slow` |
 | `lmpop` | `list` | `full` | `-` | `-4` | `-` | `no` | `@write, @list, @slow` |
-| `lolwut` | `server` | `deferred` | `v0.9.1` | `-1` | `-` | `no` | `@read, @fast` |
+| `lolwut` | `server` | `partial` | `-` | `-1` | `-` | `no` | `@read, @fast` |
 | `lpop` | `list` | `full` | `-` | `-2` | `-` | `no` | `@write, @list, @fast` |
 | `lpos` | `list` | `full` | `-` | `-3` | `-` | `no` | `@read, @list, @slow` |
 | `lpush` | `list` | `full` | `-` | `-3` | `-` | `no` | `@write, @list, @fast` |

@@ -2133,6 +2133,24 @@ if [[ "$SWAPDB_BAD_RESULT" != "ERR value is not an integer or out of range" ]]; 
     exit 1
 fi
 
+LOLWUT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lolwut)"
+if [[ "$LOLWUT_RESULT" != *"Redis ver. v0.9.1-dev"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected LOLWUT version text, got '$LOLWUT_RESULT'" >&2
+    exit 1
+fi
+
+LOLWUT_VERSION_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lolwut version 5)"
+if [[ "$LOLWUT_VERSION_RESULT" != *"Redis-compatible"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected LOLWUT VERSION 5 compatibility text, got '$LOLWUT_VERSION_RESULT'" >&2
+    exit 1
+fi
+
+LOLWUT_BAD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lolwut version bad 2>&1 || true)"
+if [[ "$LOLWUT_BAD_RESULT" != "ERR value is not an integer or out of range" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected LOLWUT VERSION bad integer error, got '$LOLWUT_BAD_RESULT'" >&2
+    exit 1
+fi
+
 WAIT_ZERO_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" wait 0 0)"
 if [[ "$WAIT_ZERO_RESULT" != "0" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected WAIT 0 0 to return 0, got '$WAIT_ZERO_RESULT'" >&2

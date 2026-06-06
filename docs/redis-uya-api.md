@@ -1676,6 +1676,24 @@ SWAPDB index1 index2
 
 - 当前运行时只暴露唯一数据库，因此 `SWAPDB 0 0` 是 no-op partial，不存在真实多 DB 数据交换路径
 
+### `LOLWUT`
+
+格式：
+
+```text
+LOLWUT [VERSION version]
+```
+
+返回：
+
+- 成功：Bulk String，包含 redis-uya 固定兼容文本和当前版本
+- `VERSION` 参数值非整数：`-ERR value is not an integer or out of range`
+
+说明：
+
+- 当前实现是固定文本 partial，不生成 Redis 原版动态图形
+- 未识别首参数按 Redis 7.0 兼容面退回默认输出
+
 ### `WAIT`
 
 格式：

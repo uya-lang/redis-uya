@@ -8524,6 +8524,41 @@ fn command_executor_swapdb(runtime: &CommandRuntimeInfo, command: &Command) Comm
     return command_executor_simple(&"OK"[0: 2]);
 }
 
+fn command_executor_lolwut(runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
+    _ = runtime;
+    if command.argc >= 3 {
+        const option_data: &[byte] = command_executor_arg(command, 1) catch {
+            return command_executor_wrong_arity();
+        };
+        if command_executor_keyword_eq(option_data, &"VERSION"[0: 7]) {
+            const version_data: &[byte] = command_executor_arg(command, 2) catch {
+                return command_executor_wrong_arity();
+            };
+            _ = command_executor_parse_i64(version_data) catch {
+                return command_executor_invalid_integer();
+            };
+        }
+    }
+
+    var buf: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    _ = sds_cat(&buf, &"redis-uya LOLWUT partial\r\n"[0: 26]) catch { sds_free(&buf); return command_executor_oom(); };
+    _ = sds_cat(&buf, &"+------------------+\r\n"[0: 22]) catch { sds_free(&buf); return command_executor_oom(); };
+    _ = sds_cat(&buf, &"| Redis-compatible |\r\n"[0: 22]) catch { sds_free(&buf); return command_executor_oom(); };
+    _ = sds_cat(&buf, &"| single node mode |\r\n"[0: 22]) catch { sds_free(&buf); return command_executor_oom(); };
+    _ = sds_cat(&buf, &"+------------------+\r\n"[0: 22]) catch { sds_free(&buf); return command_executor_oom(); };
+    _ = sds_cat(&buf, &"Redis ver. "[0: 11]) catch { sds_free(&buf); return command_executor_oom(); };
+    _ = sds_cat(&buf, redis_uya_version()) catch { sds_free(&buf); return command_executor_oom(); };
+
+    const obj: &RedisObject = create_string_object(buf.buf[0: buf.len]) catch {
+        sds_free(&buf);
+        return command_executor_oom();
+    };
+    sds_free(&buf);
+    return command_executor_owned_bulk(obj);
+}
+
 fn command_executor_wait(runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
     _ = runtime;
     if command.argc != 3 {
@@ -17176,6 +17211,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_swapdb {
         return command_executor_swapdb(runtime, command);
+    }
+    if command.info.cmd_type == CommandType.command_lolwut {
+        return command_executor_lolwut(runtime, command);
     }
     if command.info.cmd_type == CommandType.command_wait {
         return command_executor_wait(runtime, command);

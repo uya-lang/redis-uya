@@ -207,6 +207,18 @@ def run_smoke() -> None:
             swapdb_bad_reply = recv_line(sock)
             if swapdb_bad_reply != b"-ERR value is not an integer or out of range\r\n":
                 raise AssertionError(f"unexpected SWAPDB bad integer reply: {swapdb_bad_reply!r}")
+            sock.sendall(b"*1\r\n$6\r\nLOLWUT\r\n")
+            lolwut_reply = recv_bulk(sock)
+            if lolwut_reply is None or b"Redis ver. v0.9.1-dev" not in lolwut_reply:
+                raise AssertionError(f"unexpected LOLWUT reply: {lolwut_reply!r}")
+            sock.sendall(b"*3\r\n$6\r\nLOLWUT\r\n$7\r\nVERSION\r\n$1\r\n5\r\n")
+            lolwut_version_reply = recv_bulk(sock)
+            if lolwut_version_reply is None or b"Redis-compatible" not in lolwut_version_reply:
+                raise AssertionError(f"unexpected LOLWUT VERSION reply: {lolwut_version_reply!r}")
+            sock.sendall(b"*3\r\n$6\r\nLOLWUT\r\n$7\r\nVERSION\r\n$3\r\nbad\r\n")
+            lolwut_bad_reply = recv_line(sock)
+            if lolwut_bad_reply != b"-ERR value is not an integer or out of range\r\n":
+                raise AssertionError(f"unexpected LOLWUT bad integer reply: {lolwut_bad_reply!r}")
             roundtrip(sock, b"*3\r\n$4\r\nWAIT\r\n$1\r\n0\r\n$1\r\n0\r\n", b":0\r\n")
             roundtrip(sock, b"*3\r\n$4\r\nWAIT\r\n$1\r\n1\r\n$2\r\n10\r\n", b":0\r\n")
             sock.sendall(b"*3\r\n$4\r\nWAIT\r\n$1\r\n1\r\n$2\r\n-1\r\n")

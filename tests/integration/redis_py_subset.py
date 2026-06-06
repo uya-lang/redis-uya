@@ -559,6 +559,12 @@ class RedisPySubsetClient:
         result = self._request(b"SWAPDB", str(first).encode(), str(second).encode())
         return result == "OK"
 
+    def lolwut(self, *args: bytes) -> bytes:
+        result = self._request(b"LOLWUT", *args)
+        if not isinstance(result, bytes):
+            raise AssertionError(f"unexpected LOLWUT result: {result!r}")
+        return result
+
     def wait(self, replicas: int, timeout_ms: int) -> int:
         return int(self._request(b"WAIT", str(replicas).encode(), str(timeout_ms).encode()))
 
@@ -1528,6 +1534,18 @@ def run_smoke() -> None:
             except RespError as exc:
                 if str(exc) != "ERR value is not an integer or out of range":
                     raise AssertionError(f"unexpected SWAPDB integer error: {exc}") from exc
+            if b"Redis ver. v0.9.1-dev" not in client.lolwut():
+                raise AssertionError("expected LOLWUT to include redis-uya version")
+            if b"Redis-compatible" not in client.lolwut(b"VERSION", b"5"):
+                raise AssertionError("expected LOLWUT VERSION 5 to return compatibility text")
+            if b"Redis ver." not in client.lolwut(b"bad", b"5"):
+                raise AssertionError("expected LOLWUT unknown option to return default output")
+            try:
+                client.lolwut(b"VERSION", b"bad")
+                raise AssertionError("expected LOLWUT VERSION bad to fail")
+            except RespError as exc:
+                if str(exc) != "ERR value is not an integer or out of range":
+                    raise AssertionError(f"unexpected LOLWUT integer error: {exc}") from exc
             if client.wait(0, 0) != 0:
                 raise AssertionError("expected WAIT 0 0 to return 0")
             if client.wait(1, 10) != 0:

@@ -406,6 +406,7 @@ PARTIAL_NAMES = {
     "restore-asking",
     "save",
     "select",
+    "lolwut",
     "sort",
     "slowlog",
     "slowlog|get",

@@ -258,6 +258,8 @@ export fn test_connection_process_ping_set_get_quit() !void {
     try assert_true(network_connection_slice_eq(out[0: pfmerge_result.response_len], &"+OK\r\n"[0: 5]));
     const pfcount_dst_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$7\r\nPFCOUNT\r\n$3\r\ndst\r\n"[0: 26], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: pfcount_dst_result.response_len], &":3\r\n"[0: 4]));
+    const pfselftest_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*1\r\n$10\r\nPFSELFTEST\r\n"[0: 21], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: pfselftest_result.response_len], &"+OK\r\n"[0: 5]));
 
     const geoadd_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*8\r\n$6\r\nGEOADD\r\n$3\r\ngeo\r\n$9\r\n13.361389\r\n$9\r\n38.115556\r\n$7\r\nPalermo\r\n$9\r\n15.087269\r\n$9\r\n37.502669\r\n$7\r\nCatania\r\n"[0: 111], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: geoadd_result.response_len], &":2\r\n"[0: 4]));

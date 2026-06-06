@@ -711,6 +711,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"zunionstore"[0: 11], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"zrandmember"[0: 11], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"zrangestore"[0: 11], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"pfselftest"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xack"[0: 4], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xclaim"[0: 6], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xgroup"[0: 6], CommandCatalogStatus.status_partial);
@@ -2682,6 +2683,13 @@ export fn test_command_set_get_del_exists() !void {
     try assert_eq_i32(pfcount_dst2_reply.typ as i32, CommandReplyType.reply_integer as i32);
     try assert_eq_i32(pfcount_dst2_reply.integer as i32, 0);
     resp_value_free(&pfcount_dst2_parsed.value);
+
+    var pfselftest_parsed: RespParseResult = try parse_resp2(&"*1\r\n$10\r\nPFSELFTEST\r\n"[0: 21]);
+    const pfselftest_command: Command = try command_executor_test_command(&router, &pfselftest_parsed);
+    const pfselftest_reply: CommandReply = command_execute_at(&engine, &pfselftest_command, 1000u64);
+    try assert_eq_i32(pfselftest_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(pfselftest_reply.data, &"OK"[0: 2]));
+    resp_value_free(&pfselftest_parsed.value);
 
     var del_hll_parsed: RespParseResult = try parse_resp2(&"*5\r\n$3\r\nDEL\r\n$3\r\nhll\r\n$3\r\ndst\r\n$5\r\nempty\r\n$4\r\ndst2\r\n"[0: 52]);
     const del_hll_command: Command = try command_executor_test_command(&router, &del_hll_parsed);

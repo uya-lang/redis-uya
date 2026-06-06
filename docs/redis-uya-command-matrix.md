@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 171 | 2 | 3 | 43 |
+| Tier A: standalone core | 365 | 259 | 146 | 172 | 2 | 3 | 42 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `178` |
+| `partial` | `179` |
 | `standalone-error` | `28` |
 | `alias` | `3` |
-| `deferred` | `196` |
+| `deferred` | `195` |
 
 ## Group counts
 
@@ -415,7 +415,7 @@
 | `pfcount` | `hyperloglog` | `partial` | `-` | `-2` | `-` | `no` | `@read, @hyperloglog, @slow` |
 | `pfdebug` | `hyperloglog` | `deferred` | `v0.9.2` | `3` | `-` | `no` | `@write, @hyperloglog, @admin, @slow, @dangerous` |
 | `pfmerge` | `hyperloglog` | `partial` | `-` | `-2` | `-` | `no` | `@write, @hyperloglog, @slow` |
-| `pfselftest` | `hyperloglog` | `deferred` | `v0.9.2` | `1` | `-` | `no` | `@hyperloglog, @admin, @slow, @dangerous` |
+| `pfselftest` | `hyperloglog` | `partial` | `-` | `1` | `-` | `no` | `@hyperloglog, @admin, @slow, @dangerous` |
 | `ping` | `connection` | `full` | `-` | `-1` | `-` | `no` | `@fast, @connection` |
 | `psetex` | `string` | `full` | `-` | `4` | `-` | `no` | `@write, @string, @slow` |
 | `psubscribe` | `pubsub` | `full` | `-` | `-2` | `-` | `yes` | `@pubsub, @slow` |

@@ -457,6 +457,7 @@ PARTIAL_NAMES = {
     "pfadd",
     "pfcount",
     "pfmerge",
+    "pfselftest",
 }
 
 STANDALONE_ERROR_NAMES = {

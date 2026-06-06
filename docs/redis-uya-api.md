@@ -2048,6 +2048,24 @@ PFMERGE destkey [sourcekey ...]
 - `PFMERGE destkey` 无 source 时会把目标写成空的 partial-HLL
 - 目标 key 会被重写，因此原 TTL 会被清除
 
+### `PFSELFTEST`
+
+格式：
+
+```text
+PFSELFTEST
+```
+
+返回：
+
+- 成功：`+OK`
+
+说明：
+
+- 当前实现为 partial：在 redis-uya 的 exact set-backed HLL profile 下作为安全自检兼容面返回 `OK`
+- 不读取或修改 key，不执行 Redis 原生 dense/sparse HLL 编码压力测试
+- 不进入 AOF、复制 backlog 或脚本执行路径
+
 ### `EVAL`
 
 格式：

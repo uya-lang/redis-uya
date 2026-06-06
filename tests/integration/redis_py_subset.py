@@ -204,6 +204,9 @@ class RedisPySubsetClient:
     def pfmerge(self, dest: str, *sources: str) -> bool:
         return self._request(b"PFMERGE", dest.encode(), *(source.encode() for source in sources)) == "OK"
 
+    def pfselftest(self) -> bool:
+        return self._request(b"PFSELFTEST") == "OK"
+
     def geoadd(self, key: str, *parts: str) -> int:
         return int(self._request(b"GEOADD", key.encode(), *(part.encode() for part in parts)))
 
@@ -1247,6 +1250,7 @@ def run_smoke() -> None:
             assert client.pfcount("dsthll") == 3
             assert client.pfadd("emptyhll") == 1
             assert client.pfcount("emptyhll") == 0
+            assert client.pfselftest()
             assert client.geoadd("geo", "13.361389", "38.115556", "Palermo", "15.087269", "37.502669", "Catania") == 2
             assert client.geodist("geo", "Palermo", "Catania", "km") == b"166.2742"
             assert client.geopos("geo", "Palermo", "Missing", "Catania") == [[b"13.361389", b"38.115555"], None, [b"15.087268", b"37.502668"]]

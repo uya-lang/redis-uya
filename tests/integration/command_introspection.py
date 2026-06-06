@@ -294,10 +294,10 @@ def run_smoke() -> None:
             if not isinstance(info[11], list) or info[11][0] != b"failover":
                 raise AssertionError(f"COMMAND INFO FAILOVER returned wrong payload: {info!r}")
 
-            bitmap_info = send_command(sock, b"COMMAND", b"INFO", b"GETBIT", b"SETBIT", b"BITCOUNT", b"BITPOS", b"BITOP", b"BITFIELD", b"BITFIELD_RO", b"PFADD", b"PFCOUNT", b"PFMERGE", b"GEOADD", b"GEODIST", b"GEOHASH", b"GEOPOS", b"GEORADIUS", b"GEORADIUS_RO", b"GEORADIUSBYMEMBER", b"GEORADIUSBYMEMBER_RO", b"GEOSEARCH", b"GEOSEARCHSTORE")
+            bitmap_info = send_command(sock, b"COMMAND", b"INFO", b"GETBIT", b"SETBIT", b"BITCOUNT", b"BITPOS", b"BITOP", b"BITFIELD", b"BITFIELD_RO", b"PFADD", b"PFCOUNT", b"PFMERGE", b"PFSELFTEST", b"GEOADD", b"GEODIST", b"GEOHASH", b"GEOPOS", b"GEORADIUS", b"GEORADIUS_RO", b"GEORADIUSBYMEMBER", b"GEORADIUSBYMEMBER_RO", b"GEOSEARCH", b"GEOSEARCHSTORE")
             if (
                 not isinstance(bitmap_info, list)
-                or len(bitmap_info) != 20
+                or len(bitmap_info) != 21
                 or not isinstance(bitmap_info[0], list)
                 or bitmap_info[0][0] != b"getbit"
                 or not isinstance(bitmap_info[1], list)
@@ -319,25 +319,27 @@ def run_smoke() -> None:
                 or not isinstance(bitmap_info[9], list)
                 or bitmap_info[9][0] != b"pfmerge"
                 or not isinstance(bitmap_info[10], list)
-                or bitmap_info[10][0] != b"geoadd"
+                or bitmap_info[10][0] != b"pfselftest"
                 or not isinstance(bitmap_info[11], list)
-                or bitmap_info[11][0] != b"geodist"
+                or bitmap_info[11][0] != b"geoadd"
                 or not isinstance(bitmap_info[12], list)
-                or bitmap_info[12][0] != b"geohash"
+                or bitmap_info[12][0] != b"geodist"
                 or not isinstance(bitmap_info[13], list)
-                or bitmap_info[13][0] != b"geopos"
+                or bitmap_info[13][0] != b"geohash"
                 or not isinstance(bitmap_info[14], list)
-                or bitmap_info[14][0] != b"georadius"
+                or bitmap_info[14][0] != b"geopos"
                 or not isinstance(bitmap_info[15], list)
-                or bitmap_info[15][0] != b"georadius_ro"
+                or bitmap_info[15][0] != b"georadius"
                 or not isinstance(bitmap_info[16], list)
-                or bitmap_info[16][0] != b"georadiusbymember"
+                or bitmap_info[16][0] != b"georadius_ro"
                 or not isinstance(bitmap_info[17], list)
-                or bitmap_info[17][0] != b"georadiusbymember_ro"
+                or bitmap_info[17][0] != b"georadiusbymember"
                 or not isinstance(bitmap_info[18], list)
-                or bitmap_info[18][0] != b"geosearch"
+                or bitmap_info[18][0] != b"georadiusbymember_ro"
                 or not isinstance(bitmap_info[19], list)
-                or bitmap_info[19][0] != b"geosearchstore"
+                or bitmap_info[19][0] != b"geosearch"
+                or not isinstance(bitmap_info[20], list)
+                or bitmap_info[20][0] != b"geosearchstore"
             ):
                 raise AssertionError(f"bitmap commands missing from COMMAND INFO: {bitmap_info!r}")
 
@@ -699,6 +701,7 @@ def run_smoke() -> None:
                 or b"replconf" not in docs_all_resp2
                 or b"debug" not in docs_all_resp2
                 or b"failover" not in docs_all_resp2
+                or b"pfselftest" not in docs_all_resp2
                 or b"blmove" not in docs_all_resp2
                 or b"blmpop" not in docs_all_resp2
                 or b"zmpop" not in docs_all_resp2
@@ -791,6 +794,7 @@ def run_smoke() -> None:
                 or b"pfadd" not in listed_pf
                 or b"pfcount" not in listed_pf
                 or b"pfmerge" not in listed_pf
+                or b"pfselftest" not in listed_pf
                 or b"pfdebug" in listed_pf
             ):
                 raise AssertionError(f"unexpected COMMAND LIST pf* result: {listed_pf!r}")
@@ -1068,6 +1072,7 @@ def run_smoke() -> None:
                 or not isinstance(docs_all.get(b"replconf"), dict)
                 or not isinstance(docs_all.get(b"debug"), dict)
                 or not isinstance(docs_all.get(b"failover"), dict)
+                or not isinstance(docs_all.get(b"pfselftest"), dict)
                 or not isinstance(docs_all.get(b"blmove"), dict)
                 or not isinstance(docs_all.get(b"blmpop"), dict)
                 or not isinstance(docs_all.get(b"zmpop"), dict)

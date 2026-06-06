@@ -447,6 +447,12 @@ if [[ "$PFCOUNT_EMPTY_RESULT" != "0" ]]; then
     exit 1
 fi
 
+PFSELFTEST_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" pfselftest)"
+if [[ "$PFSELFTEST_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected PFSELFTEST OK, got '$PFSELFTEST_RESULT'" >&2
+    exit 1
+fi
+
 GEOADD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" geoadd geo 13.361389 38.115556 Palermo 15.087269 37.502669 Catania)"
 if [[ "$GEOADD_RESULT" != "2" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected GEOADD 2, got '$GEOADD_RESULT'" >&2

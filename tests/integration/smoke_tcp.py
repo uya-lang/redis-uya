@@ -226,6 +226,10 @@ def run_smoke() -> None:
             debug_reply = recv_line(sock)
             if debug_reply != b"-ERR DEBUG command not allowed by redis-uya standalone profile\r\n":
                 raise AssertionError(f"unexpected DEBUG reply: {debug_reply!r}")
+            sock.sendall(b"*1\r\n$8\r\nFAILOVER\r\n")
+            failover_reply = recv_line(sock)
+            if failover_reply != b"-ERR FAILOVER requires connected replicas.\r\n":
+                raise AssertionError(f"unexpected FAILOVER reply: {failover_reply!r}")
             roundtrip(sock, b"*3\r\n$4\r\nWAIT\r\n$1\r\n0\r\n$1\r\n0\r\n", b":0\r\n")
             roundtrip(sock, b"*3\r\n$4\r\nWAIT\r\n$1\r\n1\r\n$2\r\n10\r\n", b":0\r\n")
             sock.sendall(b"*3\r\n$4\r\nWAIT\r\n$1\r\n1\r\n$2\r\n-1\r\n")

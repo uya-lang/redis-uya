@@ -3344,6 +3344,24 @@ REPLCONF [option [value ...]]
 - 用作复制握手兼容面；当前不记录 replica 端口、能力、ACK offset，也不触发 `GETACK` 推送
 - 不进入 AOF 或 replication backlog
 
+### `FAILOVER`
+
+格式：
+
+```text
+FAILOVER [TO host port [FORCE]] [ABORT] [TIMEOUT milliseconds]
+```
+
+返回：
+
+- 当前统一返回：`-ERR FAILOVER requires connected replicas.`
+
+说明：
+
+- 当前实现为 `standalone-error`：命令已进入运行时路由、命令矩阵和 `COMMAND*` 可见面，但 redis-uya 尚未实现 Redis 自动 failover / controlled failover 状态机
+- 当前不会提升 replica、切换复制角色、等待同步 offset、关闭 master 客户端或修改复制配置
+- 不进入 AOF 或 replication backlog
+
 ### `PSYNC`
 
 格式：

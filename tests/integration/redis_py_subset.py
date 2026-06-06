@@ -571,6 +571,9 @@ class RedisPySubsetClient:
     def debug(self, *args: bytes):
         return self._request(b"DEBUG", *args)
 
+    def failover(self, *args: bytes):
+        return self._request(b"FAILOVER", *args)
+
     def wait(self, replicas: int, timeout_ms: int) -> int:
         return int(self._request(b"WAIT", str(replicas).encode(), str(timeout_ms).encode()))
 
@@ -1564,6 +1567,12 @@ def run_smoke() -> None:
             except RespError as exc:
                 if str(exc) != "ERR DEBUG command not allowed by redis-uya standalone profile":
                     raise AssertionError(f"unexpected DEBUG error: {exc}") from exc
+            try:
+                client.failover()
+                raise AssertionError("expected FAILOVER without replicas to fail")
+            except RespError as exc:
+                if str(exc) != "ERR FAILOVER requires connected replicas.":
+                    raise AssertionError(f"unexpected FAILOVER error: {exc}") from exc
             if client.wait(0, 0) != 0:
                 raise AssertionError("expected WAIT 0 0 to return 0")
             if client.wait(1, 10) != 0:

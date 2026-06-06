@@ -461,6 +461,7 @@ PARTIAL_NAMES = {
 
 STANDALONE_ERROR_NAMES = {
     "debug",
+    "failover",
 }
 
 ALIAS_NAMES = {

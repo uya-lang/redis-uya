@@ -2175,6 +2175,12 @@ if [[ "$DEBUG_RESULT" != "ERR DEBUG command not allowed by redis-uya standalone 
     exit 1
 fi
 
+FAILOVER_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" failover 2>&1 || true)"
+if [[ "$FAILOVER_RESULT" != "ERR FAILOVER requires connected replicas." ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected FAILOVER no replicas error, got '$FAILOVER_RESULT'" >&2
+    exit 1
+fi
+
 WAIT_ZERO_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" wait 0 0)"
 if [[ "$WAIT_ZERO_RESULT" != "0" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected WAIT 0 0 to return 0, got '$WAIT_ZERO_RESULT'" >&2

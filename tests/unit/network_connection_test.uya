@@ -487,6 +487,10 @@ export fn test_connection_process_ping_set_get_quit() !void {
     try assert_true(network_connection_contains(out[0: debug_result.response_len], &"DEBUG command not allowed"[0: 25]));
     try assert_eq_i32(debug_result.request_bgsave as i32, 0);
 
+    const failover_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*1\r\n$8\r\nFAILOVER\r\n"[0: 18], &out[0], 512, 1000u64);
+    try assert_true(network_connection_contains(out[0: failover_result.response_len], &"FAILOVER requires connected replicas"[0: 36]));
+    try assert_eq_i32(failover_result.request_replicaof as i32, 0);
+
     const wait_zero_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$4\r\nWAIT\r\n$1\r\n0\r\n$1\r\n0\r\n"[0: 31], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: wait_zero_result.response_len], &":0\r\n"[0: 4]));
 

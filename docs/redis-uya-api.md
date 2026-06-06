@@ -2066,6 +2066,23 @@ PFSELFTEST
 - 不读取或修改 key，不执行 Redis 原生 dense/sparse HLL 编码压力测试
 - 不进入 AOF、复制 backlog 或脚本执行路径
 
+### `PFDEBUG`
+
+格式：
+
+```text
+PFDEBUG subcommand key
+```
+
+返回：
+
+- 当前统一返回：`-ERR PFDEBUG command not allowed by redis-uya standalone profile`
+
+说明：
+
+- 当前实现为 `standalone-error`：命令进入路由、运行时执行链和 `COMMAND*` 可见面，但不开放 Redis 内部 HyperLogLog 调试/破坏性子命令
+- 不读取或修改 key，不进入 AOF、复制 backlog 或脚本执行路径
+
 ### `EVAL`
 
 格式：

@@ -231,6 +231,7 @@ def run_smoke() -> None:
             if failover_reply != b"-ERR FAILOVER requires connected replicas.\r\n":
                 raise AssertionError(f"unexpected FAILOVER reply: {failover_reply!r}")
             roundtrip(sock, b"*1\r\n$10\r\nPFSELFTEST\r\n", b"+OK\r\n")
+            roundtrip(sock, b"*3\r\n$7\r\nPFDEBUG\r\n$6\r\nGETREG\r\n$3\r\nhll\r\n", b"-ERR PFDEBUG command not allowed by redis-uya standalone profile\r\n")
             roundtrip(sock, b"*3\r\n$4\r\nWAIT\r\n$1\r\n0\r\n$1\r\n0\r\n", b":0\r\n")
             roundtrip(sock, b"*3\r\n$4\r\nWAIT\r\n$1\r\n1\r\n$2\r\n10\r\n", b":0\r\n")
             sock.sendall(b"*3\r\n$4\r\nWAIT\r\n$1\r\n1\r\n$2\r\n-1\r\n")

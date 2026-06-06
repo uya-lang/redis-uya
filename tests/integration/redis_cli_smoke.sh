@@ -453,6 +453,12 @@ if [[ "$PFSELFTEST_RESULT" != "OK" ]]; then
     exit 1
 fi
 
+PFDEBUG_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" pfdebug getreg hll 2>&1 || true)"
+if [[ "$PFDEBUG_RESULT" != "ERR PFDEBUG command not allowed by redis-uya standalone profile" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected PFDEBUG standalone error, got '$PFDEBUG_RESULT'" >&2
+    exit 1
+fi
+
 GEOADD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" geoadd geo 13.361389 38.115556 Palermo 15.087269 37.502669 Catania)"
 if [[ "$GEOADD_RESULT" != "2" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected GEOADD 2, got '$GEOADD_RESULT'" >&2

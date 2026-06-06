@@ -207,6 +207,9 @@ class RedisPySubsetClient:
     def pfselftest(self) -> bool:
         return self._request(b"PFSELFTEST") == "OK"
 
+    def pfdebug(self, subcommand: bytes, key: str):
+        return self._request(b"PFDEBUG", subcommand, key.encode())
+
     def geoadd(self, key: str, *parts: str) -> int:
         return int(self._request(b"GEOADD", key.encode(), *(part.encode() for part in parts)))
 
@@ -1251,6 +1254,12 @@ def run_smoke() -> None:
             assert client.pfadd("emptyhll") == 1
             assert client.pfcount("emptyhll") == 0
             assert client.pfselftest()
+            try:
+                client.pfdebug(b"GETREG", "hll")
+                raise AssertionError("expected PFDEBUG to fail")
+            except RespError as exc:
+                if str(exc) != "ERR PFDEBUG command not allowed by redis-uya standalone profile":
+                    raise AssertionError(f"unexpected PFDEBUG error: {exc}") from exc
             assert client.geoadd("geo", "13.361389", "38.115556", "Palermo", "15.087269", "37.502669", "Catania") == 2
             assert client.geodist("geo", "Palermo", "Catania", "km") == b"166.2742"
             assert client.geopos("geo", "Palermo", "Missing", "Catania") == [[b"13.361389", b"38.115555"], None, [b"15.087268", b"37.502668"]]

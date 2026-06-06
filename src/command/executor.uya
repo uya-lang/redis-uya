@@ -3611,6 +3611,13 @@ fn command_executor_pfselftest(command: &Command) CommandReply {
     return command_executor_simple(&"OK"[0: 2]);
 }
 
+fn command_executor_pfdebug(command: &Command) CommandReply {
+    if command.argc != 3 {
+        return command_executor_wrong_arity();
+    }
+    return command_executor_error(&"ERR PFDEBUG command not allowed by redis-uya standalone profile"[0: 63]);
+}
+
 fn command_executor_incrbyfloat(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
     if command.argc != 3 {
         return command_executor_wrong_arity();
@@ -16888,6 +16895,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_pfselftest {
         return command_executor_pfselftest(command);
+    }
+    if command.info.cmd_type == CommandType.command_pfdebug {
+        return command_executor_pfdebug(command);
     }
     if command.info.cmd_type == CommandType.command_geoadd {
         return command_executor_geoadd(engine, command, now_ms);

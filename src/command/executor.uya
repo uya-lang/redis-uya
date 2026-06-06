@@ -11369,9 +11369,43 @@ fn command_executor_zmpop(engine: &Engine, command: &Command, now_ms: u64) Comma
     return command_executor_reply(CommandReplyType.reply_null_array, command_executor_empty_slice(), 0);
 }
 
+fn command_executor_zset_members_with_scores_reply(obj: &RedisObject, members: &RedisObject, count: usize) CommandReply {
+    const scored: &RedisObject = create_list_object() catch {
+        object_free(members);
+        return command_executor_oom();
+    };
+    var current: &ListNode = members.list_head;
+    var emitted: usize = 0;
+    while current != null && emitted < count {
+        const member: &[byte] = current.value.value.buf[0: current.value.value.len];
+        const score: i64 = zset_object_get_score(obj, member) catch {
+            object_free(members);
+            object_free(scored);
+            return command_executor_wrongtype();
+        };
+        _ = list_object_push_tail(scored, member) catch {
+            object_free(members);
+            object_free(scored);
+            return command_executor_oom();
+        };
+        _ = command_executor_list_push_i64(scored, score) catch {
+            object_free(members);
+            object_free(scored);
+            return command_executor_oom();
+        };
+        current = current.next;
+        emitted = emitted + 1;
+    }
+    object_free(members);
+    return command_executor_owned_array(scored);
+}
+
 fn command_executor_zrangebyscore(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
-    if command.argc != 4 {
+    if command.argc < 4 {
         return command_executor_wrong_arity();
+    }
+    if command.argc > 5 {
+        return command_executor_syntax_error();
     }
     const key: &[byte] = command_executor_arg(command, 1) catch {
         return command_executor_wrong_arity();
@@ -11388,6 +11422,16 @@ fn command_executor_zrangebyscore(engine: &Engine, command: &Command, now_ms: u6
     const max_score: i64 = command_executor_parse_i64(max_data) catch {
         return command_executor_invalid_integer();
     };
+    var with_scores: bool = false;
+    if command.argc == 5 {
+        const option: &[byte] = command_executor_arg(command, 4) catch {
+            return command_executor_wrong_arity();
+        };
+        if !command_executor_keyword_eq(option, &"WITHSCORES"[0: 10]) {
+            return command_executor_syntax_error();
+        }
+        with_scores = true;
+    }
     if min_score > max_score {
         return command_executor_array_bulk(null as &ListNode, 0);
     }
@@ -11407,6 +11451,9 @@ fn command_executor_zrangebyscore(engine: &Engine, command: &Command, now_ms: u6
         object_free(ranged);
         return command_executor_wrongtype();
     };
+    if with_scores {
+        return command_executor_zset_members_with_scores_reply(obj, ranged, count);
+    }
     var reply: CommandReply = command_executor_array_bulk(ranged.list_head, count);
     reply.owned_object = ranged;
     return reply;
@@ -11532,8 +11579,11 @@ fn command_executor_zremrangebyscore(engine: &Engine, command: &Command, now_ms:
 }
 
 fn command_executor_zrevrangebyscore(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
-    if command.argc != 4 {
+    if command.argc < 4 {
         return command_executor_wrong_arity();
+    }
+    if command.argc > 5 {
+        return command_executor_syntax_error();
     }
     const key: &[byte] = command_executor_arg(command, 1) catch {
         return command_executor_wrong_arity();
@@ -11550,6 +11600,16 @@ fn command_executor_zrevrangebyscore(engine: &Engine, command: &Command, now_ms:
     const min_score: i64 = command_executor_parse_i64(min_data) catch {
         return command_executor_invalid_integer();
     };
+    var with_scores: bool = false;
+    if command.argc == 5 {
+        const option: &[byte] = command_executor_arg(command, 4) catch {
+            return command_executor_wrong_arity();
+        };
+        if !command_executor_keyword_eq(option, &"WITHSCORES"[0: 10]) {
+            return command_executor_syntax_error();
+        }
+        with_scores = true;
+    }
     if min_score > max_score {
         return command_executor_array_bulk(null as &ListNode, 0);
     }
@@ -11569,6 +11629,9 @@ fn command_executor_zrevrangebyscore(engine: &Engine, command: &Command, now_ms:
         object_free(ranged);
         return command_executor_wrongtype();
     };
+    if with_scores {
+        return command_executor_zset_members_with_scores_reply(obj, ranged, count);
+    }
     var reply: CommandReply = command_executor_array_bulk(ranged.list_head, count);
     reply.owned_object = ranged;
     return reply;

@@ -1061,13 +1061,19 @@ class RedisPySubsetClient:
             parts.extend([b"AGGREGATE", aggregate.encode()])
         return int(self._request(*parts))
 
-    def zrangebyscore(self, key: str, minimum: int, maximum: int) -> list[bytes]:
-        result = self._request(b"ZRANGEBYSCORE", key.encode(), str(minimum).encode(), str(maximum).encode())
+    def zrangebyscore(self, key: str, minimum: int, maximum: int, withscores: bool = False) -> list[bytes]:
+        parts: list[bytes] = [b"ZRANGEBYSCORE", key.encode(), str(minimum).encode(), str(maximum).encode()]
+        if withscores:
+            parts.append(b"WITHSCORES")
+        result = self._request(*parts)
         assert isinstance(result, list)
         return result
 
-    def zrevrangebyscore(self, key: str, maximum: int, minimum: int) -> list[bytes]:
-        result = self._request(b"ZREVRANGEBYSCORE", key.encode(), str(maximum).encode(), str(minimum).encode())
+    def zrevrangebyscore(self, key: str, maximum: int, minimum: int, withscores: bool = False) -> list[bytes]:
+        parts: list[bytes] = [b"ZREVRANGEBYSCORE", key.encode(), str(maximum).encode(), str(minimum).encode()]
+        if withscores:
+            parts.append(b"WITHSCORES")
+        result = self._request(*parts)
         assert isinstance(result, list)
         return result
 
@@ -1896,7 +1902,9 @@ def run_smoke() -> None:
             assert client.zrevrange("zset", 0, -1) == [b"a", b"b"]
             assert client.zrevrange("zset", 0, 1, withscores=True) == [b"a", b"4", b"b", b"2"]
             assert client.zrangebyscore("zset", 2, 4) == [b"b", b"a"]
+            assert client.zrangebyscore("zset", 2, 4, withscores=True) == [b"b", b"2", b"a", b"4"]
             assert client.zrevrangebyscore("zset", 4, 2) == [b"a", b"b"]
+            assert client.zrevrangebyscore("zset", 4, 2, withscores=True) == [b"a", b"4", b"b", b"2"]
             assert client.zrem("zset", "a") == 1
             assert client.zadd("zmset", {"b": 2, "a": 1, "c": 3}) == 3
             assert client.zmpop("MIN", "missing", "zmset", count=2) == [b"zmset", [[b"a", b"1"], [b"b", b"2"]]]

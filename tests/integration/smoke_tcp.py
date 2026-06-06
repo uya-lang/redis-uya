@@ -559,6 +559,8 @@ def run_smoke() -> None:
             roundtrip(sock, b"*4\r\n$6\r\nZRANGE\r\n$4\r\nzset\r\n$1\r\n0\r\n$2\r\n-1\r\n", b"*2\r\n$1\r\nb\r\n$1\r\na\r\n")
             roundtrip(sock, b"*4\r\n$9\r\nZREVRANGE\r\n$4\r\nzset\r\n$1\r\n0\r\n$2\r\n-1\r\n", b"*2\r\n$1\r\na\r\n$1\r\nb\r\n")
             roundtrip(sock, b"*5\r\n$9\r\nZREVRANGE\r\n$4\r\nzset\r\n$1\r\n0\r\n$1\r\n1\r\n$10\r\nWITHSCORES\r\n", b"*4\r\n$1\r\na\r\n$1\r\n4\r\n$1\r\nb\r\n$1\r\n2\r\n")
+            roundtrip(sock, b"*5\r\n$13\r\nZRANGEBYSCORE\r\n$4\r\nzset\r\n$1\r\n2\r\n$1\r\n4\r\n$10\r\nWITHSCORES\r\n", b"*4\r\n$1\r\nb\r\n$1\r\n2\r\n$1\r\na\r\n$1\r\n4\r\n")
+            roundtrip(sock, b"*5\r\n$16\r\nZREVRANGEBYSCORE\r\n$4\r\nzset\r\n$1\r\n4\r\n$1\r\n2\r\n$10\r\nWITHSCORES\r\n", b"*4\r\n$1\r\na\r\n$1\r\n4\r\n$1\r\nb\r\n$1\r\n2\r\n")
             roundtrip(sock, b"*3\r\n$4\r\nZREM\r\n$4\r\nzset\r\n$1\r\na\r\n", b":1\r\n")
             roundtrip(sock, b"*4\r\n$6\r\nZRANGE\r\n$4\r\nzset\r\n$1\r\n0\r\n$2\r\n-1\r\n", b"*1\r\n$1\r\nb\r\n")
             roundtrip(sock, b"*8\r\n$4\r\nZADD\r\n$5\r\nzmset\r\n$1\r\n2\r\n$1\r\nb\r\n$1\r\n1\r\n$1\r\na\r\n$1\r\n3\r\n$1\r\nc\r\n", b":3\r\n")

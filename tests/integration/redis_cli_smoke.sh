@@ -1665,6 +1665,18 @@ if [[ "$ZREVRANGE_WITHSCORES_RESULT" != $'a\n4\nb\n2' ]]; then
     exit 1
 fi
 
+ZRANGEBYSCORE_WITHSCORES_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrangebyscore zset 2 4 withscores)"
+if [[ "$ZRANGEBYSCORE_WITHSCORES_RESULT" != $'b\n2\na\n4' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZRANGEBYSCORE WITHSCORES b/2/a/4, got '$ZRANGEBYSCORE_WITHSCORES_RESULT'" >&2
+    exit 1
+fi
+
+ZREVRANGEBYSCORE_WITHSCORES_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrevrangebyscore zset 4 2 withscores)"
+if [[ "$ZREVRANGEBYSCORE_WITHSCORES_RESULT" != $'a\n4\nb\n2' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZREVRANGEBYSCORE WITHSCORES a/4/b/2, got '$ZREVRANGEBYSCORE_WITHSCORES_RESULT'" >&2
+    exit 1
+fi
+
 ZMSET_ZADD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zadd zmset 2 b 1 a 3 c)"
 if [[ "$ZMSET_ZADD_RESULT" != "3" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected zmset ZADD 3, got '$ZMSET_ZADD_RESULT'" >&2

@@ -597,7 +597,7 @@ export fn test_command_router_lookup_and_case() !void {
 
     const zrangebyscore: CommandInfo = try command_router_lookup(&router, &"ZRANGEBYSCORE"[0: 13]);
     try assert_eq_i32(zrangebyscore.cmd_type as i32, CommandType.command_zrangebyscore as i32);
-    try assert_eq_i32(zrangebyscore.arity, 4);
+    try assert_eq_i32(zrangebyscore.arity, -4);
 
     const zrevrange: CommandInfo = try command_router_lookup(&router, &"ZREVRANGE"[0: 9]);
     try assert_eq_i32(zrevrange.cmd_type as i32, CommandType.command_zrevrange as i32);
@@ -605,7 +605,7 @@ export fn test_command_router_lookup_and_case() !void {
 
     const zrevrangebyscore: CommandInfo = try command_router_lookup(&router, &"zrevrangebyscore"[0: 16]);
     try assert_eq_i32(zrevrangebyscore.cmd_type as i32, CommandType.command_zrevrangebyscore as i32);
-    try assert_eq_i32(zrevrangebyscore.arity, 4);
+    try assert_eq_i32(zrevrangebyscore.arity, -4);
 
     const zremrangebyrank: CommandInfo = try command_router_lookup(&router, &"ZREMRANGEBYRANK"[0: 15]);
     try assert_eq_i32(zremrangebyrank.cmd_type as i32, CommandType.command_zremrangebyrank as i32);
@@ -1019,6 +1019,8 @@ export fn test_command_router_arity_validation() !void {
     const zlexcount: CommandInfo = try command_router_lookup(&router, &"ZLEXCOUNT"[0: 9]);
     const zrangebylex: CommandInfo = try command_router_lookup(&router, &"ZRANGEBYLEX"[0: 11]);
     const zrangestore: CommandInfo = try command_router_lookup(&router, &"ZRANGESTORE"[0: 11]);
+    const zrangebyscore: CommandInfo = try command_router_lookup(&router, &"ZRANGEBYSCORE"[0: 13]);
+    const zrevrangebyscore: CommandInfo = try command_router_lookup(&router, &"ZREVRANGEBYSCORE"[0: 16]);
     const zrevrangebylex: CommandInfo = try command_router_lookup(&router, &"ZREVRANGEBYLEX"[0: 14]);
     const zremrangebylex: CommandInfo = try command_router_lookup(&router, &"ZREMRANGEBYLEX"[0: 14]);
     const lmove: CommandInfo = try command_router_lookup(&router, &"LMOVE"[0: 5]);
@@ -1243,6 +1245,10 @@ export fn test_command_router_arity_validation() !void {
     try command_validate_arity(&zrangestore, 5);
     try command_validate_arity(&zrangestore, 6);
     try command_validate_arity(&zrangestore, 9);
+    try command_validate_arity(&zrangebyscore, 4);
+    try command_validate_arity(&zrangebyscore, 5);
+    try command_validate_arity(&zrevrangebyscore, 4);
+    try command_validate_arity(&zrevrangebyscore, 5);
     try command_validate_arity(&zrevrangebylex, 4);
     try command_validate_arity(&zrevrangebylex, 7);
     try command_validate_arity(&zremrangebylex, 4);

@@ -585,10 +585,10 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
         return command_router_info(CommandType.command_zcount, &"ZCOUNT"[0: 6], 4, COMMAND_FLAG_READONLY, 1, 1, 1);
     }
     if index == 94 {
-        return command_router_info(CommandType.command_zrangebyscore, &"ZRANGEBYSCORE"[0: 13], 4, COMMAND_FLAG_READONLY, 1, 1, 1);
+        return command_router_info(CommandType.command_zrangebyscore, &"ZRANGEBYSCORE"[0: 13], -4, COMMAND_FLAG_READONLY, 1, 1, 1);
     }
     if index == 95 {
-        return command_router_info(CommandType.command_zrevrangebyscore, &"ZREVRANGEBYSCORE"[0: 16], 4, COMMAND_FLAG_READONLY, 1, 1, 1);
+        return command_router_info(CommandType.command_zrevrangebyscore, &"ZREVRANGEBYSCORE"[0: 16], -4, COMMAND_FLAG_READONLY, 1, 1, 1);
     }
     if index == 96 {
         return command_router_info(CommandType.command_zremrangebyrank, &"ZREMRANGEBYRANK"[0: 15], 4, COMMAND_FLAG_WRITE, 1, 1, 1);

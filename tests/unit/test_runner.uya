@@ -99,6 +99,7 @@ use tests.unit.command_executor_test.test_command_cluster;
 use tests.unit.command_executor_test.test_command_cluster_redirects;
 use tests.unit.command_executor_test.test_command_replicaof;
 use tests.unit.command_executor_test.test_command_psync;
+use tests.unit.command_executor_test.test_command_replconf;
 use tests.unit.command_executor_test.test_command_bgsave;
 use tests.unit.command_executor_test.test_command_bgrewriteaof;
 use tests.unit.command_executor_test.test_command_save_rdb;
@@ -613,6 +614,10 @@ export fn main() i32 {
     const before_exec_psync: i32 = failed;
     _ = test_command_psync() catch { printf("[FAIL] command_executor/psync\n" as *byte); failed = failed + 1; };
     if failed == before_exec_psync { printf("[PASS] command_executor/psync\n" as *byte); }
+
+    const before_exec_replconf: i32 = failed;
+    _ = test_command_replconf() catch { printf("[FAIL] command_executor/replconf\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_replconf { printf("[PASS] command_executor/replconf\n" as *byte); }
 
     const before_exec_bgsave: i32 = failed;
     _ = test_command_bgsave() catch { printf("[FAIL] command_executor/bgsave\n" as *byte); failed = failed + 1; };

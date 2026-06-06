@@ -699,6 +699,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"waitaof"[0: 7], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"swapdb"[0: 6], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"lolwut"[0: 6], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"replconf"[0: 8], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"zdiff"[0: 5], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"zdiffstore"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"zinter"[0: 6], CommandCatalogStatus.status_partial);
@@ -1957,6 +1958,40 @@ export fn test_command_psync() !void {
     const bad_role_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &bad_role_command, 1000u64);
     try assert_eq_i32(bad_role_reply.typ as i32, CommandReplyType.reply_error as i32);
     resp_value_free(&bad_role_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_command_replconf() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var runtime: CommandRuntimeInfo = command_runtime_default();
+
+    var noargs_parsed: RespParseResult = try parse_resp2(&"*1\r\n$8\r\nREPLCONF\r\n"[0: 18]);
+    const noargs_command: Command = try command_executor_test_command(&router, &noargs_parsed);
+    const noargs_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &noargs_command, 1000u64);
+    try assert_eq_i32(noargs_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(noargs_reply.data, &"OK"[0: 2]));
+    try assert_eq_i32(noargs_reply.request_replicaof as i32, 0);
+    resp_value_free(&noargs_parsed.value);
+
+    var port_parsed: RespParseResult = try parse_resp2(&"*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n6380\r\n"[0: 49]);
+    const port_command: Command = try command_executor_test_command(&router, &port_parsed);
+    const port_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &port_command, 1000u64);
+    try assert_eq_i32(port_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(port_reply.data, &"OK"[0: 2]));
+    try assert_eq_i32(port_reply.request_replicaof as i32, 0);
+    resp_value_free(&port_parsed.value);
+
+    var ack_parsed: RespParseResult = try parse_resp2(&"*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n"[0: 34]);
+    const ack_command: Command = try command_executor_test_command(&router, &ack_parsed);
+    const ack_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &ack_command, 1000u64);
+    try assert_eq_i32(ack_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(ack_reply.data, &"OK"[0: 2]));
+    try assert_eq_i32(ack_reply.request_replicaof as i32, 0);
+    resp_value_free(&ack_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

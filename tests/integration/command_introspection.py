@@ -266,8 +266,8 @@ def run_smoke() -> None:
             if acl_list != [b"user default on nopass ~* &* +@all"]:
                 raise AssertionError(f"unexpected ACL LIST: {acl_list!r}")
 
-            info = send_command(sock, b"COMMAND", b"INFO", b"GET", b"FOO", b"CLIENT|ID", b"COPY", b"RESTORE-ASKING", b"HRANDFIELD", b"WAITAOF", b"SWAPDB", b"LOLWUT")
-            if not isinstance(info, list) or len(info) != 9:
+            info = send_command(sock, b"COMMAND", b"INFO", b"GET", b"FOO", b"CLIENT|ID", b"COPY", b"RESTORE-ASKING", b"HRANDFIELD", b"WAITAOF", b"SWAPDB", b"LOLWUT", b"REPLCONF")
+            if not isinstance(info, list) or len(info) != 10:
                 raise AssertionError(f"unexpected COMMAND INFO shape: {info!r}")
             if info[1] is not None:
                 raise AssertionError(f"COMMAND INFO should return null for unknown command: {info!r}")
@@ -287,6 +287,8 @@ def run_smoke() -> None:
                 raise AssertionError(f"COMMAND INFO SWAPDB returned wrong payload: {info!r}")
             if not isinstance(info[8], list) or info[8][0] != b"lolwut":
                 raise AssertionError(f"COMMAND INFO LOLWUT returned wrong payload: {info!r}")
+            if not isinstance(info[9], list) or info[9][0] != b"replconf":
+                raise AssertionError(f"COMMAND INFO REPLCONF returned wrong payload: {info!r}")
 
             bitmap_info = send_command(sock, b"COMMAND", b"INFO", b"GETBIT", b"SETBIT", b"BITCOUNT", b"BITPOS", b"BITOP", b"BITFIELD", b"BITFIELD_RO", b"PFADD", b"PFCOUNT", b"PFMERGE", b"GEOADD", b"GEODIST", b"GEOHASH", b"GEOPOS", b"GEORADIUS", b"GEORADIUS_RO", b"GEORADIUSBYMEMBER", b"GEORADIUSBYMEMBER_RO", b"GEOSEARCH", b"GEOSEARCHSTORE")
             if (
@@ -690,6 +692,7 @@ def run_smoke() -> None:
                 or b"waitaof" not in docs_all_resp2
                 or b"swapdb" not in docs_all_resp2
                 or b"lolwut" not in docs_all_resp2
+                or b"replconf" not in docs_all_resp2
                 or b"blmove" not in docs_all_resp2
                 or b"blmpop" not in docs_all_resp2
                 or b"zmpop" not in docs_all_resp2
@@ -752,6 +755,10 @@ def run_smoke() -> None:
             listed_lolwut = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"LOL*")
             if not isinstance(listed_lolwut, list) or listed_lolwut != [b"lolwut"]:
                 raise AssertionError(f"unexpected COMMAND LIST lol* result: {listed_lolwut!r}")
+
+            listed_repl = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"REPL*")
+            if not isinstance(listed_repl, list) or b"replicaof" not in listed_repl or b"replconf" not in listed_repl:
+                raise AssertionError(f"unexpected COMMAND LIST repl* result: {listed_repl!r}")
 
             listed_bitmap = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"BIT*")
             if (
@@ -1044,6 +1051,7 @@ def run_smoke() -> None:
                 or not isinstance(docs_all.get(b"waitaof"), dict)
                 or not isinstance(docs_all.get(b"swapdb"), dict)
                 or not isinstance(docs_all.get(b"lolwut"), dict)
+                or not isinstance(docs_all.get(b"replconf"), dict)
                 or not isinstance(docs_all.get(b"blmove"), dict)
                 or not isinstance(docs_all.get(b"blmpop"), dict)
                 or not isinstance(docs_all.get(b"zmpop"), dict)

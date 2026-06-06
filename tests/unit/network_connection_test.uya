@@ -752,6 +752,10 @@ export fn test_connection_process_ping_set_get_quit() !void {
     try assert_eq_i32(replicaof_result.request_replicaof as i32, 1);
     try assert_eq_i32(replicaof_result.replicaof_promote as i32, 0);
 
+    const replconf_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$8\r\nREPLCONF\r\n$4\r\nCAPA\r\n$6\r\npsync2\r\n"[0: 40], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: replconf_result.response_len], &"+OK\r\n"[0: 5]));
+    try assert_eq_i32(replconf_result.request_replicaof as i32, 0);
+
     const config_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$6\r\nCONFIG\r\n$3\r\nGET\r\n$4\r\nport\r\n"[0: 35], &out[0], 256, 1000u64);
     try assert_eq_i32(config_result.response_len as i32, 24);
     try assert_true(network_connection_slice_eq(out[0: config_result.response_len], &"*2\r\n$4\r\nport\r\n$4\r\n6379\r\n"[0: 24]));

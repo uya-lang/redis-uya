@@ -3309,6 +3309,23 @@ REPLICAOF NO ONE
 - 成功：`+OK`
 - 当前仅完成复制角色与状态机切换，不包含 `PSYNC`、全量同步、增量同步和心跳
 
+### `REPLCONF`
+
+格式：
+
+```text
+REPLCONF [option [value ...]]
+```
+
+返回：
+
+- 当前 partial 对任意参数形态返回 `+OK`
+
+说明：
+
+- 用作复制握手兼容面；当前不记录 replica 端口、能力、ACK offset，也不触发 `GETACK` 推送
+- 不进入 AOF 或 replication backlog
+
 ### `PSYNC`
 
 格式：

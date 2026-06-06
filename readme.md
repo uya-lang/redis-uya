@@ -71,7 +71,7 @@
 - AOF TTL 语义：`EXPIRE`、`EXPIREAT`、`PEXPIRE`、`SETEX`、`PSETEX` 追加时会规范化为绝对 `PEXPIREAT`；`GETEX` 在带 TTL/PERSIST 选项时只落对应状态变更，回放保持绝对过期时间
 - `BGREWRITEAOF`：真实子进程后台 rewrite + 父进程增量缓冲合并，可把当前内存态规范化重写为可回放 AOF
 - 复制角色与状态机：支持 master/slave 角色切换、`REPLICAOF` 控制入口、`INFO replication` 与复制配置可观测
-- `PSYNC / backlog`：master 维护复制积压缓冲区，支持 `FULLRESYNC` / `CONTINUE` 最小握手判断
+- `PSYNC / backlog`：master 维护复制积压缓冲区，支持 `FULLRESYNC` / `CONTINUE` 最小握手判断；`REPLCONF` 当前作为 no-op 握手 partial 返回 `OK`
 - 全量同步：replica 可通过 `REPLICAOF -> PSYNC ? -1` 拉取 master 当前 RDB 快照并落库
 - 增量同步：replica 在 connected 状态下周期性 `PSYNC replid offset` 拉取 backlog delta 并回放
 - 复制心跳：replica 周期性 `PING` master，链路失败时回到 `configured` 并等待重同步
@@ -282,6 +282,7 @@ build/redis-uya 6380 1
 - Key 单库 DB 管理 partial：`SWAPDB 0 0` 当前作为 no-op 返回 `OK`；任一 DB 参数非 `0` 返回 `ERR DB index is out of range`，暂不支持真实多 DB 数据交换
 - Server 趣味/诊断 partial：`LOLWUT [VERSION version]` 当前返回固定 bulk 文本和 redis-uya 版本，`VERSION` 的非整数参数返回 Redis 兼容整数错误，暂不生成 Redis 原版动态图形
 - Key 复制等待 partial：`WAIT` 当前在无副本 ACK 收敛路径下返回 `0`；`WAITAOF numlocal numreplicas timeout` 当前返回 `[local, replicas]`，`numlocal > 0` 时本地确认返回 `1`，副本 AOF 确认固定返回 `0`，暂不做真实阻塞等待或副本 AOF ACK 收敛
+- Server 复制握手 partial：`REPLCONF [option ...]` 当前对常见握手/ACK 参数返回 `OK`，不记录 replica 能力、ACK offset 或触发 `GETACK` 推送
 - Bitmap / Bitfield 第一批：`GETBIT`、`SETBIT`、`BITCOUNT`、`BITPOS`、`BITOP`、`BITFIELD`、`BITFIELD_RO`
 - HyperLogLog 第一批 partial：`PFADD`、`PFCOUNT`、`PFMERGE` 当前可用，但内部暂以 exact set-backed cardinality 近似 Redis 语义，尚未落地 Redis 原生 dense/sparse HLL 字符串编码
 - Geo 第一批 partial：`GEOADD`、`GEODIST`、`GEOHASH`、`GEOPOS`、`GEOSEARCH`、`GEOSEARCHSTORE`、`GEORADIUS`、`GEORADIUS_RO`、`GEORADIUSBYMEMBER`、`GEORADIUSBYMEMBER_RO` 当前可用，但内部暂以 exact zset-backed packed coordinate score 实现，`GEOSEARCHSTORE` 支持目标写入和 `STOREDIST` 整数距离 score，暂不保存 Redis 原生浮点距离，legacy radius 命令复用 `GEOSEARCH ... BYRADIUS` 路径且不支持 `STORE/STOREDIST`，`GEOPOS` 和 `WITHCOORD` 返回当前 packed score 解码后的 `1e-6` 量化坐标，`GEOHASH` 基于当前解码坐标生成 Redis 兼容 geohash 字符串，`WITHHASH` 返回当前 packed score，而不是 Redis 原生 geohash 整数
@@ -323,6 +324,7 @@ build/redis-uya 6380 1
 - Key/Server 第二批：`PEXPIRE`、`PERSIST`、`PTTL`
 - AOF append/replay、RDB 子集、`SAVE`、`BGSAVE`、`BGREWRITEAOF`
 - 主从复制最小闭环：`REPLICAOF`、`PSYNC / backlog`、全量同步、定时拉取式增量同步、复制心跳
+- 复制握手兼容面：`REPLCONF`
 - 事务最小子集：`MULTI/EXEC/DISCARD/WATCH/UNWATCH`
 - Pub/Sub 第一批子集：`PUBLISH/SUBSCRIBE/UNSUBSCRIBE/PSUBSCRIBE/PUNSUBSCRIBE`
 - `CLIENT` / `CONFIG` 控制面兼容子集

@@ -79,6 +79,24 @@ if ! [[ "$ROLE_RESULT" =~ ^master$'\n'[0-9]+$ ]]; then
     exit 1
 fi
 
+REPLCONF_NOARGS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" replconf)"
+if [[ "$REPLCONF_NOARGS_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected REPLCONF OK, got '$REPLCONF_NOARGS_RESULT'" >&2
+    exit 1
+fi
+
+REPLCONF_CAPA_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" replconf capa psync2)"
+if [[ "$REPLCONF_CAPA_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected REPLCONF CAPA psync2 OK, got '$REPLCONF_CAPA_RESULT'" >&2
+    exit 1
+fi
+
+REPLCONF_ACK_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" replconf ack 0)"
+if [[ "$REPLCONF_ACK_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected REPLCONF ACK 0 OK, got '$REPLCONF_ACK_RESULT'" >&2
+    exit 1
+fi
+
 RANDOMKEY_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" randomkey)"
 if [[ "$RANDOMKEY_RESULT" != "key" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected RANDOMKEY key, got '$RANDOMKEY_RESULT'" >&2

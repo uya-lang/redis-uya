@@ -289,6 +289,7 @@
 
 - [x] 复制角色与状态机
 - [x] `PSYNC` / backlog
+- [x] `REPLCONF` no-op 握手兼容面
 - [x] 全量同步
 - [x] 增量同步
 - [x] 复制心跳
@@ -508,7 +509,7 @@
 - [ ] Functions / Script 收口：只读脚本第一批已补 `EVAL_RO` / `EVALSHA_RO` single-call subset partial，`SCRIPT DEBUG` 已补 no-op 兼容面，`SCRIPT KILL` 已补无运行脚本 `NOTBUSY` 错误面 partial，Functions 第一批已补 `FUNCTION HELP/LIST/STATS/FLUSH/DELETE/LOAD/DUMP/RESTORE/KILL` 与 `FCALL/FCALL_RO` 空库/错误面兼容面，后续继续补脚本缓存、错误中止、传播边界和 function library 最小面
 - [ ] ACL 第一批：`ACL CAT/DELUSER/DRYRUN/GENPASS/GETUSER/HELP/LIST/LOAD/LOG/SAVE/SETUSER/USERS/WHOAMI` 默认用户控制面 partial 已补，后续继续补用户、密码、命令分类、最小权限拒绝路径
 - [ ] 运维与诊断第一批：`CONFIG` 余量、`CLIENT` 余量（`REPLY` 命令回复抑制 partial、`UNBLOCK` 阻塞 pop 等待解除 partial 与 `CACHING` / `NO-EVICT` / `NO-TOUCH` 连接级兼容标志已补）、`MEMORY` 观测（`MALLOC-STATS` runtime-approx 与 `PURGE` no-op 兼容面已补）、`SLOWLOG`、`LATENCY`、`MONITOR`、`MODULE HELP/LIST` 空模块兼容面已补，后续继续补配置、客户端与观测真值
-- [ ] 复制/持久化深化：RDB 二进制兼容推进、AOF rewrite 压测、复制断线重连、`WAIT` / `WAITAOF` 真实等待语义、只读副本限制
+- [ ] 复制/持久化深化：RDB 二进制兼容推进、AOF rewrite 压测、复制断线重连、`REPLCONF` 真实 ACK/GETACK 语义、`WAIT` / `WAITAOF` 真实等待语义、只读副本限制
 
 验收项：
 

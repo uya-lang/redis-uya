@@ -528,6 +528,9 @@ class RedisPySubsetClient:
     def role(self):
         return self._request(b"ROLE")
 
+    def replconf(self, *args: bytes) -> bool:
+        return self._request(b"REPLCONF", *args) == "OK"
+
     def select(self, db: int) -> bool:
         return self._request(b"SELECT", str(db).encode()) == "OK"
 
@@ -1158,6 +1161,12 @@ def run_smoke() -> None:
             role = client.role()
             if role != [b"master", 0, []]:
                 raise AssertionError(f"unexpected ROLE reply: {role!r}")
+            if not client.replconf():
+                raise AssertionError("expected REPLCONF with no args to return OK")
+            if not client.replconf(b"CAPA", b"psync2"):
+                raise AssertionError("expected REPLCONF CAPA psync2 to return OK")
+            if not client.replconf(b"ACK", b"0"):
+                raise AssertionError("expected REPLCONF ACK 0 to return OK")
             assert client.set("key", "value")
             assert client.randomkey() == b"key"
             assert client.get("key") == b"value"

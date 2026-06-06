@@ -402,6 +402,7 @@ PARTIAL_NAMES = {
     "psync",
     "quit",
     "replicaof",
+    "replconf",
     "restore",
     "restore-asking",
     "save",

@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 170 | 0 | 3 | 46 |
+| Tier A: standalone core | 365 | 259 | 146 | 171 | 0 | 3 | 45 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `177` |
+| `partial` | `178` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `199` |
+| `deferred` | `198` |
 
 ## Group counts
 
@@ -436,7 +436,7 @@
 | `readwrite` | `cluster` | `standalone-error` | `v1.1.0` | `1` | `-` | `no` | `@fast, @connection` |
 | `rename` | `generic` | `full` | `-` | `3` | `-` | `no` | `@keyspace, @write, @slow` |
 | `renamenx` | `generic` | `full` | `-` | `3` | `-` | `no` | `@keyspace, @write, @fast` |
-| `replconf` | `server` | `deferred` | `v0.9.1` | `-1` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `replconf` | `server` | `partial` | `-` | `-1` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `replicaof` | `server` | `partial` | `-` | `3` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `reset` | `connection` | `full` | `-` | `1` | `-` | `no` | `@fast, @connection` |
 | `restore` | `generic` | `partial` | `-` | `-4` | `-` | `no` | `@keyspace, @write, @slow, @dangerous` |

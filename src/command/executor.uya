@@ -14502,6 +14502,12 @@ fn command_executor_psync(runtime: &CommandRuntimeInfo, command: &Command) Comma
     return command_executor_owned_simple(buf.buf[0: buf.len]);
 }
 
+fn command_executor_replconf(runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
+    _ = runtime;
+    _ = command;
+    return command_executor_simple(&"OK"[0: 2]);
+}
+
 fn command_executor_info(engine: &Engine, runtime: &CommandRuntimeInfo, command: &Command, now_ms: u64) CommandReply {
     if command.argc > 2 {
         return command_executor_wrong_arity();
@@ -17423,6 +17429,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type == CommandType.command_psync {
         return command_executor_psync(runtime, command);
+    }
+    if command.info.cmd_type == CommandType.command_replconf {
+        return command_executor_replconf(runtime, command);
     }
     if command.info.cmd_type == CommandType.command_config {
         return command_executor_config(runtime, command);

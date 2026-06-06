@@ -555,6 +555,10 @@ class RedisPySubsetClient:
     def move(self, key: str, db: int) -> int:
         return int(self._request(b"MOVE", key.encode(), str(db).encode()))
 
+    def swapdb(self, first: int | str, second: int | str) -> bool:
+        result = self._request(b"SWAPDB", str(first).encode(), str(second).encode())
+        return result == "OK"
+
     def wait(self, replicas: int, timeout_ms: int) -> int:
         return int(self._request(b"WAIT", str(replicas).encode(), str(timeout_ms).encode()))
 
@@ -1510,6 +1514,20 @@ def run_smoke() -> None:
             except RespError as exc:
                 if str(exc) != "ERR DB index is out of range":
                     raise AssertionError(f"unexpected MOVE range error: {exc}") from exc
+            if not client.swapdb(0, 0):
+                raise AssertionError("expected SWAPDB 0 0 to return OK")
+            try:
+                client.swapdb(0, 1)
+                raise AssertionError("expected SWAPDB 0 1 to fail in single-db mode")
+            except RespError as exc:
+                if str(exc) != "ERR DB index is out of range":
+                    raise AssertionError(f"unexpected SWAPDB range error: {exc}") from exc
+            try:
+                client.swapdb("bad", 0)
+                raise AssertionError("expected SWAPDB bad 0 to fail")
+            except RespError as exc:
+                if str(exc) != "ERR value is not an integer or out of range":
+                    raise AssertionError(f"unexpected SWAPDB integer error: {exc}") from exc
             if client.wait(0, 0) != 0:
                 raise AssertionError("expected WAIT 0 0 to return 0")
             if client.wait(1, 10) != 0:

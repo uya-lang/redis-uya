@@ -2115,6 +2115,24 @@ if [[ "$MOVE_ONE_RESULT" != "ERR DB index is out of range" ]]; then
     exit 1
 fi
 
+SWAPDB_ZERO_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" swapdb 0 0)"
+if [[ "$SWAPDB_ZERO_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SWAPDB 0 0 OK, got '$SWAPDB_ZERO_RESULT'" >&2
+    exit 1
+fi
+
+SWAPDB_ONE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" swapdb 0 1 2>&1 || true)"
+if [[ "$SWAPDB_ONE_RESULT" != "ERR DB index is out of range" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SWAPDB 0 1 range error, got '$SWAPDB_ONE_RESULT'" >&2
+    exit 1
+fi
+
+SWAPDB_BAD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" swapdb bad 0 2>&1 || true)"
+if [[ "$SWAPDB_BAD_RESULT" != "ERR value is not an integer or out of range" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SWAPDB bad integer error, got '$SWAPDB_BAD_RESULT'" >&2
+    exit 1
+fi
+
 WAIT_ZERO_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" wait 0 0)"
 if [[ "$WAIT_ZERO_RESULT" != "0" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected WAIT 0 0 to return 0, got '$WAIT_ZERO_RESULT'" >&2

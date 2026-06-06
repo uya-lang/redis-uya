@@ -471,6 +471,12 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const move_range_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$4\r\nMOVE\r\n$3\r\nkey\r\n$1\r\n1\r\n"[0: 30], &out[0], 256, 1000u64);
     try assert_true(network_connection_contains(out[0: move_range_result.response_len], &"DB index is out of range"[0: 24]));
 
+    const swapdb_zero_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$6\r\nSWAPDB\r\n$1\r\n0\r\n$1\r\n0\r\n"[0: 30], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: swapdb_zero_result.response_len], &"+OK\r\n"[0: 5]));
+
+    const swapdb_range_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$6\r\nSWAPDB\r\n$1\r\n0\r\n$1\r\n1\r\n"[0: 30], &out[0], 256, 1000u64);
+    try assert_true(network_connection_contains(out[0: swapdb_range_result.response_len], &"DB index is out of range"[0: 24]));
+
     const wait_zero_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$4\r\nWAIT\r\n$1\r\n0\r\n$1\r\n0\r\n"[0: 31], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: wait_zero_result.response_len], &":0\r\n"[0: 4]));
 

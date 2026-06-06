@@ -279,6 +279,7 @@ build/redis-uya 6380 1
 - String 第五批范围读写：`GETRANGE`、`SETRANGE`
 - String 第六批浮点计数：`INCRBYFLOAT`
 - Key 复制/恢复 partial：`COPY source destination [DB 0] [REPLACE]` 当前可用，支持当前单 DB 内深拷贝对象、保留 source TTL、已存在目标的 `REPLACE` 覆盖和 `COMMAND GETKEYS*` 可见面；`RESTORE-ASKING key ttl serialized-value` 当前复用 `RESTORE` 的单 DB RDB payload 写入路径；非 `0` DB 按当前单 DB 模型返回 `ERR DB index is out of range`
+- Key 单库 DB 管理 partial：`SWAPDB 0 0` 当前作为 no-op 返回 `OK`；任一 DB 参数非 `0` 返回 `ERR DB index is out of range`，暂不支持真实多 DB 数据交换
 - Key 复制等待 partial：`WAIT` 当前在无副本 ACK 收敛路径下返回 `0`；`WAITAOF numlocal numreplicas timeout` 当前返回 `[local, replicas]`，`numlocal > 0` 时本地确认返回 `1`，副本 AOF 确认固定返回 `0`，暂不做真实阻塞等待或副本 AOF ACK 收敛
 - Bitmap / Bitfield 第一批：`GETBIT`、`SETBIT`、`BITCOUNT`、`BITPOS`、`BITOP`、`BITFIELD`、`BITFIELD_RO`
 - HyperLogLog 第一批 partial：`PFADD`、`PFCOUNT`、`PFMERGE` 当前可用，但内部暂以 exact set-backed cardinality 近似 Redis 语义，尚未落地 Redis 原生 dense/sparse HLL 字符串编码
@@ -311,7 +312,7 @@ build/redis-uya 6380 1
 - Key/Server 第五批：`PEXPIREAT`
 - Key/Server 第六批：`DUMP`、`RESTORE`
 - Key/Server 第七批：`SELECT`、`OBJECT`
-- Key/Server 第八批：`MOVE`
+- Key/Server 第八批：`MOVE`、`SWAPDB`
 - Key/Server 第九批：`WAIT`、`WAITAOF`
 - Key/Server 第十批通用 key 管理：`TOUCH`、`UNLINK`
 - Key/Server 第十一批模式读取：`KEYS`

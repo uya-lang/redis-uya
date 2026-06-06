@@ -697,6 +697,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"geosearchstore"[0: 14], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"hrandfield"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"waitaof"[0: 7], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"swapdb"[0: 6], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"zdiff"[0: 5], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"zdiffstore"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"zinter"[0: 6], CommandCatalogStatus.status_partial);
@@ -7241,6 +7242,37 @@ export fn test_command_move() !void {
     try assert_eq_i32(move_range_reply.typ as i32, CommandReplyType.reply_error as i32);
     try assert_true(command_executor_test_slice_eq(move_range_reply.data, &"ERR DB index is out of range"[0: 28]));
     resp_value_free(&move_range_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_command_swapdb() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var runtime: CommandRuntimeInfo = command_runtime_default();
+
+    var swapdb_zero_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nSWAPDB\r\n$1\r\n0\r\n$1\r\n0\r\n"[0: 30]);
+    const swapdb_zero_command: Command = try command_executor_test_command(&router, &swapdb_zero_parsed);
+    const swapdb_zero_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &swapdb_zero_command, 1000u64);
+    try assert_eq_i32(swapdb_zero_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(swapdb_zero_reply.data, &"OK"[0: 2]));
+    resp_value_free(&swapdb_zero_parsed.value);
+
+    var swapdb_range_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nSWAPDB\r\n$1\r\n0\r\n$1\r\n1\r\n"[0: 30]);
+    const swapdb_range_command: Command = try command_executor_test_command(&router, &swapdb_range_parsed);
+    const swapdb_range_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &swapdb_range_command, 1000u64);
+    try assert_eq_i32(swapdb_range_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(swapdb_range_reply.data, &"ERR DB index is out of range"[0: 28]));
+    resp_value_free(&swapdb_range_parsed.value);
+
+    var swapdb_bad_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nSWAPDB\r\n$3\r\nbad\r\n$1\r\n0\r\n"[0: 32]);
+    const swapdb_bad_command: Command = try command_executor_test_command(&router, &swapdb_bad_parsed);
+    const swapdb_bad_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &swapdb_bad_command, 1000u64);
+    try assert_eq_i32(swapdb_bad_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(swapdb_bad_reply.data, &"ERR value is not an integer or out of range"[0: 43]));
+    resp_value_free(&swapdb_bad_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

@@ -198,6 +198,15 @@ def run_smoke() -> None:
             move_range_reply = recv_line(sock)
             if move_range_reply != b"-ERR DB index is out of range\r\n":
                 raise AssertionError(f"unexpected MOVE range reply: {move_range_reply!r}")
+            roundtrip(sock, b"*3\r\n$6\r\nSWAPDB\r\n$1\r\n0\r\n$1\r\n0\r\n", b"+OK\r\n")
+            sock.sendall(b"*3\r\n$6\r\nSWAPDB\r\n$1\r\n0\r\n$1\r\n1\r\n")
+            swapdb_range_reply = recv_line(sock)
+            if swapdb_range_reply != b"-ERR DB index is out of range\r\n":
+                raise AssertionError(f"unexpected SWAPDB range reply: {swapdb_range_reply!r}")
+            sock.sendall(b"*3\r\n$6\r\nSWAPDB\r\n$3\r\nbad\r\n$1\r\n0\r\n")
+            swapdb_bad_reply = recv_line(sock)
+            if swapdb_bad_reply != b"-ERR value is not an integer or out of range\r\n":
+                raise AssertionError(f"unexpected SWAPDB bad integer reply: {swapdb_bad_reply!r}")
             roundtrip(sock, b"*3\r\n$4\r\nWAIT\r\n$1\r\n0\r\n$1\r\n0\r\n", b":0\r\n")
             roundtrip(sock, b"*3\r\n$4\r\nWAIT\r\n$1\r\n1\r\n$2\r\n10\r\n", b":0\r\n")
             sock.sendall(b"*3\r\n$4\r\nWAIT\r\n$1\r\n1\r\n$2\r\n-1\r\n")

@@ -441,7 +441,7 @@
 - [x] Key/Server 第五批：`PEXPIREAT`
 - [x] Key/Server 第六批：`DUMP`、`RESTORE`
 - [x] Key/Server 第七批：`SELECT`、`OBJECT`
-- [x] Key/Server 第八批：`MOVE`
+- [x] Key/Server 第八批：`MOVE`、`SWAPDB`
 - [x] Key/Server 第九批：`WAIT`、`WAITAOF`
 - [x] Key/Server 第十批通用 key 管理：`TOUCH`、`UNLINK`
 - [x] Key/Server 第十一批模式读取：`KEYS`

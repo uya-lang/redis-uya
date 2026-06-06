@@ -1658,6 +1658,24 @@ MOVE key db
 
 - 当前运行时只暴露唯一数据库，因此 `MOVE` 只固化与单库模式一致的错误语义，不存在成功迁移路径
 
+### `SWAPDB`
+
+格式：
+
+```text
+SWAPDB index1 index2
+```
+
+返回：
+
+- 当前单机实现中：`index1 = 0` 且 `index2 = 0` 返回 `+OK`
+- 非整数 DB 参数：`-ERR value is not an integer or out of range`
+- 任一参数非 `0`：`-ERR DB index is out of range`
+
+说明：
+
+- 当前运行时只暴露唯一数据库，因此 `SWAPDB 0 0` 是 no-op partial，不存在真实多 DB 数据交换路径
+
 ### `WAIT`
 
 格式：

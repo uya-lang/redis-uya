@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 168 | 0 | 3 | 48 |
+| Tier A: standalone core | 365 | 259 | 146 | 169 | 0 | 3 | 47 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `175` |
+| `partial` | `176` |
 | `standalone-error` | `26` |
 | `alias` | `3` |
-| `deferred` | `201` |
+| `deferred` | `200` |
 
 ## Group counts
 
@@ -493,7 +493,7 @@
 | `sunion` | `set` | `full` | `-` | `-2` | `-` | `no` | `@read, @set, @slow` |
 | `sunionstore` | `set` | `full` | `-` | `-3` | `-` | `no` | `@write, @set, @slow` |
 | `sunsubscribe` | `pubsub` | `deferred` | `v0.9.1` | `-1` | `-` | `no` | `@pubsub, @slow` |
-| `swapdb` | `server` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@keyspace, @write, @fast, @dangerous` |
+| `swapdb` | `server` | `partial` | `-` | `3` | `-` | `no` | `@keyspace, @write, @fast, @dangerous` |
 | `sync` | `server` | `deferred` | `v0.9.1` | `1` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `tdigest.add` | `tdigest` | `deferred` | `v0.9.2` | `-2` | `tdigest` | `no` | `@tdigest, @write, @slow` |
 | `tdigest.byrank` | `tdigest` | `deferred` | `v0.9.2` | `-2` | `tdigest` | `no` | `@tdigest, @read` |

@@ -1103,7 +1103,7 @@ ZRANGEBYLEX key min max [LIMIT offset count]
 格式：
 
 ```text
-ZRANGESTORE destination source start stop [BYSCORE] [REV] [LIMIT offset count]
+ZRANGESTORE destination source start stop [BYSCORE | BYLEX] [REV] [LIMIT offset count]
 ```
 
 返回：
@@ -1111,13 +1111,14 @@ ZRANGESTORE destination source start stop [BYSCORE] [REV] [LIMIT offset count]
 - 返回写入 `destination` 的成员数量
 - 写入 `source` 中 rank 落在闭区间 `[start, stop]` 内的成员，并保留原始 score
 - 带 `BYSCORE` 时把 `start` / `stop` 解释为整数 score 闭区间；`REV` 模式下 `start` 是 max、`stop` 是 min
+- 带 `BYLEX` 时把 `start` / `stop` 解释为 Redis lex 边界；`REV` 模式下 `start` 是 max、`stop` 是 min
 
 说明：
 
 - 当前 rank 模式范围语义与当前 `ZRANGE key start stop [REV]` 对齐
 - 当前 `BYSCORE` 模式支持 `REV` 和 `LIMIT offset count`；`offset` 必须非负，`count < 0` 表示不限制数量
+- 当前 `BYLEX` 模式支持 Redis lex 边界 token：`-`、`+`、`[value`、`(value`，支持 `REV` 和 `LIMIT offset count`
 - `source` 缺失或结果为空时删除 `destination` 并返回 `0`
-- 当前尚未实现 `BYLEX` 选项
 - 当前项目内 ZSet score 使用整数语义
 
 ### `ZREMRANGEBYLEX`

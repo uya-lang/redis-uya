@@ -905,16 +905,19 @@ class RedisPySubsetClient:
         self,
         destination: str,
         source: str,
-        start: int,
-        stop: int,
+        start: int | str,
+        stop: int | str,
         rev: bool = False,
         byscore: bool = False,
+        bylex: bool = False,
         limit_start: int | None = None,
         limit_num: int | None = None,
     ) -> int:
         parts: list[bytes] = [b"ZRANGESTORE", destination.encode(), source.encode(), str(start).encode(), str(stop).encode()]
         if byscore:
             parts.append(b"BYSCORE")
+        if bylex:
+            parts.append(b"BYLEX")
         if rev:
             parts.append(b"REV")
         if limit_start is not None or limit_num is not None:
@@ -1889,6 +1892,12 @@ def run_smoke() -> None:
             assert client.zrange("lex", "[alpha", "[charlie", bylex=True) == [b"alpha", b"beta", b"charlie"]
             assert client.zrange("lex", "-", "+", bylex=True, limit_start=1, limit_num=2) == [b"beta", b"charlie"]
             assert client.zrange("lex", "[delta", "(alpha", bylex=True, rev=True) == [b"delta", b"charlie", b"beta"]
+            assert client.zrangestore("zlexstore", "lex", "[alpha", "[charlie", bylex=True) == 3
+            assert client.zrange("zlexstore", 0, -1) == [b"alpha", b"beta", b"charlie"]
+            assert client.zscore("zlexstore", "charlie") == b"0"
+            assert client.zrangestore("zlexstorerev", "lex", "[delta", "(alpha", bylex=True, rev=True, limit_start=1, limit_num=1) == 1
+            assert client.zrange("zlexstorerev", 0, -1) == [b"charlie"]
+            assert client.delete("zlexstore", "zlexstorerev") == 2
             assert client.zrevrangebylex("lex", "[delta", "(alpha") == [b"delta", b"charlie", b"beta"]
             assert client.zrevrangebylex("lex", "+", "-", offset=1, count=2) == [b"charlie", b"beta"]
             assert client.zrevrangebylex("lex", "[charlie", "-", offset=0, count=-1) == [b"charlie", b"beta", b"alpha"]

@@ -901,10 +901,25 @@ class RedisPySubsetClient:
         assert isinstance(result, list)
         return result
 
-    def zrangestore(self, destination: str, source: str, start: int, stop: int, rev: bool = False) -> int:
+    def zrangestore(
+        self,
+        destination: str,
+        source: str,
+        start: int,
+        stop: int,
+        rev: bool = False,
+        byscore: bool = False,
+        limit_start: int | None = None,
+        limit_num: int | None = None,
+    ) -> int:
         parts: list[bytes] = [b"ZRANGESTORE", destination.encode(), source.encode(), str(start).encode(), str(stop).encode()]
+        if byscore:
+            parts.append(b"BYSCORE")
         if rev:
             parts.append(b"REV")
+        if limit_start is not None or limit_num is not None:
+            assert limit_start is not None and limit_num is not None
+            parts.extend([b"LIMIT", str(limit_start).encode(), str(limit_num).encode()])
         return int(self._request(*parts))
 
     def zrevrange(self, key: str, start: int, stop: int, withscores: bool = False) -> list[bytes]:
@@ -1916,9 +1931,14 @@ def run_smoke() -> None:
             assert client.zscore("zrangestoredst", "a") == b"4"
             assert client.zrangestore("zrangestorerev", "zset", 0, 1, rev=True) == 2
             assert client.zrange("zrangestorerev", 0, -1) == [b"b", b"a"]
+            assert client.zrangestore("zrangestorescore", "zset", 2, 4, byscore=True) == 2
+            assert client.zrange("zrangestorescore", 0, -1) == [b"b", b"a"]
+            assert client.zscore("zrangestorescore", "a") == b"4"
+            assert client.zrangestore("zrangestorescorerev", "zset", 4, 2, byscore=True, rev=True, limit_start=1, limit_num=1) == 1
+            assert client.zrange("zrangestorescorerev", 0, -1) == [b"b"]
             assert client.zrangestore("zrangestoredst", "missing", 0, -1) == 0
             assert client.zrange("zrangestoredst", 0, -1) == []
-            assert client.delete("zrangestorerev") == 1
+            assert client.delete("zrangestorerev", "zrangestorescore", "zrangestorescorerev") == 3
             assert client.zunion("zset", "zdiff2") == [b"a", b"b", b"d"]
             assert client.zunion("zset", "zdiff2", withscores=True) == [b"a", b"4", b"b", b"4", b"d", b"5"]
             assert client.zunion("zset", "zdiff2", withscores=True, weights=[4, 1], aggregate="MIN") == [b"b", b"2", b"d", b"5", b"a", b"16"]

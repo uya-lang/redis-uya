@@ -108,7 +108,7 @@ server open
 - `HRANDFIELD` 当前复用 hash field 字典序视图提供 deterministic random-field partial，支持 `count`、负数重复与 `WITHVALUES`，真实随机采样保留为后续完整语义
 - `ZMPOP` 是非阻塞 sorted-set multi-pop，执行层复用 zset pop 编码与删除路径；连接层只在成功返回数组时追加 AOF，空结果不落盘
 - `ZRANGE` / `ZREVRANGE` 当前复用 rank-based zset 视图，支持正负索引、`REV` 和 `WITHSCORES`；`ZRANGE ... BYSCORE`、`ZRANGEBYSCORE` / `ZREVRANGEBYSCORE` 支持整数 score 闭区间、`WITHSCORES` 和 `LIMIT`；`ZRANGE ... BYLEX` 复用 lex 边界扫描，支持 `REV` 和 `LIMIT`，不支持 `WITHSCORES`
-- `ZRANGESTORE` 当前复用 rank-based `ZRANGE` 视图写回项目内 zset，支持 `REV` 并保留源 member 的整数 score；`BYSCORE` / `BYLEX` / `LIMIT` 仍保留为后续完整语义
+- `ZRANGESTORE` 当前复用 rank-based `ZRANGE` 视图或 score-range 视图写回项目内 zset，支持 `BYSCORE`、`REV` 和 `LIMIT` 并保留源 member 的整数 score；`BYLEX` 仍保留为后续完整语义
 - `ZDIFF` / `ZINTER` / `ZINTERSTORE` / `ZUNION` / `ZUNIONSTORE` 这类 sorted-set 多 key 命令在执行层扫描项目内 zset `(score, member)` 排序视图；`ZINTER` / `ZINTERSTORE` / `ZUNION` / `ZUNIONSTORE` 当前支持整数 score 的默认 SUM 聚合、整数 `WEIGHTS` 和 `AGGREGATE SUM|MIN|MAX`，仍不支持 Redis 原生浮点 score / weight 口径
 - `PFADD` / `PFCOUNT` / `PFMERGE` 当前使用项目内 set 对象保存 exact HLL 成员视图；`PFSELFTEST` 是 no-op self-test 兼容面，返回 `OK`，不触发 Redis 原生 HLL 编码自检；`PFDEBUG` 是安全 profile 下的 standalone-error，不开放内部 HLL 调试输出
 - `SWAPDB` 当前由执行层按单 DB 模型处理；`0 0` 是 no-op partial，任一非 `0` DB 返回越界错误，真实多 DB 数据交换保留到多 DB 模型落地后再补

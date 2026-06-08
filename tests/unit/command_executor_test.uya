@@ -5465,6 +5465,66 @@ export fn test_command_zrangebyscore_zrevrangebyscore() !void {
     command_reply_cleanup(&zrangestore_rev_score_reply);
     resp_value_free(&zrangestore_rev_score_parsed.value);
 
+    var zrangestore_byscore_parsed: RespParseResult = try parse_resp2(&"*6\r\n$11\r\nZRANGESTORE\r\n$3\r\nzrs\r\n$4\r\nzset\r\n$1\r\n2\r\n$1\r\n3\r\n$7\r\nBYSCORE\r\n"[0: 68]);
+    const zrangestore_byscore_command: Command = try command_executor_test_command(&router, &zrangestore_byscore_parsed);
+    const zrangestore_byscore_reply: CommandReply = command_execute_at(&engine, &zrangestore_byscore_command, 1000u64);
+    try assert_eq_i32(zrangestore_byscore_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(zrangestore_byscore_reply.integer as i32, 2);
+    resp_value_free(&zrangestore_byscore_parsed.value);
+
+    var zrangestore_byscore_range_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nZRANGE\r\n$3\r\nzrs\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 40]);
+    const zrangestore_byscore_range_command: Command = try command_executor_test_command(&router, &zrangestore_byscore_range_parsed);
+    var zrangestore_byscore_range_reply: CommandReply = command_execute_at(&engine, &zrangestore_byscore_range_command, 1000u64);
+    const zrangestore_byscore_range_len: usize = try connection_encode_reply(&zrangestore_byscore_range_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: zrangestore_byscore_range_len], &"*2\r\n$1\r\nb\r\n$1\r\nc\r\n"[0: 18]));
+    command_reply_cleanup(&zrangestore_byscore_range_reply);
+    resp_value_free(&zrangestore_byscore_range_parsed.value);
+
+    var zrangestore_byscore_score_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nZSCORE\r\n$3\r\nzrs\r\n$1\r\nc\r\n"[0: 32]);
+    const zrangestore_byscore_score_command: Command = try command_executor_test_command(&router, &zrangestore_byscore_score_parsed);
+    var zrangestore_byscore_score_reply: CommandReply = command_execute_at(&engine, &zrangestore_byscore_score_command, 1000u64);
+    const zrangestore_byscore_score_len: usize = try connection_encode_reply(&zrangestore_byscore_score_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: zrangestore_byscore_score_len], &"$1\r\n3\r\n"[0: 7]));
+    command_reply_cleanup(&zrangestore_byscore_score_reply);
+    resp_value_free(&zrangestore_byscore_score_parsed.value);
+
+    var zrangestore_byscore_limit_parsed: RespParseResult = try parse_resp2(&"*9\r\n$11\r\nZRANGESTORE\r\n$6\r\nzrslim\r\n$4\r\nzset\r\n$1\r\n1\r\n$1\r\n3\r\n$7\r\nBYSCORE\r\n$5\r\nLIMIT\r\n$1\r\n1\r\n$1\r\n1\r\n"[0: 96]);
+    const zrangestore_byscore_limit_command: Command = try command_executor_test_command(&router, &zrangestore_byscore_limit_parsed);
+    const zrangestore_byscore_limit_reply: CommandReply = command_execute_at(&engine, &zrangestore_byscore_limit_command, 1000u64);
+    try assert_eq_i32(zrangestore_byscore_limit_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(zrangestore_byscore_limit_reply.integer as i32, 1);
+    resp_value_free(&zrangestore_byscore_limit_parsed.value);
+
+    var zrangestore_byscore_limit_range_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nZRANGE\r\n$6\r\nzrslim\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 43]);
+    const zrangestore_byscore_limit_range_command: Command = try command_executor_test_command(&router, &zrangestore_byscore_limit_range_parsed);
+    var zrangestore_byscore_limit_range_reply: CommandReply = command_execute_at(&engine, &zrangestore_byscore_limit_range_command, 1000u64);
+    const zrangestore_byscore_limit_range_len: usize = try connection_encode_reply(&zrangestore_byscore_limit_range_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: zrangestore_byscore_limit_range_len], &"*1\r\n$1\r\nb\r\n"[0: 11]));
+    command_reply_cleanup(&zrangestore_byscore_limit_range_reply);
+    resp_value_free(&zrangestore_byscore_limit_range_parsed.value);
+
+    var zrangestore_byscore_rev_limit_parsed: RespParseResult = try parse_resp2(&"*10\r\n$11\r\nZRANGESTORE\r\n$6\r\nzrsrev\r\n$4\r\nzset\r\n$1\r\n3\r\n$1\r\n1\r\n$7\r\nBYSCORE\r\n$3\r\nREV\r\n$5\r\nLIMIT\r\n$1\r\n1\r\n$1\r\n1\r\n"[0: 106]);
+    const zrangestore_byscore_rev_limit_command: Command = try command_executor_test_command(&router, &zrangestore_byscore_rev_limit_parsed);
+    const zrangestore_byscore_rev_limit_reply: CommandReply = command_execute_at(&engine, &zrangestore_byscore_rev_limit_command, 1000u64);
+    try assert_eq_i32(zrangestore_byscore_rev_limit_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(zrangestore_byscore_rev_limit_reply.integer as i32, 1);
+    resp_value_free(&zrangestore_byscore_rev_limit_parsed.value);
+
+    var zrangestore_byscore_rev_range_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nZRANGE\r\n$6\r\nzrsrev\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 43]);
+    const zrangestore_byscore_rev_range_command: Command = try command_executor_test_command(&router, &zrangestore_byscore_rev_range_parsed);
+    var zrangestore_byscore_rev_range_reply: CommandReply = command_execute_at(&engine, &zrangestore_byscore_rev_range_command, 1000u64);
+    const zrangestore_byscore_rev_range_len: usize = try connection_encode_reply(&zrangestore_byscore_rev_range_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: zrangestore_byscore_rev_range_len], &"*1\r\n$1\r\nb\r\n"[0: 11]));
+    command_reply_cleanup(&zrangestore_byscore_rev_range_reply);
+    resp_value_free(&zrangestore_byscore_rev_range_parsed.value);
+
+    var zrangestore_limit_no_byscore_parsed: RespParseResult = try parse_resp2(&"*8\r\n$11\r\nZRANGESTORE\r\n$6\r\nzrsbad\r\n$4\r\nzset\r\n$1\r\n1\r\n$1\r\n3\r\n$5\r\nLIMIT\r\n$1\r\n0\r\n$1\r\n1\r\n"[0: 83]);
+    const zrangestore_limit_no_byscore_command: Command = try command_executor_test_command(&router, &zrangestore_limit_no_byscore_parsed);
+    const zrangestore_limit_no_byscore_reply: CommandReply = command_execute_at(&engine, &zrangestore_limit_no_byscore_command, 1000u64);
+    try assert_eq_i32(zrangestore_limit_no_byscore_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(zrangestore_limit_no_byscore_reply.data, &"ERR syntax error"[0: 16]));
+    resp_value_free(&zrangestore_limit_no_byscore_parsed.value);
+
     var zrangestore_missing_parsed: RespParseResult = try parse_resp2(&"*5\r\n$11\r\nZRANGESTORE\r\n$5\r\nzrdst\r\n$7\r\nmissing\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 61]);
     const zrangestore_missing_command: Command = try command_executor_test_command(&router, &zrangestore_missing_parsed);
     const zrangestore_missing_reply: CommandReply = command_execute_at(&engine, &zrangestore_missing_command, 1000u64);

@@ -13215,9 +13215,6 @@ fn command_executor_zrangestore(engine: &Engine, command: &Command, now_ms: u64)
     if command.argc < 5 {
         return command_executor_wrong_arity();
     }
-    if command.argc > 6 {
-        return command_executor_syntax_error();
-    }
     const target: &[byte] = command_executor_arg(command, 1) catch {
         return command_executor_wrong_arity();
     };
@@ -13230,24 +13227,172 @@ fn command_executor_zrangestore(engine: &Engine, command: &Command, now_ms: u64)
     const stop_data: &[byte] = command_executor_arg(command, 4) catch {
         return command_executor_wrong_arity();
     };
-    const start: i64 = command_executor_parse_i64(start_data) catch {
-        return command_executor_invalid_integer();
-    };
-    const stop: i64 = command_executor_parse_i64(stop_data) catch {
-        return command_executor_invalid_integer();
-    };
 
     var reverse: bool = false;
-    if command.argc == 6 {
-        const option: &[byte] = command_executor_arg(command, 5) catch {
+    var by_score: bool = false;
+    var by_lex: bool = false;
+    var limit_enabled: bool = false;
+    var limit_offset: usize = 0;
+    var limit_count: i64 = -1;
+    var index: usize = 5;
+    while index < command.argc {
+        const option: &[byte] = command_executor_arg(command, index) catch {
             return command_executor_wrong_arity();
         };
-        if !command_executor_keyword_eq(option, &"REV"[0: 3]) {
-            return command_executor_syntax_error();
+        if command_executor_keyword_eq(option, &"REV"[0: 3]) {
+            if reverse {
+                return command_executor_syntax_error();
+            }
+            reverse = true;
+            index = index + 1;
+            continue;
         }
-        reverse = true;
+        if command_executor_keyword_eq(option, &"BYSCORE"[0: 7]) {
+            if by_score || by_lex {
+                return command_executor_syntax_error();
+            }
+            by_score = true;
+            index = index + 1;
+            continue;
+        }
+        if command_executor_keyword_eq(option, &"BYLEX"[0: 5]) {
+            if by_score || by_lex {
+                return command_executor_syntax_error();
+            }
+            by_lex = true;
+            index = index + 1;
+            continue;
+        }
+        if command_executor_keyword_eq(option, &"LIMIT"[0: 5]) {
+            if limit_enabled || index + 2 >= command.argc {
+                return command_executor_syntax_error();
+            }
+            const offset_data: &[byte] = command_executor_arg(command, index + 1) catch {
+                return command_executor_wrong_arity();
+            };
+            const count_data: &[byte] = command_executor_arg(command, index + 2) catch {
+                return command_executor_wrong_arity();
+            };
+            const offset_i64: i64 = command_executor_parse_i64(offset_data) catch {
+                return command_executor_invalid_integer();
+            };
+            if offset_i64 < 0 {
+                return command_executor_error(&"ERR offset out of range"[0: 23]);
+            }
+            limit_enabled = true;
+            limit_offset = offset_i64 as usize;
+            limit_count = command_executor_parse_i64(count_data) catch {
+                return command_executor_invalid_integer();
+            };
+            index = index + 3;
+            continue;
+        }
+        return command_executor_syntax_error();
+    }
+    if by_lex {
+        return command_executor_syntax_error();
+    }
+    if limit_enabled && !by_score {
+        return command_executor_syntax_error();
+    }
+    if !by_score {
+        const start: i64 = command_executor_parse_i64(start_data) catch {
+            return command_executor_invalid_integer();
+        };
+        const stop: i64 = command_executor_parse_i64(stop_data) catch {
+            return command_executor_invalid_integer();
+        };
+
+        const result_zset: &RedisObject = create_zset_object() catch {
+            return command_executor_oom();
+        };
+        const source_obj: &RedisObject = lookup_key_at(engine, source, now_ms) catch {
+            return command_executor_zset_store_result(engine, target, result_zset, now_ms);
+        };
+        if source_obj.obj_type != ObjectType.object_zset {
+            object_free(result_zset);
+            return command_executor_wrongtype();
+        }
+
+        if !reverse {
+            const ranged: &RedisObject = zset_object_range_reply(source_obj, start, stop) catch |err| {
+                object_free(result_zset);
+                if err == error.AllocOutOfMemory {
+                    return command_executor_oom();
+                }
+                return command_executor_wrongtype();
+            };
+            const count: usize = list_object_len(ranged) catch {
+                object_free(ranged);
+                object_free(result_zset);
+                return command_executor_wrongtype();
+            };
+            _ = command_executor_zrangestore_add_members(source_obj, result_zset, ranged.list_head, count) catch |err| {
+                object_free(ranged);
+                object_free(result_zset);
+                if err == error.AllocOutOfMemory {
+                    return command_executor_oom();
+                }
+                return command_executor_wrongtype();
+            };
+            object_free(ranged);
+            return command_executor_zset_store_result(engine, target, result_zset, now_ms);
+        }
+
+        const ranked: &RedisObject = zset_object_range_reply(source_obj, 0, -1) catch |err| {
+            object_free(result_zset);
+            if err == error.AllocOutOfMemory {
+                return command_executor_oom();
+            }
+            return command_executor_wrongtype();
+        };
+        const reversed: &RedisObject = create_list_object() catch {
+            object_free(ranked);
+            object_free(result_zset);
+            return command_executor_oom();
+        };
+        var reverse_node: &ListNode = ranked.list_tail;
+        while reverse_node != null {
+            const member_reversed: &[byte] = reverse_node.value.value.buf[0: reverse_node.value.value.len];
+            _ = list_object_push_tail(reversed, member_reversed) catch {
+                object_free(ranked);
+                object_free(reversed);
+                object_free(result_zset);
+                return command_executor_oom();
+            };
+            reverse_node = reverse_node.prev;
+        }
+        object_free(ranked);
+
+        const view: ListRangeView = list_object_range(reversed, start, stop) catch {
+            object_free(reversed);
+            object_free(result_zset);
+            return command_executor_wrongtype();
+        };
+        _ = command_executor_zrangestore_add_members(source_obj, result_zset, view.head, view.count) catch |err| {
+            object_free(reversed);
+            object_free(result_zset);
+            if err == error.AllocOutOfMemory {
+                return command_executor_oom();
+            }
+            return command_executor_wrongtype();
+        };
+        object_free(reversed);
+        return command_executor_zset_store_result(engine, target, result_zset, now_ms);
     }
 
+    const start_score: i64 = command_executor_parse_i64(start_data) catch {
+        return command_executor_invalid_integer();
+    };
+    const stop_score: i64 = command_executor_parse_i64(stop_data) catch {
+        return command_executor_invalid_integer();
+    };
+    var min_score: i64 = start_score;
+    var max_score: i64 = stop_score;
+    if reverse {
+        min_score = stop_score;
+        max_score = start_score;
+    }
     const result_zset: &RedisObject = create_zset_object() catch {
         return command_executor_oom();
     };
@@ -13259,70 +13404,45 @@ fn command_executor_zrangestore(engine: &Engine, command: &Command, now_ms: u64)
         return command_executor_wrongtype();
     }
 
-    if !reverse {
-        const ranged: &RedisObject = zset_object_range_reply(source_obj, start, stop) catch |err| {
-            object_free(result_zset);
-            if err == error.AllocOutOfMemory {
-                return command_executor_oom();
-            }
-            return command_executor_wrongtype();
-        };
-        const count: usize = list_object_len(ranged) catch {
-            object_free(ranged);
-            object_free(result_zset);
-            return command_executor_wrongtype();
-        };
-        _ = command_executor_zrangestore_add_members(source_obj, result_zset, ranged.list_head, count) catch |err| {
-            object_free(ranged);
-            object_free(result_zset);
-            if err == error.AllocOutOfMemory {
-                return command_executor_oom();
-            }
-            return command_executor_wrongtype();
-        };
-        object_free(ranged);
+    if min_score > max_score {
         return command_executor_zset_store_result(engine, target, result_zset, now_ms);
     }
-
-    const ranked: &RedisObject = zset_object_range_reply(source_obj, 0, -1) catch |err| {
+    const ranged: &RedisObject = zset_object_range_by_score_reply(source_obj, min_score, max_score, reverse) catch |err| {
         object_free(result_zset);
         if err == error.AllocOutOfMemory {
             return command_executor_oom();
         }
         return command_executor_wrongtype();
     };
-    const reversed: &RedisObject = create_list_object() catch {
-        object_free(ranked);
+    const count: usize = list_object_len(ranged) catch {
+        object_free(ranged);
         object_free(result_zset);
-        return command_executor_oom();
+        return command_executor_wrongtype();
     };
-    var reverse_node: &ListNode = ranked.list_tail;
-    while reverse_node != null {
-        const member_reversed: &[byte] = reverse_node.value.value.buf[0: reverse_node.value.value.len];
-        _ = list_object_push_tail(reversed, member_reversed) catch {
-            object_free(ranked);
-            object_free(reversed);
+    var reply_head: &ListNode = ranged.list_head;
+    var reply_count: usize = count;
+    if limit_enabled {
+        var limit_stop: i64 = -1;
+        if limit_count >= 0 {
+            limit_stop = (limit_offset as i64) + limit_count - 1;
+        }
+        const view: ListRangeView = list_object_range(ranged, limit_offset as i64, limit_stop) catch {
+            object_free(ranged);
             object_free(result_zset);
-            return command_executor_oom();
+            return command_executor_wrongtype();
         };
-        reverse_node = reverse_node.prev;
+        reply_head = view.head;
+        reply_count = view.count;
     }
-    object_free(ranked);
-
-    const view: ListRangeView = list_object_range(reversed, start, stop) catch {
-        object_free(reversed);
-        object_free(result_zset);
-        return command_executor_wrongtype();
-    };
-    _ = command_executor_zrangestore_add_members(source_obj, result_zset, view.head, view.count) catch |err| {
-        object_free(reversed);
+    _ = command_executor_zrangestore_add_members(source_obj, result_zset, reply_head, reply_count) catch |err| {
+        object_free(ranged);
         object_free(result_zset);
         if err == error.AllocOutOfMemory {
             return command_executor_oom();
         }
         return command_executor_wrongtype();
     };
-    object_free(reversed);
+    object_free(ranged);
     return command_executor_zset_store_result(engine, target, result_zset, now_ms);
 }
 

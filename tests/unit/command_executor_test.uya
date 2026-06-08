@@ -5,7 +5,9 @@ use tests.unit.assert.assert_true;
 use src.command.catalog.command_catalog_lookup;
 use src.command.catalog_generated_base.CommandCatalogEntry;
 use src.command.catalog_generated_base.CommandCatalogStatus;
+use src.command.slowlog.SlowlogEntry;
 use src.command.slowlog.slowlog_reset;
+use src.command.slowlog.slowlog_entry_newest;
 use src.command.router.CommandRouter;
 use src.command.router.Command;
 use src.command.router.command_router_new;
@@ -7439,6 +7441,12 @@ export fn test_command_slowlog() !void {
     var get_reply: CommandReply = command_execute_at(&engine, &get_command, 1000u64);
     command_reply_cleanup(&get_reply);
     resp_value_free(&get_parsed.value);
+
+    const newest_entry: &SlowlogEntry = slowlog_entry_newest(0);
+    try assert_true(newest_entry != null);
+    try assert_eq_u64(newest_entry.timestamp_sec, 1u64);
+    try assert_true(command_executor_test_slice_eq(newest_entry.args[0].data[0: newest_entry.args[0].len], &"GET"[0: 3]));
+    try assert_true(command_executor_test_slice_eq(newest_entry.args[1].data[0: newest_entry.args[1].len], &"k"[0: 1]));
 
     var slowlog_len_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nSLOWLOG\r\n$3\r\nLEN\r\n"[0: 26]);
     const slowlog_len_command: Command = try command_executor_test_command(&router, &slowlog_len_parsed);

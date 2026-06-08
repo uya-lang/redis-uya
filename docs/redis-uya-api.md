@@ -2924,8 +2924,8 @@ SLOWLOG RESET
 说明：
 
 - 当前实现为 partial：slowlog 仅是 redis-uya 进程内固定容量 ring，不持久化
-- 当前记录每条命令的 `id`、秒级时间戳、`duration_us`、命令参数数组、客户端占位地址与空 client name
-- 当前 `duration_us` 固定为 `0`，客户端地址固定为占位值 `127.0.0.1:0`，不代表 Redis 原生真实慢查询采样结果
+- 当前记录每条命令的 `id`、秒级时间戳、runtime-measured `duration_us`、命令参数数组、客户端占位地址与空 client name
+- 当前 `duration_us` 基于 redis-uya 运行时时间源采样，精度受毫秒级时钟限制；客户端地址固定为占位值 `127.0.0.1:0`，不代表 Redis 原生真实慢查询采样结果
 - 当前不支持 Redis 原生 `slowlog-log-slower-than` / `slowlog-max-len` 配置联动
 
 ### `LATENCY`

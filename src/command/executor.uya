@@ -158,6 +158,7 @@ use src.storage.sds.sds_fmt_bytes;
 use src.storage.sds.sds_fmt_i64;
 use src.storage.sds.sds_fmt_u64;
 use src.util.bytes.bytes_cmp;
+use src.util.time.now_us;
 use src.version.redis_uya_version;
 use libc.strtod;
 use libc.snprintf;
@@ -17340,12 +17341,9 @@ export fn command_reply_cleanup(reply: &CommandReply) void {
     }
 }
 
-export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRuntimeInfo, command: &Command, now_ms: u64) CommandReply {
+fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRuntimeInfo, command: &Command, now_ms: u64) CommandReply {
     const default_single_node: bool = runtime.cluster_topology == null ||
         (runtime.cluster_topology.node_count == 1 && runtime.cluster_topology.local_index == 0);
-    if command.info.cmd_type != CommandType.command_slowlog {
-        slowlog_append(command, now_ms / 1000u64, 0u64);
-    }
     if command.info.cmd_type == CommandType.command_ping {
         return command_executor_ping(command);
     }
@@ -18028,6 +18026,20 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
         return command_executor_simple(&"OK"[0: 2]);
     }
     return command_executor_error(&"ERR unsupported command"[0: 23]);
+}
+
+export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRuntimeInfo, command: &Command, now_ms: u64) CommandReply {
+    const start_us: u64 = now_us();
+    var reply: CommandReply = command_execute_with_runtime_dispatch_at(engine, runtime, command, now_ms);
+    if command.info.cmd_type != CommandType.command_slowlog {
+        const end_us: u64 = now_us();
+        var duration_us: u64 = 0u64;
+        if end_us >= start_us {
+            duration_us = end_us - start_us;
+        }
+        slowlog_append(command, now_ms / 1000u64, duration_us);
+    }
+    return reply;
 }
 
 export fn command_execute_at(engine: &Engine, command: &Command, now_ms: u64) CommandReply {

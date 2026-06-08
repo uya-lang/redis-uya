@@ -909,27 +909,47 @@ if [[ "$SLOWLOG_LEN_ZERO_RESULT" != "0" ]]; then
     exit 1
 fi
 
+redis-cli --raw -h 127.0.0.1 -p "$PORT" latency reset >/dev/null
+
 LATENCY_LATEST_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" latency latest)"
 if [[ -n "$LATENCY_LATEST_RESULT" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected empty LATENCY LATEST, got '$LATENCY_LATEST_RESULT'" >&2
+    echo "[FAIL] integration/redis_cli_smoke: expected empty LATENCY LATEST after reset, got '$LATENCY_LATEST_RESULT'" >&2
     exit 1
 fi
 
 LATENCY_HISTORY_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" latency history command)"
 if [[ -n "$LATENCY_HISTORY_RESULT" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected empty LATENCY HISTORY, got '$LATENCY_HISTORY_RESULT'" >&2
+    echo "[FAIL] integration/redis_cli_smoke: expected empty LATENCY HISTORY after reset, got '$LATENCY_HISTORY_RESULT'" >&2
+    exit 1
+fi
+
+LATENCY_SET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" set latency-k 1)"
+if [[ "$LATENCY_SET_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected latency seed SET OK, got '$LATENCY_SET_RESULT'" >&2
+    exit 1
+fi
+
+LATENCY_LATEST_RECORDED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" latency latest)"
+if [[ "$LATENCY_LATEST_RECORDED_RESULT" != *"command"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected LATENCY LATEST command event, got '$LATENCY_LATEST_RECORDED_RESULT'" >&2
+    exit 1
+fi
+
+LATENCY_HISTORY_RECORDED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" latency history command)"
+if [[ -z "$LATENCY_HISTORY_RECORDED_RESULT" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected LATENCY HISTORY command samples" >&2
     exit 1
 fi
 
 LATENCY_DOCTOR_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" latency doctor)"
-if [[ "$LATENCY_DOCTOR_RESULT" != *"No latency events"* ]]; then
+if [[ "$LATENCY_DOCTOR_RESULT" != *"recorded command events"* ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected LATENCY DOCTOR minimal diagnostic, got '$LATENCY_DOCTOR_RESULT'" >&2
     exit 1
 fi
 
 LATENCY_RESET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" latency reset)"
-if [[ "$LATENCY_RESET_RESULT" != "0" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected LATENCY RESET 0, got '$LATENCY_RESET_RESULT'" >&2
+if [[ "$LATENCY_RESET_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected LATENCY RESET 1, got '$LATENCY_RESET_RESULT'" >&2
     exit 1
 fi
 
@@ -2267,9 +2287,9 @@ fi
 
 redis-cli --raw -h 127.0.0.1 -p "$PORT" del sx-key >/dev/null
 
-TEMP_STRING_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del fcounter nx-key gs-key allones srca srcb dstbit bf hll dsthll emptyhll geo lua-key slow-k)"
-if [[ "$TEMP_STRING_DEL_RESULT" != "14" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected temp string DEL 14, got '$TEMP_STRING_DEL_RESULT'" >&2
+TEMP_STRING_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del fcounter nx-key gs-key allones srca srcb dstbit bf hll dsthll emptyhll geo lua-key slow-k latency-k)"
+if [[ "$TEMP_STRING_DEL_RESULT" != "15" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected temp string DEL 15, got '$TEMP_STRING_DEL_RESULT'" >&2
     exit 1
 fi
 

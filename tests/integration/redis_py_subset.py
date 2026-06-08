@@ -1582,16 +1582,28 @@ def run_smoke() -> None:
             assert client.slowlog_reset()
             if client.slowlog_len() != 0:
                 raise AssertionError("expected SLOWLOG LEN 0 after RESET")
+            client.latency_reset()
             if client.latency_latest() != []:
-                raise AssertionError("expected empty LATENCY LATEST partial result")
+                raise AssertionError("expected empty LATENCY LATEST after RESET")
             if client.latency_history("command") != []:
-                raise AssertionError("expected empty LATENCY HISTORY partial result")
+                raise AssertionError("expected empty LATENCY HISTORY after RESET")
+            assert client.set("latency-k", "1")
+            latest_latency = client.latency_latest()
+            if (
+                len(latest_latency) != 1
+                or not isinstance(latest_latency[0], list)
+                or latest_latency[0][0] != b"command"
+            ):
+                raise AssertionError(f"unexpected LATENCY LATEST payload: {latest_latency!r}")
+            history_latency = client.latency_history("command")
+            if len(history_latency) == 0 or not isinstance(history_latency[0], list):
+                raise AssertionError(f"unexpected LATENCY HISTORY payload: {history_latency!r}")
             if client.latency_histogram() != []:
                 raise AssertionError("expected empty LATENCY HISTOGRAM partial result")
-            if b"No latency events" not in client.latency_doctor():
+            if b"recorded command events" not in client.latency_doctor():
                 raise AssertionError("expected LATENCY DOCTOR minimal diagnostic")
-            if client.latency_reset() != 0:
-                raise AssertionError("expected LATENCY RESET 0")
+            if client.latency_reset() != 1:
+                raise AssertionError("expected LATENCY RESET 1")
             assert client.setrange("key", 5, "__") == 7
             assert client.get("key") == b"value__"
             assert client.rename("key", "key2")
@@ -1603,7 +1615,7 @@ def run_smoke() -> None:
             assert client.getdel("gd-key") == b"once"
             assert client.getdel("gd-key") is None
             assert client.delete("counter") == 1
-            assert client.delete("fcounter", "nx-key", "gs-key", "sx-key", "mk1", "mk2", "mn1", "mn2", "allones", "srca", "srcb", "dstbit", "bf", "hll", "dsthll", "emptyhll", "geo", "geodst", "distdst", "lua-key", "slow-k") == 21
+            assert client.delete("fcounter", "nx-key", "gs-key", "sx-key", "mk1", "mk2", "mn1", "mn2", "allones", "srca", "srcb", "dstbit", "bf", "hll", "dsthll", "emptyhll", "geo", "geodst", "distdst", "lua-key", "slow-k", "latency-k") == 22
             assert client.echo("hi") == b"hi"
             assert client.key_type("key") == "string"
             assert client.dbsize() == 1

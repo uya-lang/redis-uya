@@ -2945,18 +2945,18 @@ LATENCY GRAPH event
 返回：
 
 - `HELP`：返回当前支持的 `LATENCY` 子命令说明
-- `LATEST`：返回 latest event 数组；当前为空数组
-- `HISTORY`：返回指定 event 的历史数组；当前为空数组
-- `RESET`：返回已清除 event 数；当前为 `0`
+- `LATEST`：返回 latest event 数组；当前记录 `command` 事件
+- `HISTORY`：返回指定 event 的历史数组；当前支持 `command` 事件
+- `RESET`：返回已清除 event 数；无参数时清空全部事件，也可按 event 名清理
 - `DOCTOR`：返回 minimal 诊断文本 Bulk String
 - `HISTOGRAM`：返回命令延迟直方图数组；当前为空数组
-- `GRAPH`：返回指定 event 的 ASCII graph 文本；当前说明未采样事件
+- `GRAPH`：返回指定 event 的 ASCII graph 文本；当前对有历史的 `command` 事件返回最小文本说明
 
 说明：
 
-- 当前实现为 partial：只提供 Redis 单机运维命令的兼容入口、参数校验和空事件返回
-- 当前尚未采样真实延迟事件、命令直方图或事件历史；这些能力后续与可观测/性能收敛一起推进
-- 当前不支持基于 `latency-monitor-threshold` 的 Redis 原生事件采样语义
+- 当前实现为 partial：采样普通命令执行耗时并写入 `command` 事件的进程内历史；`LATENCY` 自身不写入 latency 历史
+- 当前 `command` 事件耗时基于 redis-uya 运行时时间源，精度受毫秒级时钟限制
+- 当前 `HISTOGRAM` 仍为空数组；尚未实现 Redis 原生命令直方图或基于 `latency-monitor-threshold` 的事件门限采样语义
 
 ### `MONITOR`
 

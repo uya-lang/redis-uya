@@ -7492,6 +7492,11 @@ export fn test_command_latency() !void {
     const router: CommandRouter = command_router_new();
     var engine: Engine = engine_new();
 
+    var reset_seed_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nLATENCY\r\n$5\r\nRESET\r\n"[0: 28]);
+    const reset_seed_command: Command = try command_executor_test_command(&router, &reset_seed_parsed);
+    _ = command_execute_at(&engine, &reset_seed_command, 1000u64);
+    resp_value_free(&reset_seed_parsed.value);
+
     var latest_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nLATENCY\r\n$6\r\nLATEST\r\n"[0: 29]);
     const latest_command: Command = try command_executor_test_command(&router, &latest_parsed);
     var latest_reply: CommandReply = command_execute_at(&engine, &latest_command, 1000u64);
@@ -7500,11 +7505,26 @@ export fn test_command_latency() !void {
     command_reply_cleanup(&latest_reply);
     resp_value_free(&latest_parsed.value);
 
+    var seed_set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$5\r\nlat-k\r\n$1\r\n1\r\n"[0: 31]);
+    const seed_set_command: Command = try command_executor_test_command(&router, &seed_set_parsed);
+    const seed_set_reply: CommandReply = command_execute_at(&engine, &seed_set_command, 2000u64);
+    try assert_eq_i32(seed_set_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    resp_value_free(&seed_set_parsed.value);
+
+    var latest_recorded_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nLATENCY\r\n$6\r\nLATEST\r\n"[0: 29]);
+    const latest_recorded_command: Command = try command_executor_test_command(&router, &latest_recorded_parsed);
+    var latest_recorded_reply: CommandReply = command_execute_at(&engine, &latest_recorded_command, 2000u64);
+    try assert_eq_i32(latest_recorded_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    try assert_true(command_executor_test_contains(latest_recorded_reply.data, &"$7\r\ncommand\r\n"[0: 13]));
+    try assert_true(command_executor_test_contains(latest_recorded_reply.data, &":2\r\n"[0: 4]));
+    command_reply_cleanup(&latest_recorded_reply);
+    resp_value_free(&latest_recorded_parsed.value);
+
     var history_parsed: RespParseResult = try parse_resp2(&"*3\r\n$7\r\nLATENCY\r\n$7\r\nHISTORY\r\n$7\r\ncommand\r\n"[0: 43]);
     const history_command: Command = try command_executor_test_command(&router, &history_parsed);
-    var history_reply: CommandReply = command_execute_at(&engine, &history_command, 1000u64);
+    var history_reply: CommandReply = command_execute_at(&engine, &history_command, 2000u64);
     try assert_eq_i32(history_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
-    try assert_true(command_executor_test_slice_eq(history_reply.data, &"*0\r\n"[0: 4]));
+    try assert_true(command_executor_test_contains(history_reply.data, &":2\r\n"[0: 4]));
     command_reply_cleanup(&history_reply);
     resp_value_free(&history_parsed.value);
 
@@ -7520,7 +7540,7 @@ export fn test_command_latency() !void {
     const graph_command: Command = try command_executor_test_command(&router, &graph_parsed);
     var graph_reply: CommandReply = command_execute_at(&engine, &graph_command, 1000u64);
     try assert_eq_i32(graph_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
-    try assert_true(command_executor_test_contains(graph_reply.data, &"LATENCY GRAPH is empty"[0: 22]));
+    try assert_true(command_executor_test_contains(graph_reply.data, &"command latency history"[0: 23]));
     command_reply_cleanup(&graph_reply);
     resp_value_free(&graph_parsed.value);
 
@@ -7528,7 +7548,7 @@ export fn test_command_latency() !void {
     const doctor_command: Command = try command_executor_test_command(&router, &doctor_parsed);
     var doctor_reply: CommandReply = command_execute_at(&engine, &doctor_command, 1000u64);
     try assert_eq_i32(doctor_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
-    try assert_true(command_executor_test_contains(doctor_reply.data, &"No latency events"[0: 17]));
+    try assert_true(command_executor_test_contains(doctor_reply.data, &"recorded command events"[0: 23]));
     command_reply_cleanup(&doctor_reply);
     resp_value_free(&doctor_parsed.value);
 
@@ -7536,7 +7556,7 @@ export fn test_command_latency() !void {
     const reset_command: Command = try command_executor_test_command(&router, &reset_parsed);
     const reset_reply: CommandReply = command_execute_at(&engine, &reset_command, 1000u64);
     try assert_eq_i32(reset_reply.typ as i32, CommandReplyType.reply_integer as i32);
-    try assert_eq_i32(reset_reply.integer as i32, 0);
+    try assert_eq_i32(reset_reply.integer as i32, 1);
     resp_value_free(&reset_parsed.value);
 
     var unknown_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nLATENCY\r\n$1\r\nX\r\n"[0: 24]);

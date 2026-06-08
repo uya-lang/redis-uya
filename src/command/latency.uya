@@ -1,0 +1,125 @@
+// command/latency.uya - minimal in-process latency event history.
+
+const LATENCY_HISTORY_MAX_ENTRIES: usize = 160;
+
+export struct LatencyHistoryEntry {
+    active: bool,
+    timestamp_sec: u64,
+    latency_ms: u64,
+}
+
+var latency_command_active: bool = false;
+var latency_command_latest_timestamp_sec: u64 = 0u64;
+var latency_command_latest_latency_ms: u64 = 0u64;
+var latency_command_max_latency_ms: u64 = 0u64;
+var latency_command_entries: [LatencyHistoryEntry: LATENCY_HISTORY_MAX_ENTRIES] = [];
+var latency_command_start: usize = 0;
+var latency_command_count: usize = 0;
+
+fn latency_event_is_command(event: &[byte]) bool {
+    if event.len != 7 {
+        return false;
+    }
+    return
+        (event.ptr[0] == 99 as byte || event.ptr[0] == 67 as byte) &&
+        (event.ptr[1] == 111 as byte || event.ptr[1] == 79 as byte) &&
+        (event.ptr[2] == 109 as byte || event.ptr[2] == 77 as byte) &&
+        (event.ptr[3] == 109 as byte || event.ptr[3] == 77 as byte) &&
+        (event.ptr[4] == 97 as byte || event.ptr[4] == 65 as byte) &&
+        (event.ptr[5] == 110 as byte || event.ptr[5] == 78 as byte) &&
+        (event.ptr[6] == 100 as byte || event.ptr[6] == 68 as byte);
+}
+
+export fn latency_record_command(timestamp_sec: u64, duration_us: u64) void {
+    var latency_ms: u64 = duration_us / 1000u64;
+    if duration_us > 0u64 && latency_ms == 0u64 {
+        latency_ms = 1u64;
+    }
+
+    latency_command_active = true;
+    latency_command_latest_timestamp_sec = timestamp_sec;
+    latency_command_latest_latency_ms = latency_ms;
+    if latency_ms > latency_command_max_latency_ms {
+        latency_command_max_latency_ms = latency_ms;
+    }
+
+    var slot: usize = 0;
+    if latency_command_count < LATENCY_HISTORY_MAX_ENTRIES {
+        slot = (latency_command_start + latency_command_count) % LATENCY_HISTORY_MAX_ENTRIES;
+        latency_command_count = latency_command_count + 1;
+    } else {
+        slot = latency_command_start;
+        latency_command_start = (latency_command_start + 1) % LATENCY_HISTORY_MAX_ENTRIES;
+    }
+    latency_command_entries[slot].active = true;
+    latency_command_entries[slot].timestamp_sec = timestamp_sec;
+    latency_command_entries[slot].latency_ms = latency_ms;
+}
+
+export fn latency_command_is_active() bool {
+    return latency_command_active;
+}
+
+export fn latency_command_latest_timestamp_sec() u64 {
+    return latency_command_latest_timestamp_sec;
+}
+
+export fn latency_command_latest_latency_ms() u64 {
+    return latency_command_latest_latency_ms;
+}
+
+export fn latency_command_max_latency_ms() u64 {
+    return latency_command_max_latency_ms;
+}
+
+export fn latency_history_count(event: &[byte]) usize {
+    if !latency_event_is_command(event) || !latency_command_active {
+        return 0;
+    }
+    return latency_command_count;
+}
+
+export fn latency_history_entry(event: &[byte], offset: usize) &LatencyHistoryEntry {
+    if !latency_event_is_command(event) || offset >= latency_command_count {
+        return null as &LatencyHistoryEntry;
+    }
+    const slot: usize = (latency_command_start + offset) % LATENCY_HISTORY_MAX_ENTRIES;
+    if !latency_command_entries[slot].active {
+        return null as &LatencyHistoryEntry;
+    }
+    return &latency_command_entries[slot];
+}
+
+fn latency_reset_command() bool {
+    if !latency_command_active {
+        return false;
+    }
+    var index: usize = 0;
+    while index < LATENCY_HISTORY_MAX_ENTRIES {
+        latency_command_entries[index].active = false;
+        latency_command_entries[index].timestamp_sec = 0u64;
+        latency_command_entries[index].latency_ms = 0u64;
+        index = index + 1;
+    }
+    latency_command_active = false;
+    latency_command_latest_timestamp_sec = 0u64;
+    latency_command_latest_latency_ms = 0u64;
+    latency_command_max_latency_ms = 0u64;
+    latency_command_start = 0;
+    latency_command_count = 0;
+    return true;
+}
+
+export fn latency_reset_all() usize {
+    if latency_reset_command() {
+        return 1;
+    }
+    return 0;
+}
+
+export fn latency_reset_event(event: &[byte]) usize {
+    if latency_event_is_command(event) && latency_reset_command() {
+        return 1;
+    }
+    return 0;
+}

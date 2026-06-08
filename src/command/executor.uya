@@ -39,6 +39,16 @@ use src.command.slowlog.slowlog_append;
 use src.command.slowlog.slowlog_count;
 use src.command.slowlog.slowlog_entry_newest;
 use src.command.slowlog.slowlog_reset;
+use src.command.latency.LatencyHistoryEntry;
+use src.command.latency.latency_command_is_active;
+use src.command.latency.latency_command_latest_timestamp_sec;
+use src.command.latency.latency_command_latest_latency_ms;
+use src.command.latency.latency_command_max_latency_ms;
+use src.command.latency.latency_history_count;
+use src.command.latency.latency_history_entry;
+use src.command.latency.latency_record_command;
+use src.command.latency.latency_reset_all;
+use src.command.latency.latency_reset_event;
 use src.command.catalog_generated_base.CommandCatalogEntry;
 use src.command.catalog_generated_base.CommandCatalogStatus;
 use src.command.router.CommandInfo;
@@ -7664,18 +7674,79 @@ fn command_executor_latency_help() CommandReply {
     _ = list_object_push_tail(reply_list, &"LATENCY DOCTOR"[0: 14]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"    Return a minimal diagnostic report for redis-uya latency state."[0: 67]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"LATENCY GRAPH <event>"[0: 21]) catch { object_free(reply_list); return command_executor_oom(); };
-    _ = list_object_push_tail(reply_list, &"    Return an ASCII graph for <event>. Currently empty until event sampling lands."[0: 82]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Return a minimal graph text for <event>."[0: 46]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"LATENCY HISTOGRAM [command [command ...]]"[0: 41]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"    Return command latency histograms. Currently empty until histogram sampling lands."[0: 86]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"LATENCY HISTORY <event>"[0: 23]) catch { object_free(reply_list); return command_executor_oom(); };
-    _ = list_object_push_tail(reply_list, &"    Return history for <event>. Currently empty until event sampling lands."[0: 75]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Return history for <event>. Currently supports command events."[0: 65]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"LATENCY LATEST"[0: 14]) catch { object_free(reply_list); return command_executor_oom(); };
-    _ = list_object_push_tail(reply_list, &"    Return latest latency events tracked by redis-uya. Currently empty until event sampling lands."[0: 98]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Return latest latency events tracked by redis-uya."[0: 56]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"LATENCY RESET [event [event ...]]"[0: 33]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"    Reset latency events and return the number of removed events."[0: 65]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"LATENCY HELP"[0: 12]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"    Prints this help."[0: 21]) catch { object_free(reply_list); return command_executor_oom(); };
     return command_executor_owned_array(reply_list);
+}
+
+fn command_executor_latency_latest() CommandReply {
+    if !latency_command_is_active() {
+        return command_executor_owned_raw(&"*0\r\n"[0: 4]);
+    }
+
+    var raw: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&raw);
+    }
+    _ = command_executor_resp_collection_prefix(&raw, &"*"[0: 1], 1) catch { return command_executor_oom(); };
+    _ = command_executor_resp_collection_prefix(&raw, &"*"[0: 1], 4) catch { return command_executor_oom(); };
+    _ = command_executor_command_append_bulk(&raw, &"command"[0: 7]) catch { return command_executor_oom(); };
+    _ = command_executor_info_append_u64(&raw, &":%u\r\n"[0: 5], latency_command_latest_timestamp_sec()) catch { return command_executor_oom(); };
+    _ = command_executor_info_append_u64(&raw, &":%u\r\n"[0: 5], latency_command_latest_latency_ms()) catch { return command_executor_oom(); };
+    _ = command_executor_info_append_u64(&raw, &":%u\r\n"[0: 5], latency_command_max_latency_ms()) catch { return command_executor_oom(); };
+    return command_executor_owned_raw(raw.buf[0: raw.len]);
+}
+
+fn command_executor_latency_history(event: &[byte]) CommandReply {
+    const count: usize = latency_history_count(event);
+    if count == 0 {
+        return command_executor_owned_raw(&"*0\r\n"[0: 4]);
+    }
+
+    var raw: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&raw);
+    }
+    _ = command_executor_resp_collection_prefix(&raw, &"*"[0: 1], count) catch { return command_executor_oom(); };
+    var index: usize = 0;
+    while index < count {
+        const entry: &LatencyHistoryEntry = latency_history_entry(event, index);
+        if entry != null {
+            _ = command_executor_resp_collection_prefix(&raw, &"*"[0: 1], 2) catch { return command_executor_oom(); };
+            _ = command_executor_info_append_u64(&raw, &":%u\r\n"[0: 5], entry.timestamp_sec) catch { return command_executor_oom(); };
+            _ = command_executor_info_append_u64(&raw, &":%u\r\n"[0: 5], entry.latency_ms) catch { return command_executor_oom(); };
+        }
+        index = index + 1;
+    }
+    return command_executor_owned_raw(raw.buf[0: raw.len]);
+}
+
+fn command_executor_latency_graph(event: &[byte]) CommandReply {
+    const count: usize = latency_history_count(event);
+    if count == 0 {
+        return command_executor_owned_bulk_copy(&"LATENCY GRAPH is empty because redis-uya has not recorded latency events for this event."[0: 88]);
+    }
+    return command_executor_owned_bulk_copy(&"command latency history is available via LATENCY HISTORY command; redis-uya graph rendering is still a minimal text compatibility surface."[0: 130]);
+}
+
+fn command_executor_latency_doctor() CommandReply {
+    if !latency_command_is_active() {
+        return command_executor_owned_bulk_copy(&"No latency events are available yet. redis-uya currently exposes a minimal LATENCY compatibility surface; event sampling and histograms are planned after the v0.9.2 command gap pass."[0: 182]);
+    }
+    return command_executor_owned_bulk_copy(&"Latency monitor has recorded command events. redis-uya currently samples command execution duration with millisecond-granularity runtime time and keeps an in-process command event history."[0: 174]);
 }
 
 fn command_executor_latency(command: &Command) CommandReply {
@@ -7696,31 +7767,49 @@ fn command_executor_latency(command: &Command) CommandReply {
         if command.argc != 2 {
             return command_executor_latency_wrong_subcommand_arity(&"doctor"[0: 6]);
         }
-        return command_executor_owned_bulk_copy(&"No latency events are available yet. redis-uya currently exposes a minimal LATENCY compatibility surface; event sampling and histograms are planned after the v0.9.2 command gap pass."[0: 182]);
+        return command_executor_latency_doctor();
     }
     if command_executor_keyword_eq(subcommand, &"LATEST"[0: 6]) {
         if command.argc != 2 {
             return command_executor_latency_wrong_subcommand_arity(&"latest"[0: 6]);
         }
-        return command_executor_owned_raw(&"*0\r\n"[0: 4]);
+        return command_executor_latency_latest();
     }
     if command_executor_keyword_eq(subcommand, &"HISTORY"[0: 7]) {
         if command.argc != 3 {
             return command_executor_latency_wrong_subcommand_arity(&"history"[0: 7]);
         }
-        return command_executor_owned_raw(&"*0\r\n"[0: 4]);
+        const event: &[byte] = command_executor_arg(command, 2) catch {
+            return command_executor_latency_wrong_subcommand_arity(&"history"[0: 7]);
+        };
+        return command_executor_latency_history(event);
     }
     if command_executor_keyword_eq(subcommand, &"GRAPH"[0: 5]) {
         if command.argc != 3 {
             return command_executor_latency_wrong_subcommand_arity(&"graph"[0: 5]);
         }
-        return command_executor_owned_bulk_copy(&"LATENCY GRAPH is empty because redis-uya has not recorded latency events for this event."[0: 88]);
+        const event: &[byte] = command_executor_arg(command, 2) catch {
+            return command_executor_latency_wrong_subcommand_arity(&"graph"[0: 5]);
+        };
+        return command_executor_latency_graph(event);
     }
     if command_executor_keyword_eq(subcommand, &"HISTOGRAM"[0: 9]) {
         return command_executor_owned_raw(&"*0\r\n"[0: 4]);
     }
     if command_executor_keyword_eq(subcommand, &"RESET"[0: 5]) {
-        return command_executor_integer(0);
+        if command.argc == 2 {
+            return command_executor_integer(latency_reset_all() as i64);
+        }
+        var removed: usize = 0;
+        var index: usize = 2;
+        while index < command.argc {
+            const event: &[byte] = command_executor_arg(command, index) catch {
+                return command_executor_latency_wrong_subcommand_arity(&"reset"[0: 5]);
+            };
+            removed = removed + latency_reset_event(event);
+            index = index + 1;
+        }
+        return command_executor_integer(removed as i64);
     }
 
     var err: Sds = sds_empty() catch {
@@ -18038,6 +18127,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
             duration_us = end_us - start_us;
         }
         slowlog_append(command, now_ms / 1000u64, duration_us);
+        if command.info.cmd_type != CommandType.command_latency {
+            latency_record_command(now_ms / 1000u64, duration_us);
+        }
     }
     return reply;
 }

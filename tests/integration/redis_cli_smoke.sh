@@ -1653,6 +1653,24 @@ if [[ "$ZRANGE_REV_WITHSCORES_RESULT" != $'a\n4\nb\n2' ]]; then
     exit 1
 fi
 
+ZRANGE_BYSCORE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrange zset 2 4 byscore)"
+if [[ "$ZRANGE_BYSCORE_RESULT" != $'b\na' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZRANGE BYSCORE b/a, got '$ZRANGE_BYSCORE_RESULT'" >&2
+    exit 1
+fi
+
+ZRANGE_BYSCORE_REV_WITHSCORES_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrange zset 2 4 byscore rev withscores)"
+if [[ "$ZRANGE_BYSCORE_REV_WITHSCORES_RESULT" != $'a\n4\nb\n2' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZRANGE BYSCORE REV WITHSCORES a/4/b/2, got '$ZRANGE_BYSCORE_REV_WITHSCORES_RESULT'" >&2
+    exit 1
+fi
+
+ZRANGE_BYSCORE_LIMIT_WITHSCORES_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrange zset 2 4 byscore limit 1 1 withscores)"
+if [[ "$ZRANGE_BYSCORE_LIMIT_WITHSCORES_RESULT" != $'a\n4' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZRANGE BYSCORE LIMIT WITHSCORES a/4, got '$ZRANGE_BYSCORE_LIMIT_WITHSCORES_RESULT'" >&2
+    exit 1
+fi
+
 ZREVRANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrevrange zset 0 -1)"
 if [[ "$ZREVRANGE_RESULT" != $'a\nb' ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ZREVRANGE a/b after ZINCRBY, got '$ZREVRANGE_RESULT'" >&2

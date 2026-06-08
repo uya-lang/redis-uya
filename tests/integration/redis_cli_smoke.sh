@@ -1287,6 +1287,24 @@ if [[ "$ZRANGEBYLEX_UNLIMITED_RESULT" != $'charlie\ndelta' ]]; then
     exit 1
 fi
 
+ZRANGE_BYLEX_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrange lex '[alpha' '[charlie' bylex)"
+if [[ "$ZRANGE_BYLEX_RESULT" != $'alpha\nbeta\ncharlie' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZRANGE BYLEX alpha/beta/charlie, got '$ZRANGE_BYLEX_RESULT'" >&2
+    exit 1
+fi
+
+ZRANGE_BYLEX_LIMIT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrange lex - + bylex limit 1 2)"
+if [[ "$ZRANGE_BYLEX_LIMIT_RESULT" != $'beta\ncharlie' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZRANGE BYLEX LIMIT beta/charlie, got '$ZRANGE_BYLEX_LIMIT_RESULT'" >&2
+    exit 1
+fi
+
+ZRANGE_BYLEX_REV_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrange lex '[delta' '(alpha' bylex rev)"
+if [[ "$ZRANGE_BYLEX_REV_RESULT" != $'delta\ncharlie\nbeta' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZRANGE BYLEX REV delta/charlie/beta, got '$ZRANGE_BYLEX_REV_RESULT'" >&2
+    exit 1
+fi
+
 ZREVRANGEBYLEX_CLOSED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrevrangebylex lex '[delta' '(alpha')"
 if [[ "$ZREVRANGEBYLEX_CLOSED_RESULT" != $'delta\ncharlie\nbeta' ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ZREVRANGEBYLEX delta/charlie/beta, got '$ZREVRANGEBYLEX_CLOSED_RESULT'" >&2
@@ -1659,7 +1677,7 @@ if [[ "$ZRANGE_BYSCORE_RESULT" != $'b\na' ]]; then
     exit 1
 fi
 
-ZRANGE_BYSCORE_REV_WITHSCORES_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrange zset 2 4 byscore rev withscores)"
+ZRANGE_BYSCORE_REV_WITHSCORES_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrange zset 4 2 byscore rev withscores)"
 if [[ "$ZRANGE_BYSCORE_REV_WITHSCORES_RESULT" != $'a\n4\nb\n2' ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ZRANGE BYSCORE REV WITHSCORES a/4/b/2, got '$ZRANGE_BYSCORE_REV_WITHSCORES_RESULT'" >&2
     exit 1

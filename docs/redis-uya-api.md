@@ -1040,14 +1040,15 @@ ZCOUNT key min max
 格式：
 
 ```text
-ZRANGE key start stop [BYSCORE] [REV] [LIMIT offset count] [WITHSCORES]
+ZRANGE key start stop [BYSCORE | BYLEX] [REV] [LIMIT offset count] [WITHSCORES]
 ```
 
 返回：
 
 - 返回按 score 升序排列后的索引区间成员
 - 带 `REV` 时按 score 降序排列后再应用索引区间
-- 带 `BYSCORE` 时把 `start` / `stop` 解释为整数 score 闭区间
+- 带 `BYSCORE` 时把 `start` / `stop` 解释为整数 score 闭区间；`REV` 模式下 `start` 是 max、`stop` 是 min
+- 带 `BYLEX` 时把 `start` / `stop` 解释为 Redis lex 边界；`REV` 模式下 `start` 是 max、`stop` 是 min
 - 带 `WITHSCORES` 时返回 member / score 交错数组
 - key 不存在时返回空数组
 
@@ -1055,7 +1056,7 @@ ZRANGE key start stop [BYSCORE] [REV] [LIMIT offset count] [WITHSCORES]
 
 - 当前 rank 模式支持正负索引、闭区间 `[start, stop]`、`REV` 和 `WITHSCORES`
 - 当前 `BYSCORE` 模式支持 `REV`、`WITHSCORES` 和 `LIMIT offset count`；`offset` 必须非负，`count < 0` 表示不限制数量
-- 当前不支持 `BYLEX`；lex 范围请使用 `ZRANGEBYLEX`
+- 当前 `BYLEX` 模式支持 Redis lex 边界 token：`-`、`+`、`[value`、`(value`，支持 `REV` 和 `LIMIT offset count`，不支持与 `WITHSCORES` 组合
 - 当前项目内 ZSet score 使用整数语义
 
 ### `ZLEXCOUNT`
@@ -1095,7 +1096,7 @@ ZRANGEBYLEX key min max [LIMIT offset count]
 - 当前支持 Redis lex 边界 token：`-`、`+`、`[value`、`(value`
 - 当前支持 `LIMIT offset count`；`offset` 必须非负，`count < 0` 表示不限制数量
 - 当前按项目内 ZSet 的 `(score, member)` 排序视图扫描并按 member 边界返回；与 Redis 一样，lex 范围命令的有效业务语义应使用同分 sorted set
-- 当前不支持通过新版 `ZRANGE ... BYLEX` 复合语法访问同一能力；请继续使用独立 `ZRANGEBYLEX` 命令
+- 新版 `ZRANGE ... BYLEX` 复合语法复用同一 lex 边界与 `LIMIT` 语义
 
 ### `ZRANGESTORE`
 

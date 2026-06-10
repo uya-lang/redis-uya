@@ -320,6 +320,28 @@ def run_smoke() -> None:
                     if "syntax" not in str(exc).lower():
                         raise
 
+                if send_command(sock, b"CLIENT", b"PAUSE", b"1000", b"WRITE") != "OK":
+                    raise AssertionError("CLIENT PAUSE WRITE failed")
+                peer_sock.settimeout(1.0)
+                peer_sock.sendall(b"*1\r\n$4\r\nPING\r\n")
+                if read_resp(peer_sock) != "PONG":
+                    raise AssertionError("CLIENT PAUSE WRITE should not block peer read command")
+                peer_sock.settimeout(0.1)
+                peer_sock.sendall(b"*3\r\n$3\r\nSET\r\n$15\r\npause-write-key\r\n$1\r\n1\r\n")
+                try:
+                    paused_write_reply = read_resp(peer_sock)
+                except TimeoutError:
+                    paused_write_reply = None
+                except socket.timeout:
+                    paused_write_reply = None
+                if paused_write_reply is not None:
+                    raise AssertionError(f"CLIENT PAUSE WRITE did not block peer write command: {paused_write_reply!r}")
+                if send_command(sock, b"CLIENT", b"UNPAUSE") != "OK":
+                    raise AssertionError("CLIENT UNPAUSE after WRITE failed")
+                peer_sock.settimeout(2.0)
+                if read_resp(peer_sock) != "OK":
+                    raise AssertionError("peer write command did not resume after CLIENT UNPAUSE")
+
                 if send_command(sock, b"CLIENT", b"PAUSE", b"1000", b"ALL") != "OK":
                     raise AssertionError("CLIENT PAUSE failed")
                 peer_sock.settimeout(0.1)

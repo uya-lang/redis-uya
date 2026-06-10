@@ -135,7 +135,7 @@ server open
 - `CLIENT` 在 `connection.uya` 处理，因为 `SETNAME/GETNAME/SETINFO/INFO/LIST` 依赖连接级状态
 - `HELLO 2/3 SETNAME name` 与 `CLIENT SETNAME` 共享同一份连接级客户端名
 - `CLIENT LIST` 通过连接级注册表返回当前活跃连接的信息行快照，连接关闭时由 `server.uya` 注销
-- `CLIENT KILL` / `UNBLOCK` / `PAUSE` / `UNPAUSE` 通过 `ConnectionProcessResult` 把控制请求传回 `server.uya`，由 server 侧关闭目标连接、解除阻塞等待或更新全局 pause 状态
+- `CLIENT KILL` / `UNBLOCK` / `PAUSE` / `UNPAUSE` 通过 `ConnectionProcessResult` 把控制请求传回 `server.uya`，由 server 侧关闭目标连接、解除阻塞等待或更新全局 pause 状态；`PAUSE WRITE` 使用连接层 RESP 探针和命令目录写标志只阻塞写命令
 - `CLIENT TRACKING` 当前维护连接级 flags/redirect/prefix 状态，并通过 `CLIENT GETREDIR` / `CLIENT TRACKINGINFO` 暴露，不包含 invalidation push 通道
 - `CLIENT REPLY` 当前在连接层维护 `OFF` / `SKIP` 回复抑制状态，覆盖命令回复编码路径；不改变 Pub/Sub push 或 `MONITOR` 推送
 - `CLIENT UNBLOCK` 当前在 server 侧定位目标连接并解除阻塞 pop 等待，`TIMEOUT` 复用连接层回复编码生成空阻塞结果，`ERROR` 返回 `UNBLOCKED` 错误
@@ -215,5 +215,5 @@ server open
 - `RESET` 当前由 `connection.uya` 直接处理，重置连接级协议版本、事务/观察键、Pub/Sub、tracking 和认证状态，作为连接重连语义的最小闭环
 - RESP3 当前是 `HELLO 2/3` 驱动的最小闭环，仍不是完整 RESP3 类型输出与客户端兼容矩阵
 - Pub/Sub 当前是固定容量最小闭环，已支持 pattern 订阅和 RESP2 subscribed-mode 命令限制，但仍没有背压缓冲
-- 控制面当前覆盖 `CLIENT` / `CONFIG` 的兼容子集，`CONFIG SET` 已支持 `port/bind/dir/dbfilename/appendfilename/requirepass/masterauth/replicaof/maxmemory/maxmemory-policy/maxclients/databases/save/latency-tracking` 运行时子集，`CONFIG REWRITE` 已支持把当前有效配置写到 `<appendfilename>.conf`，`CLIENT KILL/PAUSE/TRACKING/GETREDIR` 已有最小闭环且 `CLIENT TRACKING` 可回显 `BCAST PREFIX` 列表；仍没有其余 `CONFIG SET` 热更新、更完整的 rewrite 保真度，以及 tracking invalidation 和 richer client filters
+- 控制面当前覆盖 `CLIENT` / `CONFIG` 的兼容子集，`CONFIG SET` 已支持 `port/bind/dir/dbfilename/appendfilename/requirepass/masterauth/replicaof/maxmemory/maxmemory-policy/maxclients/databases/save/latency-tracking` 运行时子集，`CONFIG REWRITE` 已支持把当前有效配置写到 `<appendfilename>.conf`，`CLIENT KILL/PAUSE/TRACKING/GETREDIR` 已有最小闭环且 `CLIENT PAUSE WRITE` 可区分读写命令、`CLIENT TRACKING` 可回显 `BCAST PREFIX` 列表；仍没有其余 `CONFIG SET` 热更新、更完整的 rewrite 保真度，以及 tracking invalidation 和 richer client filters
 - `maxmemory` 当前已覆盖 noeviction、allkeys-* 与 volatile-* 基线，并补齐 allocator 统计观测、Slab 小对象缓存和压力回归；仍没有 LFU 衰减、采样池、淘汰事件持久化优化和正式内存 benchmark

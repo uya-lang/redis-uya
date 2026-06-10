@@ -26,6 +26,7 @@ use src.network.protocol.parse_resp2_batch;
 use src.network.protocol.parse_resp3;
 use src.network.protocol.parse_resp3_batch;
 use src.network.protocol.resp_batch_free;
+use src.network.protocol.resp_batch_value;
 use src.network.protocol.resp_batch_value_consumed;
 use src.network.protocol.resp_value_free;
 use src.persistence.aof.AofWriter;
@@ -3322,6 +3323,35 @@ fn connection_should_append_aof(command: &Command, reply: &CommandReply) bool {
     return (command.info.flags & COMMAND_FLAG_WRITE) != 0u64;
 }
 
+fn connection_command_requests_write(command: &Command) bool {
+    if command == null {
+        return false;
+    }
+    if command.info.cmd_type == CommandType.command_sort {
+        if command.argc < 4 {
+            return false;
+        }
+        var index: usize = 2;
+        while index < command.argc {
+            const token: &[byte] = command_arg_data(command, index) catch {
+                return false;
+            };
+            if connection_keyword_eq(token, &"STORE"[0: 5]) {
+                return index + 1 < command.argc;
+            }
+            if connection_keyword_eq(token, &"LIMIT"[0: 5]) {
+                index = index + 3;
+            } else if connection_keyword_eq(token, &"BY"[0: 2]) || connection_keyword_eq(token, &"GET"[0: 3]) {
+                index = index + 2;
+            } else {
+                index = index + 1;
+            }
+        }
+        return false;
+    }
+    return (command.info.flags & COMMAND_FLAG_WRITE) != 0u64;
+}
+
 fn connection_execute_blocking_pop_command_at(
     engine: &Engine,
     runtime: &CommandRuntimeInfo,
@@ -4557,6 +4587,48 @@ fn connection_parse_batch_for_protocol(tx: &ConnectionTransaction, input: &[byte
         return parse_resp3_batch(input, max_count);
     }
     return parse_resp2_batch(input, max_count);
+}
+
+export fn connection_input_contains_write_command(tx: &ConnectionTransaction, router: &CommandRouter, input: &[byte]) bool {
+    if input.len == 0 {
+        return false;
+    }
+    const batch_result: !RespBatchParseResult = connection_parse_batch_for_protocol(tx, input, CONNECTION_BATCH_MAX_COUNT);
+    const batch: RespBatchParseResult = batch_result catch {
+        return connection_input_single_write_command(tx, router, input);
+    };
+    defer {
+        resp_batch_free(&batch);
+    }
+
+    var index: usize = 0;
+    while index < batch.count {
+        const value: &RespValue = resp_batch_value(&batch, index);
+        if connection_resp_value_requests_write(router, value) {
+            return true;
+        }
+        index = index + 1;
+    }
+    return false;
+}
+
+fn connection_resp_value_requests_write(router: &CommandRouter, value: &RespValue) bool {
+    const command_result: !Command = command_from_resp(router, value);
+    const command: Command = command_result catch {
+        return false;
+    };
+    return connection_command_requests_write(&command);
+}
+
+fn connection_input_single_write_command(tx: &ConnectionTransaction, router: &CommandRouter, input: &[byte]) bool {
+    const parsed_result: !RespParseResult = connection_parse_input_for_protocol(tx, input);
+    const parsed: RespParseResult = parsed_result catch {
+        return false;
+    };
+    defer {
+        resp_value_free(&parsed.value);
+    }
+    return connection_resp_value_requests_write(router, &parsed.value);
 }
 
 export fn connection_process_input_at(

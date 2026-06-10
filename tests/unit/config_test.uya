@@ -37,6 +37,7 @@ export fn test_config_defaults() !void {
     try assert_eq_i32(cfg.maxmemory as i32, 0);
     try assert_eq_i32(cfg.maxmemory_policy as i32, MaxmemoryPolicy.maxmemory_noeviction as i32);
     try assert_eq_i32(cfg.latency_tracking as i32, 1);
+    try assert_eq_i32(cfg.slowlog_log_slower_than as i32, 10000);
     try assert_eq_i32(cfg.replicaof_port, 0);
     try assert_true(cstr_eq(cfg.bind[0: 64], &"0.0.0.0"[0: 7]));
     try assert_true(cstr_eq(cfg.dbfilename[0: 128], &"dump.rdb"[0: 8]));
@@ -63,6 +64,9 @@ export fn test_config_parse_core_fields() !void {
     try assert_true(config_test_slice_eq(maxmemory_policy_name(cfg.maxmemory_policy), &"allkeys-lru"[0: 11]));
     try assert_eq_i32(cfg.save_seconds, 60);
     try assert_eq_i32(cfg.save_changes, 1000);
+
+    const slowlog_cfg: ServerConfig = try parse_config_text(&"slowlog-log-slower-than -1\n"[0: 27]);
+    try assert_eq_i32(slowlog_cfg.slowlog_log_slower_than as i32, -1);
 }
 
 export fn test_config_parse_memory_units() !void {

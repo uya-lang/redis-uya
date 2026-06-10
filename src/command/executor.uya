@@ -15545,6 +15545,12 @@ fn command_executor_config(runtime: &CommandRuntimeInfo, command: &Command) Comm
             return command_executor_oom();
         };
     }
+    if command_executor_keyword_match(pattern, &"slowlog-log-slower-than"[0: 23]) {
+        _ = command_executor_config_append_i64(reply_list, &"slowlog-log-slower-than"[0: 23], runtime.config.slowlog_log_slower_than) catch {
+            object_free(reply_list);
+            return command_executor_oom();
+        };
+    }
     if command_executor_keyword_match(pattern, &"maxclients"[0: 10]) {
         _ = command_executor_config_append_i64(reply_list, &"maxclients"[0: 10], runtime.maxclients as i64) catch {
             object_free(reply_list);
@@ -18233,7 +18239,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     if end_us >= start_us {
         duration_us = end_us - start_us;
     }
-    if command.info.cmd_type != CommandType.command_slowlog {
+    if command.info.cmd_type != CommandType.command_slowlog &&
+        runtime.config.slowlog_log_slower_than >= 0 &&
+        duration_us >= runtime.config.slowlog_log_slower_than as u64 {
         slowlog_append(command, now_ms / 1000u64, duration_us);
     }
     if command.info.cmd_type != CommandType.command_latency {

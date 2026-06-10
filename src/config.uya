@@ -53,6 +53,7 @@ export struct ServerConfig {
     maxmemory: usize,
     maxmemory_policy: MaxmemoryPolicy,
     latency_tracking: bool,
+    slowlog_log_slower_than: i64,
     save_seconds: i32,
     save_changes: i32,
 }
@@ -78,6 +79,7 @@ export fn default_config() ServerConfig {
         maxmemory: 0,
         maxmemory_policy: MaxmemoryPolicy.maxmemory_noeviction,
         latency_tracking: true,
+        slowlog_log_slower_than: 10000,
         save_seconds: 900,
         save_changes: 1,
     };
@@ -109,6 +111,28 @@ fn parse_i32_token(token: &[byte]) !i32 {
         if ch < 48 as byte || ch > 57 as byte { return error.ConfigInvalidNumber; }
         value = value * 10 + ((ch - 48 as byte) as i32);
         i = i + 1;
+    }
+    return value;
+}
+
+fn parse_i64_token(token: &[byte]) !i64 {
+    if token.len == 0 { return error.ConfigInvalidNumber; }
+    var negative: bool = false;
+    var i: usize = 0;
+    if token.ptr[0] == 45 as byte {
+        negative = true;
+        i = 1;
+    }
+    if i >= token.len { return error.ConfigInvalidNumber; }
+    var value: i64 = 0;
+    while i < token.len {
+        const ch: byte = token.ptr[i];
+        if ch < 48 as byte || ch > 57 as byte { return error.ConfigInvalidNumber; }
+        value = value * 10 + ((ch - 48 as byte) as i64);
+        i = i + 1;
+    }
+    if negative {
+        return 0i64 - value;
     }
     return value;
 }
@@ -274,6 +298,14 @@ export fn config_apply_runtime_set(cfg: &ServerConfig, key: &[byte], value: &[by
         cfg.latency_tracking = try parse_bool_token(value);
         return true;
     }
+    if token_eq(key, &"slowlog-log-slower-than"[0: 23]) {
+        const threshold: i64 = try parse_i64_token(value);
+        if threshold < -1 {
+            return error.ConfigInvalidValue;
+        }
+        cfg.slowlog_log_slower_than = threshold;
+        return true;
+    }
     if token_eq(key, &"save"[0: 4]) {
         if value.len == 0 {
             cfg.save_seconds = 0;
@@ -385,6 +417,15 @@ fn config_append_u64_line(buf: &Sds, key: &[byte], value: u64) !void {
     try sds_cat(buf, &"\n"[0: 1]);
 }
 
+fn config_append_i64_line(buf: &Sds, key: &[byte], value: i64) !void {
+    var args: [SdsFmtArg: 1] = [];
+    args[0] = sds_fmt_i64(value);
+    try sds_cat(buf, key);
+    try sds_cat(buf, &" "[0: 1]);
+    try sds_cat_fmt(buf, &"%i"[0: 2], args[0: 1]);
+    try sds_cat(buf, &"\n"[0: 1]);
+}
+
 fn config_append_pair_i32_line(buf: &Sds, key: &[byte], value1: i32, value2: i32) !void {
     var args: [SdsFmtArg: 2] = [];
     args[0] = sds_fmt_i64(value1 as i64);
@@ -420,6 +461,7 @@ fn config_rewrite_payload(cfg: &ServerConfig) !Sds {
     try config_append_u64_line(&buf, &"maxmemory"[0: 9], cfg.maxmemory as u64);
     try config_append_line(&buf, &"maxmemory-policy"[0: 16], maxmemory_policy_name(cfg.maxmemory_policy));
     try config_append_line(&buf, &"latency-tracking"[0: 16], config_bool_name(cfg.latency_tracking));
+    try config_append_i64_line(&buf, &"slowlog-log-slower-than"[0: 23], cfg.slowlog_log_slower_than);
     try config_append_pair_i32_line(&buf, &"save"[0: 4], cfg.save_seconds, cfg.save_changes);
     const requirepass: &[byte] = config_cstring_slice(cfg.requirepass[0: 128]);
     if requirepass.len > 0 {
@@ -515,6 +557,12 @@ fn parse_line(cfg: &ServerConfig, line: &[byte]) !void {
         cfg.maxmemory_policy = try parse_maxmemory_policy(value);
     } else if token_eq(key, &"latency-tracking"[0: 16]) {
         cfg.latency_tracking = try parse_bool_token(value);
+    } else if token_eq(key, &"slowlog-log-slower-than"[0: 23]) {
+        const threshold: i64 = try parse_i64_token(value);
+        if threshold < -1 {
+            return error.ConfigInvalidValue;
+        }
+        cfg.slowlog_log_slower_than = threshold;
     } else if token_eq(key, &"save"[0: 4]) {
         cfg.save_seconds = try parse_i32_token(value);
         const changes: &[byte] = next_token(line, &pos);

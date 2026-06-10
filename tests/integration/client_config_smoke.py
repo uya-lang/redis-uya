@@ -444,6 +444,17 @@ def run_smoke() -> None:
                 if send_command(sock, b"CONFIG", b"SET", b"latency-tracking", b"no") != "OK":
                     raise AssertionError("CONFIG SET latency-tracking no before rewrite failed")
 
+                if send_command(sock, b"CONFIG", b"SET", b"slowlog-log-slower-than", b"-1") != "OK":
+                    raise AssertionError("CONFIG SET slowlog-log-slower-than -1 failed")
+                if array_pairs_to_dict(send_command(sock, b"CONFIG", b"GET", b"slowlog-log-slower-than")).get("slowlog-log-slower-than") != "-1":
+                    raise AssertionError("CONFIG GET slowlog-log-slower-than did not reflect disabled state")
+                if send_command(sock, b"SLOWLOG", b"RESET") != "OK":
+                    raise AssertionError("SLOWLOG RESET before threshold check failed")
+                if send_command(sock, b"SET", b"slowlog-threshold-off", b"1") != "OK":
+                    raise AssertionError("SET while slowlog disabled failed")
+                if send_command(sock, b"SLOWLOG", b"LEN") != 0:
+                    raise AssertionError("slowlog-log-slower-than -1 still recorded command")
+
                 if send_command(sock, b"CONFIG", b"SET", b"port", b"6391") != "OK":
                     raise AssertionError("CONFIG SET port failed")
                 if array_pairs_to_dict(send_command(sock, b"CONFIG", b"GET", b"port")).get("port") != "6391":
@@ -501,6 +512,7 @@ def run_smoke() -> None:
                     "maxmemory 1048576",
                     "maxmemory-policy allkeys-lru",
                     "latency-tracking no",
+                    "slowlog-log-slower-than -1",
                     "save 60 10",
                     "requirepass runtime-secret",
                     "masterauth upstream-pass",

@@ -310,6 +310,14 @@ export fn test_command_info_and_config() !void {
     command_reply_cleanup(&config_latency_tracking_reply);
     resp_value_free(&config_latency_tracking_parsed.value);
 
+    var config_slowlog_threshold_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nCONFIG\r\n$3\r\nGET\r\n$23\r\nslowlog-log-slower-than\r\n"[0: 55]);
+    const config_slowlog_threshold_command: Command = try command_executor_test_command(&router, &config_slowlog_threshold_parsed);
+    var config_slowlog_threshold_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_slowlog_threshold_command, 5000u64);
+    const config_slowlog_threshold_len: usize = try connection_encode_reply(&config_slowlog_threshold_reply, &out[0], 512);
+    try assert_true(command_executor_test_slice_eq(out[0: config_slowlog_threshold_len], &"*2\r\n$23\r\nslowlog-log-slower-than\r\n$5\r\n10000\r\n"[0: 45]));
+    command_reply_cleanup(&config_slowlog_threshold_reply);
+    resp_value_free(&config_slowlog_threshold_parsed.value);
+
     var config_help_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nCONFIG\r\n$4\r\nHELP\r\n"[0: 26]);
     const config_help_command: Command = try command_executor_test_command(&router, &config_help_parsed);
     var config_help_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_help_command, 5000u64);
@@ -7437,6 +7445,8 @@ export fn test_command_slowlog() !void {
     const router: CommandRouter = command_router_new();
     var engine: Engine = engine_new();
     var out: [byte: 1024] = [];
+    var runtime: CommandRuntimeInfo = command_runtime_default();
+    runtime.config.slowlog_log_slower_than = 0;
 
     var slowlog_help_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nSLOWLOG\r\n$4\r\nHELP\r\n"[0: 27]);
     const slowlog_help_command: Command = try command_executor_test_command(&router, &slowlog_help_parsed);
@@ -7456,12 +7466,12 @@ export fn test_command_slowlog() !void {
 
     var set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$1\r\nk\r\n$1\r\nv\r\n"[0: 27]);
     const set_command: Command = try command_executor_test_command(&router, &set_parsed);
-    _ = command_execute_at(&engine, &set_command, 1000u64);
+    _ = command_execute_with_runtime_at(&engine, &runtime, &set_command, 1000u64);
     resp_value_free(&set_parsed.value);
 
     var get_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nGET\r\n$1\r\nk\r\n"[0: 20]);
     const get_command: Command = try command_executor_test_command(&router, &get_parsed);
-    var get_reply: CommandReply = command_execute_at(&engine, &get_command, 1000u64);
+    var get_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &get_command, 1000u64);
     command_reply_cleanup(&get_reply);
     resp_value_free(&get_parsed.value);
 
@@ -7505,6 +7515,19 @@ export fn test_command_slowlog() !void {
     const slowlog_len_zero_reply: CommandReply = command_execute_at(&engine, &slowlog_len_zero_command, 1000u64);
     try assert_eq_i32(slowlog_len_zero_reply.integer as i32, 0);
     resp_value_free(&slowlog_len_zero_parsed.value);
+
+    runtime.config.slowlog_log_slower_than = -1;
+    var disabled_set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$8\r\ndisabled\r\n$1\r\n1\r\n"[0: 34]);
+    const disabled_set_command: Command = try command_executor_test_command(&router, &disabled_set_parsed);
+    var disabled_set_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &disabled_set_command, 1000u64);
+    command_reply_cleanup(&disabled_set_reply);
+    resp_value_free(&disabled_set_parsed.value);
+
+    var slowlog_disabled_len_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nSLOWLOG\r\n$3\r\nLEN\r\n"[0: 26]);
+    const slowlog_disabled_len_command: Command = try command_executor_test_command(&router, &slowlog_disabled_len_parsed);
+    const slowlog_disabled_len_reply: CommandReply = command_execute_at(&engine, &slowlog_disabled_len_command, 1000u64);
+    try assert_eq_i32(slowlog_disabled_len_reply.integer as i32, 0);
+    resp_value_free(&slowlog_disabled_len_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

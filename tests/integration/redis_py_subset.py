@@ -1189,6 +1189,9 @@ class RedisPySubsetClient:
             i += 2
         return result
 
+    def config_set(self, key: str, value: str) -> bool:
+        return self._request(b"CONFIG", b"SET", key.encode(), value.encode()) == "OK"
+
     def config_resetstat(self) -> bool:
         return self._request(b"CONFIG", b"RESETSTAT") == "OK"
 
@@ -1572,6 +1575,10 @@ def run_smoke() -> None:
             except RespError as exc:
                 if str(exc) != "ERR wrong number of arguments":
                     raise AssertionError(f"unexpected MEMORY arity error: {exc}") from exc
+            if not client.config_set("slowlog-log-slower-than", "0"):
+                raise AssertionError("CONFIG SET slowlog-log-slower-than 0 failed")
+            if client.config_get("slowlog-log-slower-than").get("slowlog-log-slower-than") != "0":
+                raise AssertionError("CONFIG GET slowlog-log-slower-than did not reflect enabled state")
             assert client.slowlog_reset()
             assert client.set("slow-k", "1")
             assert client.get("slow-k") == b"1"

@@ -36,6 +36,7 @@ export fn test_config_defaults() !void {
     try assert_eq_i32(cfg.databases, 1);
     try assert_eq_i32(cfg.maxmemory as i32, 0);
     try assert_eq_i32(cfg.maxmemory_policy as i32, MaxmemoryPolicy.maxmemory_noeviction as i32);
+    try assert_eq_i32(cfg.latency_tracking as i32, 1);
     try assert_eq_i32(cfg.replicaof_port, 0);
     try assert_true(cstr_eq(cfg.bind[0: 64], &"0.0.0.0"[0: 7]));
     try assert_true(cstr_eq(cfg.dbfilename[0: 128], &"dump.rdb"[0: 8]));
@@ -43,7 +44,7 @@ export fn test_config_defaults() !void {
 }
 
 export fn test_config_parse_core_fields() !void {
-    const text: &[byte] = &"# sample\nport 6380\nmaxclients 64\ndatabases 1\nbind 127.0.0.1\ndir /data\ndbfilename redis.rdb\nappendfilename redis.aof\nrequirepass lock\nreplicaof 10.0.0.8 6381\nmasterauth secret\nmaxmemory 64mb\nmaxmemory-policy allkeys-lru\nsave 60 1000\n"[0: 232];
+    const text: &[byte] = &"# sample\nport 6380\nmaxclients 64\ndatabases 1\nbind 127.0.0.1\ndir /data\ndbfilename redis.rdb\nappendfilename redis.aof\nrequirepass lock\nreplicaof 10.0.0.8 6381\nmasterauth secret\nmaxmemory 64mb\nmaxmemory-policy allkeys-lru\nlatency-tracking no\nsave 60 1000\n"[0: 252];
     const cfg: ServerConfig = try parse_config_text(text);
     try assert_eq_i32(cfg.port, 6380);
     try assert_eq_i32(cfg.maxclients, 64);
@@ -58,6 +59,7 @@ export fn test_config_parse_core_fields() !void {
     try assert_true(cstr_eq(cfg.masterauth[0: 128], &"secret"[0: 6]));
     try assert_eq_i32(cfg.maxmemory as i32, 64 * 1024 * 1024);
     try assert_eq_i32(cfg.maxmemory_policy as i32, MaxmemoryPolicy.maxmemory_allkeys_lru as i32);
+    try assert_eq_i32(cfg.latency_tracking as i32, 0);
     try assert_true(config_test_slice_eq(maxmemory_policy_name(cfg.maxmemory_policy), &"allkeys-lru"[0: 11]));
     try assert_eq_i32(cfg.save_seconds, 60);
     try assert_eq_i32(cfg.save_changes, 1000);

@@ -2957,7 +2957,7 @@ LATENCY GRAPH event
 - 当前实现为 partial：采样普通命令执行耗时并写入 `command` 事件的进程内历史，同时写入 top-level 命令名直方图；`LATENCY` 自身不写入 latency 历史或直方图
 - 当前 `command` 事件耗时基于 redis-uya 运行时时间源，精度受毫秒级时钟限制
 - `LATENCY RESET` 只清理 event 历史；命令直方图按 Redis 习惯由 `CONFIG RESETSTAT` 清理
-- 当前直方图使用 Redis 兼容的 RESP2 map-as-array 形状和固定微秒桶，但只按 top-level 命令名聚合；尚未实现 Redis 原生 `latency-tracking` 配置、子命令名粒度或基于 `latency-monitor-threshold` 的事件门限采样语义
+- 当前直方图使用 Redis 兼容的 RESP2 map-as-array 形状和固定微秒桶，但只按 top-level 命令名聚合；`CONFIG SET latency-tracking yes|no` 可控制后续命令直方图采样，尚未实现子命令名粒度或基于 `latency-monitor-threshold` 的事件门限采样语义
 
 ### `MONITOR`
 
@@ -3035,12 +3035,12 @@ CONFIG RESETSTAT
 返回：
 
 - 返回 RESP Array，按 `name`、`value` 成对展开
-- 当前支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`replicaof`、`masterauth`、`maxmemory`、`maxmemory-policy`、`maxclients`、`databases`、`save`
+- 当前支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`replicaof`、`masterauth`、`maxmemory`、`maxmemory-policy`、`maxclients`、`databases`、`save`、`latency-tracking`
 - 支持最小 `*` 通配模式
-- `CONFIG SET` 当前支持运行时子集：`requirepass`、`maxmemory`、`maxmemory-policy`、`save`
+- `CONFIG SET` 当前支持运行时子集：`port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`replicaof`、`masterauth`、`maxmemory`、`maxmemory-policy`、`maxclients`、`databases`、`save`、`latency-tracking`
 - `CONFIG REWRITE` 当前会把运行时有效配置写到 `<appendfilename>.conf`，成功返回 `+OK`；当前已覆盖 `maxclients`、`databases` 等第二批运行时字段的落盘
 - `CONFIG HELP` 返回当前支持的 CONFIG 子命令列表
-- `CONFIG RESETSTAT` 当前返回 `+OK`，用于客户端兼容；统计重置仍是最小占位语义
+- `CONFIG RESETSTAT` 当前返回 `+OK`，并清理 `LATENCY HISTOGRAM` 的命令直方图状态
 - `CONFIG REWRITE` 当前是最小实现：目标文件路径按当前 AOF 路径派生，不保留原始配置文件注释/顺序；其余更高风险的 `CONFIG SET` 字段热更新仍不支持
 
 ### `CLIENT`

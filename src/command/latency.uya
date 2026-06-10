@@ -166,7 +166,7 @@ fn latency_histogram_record(command_name: &[byte], duration_us: u64) void {
     }
 }
 
-export fn latency_record_command(timestamp_sec: u64, duration_us: u64, command_name: &[byte]) void {
+export fn latency_record_command(timestamp_sec: u64, duration_us: u64, command_name: &[byte], track_histogram: bool) void {
     var latency_ms: u64 = duration_us / 1000u64;
     if duration_us > 0u64 && latency_ms == 0u64 {
         latency_ms = 1u64;
@@ -190,7 +190,9 @@ export fn latency_record_command(timestamp_sec: u64, duration_us: u64, command_n
     latency_command_entries[slot].active = true;
     latency_command_entries[slot].timestamp_sec = timestamp_sec;
     latency_command_entries[slot].latency_ms = latency_ms;
-    latency_histogram_record(command_name, duration_us);
+    if track_histogram {
+        latency_histogram_record(command_name, duration_us);
+    }
 }
 
 export fn latency_command_is_active() bool {

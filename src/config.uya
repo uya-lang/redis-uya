@@ -52,6 +52,7 @@ export struct ServerConfig {
     masterauth: [byte: 128],
     maxmemory: usize,
     maxmemory_policy: MaxmemoryPolicy,
+    latency_tracking: bool,
     save_seconds: i32,
     save_changes: i32,
 }
@@ -76,6 +77,7 @@ export fn default_config() ServerConfig {
         databases: 1,
         maxmemory: 0,
         maxmemory_policy: MaxmemoryPolicy.maxmemory_noeviction,
+        latency_tracking: true,
         save_seconds: 900,
         save_changes: 1,
     };
@@ -153,6 +155,23 @@ fn parse_maxmemory_policy(token: &[byte]) !MaxmemoryPolicy {
         return MaxmemoryPolicy.maxmemory_volatile_ttl;
     }
     return error.ConfigInvalidValue;
+}
+
+fn parse_bool_token(token: &[byte]) !bool {
+    if token_eq(token, &"yes"[0: 3]) || token_eq(token, &"true"[0: 4]) || token_eq(token, &"1"[0: 1]) {
+        return true;
+    }
+    if token_eq(token, &"no"[0: 2]) || token_eq(token, &"false"[0: 5]) || token_eq(token, &"0"[0: 1]) {
+        return false;
+    }
+    return error.ConfigInvalidValue;
+}
+
+export fn config_bool_name(value: bool) &[byte] {
+    if value {
+        return &"yes"[0: 3];
+    }
+    return &"no"[0: 2];
 }
 
 export fn maxmemory_policy_name(policy: MaxmemoryPolicy) &[byte] {
@@ -249,6 +268,10 @@ export fn config_apply_runtime_set(cfg: &ServerConfig, key: &[byte], value: &[by
     }
     if token_eq(key, &"maxmemory-policy"[0: 16]) {
         cfg.maxmemory_policy = try parse_maxmemory_policy(value);
+        return true;
+    }
+    if token_eq(key, &"latency-tracking"[0: 16]) {
+        cfg.latency_tracking = try parse_bool_token(value);
         return true;
     }
     if token_eq(key, &"save"[0: 4]) {
@@ -396,6 +419,7 @@ fn config_rewrite_payload(cfg: &ServerConfig) !Sds {
     try config_append_i32_line(&buf, &"databases"[0: 9], cfg.databases);
     try config_append_u64_line(&buf, &"maxmemory"[0: 9], cfg.maxmemory as u64);
     try config_append_line(&buf, &"maxmemory-policy"[0: 16], maxmemory_policy_name(cfg.maxmemory_policy));
+    try config_append_line(&buf, &"latency-tracking"[0: 16], config_bool_name(cfg.latency_tracking));
     try config_append_pair_i32_line(&buf, &"save"[0: 4], cfg.save_seconds, cfg.save_changes);
     const requirepass: &[byte] = config_cstring_slice(cfg.requirepass[0: 128]);
     if requirepass.len > 0 {
@@ -489,6 +513,8 @@ fn parse_line(cfg: &ServerConfig, line: &[byte]) !void {
         }
     } else if token_eq(key, &"maxmemory-policy"[0: 16]) {
         cfg.maxmemory_policy = try parse_maxmemory_policy(value);
+    } else if token_eq(key, &"latency-tracking"[0: 16]) {
+        cfg.latency_tracking = try parse_bool_token(value);
     } else if token_eq(key, &"save"[0: 4]) {
         cfg.save_seconds = try parse_i32_token(value);
         const changes: &[byte] = next_token(line, &pos);

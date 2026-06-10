@@ -302,6 +302,14 @@ export fn test_command_info_and_config() !void {
     command_reply_cleanup(&config_databases_reply);
     resp_value_free(&config_databases_parsed.value);
 
+    var config_latency_tracking_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nCONFIG\r\n$3\r\nGET\r\n$16\r\nlatency-tracking\r\n"[0: 48]);
+    const config_latency_tracking_command: Command = try command_executor_test_command(&router, &config_latency_tracking_parsed);
+    var config_latency_tracking_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_latency_tracking_command, 5000u64);
+    const config_latency_tracking_len: usize = try connection_encode_reply(&config_latency_tracking_reply, &out[0], 512);
+    try assert_true(command_executor_test_slice_eq(out[0: config_latency_tracking_len], &"*2\r\n$16\r\nlatency-tracking\r\n$3\r\nyes\r\n"[0: 36]));
+    command_reply_cleanup(&config_latency_tracking_reply);
+    resp_value_free(&config_latency_tracking_parsed.value);
+
     var config_help_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nCONFIG\r\n$4\r\nHELP\r\n"[0: 26]);
     const config_help_command: Command = try command_executor_test_command(&router, &config_help_parsed);
     var config_help_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_help_command, 5000u64);
@@ -336,6 +344,14 @@ export fn test_command_info_and_config() !void {
     try assert_eq_i32(config_set_policy_reply.config_after.maxmemory_policy as i32, MaxmemoryPolicy.maxmemory_allkeys_lru as i32);
     resp_value_free(&config_set_policy_parsed.value);
 
+    var config_set_latency_tracking_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$16\r\nlatency-tracking\r\n$2\r\nno\r\n"[0: 56]);
+    const config_set_latency_tracking_command: Command = try command_executor_test_command(&router, &config_set_latency_tracking_parsed);
+    const config_set_latency_tracking_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_set_latency_tracking_command, 5000u64);
+    try assert_eq_i32(config_set_latency_tracking_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_eq_i32(config_set_latency_tracking_reply.request_config_set as i32, 1);
+    try assert_eq_i32(config_set_latency_tracking_reply.config_after.latency_tracking as i32, 0);
+    resp_value_free(&config_set_latency_tracking_parsed.value);
+
     var config_set_save_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$4\r\nsave\r\n$5\r\n60 10\r\n"[0: 46]);
     const config_set_save_command: Command = try command_executor_test_command(&router, &config_set_save_parsed);
     const config_set_save_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_set_save_command, 5000u64);
@@ -359,6 +375,13 @@ export fn test_command_info_and_config() !void {
     try assert_eq_i32(config_set_bad_value_reply.typ as i32, CommandReplyType.reply_error as i32);
     try assert_true(command_executor_test_slice_eq(config_set_bad_value_reply.data, &"ERR Invalid argument for CONFIG SET"[0: 35]));
     resp_value_free(&config_set_bad_value_parsed.value);
+
+    var config_set_bad_bool_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$16\r\nlatency-tracking\r\n$5\r\nmaybe\r\n"[0: 59]);
+    const config_set_bad_bool_command: Command = try command_executor_test_command(&router, &config_set_bad_bool_parsed);
+    const config_set_bad_bool_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_set_bad_bool_command, 5000u64);
+    try assert_eq_i32(config_set_bad_bool_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(config_set_bad_bool_reply.data, &"ERR Invalid argument for CONFIG SET"[0: 35]));
+    resp_value_free(&config_set_bad_bool_parsed.value);
 
     var config_set_unknown_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$6\r\nfoobar\r\n$1\r\n1\r\n"[0: 44]);
     const config_set_unknown_command: Command = try command_executor_test_command(&router, &config_set_unknown_parsed);
@@ -7565,6 +7588,22 @@ export fn test_command_latency() !void {
     try assert_true(command_executor_test_slice_eq(histogram_reset_reply.data, &"*0\r\n"[0: 4]));
     command_reply_cleanup(&histogram_reset_reply);
     resp_value_free(&histogram_reset_parsed.value);
+
+    var disabled_runtime: CommandRuntimeInfo = command_runtime_default();
+    disabled_runtime.config.latency_tracking = false;
+    var disabled_set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$14\r\nlat-disabled-k\r\n$1\r\n1\r\n"[0: 41]);
+    const disabled_set_command: Command = try command_executor_test_command(&router, &disabled_set_parsed);
+    const disabled_set_reply: CommandReply = command_execute_with_runtime_at(&engine, &disabled_runtime, &disabled_set_command, 2000u64);
+    try assert_eq_i32(disabled_set_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    resp_value_free(&disabled_set_parsed.value);
+
+    var histogram_disabled_parsed: RespParseResult = try parse_resp2(&"*3\r\n$7\r\nLATENCY\r\n$9\r\nHISTOGRAM\r\n$3\r\nSET\r\n"[0: 41]);
+    const histogram_disabled_command: Command = try command_executor_test_command(&router, &histogram_disabled_parsed);
+    var histogram_disabled_reply: CommandReply = command_execute_at(&engine, &histogram_disabled_command, 1000u64);
+    try assert_eq_i32(histogram_disabled_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    try assert_true(command_executor_test_slice_eq(histogram_disabled_reply.data, &"*0\r\n"[0: 4]));
+    command_reply_cleanup(&histogram_disabled_reply);
+    resp_value_free(&histogram_disabled_parsed.value);
 
     var graph_parsed: RespParseResult = try parse_resp2(&"*3\r\n$7\r\nLATENCY\r\n$5\r\nGRAPH\r\n$7\r\ncommand\r\n"[0: 41]);
     const graph_command: Command = try command_executor_test_command(&router, &graph_parsed);

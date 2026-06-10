@@ -379,6 +379,29 @@ def run_smoke() -> None:
                 if array_pairs_to_dict(save_raw).get("save") != "60 10":
                     raise AssertionError(f"unexpected CONFIG GET save after SET: {save_raw!r}")
 
+                if send_command(sock, b"CONFIG", b"SET", b"latency-tracking", b"no") != "OK":
+                    raise AssertionError("CONFIG SET latency-tracking no failed")
+                if array_pairs_to_dict(send_command(sock, b"CONFIG", b"GET", b"latency-tracking")).get("latency-tracking") != "no":
+                    raise AssertionError("CONFIG GET latency-tracking did not reflect disabled state")
+                if send_command(sock, b"CONFIG", b"RESETSTAT") != "OK":
+                    raise AssertionError("CONFIG RESETSTAT before latency-tracking check failed")
+                if send_command(sock, b"SET", b"latency-track-off", b"1") != "OK":
+                    raise AssertionError("SET while latency-tracking disabled failed")
+                disabled_histogram = send_command(sock, b"LATENCY", b"HISTOGRAM", b"SET")
+                if disabled_histogram != []:
+                    raise AssertionError(f"latency-tracking no still recorded SET histogram: {disabled_histogram!r}")
+                if send_command(sock, b"CONFIG", b"SET", b"latency-tracking", b"yes") != "OK":
+                    raise AssertionError("CONFIG SET latency-tracking yes failed")
+                if array_pairs_to_dict(send_command(sock, b"CONFIG", b"GET", b"latency-tracking")).get("latency-tracking") != "yes":
+                    raise AssertionError("CONFIG GET latency-tracking did not reflect enabled state")
+                if send_command(sock, b"SET", b"latency-track-on", b"1") != "OK":
+                    raise AssertionError("SET while latency-tracking enabled failed")
+                enabled_histogram = send_command(sock, b"LATENCY", b"HISTOGRAM", b"SET")
+                if not isinstance(enabled_histogram, list) or b"set" not in enabled_histogram:
+                    raise AssertionError(f"latency-tracking yes did not record SET histogram: {enabled_histogram!r}")
+                if send_command(sock, b"CONFIG", b"SET", b"latency-tracking", b"no") != "OK":
+                    raise AssertionError("CONFIG SET latency-tracking no before rewrite failed")
+
                 if send_command(sock, b"CONFIG", b"SET", b"port", b"6391") != "OK":
                     raise AssertionError("CONFIG SET port failed")
                 if array_pairs_to_dict(send_command(sock, b"CONFIG", b"GET", b"port")).get("port") != "6391":
@@ -435,6 +458,7 @@ def run_smoke() -> None:
                     "databases 1",
                     "maxmemory 1048576",
                     "maxmemory-policy allkeys-lru",
+                    "latency-tracking no",
                     "save 60 10",
                     "requirepass runtime-secret",
                     "masterauth upstream-pass",

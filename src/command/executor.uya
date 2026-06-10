@@ -4,6 +4,7 @@ use src.config.ServerConfig;
 use src.config.MaxmemoryPolicy;
 use src.config.default_config;
 use src.config.config_apply_runtime_set;
+use src.config.config_bool_name;
 use src.config.config_copy_bytes;
 use src.config.config_rewrite_file;
 use src.config.maxmemory_policy_name;
@@ -15538,6 +15539,12 @@ fn command_executor_config(runtime: &CommandRuntimeInfo, command: &Command) Comm
             return command_executor_oom();
         };
     }
+    if command_executor_keyword_match(pattern, &"latency-tracking"[0: 16]) {
+        _ = command_executor_config_append_pair(reply_list, &"latency-tracking"[0: 16], config_bool_name(runtime.config.latency_tracking)) catch {
+            object_free(reply_list);
+            return command_executor_oom();
+        };
+    }
     if command_executor_keyword_match(pattern, &"maxclients"[0: 10]) {
         _ = command_executor_config_append_i64(reply_list, &"maxclients"[0: 10], runtime.maxclients as i64) catch {
             object_free(reply_list);
@@ -18230,7 +18237,7 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
         slowlog_append(command, now_ms / 1000u64, duration_us);
     }
     if command.info.cmd_type != CommandType.command_latency {
-        latency_record_command(now_ms / 1000u64, duration_us, command.info.name);
+        latency_record_command(now_ms / 1000u64, duration_us, command.info.name, runtime.config.latency_tracking);
     }
     return reply;
 }

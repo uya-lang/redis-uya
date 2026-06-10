@@ -40,6 +40,7 @@ use src.command.slowlog.slowlog_append;
 use src.command.slowlog.slowlog_count;
 use src.command.slowlog.slowlog_entry_newest;
 use src.command.slowlog.slowlog_reset;
+use src.command.slowlog.slowlog_trim;
 use src.command.latency.LATENCY_HISTOGRAM_BUCKET_COUNT;
 use src.command.latency.LatencyHistoryEntry;
 use src.command.latency.LatencyHistogramEntry;
@@ -15411,6 +15412,8 @@ fn command_executor_config(runtime: &CommandRuntimeInfo, command: &Command) Comm
         var replicaof_port: i32 = 0;
         var request_maxclients_set: bool = false;
         var maxclients_after: i32 = runtime.maxclients;
+        var slowlog_max_len_after: usize = runtime.config.slowlog_max_len;
+        var request_slowlog_trim: bool = false;
         var index: usize = 2;
         while index + 1 < command.argc {
             const key: &[byte] = command_executor_arg(command, index) catch {
@@ -15428,6 +15431,10 @@ fn command_executor_config(runtime: &CommandRuntimeInfo, command: &Command) Comm
             if command_executor_keyword_eq(key, &"maxclients"[0: 10]) {
                 request_maxclients_set = true;
                 maxclients_after = next_config.maxclients;
+            }
+            if command_executor_keyword_eq(key, &"slowlog-max-len"[0: 15]) {
+                request_slowlog_trim = true;
+                slowlog_max_len_after = next_config.slowlog_max_len;
             }
             if command_executor_keyword_eq(key, &"replicaof"[0: 9]) {
                 request_replicaof = true;
@@ -15450,6 +15457,9 @@ fn command_executor_config(runtime: &CommandRuntimeInfo, command: &Command) Comm
         config_copy_bytes(reply.replicaof_host[0: 64], replicaof_host[0: 64]);
         reply.request_maxclients_set = request_maxclients_set;
         reply.maxclients_after = maxclients_after;
+        if request_slowlog_trim {
+            slowlog_trim(slowlog_max_len_after);
+        }
         return reply;
     }
 
@@ -15547,6 +15557,12 @@ fn command_executor_config(runtime: &CommandRuntimeInfo, command: &Command) Comm
     }
     if command_executor_keyword_match(pattern, &"slowlog-log-slower-than"[0: 23]) {
         _ = command_executor_config_append_i64(reply_list, &"slowlog-log-slower-than"[0: 23], runtime.config.slowlog_log_slower_than) catch {
+            object_free(reply_list);
+            return command_executor_oom();
+        };
+    }
+    if command_executor_keyword_match(pattern, &"slowlog-max-len"[0: 15]) {
+        _ = command_executor_config_append_u64(reply_list, &"slowlog-max-len"[0: 15], runtime.config.slowlog_max_len as u64) catch {
             object_free(reply_list);
             return command_executor_oom();
         };
@@ -18242,7 +18258,7 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     if command.info.cmd_type != CommandType.command_slowlog &&
         runtime.config.slowlog_log_slower_than >= 0 &&
         duration_us >= runtime.config.slowlog_log_slower_than as u64 {
-        slowlog_append(command, now_ms / 1000u64, duration_us);
+        slowlog_append(command, now_ms / 1000u64, duration_us, runtime.config.slowlog_max_len);
     }
     if command.info.cmd_type != CommandType.command_latency {
         latency_record_command(now_ms / 1000u64, duration_us, command.info.name, runtime.config.latency_tracking);

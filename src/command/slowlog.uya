@@ -32,7 +32,42 @@ var slowlog_start: usize = 0;
 var slowlog_count_entries: usize = 0;
 var slowlog_next_id: u64 = 1u64;
 
-export fn slowlog_append(command: &Command, timestamp_sec: u64, duration_us: u64) void {
+fn slowlog_effective_max_len(max_len: usize) usize {
+    if max_len > SLOWLOG_MAX_ENTRIES {
+        return SLOWLOG_MAX_ENTRIES;
+    }
+    return max_len;
+}
+
+export fn slowlog_trim(max_len: usize) void {
+    const limit: usize = slowlog_effective_max_len(max_len);
+    while slowlog_count_entries > limit {
+        var slot: usize = slowlog_start;
+        if slot >= SLOWLOG_MAX_ENTRIES {
+            slot = 0;
+        }
+        if slot < SLOWLOG_MAX_ENTRIES {
+            slowlog_entries[slot].active = false;
+            slowlog_entries[slot].id = 0u64;
+            slowlog_entries[slot].timestamp_sec = 0u64;
+            slowlog_entries[slot].duration_us = 0u64;
+            slowlog_entries[slot].argc = 0;
+            slowlog_entries[slot].client_len = 0;
+            slowlog_entries[slot].name_len = 0;
+        }
+        slowlog_start = (slot + 1) % SLOWLOG_MAX_ENTRIES;
+        slowlog_count_entries = slowlog_count_entries - 1;
+    }
+    if slowlog_count_entries == 0 {
+        slowlog_start = 0;
+    }
+}
+
+export fn slowlog_append(command: &Command, timestamp_sec: u64, duration_us: u64, max_len: usize) void {
+    const limit: usize = slowlog_effective_max_len(max_len);
+    if limit == 0 {
+        return;
+    }
     var slot: usize = 0;
     if slowlog_count_entries < SLOWLOG_MAX_ENTRIES {
         slot = (slowlog_start + slowlog_count_entries) % SLOWLOG_MAX_ENTRIES;
@@ -85,6 +120,7 @@ export fn slowlog_append(command: &Command, timestamp_sec: u64, duration_us: u64
     slowlog_entries[slot].client_len = client.len;
     slowlog_entries[slot].name_len = 0;
     slowlog_next_id = slowlog_next_id + 1u64;
+    slowlog_trim(limit);
 }
 
 export fn slowlog_count() usize {

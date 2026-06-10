@@ -121,7 +121,7 @@ server open
 
 - `CONFIG` 仍由 `command/executor.uya` 执行，当前覆盖 `GET`、`SET` 运行时子集、`REWRITE`、`HELP`、`RESETSTAT`
 - `CONFIG GET` 从 `CommandRuntimeInfo` 暴露运行时配置快照，支持 `maxclients`、`databases` 等兼容字段
-- `MEMORY` / `SLOWLOG` / `LATENCY` 由 `command/executor.uya` 执行；其中 `MEMORY MALLOC-STATS` 当前暴露 redis-uya allocator / object-pool 计数而非 Redis 原生 jemalloc 报告，`MEMORY PURGE` 当前是 no-op allocator purge 兼容面，`SLOWLOG` 记录 runtime-measured 命令耗时并受 `CONFIG SET slowlog-log-slower-than` 控制但精度受毫秒级时间源限制，`LATENCY` 当前记录 `command` 事件的进程内历史与 top-level 命令名累计直方图，`CONFIG SET latency-tracking yes|no` 可控制后续直方图采样，真实 Redis 事件门限和子命令名粒度后续再接入观测管线
+- `MEMORY` / `SLOWLOG` / `LATENCY` 由 `command/executor.uya` 执行；其中 `MEMORY MALLOC-STATS` 当前暴露 redis-uya allocator / object-pool 计数而非 Redis 原生 jemalloc 报告，`MEMORY PURGE` 当前是 no-op allocator purge 兼容面，`SLOWLOG` 记录 runtime-measured 命令耗时并受 `CONFIG SET slowlog-log-slower-than` 和 `slowlog-max-len` 控制但精度受毫秒级时间源限制，`LATENCY` 当前记录 `command` 事件的进程内历史与 top-level 命令名累计直方图，`CONFIG SET latency-tracking yes|no` 可控制后续直方图采样，真实 Redis 事件门限和子命令名粒度后续再接入观测管线
 - `MODULE HELP/LIST` 由 `command/executor.uya` 执行，当前只暴露空模块列表兼容面和 `COMMAND*` 可见面，不支持 module 加载、卸载或模块 API
 - `MONITOR` 由 `connection.uya` 维护连接级 monitor 状态和全局 fd 注册表；普通命令成功执行后向 monitor fd 推送兼容行，连接关闭和 `RESET` 会清理注册项
 - `DEBUG` 由 `command/executor.uya` 执行为单机安全 profile 的 `standalone-error`；命令进入路由和 `COMMAND*` 可见面，但不会开放 Redis 内部调试/破坏性子命令，也不进入 AOF/复制传播
@@ -215,5 +215,5 @@ server open
 - `RESET` 当前由 `connection.uya` 直接处理，重置连接级协议版本、事务/观察键、Pub/Sub、tracking 和认证状态，作为连接重连语义的最小闭环
 - RESP3 当前是 `HELLO 2/3` 驱动的最小闭环，仍不是完整 RESP3 类型输出与客户端兼容矩阵
 - Pub/Sub 当前是固定容量最小闭环，已支持 pattern 订阅和 RESP2 subscribed-mode 命令限制，但仍没有背压缓冲
-- 控制面当前覆盖 `CLIENT` / `CONFIG` 的兼容子集，`CONFIG SET` 已支持 `port/bind/dir/dbfilename/appendfilename/requirepass/masterauth/replicaof/maxmemory/maxmemory-policy/maxclients/databases/save/latency-tracking/slowlog-log-slower-than` 运行时子集，`CONFIG REWRITE` 已支持把当前有效配置写到 `<appendfilename>.conf`，`CLIENT KILL/PAUSE/TRACKING/GETREDIR` 已有最小闭环且 `CLIENT PAUSE WRITE` 可区分读写命令、`CLIENT TRACKING` 可回显 `BCAST PREFIX` 列表；仍没有其余 `CONFIG SET` 热更新、更完整的 rewrite 保真度，以及 tracking invalidation 和 richer client filters
+- 控制面当前覆盖 `CLIENT` / `CONFIG` 的兼容子集，`CONFIG SET` 已支持 `port/bind/dir/dbfilename/appendfilename/requirepass/masterauth/replicaof/maxmemory/maxmemory-policy/maxclients/databases/save/latency-tracking/slowlog-log-slower-than/slowlog-max-len` 运行时子集，`CONFIG REWRITE` 已支持把当前有效配置写到 `<appendfilename>.conf`，`CLIENT KILL/PAUSE/TRACKING/GETREDIR` 已有最小闭环且 `CLIENT PAUSE WRITE` 可区分读写命令、`CLIENT TRACKING` 可回显 `BCAST PREFIX` 列表；仍没有其余 `CONFIG SET` 热更新、更完整的 rewrite 保真度，以及 tracking invalidation 和 richer client filters
 - `maxmemory` 当前已覆盖 noeviction、allkeys-* 与 volatile-* 基线，并补齐 allocator 统计观测、Slab 小对象缓存和压力回归；仍没有 LFU 衰减、采样池、淘汰事件持久化优化和正式内存 benchmark

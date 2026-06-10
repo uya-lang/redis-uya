@@ -455,6 +455,23 @@ def run_smoke() -> None:
                 if send_command(sock, b"SLOWLOG", b"LEN") != 0:
                     raise AssertionError("slowlog-log-slower-than -1 still recorded command")
 
+                if send_command(sock, b"CONFIG", b"SET", b"slowlog-max-len", b"1") != "OK":
+                    raise AssertionError("CONFIG SET slowlog-max-len 1 failed")
+                if array_pairs_to_dict(send_command(sock, b"CONFIG", b"GET", b"slowlog-max-len")).get("slowlog-max-len") != "1":
+                    raise AssertionError("CONFIG GET slowlog-max-len did not reflect configured state")
+                if send_command(sock, b"CONFIG", b"SET", b"slowlog-log-slower-than", b"0") != "OK":
+                    raise AssertionError("CONFIG SET slowlog-log-slower-than 0 failed")
+                if send_command(sock, b"SLOWLOG", b"RESET") != "OK":
+                    raise AssertionError("SLOWLOG RESET before max-len check failed")
+                if send_command(sock, b"SET", b"slowlog-max-one", b"1") != "OK":
+                    raise AssertionError("SET before slowlog max-len check failed")
+                if send_command(sock, b"GET", b"slowlog-max-one") != b"1":
+                    raise AssertionError("GET before slowlog max-len check failed")
+                if send_command(sock, b"SLOWLOG", b"LEN") != 1:
+                    raise AssertionError("slowlog-max-len 1 did not trim slowlog to one entry")
+                if send_command(sock, b"CONFIG", b"SET", b"slowlog-log-slower-than", b"-1") != "OK":
+                    raise AssertionError("CONFIG SET slowlog-log-slower-than -1 before rewrite failed")
+
                 if send_command(sock, b"CONFIG", b"SET", b"port", b"6391") != "OK":
                     raise AssertionError("CONFIG SET port failed")
                 if array_pairs_to_dict(send_command(sock, b"CONFIG", b"GET", b"port")).get("port") != "6391":
@@ -513,6 +530,7 @@ def run_smoke() -> None:
                     "maxmemory-policy allkeys-lru",
                     "latency-tracking no",
                     "slowlog-log-slower-than -1",
+                    "slowlog-max-len 1",
                     "save 60 10",
                     "requirepass runtime-secret",
                     "masterauth upstream-pass",

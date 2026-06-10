@@ -54,6 +54,7 @@ export struct ServerConfig {
     maxmemory_policy: MaxmemoryPolicy,
     latency_tracking: bool,
     slowlog_log_slower_than: i64,
+    slowlog_max_len: usize,
     save_seconds: i32,
     save_changes: i32,
 }
@@ -80,6 +81,7 @@ export fn default_config() ServerConfig {
         maxmemory_policy: MaxmemoryPolicy.maxmemory_noeviction,
         latency_tracking: true,
         slowlog_log_slower_than: 10000,
+        slowlog_max_len: 128,
         save_seconds: 900,
         save_changes: 1,
     };
@@ -306,6 +308,14 @@ export fn config_apply_runtime_set(cfg: &ServerConfig, key: &[byte], value: &[by
         cfg.slowlog_log_slower_than = threshold;
         return true;
     }
+    if token_eq(key, &"slowlog-max-len"[0: 15]) {
+        const max_len: i64 = try parse_i64_token(value);
+        if max_len < 0 {
+            return error.ConfigInvalidValue;
+        }
+        cfg.slowlog_max_len = max_len as usize;
+        return true;
+    }
     if token_eq(key, &"save"[0: 4]) {
         if value.len == 0 {
             cfg.save_seconds = 0;
@@ -462,6 +472,7 @@ fn config_rewrite_payload(cfg: &ServerConfig) !Sds {
     try config_append_line(&buf, &"maxmemory-policy"[0: 16], maxmemory_policy_name(cfg.maxmemory_policy));
     try config_append_line(&buf, &"latency-tracking"[0: 16], config_bool_name(cfg.latency_tracking));
     try config_append_i64_line(&buf, &"slowlog-log-slower-than"[0: 23], cfg.slowlog_log_slower_than);
+    try config_append_u64_line(&buf, &"slowlog-max-len"[0: 15], cfg.slowlog_max_len as u64);
     try config_append_pair_i32_line(&buf, &"save"[0: 4], cfg.save_seconds, cfg.save_changes);
     const requirepass: &[byte] = config_cstring_slice(cfg.requirepass[0: 128]);
     if requirepass.len > 0 {
@@ -563,6 +574,12 @@ fn parse_line(cfg: &ServerConfig, line: &[byte]) !void {
             return error.ConfigInvalidValue;
         }
         cfg.slowlog_log_slower_than = threshold;
+    } else if token_eq(key, &"slowlog-max-len"[0: 15]) {
+        const max_len: i64 = try parse_i64_token(value);
+        if max_len < 0 {
+            return error.ConfigInvalidValue;
+        }
+        cfg.slowlog_max_len = max_len as usize;
     } else if token_eq(key, &"save"[0: 4]) {
         cfg.save_seconds = try parse_i32_token(value);
         const changes: &[byte] = next_token(line, &pos);

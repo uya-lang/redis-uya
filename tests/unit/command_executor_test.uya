@@ -318,6 +318,14 @@ export fn test_command_info_and_config() !void {
     command_reply_cleanup(&config_slowlog_threshold_reply);
     resp_value_free(&config_slowlog_threshold_parsed.value);
 
+    var config_slowlog_max_len_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nCONFIG\r\n$3\r\nGET\r\n$15\r\nslowlog-max-len\r\n"[0: 47]);
+    const config_slowlog_max_len_command: Command = try command_executor_test_command(&router, &config_slowlog_max_len_parsed);
+    var config_slowlog_max_len_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_slowlog_max_len_command, 5000u64);
+    const config_slowlog_max_len_len: usize = try connection_encode_reply(&config_slowlog_max_len_reply, &out[0], 512);
+    try assert_true(command_executor_test_slice_eq(out[0: config_slowlog_max_len_len], &"*2\r\n$15\r\nslowlog-max-len\r\n$3\r\n128\r\n"[0: 35]));
+    command_reply_cleanup(&config_slowlog_max_len_reply);
+    resp_value_free(&config_slowlog_max_len_parsed.value);
+
     var config_help_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nCONFIG\r\n$4\r\nHELP\r\n"[0: 26]);
     const config_help_command: Command = try command_executor_test_command(&router, &config_help_parsed);
     var config_help_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_help_command, 5000u64);
@@ -7516,6 +7524,31 @@ export fn test_command_slowlog() !void {
     try assert_eq_i32(slowlog_len_zero_reply.integer as i32, 0);
     resp_value_free(&slowlog_len_zero_parsed.value);
 
+    runtime.config.slowlog_log_slower_than = 0;
+    runtime.config.slowlog_max_len = 1;
+    var trim_set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$6\r\ntrim-k\r\n$1\r\n1\r\n"[0: 32]);
+    const trim_set_command: Command = try command_executor_test_command(&router, &trim_set_parsed);
+    var trim_set_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &trim_set_command, 1000u64);
+    command_reply_cleanup(&trim_set_reply);
+    resp_value_free(&trim_set_parsed.value);
+
+    var trim_get_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nGET\r\n$6\r\ntrim-k\r\n"[0: 25]);
+    const trim_get_command: Command = try command_executor_test_command(&router, &trim_get_parsed);
+    var trim_get_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &trim_get_command, 1000u64);
+    command_reply_cleanup(&trim_get_reply);
+    resp_value_free(&trim_get_parsed.value);
+
+    var slowlog_trimmed_len_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nSLOWLOG\r\n$3\r\nLEN\r\n"[0: 26]);
+    const slowlog_trimmed_len_command: Command = try command_executor_test_command(&router, &slowlog_trimmed_len_parsed);
+    const slowlog_trimmed_len_reply: CommandReply = command_execute_at(&engine, &slowlog_trimmed_len_command, 1000u64);
+    try assert_eq_i32(slowlog_trimmed_len_reply.integer as i32, 1);
+    resp_value_free(&slowlog_trimmed_len_parsed.value);
+
+    const trimmed_entry: &SlowlogEntry = slowlog_entry_newest(0);
+    try assert_true(trimmed_entry != null);
+    try assert_true(command_executor_test_slice_eq(trimmed_entry.args[0].data[0: trimmed_entry.args[0].len], &"GET"[0: 3]));
+
+    slowlog_reset();
     runtime.config.slowlog_log_slower_than = -1;
     var disabled_set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$8\r\ndisabled\r\n$1\r\n1\r\n"[0: 34]);
     const disabled_set_command: Command = try command_executor_test_command(&router, &disabled_set_parsed);

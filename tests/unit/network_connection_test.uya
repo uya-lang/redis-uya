@@ -820,29 +820,39 @@ export fn test_connection_process_latency() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();
     var engine: Engine = engine_new();
-    var out: [byte: 1024] = [];
+    var out: [byte: 2048] = [];
 
+    _ = try connection_process_input_at(&engine, &router, &"*2\r\n$6\r\nCONFIG\r\n$9\r\nRESETSTAT\r\n"[0: 31], &out[0], 2048, 1000u64);
     _ = try connection_process_input_at(&engine, &router, &"*2\r\n$7\r\nLATENCY\r\n$5\r\nRESET\r\n"[0: 28], &out[0], 1024, 1000u64);
 
-    const latest_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$7\r\nLATENCY\r\n$6\r\nLATEST\r\n"[0: 29], &out[0], 1024, 1000u64);
+    const latest_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$7\r\nLATENCY\r\n$6\r\nLATEST\r\n"[0: 29], &out[0], 2048, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: latest_result.response_len], &"*0\r\n"[0: 4]));
 
-    _ = try connection_process_input_at(&engine, &router, &"*3\r\n$3\r\nSET\r\n$5\r\nlat-k\r\n$1\r\n1\r\n"[0: 31], &out[0], 1024, 2000u64);
+    _ = try connection_process_input_at(&engine, &router, &"*3\r\n$3\r\nSET\r\n$5\r\nlat-k\r\n$1\r\n1\r\n"[0: 31], &out[0], 2048, 2000u64);
 
-    const latest_recorded_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$7\r\nLATENCY\r\n$6\r\nLATEST\r\n"[0: 29], &out[0], 1024, 2000u64);
+    const latest_recorded_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$7\r\nLATENCY\r\n$6\r\nLATEST\r\n"[0: 29], &out[0], 2048, 2000u64);
     try assert_true(network_connection_contains(out[0: latest_recorded_result.response_len], &"$7\r\ncommand\r\n"[0: 13]));
     try assert_true(network_connection_contains(out[0: latest_recorded_result.response_len], &":2\r\n"[0: 4]));
 
-    const history_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$7\r\nLATENCY\r\n$7\r\nHISTORY\r\n$7\r\ncommand\r\n"[0: 43], &out[0], 1024, 2000u64);
+    const history_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$7\r\nLATENCY\r\n$7\r\nHISTORY\r\n$7\r\ncommand\r\n"[0: 43], &out[0], 2048, 2000u64);
     try assert_true(network_connection_contains(out[0: history_result.response_len], &":2\r\n"[0: 4]));
 
-    const doctor_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$7\r\nLATENCY\r\n$6\r\nDOCTOR\r\n"[0: 29], &out[0], 1024, 1000u64);
+    const histogram_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$7\r\nLATENCY\r\n$9\r\nHISTOGRAM\r\n$3\r\nSET\r\n"[0: 41], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_contains(out[0: histogram_result.response_len], &"$3\r\nset\r\n"[0: 9]));
+    try assert_true(network_connection_contains(out[0: histogram_result.response_len], &"$5\r\ncalls\r\n:1\r\n"[0: 15]));
+    try assert_true(network_connection_contains(out[0: histogram_result.response_len], &"$14\r\nhistogram_usec\r\n"[0: 21]));
+
+    const doctor_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$7\r\nLATENCY\r\n$6\r\nDOCTOR\r\n"[0: 29], &out[0], 2048, 1000u64);
     try assert_true(network_connection_contains(out[0: doctor_result.response_len], &"recorded command events"[0: 23]));
 
-    const reset_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$7\r\nLATENCY\r\n$5\r\nRESET\r\n"[0: 28], &out[0], 1024, 1000u64);
+    const reset_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$7\r\nLATENCY\r\n$5\r\nRESET\r\n"[0: 28], &out[0], 2048, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: reset_result.response_len], &":1\r\n"[0: 4]));
 
-    const unknown_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$7\r\nLATENCY\r\n$1\r\nX\r\n"[0: 24], &out[0], 1024, 1000u64);
+    _ = try connection_process_input_at(&engine, &router, &"*2\r\n$6\r\nCONFIG\r\n$9\r\nRESETSTAT\r\n"[0: 31], &out[0], 2048, 1000u64);
+    const histogram_reset_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$7\r\nLATENCY\r\n$9\r\nHISTOGRAM\r\n$3\r\nSET\r\n"[0: 41], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: histogram_reset_result.response_len], &"*0\r\n"[0: 4]));
+
+    const unknown_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$7\r\nLATENCY\r\n$1\r\nX\r\n"[0: 24], &out[0], 2048, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: unknown_result.response_len], &"-ERR unknown subcommand 'X'. Try LATENCY HELP.\r\n"[0: 48]));
 
     engine_free(&engine);

@@ -492,7 +492,7 @@
 - [x] 常用 bitmap / bitfield：已补 `SETBIT`、`GETBIT`、`BITCOUNT`、`BITPOS`、`BITOP`、`BITFIELD`、`BITFIELD_RO`
 - [x] 常用 HLL / GEO / Key：已补 `PFADD`、`PFCOUNT`、`PFMERGE`（exact set-backed partial）、`PFSELFTEST`（no-op self-test partial）、`PFDEBUG`（standalone-error），以及 `GEOADD`、`GEODIST`、`GEOHASH`、`GEOPOS`、`GEOSEARCH`、`GEOSEARCHSTORE`、`GEORADIUS`、`GEORADIUS_RO`、`GEORADIUSBYMEMBER`、`GEORADIUSBYMEMBER_RO`（exact zset-backed partial；`GEOSEARCHSTORE STOREDIST` 当前写入整数距离 score），`COPY`（当前单 DB 深拷贝 partial，支持 `REPLACE`、`DB 0` 与 TTL 保留），`RESTORE-ASKING`（复用 `RESTORE` 的单 DB RDB payload 写入 partial）
 - [x] Scripting 第一批：已补 `EVAL`、`EVALSHA`、`SCRIPT LOAD/EXISTS/FLUSH`，当前为 single-call script subset partial
-- [x] Server / Connection 缺口第一批：已补 `MEMORY HELP/STATS/USAGE/DOCTOR/MALLOC-STATS/PURGE`（runtime-approx/no-op partial）、`SLOWLOG HELP/LEN/GET/RESET`（in-process ring partial）、`LATENCY HELP/LATEST/HISTORY/RESET/DOCTOR/HISTOGRAM/GRAPH`（command-event history partial；`HISTOGRAM` 仍为空直方图兼容面）与 `MONITOR`（流式命令观测 partial）
+- [x] Server / Connection 缺口第一批：已补 `MEMORY HELP/STATS/USAGE/DOCTOR/MALLOC-STATS/PURGE`（runtime-approx/no-op partial）、`SLOWLOG HELP/LEN/GET/RESET`（in-process ring partial）、`LATENCY HELP/LATEST/HISTORY/RESET/DOCTOR/HISTOGRAM/GRAPH`（command-event history + top-level command histogram partial）与 `MONITOR`（流式命令观测 partial）
 
 验收项：
 

@@ -39,16 +39,25 @@ use src.command.slowlog.slowlog_append;
 use src.command.slowlog.slowlog_count;
 use src.command.slowlog.slowlog_entry_newest;
 use src.command.slowlog.slowlog_reset;
+use src.command.latency.LATENCY_HISTOGRAM_BUCKET_COUNT;
 use src.command.latency.LatencyHistoryEntry;
+use src.command.latency.LatencyHistogramEntry;
 use src.command.latency.latency_command_is_active;
 use src.command.latency.latency_command_latest_timestamp_sec;
 use src.command.latency.latency_command_latest_latency_ms;
 use src.command.latency.latency_command_max_latency_ms;
 use src.command.latency.latency_history_count;
 use src.command.latency.latency_history_entry;
+use src.command.latency.latency_histogram_bucket_usec;
+use src.command.latency.latency_histogram_count;
+use src.command.latency.latency_histogram_entry_at;
+use src.command.latency.latency_histogram_entry_bucket_count;
+use src.command.latency.latency_histogram_entry_name;
+use src.command.latency.latency_histogram_find_entry;
 use src.command.latency.latency_record_command;
 use src.command.latency.latency_reset_all;
 use src.command.latency.latency_reset_event;
+use src.command.latency.latency_reset_histogram_all;
 use src.command.catalog_generated_base.CommandCatalogEntry;
 use src.command.catalog_generated_base.CommandCatalogStatus;
 use src.command.router.CommandInfo;
@@ -7676,7 +7685,7 @@ fn command_executor_latency_help() CommandReply {
     _ = list_object_push_tail(reply_list, &"LATENCY GRAPH <event>"[0: 21]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"    Return a minimal graph text for <event>."[0: 46]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"LATENCY HISTOGRAM [command [command ...]]"[0: 41]) catch { object_free(reply_list); return command_executor_oom(); };
-    _ = list_object_push_tail(reply_list, &"    Return command latency histograms. Currently empty until histogram sampling lands."[0: 86]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Return cumulative command latency histograms for tracked command names."[0: 73]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"LATENCY HISTORY <event>"[0: 23]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"    Return history for <event>. Currently supports command events."[0: 65]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"LATENCY LATEST"[0: 14]) catch { object_free(reply_list); return command_executor_oom(); };
@@ -7730,6 +7739,97 @@ fn command_executor_latency_history(event: &[byte]) CommandReply {
             _ = command_executor_info_append_u64(&raw, &":%u\r\n"[0: 5], entry.latency_ms) catch { return command_executor_oom(); };
         }
         index = index + 1;
+    }
+    return command_executor_owned_raw(raw.buf[0: raw.len]);
+}
+
+fn command_executor_latency_histogram_bucket_pair_count(entry: &LatencyHistogramEntry) usize {
+    var count: usize = 0;
+    var index: usize = 0;
+    while index < LATENCY_HISTOGRAM_BUCKET_COUNT {
+        if latency_histogram_entry_bucket_count(entry, index) > 0u64 {
+            count = count + 1;
+        }
+        index = index + 1;
+    }
+    return count;
+}
+
+fn command_executor_latency_histogram_append_entry(raw: &Sds, entry: &LatencyHistogramEntry) !void {
+    try command_executor_command_append_bulk(raw, latency_histogram_entry_name(entry));
+    try command_executor_resp_collection_prefix(raw, &"*"[0: 1], 4);
+    try command_executor_command_append_bulk(raw, &"calls"[0: 5]);
+    try command_executor_info_append_u64(raw, &":%u\r\n"[0: 5], entry.calls);
+    try command_executor_command_append_bulk(raw, &"histogram_usec"[0: 14]);
+
+    const pair_count: usize = command_executor_latency_histogram_bucket_pair_count(entry);
+    try command_executor_resp_collection_prefix(raw, &"*"[0: 1], pair_count * 2);
+    var cumulative: u64 = 0u64;
+    var index: usize = 0;
+    while index < LATENCY_HISTOGRAM_BUCKET_COUNT {
+        const bucket_count: u64 = latency_histogram_entry_bucket_count(entry, index);
+        cumulative = cumulative + bucket_count;
+        if bucket_count > 0u64 {
+            try command_executor_info_append_u64(raw, &":%u\r\n"[0: 5], latency_histogram_bucket_usec(index));
+            try command_executor_info_append_u64(raw, &":%u\r\n"[0: 5], cumulative);
+        }
+        index = index + 1;
+    }
+}
+
+fn command_executor_latency_histogram_result_count(command: &Command) usize {
+    if command.argc == 2 {
+        return latency_histogram_count();
+    }
+    var count: usize = 0;
+    var index: usize = 2;
+    while index < command.argc {
+        const name: &[byte] = command_executor_arg(command, index) catch {
+            return count;
+        };
+        if latency_histogram_find_entry(name) != null {
+            count = count + 1;
+        }
+        index = index + 1;
+    }
+    return count;
+}
+
+fn command_executor_latency_histogram(command: &Command) CommandReply {
+    const result_count: usize = command_executor_latency_histogram_result_count(command);
+    if result_count == 0 {
+        return command_executor_owned_raw(&"*0\r\n"[0: 4]);
+    }
+
+    var raw: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&raw);
+    }
+    _ = command_executor_resp_collection_prefix(&raw, &"*"[0: 1], result_count * 2) catch { return command_executor_oom(); };
+
+    if command.argc == 2 {
+        var index: usize = 0;
+        while index < latency_histogram_count() {
+            const entry: &LatencyHistogramEntry = latency_histogram_entry_at(index);
+            if entry != null {
+                _ = command_executor_latency_histogram_append_entry(&raw, entry) catch { return command_executor_oom(); };
+            }
+            index = index + 1;
+        }
+    } else {
+        var arg_index: usize = 2;
+        while arg_index < command.argc {
+            const name: &[byte] = command_executor_arg(command, arg_index) catch {
+                return command_executor_latency_wrong_subcommand_arity(&"histogram"[0: 9]);
+            };
+            const entry: &LatencyHistogramEntry = latency_histogram_find_entry(name);
+            if entry != null {
+                _ = command_executor_latency_histogram_append_entry(&raw, entry) catch { return command_executor_oom(); };
+            }
+            arg_index = arg_index + 1;
+        }
     }
     return command_executor_owned_raw(raw.buf[0: raw.len]);
 }
@@ -7794,7 +7894,7 @@ fn command_executor_latency(command: &Command) CommandReply {
         return command_executor_latency_graph(event);
     }
     if command_executor_keyword_eq(subcommand, &"HISTOGRAM"[0: 9]) {
-        return command_executor_owned_raw(&"*0\r\n"[0: 4]);
+        return command_executor_latency_histogram(command);
     }
     if command_executor_keyword_eq(subcommand, &"RESET"[0: 5]) {
         if command.argc == 2 {
@@ -15295,6 +15395,7 @@ fn command_executor_config(runtime: &CommandRuntimeInfo, command: &Command) Comm
         if command.argc != 2 {
             return command_executor_wrong_arity();
         }
+        latency_reset_histogram_all();
         return command_executor_simple(&"OK"[0: 2]);
     }
 
@@ -18120,16 +18221,16 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
 export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRuntimeInfo, command: &Command, now_ms: u64) CommandReply {
     const start_us: u64 = now_us();
     var reply: CommandReply = command_execute_with_runtime_dispatch_at(engine, runtime, command, now_ms);
+    const end_us: u64 = now_us();
+    var duration_us: u64 = 0u64;
+    if end_us >= start_us {
+        duration_us = end_us - start_us;
+    }
     if command.info.cmd_type != CommandType.command_slowlog {
-        const end_us: u64 = now_us();
-        var duration_us: u64 = 0u64;
-        if end_us >= start_us {
-            duration_us = end_us - start_us;
-        }
         slowlog_append(command, now_ms / 1000u64, duration_us);
-        if command.info.cmd_type != CommandType.command_latency {
-            latency_record_command(now_ms / 1000u64, duration_us);
-        }
+    }
+    if command.info.cmd_type != CommandType.command_latency {
+        latency_record_command(now_ms / 1000u64, duration_us, command.info.name);
     }
     return reply;
 }

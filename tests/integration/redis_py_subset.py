@@ -459,8 +459,11 @@ class RedisPySubsetClient:
         assert isinstance(result, list)
         return result
 
-    def latency_histogram(self):
-        result = self._request(b"LATENCY", b"HISTOGRAM")
+    def latency_histogram(self, *commands: str):
+        args = [b"LATENCY", b"HISTOGRAM"]
+        for command in commands:
+            args.append(command.encode())
+        result = self._request(*args)
         assert isinstance(result, list)
         return result
 
@@ -1186,6 +1189,9 @@ class RedisPySubsetClient:
             i += 2
         return result
 
+    def config_resetstat(self) -> bool:
+        return self._request(b"CONFIG", b"RESETSTAT") == "OK"
+
     def lastsave(self) -> int:
         return int(self._request(b"LASTSAVE"))
 
@@ -1582,6 +1588,8 @@ def run_smoke() -> None:
             assert client.slowlog_reset()
             if client.slowlog_len() != 0:
                 raise AssertionError("expected SLOWLOG LEN 0 after RESET")
+            if not client.config_resetstat():
+                raise AssertionError("CONFIG RESETSTAT failed before LATENCY checks")
             client.latency_reset()
             if client.latency_latest() != []:
                 raise AssertionError("expected empty LATENCY LATEST after RESET")
@@ -1598,12 +1606,25 @@ def run_smoke() -> None:
             history_latency = client.latency_history("command")
             if len(history_latency) == 0 or not isinstance(history_latency[0], list):
                 raise AssertionError(f"unexpected LATENCY HISTORY payload: {history_latency!r}")
-            if client.latency_histogram() != []:
-                raise AssertionError("expected empty LATENCY HISTOGRAM partial result")
+            set_histogram = client.latency_histogram("SET")
+            if (
+                len(set_histogram) != 2
+                or set_histogram[0] != b"set"
+                or not isinstance(set_histogram[1], list)
+                or b"calls" not in set_histogram[1]
+                or b"histogram_usec" not in set_histogram[1]
+            ):
+                raise AssertionError(f"unexpected LATENCY HISTOGRAM SET payload: {set_histogram!r}")
+            if client.latency_histogram("missing") != []:
+                raise AssertionError("expected empty LATENCY HISTOGRAM missing result")
             if b"recorded command events" not in client.latency_doctor():
                 raise AssertionError("expected LATENCY DOCTOR minimal diagnostic")
             if client.latency_reset() != 1:
                 raise AssertionError("expected LATENCY RESET 1")
+            if not client.config_resetstat():
+                raise AssertionError("CONFIG RESETSTAT failed after LATENCY checks")
+            if client.latency_histogram("SET") != []:
+                raise AssertionError("CONFIG RESETSTAT did not clear SET latency histogram")
             assert client.setrange("key", 5, "__") == 7
             assert client.get("key") == b"value__"
             assert client.rename("key", "key2")

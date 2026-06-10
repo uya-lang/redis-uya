@@ -7492,6 +7492,12 @@ export fn test_command_latency() !void {
     const router: CommandRouter = command_router_new();
     var engine: Engine = engine_new();
 
+    var config_resetstat_seed_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nCONFIG\r\n$9\r\nRESETSTAT\r\n"[0: 31]);
+    const config_resetstat_seed_command: Command = try command_executor_test_command(&router, &config_resetstat_seed_parsed);
+    const config_resetstat_seed_reply: CommandReply = command_execute_at(&engine, &config_resetstat_seed_command, 1000u64);
+    try assert_eq_i32(config_resetstat_seed_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    resp_value_free(&config_resetstat_seed_parsed.value);
+
     var reset_seed_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nLATENCY\r\n$5\r\nRESET\r\n"[0: 28]);
     const reset_seed_command: Command = try command_executor_test_command(&router, &reset_seed_parsed);
     _ = command_execute_at(&engine, &reset_seed_command, 1000u64);
@@ -7528,13 +7534,37 @@ export fn test_command_latency() !void {
     command_reply_cleanup(&history_reply);
     resp_value_free(&history_parsed.value);
 
-    var histogram_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nLATENCY\r\n$9\r\nHISTOGRAM\r\n"[0: 32]);
+    var histogram_parsed: RespParseResult = try parse_resp2(&"*3\r\n$7\r\nLATENCY\r\n$9\r\nHISTOGRAM\r\n$3\r\nSET\r\n"[0: 41]);
     const histogram_command: Command = try command_executor_test_command(&router, &histogram_parsed);
     var histogram_reply: CommandReply = command_execute_at(&engine, &histogram_command, 1000u64);
     try assert_eq_i32(histogram_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
-    try assert_true(command_executor_test_slice_eq(histogram_reply.data, &"*0\r\n"[0: 4]));
+    try assert_true(command_executor_test_contains(histogram_reply.data, &"$3\r\nset\r\n"[0: 9]));
+    try assert_true(command_executor_test_contains(histogram_reply.data, &"$5\r\ncalls\r\n:1\r\n"[0: 15]));
+    try assert_true(command_executor_test_contains(histogram_reply.data, &"$14\r\nhistogram_usec\r\n"[0: 21]));
     command_reply_cleanup(&histogram_reply);
     resp_value_free(&histogram_parsed.value);
+
+    var histogram_missing_parsed: RespParseResult = try parse_resp2(&"*3\r\n$7\r\nLATENCY\r\n$9\r\nHISTOGRAM\r\n$7\r\nmissing\r\n"[0: 45]);
+    const histogram_missing_command: Command = try command_executor_test_command(&router, &histogram_missing_parsed);
+    var histogram_missing_reply: CommandReply = command_execute_at(&engine, &histogram_missing_command, 1000u64);
+    try assert_eq_i32(histogram_missing_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    try assert_true(command_executor_test_slice_eq(histogram_missing_reply.data, &"*0\r\n"[0: 4]));
+    command_reply_cleanup(&histogram_missing_reply);
+    resp_value_free(&histogram_missing_parsed.value);
+
+    var config_resetstat_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nCONFIG\r\n$9\r\nRESETSTAT\r\n"[0: 31]);
+    const config_resetstat_command: Command = try command_executor_test_command(&router, &config_resetstat_parsed);
+    const config_resetstat_reply: CommandReply = command_execute_at(&engine, &config_resetstat_command, 1000u64);
+    try assert_eq_i32(config_resetstat_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    resp_value_free(&config_resetstat_parsed.value);
+
+    var histogram_reset_parsed: RespParseResult = try parse_resp2(&"*3\r\n$7\r\nLATENCY\r\n$9\r\nHISTOGRAM\r\n$3\r\nSET\r\n"[0: 41]);
+    const histogram_reset_command: Command = try command_executor_test_command(&router, &histogram_reset_parsed);
+    var histogram_reset_reply: CommandReply = command_execute_at(&engine, &histogram_reset_command, 1000u64);
+    try assert_eq_i32(histogram_reset_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    try assert_true(command_executor_test_slice_eq(histogram_reset_reply.data, &"*0\r\n"[0: 4]));
+    command_reply_cleanup(&histogram_reset_reply);
+    resp_value_free(&histogram_reset_parsed.value);
 
     var graph_parsed: RespParseResult = try parse_resp2(&"*3\r\n$7\r\nLATENCY\r\n$5\r\nGRAPH\r\n$7\r\ncommand\r\n"[0: 41]);
     const graph_command: Command = try command_executor_test_command(&router, &graph_parsed);

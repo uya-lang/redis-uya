@@ -909,6 +909,7 @@ if [[ "$SLOWLOG_LEN_ZERO_RESULT" != "0" ]]; then
     exit 1
 fi
 
+redis-cli --raw -h 127.0.0.1 -p "$PORT" config resetstat >/dev/null
 redis-cli --raw -h 127.0.0.1 -p "$PORT" latency reset >/dev/null
 
 LATENCY_LATEST_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" latency latest)"
@@ -941,6 +942,18 @@ if [[ -z "$LATENCY_HISTORY_RECORDED_RESULT" ]]; then
     exit 1
 fi
 
+LATENCY_HISTOGRAM_SET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" latency histogram SET)"
+if [[ "$LATENCY_HISTOGRAM_SET_RESULT" != *"set"* ]] || [[ "$LATENCY_HISTOGRAM_SET_RESULT" != *"calls"* ]] || [[ "$LATENCY_HISTOGRAM_SET_RESULT" != *"histogram_usec"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected LATENCY HISTOGRAM SET payload, got '$LATENCY_HISTOGRAM_SET_RESULT'" >&2
+    exit 1
+fi
+
+LATENCY_HISTOGRAM_MISSING_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" latency histogram missing)"
+if [[ -n "$LATENCY_HISTOGRAM_MISSING_RESULT" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected empty LATENCY HISTOGRAM missing result, got '$LATENCY_HISTOGRAM_MISSING_RESULT'" >&2
+    exit 1
+fi
+
 LATENCY_DOCTOR_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" latency doctor)"
 if [[ "$LATENCY_DOCTOR_RESULT" != *"recorded command events"* ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected LATENCY DOCTOR minimal diagnostic, got '$LATENCY_DOCTOR_RESULT'" >&2
@@ -950,6 +963,13 @@ fi
 LATENCY_RESET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" latency reset)"
 if [[ "$LATENCY_RESET_RESULT" != "1" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected LATENCY RESET 1, got '$LATENCY_RESET_RESULT'" >&2
+    exit 1
+fi
+
+redis-cli --raw -h 127.0.0.1 -p "$PORT" config resetstat >/dev/null
+LATENCY_HISTOGRAM_RESET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" latency histogram SET)"
+if [[ -n "$LATENCY_HISTOGRAM_RESET_RESULT" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected CONFIG RESETSTAT to clear SET histogram, got '$LATENCY_HISTOGRAM_RESET_RESULT'" >&2
     exit 1
 fi
 

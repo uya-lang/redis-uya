@@ -1455,6 +1455,20 @@ export fn test_connection_process_client_commands() !void {
     const getredir_off: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$8\r\nGETREDIR\r\n"[0: 30], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: getredir_off.response_len], &":-1\r\n"[0: 5]));
 
+    const tracking_prefix_bad: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*5\r\n$6\r\nCLIENT\r\n$8\r\nTRACKING\r\n$2\r\nON\r\n$6\r\nPREFIX\r\n$3\r\nfoo\r\n"[0: 59], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: tracking_prefix_bad.response_len], &"-ERR PREFIX option requires BCAST mode to be enabled\r\n"[0: 54]));
+
+    const tracking_prefix_on: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*8\r\n$6\r\nCLIENT\r\n$8\r\nTRACKING\r\n$2\r\nON\r\n$5\r\nBCAST\r\n$6\r\nPREFIX\r\n$6\r\ncache:\r\n$6\r\nPREFIX\r\n$5\r\nuser:\r\n"[0: 96], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: tracking_prefix_on.response_len], &"+OK\r\n"[0: 5]));
+
+    const tracking_prefix_info: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$12\r\nTRACKINGINFO\r\n"[0: 35], &out[0], 512, 1000u64);
+    try assert_true(network_connection_contains(out[0: tracking_prefix_info.response_len], &"bcast"[0: 5]));
+    try assert_true(network_connection_contains(out[0: tracking_prefix_info.response_len], &"cache:"[0: 6]));
+    try assert_true(network_connection_contains(out[0: tracking_prefix_info.response_len], &"user:"[0: 5]));
+
+    const tracking_prefix_off: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$6\r\nCLIENT\r\n$8\r\nTRACKING\r\n$3\r\nOFF\r\n"[0: 39], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: tracking_prefix_off.response_len], &"+OK\r\n"[0: 5]));
+
     const client_kill: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$4\r\nKILL\r\n$2\r\nID\r\n$1\r\n2\r\n"[0: 41], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: client_kill.response_len], &":1\r\n"[0: 4]));
     try assert_eq_i32(client_kill.request_client_kill as i32, 1);

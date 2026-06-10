@@ -3062,7 +3062,7 @@ CLIENT KILL ID id
 CLIENT UNBLOCK id [TIMEOUT|ERROR]
 CLIENT PAUSE timeout-ms [WRITE|ALL]
 CLIENT UNPAUSE
-CLIENT TRACKING ON [REDIRECT id] [BCAST] [OPTIN] [OPTOUT] [NOLOOP]
+CLIENT TRACKING ON [REDIRECT id] [BCAST] [PREFIX prefix ...] [OPTIN] [OPTOUT] [NOLOOP]
 CLIENT TRACKING OFF
 CLIENT TRACKINGINFO
 CLIENT SETINFO LIB-NAME value
@@ -3086,7 +3086,7 @@ CLIENT HELP
 - `CLIENT UNBLOCK id [TIMEOUT|ERROR]`：解除处于阻塞 pop 等待中的其他连接；默认 `TIMEOUT` 向目标连接返回对应阻塞命令的空结果，`ERROR` 向目标连接返回 `UNBLOCKED` 错误，当前命令返回整数 `0/1`
 - `CLIENT PAUSE timeout-ms [WRITE|ALL]`：暂停其他连接的命令处理；当前 `WRITE`/`ALL` 都按全局暂停处理，返回 `+OK`
 - `CLIENT UNPAUSE`：提前解除当前 pause 状态，返回 `+OK`
-- `CLIENT TRACKING`：当前支持连接级 `ON/OFF`、`REDIRECT`、`BCAST`、`OPTIN`、`OPTOUT`、`NOLOOP` 标志存储，返回 `+OK`
+- `CLIENT TRACKING`：当前支持连接级 `ON/OFF`、`REDIRECT`、`BCAST`、`PREFIX`、`OPTIN`、`OPTOUT`、`NOLOOP` 状态存储，返回 `+OK`；`PREFIX` 仅在 `BCAST` 模式下接受
 - `CLIENT TRACKINGINFO`：RESP2 下返回 flatten array，RESP3 下返回 map，暴露当前连接的 tracking flags、redirect 和 prefixes
 - `CLIENT SETINFO`：保存客户端库名/版本元数据，成功返回 `+OK`
 - `CLIENT HELP`：返回当前支持的 CLIENT 子命令列表
@@ -3099,7 +3099,7 @@ CLIENT HELP
 - `CLIENT KILL` 当前只支持 `ID <id>` 过滤，不支持更完整的 addr/type/user/maxage/skipme 组合
 - `CLIENT UNBLOCK` 当前支持阻塞 pop 等待路径的 `TIMEOUT` / `ERROR` 解除，不支持更复杂的模块阻塞客户端类型
 - `CLIENT PAUSE` 当前保留发起暂停的控制连接可继续发送 `CLIENT UNPAUSE`；`WRITE` 语义还没有细分成仅写命令暂停
-- `CLIENT TRACKING` 当前只保存连接级状态，不发送 invalidation push，也不支持 `PREFIX`
+- `CLIENT TRACKING` 当前只保存连接级状态和 `BCAST PREFIX` 列表，不发送 invalidation push
 - `CLIENT CACHING` 当前只保存连接级兼容标志，尚未提供 server-assisted client-side caching invalidation
 - `CLIENT NO-EVICT` 当前只保存连接级兼容标志，尚未接入 `maxmemory` 淘汰候选保护
 - `CLIENT NO-TOUCH` 当前只保存连接级兼容标志，尚未接入对象访问路径的 LRU/LFU touch 抑制

@@ -248,6 +248,26 @@ def run_smoke() -> None:
                     raise AssertionError("CLIENT TRACKING OFF failed")
                 if send_command(sock, b"CLIENT", b"GETREDIR") != -1:
                     raise AssertionError("CLIENT GETREDIR should reset to -1 after TRACKING OFF")
+                try:
+                    send_command(sock, b"CLIENT", b"TRACKING", b"ON", b"PREFIX", b"cache:")
+                    raise AssertionError("CLIENT TRACKING PREFIX without BCAST should fail")
+                except RespError as exc:
+                    if "prefix option requires bcast" not in str(exc).lower():
+                        raise
+                if send_command(sock, b"CLIENT", b"TRACKING", b"ON", b"BCAST", b"PREFIX", b"cache:", b"PREFIX", b"user:") != "OK":
+                    raise AssertionError("CLIENT TRACKING BCAST PREFIX failed")
+                tracking_prefix_info = send_command(sock, b"CLIENT", b"TRACKINGINFO")
+                if (
+                    not isinstance(tracking_prefix_info, dict)
+                    or not isinstance(tracking_prefix_info.get(b"flags"), list)
+                    or b"on" not in tracking_prefix_info[b"flags"]
+                    or b"bcast" not in tracking_prefix_info[b"flags"]
+                    or tracking_prefix_info.get(b"redirect") != -1
+                    or tracking_prefix_info.get(b"prefixes") != [b"cache:", b"user:"]
+                ):
+                    raise AssertionError(f"unexpected CLIENT TRACKINGINFO prefixes: {tracking_prefix_info!r}")
+                if send_command(sock, b"CLIENT", b"TRACKING", b"OFF") != "OK":
+                    raise AssertionError("CLIENT TRACKING OFF after prefixes failed")
 
                 if send_command(sock, b"CLIENT", b"CACHING", b"YES") != "OK":
                     raise AssertionError("CLIENT CACHING YES failed")

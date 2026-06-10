@@ -132,6 +132,7 @@ export struct ConnectionTransaction {
     tracking_optin: bool,
     tracking_optout: bool,
     tracking_noloop: bool,
+    tracking_prefixes: &RedisObject,
     reply_off_enabled: bool,
     reply_skip_next: bool,
     caching_enabled: bool,
@@ -251,6 +252,7 @@ fn connection_transaction_empty() ConnectionTransaction {
         tracking_optin: false,
         tracking_optout: false,
         tracking_noloop: false,
+        tracking_prefixes: null as &RedisObject,
         reply_off_enabled: false,
         reply_skip_next: false,
         caching_enabled: false,
@@ -274,6 +276,7 @@ export fn connection_transaction_reset(tx: &ConnectionTransaction) void {
         object_free(tx.queue);
     }
     connection_transaction_clear_watches(tx);
+    connection_client_tracking_clear(tx);
     tx.active = false;
     tx.queue = null as &RedisObject;
     tx.queue_count = 0;
@@ -2066,6 +2069,10 @@ fn connection_client_tracking_clear(tx: &ConnectionTransaction) void {
     tx.tracking_optin = false;
     tx.tracking_optout = false;
     tx.tracking_noloop = false;
+    if tx.tracking_prefixes != null {
+        object_free(tx.tracking_prefixes);
+    }
+    tx.tracking_prefixes = null as &RedisObject;
 }
 
 fn connection_sds_append_resp_array_header(buf: &Sds, count: usize) !void {
@@ -2130,6 +2137,20 @@ fn connection_client_tracking_append_flags(buf: &Sds, tx: &ConnectionTransaction
     }
     if tx.tracking_noloop {
         try connection_sds_append_resp_bulk(buf, &"noloop"[0: 6]);
+    }
+}
+
+fn connection_client_tracking_append_prefixes(buf: &Sds, tx: &ConnectionTransaction) !void {
+    if tx.tracking_prefixes == null {
+        try connection_sds_append_resp_array_header(buf, 0);
+        return;
+    }
+    try connection_sds_append_resp_array_header(buf, tx.tracking_prefixes.list_len);
+    var node: &ListNode = tx.tracking_prefixes.list_head;
+    while node != null {
+        const data: &[byte] = node.value.value.buf[0: node.value.value.len];
+        try connection_sds_append_resp_bulk(buf, data);
+        node = node.next;
     }
 }
 
@@ -2255,7 +2276,7 @@ fn connection_client_help_reply() CommandReply {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
-    _ = list_object_push_tail(reply_list, &"CLIENT TRACKING <ON|OFF> [REDIRECT <id>] [BCAST] [OPTIN] [OPTOUT] [NOLOOP]"[0: 74]) catch {
+    _ = list_object_push_tail(reply_list, &"CLIENT TRACKING <ON|OFF> [REDIRECT <id>] [BCAST] [PREFIX <prefix> ...] [OPTIN] [OPTOUT] [NOLOOP]"[0: 96]) catch {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
@@ -2328,7 +2349,7 @@ fn connection_client_trackinginfo_reply(tx: &ConnectionTransaction) CommandReply
     _ = connection_sds_append_resp_bulk(&raw, &"redirect"[0: 8]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
     _ = connection_sds_append_resp_integer(&raw, tx.tracking_redirect_id) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
     _ = connection_sds_append_resp_bulk(&raw, &"prefixes"[0: 8]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
-    _ = connection_sds_append_resp_array_header(&raw, 0) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_client_tracking_append_prefixes(&raw, tx) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
     return connection_raw_reply_owned(raw.buf[0: raw.len]);
 }
 
@@ -2355,6 +2376,13 @@ fn connection_handle_client_tracking(tx: &ConnectionTransaction, command: &Comma
     var tracking_optin: bool = false;
     var tracking_optout: bool = false;
     var tracking_noloop: bool = false;
+    var tracking_prefixes: &RedisObject = null as &RedisObject;
+    var tracking_prefixes_owned: bool = true;
+    defer {
+        if tracking_prefixes_owned && tracking_prefixes != null {
+            object_free(tracking_prefixes);
+        }
+    }
 
     var index: usize = 3;
     while index < command.argc {
@@ -2404,14 +2432,38 @@ fn connection_handle_client_tracking(tx: &ConnectionTransaction, command: &Comma
             index = index + 1;
             continue;
         }
+        if connection_keyword_eq(option, &"PREFIX"[0: 6]) {
+            if index + 1 >= command.argc {
+                return connection_error_reply(&"ERR syntax error"[0: 16]);
+            }
+            const prefix: &[byte] = command_arg_data(command, index + 1) catch {
+                return connection_error_reply(&"ERR invalid request"[0: 19]);
+            };
+            if tracking_prefixes == null {
+                tracking_prefixes = create_list_object() catch {
+                    return connection_error_reply(&"ERR out of memory"[0: 17]);
+                };
+            }
+            _ = list_object_push_tail(tracking_prefixes, prefix) catch {
+                return connection_error_reply(&"ERR out of memory"[0: 17]);
+            };
+            index = index + 2;
+            continue;
+        }
         return connection_error_reply(&"ERR syntax error"[0: 16]);
     }
+    if tracking_prefixes != null && !tracking_bcast {
+        return connection_error_reply(&"ERR PREFIX option requires BCAST mode to be enabled"[0: 51]);
+    }
+    connection_client_tracking_clear(tx);
     tx.tracking_enabled = true;
     tx.tracking_redirect_id = tracking_redirect_id;
     tx.tracking_bcast = tracking_bcast;
     tx.tracking_optin = tracking_optin;
     tx.tracking_optout = tracking_optout;
     tx.tracking_noloop = tracking_noloop;
+    tx.tracking_prefixes = tracking_prefixes;
+    tracking_prefixes_owned = false;
     return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
 }
 

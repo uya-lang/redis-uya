@@ -2955,10 +2955,11 @@ LATENCY GRAPH event
 
 说明：
 
-- 当前实现为 partial：采样普通命令执行耗时并写入 `command` 事件的进程内历史，同时写入 top-level 命令名直方图；`LATENCY` 自身不写入 latency 历史或直方图
+- 当前实现为 partial：按 `latency-monitor-threshold` 采样普通命令执行耗时并写入 `command` 事件的进程内历史，同时写入 top-level 命令名直方图；`LATENCY` 自身不写入 latency 历史或直方图
 - 当前 `command` 事件耗时基于 redis-uya 运行时时间源，精度受毫秒级时钟限制
 - `LATENCY RESET` 只清理 event 历史；命令直方图按 Redis 习惯由 `CONFIG RESETSTAT` 清理
-- 当前直方图使用 Redis 兼容的 RESP2 map-as-array 形状和固定微秒桶，但只按 top-level 命令名聚合；`CONFIG SET latency-tracking yes|no` 可控制后续命令直方图采样，尚未实现子命令名粒度或基于 `latency-monitor-threshold` 的事件门限采样语义
+- `CONFIG SET latency-monitor-threshold <milliseconds>` 可控制后续 `LATENCY LATEST/HISTORY/GRAPH` 的 `command` 事件采样；`0` 禁用事件采样，正数表示记录大于等于该毫秒门限的命令事件
+- 当前直方图使用 Redis 兼容的 RESP2 map-as-array 形状和固定微秒桶，但只按 top-level 命令名聚合；`CONFIG SET latency-tracking yes|no` 可控制后续命令直方图采样，尚未实现子命令名粒度直方图
 
 ### `MONITOR`
 
@@ -3036,9 +3037,9 @@ CONFIG RESETSTAT
 返回：
 
 - 返回 RESP Array，按 `name`、`value` 成对展开
-- 当前支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`replicaof`、`masterauth`、`maxmemory`、`maxmemory-policy`、`maxclients`、`databases`、`save`、`latency-tracking`、`slowlog-log-slower-than`、`slowlog-max-len`
+- 当前支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`replicaof`、`masterauth`、`maxmemory`、`maxmemory-policy`、`maxclients`、`databases`、`save`、`latency-tracking`、`latency-monitor-threshold`、`slowlog-log-slower-than`、`slowlog-max-len`
 - 支持最小 `*` 通配模式
-- `CONFIG SET` 当前支持运行时子集：`port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`replicaof`、`masterauth`、`maxmemory`、`maxmemory-policy`、`maxclients`、`databases`、`save`、`latency-tracking`、`slowlog-log-slower-than`、`slowlog-max-len`
+- `CONFIG SET` 当前支持运行时子集：`port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`replicaof`、`masterauth`、`maxmemory`、`maxmemory-policy`、`maxclients`、`databases`、`save`、`latency-tracking`、`latency-monitor-threshold`、`slowlog-log-slower-than`、`slowlog-max-len`
 - `CONFIG REWRITE` 当前会把运行时有效配置写到 `<appendfilename>.conf`，成功返回 `+OK`；当前已覆盖 `maxclients`、`databases` 等第二批运行时字段的落盘
 - `CONFIG HELP` 返回当前支持的 CONFIG 子命令列表
 - `CONFIG RESETSTAT` 当前返回 `+OK`，并清理 `LATENCY HISTOGRAM` 的命令直方图状态

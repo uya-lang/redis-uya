@@ -15555,6 +15555,12 @@ fn command_executor_config(runtime: &CommandRuntimeInfo, command: &Command) Comm
             return command_executor_oom();
         };
     }
+    if command_executor_keyword_match(pattern, &"latency-monitor-threshold"[0: 25]) {
+        _ = command_executor_config_append_i64(reply_list, &"latency-monitor-threshold"[0: 25], runtime.config.latency_monitor_threshold) catch {
+            object_free(reply_list);
+            return command_executor_oom();
+        };
+    }
     if command_executor_keyword_match(pattern, &"slowlog-log-slower-than"[0: 23]) {
         _ = command_executor_config_append_i64(reply_list, &"slowlog-log-slower-than"[0: 23], runtime.config.slowlog_log_slower_than) catch {
             object_free(reply_list);
@@ -18261,7 +18267,7 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
         slowlog_append(command, now_ms / 1000u64, duration_us, runtime.config.slowlog_max_len);
     }
     if command.info.cmd_type != CommandType.command_latency {
-        latency_record_command(now_ms / 1000u64, duration_us, command.info.name, runtime.config.latency_tracking);
+        latency_record_command(now_ms / 1000u64, duration_us, command.info.name, runtime.config.latency_tracking, runtime.config.latency_monitor_threshold);
     }
     return reply;
 }

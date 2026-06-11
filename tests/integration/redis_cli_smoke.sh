@@ -930,6 +930,12 @@ if [[ -n "$LATENCY_HISTORY_RESULT" ]]; then
     exit 1
 fi
 
+LATENCY_THRESHOLD_SET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" config set latency-monitor-threshold 1)"
+if [[ "$LATENCY_THRESHOLD_SET_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected CONFIG SET latency-monitor-threshold OK, got '$LATENCY_THRESHOLD_SET_RESULT'" >&2
+    exit 1
+fi
+
 LATENCY_SET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" set latency-k 1)"
 if [[ "$LATENCY_SET_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected latency seed SET OK, got '$LATENCY_SET_RESULT'" >&2

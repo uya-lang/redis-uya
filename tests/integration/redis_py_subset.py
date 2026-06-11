@@ -1602,6 +1602,8 @@ def run_smoke() -> None:
                 raise AssertionError("expected empty LATENCY LATEST after RESET")
             if client.latency_history("command") != []:
                 raise AssertionError("expected empty LATENCY HISTORY after RESET")
+            if not client.config_set("latency-monitor-threshold", "1"):
+                raise AssertionError("CONFIG SET latency-monitor-threshold failed before LATENCY checks")
             assert client.set("latency-k", "1")
             latest_latency = client.latency_latest()
             if (

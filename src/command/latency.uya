@@ -166,30 +166,35 @@ fn latency_histogram_record(command_name: &[byte], duration_us: u64) void {
     }
 }
 
-export fn latency_record_command(timestamp_sec: u64, duration_us: u64, command_name: &[byte], track_histogram: bool) void {
+export fn latency_record_command(timestamp_sec: u64, duration_us: u64, command_name: &[byte], track_histogram: bool, monitor_threshold_ms: i64) void {
     var latency_ms: u64 = duration_us / 1000u64;
     if duration_us > 0u64 && latency_ms == 0u64 {
         latency_ms = 1u64;
     }
-
-    latency_command_active = true;
-    latency_command_latest_timestamp_sec = timestamp_sec;
-    latency_command_latest_latency_ms = latency_ms;
-    if latency_ms > latency_command_max_latency_ms {
-        latency_command_max_latency_ms = latency_ms;
+    if monitor_threshold_ms > 0 && latency_ms == 0u64 {
+        latency_ms = 1u64;
     }
 
-    var slot: usize = 0;
-    if latency_command_count < LATENCY_HISTORY_MAX_ENTRIES {
-        slot = (latency_command_start + latency_command_count) % LATENCY_HISTORY_MAX_ENTRIES;
-        latency_command_count = latency_command_count + 1;
-    } else {
-        slot = latency_command_start;
-        latency_command_start = (latency_command_start + 1) % LATENCY_HISTORY_MAX_ENTRIES;
+    if monitor_threshold_ms > 0 && latency_ms >= monitor_threshold_ms as u64 {
+        latency_command_active = true;
+        latency_command_latest_timestamp_sec = timestamp_sec;
+        latency_command_latest_latency_ms = latency_ms;
+        if latency_ms > latency_command_max_latency_ms {
+            latency_command_max_latency_ms = latency_ms;
+        }
+
+        var slot: usize = 0;
+        if latency_command_count < LATENCY_HISTORY_MAX_ENTRIES {
+            slot = (latency_command_start + latency_command_count) % LATENCY_HISTORY_MAX_ENTRIES;
+            latency_command_count = latency_command_count + 1;
+        } else {
+            slot = latency_command_start;
+            latency_command_start = (latency_command_start + 1) % LATENCY_HISTORY_MAX_ENTRIES;
+        }
+        latency_command_entries[slot].active = true;
+        latency_command_entries[slot].timestamp_sec = timestamp_sec;
+        latency_command_entries[slot].latency_ms = latency_ms;
     }
-    latency_command_entries[slot].active = true;
-    latency_command_entries[slot].timestamp_sec = timestamp_sec;
-    latency_command_entries[slot].latency_ms = latency_ms;
     if track_histogram {
         latency_histogram_record(command_name, duration_us);
     }

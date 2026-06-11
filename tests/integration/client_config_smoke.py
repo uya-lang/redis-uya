@@ -441,6 +441,25 @@ def run_smoke() -> None:
                 enabled_histogram = send_command(sock, b"LATENCY", b"HISTOGRAM", b"SET")
                 if not isinstance(enabled_histogram, list) or b"set" not in enabled_histogram:
                     raise AssertionError(f"latency-tracking yes did not record SET histogram: {enabled_histogram!r}")
+                if send_command(sock, b"CONFIG", b"SET", b"latency-monitor-threshold", b"1000000") != "OK":
+                    raise AssertionError("CONFIG SET latency-monitor-threshold high failed")
+                if array_pairs_to_dict(send_command(sock, b"CONFIG", b"GET", b"latency-monitor-threshold")).get("latency-monitor-threshold") != "1000000":
+                    raise AssertionError("CONFIG GET latency-monitor-threshold did not reflect high threshold")
+                if send_command(sock, b"LATENCY", b"RESET") not in (0, 1):
+                    raise AssertionError("LATENCY RESET before threshold check failed")
+                if send_command(sock, b"SET", b"latency-threshold-off", b"1") != "OK":
+                    raise AssertionError("SET while latency-monitor-threshold high failed")
+                if send_command(sock, b"LATENCY", b"LATEST") != []:
+                    raise AssertionError("latency-monitor-threshold high still recorded event")
+                if send_command(sock, b"CONFIG", b"SET", b"latency-monitor-threshold", b"1") != "OK":
+                    raise AssertionError("CONFIG SET latency-monitor-threshold 1 failed")
+                if send_command(sock, b"LATENCY", b"RESET") not in (0, 1):
+                    raise AssertionError("LATENCY RESET before threshold enabled check failed")
+                if send_command(sock, b"SET", b"latency-threshold-on", b"1") != "OK":
+                    raise AssertionError("SET while latency-monitor-threshold enabled failed")
+                enabled_latest = send_command(sock, b"LATENCY", b"LATEST")
+                if not isinstance(enabled_latest, list) or len(enabled_latest) == 0:
+                    raise AssertionError("latency-monitor-threshold 1 did not record event")
                 if send_command(sock, b"CONFIG", b"SET", b"latency-tracking", b"no") != "OK":
                     raise AssertionError("CONFIG SET latency-tracking no before rewrite failed")
 
@@ -529,6 +548,7 @@ def run_smoke() -> None:
                     "maxmemory 1048576",
                     "maxmemory-policy allkeys-lru",
                     "latency-tracking no",
+                    "latency-monitor-threshold 1",
                     "slowlog-log-slower-than -1",
                     "slowlog-max-len 1",
                     "save 60 10",

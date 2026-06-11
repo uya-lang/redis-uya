@@ -830,7 +830,9 @@ export fn test_connection_process_latency() !void {
     const latest_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$7\r\nLATENCY\r\n$6\r\nLATEST\r\n"[0: 29], &out[0], 2048, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: latest_result.response_len], &"*0\r\n"[0: 4]));
 
-    _ = try connection_process_input_at(&engine, &router, &"*3\r\n$3\r\nSET\r\n$5\r\nlat-k\r\n$1\r\n1\r\n"[0: 31], &out[0], 2048, 2000u64);
+    var latency_runtime: CommandRuntimeInfo = command_runtime_default();
+    latency_runtime.config.latency_monitor_threshold = 1;
+    _ = try connection_process_input_with_runtime_at(&engine, &latency_runtime, &router, &"*3\r\n$3\r\nSET\r\n$5\r\nlat-k\r\n$1\r\n1\r\n"[0: 31], &out[0], 2048, 2000u64);
 
     const latest_recorded_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$7\r\nLATENCY\r\n$6\r\nLATEST\r\n"[0: 29], &out[0], 2048, 2000u64);
     try assert_true(network_connection_contains(out[0: latest_recorded_result.response_len], &"$7\r\ncommand\r\n"[0: 13]));

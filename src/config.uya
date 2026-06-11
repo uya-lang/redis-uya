@@ -53,6 +53,7 @@ export struct ServerConfig {
     maxmemory: usize,
     maxmemory_policy: MaxmemoryPolicy,
     latency_tracking: bool,
+    latency_monitor_threshold: i64,
     slowlog_log_slower_than: i64,
     slowlog_max_len: usize,
     save_seconds: i32,
@@ -80,6 +81,7 @@ export fn default_config() ServerConfig {
         maxmemory: 0,
         maxmemory_policy: MaxmemoryPolicy.maxmemory_noeviction,
         latency_tracking: true,
+        latency_monitor_threshold: 0,
         slowlog_log_slower_than: 10000,
         slowlog_max_len: 128,
         save_seconds: 900,
@@ -300,6 +302,14 @@ export fn config_apply_runtime_set(cfg: &ServerConfig, key: &[byte], value: &[by
         cfg.latency_tracking = try parse_bool_token(value);
         return true;
     }
+    if token_eq(key, &"latency-monitor-threshold"[0: 25]) {
+        const threshold: i64 = try parse_i64_token(value);
+        if threshold < 0 {
+            return error.ConfigInvalidValue;
+        }
+        cfg.latency_monitor_threshold = threshold;
+        return true;
+    }
     if token_eq(key, &"slowlog-log-slower-than"[0: 23]) {
         const threshold: i64 = try parse_i64_token(value);
         if threshold < -1 {
@@ -471,6 +481,7 @@ fn config_rewrite_payload(cfg: &ServerConfig) !Sds {
     try config_append_u64_line(&buf, &"maxmemory"[0: 9], cfg.maxmemory as u64);
     try config_append_line(&buf, &"maxmemory-policy"[0: 16], maxmemory_policy_name(cfg.maxmemory_policy));
     try config_append_line(&buf, &"latency-tracking"[0: 16], config_bool_name(cfg.latency_tracking));
+    try config_append_i64_line(&buf, &"latency-monitor-threshold"[0: 25], cfg.latency_monitor_threshold);
     try config_append_i64_line(&buf, &"slowlog-log-slower-than"[0: 23], cfg.slowlog_log_slower_than);
     try config_append_u64_line(&buf, &"slowlog-max-len"[0: 15], cfg.slowlog_max_len as u64);
     try config_append_pair_i32_line(&buf, &"save"[0: 4], cfg.save_seconds, cfg.save_changes);
@@ -568,6 +579,12 @@ fn parse_line(cfg: &ServerConfig, line: &[byte]) !void {
         cfg.maxmemory_policy = try parse_maxmemory_policy(value);
     } else if token_eq(key, &"latency-tracking"[0: 16]) {
         cfg.latency_tracking = try parse_bool_token(value);
+    } else if token_eq(key, &"latency-monitor-threshold"[0: 25]) {
+        const threshold: i64 = try parse_i64_token(value);
+        if threshold < 0 {
+            return error.ConfigInvalidValue;
+        }
+        cfg.latency_monitor_threshold = threshold;
     } else if token_eq(key, &"slowlog-log-slower-than"[0: 23]) {
         const threshold: i64 = try parse_i64_token(value);
         if threshold < -1 {

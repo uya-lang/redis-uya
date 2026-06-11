@@ -2011,6 +2011,32 @@ fn connection_handle_auth(tx: &ConnectionTransaction, runtime: &CommandRuntimeIn
     return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
 }
 
+fn connection_authenticate_username_password(tx: &ConnectionTransaction, runtime: &CommandRuntimeInfo, username: &[byte], password: &[byte]) CommandReply {
+    const requirepass: &[byte] = connection_requirepass(runtime);
+    if !connection_keyword_eq(username, &"default"[0: 7]) {
+        tx.authenticated = false;
+        return connection_wrongpass_reply();
+    }
+    if requirepass.len == 0 {
+        tx.authenticated = true;
+        return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+    }
+    if password.len != requirepass.len {
+        tx.authenticated = false;
+        return connection_wrongpass_reply();
+    }
+    var i: usize = 0;
+    while i < password.len {
+        if password.ptr[i] != requirepass.ptr[i] {
+            tx.authenticated = false;
+            return connection_wrongpass_reply();
+        }
+        i = i + 1;
+    }
+    tx.authenticated = true;
+    return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+}
+
 fn connection_handle_shutdown(command: &Command) !ConnectionProcessResult {
     if command.argc > 2 {
         return error.CommandInvalidRequest;
@@ -4384,12 +4410,15 @@ fn connection_hello_reply(protocol_version: i32) CommandReply {
     return connection_raw_reply_owned(raw.buf[0: raw.len]);
 }
 
-fn connection_handle_hello(tx: &ConnectionTransaction, command: &Command) CommandReply {
+fn connection_handle_hello(tx: &ConnectionTransaction, runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
     if command.argc == 1 {
+        if !connection_auth_ok(tx, runtime) {
+            return connection_noauth_reply();
+        }
         connection_client_registry_sync(tx);
         return connection_hello_reply(tx.protocol_version);
     }
-    if command.argc != 2 && command.argc != 4 {
+    if command.argc < 2 {
         return connection_error_reply(&"ERR syntax error"[0: 16]);
     }
     const version_arg: &[byte] = command_arg_data(command, 1) catch {
@@ -4401,18 +4430,54 @@ fn connection_handle_hello(tx: &ConnectionTransaction, command: &Command) Comman
     if version != 2u64 && version != 3u64 {
         return connection_error_reply(&"NOPROTO unsupported protocol version"[0: 36]);
     }
-    tx.protocol_version = version as i32;
-    if command.argc == 4 {
-        const option: &[byte] = command_arg_data(command, 2) catch {
+    var has_auth: bool = false;
+    var auth_username: &[byte] = connection_reply_empty_slice();
+    var auth_password: &[byte] = connection_reply_empty_slice();
+    var has_setname: bool = false;
+    var setname: &[byte] = connection_reply_empty_slice();
+    var index: usize = 2;
+    while index < command.argc {
+        const option: &[byte] = command_arg_data(command, index) catch {
             return connection_error_reply(&"ERR syntax error"[0: 16]);
         };
-        if !connection_keyword_eq(option, &"SETNAME"[0: 7]) {
+        if connection_keyword_eq(option, &"AUTH"[0: 4]) {
+            if index + 2 >= command.argc {
+                return connection_error_reply(&"ERR syntax error"[0: 16]);
+            }
+            auth_username = command_arg_data(command, index + 1) catch {
+                return connection_error_reply(&"ERR syntax error"[0: 16]);
+            };
+            auth_password = command_arg_data(command, index + 2) catch {
+                return connection_error_reply(&"ERR syntax error"[0: 16]);
+            };
+            has_auth = true;
+            index = index + 3;
+        } else if connection_keyword_eq(option, &"SETNAME"[0: 7]) {
+            if index + 1 >= command.argc {
+                return connection_error_reply(&"ERR syntax error"[0: 16]);
+            }
+            setname = command_arg_data(command, index + 1) catch {
+                return connection_error_reply(&"ERR syntax error"[0: 16]);
+            };
+            has_setname = true;
+            index = index + 2;
+        } else {
             return connection_error_reply(&"ERR syntax error"[0: 16]);
         }
-        const name: &[byte] = command_arg_data(command, 3) catch {
-            return connection_error_reply(&"ERR syntax error"[0: 16]);
-        };
-        _ = connection_client_store_name(tx, name) catch {
+    }
+    if has_auth {
+        var auth_reply: CommandReply = connection_authenticate_username_password(tx, runtime, auth_username, auth_password);
+        if auth_reply.typ != CommandReplyType.reply_simple_string {
+            return auth_reply;
+        }
+        command_reply_cleanup(&auth_reply);
+    }
+    if !connection_auth_ok(tx, runtime) {
+        return connection_noauth_reply();
+    }
+    tx.protocol_version = version as i32;
+    if has_setname {
+        _ = connection_client_store_name(tx, setname) catch {
             return connection_error_reply(&"ERR invalid client name"[0: 23]);
         };
     }
@@ -5348,7 +5413,8 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
     }
     if !connection_auth_ok(tx, runtime) &&
         command.info.cmd_type != CommandType.command_quit &&
-        command.info.cmd_type != CommandType.command_reset {
+        command.info.cmd_type != CommandType.command_reset &&
+        command.info.cmd_type != CommandType.command_hello {
         const noauth_reply: CommandReply = connection_noauth_reply();
         const noauth_n: usize = try connection_encode_reply_for_command(tx, &command, &noauth_reply, out, out_cap, reply_off_before, reply_skip_before);
         resp_value_free(&parsed.value);
@@ -5476,7 +5542,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
     }
 
     if command.info.cmd_type == CommandType.command_hello {
-        var hello_reply: CommandReply = connection_handle_hello(tx, &command);
+        var hello_reply: CommandReply = connection_handle_hello(tx, runtime, &command);
         const hello_n: usize = try connection_encode_reply_for_command(tx, &command, &hello_reply, out, out_cap, reply_off_before, reply_skip_before);
         command_reply_cleanup(&hello_reply);
         resp_value_free(&parsed.value);

@@ -35,8 +35,12 @@
 HELLO
 HELLO 2
 HELLO 3
+HELLO 2 AUTH default password
+HELLO 3 AUTH default password
 HELLO 2 SETNAME name
 HELLO 3 SETNAME name
+HELLO 2 AUTH default password SETNAME name
+HELLO 3 AUTH default password SETNAME name
 ```
 
 返回：
@@ -47,8 +51,8 @@ HELLO 3 SETNAME name
 
 说明：
 
-- 当前 `HELLO` 支持 `SETNAME` 扩展参数，不支持 `AUTH`
-- 启用 `requirepass` 后，当前实现要求先单独执行 `AUTH`；未认证时 `HELLO` 返回 `-NOAUTH Authentication required.`
+- 当前 `HELLO` 支持 `AUTH default password` 与 `SETNAME name` 扩展参数，两个扩展可组合使用
+- 启用 `requirepass` 后，未认证且未带 `AUTH` 的 `HELLO` 返回 `-NOAUTH Authentication required.`；带 `AUTH` 且密码错误时返回 `-WRONGPASS ...`，不会切换协议版本或设置客户端名
 - RESP3 模式下，不存在的 bulk 值返回 RESP3 Null：`_\r\n`
 
 ### `AUTH`

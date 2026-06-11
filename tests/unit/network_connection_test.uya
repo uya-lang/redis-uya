@@ -1707,6 +1707,35 @@ export fn test_connection_process_auth_requirepass_shutdown() !void {
     const hello_noauth: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*2\r\n$5\r\nHELLO\r\n$1\r\n3\r\n"[0: 22], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: hello_noauth.response_len], &"-NOAUTH Authentication required.\r\n"[0: 34]));
 
+    var hello_auth_bad_tx: ConnectionTransaction = connection_transaction_new();
+    defer {
+        connection_transaction_reset(&hello_auth_bad_tx);
+    }
+    const hello_auth_bad: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &hello_auth_bad_tx, &"*5\r\n$5\r\nHELLO\r\n$1\r\n3\r\n$4\r\nAUTH\r\n$7\r\ndefault\r\n$5\r\nwrong\r\n"[0: 56], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: hello_auth_bad.response_len], &"-WRONGPASS invalid username-password pair or user is disabled.\r\n"[0: 64]));
+    try assert_eq_i32(hello_auth_bad_tx.authenticated as i32, 0);
+    try assert_eq_i32(hello_auth_bad_tx.protocol_version, 2);
+
+    var hello_auth_tx: ConnectionTransaction = connection_transaction_new();
+    defer {
+        connection_transaction_reset(&hello_auth_tx);
+    }
+    const hello_auth_ok: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &hello_auth_tx, &"*5\r\n$5\r\nHELLO\r\n$1\r\n3\r\n$4\r\nAUTH\r\n$7\r\ndefault\r\n$6\r\nsecret\r\n"[0: 57], &out[0], 512, 1000u64);
+    try assert_true(out[0] == 37 as byte);
+    try assert_eq_i32(hello_auth_tx.authenticated as i32, 1);
+    try assert_eq_i32(hello_auth_tx.protocol_version, 3);
+
+    var hello_auth_name_tx: ConnectionTransaction = connection_transaction_new();
+    defer {
+        connection_transaction_reset(&hello_auth_name_tx);
+    }
+    const hello_auth_setname: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &hello_auth_name_tx, &"*7\r\n$5\r\nHELLO\r\n$1\r\n2\r\n$4\r\nAUTH\r\n$7\r\ndefault\r\n$6\r\nsecret\r\n$7\r\nSETNAME\r\n$10\r\nhello-auth\r\n"[0: 87], &out[0], 512, 1000u64);
+    try assert_true(out[0] == 42 as byte);
+    try assert_eq_i32(hello_auth_name_tx.authenticated as i32, 1);
+    try assert_eq_i32(hello_auth_name_tx.protocol_version, 2);
+    const hello_auth_getname: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &hello_auth_name_tx, &"*2\r\n$6\r\nCLIENT\r\n$7\r\nGETNAME\r\n"[0: 29], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: hello_auth_getname.response_len], &"$10\r\nhello-auth\r\n"[0: 17]));
+
     const auth_wrong: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*2\r\n$4\r\nAUTH\r\n$5\r\nwrong\r\n"[0: 25], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: auth_wrong.response_len], &"-WRONGPASS invalid username-password pair or user is disabled.\r\n"[0: 64]));
 

@@ -132,7 +132,7 @@ bash scripts/verify_definition_of_done.sh
 | `MULTI/EXEC/DISCARD` 最小事务子集可用：连接级队列、`QUEUED`、`EXEC` 数组回复、`DISCARD` 丢弃、无 `MULTI` 错误路径 | `tests/unit/command_router_test.uya`、`tests/unit/network_connection_test.uya`、`tests/integration/smoke_tcp.py`、`tests/integration/error_compat.py` |
 | `WATCH/UNWATCH` 最小事务观察子集可用：按键版本跟踪、变更后 `EXEC` 返回 Null Array、`UNWATCH` 清空观察集、`WATCH/UNWATCH` in-transaction 错误路径 | `tests/unit/command_router_test.uya`、`tests/unit/network_connection_test.uya` |
 | `PUBLISH/SUBSCRIBE/UNSUBSCRIBE` 最小 Pub/Sub 闭环可用：连接订阅注册、跨连接发布推送、发布返回订阅者数量、取消订阅后不再收到消息 | `tests/unit/command_router_test.uya`、`tests/unit/network_connection_test.uya`、`tests/integration/pubsub_smoke.py` |
-| `CLIENT` / `CONFIG` 控制面兼容子集可用：`CLIENT ID/GETNAME/GETREDIR/SETNAME/INFO/LIST/SETINFO/HELP/REPLY/UNBLOCK`、`HELLO SETNAME`、`CONFIG GET/HELP/RESETSTAT` | `tests/unit/command_router_test.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/network_connection_test.uya`、`tests/integration/client_config_smoke.py` |
+| `CLIENT` / `CONFIG` 控制面兼容子集可用：`CLIENT ID/GETNAME/GETREDIR/SETNAME/INFO/LIST/SETINFO/HELP/REPLY/UNBLOCK`、`HELLO AUTH/SETNAME`、`CONFIG GET/HELP/RESETSTAT` | `tests/unit/command_router_test.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/network_connection_test.uya`、`tests/integration/client_config_smoke.py`、`tests/integration/smoke_tcp.py` |
 | `v0.5.0` 兼容性回归覆盖协议与控制面组合路径：RESP3 Null、`HELLO SETNAME`、WATCH 中止、事务内控制命令错误、RESP3 Pub/Sub Push、控制面查询 | `tests/integration/v0_5_compat.py`、`tests/integration/error_compat.py`、`tests/integration/redis_py_subset.py` |
 
 ## 10. `v0.6.0`

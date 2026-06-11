@@ -3043,7 +3043,7 @@ CONFIG RESETSTAT
 - `CONFIG REWRITE` 当前会把运行时有效配置写到 `<appendfilename>.conf`，成功返回 `+OK`；当前已覆盖 `maxclients`、`databases` 等第二批运行时字段的落盘
 - `CONFIG HELP` 返回当前支持的 CONFIG 子命令列表
 - `CONFIG RESETSTAT` 当前返回 `+OK`，并清理 `LATENCY HISTOGRAM` 的命令直方图状态
-- `timeout` 当前为配置兼容面，可回读和重写；redis-uya 仍不按该值主动关闭空闲连接
+- `timeout` 当前会由 server cron 关闭普通空闲连接；阻塞等待、Pub/Sub 和 MONITOR 连接不按该值主动关闭
 - `CONFIG REWRITE` 当前是最小实现：目标文件路径按当前 AOF 路径派生，不保留原始配置文件注释/顺序；其余更高风险的 `CONFIG SET` 字段热更新仍不支持
 
 ### `CLIENT`

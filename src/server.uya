@@ -136,6 +136,7 @@ export struct RedisClient {
     output_len: usize,
     output_sent: usize,
     close_after_write: bool,
+    last_interaction_ms: u64,
     transaction: ConnectionTransaction,
     async_live: bool,
     async_epoll_interest: i32,
@@ -207,6 +208,7 @@ fn server_init_clients(server: &RedisServer) void {
         server.clients[i].output_len = 0;
         server.clients[i].output_sent = 0;
         server.clients[i].close_after_write = false;
+        server.clients[i].last_interaction_ms = 0u64;
         server.clients[i].transaction = connection_transaction_new();
         server.clients[i].async_live = false;
         server.clients[i].async_epoll_interest = 0;
@@ -931,6 +933,7 @@ fn server_close_client_slot(server: &RedisServer, slot: usize) void {
     server.clients[slot].output_len = 0;
     server.clients[slot].output_sent = 0;
     server.clients[slot].close_after_write = false;
+    server.clients[slot].last_interaction_ms = 0u64;
     server.clients[slot].transaction = connection_transaction_new();
     server.clients[slot].async_epoll_interest = 0;
     server.clients[slot].async_waker = Waker{};
@@ -1579,6 +1582,7 @@ fn server_async_writev_all_future(fd: i32, head: &const byte, head_len: usize, b
             return false;
         }
         client.input_len = client.input_len + rn;
+        client.last_interaction_ms = now_ms_safe();
     }
 }
 
@@ -1796,8 +1800,30 @@ export fn server_close(server: &RedisServer) void {
     engine_free(&server.engine);
 }
 
+fn server_close_idle_clients_at(server: &RedisServer, now_ms: u64) void {
+    if server.config.timeout_seconds <= 0 {
+        return;
+    }
+    const timeout_ms: u64 = (server.config.timeout_seconds as u64) * 1000u64;
+    var slot: usize = 0;
+    while slot < SERVER_MAX_CLIENTS {
+        const client: &RedisClient = &server.clients[slot];
+        if client.fd >= 0 &&
+            !client.transaction.blocking_active &&
+            client.transaction.pubsub_count == 0 &&
+            !client.transaction.monitoring &&
+            !server_client_pending_write(server, slot) &&
+            client.last_interaction_ms > 0u64 &&
+            now_ms >= client.last_interaction_ms + timeout_ms {
+            server_close_client_slot(server, slot);
+        }
+        slot = slot + 1;
+    }
+}
+
 export fn server_cron_at(server: &RedisServer, now_ms: u64) void {
     _ = engine_active_expire_cycle_at(&server.engine, now_ms, SERVER_CRON_EXPIRE_LIMIT, SERVER_CRON_EXPIRE_MAX_ROUNDS);
+    server_close_idle_clients_at(server, now_ms);
     _ = aof_flush(&server.aof) catch {};
     server.last_cron_ms = now_ms;
     server.cron_ticks = server.cron_ticks + 1u64;
@@ -1966,6 +1992,7 @@ export fn server_accept_once(server: &RedisServer) !void {
     server.clients[slot].output_len = 0;
     server.clients[slot].output_sent = 0;
     server.clients[slot].close_after_write = false;
+    server.clients[slot].last_interaction_ms = now_ms_safe();
     server.clients[slot].transaction = connection_transaction_new();
     server.clients[slot].transaction.client_fd = fd;
     server.clients[slot].async_epoll_interest = 1;

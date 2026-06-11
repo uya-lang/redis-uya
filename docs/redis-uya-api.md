@@ -3037,12 +3037,13 @@ CONFIG RESETSTAT
 返回：
 
 - 返回 RESP Array，按 `name`、`value` 成对展开
-- 当前支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`replicaof`、`masterauth`、`maxmemory`、`maxmemory-policy`、`maxclients`、`databases`、`save`、`latency-tracking`、`latency-monitor-threshold`、`slowlog-log-slower-than`、`slowlog-max-len`
+- 当前支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`replicaof`、`masterauth`、`maxmemory`、`maxmemory-policy`、`maxclients`、`databases`、`timeout`、`save`、`latency-tracking`、`latency-monitor-threshold`、`slowlog-log-slower-than`、`slowlog-max-len`
 - 支持最小 `*` 通配模式
-- `CONFIG SET` 当前支持运行时子集：`port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`replicaof`、`masterauth`、`maxmemory`、`maxmemory-policy`、`maxclients`、`databases`、`save`、`latency-tracking`、`latency-monitor-threshold`、`slowlog-log-slower-than`、`slowlog-max-len`
+- `CONFIG SET` 当前支持运行时子集：`port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`replicaof`、`masterauth`、`maxmemory`、`maxmemory-policy`、`maxclients`、`databases`、`timeout`、`save`、`latency-tracking`、`latency-monitor-threshold`、`slowlog-log-slower-than`、`slowlog-max-len`
 - `CONFIG REWRITE` 当前会把运行时有效配置写到 `<appendfilename>.conf`，成功返回 `+OK`；当前已覆盖 `maxclients`、`databases` 等第二批运行时字段的落盘
 - `CONFIG HELP` 返回当前支持的 CONFIG 子命令列表
 - `CONFIG RESETSTAT` 当前返回 `+OK`，并清理 `LATENCY HISTOGRAM` 的命令直方图状态
+- `timeout` 当前为配置兼容面，可回读和重写；redis-uya 仍不按该值主动关闭空闲连接
 - `CONFIG REWRITE` 当前是最小实现：目标文件路径按当前 AOF 路径派生，不保留原始配置文件注释/顺序；其余更高风险的 `CONFIG SET` 字段热更新仍不支持
 
 ### `CLIENT`

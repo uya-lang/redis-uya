@@ -302,6 +302,14 @@ export fn test_command_info_and_config() !void {
     command_reply_cleanup(&config_databases_reply);
     resp_value_free(&config_databases_parsed.value);
 
+    var config_timeout_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nCONFIG\r\n$3\r\nGET\r\n$7\r\ntimeout\r\n"[0: 38]);
+    const config_timeout_command: Command = try command_executor_test_command(&router, &config_timeout_parsed);
+    var config_timeout_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_timeout_command, 5000u64);
+    const config_timeout_len: usize = try connection_encode_reply(&config_timeout_reply, &out[0], 512);
+    try assert_true(command_executor_test_slice_eq(out[0: config_timeout_len], &"*2\r\n$7\r\ntimeout\r\n$1\r\n0\r\n"[0: 24]));
+    command_reply_cleanup(&config_timeout_reply);
+    resp_value_free(&config_timeout_parsed.value);
+
     var config_latency_tracking_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nCONFIG\r\n$3\r\nGET\r\n$16\r\nlatency-tracking\r\n"[0: 48]);
     const config_latency_tracking_command: Command = try command_executor_test_command(&router, &config_latency_tracking_parsed);
     var config_latency_tracking_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_latency_tracking_command, 5000u64);
@@ -383,6 +391,14 @@ export fn test_command_info_and_config() !void {
     try assert_eq_i32(config_set_latency_threshold_reply.request_config_set as i32, 1);
     try assert_eq_i32(config_set_latency_threshold_reply.config_after.latency_monitor_threshold as i32, 1);
     resp_value_free(&config_set_latency_threshold_parsed.value);
+
+    var config_set_timeout_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$7\r\ntimeout\r\n$2\r\n30\r\n"[0: 46]);
+    const config_set_timeout_command: Command = try command_executor_test_command(&router, &config_set_timeout_parsed);
+    const config_set_timeout_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_set_timeout_command, 5000u64);
+    try assert_eq_i32(config_set_timeout_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_eq_i32(config_set_timeout_reply.request_config_set as i32, 1);
+    try assert_eq_i32(config_set_timeout_reply.config_after.timeout_seconds, 30);
+    resp_value_free(&config_set_timeout_parsed.value);
 
     var config_set_save_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$4\r\nsave\r\n$5\r\n60 10\r\n"[0: 46]);
     const config_set_save_command: Command = try command_executor_test_command(&router, &config_set_save_parsed);
@@ -503,6 +519,7 @@ export fn test_command_info_and_config() !void {
     config_copy_bytes(runtime.config.appendfilename[0: 128], &"build/test-command-config-rewrite.aof"[0: 37]);
     runtime.config.maxmemory = 1048576;
     runtime.config.maxmemory_policy = MaxmemoryPolicy.maxmemory_allkeys_lru;
+    runtime.config.timeout_seconds = 30;
     runtime.config.save_seconds = 60;
     runtime.config.save_changes = 10;
     config_copy_bytes(runtime.config.requirepass[0: 128], &"next"[0: 4]);
@@ -522,6 +539,7 @@ export fn test_command_info_and_config() !void {
     try assert_eq_i32(rewritten_cfg.port, runtime.config.port);
     try assert_eq_i32(rewritten_cfg.maxclients, runtime.config.maxclients);
     try assert_eq_i32(rewritten_cfg.databases, runtime.config.databases);
+    try assert_eq_i32(rewritten_cfg.timeout_seconds, 30);
     try assert_eq_i32(rewritten_cfg.maxmemory as i32, 1048576);
     try assert_eq_i32(rewritten_cfg.maxmemory_policy as i32, MaxmemoryPolicy.maxmemory_allkeys_lru as i32);
     try assert_eq_i32(rewritten_cfg.save_seconds, 60);

@@ -526,6 +526,11 @@ def run_smoke() -> None:
                 if array_pairs_to_dict(send_command(sock, b"CONFIG", b"GET", b"databases")).get("databases") != "1":
                     raise AssertionError("CONFIG GET databases did not reflect CONFIG SET")
 
+                if send_command(sock, b"CONFIG", b"SET", b"timeout", b"30") != "OK":
+                    raise AssertionError("CONFIG SET timeout failed")
+                if array_pairs_to_dict(send_command(sock, b"CONFIG", b"GET", b"timeout")).get("timeout") != "30":
+                    raise AssertionError("CONFIG GET timeout did not reflect CONFIG SET")
+
                 if send_command(sock, b"CONFIG", b"SET", b"requirepass", b"runtime-secret") != "OK":
                     raise AssertionError("CONFIG SET requirepass failed")
                 requirepass_raw = send_command(sock, b"CONFIG", b"GET", b"requirepass")
@@ -545,6 +550,7 @@ def run_smoke() -> None:
                     "dbfilename runtime.rdb",
                     "maxclients 16",
                     "databases 1",
+                    "timeout 30",
                     "maxmemory 1048576",
                     "maxmemory-policy allkeys-lru",
                     "latency-tracking no",

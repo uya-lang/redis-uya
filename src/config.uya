@@ -42,6 +42,7 @@ export struct ServerConfig {
     port: i32,
     maxclients: i32,
     databases: i32,
+    timeout_seconds: i32,
     bind: [byte: 64],
     dir: [byte: 256],
     dbfilename: [byte: 128],
@@ -78,6 +79,7 @@ export fn default_config() ServerConfig {
         port: 6379,
         maxclients: 0,
         databases: 1,
+        timeout_seconds: 0,
         maxmemory: 0,
         maxmemory_policy: MaxmemoryPolicy.maxmemory_noeviction,
         latency_tracking: true,
@@ -294,6 +296,14 @@ export fn config_apply_runtime_set(cfg: &ServerConfig, key: &[byte], value: &[by
         cfg.databases = databases;
         return true;
     }
+    if token_eq(key, &"timeout"[0: 7]) {
+        const timeout_seconds: i32 = try parse_i32_token(value);
+        if timeout_seconds < 0 {
+            return error.ConfigInvalidValue;
+        }
+        cfg.timeout_seconds = timeout_seconds;
+        return true;
+    }
     if token_eq(key, &"maxmemory-policy"[0: 16]) {
         cfg.maxmemory_policy = try parse_maxmemory_policy(value);
         return true;
@@ -478,6 +488,7 @@ fn config_rewrite_payload(cfg: &ServerConfig) !Sds {
     try config_append_line(&buf, &"appendfilename"[0: 14], config_cstring_slice(cfg.appendfilename[0: 128]));
     try config_append_i32_line(&buf, &"maxclients"[0: 10], cfg.maxclients);
     try config_append_i32_line(&buf, &"databases"[0: 9], cfg.databases);
+    try config_append_i32_line(&buf, &"timeout"[0: 7], cfg.timeout_seconds);
     try config_append_u64_line(&buf, &"maxmemory"[0: 9], cfg.maxmemory as u64);
     try config_append_line(&buf, &"maxmemory-policy"[0: 16], maxmemory_policy_name(cfg.maxmemory_policy));
     try config_append_line(&buf, &"latency-tracking"[0: 16], config_bool_name(cfg.latency_tracking));
@@ -573,6 +584,11 @@ fn parse_line(cfg: &ServerConfig, line: &[byte]) !void {
     } else if token_eq(key, &"databases"[0: 9]) {
         cfg.databases = try parse_i32_token(value);
         if cfg.databases != 1 {
+            return error.ConfigInvalidValue;
+        }
+    } else if token_eq(key, &"timeout"[0: 7]) {
+        cfg.timeout_seconds = try parse_i32_token(value);
+        if cfg.timeout_seconds < 0 {
             return error.ConfigInvalidValue;
         }
     } else if token_eq(key, &"maxmemory-policy"[0: 16]) {

@@ -34,6 +34,7 @@ export fn test_config_defaults() !void {
     try assert_eq_i32(cfg.port, 6379);
     try assert_eq_i32(cfg.maxclients, 0);
     try assert_eq_i32(cfg.databases, 1);
+    try assert_eq_i32(cfg.timeout_seconds, 0);
     try assert_eq_i32(cfg.maxmemory as i32, 0);
     try assert_eq_i32(cfg.maxmemory_policy as i32, MaxmemoryPolicy.maxmemory_noeviction as i32);
     try assert_eq_i32(cfg.latency_tracking as i32, 1);
@@ -52,6 +53,8 @@ export fn test_config_parse_core_fields() !void {
     try assert_eq_i32(cfg.port, 6380);
     try assert_eq_i32(cfg.maxclients, 64);
     try assert_eq_i32(cfg.databases, 1);
+    const timeout_cfg: ServerConfig = try parse_config_text(&"timeout 12\n"[0: 11]);
+    try assert_eq_i32(timeout_cfg.timeout_seconds, 12);
     try assert_true(cstr_eq(cfg.bind[0: 64], &"127.0.0.1"[0: 9]));
     try assert_true(cstr_eq(cfg.dir[0: 256], &"/data"[0: 5]));
     try assert_true(cstr_eq(cfg.dbfilename[0: 128], &"redis.rdb"[0: 9]));

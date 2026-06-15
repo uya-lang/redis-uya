@@ -855,6 +855,12 @@ if [[ "$CLIENT_UNBLOCK_MISS_RESULT" != "0" ]]; then
     exit 1
 fi
 
+CLIENT_KILL_SKIPME_MISS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" client kill id 999999 skipme yes)"
+if [[ "$CLIENT_KILL_SKIPME_MISS_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected CLIENT KILL ID miss with SKIPME 0, got '$CLIENT_KILL_SKIPME_MISS_RESULT'" >&2
+    exit 1
+fi
+
 CLIENT_NO_TOUCH_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" client no-touch on)"
 if [[ "$CLIENT_NO_TOUCH_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected CLIENT NO-TOUCH ON OK, got '$CLIENT_NO_TOUCH_RESULT'" >&2

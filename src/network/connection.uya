@@ -2287,7 +2287,7 @@ fn connection_client_help_reply() CommandReply {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
-    _ = list_object_push_tail(reply_list, &"CLIENT KILL ID <id>"[0: 19]) catch {
+    _ = list_object_push_tail(reply_list, &"CLIENT KILL ID <id> [SKIPME yes|no]"[0: 35]) catch {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
@@ -2642,23 +2642,53 @@ fn connection_handle_client(tx: &ConnectionTransaction, command: &Command, now_m
         return connection_client_list_reply();
     }
     if connection_keyword_eq(subcommand, &"KILL"[0: 4]) {
-        if command.argc != 4 {
+        if command.argc < 4 {
             return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
         }
-        const selector: &[byte] = command_arg_data(command, 2) catch {
-            return connection_error_reply(&"ERR invalid request"[0: 19]);
-        };
-        if !connection_keyword_eq(selector, &"ID"[0: 2]) {
+        var target_id: i64 = -1;
+        var skip_me: bool = true;
+        var index: usize = 2;
+        while index < command.argc {
+            const selector: &[byte] = command_arg_data(command, index) catch {
+                return connection_error_reply(&"ERR invalid request"[0: 19]);
+            };
+            if connection_keyword_eq(selector, &"ID"[0: 2]) {
+                if target_id >= 0 || index + 1 >= command.argc {
+                    return connection_error_reply(&"ERR syntax error"[0: 16]);
+                }
+                const id_arg: &[byte] = command_arg_data(command, index + 1) catch {
+                    return connection_error_reply(&"ERR invalid request"[0: 19]);
+                };
+                const target_id_u64: u64 = connection_parse_u64(id_arg) catch {
+                    return connection_error_reply(&"ERR invalid client ID"[0: 21]);
+                };
+                target_id = target_id_u64 as i64;
+                index = index + 2;
+                continue;
+            }
+            if connection_keyword_eq(selector, &"SKIPME"[0: 6]) {
+                if index + 1 >= command.argc {
+                    return connection_error_reply(&"ERR syntax error"[0: 16]);
+                }
+                const skip_arg: &[byte] = command_arg_data(command, index + 1) catch {
+                    return connection_error_reply(&"ERR invalid request"[0: 19]);
+                };
+                if connection_keyword_eq(skip_arg, &"YES"[0: 3]) {
+                    skip_me = true;
+                } else if connection_keyword_eq(skip_arg, &"NO"[0: 2]) {
+                    skip_me = false;
+                } else {
+                    return connection_error_reply(&"ERR syntax error"[0: 16]);
+                }
+                index = index + 2;
+                continue;
+            }
             return connection_error_reply(&"ERR syntax error"[0: 16]);
         }
-        const id_arg: &[byte] = command_arg_data(command, 3) catch {
-            return connection_error_reply(&"ERR invalid request"[0: 19]);
-        };
-        const target_id_u64: u64 = connection_parse_u64(id_arg) catch {
-            return connection_error_reply(&"ERR invalid client ID"[0: 21]);
-        };
-        const target_id: i64 = target_id_u64 as i64;
-        if target_id == connection_client_id(tx) || !connection_client_registry_has_client_id(target_id) {
+        if target_id < 0 {
+            return connection_error_reply(&"ERR syntax error"[0: 16]);
+        }
+        if (target_id == connection_client_id(tx) && skip_me) || !connection_client_registry_has_client_id(target_id) {
             return connection_make_reply(CommandReplyType.reply_integer, connection_reply_empty_slice(), 0);
         }
         var reply: CommandReply = connection_make_reply(CommandReplyType.reply_integer, connection_reply_empty_slice(), 1);
@@ -4354,7 +4384,7 @@ fn connection_execute_standard_command_at(
     if use_psync_reply {
         command_reply_cleanup(&psync_reply);
     }
-    const should_close: bool = command.info.cmd_type == CommandType.command_quit;
+    const should_close: bool = command.info.cmd_type == CommandType.command_quit || (request_client_kill && client_kill_id == connection_client_id(tx));
     resp_value_free(&parsed.value);
     return ConnectionProcessResult{
         response_len: n,
@@ -5569,7 +5599,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
         return ConnectionProcessResult{
             response_len: client_n,
             consumed: parsed.consumed,
-            close_after: false,
+            close_after: client_request_kill && client_kill_id == connection_client_id(tx),
             request_replicaof: false,
             replicaof_promote: false,
             request_bgsave: false,

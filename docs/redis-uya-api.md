@@ -3065,7 +3065,7 @@ CLIENT NO-EVICT ON|OFF
 CLIENT NO-TOUCH ON|OFF
 CLIENT INFO
 CLIENT LIST
-CLIENT KILL ID id
+CLIENT KILL ID id [SKIPME yes|no]
 CLIENT UNBLOCK id [TIMEOUT|ERROR]
 CLIENT PAUSE timeout-ms [WRITE|ALL]
 CLIENT UNPAUSE
@@ -3089,7 +3089,7 @@ CLIENT HELP
 - `CLIENT NO-TOUCH`：保存当前连接的 no-touch 标志，成功返回 `+OK`
 - `CLIENT INFO`：返回当前连接的最小客户端信息行，包含 `id/name/resp/multi/sub/lib-name/lib-ver`
 - `CLIENT LIST`：返回当前活跃连接的最小信息行快照，每行包含 `id/name/resp/multi/sub/lib-name/lib-ver`
-- `CLIENT KILL ID id`：按连接 ID 关闭其他活跃连接；当前只支持 `ID` 过滤，返回整数 `0/1`
+- `CLIENT KILL ID id [SKIPME yes|no]`：按连接 ID 关闭活跃连接；默认 `SKIPME yes` 不关闭当前连接，显式 `SKIPME no` 可关闭当前连接，返回整数 `0/1`
 - `CLIENT UNBLOCK id [TIMEOUT|ERROR]`：解除处于阻塞 pop 等待中的其他连接；默认 `TIMEOUT` 向目标连接返回对应阻塞命令的空结果，`ERROR` 向目标连接返回 `UNBLOCKED` 错误，当前命令返回整数 `0/1`
 - `CLIENT PAUSE timeout-ms [WRITE|ALL]`：暂停其他连接的命令处理；`ALL` 阻塞后续命令，`WRITE` 只阻塞写命令并允许读命令继续执行，返回 `+OK`
 - `CLIENT UNPAUSE`：提前解除当前 pause 状态，返回 `+OK`
@@ -3103,7 +3103,7 @@ CLIENT HELP
 - 客户端名和 `SETINFO` 元数据存放在连接级 `ConnectionTransaction`
 - `CLIENT GETREDIR` 直接读取当前连接的 `tracking_redirect_id`
 - `CLIENT REPLY` 当前按连接维护 `OFF`/`SKIP` 状态，覆盖普通命令、事务控制命令和 `CLIENT` 子命令回复抑制；Pub/Sub push 与 monitor 推送不受影响
-- `CLIENT KILL` 当前只支持 `ID <id>` 过滤，不支持更完整的 addr/type/user/maxage/skipme 组合
+- `CLIENT KILL` 当前只支持 `ID <id>` 和 `SKIPME yes|no` 过滤，不支持更完整的 addr/type/user/maxage 组合
 - `CLIENT UNBLOCK` 当前支持阻塞 pop 等待路径的 `TIMEOUT` / `ERROR` 解除，不支持更复杂的模块阻塞客户端类型
 - `CLIENT PAUSE` 当前保留发起暂停的控制连接可继续发送 `CLIENT UNPAUSE`；`WRITE` 基于命令目录的写标志和当前已解析 batch 判断，不实现 Redis 原生跨线程 pause 协调
 - `CLIENT TRACKING` 当前只保存连接级状态和 `BCAST PREFIX` 列表，不发送 invalidation push

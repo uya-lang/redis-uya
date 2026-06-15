@@ -403,6 +403,26 @@ def run_smoke() -> None:
                     if not victim_failed:
                         raise AssertionError("victim connection stayed alive after CLIENT KILL")
 
+                with connect_with_retry(port, time.monotonic() + 5.0) as self_kill_sock:
+                    self_kill_id = send_command(self_kill_sock, b"CLIENT", b"ID")
+                    if not isinstance(self_kill_id, int) or self_kill_id <= 0:
+                        raise AssertionError(f"unexpected self-kill CLIENT ID: {self_kill_id!r}")
+                    skipped = send_command(self_kill_sock, b"CLIENT", b"KILL", b"ID", str(self_kill_id).encode(), b"SKIPME", b"YES")
+                    if skipped != 0:
+                        raise AssertionError(f"CLIENT KILL SKIPME YES should skip self, got {skipped!r}")
+                    if send_command(self_kill_sock, b"PING") != "PONG":
+                        raise AssertionError("self connection should survive CLIENT KILL SKIPME YES")
+                    self_killed = send_command(self_kill_sock, b"CLIENT", b"KILL", b"SKIPME", b"NO", b"ID", str(self_kill_id).encode())
+                    if self_killed != 1:
+                        raise AssertionError(f"CLIENT KILL SKIPME NO should kill self, got {self_killed!r}")
+                    self_failed = False
+                    try:
+                        send_command(self_kill_sock, b"PING")
+                    except Exception:
+                        self_failed = True
+                    if not self_failed:
+                        raise AssertionError("self connection stayed alive after CLIENT KILL SKIPME NO")
+
                 if send_command(sock, b"CONFIG", b"SET", b"maxmemory", b"1mb") != "OK":
                     raise AssertionError("CONFIG SET maxmemory failed")
                 maxmemory_raw = send_command(sock, b"CONFIG", b"GET", b"maxmemory")

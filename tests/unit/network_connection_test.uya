@@ -1478,6 +1478,25 @@ export fn test_connection_process_client_commands() !void {
     try assert_eq_i32(client_kill.request_client_kill as i32, 1);
     try assert_eq_i32(client_kill.client_kill_id as i32, 2);
 
+    const client_kill_self_skip: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*6\r\n$6\r\nCLIENT\r\n$4\r\nKILL\r\n$2\r\nID\r\n$1\r\n1\r\n$6\r\nSKIPME\r\n$3\r\nYES\r\n"[0: 62], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_kill_self_skip.response_len], &":0\r\n"[0: 4]));
+    try assert_eq_i32(client_kill_self_skip.request_client_kill as i32, 0);
+    try assert_eq_i32(client_kill_self_skip.close_after as i32, 0);
+
+    const client_kill_self: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*6\r\n$6\r\nCLIENT\r\n$4\r\nKILL\r\n$2\r\nID\r\n$1\r\n1\r\n$6\r\nSKIPME\r\n$2\r\nNO\r\n"[0: 61], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_kill_self.response_len], &":1\r\n"[0: 4]));
+    try assert_eq_i32(client_kill_self.request_client_kill as i32, 1);
+    try assert_eq_i32(client_kill_self.client_kill_id as i32, 1);
+    try assert_eq_i32(client_kill_self.close_after as i32, 1);
+
+    const client_kill_reordered: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*6\r\n$6\r\nCLIENT\r\n$4\r\nKILL\r\n$6\r\nSKIPME\r\n$2\r\nNO\r\n$2\r\nID\r\n$1\r\n1\r\n"[0: 61], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_kill_reordered.response_len], &":1\r\n"[0: 4]));
+    try assert_eq_i32(client_kill_reordered.request_client_kill as i32, 1);
+    try assert_eq_i32(client_kill_reordered.client_kill_id as i32, 1);
+
+    const client_kill_bad_skipme: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*6\r\n$6\r\nCLIENT\r\n$4\r\nKILL\r\n$2\r\nID\r\n$1\r\n2\r\n$6\r\nSKIPME\r\n$3\r\nBAD\r\n"[0: 62], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_kill_bad_skipme.response_len], &"-ERR syntax error\r\n"[0: 19]));
+
     const client_unblock: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$7\r\nUNBLOCK\r\n$1\r\n2\r\n$5\r\nERROR\r\n"[0: 47], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: client_unblock.response_len], &":1\r\n"[0: 4]));
     try assert_eq_i32(client_unblock.request_client_kill as i32, 1);

@@ -416,6 +416,7 @@ PARTIAL_NAMES = {
     "slowlog|reset",
     "subscribe",
     "swapdb",
+    "sync",
     "unsubscribe",
     "wait",
     "waitaof",

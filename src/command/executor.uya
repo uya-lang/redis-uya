@@ -15261,6 +15261,37 @@ fn command_executor_psync(runtime: &CommandRuntimeInfo, command: &Command) Comma
     return command_executor_owned_simple(buf.buf[0: buf.len]);
 }
 
+fn command_executor_sync(engine: &Engine, runtime: &CommandRuntimeInfo, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 1 {
+        return command_executor_wrong_arity();
+    }
+    if runtime.replication_role != ReplicationRole.role_master {
+        return command_executor_error(&"ERR SYNC is only valid for master role"[0: 38]);
+    }
+    const snapshot: &RedisObject = rdb_dump_object_at(engine, now_ms) catch |err| {
+        if err == error.AllocOutOfMemory {
+            return command_executor_oom();
+        }
+        return command_executor_error(&"ERR full sync snapshot failed"[0: 27]);
+    };
+    defer {
+        object_free(snapshot);
+    }
+
+    var raw: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&raw);
+    }
+    _ = sds_cat(&raw, &"$"[0: 1]) catch { return command_executor_oom(); };
+    _ = command_executor_info_append_u64(&raw, &"%u"[0: 2], snapshot.value.len as u64) catch { return command_executor_oom(); };
+    _ = sds_cat(&raw, &"\r\n"[0: 2]) catch { return command_executor_oom(); };
+    _ = sds_cat(&raw, snapshot.value.buf[0: snapshot.value.len]) catch { return command_executor_oom(); };
+    _ = sds_cat(&raw, &"\r\n"[0: 2]) catch { return command_executor_oom(); };
+    return command_executor_owned_raw(raw.buf[0: raw.len]);
+}
+
 fn command_executor_replconf(runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
     _ = runtime;
     _ = command;
@@ -18237,6 +18268,9 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
     }
     if command.info.cmd_type == CommandType.command_psync {
         return command_executor_psync(runtime, command);
+    }
+    if command.info.cmd_type == CommandType.command_sync {
+        return command_executor_sync(engine, runtime, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_replconf {
         return command_executor_replconf(runtime, command);

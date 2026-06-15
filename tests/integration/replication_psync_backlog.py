@@ -134,6 +134,18 @@ def recv_psync_fullresync(sock: socket.socket) -> tuple[str, int, bytes]:
     return replid, offset, payload
 
 
+def recv_sync_snapshot(sock: socket.socket) -> bytes:
+    bulk_prefix = recv_exact(sock, 1)
+    if bulk_prefix != b"$":
+        raise AssertionError(f"expected SYNC bulk prefix, got {bulk_prefix!r}")
+    snapshot_len = int(recv_line(sock))
+    payload = recv_exact(sock, snapshot_len)
+    terminator = recv_exact(sock, 2)
+    if terminator != b"\r\n":
+        raise AssertionError(f"invalid SYNC snapshot terminator: {terminator!r}")
+    return payload
+
+
 def recv_psync_continue(sock: socket.socket, expected_offset: int, expected_delta: bytes) -> None:
     prefix = recv_exact(sock, 1)
     if prefix != b"+":
@@ -181,6 +193,13 @@ def run_smoke() -> None:
             set_ok = send_command(sock, b"SET", b"key", b"value")
             if set_ok != b"+OK\r\n":
                 raise AssertionError(f"expected +OK on SET, got {set_ok!r}")
+
+            send_raw_request(sock, b"SYNC")
+            sync_snapshot = recv_sync_snapshot(sock)
+            if not sync_snapshot.startswith(b"RUYARDB1"):
+                raise AssertionError(f"expected SYNC project RDB snapshot, got {sync_snapshot[:8]!r}")
+            if b"key" not in sync_snapshot or b"value" not in sync_snapshot:
+                raise AssertionError(f"SYNC snapshot missing current key/value: {sync_snapshot!r}")
 
             send_raw_request(sock, b"PSYNC", b"?", b"-1")
             replid, offset, snapshot = recv_psync_fullresync(sock)

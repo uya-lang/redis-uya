@@ -3403,7 +3403,7 @@ REPLICAOF NO ONE
 返回：
 
 - 成功：`+OK`
-- 当前仅完成复制角色与状态机切换，不包含 `PSYNC`、全量同步、增量同步和心跳
+- 当前已完成复制角色切换、`PSYNC` 全量同步、轮询式增量同步和基础心跳；仍不支持 Redis 原生长连接流式增量推送、真实 ACK/GETACK 等完整复制协议
 
 ### `REPLCONF`
 
@@ -3456,6 +3456,24 @@ PSYNC replid offset
 - 当前支持最小全量同步：`FULLRESYNC` 后跟一份项目内 RDB 快照
 - 当前 replica 侧已支持把这份快照落库
 - 当前增量同步由 replica 周期性轮询 `PSYNC replid offset` 完成，不是长连接推送流
+
+### `SYNC`
+
+格式：
+
+```text
+SYNC
+```
+
+返回：
+
+- 当前实现为 legacy full-sync partial：master 角色返回一份 RESP Bulk String 包裹的项目内 RDB 快照
+- replica 角色返回：`-ERR SYNC is only valid for master role`
+
+说明：
+
+- `SYNC` 复用当前 RDB dump 路径，不返回 `PSYNC` 的 `+FULLRESYNC` 头，也不进入 AOF 或 replication backlog
+- 当前不实现 Redis 原生复制连接的后续长连接命令流；真实 replica 仍优先使用 `PSYNC`
 
 ### `QUIT`
 

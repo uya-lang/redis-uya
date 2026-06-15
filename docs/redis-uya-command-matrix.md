@@ -1,7 +1,7 @@
 # redis-uya command matrix
 
 > version: v0.9.1-dev
-> date: 2026-06-10
+> date: 2026-06-15
 > source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`
 > runtime source: `src/command/catalog_generated.uya`
 
@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 172 | 3 | 3 | 41 |
+| Tier A: standalone core | 365 | 259 | 146 | 173 | 3 | 3 | 40 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `179` |
+| `partial` | `180` |
 | `standalone-error` | `29` |
 | `alias` | `3` |
-| `deferred` | `194` |
+| `deferred` | `193` |
 
 ## Group counts
 
@@ -494,7 +494,7 @@
 | `sunionstore` | `set` | `full` | `-` | `-3` | `-` | `no` | `@write, @set, @slow` |
 | `sunsubscribe` | `pubsub` | `deferred` | `v0.9.1` | `-1` | `-` | `no` | `@pubsub, @slow` |
 | `swapdb` | `server` | `partial` | `-` | `3` | `-` | `no` | `@keyspace, @write, @fast, @dangerous` |
-| `sync` | `server` | `deferred` | `v0.9.1` | `1` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `sync` | `server` | `partial` | `-` | `1` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `tdigest.add` | `tdigest` | `deferred` | `v0.9.2` | `-2` | `tdigest` | `no` | `@tdigest, @write, @slow` |
 | `tdigest.byrank` | `tdigest` | `deferred` | `v0.9.2` | `-2` | `tdigest` | `no` | `@tdigest, @read` |
 | `tdigest.byrevrank` | `tdigest` | `deferred` | `v0.9.2` | `-2` | `tdigest` | `no` | `@tdigest, @read` |

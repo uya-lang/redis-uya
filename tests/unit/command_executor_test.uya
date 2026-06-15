@@ -2031,12 +2031,37 @@ export fn test_command_psync() !void {
     command_reply_cleanup(&stale_reply);
     resp_value_free(&stale_parsed.value);
 
+    var set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$8\r\nsync-key\r\n$10\r\nsync-value\r\n"[0: 44]);
+    const set_command: Command = try command_executor_test_command(&router, &set_parsed);
+    var set_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &set_command, 1000u64);
+    try assert_eq_i32(set_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    command_reply_cleanup(&set_reply);
+    resp_value_free(&set_parsed.value);
+
+    var sync_parsed: RespParseResult = try parse_resp2(&"*1\r\n$4\r\nSYNC\r\n"[0: 14]);
+    const sync_command: Command = try command_executor_test_command(&router, &sync_parsed);
+    var sync_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &sync_command, 1000u64);
+    try assert_eq_i32(sync_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    try assert_true(command_executor_test_starts_with(sync_reply.data, &"$"[0: 1]));
+    try assert_true(command_executor_test_contains(sync_reply.data, &"RUYARDB1"[0: 7]));
+    try assert_true(command_executor_test_contains(sync_reply.data, &"sync-key"[0: 8]));
+    try assert_true(command_executor_test_contains(sync_reply.data, &"sync-value"[0: 10]));
+    command_reply_cleanup(&sync_reply);
+    resp_value_free(&sync_parsed.value);
+
     runtime.replication_role = ReplicationRole.role_replica;
     var bad_role_parsed: RespParseResult = try parse_resp2(&"*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n"[0: 30]);
     const bad_role_command: Command = try command_executor_test_command(&router, &bad_role_parsed);
     const bad_role_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &bad_role_command, 1000u64);
     try assert_eq_i32(bad_role_reply.typ as i32, CommandReplyType.reply_error as i32);
     resp_value_free(&bad_role_parsed.value);
+
+    var sync_bad_role_parsed: RespParseResult = try parse_resp2(&"*1\r\n$4\r\nSYNC\r\n"[0: 14]);
+    const sync_bad_role_command: Command = try command_executor_test_command(&router, &sync_bad_role_parsed);
+    var sync_bad_role_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &sync_bad_role_command, 1000u64);
+    try assert_eq_i32(sync_bad_role_reply.typ as i32, CommandReplyType.reply_error as i32);
+    command_reply_cleanup(&sync_bad_role_reply);
+    resp_value_free(&sync_bad_role_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

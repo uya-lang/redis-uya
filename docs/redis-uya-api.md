@@ -516,6 +516,27 @@ HDEL key field [field ...]
 - key 不存在时返回 `0`
 - 删除最后一个 field 后，当前实现会直接删除整个 hash key
 
+### `HGETDEL`
+
+格式：
+
+```text
+HGETDEL key FIELDS numfields field [field ...]
+```
+
+返回：
+
+- 返回与请求 field 顺序一致的 RESP Array
+- 命中 field 返回删除前的 Bulk String，并删除该 field
+- 缺失 field 返回 Null Bulk
+- key 不存在时，所有请求 field 都返回 Null Bulk
+
+说明：
+
+- `numfields` 必须为正整数，并且必须与后续 field 数量一致
+- key 存在但不是 hash 时返回 `WRONGTYPE`
+- 删除最后一个 field 后，当前实现会直接删除整个 hash key
+
 ### `HEXISTS`
 
 格式：

@@ -771,6 +771,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"georadiusbymember_ro"[0: 20], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"geosearchstore"[0: 14], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"delex"[0: 5], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"hgetdel"[0: 7], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"hrandfield"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"waitaof"[0: 7], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"swapdb"[0: 6], CommandCatalogStatus.status_partial);
@@ -3714,10 +3715,90 @@ export fn test_command_hdel_hexists_hlen_hmget_hsetnx_hstrlen() !void {
     try assert_eq_i32(hlen_empty_reply.integer as i32, 0);
     resp_value_free(&hlen_empty_parsed.value);
 
+    var hgetdel_set_field_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nHSET\r\n$7\r\nhgetdel\r\n$5\r\nfield\r\n$5\r\nvalue\r\n"[0: 49]);
+    const hgetdel_set_field_command: Command = try command_executor_test_command(&router, &hgetdel_set_field_parsed);
+    _ = command_execute_at(&engine, &hgetdel_set_field_command, 1000u64);
+    resp_value_free(&hgetdel_set_field_parsed.value);
+
+    var hgetdel_set_other_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nHSET\r\n$7\r\nhgetdel\r\n$5\r\nother\r\n$4\r\nnext\r\n"[0: 48]);
+    const hgetdel_set_other_command: Command = try command_executor_test_command(&router, &hgetdel_set_other_parsed);
+    _ = command_execute_at(&engine, &hgetdel_set_other_command, 1000u64);
+    resp_value_free(&hgetdel_set_other_parsed.value);
+
+    var hgetdel_parsed: RespParseResult = try parse_resp2(&"*7\r\n$7\r\nHGETDEL\r\n$7\r\nhgetdel\r\n$6\r\nFIELDS\r\n$1\r\n3\r\n$5\r\nfield\r\n$7\r\nmissing\r\n$5\r\nother\r\n"[0: 84]);
+    const hgetdel_command: Command = try command_executor_test_command(&router, &hgetdel_parsed);
+    var hgetdel_reply: CommandReply = command_execute_at(&engine, &hgetdel_command, 1000u64);
+    const hgetdel_len: usize = try connection_encode_reply(&hgetdel_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: hgetdel_len], &"*3\r\n$5\r\nvalue\r\n$-1\r\n$4\r\nnext\r\n"[0: 30]));
+    command_reply_cleanup(&hgetdel_reply);
+    resp_value_free(&hgetdel_parsed.value);
+
+    var hgetdel_hget_parsed: RespParseResult = try parse_resp2(&"*3\r\n$4\r\nHGET\r\n$7\r\nhgetdel\r\n$5\r\nfield\r\n"[0: 38]);
+    const hgetdel_hget_command: Command = try command_executor_test_command(&router, &hgetdel_hget_parsed);
+    const hgetdel_hget_reply: CommandReply = command_execute_at(&engine, &hgetdel_hget_command, 1000u64);
+    try assert_eq_i32(hgetdel_hget_reply.typ as i32, CommandReplyType.reply_null_bulk as i32);
+    resp_value_free(&hgetdel_hget_parsed.value);
+
+    var hgetdel_hlen_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nHLEN\r\n$7\r\nhgetdel\r\n"[0: 27]);
+    const hgetdel_hlen_command: Command = try command_executor_test_command(&router, &hgetdel_hlen_parsed);
+    const hgetdel_hlen_reply: CommandReply = command_execute_at(&engine, &hgetdel_hlen_command, 1000u64);
+    try assert_eq_i32(hgetdel_hlen_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(hgetdel_hlen_reply.integer as i32, 0);
+    resp_value_free(&hgetdel_hlen_parsed.value);
+
+    var hgetdel_dup_set_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nHSET\r\n$3\r\ndup\r\n$1\r\nf\r\n$1\r\nv\r\n"[0: 37]);
+    const hgetdel_dup_set_command: Command = try command_executor_test_command(&router, &hgetdel_dup_set_parsed);
+    _ = command_execute_at(&engine, &hgetdel_dup_set_command, 1000u64);
+    resp_value_free(&hgetdel_dup_set_parsed.value);
+
+    var hgetdel_dup_parsed: RespParseResult = try parse_resp2(&"*6\r\n$7\r\nHGETDEL\r\n$3\r\ndup\r\n$6\r\nFIELDS\r\n$1\r\n2\r\n$1\r\nf\r\n$1\r\nf\r\n"[0: 59]);
+    const hgetdel_dup_command: Command = try command_executor_test_command(&router, &hgetdel_dup_parsed);
+    var hgetdel_dup_reply: CommandReply = command_execute_at(&engine, &hgetdel_dup_command, 1000u64);
+    const hgetdel_dup_len: usize = try connection_encode_reply(&hgetdel_dup_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: hgetdel_dup_len], &"*2\r\n$1\r\nv\r\n$-1\r\n"[0: 16]));
+    command_reply_cleanup(&hgetdel_dup_reply);
+    resp_value_free(&hgetdel_dup_parsed.value);
+
+    var hgetdel_missing_parsed: RespParseResult = try parse_resp2(&"*6\r\n$7\r\nHGETDEL\r\n$7\r\nmissing\r\n$6\r\nFIELDS\r\n$1\r\n2\r\n$1\r\na\r\n$1\r\nb\r\n"[0: 63]);
+    const hgetdel_missing_command: Command = try command_executor_test_command(&router, &hgetdel_missing_parsed);
+    var hgetdel_missing_reply: CommandReply = command_execute_at(&engine, &hgetdel_missing_command, 1000u64);
+    const hgetdel_missing_len: usize = try connection_encode_reply(&hgetdel_missing_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: hgetdel_missing_len], &"*2\r\n$-1\r\n$-1\r\n"[0: 14]));
+    command_reply_cleanup(&hgetdel_missing_reply);
+    resp_value_free(&hgetdel_missing_parsed.value);
+
     var set_str_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$3\r\nstr\r\n$5\r\nvalue\r\n"[0: 33]);
     const set_str_command: Command = try command_executor_test_command(&router, &set_str_parsed);
     _ = command_execute_at(&engine, &set_str_command, 1000u64);
     resp_value_free(&set_str_parsed.value);
+
+    var hgetdel_wrongtype_parsed: RespParseResult = try parse_resp2(&"*5\r\n$7\r\nHGETDEL\r\n$3\r\nstr\r\n$6\r\nFIELDS\r\n$1\r\n1\r\n$5\r\nfield\r\n"[0: 56]);
+    const hgetdel_wrongtype_command: Command = try command_executor_test_command(&router, &hgetdel_wrongtype_parsed);
+    const hgetdel_wrongtype_reply: CommandReply = command_execute_at(&engine, &hgetdel_wrongtype_command, 1000u64);
+    try assert_eq_i32(hgetdel_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(hgetdel_wrongtype_reply.data, &"WRONGTYPE"[0: 9]));
+    resp_value_free(&hgetdel_wrongtype_parsed.value);
+
+    var hgetdel_bad_token_parsed: RespParseResult = try parse_resp2(&"*5\r\n$7\r\nHGETDEL\r\n$7\r\nmissing\r\n$3\r\nFOO\r\n$1\r\n1\r\n$5\r\nfield\r\n"[0: 57]);
+    const hgetdel_bad_token_command: Command = try command_executor_test_command(&router, &hgetdel_bad_token_parsed);
+    const hgetdel_bad_token_reply: CommandReply = command_execute_at(&engine, &hgetdel_bad_token_command, 1000u64);
+    try assert_eq_i32(hgetdel_bad_token_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(hgetdel_bad_token_reply.data, &"ERR syntax error"[0: 16]));
+    resp_value_free(&hgetdel_bad_token_parsed.value);
+
+    var hgetdel_bad_count_parsed: RespParseResult = try parse_resp2(&"*5\r\n$7\r\nHGETDEL\r\n$7\r\nmissing\r\n$6\r\nFIELDS\r\n$1\r\nx\r\n$5\r\nfield\r\n"[0: 60]);
+    const hgetdel_bad_count_command: Command = try command_executor_test_command(&router, &hgetdel_bad_count_parsed);
+    const hgetdel_bad_count_reply: CommandReply = command_execute_at(&engine, &hgetdel_bad_count_command, 1000u64);
+    try assert_eq_i32(hgetdel_bad_count_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(hgetdel_bad_count_reply.data, &"ERR value is not an integer or out of range"[0: 43]));
+    resp_value_free(&hgetdel_bad_count_parsed.value);
+
+    var hgetdel_bad_mismatch_parsed: RespParseResult = try parse_resp2(&"*5\r\n$7\r\nHGETDEL\r\n$7\r\nmissing\r\n$6\r\nFIELDS\r\n$1\r\n2\r\n$5\r\nfield\r\n"[0: 60]);
+    const hgetdel_bad_mismatch_command: Command = try command_executor_test_command(&router, &hgetdel_bad_mismatch_parsed);
+    const hgetdel_bad_mismatch_reply: CommandReply = command_execute_at(&engine, &hgetdel_bad_mismatch_command, 1000u64);
+    try assert_eq_i32(hgetdel_bad_mismatch_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(hgetdel_bad_mismatch_reply.data, &"ERR syntax error"[0: 16]));
+    resp_value_free(&hgetdel_bad_mismatch_parsed.value);
 
     var hlen_wrongtype_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nHLEN\r\n$3\r\nstr\r\n"[0: 23]);
     const hlen_wrongtype_command: Command = try command_executor_test_command(&router, &hlen_wrongtype_parsed);

@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 174 | 3 | 3 | 39 |
+| Tier A: standalone core | 365 | 259 | 146 | 175 | 3 | 3 | 38 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `181` |
+| `partial` | `182` |
 | `standalone-error` | `29` |
 | `alias` | `3` |
-| `deferred` | `192` |
+| `deferred` | `191` |
 
 ## Group counts
 
@@ -297,7 +297,7 @@
 | `hexpiretime` | `hash` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@read, @hash, @fast` |
 | `hget` | `hash` | `full` | `-` | `3` | `-` | `no` | `@read, @hash, @fast` |
 | `hgetall` | `hash` | `full` | `-` | `2` | `-` | `no` | `@read, @hash, @slow` |
-| `hgetdel` | `hash` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@write, @hash, @fast` |
+| `hgetdel` | `hash` | `partial` | `-` | `-5` | `-` | `no` | `@write, @hash, @fast` |
 | `hgetex` | `hash` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@write, @hash, @fast` |
 | `hincrby` | `hash` | `full` | `-` | `4` | `-` | `no` | `@write, @hash, @fast` |
 | `hincrbyfloat` | `hash` | `full` | `-` | `4` | `-` | `no` | `@write, @hash, @fast` |

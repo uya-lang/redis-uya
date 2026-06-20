@@ -679,6 +679,17 @@ class RedisPySubsetClient:
     def hdel(self, key: str, *fields: str) -> int:
         return int(self._request(b"HDEL", key.encode(), *(field.encode() for field in fields)))
 
+    def hgetdel(self, key: str, *fields: str) -> list[bytes | None]:
+        result = self._request(
+            b"HGETDEL",
+            key.encode(),
+            b"FIELDS",
+            str(len(fields)).encode(),
+            *(field.encode() for field in fields),
+        )
+        assert isinstance(result, list)
+        return result
+
     def hexists(self, key: str, field: str) -> int:
         return int(self._request(b"HEXISTS", key.encode(), field.encode()))
 
@@ -1836,7 +1847,9 @@ def run_smoke() -> None:
             assert client.hsetnx("hash", "field", "next") == 0
             assert client.hstrlen("hash", "field") == 5
             assert client.hstrlen("hash", "missing") == 0
-            assert client.hdel("hash", "field", "counter", "extra") == 3
+            assert client.hgetdel("hash", "field", "missing") == [b"value", None]
+            assert client.hget("hash", "field") is None
+            assert client.hdel("hash", "field", "counter", "extra") == 2
             assert client.hlen("hash") == 1
             cursor, hscan_items = client.hscan("hash", 0, count=16)
             if cursor != 0 or len(hscan_items) != 2:

@@ -2131,9 +2131,21 @@ if [[ "$HSTRLEN_RESULT" != "5" ]]; then
     exit 1
 fi
 
+HGETDEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hgetdel hash fields 2 field missing)"
+if [[ "$HGETDEL_RESULT" != "value" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HGETDEL value/null, got '$HGETDEL_RESULT'" >&2
+    exit 1
+fi
+
+HGETDEL_GET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hget hash field)"
+if [[ "$HGETDEL_GET_RESULT" != "" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HGETDEL to delete field, got '$HGETDEL_GET_RESULT'" >&2
+    exit 1
+fi
+
 HDEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hdel hash field counter extra)"
-if [[ "$HDEL_RESULT" != "3" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected HDEL 3, got '$HDEL_RESULT'" >&2
+if [[ "$HDEL_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HDEL 2, got '$HDEL_RESULT'" >&2
     exit 1
 fi
 

@@ -425,6 +425,7 @@
 - [x] Hash 第一批数值：`HINCRBY`、`HINCRBYFLOAT`
 - [x] Hash 第二批视图：`HKEYS`、`HVALS`、`HGETALL`、`HRANDFIELD`
 - [x] Hash 第三批扫描：`HSCAN`
+- [x] Hash 字段扩展：`HGETDEL`
 - [x] List 第一批基础：`RPUSH`、`RPOP`、`LINDEX`、`LSET`、`LLEN`
 - [x] List 第二批：`LINSERT`、`LTRIM`、`LREM`
 - [x] List 第三批条件写入与定位：`LPUSHX`、`RPUSHX`、`LPOS`

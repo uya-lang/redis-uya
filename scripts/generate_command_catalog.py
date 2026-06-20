@@ -337,6 +337,7 @@ PARTIAL_NAMES = {
     "config|set",
     "copy",
     "delex",
+    "hgetdel",
     "flushall",
     "flushdb",
     "hello",

@@ -13893,6 +13893,121 @@ fn command_executor_hdel(engine: &Engine, command: &Command, now_ms: u64) Comman
     return command_executor_integer(removed);
 }
 
+fn command_executor_hgetdel(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 5 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const fields_token: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    if !command_executor_keyword_eq(fields_token, &"FIELDS"[0: 6]) {
+        return command_executor_syntax_error();
+    }
+    const numfields_data: &[byte] = command_executor_arg(command, 3) catch {
+        return command_executor_wrong_arity();
+    };
+    const numfields_i64: i64 = command_executor_parse_i64(numfields_data) catch {
+        return command_executor_invalid_integer();
+    };
+    if numfields_i64 < 1 {
+        return command_executor_invalid_integer();
+    }
+    const numfields: usize = numfields_i64 as usize;
+    if command.argc != numfields + 4 {
+        return command_executor_syntax_error();
+    }
+
+    const obj: &RedisObject = command_executor_lookup_key_now_or_null(engine, key, now_ms);
+    if obj != null && obj.obj_type != ObjectType.object_hash {
+        return command_executor_wrongtype();
+    }
+
+    const reply_list: &RedisObject = create_list_object() catch {
+        return command_executor_oom();
+    };
+    var null_map: Sds = sds_empty() catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&null_map);
+    }
+
+    var index: usize = 4;
+    while index < command.argc {
+        const field: &[byte] = command_executor_arg(command, index) catch {
+            object_free(reply_list);
+            return command_executor_wrong_arity();
+        };
+        var is_null: bool = false;
+        var should_delete: bool = false;
+        var data: &[byte] = command_executor_empty_slice();
+        if obj == null {
+            is_null = true;
+        } else {
+            const exists: bool = hash_object_exists_field(obj, field) catch {
+                object_free(reply_list);
+                return command_executor_wrongtype();
+            };
+            if !exists {
+                is_null = true;
+            } else {
+                const field_obj: &RedisObject = hash_object_get_field(obj, field) catch {
+                    object_free(reply_list);
+                    return command_executor_wrongtype();
+                };
+                data = command_executor_string_value(field_obj) catch {
+                    object_free(reply_list);
+                    return command_executor_wrongtype();
+                };
+                should_delete = true;
+            }
+        }
+        var flag: [byte: 1] = [];
+        if is_null {
+            flag[0] = 1 as byte;
+        } else {
+            flag[0] = 0 as byte;
+        }
+        _ = list_object_push_tail(reply_list, data) catch {
+            object_free(reply_list);
+            return command_executor_oom();
+        };
+        _ = sds_cat(&null_map, flag[0: 1]) catch {
+            object_free(reply_list);
+            return command_executor_oom();
+        };
+        if should_delete {
+            _ = hash_object_delete_field(obj, field) catch {
+                object_free(reply_list);
+                return command_executor_wrongtype();
+            };
+        }
+        index = index + 1;
+    }
+
+    if obj != null {
+        const remaining: usize = hash_object_len(obj) catch {
+            object_free(reply_list);
+            return command_executor_wrongtype();
+        };
+        if remaining == 0 {
+            _ = delete_key(engine, key);
+        }
+    }
+
+    const null_map_obj: &RedisObject = create_string_object(null_map.buf[0: null_map.len]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    var reply: CommandReply = command_executor_nullable_array_bulk(reply_list.list_head, numfields, null_map_obj);
+    reply.owned_object = reply_list;
+    return reply;
+}
+
 fn command_executor_hexists(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
     if command.argc != 3 {
         return command_executor_wrong_arity();
@@ -16707,6 +16822,7 @@ fn command_executor_command_key_flags(info: &CommandInfo, key_ordinal: usize) &[
         return &"RO|access"[0: 9];
     }
     if info.cmd_type == CommandType.command_getdel ||
+        info.cmd_type == CommandType.command_hgetdel ||
         info.cmd_type == CommandType.command_move ||
         info.cmd_type == CommandType.command_lpop ||
         info.cmd_type == CommandType.command_blpop ||
@@ -18174,6 +18290,9 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
     }
     if command.info.cmd_type == CommandType.command_hdel {
         return command_executor_hdel(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_hgetdel {
+        return command_executor_hgetdel(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_hexists {
         return command_executor_hexists(engine, command, now_ms);

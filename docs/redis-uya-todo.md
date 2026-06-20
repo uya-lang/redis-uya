@@ -416,7 +416,7 @@
 
 ### T. 基础类型与管理命令
 
-- [x] String 第一批：`APPEND`、`STRLEN`、`GETDEL`
+- [x] String 第一批：`APPEND`、`STRLEN`、`GETDEL`、`DELEX`（`IFEQ/IFNE` partial，digest 条件暂未支持）
 - [x] String 第二批计数：`INCR`、`DECR`、`INCRBY`、`DECRBY`
 - [x] String 第三批原子写入：`GETSET`、`SETNX`、`SETEX`
 - [x] String 第四批多 key：`MGET`、`MSET`、`MSETNX`

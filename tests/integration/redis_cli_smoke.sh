@@ -1045,6 +1045,30 @@ if [[ -n "$GETDEL_MISSING_RESULT" ]]; then
     exit 1
 fi
 
+DELEX_SET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" set delex-key value)"
+if [[ "$DELEX_SET_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected OK on delex-key SET, got '$DELEX_SET_RESULT'" >&2
+    exit 1
+fi
+
+DELEX_IFEQ_MISS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" delex delex-key ifeq other)"
+if [[ "$DELEX_IFEQ_MISS_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected DELEX IFEQ miss 0, got '$DELEX_IFEQ_MISS_RESULT'" >&2
+    exit 1
+fi
+
+DELEX_IFNE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" delex delex-key ifne other)"
+if [[ "$DELEX_IFNE_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected DELEX IFNE 1, got '$DELEX_IFNE_RESULT'" >&2
+    exit 1
+fi
+
+DELEX_MISSING_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" delex delex-key)"
+if [[ "$DELEX_MISSING_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected DELEX missing 0, got '$DELEX_MISSING_RESULT'" >&2
+    exit 1
+fi
+
 RPUSH_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" rpush rlist a b c)"
 if [[ "$RPUSH_RESULT" != "3" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected RPUSH 3, got '$RPUSH_RESULT'" >&2

@@ -770,6 +770,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"georadius_ro"[0: 12], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"georadiusbymember_ro"[0: 20], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"geosearchstore"[0: 14], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"delex"[0: 5], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"hrandfield"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"waitaof"[0: 7], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"swapdb"[0: 6], CommandCatalogStatus.status_partial);
@@ -2348,6 +2349,103 @@ export fn test_command_set_get_del_exists() !void {
     try assert_eq_i32(multi_del_reply.typ as i32, CommandReplyType.reply_integer as i32);
     try assert_eq_i32(multi_del_reply.integer as i32, 4);
     resp_value_free(&multi_del_parsed.value);
+
+    var delex_set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$9\r\ndelex-key\r\n$5\r\nvalue\r\n"[0: 39]);
+    const delex_set_command: Command = try command_executor_test_command(&router, &delex_set_parsed);
+    const delex_set_reply: CommandReply = command_execute_at(&engine, &delex_set_command, 1000u64);
+    try assert_eq_i32(delex_set_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    resp_value_free(&delex_set_parsed.value);
+
+    var delex_parsed: RespParseResult = try parse_resp2(&"*2\r\n$5\r\nDELEX\r\n$9\r\ndelex-key\r\n"[0: 30]);
+    const delex_command: Command = try command_executor_test_command(&router, &delex_parsed);
+    const delex_reply: CommandReply = command_execute_at(&engine, &delex_command, 1000u64);
+    try assert_eq_i32(delex_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(delex_reply.integer as i32, 1);
+    try assert_true(command_executor_test_key_missing_at(&engine, &"delex-key"[0: 9], 1000u64));
+    resp_value_free(&delex_parsed.value);
+
+    var delex_eq_set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$4\r\neqok\r\n$5\r\nvalue\r\n"[0: 34]);
+    const delex_eq_set_command: Command = try command_executor_test_command(&router, &delex_eq_set_parsed);
+    const delex_eq_set_reply: CommandReply = command_execute_at(&engine, &delex_eq_set_command, 1000u64);
+    try assert_eq_i32(delex_eq_set_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    resp_value_free(&delex_eq_set_parsed.value);
+
+    var delex_eq_parsed: RespParseResult = try parse_resp2(&"*4\r\n$5\r\nDELEX\r\n$4\r\neqok\r\n$4\r\nIFEQ\r\n$5\r\nvalue\r\n"[0: 46]);
+    const delex_eq_command: Command = try command_executor_test_command(&router, &delex_eq_parsed);
+    const delex_eq_reply: CommandReply = command_execute_at(&engine, &delex_eq_command, 1000u64);
+    try assert_eq_i32(delex_eq_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(delex_eq_reply.integer as i32, 1);
+    try assert_true(command_executor_test_key_missing_at(&engine, &"eqok"[0: 4], 1000u64));
+    resp_value_free(&delex_eq_parsed.value);
+
+    var delex_ne_set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$5\r\nnekey\r\n$5\r\nvalue\r\n"[0: 35]);
+    const delex_ne_set_command: Command = try command_executor_test_command(&router, &delex_ne_set_parsed);
+    const delex_ne_set_reply: CommandReply = command_execute_at(&engine, &delex_ne_set_command, 1000u64);
+    try assert_eq_i32(delex_ne_set_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    resp_value_free(&delex_ne_set_parsed.value);
+
+    var delex_ne_parsed: RespParseResult = try parse_resp2(&"*4\r\n$5\r\nDELEX\r\n$5\r\nnekey\r\n$4\r\nIFEQ\r\n$5\r\nother\r\n"[0: 47]);
+    const delex_ne_command: Command = try command_executor_test_command(&router, &delex_ne_parsed);
+    const delex_ne_reply: CommandReply = command_execute_at(&engine, &delex_ne_command, 1000u64);
+    try assert_eq_i32(delex_ne_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(delex_ne_reply.integer as i32, 0);
+    resp_value_free(&delex_ne_parsed.value);
+
+    var delex_ne_get_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nGET\r\n$5\r\nnekey\r\n"[0: 24]);
+    const delex_ne_get_command: Command = try command_executor_test_command(&router, &delex_ne_get_parsed);
+    const delex_ne_get_reply: CommandReply = command_execute_at(&engine, &delex_ne_get_command, 1000u64);
+    try assert_eq_i32(delex_ne_get_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(delex_ne_get_reply.data, &"value"[0: 5]));
+    resp_value_free(&delex_ne_get_parsed.value);
+
+    var delex_ne_hit_parsed: RespParseResult = try parse_resp2(&"*4\r\n$5\r\nDELEX\r\n$5\r\nnekey\r\n$4\r\nIFNE\r\n$5\r\nother\r\n"[0: 47]);
+    const delex_ne_hit_command: Command = try command_executor_test_command(&router, &delex_ne_hit_parsed);
+    const delex_ne_hit_reply: CommandReply = command_execute_at(&engine, &delex_ne_hit_command, 1000u64);
+    try assert_eq_i32(delex_ne_hit_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(delex_ne_hit_reply.integer as i32, 1);
+    try assert_true(command_executor_test_key_missing_at(&engine, &"nekey"[0: 5], 1000u64));
+    resp_value_free(&delex_ne_hit_parsed.value);
+
+    var delex_missing_parsed: RespParseResult = try parse_resp2(&"*2\r\n$5\r\nDELEX\r\n$7\r\nmissing\r\n"[0: 28]);
+    const delex_missing_command: Command = try command_executor_test_command(&router, &delex_missing_parsed);
+    const delex_missing_reply: CommandReply = command_execute_at(&engine, &delex_missing_command, 1000u64);
+    try assert_eq_i32(delex_missing_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(delex_missing_reply.integer as i32, 0);
+    resp_value_free(&delex_missing_parsed.value);
+
+    var delex_hash_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nHSET\r\n$4\r\nhash\r\n$5\r\nfield\r\n$5\r\nvalue\r\n"[0: 46]);
+    const delex_hash_command: Command = try command_executor_test_command(&router, &delex_hash_parsed);
+    const delex_hash_reply: CommandReply = command_execute_at(&engine, &delex_hash_command, 1000u64);
+    try assert_eq_i32(delex_hash_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    resp_value_free(&delex_hash_parsed.value);
+
+    var delex_wrongtype_parsed: RespParseResult = try parse_resp2(&"*4\r\n$5\r\nDELEX\r\n$4\r\nhash\r\n$4\r\nIFEQ\r\n$5\r\nvalue\r\n"[0: 46]);
+    const delex_wrongtype_command: Command = try command_executor_test_command(&router, &delex_wrongtype_parsed);
+    const delex_wrongtype_reply: CommandReply = command_execute_at(&engine, &delex_wrongtype_command, 1000u64);
+    try assert_eq_i32(delex_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(delex_wrongtype_reply.data, &"WRONGTYPE Operation against a key holding the wrong kind of value"[0: 65]));
+    resp_value_free(&delex_wrongtype_parsed.value);
+
+    var delex_hash_cleanup_parsed: RespParseResult = try parse_resp2(&"*2\r\n$5\r\nDELEX\r\n$4\r\nhash\r\n"[0: 25]);
+    const delex_hash_cleanup_command: Command = try command_executor_test_command(&router, &delex_hash_cleanup_parsed);
+    const delex_hash_cleanup_reply: CommandReply = command_execute_at(&engine, &delex_hash_cleanup_command, 1000u64);
+    try assert_eq_i32(delex_hash_cleanup_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(delex_hash_cleanup_reply.integer as i32, 1);
+    resp_value_free(&delex_hash_cleanup_parsed.value);
+
+    var delex_digest_parsed: RespParseResult = try parse_resp2(&"*4\r\n$5\r\nDELEX\r\n$5\r\nnekey\r\n$5\r\nIFDEQ\r\n$16\r\n0000000000000000\r\n"[0: 60]);
+    const delex_digest_command: Command = try command_executor_test_command(&router, &delex_digest_parsed);
+    const delex_digest_reply: CommandReply = command_execute_at(&engine, &delex_digest_command, 1000u64);
+    try assert_eq_i32(delex_digest_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(delex_digest_reply.data, &"ERR DELEX digest conditions are not supported by redis-uya partial"[0: 66]));
+    resp_value_free(&delex_digest_parsed.value);
+
+    var delex_bad_option_parsed: RespParseResult = try parse_resp2(&"*4\r\n$5\r\nDELEX\r\n$5\r\nnekey\r\n$3\r\nBAD\r\n$1\r\nx\r\n"[0: 42]);
+    const delex_bad_option_command: Command = try command_executor_test_command(&router, &delex_bad_option_parsed);
+    const delex_bad_option_reply: CommandReply = command_execute_at(&engine, &delex_bad_option_command, 1000u64);
+    try assert_eq_i32(delex_bad_option_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(delex_bad_option_reply.data, &"ERR syntax error"[0: 16]));
+    resp_value_free(&delex_bad_option_parsed.value);
 
     var incr_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nINCR\r\n$7\r\ncounter\r\n"[0: 28]);
     const incr_command: Command = try command_executor_test_command(&router, &incr_parsed);

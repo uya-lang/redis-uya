@@ -227,6 +227,28 @@ GETDEL key
 - 命中：返回旧值 Bulk String，并删除 key
 - 不存在：Null Bulk
 
+### `DELEX`
+
+格式：
+
+```text
+DELEX key [IFEQ value | IFNE value | IFDEQ digest | IFDNE digest]
+```
+
+返回：
+
+- 未带条件时：key 存在则删除并返回 `1`，key 不存在返回 `0`
+- `IFEQ value`：当前 String 值等于 `value` 时删除并返回 `1`，否则返回 `0`
+- `IFNE value`：当前 String 值不等于 `value` 时删除并返回 `1`，否则返回 `0`
+- 条件路径中 key 不存在：`0`
+- 条件路径中 key 存在且不是 String：`WRONGTYPE`
+- `IFDEQ` / `IFDNE` 当前返回 `ERR DELEX digest conditions are not supported by redis-uya partial`
+
+说明：
+
+- 当前实现为 partial，仅支持字符串值比较条件；digest 条件需要 Redis 的 XXH3 digest 兼容实现，暂未接入
+- `COMMAND INFO/LIST/DOCS` 与 `COMMAND GETKEYS*` 会暴露 `DELEX`，key flags 标记为 `RM/delete`
+
 ### `INCR`
 
 格式：

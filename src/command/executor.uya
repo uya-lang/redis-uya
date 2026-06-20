@@ -3878,6 +3878,60 @@ fn command_executor_getdel(engine: &Engine, command: &Command, now_ms: u64) Comm
     return reply;
 }
 
+fn command_executor_delex(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 2 && command.argc != 4 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    if command.argc == 2 {
+        if delete_key(engine, key) {
+            return command_executor_integer(1);
+        }
+        return command_executor_integer(0);
+    }
+
+    var expect_match: bool = true;
+    const option: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    if command_executor_keyword_eq(option, &"IFEQ"[0: 4]) {
+        expect_match = true;
+    } else if command_executor_keyword_eq(option, &"IFNE"[0: 4]) {
+        expect_match = false;
+    } else if command_executor_keyword_eq(option, &"IFDEQ"[0: 5]) ||
+        command_executor_keyword_eq(option, &"IFDNE"[0: 5]) {
+        return command_executor_error(&"ERR DELEX digest conditions are not supported by redis-uya partial"[0: 66]);
+    } else {
+        return command_executor_syntax_error();
+    }
+    const value: &[byte] = command_executor_arg(command, 3) catch {
+        return command_executor_wrong_arity();
+    };
+
+    const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+        return command_executor_integer(0);
+    };
+    const current: &[byte] = command_executor_string_value(obj) catch {
+        return command_executor_wrongtype();
+    };
+    const matched: bool = command_executor_slice_eq(current, value);
+    if expect_match {
+        if !matched {
+            return command_executor_integer(0);
+        }
+    } else {
+        if matched {
+            return command_executor_integer(0);
+        }
+    }
+    if delete_key(engine, key) {
+        return command_executor_integer(1);
+    }
+    return command_executor_integer(0);
+}
+
 fn command_executor_getex(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
     if command.argc != 2 && command.argc != 3 && command.argc != 4 {
         return command_executor_wrong_arity();
@@ -16592,7 +16646,8 @@ fn command_executor_command_key_flags(info: &CommandInfo, key_ordinal: usize) &[
         info.cmd_type == CommandType.command_touch {
         return &"RO"[0: 2];
     }
-    if info.cmd_type == CommandType.command_del {
+    if info.cmd_type == CommandType.command_del ||
+        info.cmd_type == CommandType.command_delex {
         return &"RM|delete"[0: 9];
     }
     if info.cmd_type == CommandType.command_unlink {
@@ -17748,6 +17803,9 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
     }
     if command.info.cmd_type == CommandType.command_getdel {
         return command_executor_getdel(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_delex {
+        return command_executor_delex(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_getex {
         return command_executor_getex(engine, command, now_ms);

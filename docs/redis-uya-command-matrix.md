@@ -1,7 +1,7 @@
 # redis-uya command matrix
 
 > version: v0.9.1-dev
-> date: 2026-06-15
+> date: 2026-06-20
 > source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`
 > runtime source: `src/command/catalog_generated.uya`
 
@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 173 | 3 | 3 | 40 |
+| Tier A: standalone core | 365 | 259 | 146 | 174 | 3 | 3 | 39 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `180` |
+| `partial` | `181` |
 | `standalone-error` | `29` |
 | `alias` | `3` |
-| `deferred` | `193` |
+| `deferred` | `192` |
 
 ## Group counts
 
@@ -214,7 +214,7 @@
 | `decr` | `string` | `full` | `-` | `2` | `-` | `no` | `@write, @string, @fast` |
 | `decrby` | `string` | `full` | `-` | `3` | `-` | `no` | `@write, @string, @fast` |
 | `del` | `generic` | `full` | `-` | `-2` | `-` | `no` | `@keyspace, @write, @slow` |
-| `delex` | `string` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@write, @string, @fast` |
+| `delex` | `string` | `partial` | `-` | `-2` | `-` | `no` | `@write, @string, @fast` |
 | `digest` | `string` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@read, @string, @fast` |
 | `discard` | `transactions` | `full` | `-` | `1` | `-` | `no` | `@fast, @transaction` |
 | `dump` | `generic` | `full` | `-` | `2` | `-` | `no` | `@keyspace, @read, @slow` |

@@ -173,6 +173,10 @@ def run_smoke() -> None:
             if not isinstance(listed_copy, list) or b"copy" not in listed_copy:
                 raise AssertionError(f"unexpected COMMAND LIST co* result: {listed_copy!r}")
 
+            listed_delex = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"DE*")
+            if not isinstance(listed_delex, list) or b"delex" not in listed_delex:
+                raise AssertionError(f"unexpected COMMAND LIST de* result: {listed_delex!r}")
+
             listed_restore = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"RESTORE*")
             if (
                 not isinstance(listed_restore, list)
@@ -274,8 +278,8 @@ def run_smoke() -> None:
             if acl_list != [b"user default on nopass ~* &* +@all"]:
                 raise AssertionError(f"unexpected ACL LIST: {acl_list!r}")
 
-            info = send_command(sock, b"COMMAND", b"INFO", b"GET", b"FOO", b"CLIENT|ID", b"COPY", b"RESTORE-ASKING", b"HRANDFIELD", b"WAITAOF", b"SWAPDB", b"LOLWUT", b"REPLCONF", b"SLAVEOF", b"SYNC", b"DEBUG", b"FAILOVER")
-            if not isinstance(info, list) or len(info) != 14:
+            info = send_command(sock, b"COMMAND", b"INFO", b"GET", b"FOO", b"CLIENT|ID", b"COPY", b"DELEX", b"RESTORE-ASKING", b"HRANDFIELD", b"WAITAOF", b"SWAPDB", b"LOLWUT", b"REPLCONF", b"SLAVEOF", b"SYNC", b"DEBUG", b"FAILOVER")
+            if not isinstance(info, list) or len(info) != 15:
                 raise AssertionError(f"unexpected COMMAND INFO shape: {info!r}")
             if info[1] is not None:
                 raise AssertionError(f"COMMAND INFO should return null for unknown command: {info!r}")
@@ -285,25 +289,27 @@ def run_smoke() -> None:
                 raise AssertionError(f"COMMAND INFO CLIENT|ID returned wrong payload: {info!r}")
             if not isinstance(info[3], list) or info[3][0] != b"copy":
                 raise AssertionError(f"COMMAND INFO COPY returned wrong payload: {info!r}")
-            if not isinstance(info[4], list) or info[4][0] != b"restore-asking":
+            if not isinstance(info[4], list) or info[4][0] != b"delex":
+                raise AssertionError(f"COMMAND INFO DELEX returned wrong payload: {info!r}")
+            if not isinstance(info[5], list) or info[5][0] != b"restore-asking":
                 raise AssertionError(f"COMMAND INFO RESTORE-ASKING returned wrong payload: {info!r}")
-            if not isinstance(info[5], list) or info[5][0] != b"hrandfield":
+            if not isinstance(info[6], list) or info[6][0] != b"hrandfield":
                 raise AssertionError(f"COMMAND INFO HRANDFIELD returned wrong payload: {info!r}")
-            if not isinstance(info[6], list) or info[6][0] != b"waitaof":
+            if not isinstance(info[7], list) or info[7][0] != b"waitaof":
                 raise AssertionError(f"COMMAND INFO WAITAOF returned wrong payload: {info!r}")
-            if not isinstance(info[7], list) or info[7][0] != b"swapdb":
+            if not isinstance(info[8], list) or info[8][0] != b"swapdb":
                 raise AssertionError(f"COMMAND INFO SWAPDB returned wrong payload: {info!r}")
-            if not isinstance(info[8], list) or info[8][0] != b"lolwut":
+            if not isinstance(info[9], list) or info[9][0] != b"lolwut":
                 raise AssertionError(f"COMMAND INFO LOLWUT returned wrong payload: {info!r}")
-            if not isinstance(info[9], list) or info[9][0] != b"replconf":
+            if not isinstance(info[10], list) or info[10][0] != b"replconf":
                 raise AssertionError(f"COMMAND INFO REPLCONF returned wrong payload: {info!r}")
-            if not isinstance(info[10], list) or info[10][0] != b"slaveof":
+            if not isinstance(info[11], list) or info[11][0] != b"slaveof":
                 raise AssertionError(f"COMMAND INFO SLAVEOF returned wrong payload: {info!r}")
-            if not isinstance(info[11], list) or info[11][0] != b"sync":
+            if not isinstance(info[12], list) or info[12][0] != b"sync":
                 raise AssertionError(f"COMMAND INFO SYNC returned wrong payload: {info!r}")
-            if not isinstance(info[12], list) or info[12][0] != b"debug":
+            if not isinstance(info[13], list) or info[13][0] != b"debug":
                 raise AssertionError(f"COMMAND INFO DEBUG returned wrong payload: {info!r}")
-            if not isinstance(info[13], list) or info[13][0] != b"failover":
+            if not isinstance(info[14], list) or info[14][0] != b"failover":
                 raise AssertionError(f"COMMAND INFO FAILOVER returned wrong payload: {info!r}")
 
             cluster_mode_info = send_command(sock, b"COMMAND", b"INFO", b"ASKING", b"READONLY", b"READWRITE")
@@ -751,6 +757,7 @@ def run_smoke() -> None:
                 or b"zrevrange" not in docs_all_resp2
                 or b"zrevrangebylex" not in docs_all_resp2
                 or b"copy" not in docs_all_resp2
+                or b"delex" not in docs_all_resp2
                 or b"restore-asking" not in docs_all_resp2
                 or b"memory|malloc-stats" not in docs_all_resp2
                 or b"memory|purge" not in docs_all_resp2
@@ -1136,6 +1143,7 @@ def run_smoke() -> None:
                 or not isinstance(docs_all.get(b"zrevrange"), dict)
                 or not isinstance(docs_all.get(b"zrevrangebylex"), dict)
                 or not isinstance(docs_all.get(b"copy"), dict)
+                or not isinstance(docs_all.get(b"delex"), dict)
                 or not isinstance(docs_all.get(b"restore-asking"), dict)
                 or not isinstance(docs_all.get(b"memory|malloc-stats"), dict)
                 or not isinstance(docs_all.get(b"memory|purge"), dict)
@@ -1154,6 +1162,10 @@ def run_smoke() -> None:
             copy_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"COPY", b"src", b"dst")
             if copy_getkeys != [b"src", b"dst"]:
                 raise AssertionError(f"unexpected COMMAND GETKEYS COPY result: {copy_getkeys!r}")
+
+            delex_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"DELEX", b"src")
+            if delex_getkeys != [b"src"]:
+                raise AssertionError(f"unexpected COMMAND GETKEYS DELEX result: {delex_getkeys!r}")
 
             blmove_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"BLMOVE", b"src", b"dst", b"LEFT", b"RIGHT", b"1")
             if blmove_getkeys != [b"src", b"dst"]:
@@ -1189,6 +1201,16 @@ def run_smoke() -> None:
                 or b"update" not in copy_getkeysandflags[1][1]
             ):
                 raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS COPY keys: {copy_getkeysandflags!r}")
+
+            delex_getkeysandflags = send_command(sock, b"COMMAND", b"GETKEYSANDFLAGS", b"DELEX", b"src")
+            if (
+                not isinstance(delex_getkeysandflags, list)
+                or len(delex_getkeysandflags) != 1
+                or delex_getkeysandflags[0][0] != b"src"
+                or b"RM" not in delex_getkeysandflags[0][1]
+                or b"delete" not in delex_getkeysandflags[0][1]
+            ):
+                raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS DELEX keys: {delex_getkeysandflags!r}")
 
             blmove_getkeysandflags = send_command(sock, b"COMMAND", b"GETKEYSANDFLAGS", b"BLMOVE", b"src", b"dst", b"LEFT", b"RIGHT", b"1")
             if not isinstance(blmove_getkeysandflags, list) or len(blmove_getkeysandflags) != 2:

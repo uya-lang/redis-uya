@@ -498,6 +498,9 @@ class RedisPySubsetClient:
     def getdel(self, key: str) -> bytes | None:
         return self._request(b"GETDEL", key.encode())
 
+    def delex(self, key: str, *parts: str) -> int:
+        return int(self._request(b"DELEX", key.encode(), *(part.encode() for part in parts)))
+
     def getex(self, key: str, *parts: str) -> bytes | None:
         encoded: list[bytes] = [b"GETEX", key.encode()]
         for part in parts:
@@ -1644,6 +1647,11 @@ def run_smoke() -> None:
             assert client.set("gd-key", "once")
             assert client.getdel("gd-key") == b"once"
             assert client.getdel("gd-key") is None
+            assert client.set("delex-key", "value")
+            assert client.delex("delex-key", "IFEQ", "other") == 0
+            assert client.get("delex-key") == b"value"
+            assert client.delex("delex-key", "IFNE", "other") == 1
+            assert client.delex("delex-key") == 0
             assert client.delete("counter") == 1
             assert client.delete("fcounter", "nx-key", "gs-key", "sx-key", "mk1", "mk2", "mn1", "mn2", "allones", "srca", "srcb", "dstbit", "bf", "hll", "dsthll", "emptyhll", "geo", "geodst", "distdst", "lua-key", "slow-k", "latency-k") == 22
             assert client.echo("hi") == b"hi"

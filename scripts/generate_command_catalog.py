@@ -336,6 +336,7 @@ PARTIAL_NAMES = {
     "config|rewrite",
     "config|set",
     "copy",
+    "delex",
     "flushall",
     "flushdb",
     "hello",

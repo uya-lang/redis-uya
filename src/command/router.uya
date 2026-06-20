@@ -240,6 +240,7 @@ export enum CommandType {
     command_bzpopmin,
     command_bzmpop,
     command_zmpop,
+    command_delex,
 }
 
 export struct CommandInfo {
@@ -266,7 +267,7 @@ export const COMMAND_FLAG_READONLY: u64 = 1u64;
 export const COMMAND_FLAG_WRITE: u64 = 2u64;
 export const COMMAND_FLAG_FAST: u64 = 4u64;
 
-const MIN_COMMAND_COUNT: usize = 231;
+const MIN_COMMAND_COUNT: usize = 232;
 
 fn command_router_name_eq(a: &[byte], b: &[byte]) bool {
     return bytes_ascii_case_eq(a, b);
@@ -998,6 +999,9 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
     }
     if index == 230 {
         return command_router_info(CommandType.command_readwrite, &"READWRITE"[0: 9], 1, COMMAND_FLAG_FAST, 0, 0, 0);
+    }
+    if index == 231 {
+        return command_router_info(CommandType.command_delex, &"DELEX"[0: 5], -2, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     return error.CommandUnknown;
 }

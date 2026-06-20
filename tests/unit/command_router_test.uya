@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 231);
+    try assert_eq_i32(command_router_count(&router) as i32, 232);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -402,6 +402,10 @@ export fn test_command_router_lookup_and_case() !void {
     const getdel: CommandInfo = try command_router_lookup(&router, &"GETDEL"[0: 6]);
     try assert_eq_i32(getdel.cmd_type as i32, CommandType.command_getdel as i32);
     try assert_eq_i32(getdel.arity, 2);
+
+    const delex: CommandInfo = try command_router_lookup(&router, &"DELEX"[0: 5]);
+    try assert_eq_i32(delex.cmd_type as i32, CommandType.command_delex as i32);
+    try assert_eq_i32(delex.arity, -2);
 
     const getex: CommandInfo = try command_router_lookup(&router, &"GETEX"[0: 5]);
     try assert_eq_i32(getex.cmd_type as i32, CommandType.command_getex as i32);
@@ -948,6 +952,7 @@ export fn test_command_router_arity_validation() !void {
     const append: CommandInfo = try command_router_lookup(&router, &"APPEND"[0: 6]);
     const strlen: CommandInfo = try command_router_lookup(&router, &"STRLEN"[0: 6]);
     const getdel: CommandInfo = try command_router_lookup(&router, &"GETDEL"[0: 6]);
+    const delex: CommandInfo = try command_router_lookup(&router, &"DELEX"[0: 5]);
     const getex: CommandInfo = try command_router_lookup(&router, &"GETEX"[0: 5]);
     const echo: CommandInfo = try command_router_lookup(&router, &"ECHO"[0: 4]);
     const type_info: CommandInfo = try command_router_lookup(&router, &"TYPE"[0: 4]);
@@ -1105,6 +1110,8 @@ export fn test_command_router_arity_validation() !void {
     try command_validate_arity(&append, 3);
     try command_validate_arity(&strlen, 2);
     try command_validate_arity(&getdel, 2);
+    try command_validate_arity(&delex, 2);
+    try command_validate_arity(&delex, 4);
     try command_validate_arity(&getex, 2);
     try command_validate_arity(&getex, 4);
     try command_validate_arity(&echo, 2);

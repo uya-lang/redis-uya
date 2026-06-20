@@ -120,6 +120,14 @@ def run_smoke() -> None:
             if send_command(sock, b"CLUSTER", b"KEYSLOT", b"foo{bar}zap") != 5061:
                 raise AssertionError("CLUSTER KEYSLOT did not honor hash tags")
 
+            for command_name in (b"ASKING", b"READONLY", b"READWRITE"):
+                try:
+                    send_command(sock, command_name)
+                    raise AssertionError(f"{command_name!r} should fail in standalone cluster profile")
+                except RespError as exc:
+                    if "ERR This instance has cluster support disabled" not in str(exc):
+                        raise
+
             info = send_command(sock, b"CLUSTER", b"INFO")
             if not isinstance(info, bytes):
                 raise AssertionError(f"CLUSTER INFO returned non-bulk value: {info!r}")

@@ -152,6 +152,9 @@ export enum CommandType {
     command_publish,
     command_pubsub,
     command_cluster,
+    command_asking,
+    command_readonly,
+    command_readwrite,
     command_command,
     command_mget,
     command_mset,
@@ -263,7 +266,7 @@ export const COMMAND_FLAG_READONLY: u64 = 1u64;
 export const COMMAND_FLAG_WRITE: u64 = 2u64;
 export const COMMAND_FLAG_FAST: u64 = 4u64;
 
-const MIN_COMMAND_COUNT: usize = 228;
+const MIN_COMMAND_COUNT: usize = 231;
 
 fn command_router_name_eq(a: &[byte], b: &[byte]) bool {
     return bytes_ascii_case_eq(a, b);
@@ -986,6 +989,15 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
     }
     if index == 227 {
         return command_router_info(CommandType.command_replicaof, &"SLAVEOF"[0: 7], 3, COMMAND_FLAG_READONLY, 0, 0, 0);
+    }
+    if index == 228 {
+        return command_router_info(CommandType.command_asking, &"ASKING"[0: 6], 1, COMMAND_FLAG_FAST, 0, 0, 0);
+    }
+    if index == 229 {
+        return command_router_info(CommandType.command_readonly, &"READONLY"[0: 8], 1, COMMAND_FLAG_FAST, 0, 0, 0);
+    }
+    if index == 230 {
+        return command_router_info(CommandType.command_readwrite, &"READWRITE"[0: 9], 1, COMMAND_FLAG_FAST, 0, 0, 0);
     }
     return error.CommandUnknown;
 }

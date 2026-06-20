@@ -181,6 +181,14 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"unexpected COMMAND LIST restore* result: {listed_restore!r}")
 
+            listed_asking = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"ASK*")
+            if not isinstance(listed_asking, list) or listed_asking != [b"asking"]:
+                raise AssertionError(f"unexpected COMMAND LIST ask* result: {listed_asking!r}")
+
+            listed_read = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"READ*")
+            if not isinstance(listed_read, list) or b"readonly" not in listed_read or b"readwrite" not in listed_read:
+                raise AssertionError(f"unexpected COMMAND LIST read* result: {listed_read!r}")
+
             acl_help = send_command(sock, b"ACL", b"HELP")
             if not isinstance(acl_help, list) or b"CAT [<category>]" not in acl_help or b"WHOAMI" not in acl_help:
                 raise AssertionError(f"unexpected ACL HELP: {acl_help!r}")
@@ -297,6 +305,19 @@ def run_smoke() -> None:
                 raise AssertionError(f"COMMAND INFO DEBUG returned wrong payload: {info!r}")
             if not isinstance(info[13], list) or info[13][0] != b"failover":
                 raise AssertionError(f"COMMAND INFO FAILOVER returned wrong payload: {info!r}")
+
+            cluster_mode_info = send_command(sock, b"COMMAND", b"INFO", b"ASKING", b"READONLY", b"READWRITE")
+            if (
+                not isinstance(cluster_mode_info, list)
+                or len(cluster_mode_info) != 3
+                or not isinstance(cluster_mode_info[0], list)
+                or cluster_mode_info[0][0] != b"asking"
+                or not isinstance(cluster_mode_info[1], list)
+                or cluster_mode_info[1][0] != b"readonly"
+                or not isinstance(cluster_mode_info[2], list)
+                or cluster_mode_info[2][0] != b"readwrite"
+            ):
+                raise AssertionError(f"COMMAND INFO cluster mode commands returned wrong payload: {cluster_mode_info!r}")
 
             bitmap_info = send_command(sock, b"COMMAND", b"INFO", b"GETBIT", b"SETBIT", b"BITCOUNT", b"BITPOS", b"BITOP", b"BITFIELD", b"BITFIELD_RO", b"PFADD", b"PFCOUNT", b"PFMERGE", b"PFSELFTEST", b"PFDEBUG", b"GEOADD", b"GEODIST", b"GEOHASH", b"GEOPOS", b"GEORADIUS", b"GEORADIUS_RO", b"GEORADIUSBYMEMBER", b"GEORADIUSBYMEMBER_RO", b"GEOSEARCH", b"GEOSEARCHSTORE")
             if (
@@ -1082,12 +1103,15 @@ def run_smoke() -> None:
                 or not isinstance(docs_all.get(b"acl|setuser"), dict)
                 or not isinstance(docs_all.get(b"acl|users"), dict)
                 or not isinstance(docs_all.get(b"acl|whoami"), dict)
+                or not isinstance(docs_all.get(b"asking"), dict)
                 or not isinstance(docs_all.get(b"function|load"), dict)
                 or not isinstance(docs_all.get(b"hrandfield"), dict)
                 or not isinstance(docs_all.get(b"waitaof"), dict)
                 or not isinstance(docs_all.get(b"swapdb"), dict)
                 or not isinstance(docs_all.get(b"lolwut"), dict)
                 or not isinstance(docs_all.get(b"replconf"), dict)
+                or not isinstance(docs_all.get(b"readonly"), dict)
+                or not isinstance(docs_all.get(b"readwrite"), dict)
                 or not isinstance(docs_all.get(b"slaveof"), dict)
                 or not isinstance(docs_all.get(b"sync"), dict)
                 or not isinstance(docs_all.get(b"debug"), dict)

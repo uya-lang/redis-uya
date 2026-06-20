@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 228);
+    try assert_eq_i32(command_router_count(&router) as i32, 231);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -74,6 +74,18 @@ export fn test_command_router_lookup_and_case() !void {
     const cluster: CommandInfo = try command_router_lookup(&router, &"CLUSTER"[0: 7]);
     try assert_eq_i32(cluster.cmd_type as i32, CommandType.command_cluster as i32);
     try assert_eq_i32(cluster.arity, -2);
+
+    const asking: CommandInfo = try command_router_lookup(&router, &"ASKING"[0: 6]);
+    try assert_eq_i32(asking.cmd_type as i32, CommandType.command_asking as i32);
+    try assert_eq_i32(asking.arity, 1);
+
+    const readonly: CommandInfo = try command_router_lookup(&router, &"READONLY"[0: 8]);
+    try assert_eq_i32(readonly.cmd_type as i32, CommandType.command_readonly as i32);
+    try assert_eq_i32(readonly.arity, 1);
+
+    const readwrite: CommandInfo = try command_router_lookup(&router, &"READWRITE"[0: 9]);
+    try assert_eq_i32(readwrite.cmd_type as i32, CommandType.command_readwrite as i32);
+    try assert_eq_i32(readwrite.arity, 1);
 
     const command_info: CommandInfo = try command_router_lookup(&router, &"COMMAND"[0: 7]);
     try assert_eq_i32(command_info.cmd_type as i32, CommandType.command_command as i32);
@@ -964,6 +976,9 @@ export fn test_command_router_arity_validation() !void {
     const config: CommandInfo = try command_router_lookup(&router, &"CONFIG"[0: 6]);
     const client: CommandInfo = try command_router_lookup(&router, &"CLIENT"[0: 6]);
     const cluster: CommandInfo = try command_router_lookup(&router, &"CLUSTER"[0: 7]);
+    const asking: CommandInfo = try command_router_lookup(&router, &"ASKING"[0: 6]);
+    const readonly: CommandInfo = try command_router_lookup(&router, &"READONLY"[0: 8]);
+    const readwrite: CommandInfo = try command_router_lookup(&router, &"READWRITE"[0: 9]);
     const command_info: CommandInfo = try command_router_lookup(&router, &"COMMAND"[0: 7]);
     const mget: CommandInfo = try command_router_lookup(&router, &"MGET"[0: 4]);
     const mset: CommandInfo = try command_router_lookup(&router, &"MSET"[0: 4]);
@@ -1133,6 +1148,9 @@ export fn test_command_router_arity_validation() !void {
     try command_validate_arity(&client, 4);
     try command_validate_arity(&cluster, 2);
     try command_validate_arity(&cluster, 3);
+    try command_validate_arity(&asking, 1);
+    try command_validate_arity(&readonly, 1);
+    try command_validate_arity(&readwrite, 1);
     try command_validate_arity(&command_info, 1);
     try command_validate_arity(&command_info, 4);
     try command_validate_arity(&mget, 2);

@@ -17249,6 +17249,10 @@ fn command_executor_cluster_redirect_error(kind: &[byte], slot: i32, node: &Clus
     return command_executor_owned_error(buf.buf[0: buf.len]);
 }
 
+fn command_executor_cluster_mode_command() CommandReply {
+    return command_executor_error(&"ERR This instance has cluster support disabled"[0: 46]);
+}
+
 fn command_executor_cluster_redirect(runtime: &CommandRuntimeInfo, command: &Command, out: &CommandReply) bool {
     if runtime.cluster_topology == null {
         return false;
@@ -18283,6 +18287,11 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
     }
     if command.info.cmd_type == CommandType.command_cluster {
         return command_executor_cluster(runtime, command);
+    }
+    if command.info.cmd_type == CommandType.command_asking ||
+        command.info.cmd_type == CommandType.command_readonly ||
+        command.info.cmd_type == CommandType.command_readwrite {
+        return command_executor_cluster_mode_command();
     }
     if command.info.cmd_type == CommandType.command_info {
         return command_executor_info(engine, runtime, command, now_ms);

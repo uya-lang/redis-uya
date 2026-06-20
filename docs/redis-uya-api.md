@@ -3146,6 +3146,21 @@ CLUSTER HELP
 - 当前 `MOVED` / `ASK` 只基于命令首个 key 判断，不实现完整多 key 同槽校验和 `ASKING` 一次性放行
 - 当前不支持 `CLUSTER ADDSLOTS`、`REPLICATE`、`FAILOVER` 等拓扑变更命令
 
+### `ASKING` / `READONLY` / `READWRITE`
+
+格式：
+
+```text
+ASKING
+READONLY
+READWRITE
+```
+
+返回：
+
+- 当前实现为 `standalone-error`：命令进入运行时路由和 `COMMAND*` 可见面，但 redis-uya 尚未实现 Redis Cluster 客户端连接态
+- 统一返回：`-ERR This instance has cluster support disabled`
+
 ### `MULTI`
 
 格式：

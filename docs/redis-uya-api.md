@@ -3398,11 +3398,14 @@ BGREWRITEAOF
 ```text
 REPLICAOF host port
 REPLICAOF NO ONE
+SLAVEOF host port
+SLAVEOF NO ONE
 ```
 
 返回：
 
 - 成功：`+OK`
+- `SLAVEOF` 当前作为 `REPLICAOF` alias 进入同一执行路径
 - 当前已完成复制角色切换、`PSYNC` 全量同步、轮询式增量同步和基础心跳；仍不支持 Redis 原生长连接流式增量推送、真实 ACK/GETACK 等完整复制协议
 
 ### `REPLCONF`

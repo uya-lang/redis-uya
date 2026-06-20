@@ -266,8 +266,8 @@ def run_smoke() -> None:
             if acl_list != [b"user default on nopass ~* &* +@all"]:
                 raise AssertionError(f"unexpected ACL LIST: {acl_list!r}")
 
-            info = send_command(sock, b"COMMAND", b"INFO", b"GET", b"FOO", b"CLIENT|ID", b"COPY", b"RESTORE-ASKING", b"HRANDFIELD", b"WAITAOF", b"SWAPDB", b"LOLWUT", b"REPLCONF", b"SYNC", b"DEBUG", b"FAILOVER")
-            if not isinstance(info, list) or len(info) != 13:
+            info = send_command(sock, b"COMMAND", b"INFO", b"GET", b"FOO", b"CLIENT|ID", b"COPY", b"RESTORE-ASKING", b"HRANDFIELD", b"WAITAOF", b"SWAPDB", b"LOLWUT", b"REPLCONF", b"SLAVEOF", b"SYNC", b"DEBUG", b"FAILOVER")
+            if not isinstance(info, list) or len(info) != 14:
                 raise AssertionError(f"unexpected COMMAND INFO shape: {info!r}")
             if info[1] is not None:
                 raise AssertionError(f"COMMAND INFO should return null for unknown command: {info!r}")
@@ -289,11 +289,13 @@ def run_smoke() -> None:
                 raise AssertionError(f"COMMAND INFO LOLWUT returned wrong payload: {info!r}")
             if not isinstance(info[9], list) or info[9][0] != b"replconf":
                 raise AssertionError(f"COMMAND INFO REPLCONF returned wrong payload: {info!r}")
-            if not isinstance(info[10], list) or info[10][0] != b"sync":
+            if not isinstance(info[10], list) or info[10][0] != b"slaveof":
+                raise AssertionError(f"COMMAND INFO SLAVEOF returned wrong payload: {info!r}")
+            if not isinstance(info[11], list) or info[11][0] != b"sync":
                 raise AssertionError(f"COMMAND INFO SYNC returned wrong payload: {info!r}")
-            if not isinstance(info[11], list) or info[11][0] != b"debug":
+            if not isinstance(info[12], list) or info[12][0] != b"debug":
                 raise AssertionError(f"COMMAND INFO DEBUG returned wrong payload: {info!r}")
-            if not isinstance(info[12], list) or info[12][0] != b"failover":
+            if not isinstance(info[13], list) or info[13][0] != b"failover":
                 raise AssertionError(f"COMMAND INFO FAILOVER returned wrong payload: {info!r}")
 
             bitmap_info = send_command(sock, b"COMMAND", b"INFO", b"GETBIT", b"SETBIT", b"BITCOUNT", b"BITPOS", b"BITOP", b"BITFIELD", b"BITFIELD_RO", b"PFADD", b"PFCOUNT", b"PFMERGE", b"PFSELFTEST", b"PFDEBUG", b"GEOADD", b"GEODIST", b"GEOHASH", b"GEOPOS", b"GEORADIUS", b"GEORADIUS_RO", b"GEORADIUSBYMEMBER", b"GEORADIUSBYMEMBER_RO", b"GEOSEARCH", b"GEOSEARCHSTORE")
@@ -777,6 +779,10 @@ def run_smoke() -> None:
             if not isinstance(listed_repl, list) or b"replicaof" not in listed_repl or b"replconf" not in listed_repl:
                 raise AssertionError(f"unexpected COMMAND LIST repl* result: {listed_repl!r}")
 
+            listed_slaveof = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"SLAVE*")
+            if not isinstance(listed_slaveof, list) or listed_slaveof != [b"slaveof"]:
+                raise AssertionError(f"unexpected COMMAND LIST SLAVE* result: {listed_slaveof!r}")
+
             listed_sync = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"SYNC")
             if not isinstance(listed_sync, list) or listed_sync != [b"sync"]:
                 raise AssertionError(f"unexpected COMMAND LIST SYNC result: {listed_sync!r}")
@@ -1082,6 +1088,7 @@ def run_smoke() -> None:
                 or not isinstance(docs_all.get(b"swapdb"), dict)
                 or not isinstance(docs_all.get(b"lolwut"), dict)
                 or not isinstance(docs_all.get(b"replconf"), dict)
+                or not isinstance(docs_all.get(b"slaveof"), dict)
                 or not isinstance(docs_all.get(b"sync"), dict)
                 or not isinstance(docs_all.get(b"debug"), dict)
                 or not isinstance(docs_all.get(b"failover"), dict)

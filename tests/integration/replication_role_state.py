@@ -143,6 +143,22 @@ def run_smoke() -> None:
             if b"role:master" not in back_to_master:
                 raise AssertionError(f"expected master role after promotion, got {back_to_master!r}")
 
+            slaveof_ok = send_command(sock, b"SLAVEOF", b"127.0.0.1", b"6382")
+            if slaveof_ok != b"+OK\r\n":
+                raise AssertionError(f"expected +OK on SLAVEOF, got {slaveof_ok!r}")
+
+            slaveof_info = send_command(sock, b"INFO", b"replication")
+            if b"role:slave" not in slaveof_info or b"master_host:127.0.0.1" not in slaveof_info or b"master_port:6382" not in slaveof_info:
+                raise AssertionError(f"unexpected SLAVEOF replica info: {slaveof_info!r}")
+
+            slaveof_promote_ok = send_command(sock, b"SLAVEOF", b"NO", b"ONE")
+            if slaveof_promote_ok != b"+OK\r\n":
+                raise AssertionError(f"expected +OK on SLAVEOF NO ONE, got {slaveof_promote_ok!r}")
+
+            slaveof_back_to_master = send_command(sock, b"INFO", b"replication")
+            if b"role:master" not in slaveof_back_to_master:
+                raise AssertionError(f"expected master role after SLAVEOF promotion, got {slaveof_back_to_master!r}")
+
             quit_ok = send_command(sock, b"QUIT")
             if quit_ok != b"+OK\r\n":
                 raise AssertionError(f"expected +OK on QUIT, got {quit_ok!r}")

@@ -1975,6 +1975,14 @@ export fn test_command_replicaof() !void {
     try assert_eq_i32(replica_reply.replicaof_promote as i32, 0);
     resp_value_free(&replica_parsed.value);
 
+    var slave_parsed: RespParseResult = try parse_resp2(&"*3\r\n$7\r\nSLAVEOF\r\n$9\r\n127.0.0.1\r\n$4\r\n6382\r\n"[0: 42]);
+    const slave_command: Command = try command_executor_test_command(&router, &slave_parsed);
+    const slave_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &slave_command, 1000u64);
+    try assert_eq_i32(slave_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_eq_i32(slave_reply.request_replicaof as i32, 1);
+    try assert_eq_i32(slave_reply.replicaof_promote as i32, 0);
+    resp_value_free(&slave_parsed.value);
+
     var promote_parsed: RespParseResult = try parse_resp2(&"*3\r\n$9\r\nREPLICAOF\r\n$2\r\nNO\r\n$3\r\nONE\r\n"[0: 36]);
     const promote_command: Command = try command_executor_test_command(&router, &promote_parsed);
     const promote_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &promote_command, 1000u64);
@@ -1982,6 +1990,14 @@ export fn test_command_replicaof() !void {
     try assert_eq_i32(promote_reply.request_replicaof as i32, 1);
     try assert_eq_i32(promote_reply.replicaof_promote as i32, 1);
     resp_value_free(&promote_parsed.value);
+
+    var slave_promote_parsed: RespParseResult = try parse_resp2(&"*3\r\n$7\r\nSLAVEOF\r\n$2\r\nNO\r\n$3\r\nONE\r\n"[0: 34]);
+    const slave_promote_command: Command = try command_executor_test_command(&router, &slave_promote_parsed);
+    const slave_promote_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &slave_promote_command, 1000u64);
+    try assert_eq_i32(slave_promote_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_eq_i32(slave_promote_reply.request_replicaof as i32, 1);
+    try assert_eq_i32(slave_promote_reply.replicaof_promote as i32, 1);
+    resp_value_free(&slave_promote_parsed.value);
 
     var bad_port_parsed: RespParseResult = try parse_resp2(&"*3\r\n$9\r\nREPLICAOF\r\n$9\r\n127.0.0.1\r\n$4\r\nnope\r\n"[0: 44]);
     const bad_port_command: Command = try command_executor_test_command(&router, &bad_port_parsed);

@@ -263,7 +263,7 @@ export const COMMAND_FLAG_READONLY: u64 = 1u64;
 export const COMMAND_FLAG_WRITE: u64 = 2u64;
 export const COMMAND_FLAG_FAST: u64 = 4u64;
 
-const MIN_COMMAND_COUNT: usize = 227;
+const MIN_COMMAND_COUNT: usize = 228;
 
 fn command_router_name_eq(a: &[byte], b: &[byte]) bool {
     return bytes_ascii_case_eq(a, b);
@@ -983,6 +983,9 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
     }
     if index == 226 {
         return command_router_info(CommandType.command_sync, &"SYNC"[0: 4], 1, COMMAND_FLAG_READONLY, 0, 0, 0);
+    }
+    if index == 227 {
+        return command_router_info(CommandType.command_replicaof, &"SLAVEOF"[0: 7], 3, COMMAND_FLAG_READONLY, 0, 0, 0);
     }
     return error.CommandUnknown;
 }

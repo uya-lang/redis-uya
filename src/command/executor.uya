@@ -1424,7 +1424,7 @@ fn command_executor_growth_write_command(command: &Command) bool {
     if cmd_type == CommandType.command_setex || cmd_type == CommandType.command_psetex {
         return command.argc == 4;
     }
-    if cmd_type == CommandType.command_mset || cmd_type == CommandType.command_msetnx {
+    if cmd_type == CommandType.command_mset || cmd_type == CommandType.command_msetnx || cmd_type == CommandType.command_msetex {
         return command.argc >= 3;
     }
     if cmd_type == CommandType.command_hincrby || cmd_type == CommandType.command_hincrbyfloat {
@@ -1488,6 +1488,84 @@ fn command_executor_write_is_noop(engine: &Engine, command: &Command, now_ms: u6
                 return true;
             }
             index = index + 2;
+        }
+    }
+    if command.info.cmd_type == CommandType.command_msetex {
+        if command.argc < 4 {
+            return false;
+        }
+        const numkeys_data: &[byte] = command_executor_arg(command, 1) catch {
+            return false;
+        };
+        const numkeys_i64: i64 = command_executor_parse_i64(numkeys_data) catch {
+            return false;
+        };
+        if numkeys_i64 <= 0 {
+            return false;
+        }
+        const numkeys: usize = numkeys_i64 as usize;
+        const pairs_start: usize = 2;
+        const pairs_end: usize = pairs_start + numkeys * 2;
+        if pairs_end > command.argc {
+            return false;
+        }
+        var condition: i32 = 0;
+        var option_index: usize = pairs_end;
+        while option_index < command.argc {
+            const token: &[byte] = command_executor_arg(command, option_index) catch {
+                return false;
+            };
+            if command_executor_keyword_eq(token, &"NX"[0: 2]) {
+                if condition != 0 {
+                    return false;
+                }
+                condition = 1;
+                option_index = option_index + 1;
+                continue;
+            }
+            if command_executor_keyword_eq(token, &"XX"[0: 2]) {
+                if condition != 0 {
+                    return false;
+                }
+                condition = 2;
+                option_index = option_index + 1;
+                continue;
+            }
+            if command_executor_keyword_eq(token, &"KEEPTTL"[0: 7]) {
+                option_index = option_index + 1;
+                continue;
+            }
+            if command_executor_keyword_eq(token, &"EX"[0: 2]) ||
+                command_executor_keyword_eq(token, &"PX"[0: 2]) ||
+                command_executor_keyword_eq(token, &"EXAT"[0: 4]) ||
+                command_executor_keyword_eq(token, &"PXAT"[0: 4]) {
+                option_index = option_index + 2;
+                continue;
+            }
+            return false;
+        }
+        if condition == 1 {
+            var check_index_nx: usize = pairs_start;
+            while check_index_nx < pairs_end {
+                const key_nx: &[byte] = command_executor_arg(command, check_index_nx) catch {
+                    return false;
+                };
+                if command_executor_key_exists(engine, key_nx, now_ms) {
+                    return true;
+                }
+                check_index_nx = check_index_nx + 2;
+            }
+        } else if condition == 2 {
+            var check_index_xx: usize = pairs_start;
+            while check_index_xx < pairs_end {
+                const key_xx: &[byte] = command_executor_arg(command, check_index_xx) catch {
+                    return false;
+                };
+                if !command_executor_key_exists(engine, key_xx, now_ms) {
+                    return true;
+                }
+                check_index_xx = check_index_xx + 2;
+            }
         }
     }
     if command.info.cmd_type == CommandType.command_copy {
@@ -3790,6 +3868,143 @@ fn command_executor_msetnx(engine: &Engine, command: &Command, now_ms: u64) Comm
         const set_reply: CommandReply = command_executor_store_string(engine, key, value, now_ms);
         if set_reply.typ == CommandReplyType.reply_error {
             return set_reply;
+        }
+        index = index + 2;
+    }
+    return command_executor_integer(1);
+}
+
+fn command_executor_msetex(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 4 {
+        return command_executor_wrong_arity();
+    }
+    const numkeys_data: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const numkeys_i64: i64 = command_executor_parse_i64(numkeys_data) catch {
+        return command_executor_invalid_integer();
+    };
+    if numkeys_i64 <= 0 {
+        return command_executor_invalid_integer();
+    }
+    const numkeys: usize = numkeys_i64 as usize;
+    const pairs_start: usize = 2;
+    const pairs_end: usize = pairs_start + numkeys * 2;
+    if pairs_end > command.argc {
+        return command_executor_syntax_error();
+    }
+
+    var condition: i32 = 0;
+    var expire_mode: i32 = 0;
+    var expire_at_ms: u64 = 0u64;
+    var option_index: usize = pairs_end;
+    while option_index < command.argc {
+        const token: &[byte] = command_executor_arg(command, option_index) catch {
+            return command_executor_wrong_arity();
+        };
+        if command_executor_keyword_eq(token, &"NX"[0: 2]) {
+            if condition != 0 {
+                return command_executor_syntax_error();
+            }
+            condition = 1;
+            option_index = option_index + 1;
+            continue;
+        }
+        if command_executor_keyword_eq(token, &"XX"[0: 2]) {
+            if condition != 0 {
+                return command_executor_syntax_error();
+            }
+            condition = 2;
+            option_index = option_index + 1;
+            continue;
+        }
+        if command_executor_keyword_eq(token, &"KEEPTTL"[0: 7]) {
+            if expire_mode != 0 {
+                return command_executor_syntax_error();
+            }
+            expire_mode = 2;
+            option_index = option_index + 1;
+            continue;
+        }
+        if command_executor_keyword_eq(token, &"EX"[0: 2]) ||
+            command_executor_keyword_eq(token, &"PX"[0: 2]) ||
+            command_executor_keyword_eq(token, &"EXAT"[0: 4]) ||
+            command_executor_keyword_eq(token, &"PXAT"[0: 4]) {
+            if expire_mode != 0 || option_index + 1 >= command.argc {
+                return command_executor_syntax_error();
+            }
+            const expire_data: &[byte] = command_executor_arg(command, option_index + 1) catch {
+                return command_executor_wrong_arity();
+            };
+            const expire_value: i64 = command_executor_parse_i64(expire_data) catch {
+                return command_executor_invalid_integer();
+            };
+            if expire_value <= 0 {
+                return command_executor_invalid_integer();
+            }
+            expire_mode = 1;
+            if command_executor_keyword_eq(token, &"EX"[0: 2]) {
+                expire_at_ms = now_ms + (expire_value as u64) * 1000u64;
+            } else if command_executor_keyword_eq(token, &"PX"[0: 2]) {
+                expire_at_ms = now_ms + (expire_value as u64);
+            } else if command_executor_keyword_eq(token, &"EXAT"[0: 4]) {
+                expire_at_ms = (expire_value as u64) * 1000u64;
+            } else {
+                expire_at_ms = expire_value as u64;
+            }
+            option_index = option_index + 2;
+            continue;
+        }
+        return command_executor_syntax_error();
+    }
+
+    if condition == 1 {
+        var check_index_nx: usize = pairs_start;
+        while check_index_nx < pairs_end {
+            const key_nx: &[byte] = command_executor_arg(command, check_index_nx) catch {
+                return command_executor_wrong_arity();
+            };
+            if command_executor_key_exists(engine, key_nx, now_ms) {
+                return command_executor_integer(0);
+            }
+            check_index_nx = check_index_nx + 2;
+        }
+    } else if condition == 2 {
+        var check_index_xx: usize = pairs_start;
+        while check_index_xx < pairs_end {
+            const key_xx: &[byte] = command_executor_arg(command, check_index_xx) catch {
+                return command_executor_wrong_arity();
+            };
+            if !command_executor_key_exists(engine, key_xx, now_ms) {
+                return command_executor_integer(0);
+            }
+            check_index_xx = check_index_xx + 2;
+        }
+    }
+
+    var index: usize = pairs_start;
+    while index < pairs_end {
+        const key: &[byte] = command_executor_arg(command, index) catch {
+            return command_executor_wrong_arity();
+        };
+        const value: &[byte] = command_executor_arg(command, index + 1) catch {
+            return command_executor_wrong_arity();
+        };
+        if expire_mode == 2 {
+            const set_reply_keep: CommandReply = command_executor_replace_string_preserve_ttl(engine, key, value, now_ms);
+            if set_reply_keep.typ == CommandReplyType.reply_error {
+                return set_reply_keep;
+            }
+        } else {
+            const set_reply: CommandReply = command_executor_store_string(engine, key, value, now_ms);
+            if set_reply.typ == CommandReplyType.reply_error {
+                return set_reply;
+            }
+        }
+        if expire_mode == 1 {
+            _ = set_key_expire_at(engine, key, expire_at_ms) catch {
+                return command_executor_oom();
+            };
         }
         index = index + 2;
     }
@@ -16886,6 +17101,7 @@ fn command_executor_command_key_flags(info: &CommandInfo, key_ordinal: usize) &[
         info.cmd_type == CommandType.command_setex ||
         info.cmd_type == CommandType.command_psetex ||
         info.cmd_type == CommandType.command_mset ||
+        info.cmd_type == CommandType.command_msetex ||
         info.cmd_type == CommandType.command_setrange ||
         info.cmd_type == CommandType.command_restore {
         return &"OW|update"[0: 9];
@@ -17029,6 +17245,54 @@ fn command_executor_command_getkeysandflags_lmpop(
         const key: &[byte] = try command_executor_command_full_arg(command, key_index);
         try command_executor_command_append_getkeysandflags_item(buf, key, &"RW|access|delete"[0: 16], runtime.protocol_version);
         key_index = key_index + 1;
+    }
+}
+
+fn command_executor_command_msetex_numkeys(command: &Command) !usize {
+    const full_argc: usize = command_executor_command_full_argc(command);
+    if full_argc < 4 {
+        return error.CommandWrongArity;
+    }
+    const numkeys_data: &[byte] = try command_executor_command_full_arg(command, 1);
+    const numkeys_i64: i64 = command_executor_parse_i64(numkeys_data) catch {
+        return error.CommandWrongArity;
+    };
+    if numkeys_i64 <= 0 {
+        return error.CommandWrongArity;
+    }
+    const numkeys: usize = numkeys_i64 as usize;
+    const pairs_end: usize = 2 + numkeys * 2;
+    if pairs_end > full_argc {
+        return error.CommandWrongArity;
+    }
+    return numkeys;
+}
+
+fn command_executor_command_getkeys_msetex(command: &Command, buf: &Sds) !void {
+    const numkeys: usize = try command_executor_command_msetex_numkeys(command);
+    try command_executor_resp_collection_prefix(buf, &"*"[0: 1], numkeys);
+    var key_index: usize = 2;
+    const pairs_end: usize = 2 + numkeys * 2;
+    while key_index < pairs_end {
+        const key: &[byte] = try command_executor_command_full_arg(command, key_index);
+        try command_executor_command_append_getkeys_key(buf, key);
+        key_index = key_index + 2;
+    }
+}
+
+fn command_executor_command_getkeysandflags_msetex(
+    runtime: &CommandRuntimeInfo,
+    command: &Command,
+    buf: &Sds,
+) !void {
+    const numkeys: usize = try command_executor_command_msetex_numkeys(command);
+    try command_executor_resp_collection_prefix(buf, &"*"[0: 1], numkeys);
+    var key_index: usize = 2;
+    const pairs_end: usize = 2 + numkeys * 2;
+    while key_index < pairs_end {
+        const key: &[byte] = try command_executor_command_full_arg(command, key_index);
+        try command_executor_command_append_getkeysandflags_item(buf, key, &"OW|update"[0: 9], runtime.protocol_version);
+        key_index = key_index + 2;
     }
 }
 
@@ -17273,6 +17537,19 @@ fn command_executor_command_getkeys(runtime: &CommandRuntimeInfo, command: &Comm
             };
         } else {
             _ = command_executor_command_getkeys_blmpop(command, &buf) catch {
+                return command_executor_command_invalid_command_arity();
+            };
+        }
+        return command_executor_owned_raw(buf.buf[0: buf.len]);
+    }
+
+    if info.cmd_type == CommandType.command_msetex {
+        if with_flags {
+            _ = command_executor_command_getkeysandflags_msetex(runtime, command, &buf) catch {
+                return command_executor_command_invalid_command_arity();
+            };
+        } else {
+            _ = command_executor_command_getkeys_msetex(command, &buf) catch {
                 return command_executor_command_invalid_command_arity();
             };
         }
@@ -17835,6 +18112,9 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
     }
     if command.info.cmd_type == CommandType.command_msetnx {
         return command_executor_msetnx(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_msetex {
+        return command_executor_msetex(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_getrange {
         return command_executor_getrange(engine, command, now_ms);

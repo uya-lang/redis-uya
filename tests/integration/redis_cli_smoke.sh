@@ -235,6 +235,42 @@ if [[ "$MSETNX_CONFLICT_RESULT" != "0" ]]; then
     exit 1
 fi
 
+MSETEX_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" msetex 2 me1 v1 me2 v2 px 1500)"
+if [[ "$MSETEX_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected MSETEX 1, got '$MSETEX_RESULT'" >&2
+    exit 1
+fi
+
+MSETEX_MGET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" mget me1 me2)"
+if [[ "$MSETEX_MGET_RESULT" != $'v1\nv2' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected MSETEX values, got '$MSETEX_MGET_RESULT'" >&2
+    exit 1
+fi
+
+MSETEX_PTTL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" pttl me1)"
+if (( MSETEX_PTTL_RESULT <= 0 || MSETEX_PTTL_RESULT > 1500 )); then
+    echo "[FAIL] integration/redis_cli_smoke: expected MSETEX PTTL in range, got '$MSETEX_PTTL_RESULT'" >&2
+    exit 1
+fi
+
+MSETEX_NX_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" msetex 2 me1 x me3 v3 nx)"
+if [[ "$MSETEX_NX_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected MSETEX NX conflict 0, got '$MSETEX_NX_RESULT'" >&2
+    exit 1
+fi
+
+MSETEX_ME3_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" get me3)"
+if [[ "$MSETEX_ME3_RESULT" != "" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected MSETEX NX to leave me3 missing, got '$MSETEX_ME3_RESULT'" >&2
+    exit 1
+fi
+
+MSETEX_XX_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" msetex 2 me1 x me2 y xx)"
+if [[ "$MSETEX_XX_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected MSETEX XX 1, got '$MSETEX_XX_RESULT'" >&2
+    exit 1
+fi
+
 STRLEN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" strlen key)"
 if [[ "$STRLEN_RESULT" != "5" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected strlen 5, got '$STRLEN_RESULT'" >&2

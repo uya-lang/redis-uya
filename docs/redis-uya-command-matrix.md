@@ -1,7 +1,7 @@
 # redis-uya command matrix
 
 > version: v0.9.1-dev
-> date: 2026-06-20
+> date: 2026-06-21
 > source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`
 > runtime source: `src/command/catalog_generated.uya`
 
@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 175 | 3 | 3 | 38 |
+| Tier A: standalone core | 365 | 259 | 146 | 176 | 3 | 3 | 37 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `182` |
+| `partial` | `183` |
 | `standalone-error` | `29` |
 | `alias` | `3` |
-| `deferred` | `191` |
+| `deferred` | `190` |
 
 ## Group counts
 
@@ -398,7 +398,7 @@
 | `monitor` | `server` | `partial` | `-` | `1` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `move` | `generic` | `partial` | `-` | `3` | `-` | `no` | `@keyspace, @write, @fast` |
 | `mset` | `string` | `full` | `-` | `-3` | `-` | `no` | `@write, @string, @slow` |
-| `msetex` | `string` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@write, @string, @slow` |
+| `msetex` | `string` | `partial` | `-` | `-4` | `-` | `no` | `@write, @string, @slow` |
 | `msetnx` | `string` | `full` | `-` | `-3` | `-` | `no` | `@write, @string, @slow` |
 | `multi` | `transactions` | `full` | `-` | `1` | `-` | `no` | `@fast, @transaction` |
 | `object` | `generic` | `partial` | `-` | `-2` | `-` | `no` | `@slow` |

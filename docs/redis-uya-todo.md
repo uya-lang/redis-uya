@@ -420,6 +420,7 @@
 - [x] String 第二批计数：`INCR`、`DECR`、`INCRBY`、`DECRBY`
 - [x] String 第三批原子写入：`GETSET`、`SETNX`、`SETEX`
 - [x] String 第四批多 key：`MGET`、`MSET`、`MSETNX`
+- [x] String 多 key TTL partial：`MSETEX`（`NX/XX`、`EX/PX/EXAT/PXAT/KEEPTTL`）
 - [x] String 第五批范围读写：`SETRANGE`、`GETRANGE`
 - [x] String 第六批浮点计数：`INCRBYFLOAT`
 - [x] Hash 第一批数值：`HINCRBY`、`HINCRBYFLOAT`

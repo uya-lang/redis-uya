@@ -159,6 +159,15 @@ class RedisPySubsetClient:
             parts.append(value.encode())
         return int(self._request(*parts))
 
+    def msetex(self, mapping: dict[str, str], *options: str) -> int:
+        parts: list[bytes] = [b"MSETEX", str(len(mapping)).encode()]
+        for key, value in mapping.items():
+            parts.append(key.encode())
+            parts.append(value.encode())
+        for option in options:
+            parts.append(option.encode())
+        return int(self._request(*parts))
+
     def getrange(self, key: str, start: int, stop: int) -> bytes:
         result = self._request(b"GETRANGE", key.encode(), str(start).encode(), str(stop).encode())
         assert isinstance(result, bytes)
@@ -1316,6 +1325,13 @@ def run_smoke() -> None:
             assert client.mget("mk1", "missing", "mk2") == [b"v1", None, b"v2"]
             assert client.msetnx({"mn1": "a", "mn2": "b"}) == 1
             assert client.msetnx({"mn1": "x", "mn3": "y"}) == 0
+            assert client.msetex({"me1": "v1", "me2": "v2"}, "PX", "1500") == 1
+            assert client.mget("me1", "me2") == [b"v1", b"v2"]
+            assert 0 < client.pttl("me1") <= 1500
+            assert client.msetex({"me1": "x", "me3": "v3"}, "NX") == 0
+            assert client.get("me3") is None
+            assert client.msetex({"me1": "x", "me2": "y"}, "XX") == 1
+            assert client.mget("me1", "me2") == [b"x", b"y"]
             assert client.strlen("key") == 5
             assert client.append("key", "++") == 7
             assert client.getrange("key", 1, 3) == b"alu"
@@ -1664,7 +1680,7 @@ def run_smoke() -> None:
             assert client.delex("delex-key", "IFNE", "other") == 1
             assert client.delex("delex-key") == 0
             assert client.delete("counter") == 1
-            assert client.delete("fcounter", "nx-key", "gs-key", "sx-key", "mk1", "mk2", "mn1", "mn2", "allones", "srca", "srcb", "dstbit", "bf", "hll", "dsthll", "emptyhll", "geo", "geodst", "distdst", "lua-key", "slow-k", "latency-k") == 22
+            assert client.delete("fcounter", "nx-key", "gs-key", "sx-key", "mk1", "mk2", "mn1", "mn2", "me1", "me2", "allones", "srca", "srcb", "dstbit", "bf", "hll", "dsthll", "emptyhll", "geo", "geodst", "distdst", "lua-key", "slow-k", "latency-k") == 24
             assert client.echo("hi") == b"hi"
             assert client.key_type("key") == "string"
             assert client.dbsize() == 1

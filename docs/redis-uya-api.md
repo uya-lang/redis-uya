@@ -1900,6 +1900,28 @@ MSETNX key value [key value ...]
 - 所有 key 都不存在并完成写入：`1`
 - 任一 key 已存在：`0`
 
+### `MSETEX`
+
+格式：
+
+```text
+MSETEX numkeys key value [key value ...] [NX|XX] [EX seconds|PX milliseconds|EXAT unix-time-seconds|PXAT unix-time-milliseconds|KEEPTTL]
+```
+
+返回：
+
+- 条件满足并完成写入：`1`
+- `NX` 模式下任一 key 已存在，或 `XX` 模式下任一 key 不存在：`0`
+
+说明：
+
+- `numkeys` 必须为正整数，后续必须提供对应数量的 key/value 对
+- `NX` 与 `XX` 互斥；`EX/PX/EXAT/PXAT/KEEPTTL` 互斥
+- `EX/PX/EXAT/PXAT` 参数必须为正整数，成功写入时对所有 key 使用同一个过期时间
+- `KEEPTTL` 成功写入时保留每个已存在 key 的原 TTL；新 key 不设置 TTL
+- 条件失败时不写入，不进入 AOF/replication backlog
+- 当前实现为 partial：支持 Redis 兼容面中的批量字符串写入、条件与 TTL 选项，暂不提供失败中途回滚保证
+
 ### `GETRANGE`
 
 格式：

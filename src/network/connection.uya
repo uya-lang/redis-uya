@@ -30,11 +30,11 @@ use src.network.protocol.resp_batch_value;
 use src.network.protocol.resp_batch_value_consumed;
 use src.network.protocol.resp_value_free;
 use src.persistence.aof.AofWriter;
-use src.persistence.aof.aof_append_command_at;
-use src.persistence.aof.aof_append_command_to_sds_at;
+use src.persistence.aof.aof_append_command_result_at;
+use src.persistence.aof.aof_append_command_result_to_sds_at;
 use src.persistence.rdb.rdb_dump_object_at;
 use src.replication.backlog.ReplicationBacklog;
-use src.replication.backlog.replication_backlog_append_command_at;
+use src.replication.backlog.replication_backlog_append_command_result_at;
 use src.replication.backlog.replication_backlog_slice_from;
 use src.replication.state.ReplicationRole;
 use src.storage.engine.Engine;
@@ -3355,6 +3355,9 @@ fn connection_should_append_aof(command: &Command, reply: &CommandReply) bool {
     if command.info.cmd_type == CommandType.command_getex {
         return command.argc > 2;
     }
+    if command.info.cmd_type == CommandType.command_msetex {
+        return reply.typ == CommandReplyType.reply_integer && reply.integer == 1;
+    }
     if command.info.cmd_type == CommandType.command_sort {
         if command.argc < 4 {
             return false;
@@ -3907,21 +3910,21 @@ fn connection_execute_script_effect_at(
 
     var reply: CommandReply = command_execute_with_runtime_at(engine, runtime, &inner_command, now_ms);
     if aof != null && connection_should_append_aof(&inner_command, &reply) {
-        _ = aof_append_command_at(aof, &inner_command, raw_cmd, now_ms) catch {
+        _ = aof_append_command_result_at(aof, &inner_command, raw_cmd, now_ms, &reply) catch {
             command_reply_cleanup(&reply);
             resp_value_free(&parsed.value);
             object_free(raw_obj);
             return connection_error_reply(&"ERR AOF append failed"[0: 21]);
         };
         if rewrite_buf != null && runtime.aof_rewrite_in_progress && reply.typ != CommandReplyType.reply_error {
-            _ = aof_append_command_to_sds_at(rewrite_buf, &inner_command, raw_cmd, now_ms) catch {
+            _ = aof_append_command_result_to_sds_at(rewrite_buf, &inner_command, raw_cmd, now_ms, &reply) catch {
                 if rewrite_failed != null {
                     *rewrite_failed = true;
                 }
             };
         }
         if backlog != null && runtime.replication_role == ReplicationRole.role_master && reply.typ != CommandReplyType.reply_error {
-            _ = replication_backlog_append_command_at(backlog, &inner_command, raw_cmd, now_ms) catch {};
+            _ = replication_backlog_append_command_result_at(backlog, &inner_command, raw_cmd, now_ms, &reply) catch {};
         }
     }
     resp_value_free(&parsed.value);
@@ -4163,19 +4166,19 @@ fn connection_transaction_execute_at(
             command.info.cmd_type != CommandType.command_script &&
             aof != null &&
             connection_should_append_aof(&command, &reply) {
-            _ = aof_append_command_at(aof, &command, raw_cmd, now_ms) catch {
+            _ = aof_append_command_result_at(aof, &command, raw_cmd, now_ms, &reply) catch {
                 command_reply_cleanup(&reply);
                 reply = connection_error_reply(&"ERR AOF append failed"[0: 21]);
             };
             if rewrite_buf != null && runtime.aof_rewrite_in_progress && reply.typ != CommandReplyType.reply_error {
-                _ = aof_append_command_to_sds_at(rewrite_buf, &command, raw_cmd, now_ms) catch {
+                _ = aof_append_command_result_to_sds_at(rewrite_buf, &command, raw_cmd, now_ms, &reply) catch {
                     if rewrite_failed != null {
                         *rewrite_failed = true;
                     }
                 };
             }
             if backlog != null && runtime.replication_role == ReplicationRole.role_master && reply.typ != CommandReplyType.reply_error {
-                _ = replication_backlog_append_command_at(backlog, &command, raw_cmd, now_ms) catch {};
+                _ = replication_backlog_append_command_result_at(backlog, &command, raw_cmd, now_ms, &reply) catch {};
             }
         }
 
@@ -4292,7 +4295,7 @@ fn connection_execute_standard_command_at(
         runtime.lastsave_ms = now_ms;
     }
     if aof != null && connection_should_append_aof(command, &reply) {
-        _ = aof_append_command_at(aof, command, input[0: parsed.consumed], now_ms) catch {
+        _ = aof_append_command_result_at(aof, command, input[0: parsed.consumed], now_ms, &reply) catch {
             const aof_reply: CommandReply = connection_error_reply(&"ERR AOF append failed"[0: 21]);
             const aof_n: usize = try connection_encode_reply_for_command(tx, command, &aof_reply, out, out_cap, reply_off_before, reply_skip_before);
             command_reply_cleanup(&reply);
@@ -4300,14 +4303,14 @@ fn connection_execute_standard_command_at(
             return ConnectionProcessResult{ response_len: aof_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
         };
         if rewrite_buf != null && runtime.aof_rewrite_in_progress {
-            _ = aof_append_command_to_sds_at(rewrite_buf, command, input[0: parsed.consumed], now_ms) catch {
+            _ = aof_append_command_result_to_sds_at(rewrite_buf, command, input[0: parsed.consumed], now_ms, &reply) catch {
                 if rewrite_failed != null {
                     *rewrite_failed = true;
                 }
             };
         }
         if backlog != null && runtime.replication_role == ReplicationRole.role_master {
-            _ = replication_backlog_append_command_at(backlog, command, input[0: parsed.consumed], now_ms) catch {};
+            _ = replication_backlog_append_command_result_at(backlog, command, input[0: parsed.consumed], now_ms, &reply) catch {};
         }
     }
     const request_replicaof: bool = reply.request_replicaof;

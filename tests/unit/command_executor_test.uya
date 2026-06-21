@@ -772,6 +772,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"geosearchstore"[0: 14], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"delex"[0: 5], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"hgetdel"[0: 7], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"msetex"[0: 6], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"hrandfield"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"waitaof"[0: 7], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"swapdb"[0: 6], CommandCatalogStatus.status_partial);
@@ -2344,11 +2345,61 @@ export fn test_command_set_get_del_exists() !void {
     try assert_eq_i32(msetnx_conflict_reply.integer as i32, 0);
     resp_value_free(&msetnx_conflict_parsed.value);
 
-    var multi_del_parsed: RespParseResult = try parse_resp2(&"*5\r\n$3\r\nDEL\r\n$2\r\nk1\r\n$2\r\nk2\r\n$3\r\nnx1\r\n$3\r\nnx2\r\n"[0: 47]);
+    var msetex_parsed: RespParseResult = try parse_resp2(&"*6\r\n$6\r\nMSETEX\r\n$1\r\n2\r\n$3\r\nmx1\r\n$1\r\na\r\n$3\r\nmx2\r\n$1\r\nb\r\n"[0: 55]);
+    const msetex_command: Command = try command_executor_test_command(&router, &msetex_parsed);
+    const msetex_reply: CommandReply = command_execute_at(&engine, &msetex_command, 1000u64);
+    try assert_eq_i32(msetex_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(msetex_reply.integer as i32, 1);
+    resp_value_free(&msetex_parsed.value);
+
+    var msetex_mget_parsed: RespParseResult = try parse_resp2(&"*3\r\n$4\r\nMGET\r\n$3\r\nmx1\r\n$3\r\nmx2\r\n"[0: 32]);
+    const msetex_mget_command: Command = try command_executor_test_command(&router, &msetex_mget_parsed);
+    var msetex_mget_reply: CommandReply = command_execute_at(&engine, &msetex_mget_command, 1000u64);
+    const msetex_mget_len: usize = try connection_encode_reply(&msetex_mget_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: msetex_mget_len], &"*2\r\n$1\r\na\r\n$1\r\nb\r\n"[0: 18]));
+    command_reply_cleanup(&msetex_mget_reply);
+    resp_value_free(&msetex_mget_parsed.value);
+
+    var msetex_nx_conflict_parsed: RespParseResult = try parse_resp2(&"*7\r\n$6\r\nMSETEX\r\n$1\r\n2\r\n$3\r\nmx1\r\n$1\r\nx\r\n$3\r\nmx3\r\n$1\r\nc\r\n$2\r\nNX\r\n"[0: 63]);
+    const msetex_nx_conflict_command: Command = try command_executor_test_command(&router, &msetex_nx_conflict_parsed);
+    const msetex_nx_conflict_reply: CommandReply = command_execute_at(&engine, &msetex_nx_conflict_command, 1000u64);
+    try assert_eq_i32(msetex_nx_conflict_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(msetex_nx_conflict_reply.integer as i32, 0);
+    resp_value_free(&msetex_nx_conflict_parsed.value);
+
+    var msetex_get_mx3_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nGET\r\n$3\r\nmx3\r\n"[0: 22]);
+    const msetex_get_mx3_command: Command = try command_executor_test_command(&router, &msetex_get_mx3_parsed);
+    const msetex_get_mx3_reply: CommandReply = command_execute_at(&engine, &msetex_get_mx3_command, 1000u64);
+    try assert_eq_i32(msetex_get_mx3_reply.typ as i32, CommandReplyType.reply_null_bulk as i32);
+    resp_value_free(&msetex_get_mx3_parsed.value);
+
+    var msetex_xx_missing_parsed: RespParseResult = try parse_resp2(&"*7\r\n$6\r\nMSETEX\r\n$1\r\n2\r\n$3\r\nmx1\r\n$1\r\nx\r\n$7\r\nmissing\r\n$1\r\nc\r\n$2\r\nXX\r\n"[0: 67]);
+    const msetex_xx_missing_command: Command = try command_executor_test_command(&router, &msetex_xx_missing_parsed);
+    const msetex_xx_missing_reply: CommandReply = command_execute_at(&engine, &msetex_xx_missing_command, 1000u64);
+    try assert_eq_i32(msetex_xx_missing_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(msetex_xx_missing_reply.integer as i32, 0);
+    resp_value_free(&msetex_xx_missing_parsed.value);
+
+    var msetex_xx_parsed: RespParseResult = try parse_resp2(&"*7\r\n$6\r\nMSETEX\r\n$1\r\n2\r\n$3\r\nmx1\r\n$1\r\nx\r\n$3\r\nmx2\r\n$1\r\ny\r\n$2\r\nXX\r\n"[0: 63]);
+    const msetex_xx_command: Command = try command_executor_test_command(&router, &msetex_xx_parsed);
+    const msetex_xx_reply: CommandReply = command_execute_at(&engine, &msetex_xx_command, 1000u64);
+    try assert_eq_i32(msetex_xx_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(msetex_xx_reply.integer as i32, 1);
+    resp_value_free(&msetex_xx_parsed.value);
+
+    var msetex_mget_xx_parsed: RespParseResult = try parse_resp2(&"*3\r\n$4\r\nMGET\r\n$3\r\nmx1\r\n$3\r\nmx2\r\n"[0: 32]);
+    const msetex_mget_xx_command: Command = try command_executor_test_command(&router, &msetex_mget_xx_parsed);
+    var msetex_mget_xx_reply: CommandReply = command_execute_at(&engine, &msetex_mget_xx_command, 1000u64);
+    const msetex_mget_xx_len: usize = try connection_encode_reply(&msetex_mget_xx_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: msetex_mget_xx_len], &"*2\r\n$1\r\nx\r\n$1\r\ny\r\n"[0: 18]));
+    command_reply_cleanup(&msetex_mget_xx_reply);
+    resp_value_free(&msetex_mget_xx_parsed.value);
+
+    var multi_del_parsed: RespParseResult = try parse_resp2(&"*7\r\n$3\r\nDEL\r\n$2\r\nk1\r\n$2\r\nk2\r\n$3\r\nnx1\r\n$3\r\nnx2\r\n$3\r\nmx1\r\n$3\r\nmx2\r\n"[0: 65]);
     const multi_del_command: Command = try command_executor_test_command(&router, &multi_del_parsed);
     const multi_del_reply: CommandReply = command_execute_at(&engine, &multi_del_command, 1000u64);
     try assert_eq_i32(multi_del_reply.typ as i32, CommandReplyType.reply_integer as i32);
-    try assert_eq_i32(multi_del_reply.integer as i32, 4);
+    try assert_eq_i32(multi_del_reply.integer as i32, 6);
     resp_value_free(&multi_del_parsed.value);
 
     var delex_set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$9\r\ndelex-key\r\n$5\r\nvalue\r\n"[0: 39]);
@@ -7278,6 +7329,46 @@ export fn test_command_expire_and_ttl() !void {
     try assert_eq_i32(psetex_pttl_reply.integer as i32, 1500);
     resp_value_free(&psetex_pttl_parsed.value);
 
+    var msetex_px_parsed: RespParseResult = try parse_resp2(&"*6\r\n$6\r\nMSETEX\r\n$1\r\n1\r\n$3\r\nmt1\r\n$1\r\nv\r\n$2\r\nPX\r\n$4\r\n1500\r\n"[0: 57]);
+    const msetex_px_command: Command = try command_executor_test_command(&router, &msetex_px_parsed);
+    const msetex_px_reply: CommandReply = command_execute_at(&engine, &msetex_px_command, 16000u64);
+    try assert_eq_i32(msetex_px_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(msetex_px_reply.integer as i32, 1);
+    resp_value_free(&msetex_px_parsed.value);
+
+    var msetex_pttl_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nPTTL\r\n$3\r\nmt1\r\n"[0: 23]);
+    const msetex_pttl_command: Command = try command_executor_test_command(&router, &msetex_pttl_parsed);
+    const msetex_pttl_reply: CommandReply = command_execute_at(&engine, &msetex_pttl_command, 16000u64);
+    try assert_eq_i32(msetex_pttl_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(msetex_pttl_reply.integer as i32, 1500);
+    resp_value_free(&msetex_pttl_parsed.value);
+
+    var setex_keep_parsed: RespParseResult = try parse_resp2(&"*4\r\n$5\r\nSETEX\r\n$4\r\nkeep\r\n$2\r\n10\r\n$3\r\nold\r\n"[0: 42]);
+    const setex_keep_command: Command = try command_executor_test_command(&router, &setex_keep_parsed);
+    _ = command_execute_at(&engine, &setex_keep_command, 17000u64);
+    resp_value_free(&setex_keep_parsed.value);
+
+    var msetex_keep_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nMSETEX\r\n$1\r\n1\r\n$4\r\nkeep\r\n$3\r\nnew\r\n$7\r\nKEEPTTL\r\n"[0: 55]);
+    const msetex_keep_command: Command = try command_executor_test_command(&router, &msetex_keep_parsed);
+    const msetex_keep_reply: CommandReply = command_execute_at(&engine, &msetex_keep_command, 17000u64);
+    try assert_eq_i32(msetex_keep_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(msetex_keep_reply.integer as i32, 1);
+    resp_value_free(&msetex_keep_parsed.value);
+
+    var msetex_keep_get_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nGET\r\n$4\r\nkeep\r\n"[0: 23]);
+    const msetex_keep_get_command: Command = try command_executor_test_command(&router, &msetex_keep_get_parsed);
+    const msetex_keep_get_reply: CommandReply = command_execute_at(&engine, &msetex_keep_get_command, 17000u64);
+    try assert_eq_i32(msetex_keep_get_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(msetex_keep_get_reply.data, &"new"[0: 3]));
+    resp_value_free(&msetex_keep_get_parsed.value);
+
+    var msetex_keep_ttl_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nTTL\r\n$4\r\nkeep\r\n"[0: 23]);
+    const msetex_keep_ttl_command: Command = try command_executor_test_command(&router, &msetex_keep_ttl_parsed);
+    const msetex_keep_ttl_reply: CommandReply = command_execute_at(&engine, &msetex_keep_ttl_command, 17000u64);
+    try assert_eq_i32(msetex_keep_ttl_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(msetex_keep_ttl_reply.integer as i32, 10);
+    resp_value_free(&msetex_keep_ttl_parsed.value);
+
     var sx_expired_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nGET\r\n$6\r\nsx-key\r\n"[0: 25]);
     const sx_expired_command: Command = try command_executor_test_command(&router, &sx_expired_parsed);
     const sx_expired_reply: CommandReply = command_execute_at(&engine, &sx_expired_command, 9000u64);
@@ -8483,6 +8574,24 @@ export fn test_command_error_paths() !void {
     const set_option_reply: CommandReply = command_execute_at(&engine, &set_option_command, 1000u64);
     try assert_eq_i32(set_option_reply.typ as i32, CommandReplyType.reply_error as i32);
     resp_value_free(&set_option_parsed.value);
+
+    var msetex_bad_condition_parsed: RespParseResult = try parse_resp2(&"*6\r\n$6\r\nMSETEX\r\n$1\r\n1\r\n$3\r\nbad\r\n$1\r\nv\r\n$2\r\nNX\r\n$2\r\nXX\r\n"[0: 55]);
+    const msetex_bad_condition_command: Command = try command_executor_test_command(&router, &msetex_bad_condition_parsed);
+    const msetex_bad_condition_reply: CommandReply = command_execute_at(&engine, &msetex_bad_condition_command, 1000u64);
+    try assert_eq_i32(msetex_bad_condition_reply.typ as i32, CommandReplyType.reply_error as i32);
+    resp_value_free(&msetex_bad_condition_parsed.value);
+
+    var msetex_bad_ttl_parsed: RespParseResult = try parse_resp2(&"*6\r\n$6\r\nMSETEX\r\n$1\r\n1\r\n$3\r\nbad\r\n$1\r\nv\r\n$2\r\nPX\r\n$1\r\n0\r\n"[0: 54]);
+    const msetex_bad_ttl_command: Command = try command_executor_test_command(&router, &msetex_bad_ttl_parsed);
+    const msetex_bad_ttl_reply: CommandReply = command_execute_at(&engine, &msetex_bad_ttl_command, 1000u64);
+    try assert_eq_i32(msetex_bad_ttl_reply.typ as i32, CommandReplyType.reply_error as i32);
+    resp_value_free(&msetex_bad_ttl_parsed.value);
+
+    var msetex_bad_numkeys_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nMSETEX\r\n$1\r\n2\r\n$3\r\nbad\r\n$1\r\nv\r\n"[0: 39]);
+    const msetex_bad_numkeys_command: Command = try command_executor_test_command(&router, &msetex_bad_numkeys_parsed);
+    const msetex_bad_numkeys_reply: CommandReply = command_execute_at(&engine, &msetex_bad_numkeys_command, 1000u64);
+    try assert_eq_i32(msetex_bad_numkeys_reply.typ as i32, CommandReplyType.reply_error as i32);
+    resp_value_free(&msetex_bad_numkeys_parsed.value);
 
     var expire_bad_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nEXPIRE\r\n$3\r\nkey\r\n$3\r\nbad\r\n"[0: 36]);
     const expire_bad_command: Command = try command_executor_test_command(&router, &expire_bad_parsed);

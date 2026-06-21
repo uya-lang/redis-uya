@@ -1,7 +1,9 @@
 // replication/backlog.uya - minimal replication backlog buffer.
 
 use src.command.router.Command;
+use src.command.executor.CommandReply;
 use src.persistence.aof.aof_append_command_to_sds_at;
+use src.persistence.aof.aof_append_command_result_to_sds_at;
 use src.storage.sds.Sds;
 use src.storage.sds.sds_empty;
 use src.storage.sds.sds_free;
@@ -119,6 +121,17 @@ export fn replication_backlog_append_command_at(backlog: &ReplicationBacklog, co
     }
     const before_len: usize = sds_len(&backlog.history);
     try aof_append_command_to_sds_at(&backlog.history, command, raw, now_ms);
+    const after_len: usize = sds_len(&backlog.history);
+    backlog.master_offset = backlog.master_offset + ((after_len - before_len) as u64);
+    try replication_backlog_trim(backlog);
+}
+
+export fn replication_backlog_append_command_result_at(backlog: &ReplicationBacklog, command: &Command, raw: &[byte], now_ms: u64, reply: &CommandReply) !void {
+    if !backlog.active {
+        return;
+    }
+    const before_len: usize = sds_len(&backlog.history);
+    try aof_append_command_result_to_sds_at(&backlog.history, command, raw, now_ms, reply);
     const after_len: usize = sds_len(&backlog.history);
     backlog.master_offset = backlog.master_offset + ((after_len - before_len) as u64);
     try replication_backlog_trim(backlog);

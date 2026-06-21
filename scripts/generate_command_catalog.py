@@ -338,6 +338,7 @@ PARTIAL_NAMES = {
     "copy",
     "delex",
     "hgetdel",
+    "msetex",
     "flushall",
     "flushdb",
     "hello",

@@ -988,6 +988,36 @@ export fn test_aof_expire_replays_absolute_deadline() !void {
     _ = unlink(psetex_path);
     try assert_eq_i32(used_memory() as i32, 0);
 
+    const msetex_path: &const byte = "build/test-aof-msetex.aof";
+    _ = unlink(msetex_path);
+
+    var msetex_writer: AofWriter = try aof_open_truncate(msetex_path);
+    var msetex_engine: Engine = engine_new();
+    const msetex_result: ConnectionProcessResult = try connection_process_input_with_aof_at(
+        &msetex_engine,
+        &router,
+        &msetex_writer,
+        &"*8\r\n$6\r\nMSETEX\r\n$1\r\n2\r\n$3\r\nae1\r\n$2\r\nv1\r\n$3\r\nae2\r\n$2\r\nv2\r\n$2\r\nPX\r\n$4\r\n1500\r\n"[0: 75],
+        &out[0],
+        256,
+        1000u64,
+    );
+    try assert_true(aof_test_slice_eq(out[0: msetex_result.response_len], &":1\r\n"[0: 4]));
+    aof_close(&msetex_writer);
+    engine_free(&msetex_engine);
+
+    var replay_msetex_engine: Engine = engine_new();
+    try aof_replay_file_at(msetex_path, &replay_msetex_engine, &router, 2000u64);
+    const live_msetex_1: &RedisObject = try lookup_key_at(&replay_msetex_engine, &"ae1"[0: 3], 2000u64);
+    try assert_true(aof_test_slice_eq(live_msetex_1.value.buf[0: live_msetex_1.value.len], &"v1"[0: 2]));
+    const live_msetex_2: &RedisObject = try lookup_key_at(&replay_msetex_engine, &"ae2"[0: 3], 2000u64);
+    try assert_true(aof_test_slice_eq(live_msetex_2.value.buf[0: live_msetex_2.value.len], &"v2"[0: 2]));
+    try assert_true(aof_key_missing_at(&replay_msetex_engine, &"ae1"[0: 3], 2600u64));
+    try assert_true(aof_key_missing_at(&replay_msetex_engine, &"ae2"[0: 3], 2600u64));
+    engine_free(&replay_msetex_engine);
+    _ = unlink(msetex_path);
+    try assert_eq_i32(used_memory() as i32, 0);
+
     const getex_path: &const byte = "build/test-aof-getex-px.aof";
     _ = unlink(getex_path);
 

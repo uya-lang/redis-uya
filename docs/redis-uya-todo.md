@@ -422,7 +422,7 @@
 - [x] String 第四批多 key：`MGET`、`MSET`、`MSETNX`
 - [x] String 多 key TTL partial：`MSETEX`（`NX/XX`、`EX/PX/EXAT/PXAT/KEEPTTL`）
 - [x] String LCS partial：`LCS key1 key2 [LEN]`（`IDX/MINMATCHLEN/WITHMATCHLEN` 暂未支持）
-- [x] String 第五批范围读写：`SETRANGE`、`GETRANGE`
+- [x] String 第五批范围读写：`SETRANGE`、`GETRANGE`、`SUBSTR` alias
 - [x] String 第六批浮点计数：`INCRBYFLOAT`
 - [x] Hash 第一批数值：`HINCRBY`、`HINCRBYFLOAT`
 - [x] Hash 第二批视图：`HKEYS`、`HVALS`、`HGETALL`、`HRANDFIELD`

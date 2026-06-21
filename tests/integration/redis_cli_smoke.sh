@@ -302,6 +302,12 @@ if [[ "$GETRANGE_RESULT" != "alu" ]]; then
     exit 1
 fi
 
+SUBSTR_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" substr key 1 3)"
+if [[ "$SUBSTR_RESULT" != "alu" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected substr alu, got '$SUBSTR_RESULT'" >&2
+    exit 1
+fi
+
 BITPOS_MISSING_ZERO_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" bitpos missing 0)"
 if [[ "$BITPOS_MISSING_ZERO_RESULT" != "0" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected missing BITPOS 0 => 0, got '$BITPOS_MISSING_ZERO_RESULT'" >&2

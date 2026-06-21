@@ -1949,12 +1949,17 @@ LCS key1 key2 LEN
 
 ```text
 GETRANGE key start end
+SUBSTR key start end
 ```
 
 返回：
 
 - 返回闭区间 `[start, end]` 的子串，支持负索引
 - key 不存在或范围为空时返回空 Bulk String
+
+说明：
+
+- `SUBSTR` 是 `GETRANGE` 的兼容 alias，执行语义、返回和 key 提取标记一致
 
 ### `SETRANGE`
 

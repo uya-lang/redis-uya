@@ -18264,7 +18264,7 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
     if command.info.cmd_type == CommandType.command_msetex {
         return command_executor_msetex(engine, command, now_ms);
     }
-    if command.info.cmd_type == CommandType.command_getrange {
+    if command.info.cmd_type == CommandType.command_getrange || command.info.cmd_type == CommandType.command_substr {
         return command_executor_getrange(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_lcs {

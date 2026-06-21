@@ -774,6 +774,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"hgetdel"[0: 7], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"msetex"[0: 6], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"lcs"[0: 3], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"substr"[0: 6], CommandCatalogStatus.status_alias);
     try command_executor_test_assert_catalog_status(&"hrandfield"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"waitaof"[0: 7], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"swapdb"[0: 6], CommandCatalogStatus.status_partial);
@@ -2416,6 +2417,14 @@ export fn test_command_set_get_del_exists() !void {
     try assert_eq_i32(lcs_len_reply.typ as i32, CommandReplyType.reply_integer as i32);
     try assert_eq_i32(lcs_len_reply.integer as i32, 6);
     resp_value_free(&lcs_len_parsed.value);
+
+    var substr_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nSUBSTR\r\n$3\r\nkey\r\n$1\r\n1\r\n$1\r\n3\r\n"[0: 39]);
+    const substr_command: Command = try command_executor_test_command(&router, &substr_parsed);
+    var substr_reply: CommandReply = command_execute_at(&engine, &substr_command, 1000u64);
+    try assert_eq_i32(substr_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(substr_reply.data, &"alu"[0: 3]));
+    command_reply_cleanup(&substr_reply);
+    resp_value_free(&substr_parsed.value);
 
     var multi_del_parsed: RespParseResult = try parse_resp2(&"*9\r\n$3\r\nDEL\r\n$2\r\nk1\r\n$2\r\nk2\r\n$3\r\nnx1\r\n$3\r\nnx2\r\n$3\r\nmx1\r\n$3\r\nmx2\r\n$5\r\nlcs-a\r\n$5\r\nlcs-b\r\n"[0: 87]);
     const multi_del_command: Command = try command_executor_test_command(&router, &multi_del_parsed);

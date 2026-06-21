@@ -167,6 +167,7 @@ def run_smoke() -> None:
             roundtrip(sock, b"*2\r\n$6\r\nSTRLEN\r\n$3\r\nkey\r\n", b":5\r\n")
             roundtrip(sock, b"*3\r\n$6\r\nAPPEND\r\n$3\r\nkey\r\n$2\r\n++\r\n", b":7\r\n")
             roundtrip(sock, b"*4\r\n$8\r\nGETRANGE\r\n$3\r\nkey\r\n$1\r\n1\r\n$1\r\n3\r\n", b"$3\r\nalu\r\n")
+            roundtrip(sock, b"*4\r\n$6\r\nSUBSTR\r\n$3\r\nkey\r\n$1\r\n1\r\n$1\r\n3\r\n", b"$3\r\nalu\r\n")
             roundtrip(sock, b"*4\r\n$8\r\nSETRANGE\r\n$3\r\nkey\r\n$1\r\n5\r\n$2\r\n__\r\n", b":7\r\n")
             roundtrip(sock, b"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n", b"$7\r\nvalue__\r\n")
             roundtrip(sock, b"*3\r\n$6\r\nRENAME\r\n$3\r\nkey\r\n$4\r\nkey2\r\n", b"+OK\r\n")

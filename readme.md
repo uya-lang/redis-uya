@@ -277,7 +277,7 @@ build/redis-uya 6380 1
 - String 第三批原子写入：`GETSET`、`SETNX`、`SETEX`
 - String 第四批多 key：`MGET`、`MSET`、`MSETNX`、`MSETEX`
 - String LCS partial：`LCS key1 key2 [LEN]`
-- String 第五批范围读写：`GETRANGE`、`SETRANGE`
+- String 第五批范围读写：`GETRANGE`、`SUBSTR` alias、`SETRANGE`
 - String 第六批浮点计数：`INCRBYFLOAT`
 - Key 复制/恢复 partial：`COPY source destination [DB 0] [REPLACE]` 当前可用，支持当前单 DB 内深拷贝对象、保留 source TTL、已存在目标的 `REPLACE` 覆盖和 `COMMAND GETKEYS*` 可见面；`RESTORE-ASKING key ttl serialized-value` 当前复用 `RESTORE` 的单 DB RDB payload 写入路径；非 `0` DB 按当前单 DB 模型返回 `ERR DB index is out of range`
 - Key 单库 DB 管理 partial：`SWAPDB 0 0` 当前作为 no-op 返回 `OK`；任一 DB 参数非 `0` 返回 `ERR DB index is out of range`，暂不支持真实多 DB 数据交换

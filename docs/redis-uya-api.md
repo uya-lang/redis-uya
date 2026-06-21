@@ -1922,6 +1922,27 @@ MSETEX numkeys key value [key value ...] [NX|XX] [EX seconds|PX milliseconds|EXA
 - 条件失败时不写入，不进入 AOF/replication backlog
 - 当前实现为 partial：支持 Redis 兼容面中的批量字符串写入、条件与 TTL 选项，暂不提供失败中途回滚保证
 
+### `LCS`
+
+格式：
+
+```text
+LCS key1 key2
+LCS key1 key2 LEN
+```
+
+返回：
+
+- 未带选项：返回两个字符串值的最长公共子序列，Bulk String
+- `LEN`：返回最长公共子序列长度，Integer
+
+说明：
+
+- 缺失 key 按空字符串处理
+- 任一 key 存在且不是 String：`WRONGTYPE`
+- 当前实现为 partial：只支持基础结果和 `LEN`，`IDX` / `MINMATCHLEN` / `WITHMATCHLEN` 返回 partial 限制错误
+- 为避免当前 DP 实现对大字符串造成不可控内存放大，任一输入长度超过 4096 字节时返回 partial 限制错误
+
 ### `GETRANGE`
 
 格式：

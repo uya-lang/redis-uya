@@ -79,6 +79,8 @@ use src.memory.allocator.allocator_active_allocations;
 use src.memory.allocator.allocator_slab_cached_blocks;
 use src.memory.allocator.allocator_slab_cached_bytes;
 use src.memory.allocator.allocator_slab_reuse_count;
+use src.memory.allocator.redis_malloc;
+use src.memory.allocator.redis_free;
 use src.persistence.rdb.rdb_build_path;
 use src.persistence.rdb.rdb_dump_object_at;
 use src.persistence.rdb.rdb_load_bytes_at;
@@ -2863,6 +2865,152 @@ fn command_executor_getrange(engine: &Engine, command: &Command, now_ms: u64) Co
     const start_usize: usize = start_index as usize;
     const slice_len: usize = (stop_index - start_index + 1) as usize;
     return command_executor_bulk(data[start_usize: slice_len]);
+}
+
+fn command_executor_lcs_usize_stride() usize {
+    var sample: [usize: 1] = [];
+    return @size_of(sample[0]) as usize;
+}
+
+fn command_executor_lcs_cell_at(base: &usize, index: usize) &usize {
+    const addr: usize = @usize_from_ptr(base as &void) + index * command_executor_lcs_usize_stride();
+    return @ptr_from_usize(addr) as &usize;
+}
+
+fn command_executor_lcs_value(engine: &Engine, key: &[byte], now_ms: u64) !&[byte] {
+    const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+        return command_executor_empty_slice();
+    };
+    return command_executor_string_value(obj);
+}
+
+fn command_executor_lcs_compute(a: &[byte], b: &[byte], return_len: bool) CommandReply {
+    if a.len == 0 || b.len == 0 {
+        if return_len {
+            return command_executor_integer(0);
+        }
+        return command_executor_bulk(command_executor_empty_slice());
+    }
+    if a.len > 4096 || b.len > 4096 {
+        return command_executor_error(&"ERR LCS input too large for redis-uya partial"[0: 45]);
+    }
+
+    const width: usize = b.len + 1;
+    const height: usize = a.len + 1;
+    const cell_count: usize = width * height;
+    const raw_cells: &byte = redis_malloc(cell_count * command_executor_lcs_usize_stride()) catch {
+        return command_executor_oom();
+    };
+    const cells: &usize = raw_cells as &usize;
+
+    var zero_i: usize = 0;
+    while zero_i < cell_count {
+        const cell_zero: &usize = command_executor_lcs_cell_at(cells, zero_i);
+        *cell_zero = 0;
+        zero_i = zero_i + 1;
+    }
+
+    var i: usize = a.len;
+    while i > 0 {
+        i = i - 1;
+        var j: usize = b.len;
+        while j > 0 {
+            j = j - 1;
+            const cell: &usize = command_executor_lcs_cell_at(cells, i * width + j);
+            if a.ptr[i] == b.ptr[j] {
+                const diag: &usize = command_executor_lcs_cell_at(cells, (i + 1) * width + (j + 1));
+                *cell = *diag + 1;
+            } else {
+                const down: &usize = command_executor_lcs_cell_at(cells, (i + 1) * width + j);
+                const right: &usize = command_executor_lcs_cell_at(cells, i * width + (j + 1));
+                if *down >= *right {
+                    *cell = *down;
+                } else {
+                    *cell = *right;
+                }
+            }
+        }
+    }
+
+    const root: &usize = command_executor_lcs_cell_at(cells, 0);
+    const lcs_len: usize = *root;
+    if return_len {
+        redis_free(raw_cells);
+        return command_executor_integer(lcs_len as i64);
+    }
+    if lcs_len == 0 {
+        redis_free(raw_cells);
+        return command_executor_bulk(command_executor_empty_slice());
+    }
+
+    const result_raw: &byte = redis_malloc(lcs_len) catch {
+        redis_free(raw_cells);
+        return command_executor_oom();
+    };
+    var out_index: usize = 0;
+    var ai: usize = 0;
+    var bi: usize = 0;
+    while ai < a.len && bi < b.len && out_index < lcs_len {
+        if a.ptr[ai] == b.ptr[bi] {
+            result_raw[out_index] = a.ptr[ai];
+            out_index = out_index + 1;
+            ai = ai + 1;
+            bi = bi + 1;
+        } else {
+            const down_next: &usize = command_executor_lcs_cell_at(cells, (ai + 1) * width + bi);
+            const right_next: &usize = command_executor_lcs_cell_at(cells, ai * width + (bi + 1));
+            if *down_next >= *right_next {
+                ai = ai + 1;
+            } else {
+                bi = bi + 1;
+            }
+        }
+    }
+
+    const reply: CommandReply = command_executor_owned_bulk_copy(result_raw[0: out_index]);
+    redis_free(result_raw);
+    redis_free(raw_cells);
+    return reply;
+}
+
+fn command_executor_lcs(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 3 {
+        return command_executor_wrong_arity();
+    }
+    const key_a: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const key_b: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    var return_len: bool = false;
+    var option_index: usize = 3;
+    while option_index < command.argc {
+        const option: &[byte] = command_executor_arg(command, option_index) catch {
+            return command_executor_wrong_arity();
+        };
+        if command_executor_keyword_eq(option, &"LEN"[0: 3]) {
+            if return_len || command.argc != 4 {
+                return command_executor_syntax_error();
+            }
+            return_len = true;
+        } else if command_executor_keyword_eq(option, &"IDX"[0: 3]) ||
+            command_executor_keyword_eq(option, &"MINMATCHLEN"[0: 11]) ||
+            command_executor_keyword_eq(option, &"WITHMATCHLEN"[0: 12]) {
+            return command_executor_error(&"ERR LCS IDX options are not supported by redis-uya partial"[0: 58]);
+        } else {
+            return command_executor_syntax_error();
+        }
+        option_index = option_index + 1;
+    }
+
+    const a: &[byte] = command_executor_lcs_value(engine, key_a, now_ms) catch {
+        return command_executor_wrongtype();
+    };
+    const b: &[byte] = command_executor_lcs_value(engine, key_b, now_ms) catch {
+        return command_executor_wrongtype();
+    };
+    return command_executor_lcs_compute(a, b, return_len);
 }
 
 fn command_executor_getbit(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
@@ -18118,6 +18266,9 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
     }
     if command.info.cmd_type == CommandType.command_getrange {
         return command_executor_getrange(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_lcs {
+        return command_executor_lcs(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_getbit {
         return command_executor_getbit(engine, command, now_ms);

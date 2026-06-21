@@ -271,6 +271,19 @@ if [[ "$MSETEX_XX_RESULT" != "1" ]]; then
     exit 1
 fi
 
+redis-cli --raw -h 127.0.0.1 -p "$PORT" mset lcs-a ohmytext lcs-b mynewtext >/dev/null
+LCS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lcs lcs-a lcs-b)"
+if [[ "$LCS_RESULT" != "mytext" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected LCS mytext, got '$LCS_RESULT'" >&2
+    exit 1
+fi
+
+LCS_LEN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lcs lcs-a lcs-b len)"
+if [[ "$LCS_LEN_RESULT" != "6" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected LCS LEN 6, got '$LCS_LEN_RESULT'" >&2
+    exit 1
+fi
+
 STRLEN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" strlen key)"
 if [[ "$STRLEN_RESULT" != "5" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected strlen 5, got '$STRLEN_RESULT'" >&2

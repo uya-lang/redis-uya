@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 176 | 3 | 3 | 37 |
+| Tier A: standalone core | 365 | 259 | 146 | 177 | 3 | 3 | 36 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `183` |
+| `partial` | `184` |
 | `standalone-error` | `29` |
 | `alias` | `3` |
-| `deferred` | `190` |
+| `deferred` | `189` |
 
 ## Group counts
 
@@ -365,7 +365,7 @@
 | `latency|history` | `server` | `partial` | `-` | `3` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `latency|latest` | `server` | `partial` | `-` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `latency|reset` | `server` | `partial` | `-` | `-2` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `lcs` | `string` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @string, @slow` |
+| `lcs` | `string` | `partial` | `-` | `-3` | `-` | `no` | `@read, @string, @slow` |
 | `lindex` | `list` | `full` | `-` | `3` | `-` | `no` | `@read, @list, @slow` |
 | `linsert` | `list` | `full` | `-` | `5` | `-` | `no` | `@write, @list, @slow` |
 | `llen` | `list` | `full` | `-` | `2` | `-` | `no` | `@read, @list, @fast` |

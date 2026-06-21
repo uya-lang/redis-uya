@@ -773,6 +773,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"delex"[0: 5], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"hgetdel"[0: 7], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"msetex"[0: 6], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"lcs"[0: 3], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"hrandfield"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"waitaof"[0: 7], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"swapdb"[0: 6], CommandCatalogStatus.status_partial);
@@ -2395,11 +2396,32 @@ export fn test_command_set_get_del_exists() !void {
     command_reply_cleanup(&msetex_mget_xx_reply);
     resp_value_free(&msetex_mget_xx_parsed.value);
 
-    var multi_del_parsed: RespParseResult = try parse_resp2(&"*7\r\n$3\r\nDEL\r\n$2\r\nk1\r\n$2\r\nk2\r\n$3\r\nnx1\r\n$3\r\nnx2\r\n$3\r\nmx1\r\n$3\r\nmx2\r\n"[0: 65]);
+    var lcs_set_parsed: RespParseResult = try parse_resp2(&"*5\r\n$4\r\nMSET\r\n$5\r\nlcs-a\r\n$8\r\nohmytext\r\n$5\r\nlcs-b\r\n$9\r\nmynewtext\r\n"[0: 65]);
+    const lcs_set_command: Command = try command_executor_test_command(&router, &lcs_set_parsed);
+    const lcs_set_reply: CommandReply = command_execute_at(&engine, &lcs_set_command, 1000u64);
+    try assert_eq_i32(lcs_set_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    resp_value_free(&lcs_set_parsed.value);
+
+    var lcs_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nLCS\r\n$5\r\nlcs-a\r\n$5\r\nlcs-b\r\n"[0: 35]);
+    const lcs_command: Command = try command_executor_test_command(&router, &lcs_parsed);
+    var lcs_reply: CommandReply = command_execute_at(&engine, &lcs_command, 1000u64);
+    try assert_eq_i32(lcs_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(lcs_reply.data, &"mytext"[0: 6]));
+    command_reply_cleanup(&lcs_reply);
+    resp_value_free(&lcs_parsed.value);
+
+    var lcs_len_parsed: RespParseResult = try parse_resp2(&"*4\r\n$3\r\nLCS\r\n$5\r\nlcs-a\r\n$5\r\nlcs-b\r\n$3\r\nLEN\r\n"[0: 44]);
+    const lcs_len_command: Command = try command_executor_test_command(&router, &lcs_len_parsed);
+    const lcs_len_reply: CommandReply = command_execute_at(&engine, &lcs_len_command, 1000u64);
+    try assert_eq_i32(lcs_len_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(lcs_len_reply.integer as i32, 6);
+    resp_value_free(&lcs_len_parsed.value);
+
+    var multi_del_parsed: RespParseResult = try parse_resp2(&"*9\r\n$3\r\nDEL\r\n$2\r\nk1\r\n$2\r\nk2\r\n$3\r\nnx1\r\n$3\r\nnx2\r\n$3\r\nmx1\r\n$3\r\nmx2\r\n$5\r\nlcs-a\r\n$5\r\nlcs-b\r\n"[0: 87]);
     const multi_del_command: Command = try command_executor_test_command(&router, &multi_del_parsed);
     const multi_del_reply: CommandReply = command_execute_at(&engine, &multi_del_command, 1000u64);
     try assert_eq_i32(multi_del_reply.typ as i32, CommandReplyType.reply_integer as i32);
-    try assert_eq_i32(multi_del_reply.integer as i32, 6);
+    try assert_eq_i32(multi_del_reply.integer as i32, 8);
     resp_value_free(&multi_del_parsed.value);
 
     var delex_set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$9\r\ndelex-key\r\n$5\r\nvalue\r\n"[0: 39]);
@@ -8592,6 +8614,12 @@ export fn test_command_error_paths() !void {
     const msetex_bad_numkeys_reply: CommandReply = command_execute_at(&engine, &msetex_bad_numkeys_command, 1000u64);
     try assert_eq_i32(msetex_bad_numkeys_reply.typ as i32, CommandReplyType.reply_error as i32);
     resp_value_free(&msetex_bad_numkeys_parsed.value);
+
+    var lcs_unsupported_parsed: RespParseResult = try parse_resp2(&"*6\r\n$3\r\nLCS\r\n$3\r\nkey\r\n$7\r\nmissing\r\n$3\r\nIDX\r\n$11\r\nMINMATCHLEN\r\n$1\r\n2\r\n"[0: 69]);
+    const lcs_unsupported_command: Command = try command_executor_test_command(&router, &lcs_unsupported_parsed);
+    const lcs_unsupported_reply: CommandReply = command_execute_at(&engine, &lcs_unsupported_command, 1000u64);
+    try assert_eq_i32(lcs_unsupported_reply.typ as i32, CommandReplyType.reply_error as i32);
+    resp_value_free(&lcs_unsupported_parsed.value);
 
     var expire_bad_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nEXPIRE\r\n$3\r\nkey\r\n$3\r\nbad\r\n"[0: 36]);
     const expire_bad_command: Command = try command_executor_test_command(&router, &expire_bad_parsed);

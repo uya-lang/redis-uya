@@ -110,6 +110,7 @@ server open
 - `ZRANGE` / `ZREVRANGE` 当前复用 rank-based zset 视图，支持正负索引、`REV` 和 `WITHSCORES`；`ZRANGE ... BYSCORE`、`ZRANGEBYSCORE` / `ZREVRANGEBYSCORE` 支持整数 score 闭区间、`WITHSCORES` 和 `LIMIT`；`ZRANGE ... BYLEX` 复用 lex 边界扫描，支持 `REV` 和 `LIMIT`，不支持 `WITHSCORES`
 - `ZRANGESTORE` 当前复用 rank-based、score-range 或 lex-range 视图写回项目内 zset，支持 `BYSCORE`、`BYLEX`、`REV` 和 `LIMIT` 并保留源 member 的整数 score
 - `ZDIFF` / `ZINTER` / `ZINTERSTORE` / `ZUNION` / `ZUNIONSTORE` 这类 sorted-set 多 key 命令在执行层扫描项目内 zset `(score, member)` 排序视图；`ZINTER` / `ZINTERSTORE` / `ZUNION` / `ZUNIONSTORE` 当前支持整数 score 的默认 SUM 聚合、整数 `WEIGHTS` 和 `AGGREGATE SUM|MIN|MAX`，仍不支持 Redis 原生浮点 score / weight 口径
+- `LCS` 当前由执行层按字符串值计算最长公共子序列，支持基础 Bulk String 返回和 `LEN`；`IDX` / `MINMATCHLEN` / `WITHMATCHLEN` 明细输出暂未实现，大输入有 4096 字节 partial guard
 - `PFADD` / `PFCOUNT` / `PFMERGE` 当前使用项目内 set 对象保存 exact HLL 成员视图；`PFSELFTEST` 是 no-op self-test 兼容面，返回 `OK`，不触发 Redis 原生 HLL 编码自检；`PFDEBUG` 是安全 profile 下的 standalone-error，不开放内部 HLL 调试输出
 - `SWAPDB` 当前由执行层按单 DB 模型处理；`0 0` 是 no-op partial，任一非 `0` DB 返回越界错误，真实多 DB 数据交换保留到多 DB 模型落地后再补
 - `LOLWUT` 当前由执行层返回固定 bulk 文本 partial，只校验 `VERSION` 的整数参数，不读取或修改存储状态

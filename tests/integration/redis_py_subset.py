@@ -168,6 +168,13 @@ class RedisPySubsetClient:
             parts.append(option.encode())
         return int(self._request(*parts))
 
+    def lcs(self, key1: str, key2: str, *options: str):
+        result = self._request(b"LCS", key1.encode(), key2.encode(), *(option.encode() for option in options))
+        if options and options[0].upper() == "LEN":
+            return int(result)
+        assert isinstance(result, bytes)
+        return result
+
     def getrange(self, key: str, start: int, stop: int) -> bytes:
         result = self._request(b"GETRANGE", key.encode(), str(start).encode(), str(stop).encode())
         assert isinstance(result, bytes)
@@ -1332,6 +1339,9 @@ def run_smoke() -> None:
             assert client.get("me3") is None
             assert client.msetex({"me1": "x", "me2": "y"}, "XX") == 1
             assert client.mget("me1", "me2") == [b"x", b"y"]
+            assert client.mset({"lcs-a": "ohmytext", "lcs-b": "mynewtext"})
+            assert client.lcs("lcs-a", "lcs-b") == b"mytext"
+            assert client.lcs("lcs-a", "lcs-b", "LEN") == 6
             assert client.strlen("key") == 5
             assert client.append("key", "++") == 7
             assert client.getrange("key", 1, 3) == b"alu"
@@ -1680,7 +1690,7 @@ def run_smoke() -> None:
             assert client.delex("delex-key", "IFNE", "other") == 1
             assert client.delex("delex-key") == 0
             assert client.delete("counter") == 1
-            assert client.delete("fcounter", "nx-key", "gs-key", "sx-key", "mk1", "mk2", "mn1", "mn2", "me1", "me2", "allones", "srca", "srcb", "dstbit", "bf", "hll", "dsthll", "emptyhll", "geo", "geodst", "distdst", "lua-key", "slow-k", "latency-k") == 24
+            assert client.delete("fcounter", "nx-key", "gs-key", "sx-key", "mk1", "mk2", "mn1", "mn2", "me1", "me2", "lcs-a", "lcs-b", "allones", "srca", "srcb", "dstbit", "bf", "hll", "dsthll", "emptyhll", "geo", "geodst", "distdst", "lua-key", "slow-k", "latency-k") == 26
             assert client.echo("hi") == b"hi"
             assert client.key_type("key") == "string"
             assert client.dbsize() == 1

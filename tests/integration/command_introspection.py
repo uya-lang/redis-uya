@@ -181,6 +181,10 @@ def run_smoke() -> None:
             if not isinstance(listed_mset, list) or b"mset" not in listed_mset or b"msetex" not in listed_mset or b"msetnx" not in listed_mset:
                 raise AssertionError(f"unexpected COMMAND LIST mset* result: {listed_mset!r}")
 
+            listed_lcs = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"LCS")
+            if not isinstance(listed_lcs, list) or listed_lcs != [b"lcs"]:
+                raise AssertionError(f"unexpected COMMAND LIST lcs result: {listed_lcs!r}")
+
             listed_hget = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"HGET*")
             if not isinstance(listed_hget, list) or b"hget" not in listed_hget or b"hgetdel" not in listed_hget:
                 raise AssertionError(f"unexpected COMMAND LIST hget* result: {listed_hget!r}")
@@ -330,6 +334,15 @@ def run_smoke() -> None:
                 or msetex_info[0][0] != b"msetex"
             ):
                 raise AssertionError(f"COMMAND INFO MSETEX returned wrong payload: {msetex_info!r}")
+
+            lcs_info = send_command(sock, b"COMMAND", b"INFO", b"LCS")
+            if (
+                not isinstance(lcs_info, list)
+                or len(lcs_info) != 1
+                or not isinstance(lcs_info[0], list)
+                or lcs_info[0][0] != b"lcs"
+            ):
+                raise AssertionError(f"COMMAND INFO LCS returned wrong payload: {lcs_info!r}")
 
             cluster_mode_info = send_command(sock, b"COMMAND", b"INFO", b"ASKING", b"READONLY", b"READWRITE")
             if (
@@ -778,6 +791,7 @@ def run_smoke() -> None:
                 or b"copy" not in docs_all_resp2
                 or b"delex" not in docs_all_resp2
                 or b"hgetdel" not in docs_all_resp2
+                or b"lcs" not in docs_all_resp2
                 or b"msetex" not in docs_all_resp2
                 or b"restore-asking" not in docs_all_resp2
                 or b"memory|malloc-stats" not in docs_all_resp2
@@ -1166,6 +1180,7 @@ def run_smoke() -> None:
                 or not isinstance(docs_all.get(b"copy"), dict)
                 or not isinstance(docs_all.get(b"delex"), dict)
                 or not isinstance(docs_all.get(b"hgetdel"), dict)
+                or not isinstance(docs_all.get(b"lcs"), dict)
                 or not isinstance(docs_all.get(b"msetex"), dict)
                 or not isinstance(docs_all.get(b"restore-asking"), dict)
                 or not isinstance(docs_all.get(b"memory|malloc-stats"), dict)
@@ -1197,6 +1212,10 @@ def run_smoke() -> None:
             msetex_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"MSETEX", b"2", b"a", b"1", b"b", b"2", b"PX", b"1000")
             if msetex_getkeys != [b"a", b"b"]:
                 raise AssertionError(f"unexpected COMMAND GETKEYS MSETEX result: {msetex_getkeys!r}")
+
+            lcs_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"LCS", b"a", b"b", b"LEN")
+            if lcs_getkeys != [b"a", b"b"]:
+                raise AssertionError(f"unexpected COMMAND GETKEYS LCS result: {lcs_getkeys!r}")
 
             blmove_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"BLMOVE", b"src", b"dst", b"LEFT", b"RIGHT", b"1")
             if blmove_getkeys != [b"src", b"dst"]:
@@ -1266,6 +1285,19 @@ def run_smoke() -> None:
                 or b"update" not in msetex_getkeysandflags[1][1]
             ):
                 raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS MSETEX keys: {msetex_getkeysandflags!r}")
+
+            lcs_getkeysandflags = send_command(sock, b"COMMAND", b"GETKEYSANDFLAGS", b"LCS", b"a", b"b", b"LEN")
+            if (
+                not isinstance(lcs_getkeysandflags, list)
+                or len(lcs_getkeysandflags) != 2
+                or lcs_getkeysandflags[0][0] != b"a"
+                or b"RO" not in lcs_getkeysandflags[0][1]
+                or b"access" not in lcs_getkeysandflags[0][1]
+                or lcs_getkeysandflags[1][0] != b"b"
+                or b"RO" not in lcs_getkeysandflags[1][1]
+                or b"access" not in lcs_getkeysandflags[1][1]
+            ):
+                raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS LCS keys: {lcs_getkeysandflags!r}")
 
             blmove_getkeysandflags = send_command(sock, b"COMMAND", b"GETKEYSANDFLAGS", b"BLMOVE", b"src", b"dst", b"LEFT", b"RIGHT", b"1")
             if not isinstance(blmove_getkeysandflags, list) or len(blmove_getkeysandflags) != 2:

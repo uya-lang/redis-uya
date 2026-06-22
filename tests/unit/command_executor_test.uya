@@ -774,6 +774,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"hgetdel"[0: 7], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"msetex"[0: 6], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"lcs"[0: 3], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"increx"[0: 6], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"substr"[0: 6], CommandCatalogStatus.status_alias);
     try command_executor_test_assert_catalog_status(&"hrandfield"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"waitaof"[0: 7], CommandCatalogStatus.status_partial);
@@ -1620,6 +1621,13 @@ export fn test_command_command_getkeys() !void {
     try assert_true(command_executor_test_contains(getkeys_getex_reply.data, &"$3\r\nkey\r\n*3\r\n$2\r\nRW\r\n$6\r\naccess\r\n$6\r\nupdate\r\n"[0: 45]));
     command_reply_cleanup(&getkeys_getex_reply);
     resp_value_free(&getkeys_getex_parsed.value);
+
+    var getkeys_increx_parsed: RespParseResult = try parse_resp2(&"*8\r\n$7\r\nCOMMAND\r\n$15\r\nGETKEYSANDFLAGS\r\n$6\r\nINCREX\r\n$3\r\nkey\r\n$5\r\nBYINT\r\n$1\r\n2\r\n$6\r\nUBOUND\r\n$2\r\n10\r\n"[0: 98]);
+    const getkeys_increx_command: Command = try command_executor_test_command(&router, &getkeys_increx_parsed);
+    var getkeys_increx_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &getkeys_increx_command, 1000u64);
+    try assert_true(command_executor_test_contains(getkeys_increx_reply.data, &"$3\r\nkey\r\n*3\r\n$2\r\nRW\r\n$6\r\naccess\r\n$6\r\nupdate\r\n"[0: 45]));
+    command_reply_cleanup(&getkeys_increx_reply);
+    resp_value_free(&getkeys_increx_parsed.value);
 
     var getkeys_lmpop_parsed: RespParseResult = try parse_resp2(&"*9\r\n$7\r\nCOMMAND\r\n$7\r\nGETKEYS\r\n$5\r\nLMPOP\r\n$1\r\n2\r\n$1\r\na\r\n$1\r\nb\r\n$4\r\nLEFT\r\n$5\r\nCOUNT\r\n$1\r\n2\r\n"[0: 90]);
     const getkeys_lmpop_command: Command = try command_executor_test_command(&router, &getkeys_lmpop_parsed);
@@ -2543,6 +2551,124 @@ export fn test_command_set_get_del_exists() !void {
     try assert_eq_i32(incrby_reply.typ as i32, CommandReplyType.reply_integer as i32);
     try assert_eq_i32(incrby_reply.integer as i32, 5);
     resp_value_free(&incrby_parsed.value);
+
+    var increx_default_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nINCREX\r\n$9\r\nexcounter\r\n"[0: 31]);
+    const increx_default_command: Command = try command_executor_test_command(&router, &increx_default_parsed);
+    var increx_default_reply: CommandReply = command_execute_at(&engine, &increx_default_command, 1000u64);
+    try assert_eq_i32(increx_default_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    var increx_default_len: usize = try connection_encode_reply(&increx_default_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: increx_default_len], &"*2\r\n:1\r\n:1\r\n"[0: 12]));
+    command_reply_cleanup(&increx_default_reply);
+    resp_value_free(&increx_default_parsed.value);
+
+    var increx_byint_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nINCREX\r\n$9\r\nexcounter\r\n$5\r\nBYINT\r\n$1\r\n4\r\n"[0: 49]);
+    const increx_byint_command: Command = try command_executor_test_command(&router, &increx_byint_parsed);
+    var increx_byint_reply: CommandReply = command_execute_at(&engine, &increx_byint_command, 1000u64);
+    try assert_eq_i32(increx_byint_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    var increx_byint_len: usize = try connection_encode_reply(&increx_byint_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: increx_byint_len], &"*2\r\n:5\r\n:4\r\n"[0: 12]));
+    command_reply_cleanup(&increx_byint_reply);
+    resp_value_free(&increx_byint_parsed.value);
+
+    var increx_get_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nGET\r\n$9\r\nexcounter\r\n"[0: 28]);
+    const increx_get_command: Command = try command_executor_test_command(&router, &increx_get_parsed);
+    const increx_get_reply: CommandReply = command_execute_at(&engine, &increx_get_command, 1000u64);
+    try assert_eq_i32(increx_get_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(increx_get_reply.data, &"5"[0: 1]));
+    resp_value_free(&increx_get_parsed.value);
+
+    var increx_bound_parsed: RespParseResult = try parse_resp2(&"*6\r\n$6\r\nINCREX\r\n$9\r\nexcounter\r\n$5\r\nBYINT\r\n$2\r\n10\r\n$6\r\nUBOUND\r\n$2\r\n10\r\n"[0: 70]);
+    const increx_bound_command: Command = try command_executor_test_command(&router, &increx_bound_parsed);
+    var increx_bound_reply: CommandReply = command_execute_at(&engine, &increx_bound_command, 1000u64);
+    try assert_eq_i32(increx_bound_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    var increx_bound_len: usize = try connection_encode_reply(&increx_bound_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: increx_bound_len], &"*2\r\n:5\r\n:0\r\n"[0: 12]));
+    command_reply_cleanup(&increx_bound_reply);
+    resp_value_free(&increx_bound_parsed.value);
+
+    var increx_saturate_parsed: RespParseResult = try parse_resp2(&"*7\r\n$6\r\nINCREX\r\n$9\r\nexcounter\r\n$5\r\nBYINT\r\n$2\r\n10\r\n$6\r\nUBOUND\r\n$2\r\n10\r\n$8\r\nSATURATE\r\n"[0: 84]);
+    const increx_saturate_command: Command = try command_executor_test_command(&router, &increx_saturate_parsed);
+    var increx_saturate_reply: CommandReply = command_execute_at(&engine, &increx_saturate_command, 1000u64);
+    try assert_eq_i32(increx_saturate_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    var increx_saturate_len: usize = try connection_encode_reply(&increx_saturate_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: increx_saturate_len], &"*2\r\n:10\r\n:5\r\n"[0: 13]));
+    command_reply_cleanup(&increx_saturate_reply);
+    resp_value_free(&increx_saturate_parsed.value);
+
+    var increx_px_parsed: RespParseResult = try parse_resp2(&"*6\r\n$6\r\nINCREX\r\n$6\r\nttlcnt\r\n$5\r\nBYINT\r\n$1\r\n2\r\n$2\r\nPX\r\n$4\r\n1500\r\n"[0: 64]);
+    const increx_px_command: Command = try command_executor_test_command(&router, &increx_px_parsed);
+    var increx_px_reply: CommandReply = command_execute_at(&engine, &increx_px_command, 2000u64);
+    try assert_eq_i32(increx_px_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    var increx_px_len: usize = try connection_encode_reply(&increx_px_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: increx_px_len], &"*2\r\n:2\r\n:2\r\n"[0: 12]));
+    command_reply_cleanup(&increx_px_reply);
+    resp_value_free(&increx_px_parsed.value);
+
+    var increx_pttl_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nPTTL\r\n$6\r\nttlcnt\r\n"[0: 26]);
+    const increx_pttl_command: Command = try command_executor_test_command(&router, &increx_pttl_parsed);
+    const increx_pttl_reply: CommandReply = command_execute_at(&engine, &increx_pttl_command, 2000u64);
+    try assert_eq_i32(increx_pttl_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(increx_pttl_reply.integer as i32, 1500);
+    resp_value_free(&increx_pttl_parsed.value);
+
+    var increx_enx_parsed: RespParseResult = try parse_resp2(&"*7\r\n$6\r\nINCREX\r\n$6\r\nttlcnt\r\n$5\r\nBYINT\r\n$1\r\n1\r\n$2\r\nPX\r\n$2\r\n10\r\n$3\r\nENX\r\n"[0: 71]);
+    const increx_enx_command: Command = try command_executor_test_command(&router, &increx_enx_parsed);
+    var increx_enx_reply: CommandReply = command_execute_at(&engine, &increx_enx_command, 2000u64);
+    try assert_eq_i32(increx_enx_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    var increx_enx_len: usize = try connection_encode_reply(&increx_enx_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: increx_enx_len], &"*2\r\n:3\r\n:1\r\n"[0: 12]));
+    command_reply_cleanup(&increx_enx_reply);
+    resp_value_free(&increx_enx_parsed.value);
+
+    var increx_enx_pttl_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nPTTL\r\n$6\r\nttlcnt\r\n"[0: 26]);
+    const increx_enx_pttl_command: Command = try command_executor_test_command(&router, &increx_enx_pttl_parsed);
+    const increx_enx_pttl_reply: CommandReply = command_execute_at(&engine, &increx_enx_pttl_command, 2000u64);
+    try assert_eq_i32(increx_enx_pttl_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(increx_enx_pttl_reply.integer as i32, 1500);
+    resp_value_free(&increx_enx_pttl_parsed.value);
+
+    var increx_persist_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nINCREX\r\n$6\r\nttlcnt\r\n$5\r\nBYINT\r\n$1\r\n1\r\n$7\r\nPERSIST\r\n"[0: 59]);
+    const increx_persist_command: Command = try command_executor_test_command(&router, &increx_persist_parsed);
+    var increx_persist_reply: CommandReply = command_execute_at(&engine, &increx_persist_command, 2000u64);
+    try assert_eq_i32(increx_persist_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    var increx_persist_len: usize = try connection_encode_reply(&increx_persist_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: increx_persist_len], &"*2\r\n:4\r\n:1\r\n"[0: 12]));
+    command_reply_cleanup(&increx_persist_reply);
+    resp_value_free(&increx_persist_parsed.value);
+
+    var increx_ttl_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nTTL\r\n$6\r\nttlcnt\r\n"[0: 25]);
+    const increx_ttl_command: Command = try command_executor_test_command(&router, &increx_ttl_parsed);
+    const increx_ttl_reply: CommandReply = command_execute_at(&engine, &increx_ttl_command, 2000u64);
+    try assert_eq_i32(increx_ttl_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(increx_ttl_reply.integer as i32, -1);
+    resp_value_free(&increx_ttl_parsed.value);
+
+    var increx_byfloat_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nINCREX\r\n$8\r\nfcounter\r\n$7\r\nBYFLOAT\r\n$3\r\n1.0\r\n"[0: 52]);
+    const increx_byfloat_command: Command = try command_executor_test_command(&router, &increx_byfloat_parsed);
+    const increx_byfloat_reply: CommandReply = command_execute_at(&engine, &increx_byfloat_command, 1000u64);
+    try assert_eq_i32(increx_byfloat_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(increx_byfloat_reply.data, &"ERR INCREX BYFLOAT is not supported by redis-uya partial"[0: 56]));
+    resp_value_free(&increx_byfloat_parsed.value);
+
+    var increx_hash_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nHSET\r\n$5\r\nihash\r\n$5\r\nfield\r\n$5\r\nvalue\r\n"[0: 47]);
+    const increx_hash_command: Command = try command_executor_test_command(&router, &increx_hash_parsed);
+    const increx_hash_reply: CommandReply = command_execute_at(&engine, &increx_hash_command, 1000u64);
+    try assert_eq_i32(increx_hash_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    resp_value_free(&increx_hash_parsed.value);
+
+    var increx_wrongtype_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nINCREX\r\n$5\r\nihash\r\n"[0: 27]);
+    const increx_wrongtype_command: Command = try command_executor_test_command(&router, &increx_wrongtype_parsed);
+    const increx_wrongtype_reply: CommandReply = command_execute_at(&engine, &increx_wrongtype_command, 1000u64);
+    try assert_eq_i32(increx_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(increx_wrongtype_reply.data, &"WRONGTYPE Operation against a key holding the wrong kind of value"[0: 65]));
+    resp_value_free(&increx_wrongtype_parsed.value);
+
+    var increx_cleanup_parsed: RespParseResult = try parse_resp2(&"*4\r\n$3\r\nDEL\r\n$9\r\nexcounter\r\n$6\r\nttlcnt\r\n$5\r\nihash\r\n"[0: 51]);
+    const increx_cleanup_command: Command = try command_executor_test_command(&router, &increx_cleanup_parsed);
+    const increx_cleanup_reply: CommandReply = command_execute_at(&engine, &increx_cleanup_command, 1000u64);
+    try assert_eq_i32(increx_cleanup_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(increx_cleanup_reply.integer as i32, 3);
+    resp_value_free(&increx_cleanup_parsed.value);
 
     var decr_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nDECR\r\n$7\r\ncounter\r\n"[0: 28]);
     const decr_command: Command = try command_executor_test_command(&router, &decr_parsed);

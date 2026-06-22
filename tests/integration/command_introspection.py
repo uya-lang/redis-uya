@@ -185,6 +185,10 @@ def run_smoke() -> None:
             if not isinstance(listed_lcs, list) or listed_lcs != [b"lcs"]:
                 raise AssertionError(f"unexpected COMMAND LIST lcs result: {listed_lcs!r}")
 
+            listed_increx = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"INCREX")
+            if not isinstance(listed_increx, list) or listed_increx != [b"increx"]:
+                raise AssertionError(f"unexpected COMMAND LIST increx result: {listed_increx!r}")
+
             listed_substr = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"SUBSTR")
             if not isinstance(listed_substr, list) or listed_substr != [b"substr"]:
                 raise AssertionError(f"unexpected COMMAND LIST substr result: {listed_substr!r}")
@@ -347,6 +351,15 @@ def run_smoke() -> None:
                 or lcs_info[0][0] != b"lcs"
             ):
                 raise AssertionError(f"COMMAND INFO LCS returned wrong payload: {lcs_info!r}")
+
+            increx_info = send_command(sock, b"COMMAND", b"INFO", b"INCREX")
+            if (
+                not isinstance(increx_info, list)
+                or len(increx_info) != 1
+                or not isinstance(increx_info[0], list)
+                or increx_info[0][0] != b"increx"
+            ):
+                raise AssertionError(f"COMMAND INFO INCREX returned wrong payload: {increx_info!r}")
 
             substr_info = send_command(sock, b"COMMAND", b"INFO", b"SUBSTR")
             if (
@@ -804,6 +817,7 @@ def run_smoke() -> None:
                 or b"copy" not in docs_all_resp2
                 or b"delex" not in docs_all_resp2
                 or b"hgetdel" not in docs_all_resp2
+                or b"increx" not in docs_all_resp2
                 or b"lcs" not in docs_all_resp2
                 or b"msetex" not in docs_all_resp2
                 or b"restore-asking" not in docs_all_resp2
@@ -1194,6 +1208,7 @@ def run_smoke() -> None:
                 or not isinstance(docs_all.get(b"copy"), dict)
                 or not isinstance(docs_all.get(b"delex"), dict)
                 or not isinstance(docs_all.get(b"hgetdel"), dict)
+                or not isinstance(docs_all.get(b"increx"), dict)
                 or not isinstance(docs_all.get(b"lcs"), dict)
                 or not isinstance(docs_all.get(b"msetex"), dict)
                 or not isinstance(docs_all.get(b"restore-asking"), dict)
@@ -1227,6 +1242,10 @@ def run_smoke() -> None:
             msetex_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"MSETEX", b"2", b"a", b"1", b"b", b"2", b"PX", b"1000")
             if msetex_getkeys != [b"a", b"b"]:
                 raise AssertionError(f"unexpected COMMAND GETKEYS MSETEX result: {msetex_getkeys!r}")
+
+            increx_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"INCREX", b"a", b"BYINT", b"2", b"UBOUND", b"10")
+            if increx_getkeys != [b"a"]:
+                raise AssertionError(f"unexpected COMMAND GETKEYS INCREX result: {increx_getkeys!r}")
 
             lcs_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"LCS", b"a", b"b", b"LEN")
             if lcs_getkeys != [b"a", b"b"]:
@@ -1304,6 +1323,17 @@ def run_smoke() -> None:
                 or b"update" not in msetex_getkeysandflags[1][1]
             ):
                 raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS MSETEX keys: {msetex_getkeysandflags!r}")
+
+            increx_getkeysandflags = send_command(sock, b"COMMAND", b"GETKEYSANDFLAGS", b"INCREX", b"a", b"BYINT", b"2", b"UBOUND", b"10")
+            if (
+                not isinstance(increx_getkeysandflags, list)
+                or len(increx_getkeysandflags) != 1
+                or increx_getkeysandflags[0][0] != b"a"
+                or b"RW" not in increx_getkeysandflags[0][1]
+                or b"access" not in increx_getkeysandflags[0][1]
+                or b"update" not in increx_getkeysandflags[0][1]
+            ):
+                raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS INCREX keys: {increx_getkeysandflags!r}")
 
             lcs_getkeysandflags = send_command(sock, b"COMMAND", b"GETKEYSANDFLAGS", b"LCS", b"a", b"b", b"LEN")
             if (

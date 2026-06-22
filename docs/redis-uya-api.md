@@ -320,6 +320,28 @@ INCRBYFLOAT key increment
 - key 和 increment 都必须是合法十进制浮点文本
 - 结果会归一化为最短常见十进制形态，例如 `1.5`、`3.5`
 
+### `INCREX`
+
+格式：
+
+```text
+INCREX key [BYINT increment] [LBOUND lower-bound] [UBOUND upper-bound] [SATURATE] [EX seconds|PX milliseconds|EXAT unix-time-seconds|PXAT unix-time-milliseconds|PERSIST] [ENX]
+```
+
+返回：
+
+- RESP Array，包含两个 Integer：`[new-value, actual-increment]`
+
+说明：
+
+- 当前实现为 integer-mode partial；key 不存在时按 `0` 处理，默认增量为 `1`
+- `BYINT`、`LBOUND`、`UBOUND` 参数必须为合法十进制整数
+- 越界且未指定 `SATURATE` 时返回 `[current-value, 0]`，不写入 key，也不改变 TTL
+- 指定 `SATURATE` 时会把结果钳制到上下界，第二个整数返回实际应用的增量
+- 未提供过期选项时保留原 TTL；`EX/PX/EXAT/PXAT` 设置新 TTL；`PERSIST` 清理 TTL
+- `ENX` 仅可与 `EX/PX/EXAT/PXAT` 同用；当前增量总会执行，只有目标 key 已有 TTL 时跳过新 TTL 设置
+- `BYFLOAT` 当前返回 partial 限制错误，尚不支持浮点结果和浮点边界
+
 ### `GETSET`
 
 格式：

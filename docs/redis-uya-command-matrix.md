@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 177 | 3 | 3 | 36 |
+| Tier A: standalone core | 365 | 259 | 146 | 178 | 3 | 3 | 35 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `184` |
+| `partial` | `185` |
 | `standalone-error` | `29` |
 | `alias` | `3` |
-| `deferred` | `189` |
+| `deferred` | `188` |
 
 ## Group counts
 
@@ -327,7 +327,7 @@
 | `incr` | `string` | `full` | `-` | `2` | `-` | `no` | `@write, @string, @fast` |
 | `incrby` | `string` | `full` | `-` | `3` | `-` | `no` | `@write, @string, @fast` |
 | `incrbyfloat` | `string` | `full` | `-` | `3` | `-` | `no` | `@write, @string, @fast` |
-| `increx` | `string` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@fast, @string, @write` |
+| `increx` | `string` | `partial` | `-` | `-2` | `-` | `no` | `@fast, @string, @write` |
 | `info` | `server` | `partial` | `-` | `-1` | `-` | `no` | `@slow, @dangerous` |
 | `json.arrappend` | `json` | `deferred` | `v0.9.2` | `-3` | `json` | `no` | `@json, @write, @slow` |
 | `json.arrindex` | `json` | `deferred` | `v0.9.2` | `-4` | `json` | `no` | `@json, @read, @slow` |

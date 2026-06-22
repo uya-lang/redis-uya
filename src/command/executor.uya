@@ -1906,6 +1906,8 @@ fn command_executor_string_value(obj: &RedisObject) !&[byte] {
 
 const COMMAND_EXECUTOR_I64_MAX: i64 = 9223372036854775807;
 const COMMAND_EXECUTOR_I64_MIN: i64 = -9223372036854775807 - 1;
+const COMMAND_EXECUTOR_I64_MAX_U64: u64 = 9223372036854775807u64;
+const COMMAND_EXECUTOR_I64_MIN_ABS_U64: u64 = 9223372036854775808u64;
 
 fn command_executor_add_i64_checked(base: i64, delta: i64) !i64 {
     if delta > 0 && base > COMMAND_EXECUTOR_I64_MAX - delta {
@@ -1915,6 +1917,62 @@ fn command_executor_add_i64_checked(base: i64, delta: i64) !i64 {
         return error.CommandInvalidInteger;
     }
     return base + delta;
+}
+
+fn command_executor_sub_i64_checked(base: i64, rhs: i64) !i64 {
+    if rhs < 0 && base > COMMAND_EXECUTOR_I64_MAX + rhs {
+        return error.CommandInvalidInteger;
+    }
+    if rhs > 0 && base < COMMAND_EXECUTOR_I64_MIN + rhs {
+        return error.CommandInvalidInteger;
+    }
+    return base - rhs;
+}
+
+fn command_executor_parse_i64_full(data: &[byte]) !i64 {
+    if data.len == 0 {
+        return error.CommandInvalidInteger;
+    }
+
+    var negative: bool = false;
+    var index: usize = 0;
+    if data.ptr[0] == 45 as byte {
+        negative = true;
+        index = 1;
+        if data.len == 1 {
+            return error.CommandInvalidInteger;
+        }
+    }
+
+    if data.len - index > 19 {
+        return error.CommandInvalidInteger;
+    }
+
+    var limit: u64 = COMMAND_EXECUTOR_I64_MAX_U64;
+    if negative {
+        limit = COMMAND_EXECUTOR_I64_MIN_ABS_U64;
+    }
+    var value: u64 = 0u64;
+    while index < data.len {
+        const ch: byte = data.ptr[index];
+        if ch < 48 as byte || ch > 57 as byte {
+            return error.CommandInvalidInteger;
+        }
+        const digit: u64 = (ch - 48 as byte) as u64;
+        if value > (limit - digit) / 10u64 {
+            return error.CommandInvalidInteger;
+        }
+        value = value * 10u64 + digit;
+        index = index + 1;
+    }
+
+    if negative {
+        if value == COMMAND_EXECUTOR_I64_MIN_ABS_U64 {
+            return COMMAND_EXECUTOR_I64_MIN;
+        }
+        return 0i64 - (value as i64);
+    }
+    return value as i64;
 }
 
 fn command_executor_set_integer_string(engine: &Engine, key: &[byte], value: i64, now_ms: u64) CommandReply {
@@ -1953,6 +2011,206 @@ fn command_executor_string_counter_apply(engine: &Engine, key: &[byte], delta: i
         return command_executor_invalid_integer();
     };
     return command_executor_set_integer_string(engine, key, next, now_ms);
+}
+
+struct CommandExecutorIncrexOptions {
+    delta: i64,
+    lower: i64,
+    upper: i64,
+    saturate: bool,
+    expire_mode: i32,
+    expire_value: i64,
+    enx: bool,
+}
+
+fn command_executor_increx_invalid_expire() CommandReply {
+    return command_executor_error(&"ERR invalid expire time in 'increx' command"[0: 43]);
+}
+
+fn command_executor_increx_byfloat_unsupported() CommandReply {
+    return command_executor_error(&"ERR INCREX BYFLOAT is not supported by redis-uya partial"[0: 56]);
+}
+
+fn command_executor_increx_integer_reply(new_value: i64, actual_increment: i64) CommandReply {
+    var raw: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&raw);
+    }
+    _ = sds_cat(&raw, &"*2\r\n:"[0: 5]) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append_i64(&raw, &"%i"[0: 2], new_value) catch {
+        return command_executor_oom();
+    };
+    _ = sds_cat(&raw, &"\r\n:"[0: 3]) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append_i64(&raw, &"%i"[0: 2], actual_increment) catch {
+        return command_executor_oom();
+    };
+    _ = sds_cat(&raw, &"\r\n"[0: 2]) catch {
+        return command_executor_oom();
+    };
+    return command_executor_owned_raw(raw.buf[0: raw.len]);
+}
+
+fn command_executor_increx_parse_options(command: &Command) !CommandExecutorIncrexOptions {
+    var options: CommandExecutorIncrexOptions = CommandExecutorIncrexOptions{
+        delta: 1,
+        lower: COMMAND_EXECUTOR_I64_MIN,
+        upper: COMMAND_EXECUTOR_I64_MAX,
+        saturate: false,
+        expire_mode: 0,
+        expire_value: 0,
+        enx: false,
+    };
+    var saw_increment: bool = false;
+    var saw_lower: bool = false;
+    var saw_upper: bool = false;
+    var saw_saturate: bool = false;
+    var saw_enx: bool = false;
+
+    var index: usize = 2;
+    while index < command.argc {
+        const option: &[byte] = try command_executor_arg(command, index);
+        if command_executor_keyword_eq(option, &"BYFLOAT"[0: 7]) {
+            return error.CommandUnsupported;
+        }
+        if command_executor_keyword_eq(option, &"BYINT"[0: 5]) {
+            if saw_increment || index + 1 >= command.argc {
+                return error.CommandInvalidRequest;
+            }
+            const delta_data: &[byte] = try command_executor_arg(command, index + 1);
+            options.delta = try command_executor_parse_i64_full(delta_data);
+            saw_increment = true;
+            index = index + 2;
+        } else if command_executor_keyword_eq(option, &"LBOUND"[0: 6]) {
+            if saw_lower || index + 1 >= command.argc {
+                return error.CommandInvalidRequest;
+            }
+            const lower_data: &[byte] = try command_executor_arg(command, index + 1);
+            options.lower = try command_executor_parse_i64_full(lower_data);
+            saw_lower = true;
+            index = index + 2;
+        } else if command_executor_keyword_eq(option, &"UBOUND"[0: 6]) {
+            if saw_upper || index + 1 >= command.argc {
+                return error.CommandInvalidRequest;
+            }
+            const upper_data: &[byte] = try command_executor_arg(command, index + 1);
+            options.upper = try command_executor_parse_i64_full(upper_data);
+            saw_upper = true;
+            index = index + 2;
+        } else if command_executor_keyword_eq(option, &"SATURATE"[0: 8]) {
+            if saw_saturate {
+                return error.CommandInvalidRequest;
+            }
+            options.saturate = true;
+            saw_saturate = true;
+            index = index + 1;
+        } else if command_executor_keyword_eq(option, &"EX"[0: 2]) {
+            if options.expire_mode != 0 || index + 1 >= command.argc {
+                return error.CommandInvalidRequest;
+            }
+            const seconds_data: &[byte] = try command_executor_arg(command, index + 1);
+            options.expire_value = try command_executor_parse_i64_full(seconds_data);
+            if options.expire_value <= 0 {
+                return error.CommandInvalidExpire;
+            }
+            options.expire_mode = 1;
+            index = index + 2;
+        } else if command_executor_keyword_eq(option, &"PX"[0: 2]) {
+            if options.expire_mode != 0 || index + 1 >= command.argc {
+                return error.CommandInvalidRequest;
+            }
+            const milliseconds_data: &[byte] = try command_executor_arg(command, index + 1);
+            options.expire_value = try command_executor_parse_i64_full(milliseconds_data);
+            if options.expire_value <= 0 {
+                return error.CommandInvalidExpire;
+            }
+            options.expire_mode = 2;
+            index = index + 2;
+        } else if command_executor_keyword_eq(option, &"EXAT"[0: 4]) {
+            if options.expire_mode != 0 || index + 1 >= command.argc {
+                return error.CommandInvalidRequest;
+            }
+            const seconds_at_data: &[byte] = try command_executor_arg(command, index + 1);
+            options.expire_value = try command_executor_parse_i64_full(seconds_at_data);
+            if options.expire_value <= 0 {
+                return error.CommandInvalidExpire;
+            }
+            options.expire_mode = 3;
+            index = index + 2;
+        } else if command_executor_keyword_eq(option, &"PXAT"[0: 4]) {
+            if options.expire_mode != 0 || index + 1 >= command.argc {
+                return error.CommandInvalidRequest;
+            }
+            const milliseconds_at_data: &[byte] = try command_executor_arg(command, index + 1);
+            options.expire_value = try command_executor_parse_i64_full(milliseconds_at_data);
+            if options.expire_value <= 0 {
+                return error.CommandInvalidExpire;
+            }
+            options.expire_mode = 4;
+            index = index + 2;
+        } else if command_executor_keyword_eq(option, &"PERSIST"[0: 7]) {
+            if options.expire_mode != 0 {
+                return error.CommandInvalidRequest;
+            }
+            options.expire_mode = 5;
+            index = index + 1;
+        } else if command_executor_keyword_eq(option, &"ENX"[0: 3]) {
+            if saw_enx {
+                return error.CommandInvalidRequest;
+            }
+            options.enx = true;
+            saw_enx = true;
+            index = index + 1;
+        } else {
+            return error.CommandInvalidRequest;
+        }
+    }
+
+    if options.lower > options.upper {
+        return error.CommandInvalidRequest;
+    }
+    if options.enx && (options.expire_mode < 1 || options.expire_mode > 4) {
+        return error.CommandInvalidRequest;
+    }
+    return options;
+}
+
+fn command_executor_increx_apply_expire(engine: &Engine, key: &[byte], options: &CommandExecutorIncrexOptions, had_ttl: bool, now_ms: u64) CommandReply {
+    if options.expire_mode == 0 {
+        return command_executor_simple(&"OK"[0: 2]);
+    }
+    if options.enx && had_ttl {
+        return command_executor_simple(&"OK"[0: 2]);
+    }
+    if options.expire_mode == 5 {
+        _ = persist_key_expire(engine, key);
+        return command_executor_simple(&"OK"[0: 2]);
+    }
+
+    var expire_at_ms: u64 = 0u64;
+    if options.expire_mode == 1 {
+        expire_at_ms = now_ms + (options.expire_value as u64) * 1000u64;
+    } else if options.expire_mode == 2 {
+        expire_at_ms = now_ms + options.expire_value as u64;
+    } else if options.expire_mode == 3 {
+        expire_at_ms = (options.expire_value as u64) * 1000u64;
+    } else {
+        expire_at_ms = options.expire_value as u64;
+    }
+
+    if expire_at_ms <= now_ms {
+        _ = delete_key(engine, key);
+        return command_executor_simple(&"OK"[0: 2]);
+    }
+    _ = set_key_expire_at(engine, key, expire_at_ms) catch {
+        return command_executor_oom();
+    };
+    return command_executor_simple(&"OK"[0: 2]);
 }
 
 fn command_executor_store_string(engine: &Engine, key: &[byte], value: &[byte], now_ms: u64) CommandReply {
@@ -2686,6 +2944,100 @@ fn command_executor_incrby(engine: &Engine, command: &Command, now_ms: u64) Comm
         return command_executor_invalid_integer();
     };
     return command_executor_string_counter_apply(engine, key, delta, now_ms);
+}
+
+fn command_executor_increx(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 2 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const options_result: !CommandExecutorIncrexOptions = command_executor_increx_parse_options(command);
+    const options: CommandExecutorIncrexOptions = options_result catch |err| {
+        if err == error.CommandUnsupported {
+            return command_executor_increx_byfloat_unsupported();
+        }
+        if err == error.CommandInvalidInteger {
+            return command_executor_invalid_integer();
+        }
+        if err == error.CommandInvalidExpire {
+            return command_executor_increx_invalid_expire();
+        }
+        return command_executor_syntax_error();
+    };
+
+    var current: i64 = 0;
+    var had_ttl: bool = false;
+    const existing: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+        null as &RedisObject;
+    };
+    if existing != null {
+        const data: &[byte] = command_executor_string_value(existing) catch {
+            return command_executor_wrongtype();
+        };
+        current = command_executor_parse_i64_full(data) catch {
+            return command_executor_invalid_integer();
+        };
+        had_ttl = true;
+        const ttl_result: !u64 = get_key_expire_at(engine, key);
+        const ttl_value: u64 = ttl_result catch {
+            had_ttl = false;
+            0u64;
+        };
+        _ = ttl_value;
+    }
+
+    var next: i64 = current;
+    var actual_increment: i64 = 0;
+    const checked_next: !i64 = command_executor_add_i64_checked(current, options.delta);
+    next = checked_next catch {
+        if !options.saturate {
+            return command_executor_increx_integer_reply(current, 0);
+        }
+        if options.delta > 0 {
+            next = options.upper;
+        } else {
+            next = options.lower;
+        }
+        actual_increment = command_executor_sub_i64_checked(next, current) catch {
+            return command_executor_invalid_integer();
+        };
+        const set_overflow_reply: CommandReply = command_executor_set_integer_string(engine, key, next, now_ms);
+        if set_overflow_reply.typ == CommandReplyType.reply_error {
+            return set_overflow_reply;
+        }
+        const expire_overflow_reply: CommandReply = command_executor_increx_apply_expire(engine, key, &options, had_ttl, now_ms);
+        if expire_overflow_reply.typ == CommandReplyType.reply_error {
+            return expire_overflow_reply;
+        }
+        return command_executor_increx_integer_reply(next, actual_increment);
+    };
+
+    if next < options.lower {
+        if !options.saturate {
+            return command_executor_increx_integer_reply(current, 0);
+        }
+        next = options.lower;
+    } else if next > options.upper {
+        if !options.saturate {
+            return command_executor_increx_integer_reply(current, 0);
+        }
+        next = options.upper;
+    }
+    actual_increment = command_executor_sub_i64_checked(next, current) catch {
+        return command_executor_invalid_integer();
+    };
+
+    const set_reply: CommandReply = command_executor_set_integer_string(engine, key, next, now_ms);
+    if set_reply.typ == CommandReplyType.reply_error {
+        return set_reply;
+    }
+    const expire_reply: CommandReply = command_executor_increx_apply_expire(engine, key, &options, had_ttl, now_ms);
+    if expire_reply.typ == CommandReplyType.reply_error {
+        return expire_reply;
+    }
+    return command_executor_increx_integer_reply(next, actual_increment);
 }
 
 fn command_executor_decrby(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
@@ -17204,6 +17556,7 @@ fn command_executor_command_key_flags(info: &CommandInfo, key_ordinal: usize) &[
         info.cmd_type == CommandType.command_decr ||
         info.cmd_type == CommandType.command_incrby ||
         info.cmd_type == CommandType.command_decrby ||
+        info.cmd_type == CommandType.command_increx ||
         info.cmd_type == CommandType.command_incrbyfloat ||
         info.cmd_type == CommandType.command_hincrby ||
         info.cmd_type == CommandType.command_hincrbyfloat ||
@@ -18236,6 +18589,9 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
     }
     if command.info.cmd_type == CommandType.command_incrby {
         return command_executor_incrby(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_increx {
+        return command_executor_increx(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_decrby {
         return command_executor_decrby(engine, command, now_ms);

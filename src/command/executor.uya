@@ -8278,6 +8278,30 @@ fn command_executor_module_help() CommandReply {
         object_free(reply_list);
         return command_executor_oom();
     };
+    _ = list_object_push_tail(reply_list, &"MODULE LOAD path [arg [arg ...]]"[0: 32]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"    Disabled in redis-uya standalone profile; module loading is not supported."[0: 78]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"MODULE LOADEX path [CONFIG name value ...] [ARGS arg ...]"[0: 57]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"    Disabled in redis-uya standalone profile; module loading is not supported."[0: 78]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"MODULE UNLOAD name"[0: 18]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"    Disabled in redis-uya standalone profile; module unloading is not supported."[0: 80]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
     return command_executor_owned_array(reply_list);
 }
 
@@ -8300,6 +8324,24 @@ fn command_executor_module(command: &Command) CommandReply {
             return command_executor_owned_error(&"ERR wrong number of arguments for 'module|list' command"[0: 55]);
         }
         return command_executor_owned_raw(&"*0\r\n"[0: 4]);
+    }
+    if command_executor_keyword_eq(subcommand, &"LOAD"[0: 4]) {
+        if command.argc < 3 {
+            return command_executor_owned_error(&"ERR wrong number of arguments for 'module|load' command"[0: 55]);
+        }
+        return command_executor_error(&"ERR MODULE LOAD command not allowed by redis-uya standalone profile"[0: 67]);
+    }
+    if command_executor_keyword_eq(subcommand, &"LOADEX"[0: 6]) {
+        if command.argc < 3 {
+            return command_executor_owned_error(&"ERR wrong number of arguments for 'module|loadex' command"[0: 57]);
+        }
+        return command_executor_error(&"ERR MODULE LOADEX command not allowed by redis-uya standalone profile"[0: 69]);
+    }
+    if command_executor_keyword_eq(subcommand, &"UNLOAD"[0: 6]) {
+        if command.argc != 3 {
+            return command_executor_owned_error(&"ERR wrong number of arguments for 'module|unload' command"[0: 57]);
+        }
+        return command_executor_error(&"ERR MODULE UNLOAD command not allowed by redis-uya standalone profile"[0: 69]);
     }
 
     var err: Sds = sds_empty() catch {
@@ -16792,7 +16834,10 @@ fn command_executor_command_visible_memory_subcommand(name: &[byte]) bool {
 
 fn command_executor_command_visible_module_subcommand(name: &[byte]) bool {
     return command_executor_slice_eq(name, &"help"[0: 4]) ||
-        command_executor_slice_eq(name, &"list"[0: 4]);
+        command_executor_slice_eq(name, &"list"[0: 4]) ||
+        command_executor_slice_eq(name, &"load"[0: 4]) ||
+        command_executor_slice_eq(name, &"loadex"[0: 6]) ||
+        command_executor_slice_eq(name, &"unload"[0: 6]);
 }
 
 fn command_executor_command_visible_slowlog_subcommand(name: &[byte]) bool {

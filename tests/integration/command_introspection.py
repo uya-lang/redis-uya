@@ -484,16 +484,22 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"memory commands missing from COMMAND INFO: {memory_info!r}")
 
-            module_info = send_command(sock, b"COMMAND", b"INFO", b"MODULE", b"MODULE|HELP", b"MODULE|LIST")
+            module_info = send_command(sock, b"COMMAND", b"INFO", b"MODULE", b"MODULE|HELP", b"MODULE|LIST", b"MODULE|LOAD", b"MODULE|LOADEX", b"MODULE|UNLOAD")
             if (
                 not isinstance(module_info, list)
-                or len(module_info) != 3
+                or len(module_info) != 6
                 or not isinstance(module_info[0], list)
                 or module_info[0][0] != b"module"
                 or not isinstance(module_info[1], list)
                 or module_info[1][0] != b"module|help"
                 or not isinstance(module_info[2], list)
                 or module_info[2][0] != b"module|list"
+                or not isinstance(module_info[3], list)
+                or module_info[3][0] != b"module|load"
+                or not isinstance(module_info[4], list)
+                or module_info[4][0] != b"module|loadex"
+                or not isinstance(module_info[5], list)
+                or module_info[5][0] != b"module|unload"
             ):
                 raise AssertionError(f"module commands missing from COMMAND INFO: {module_info!r}")
 
@@ -729,8 +735,8 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"list move commands missing from COMMAND INFO: {list_move_info!r}")
 
-            unsupported_info = send_command(sock, b"COMMAND", b"INFO", b"MODULE|LOAD", b"CLUSTER|RESET")
-            if unsupported_info != [None, None]:
+            unsupported_info = send_command(sock, b"COMMAND", b"INFO", b"CLUSTER|RESET")
+            if unsupported_info != [None]:
                 raise AssertionError(f"unsupported COMMAND INFO entries must be null: {unsupported_info!r}")
 
             client_kill_info = send_command(sock, b"COMMAND", b"INFO", b"CLIENT|KILL", b"CLIENT|UNBLOCK", b"CLIENT|REPLY", b"CLIENT|CACHING", b"CLIENT|NO-EVICT", b"CLIENT|NO-TOUCH")
@@ -758,7 +764,7 @@ def run_smoke() -> None:
             if not isinstance(docs[1], list) or b"summary" not in docs[1]:
                 raise AssertionError(f"missing COMMAND DOCS summary: {docs!r}")
 
-            unsupported_docs = send_command(sock, b"COMMAND", b"DOCS", b"MODULE|LOAD", b"CLUSTER|RESET")
+            unsupported_docs = send_command(sock, b"COMMAND", b"DOCS", b"CLUSTER|RESET")
             if unsupported_docs != []:
                 raise AssertionError(f"unsupported COMMAND DOCS entries should be omitted: {unsupported_docs!r}")
 
@@ -827,9 +833,12 @@ def run_smoke() -> None:
                 or b"module" not in docs_all_resp2
                 or b"module|help" not in docs_all_resp2
                 or b"module|list" not in docs_all_resp2
+                or b"module|load" not in docs_all_resp2
+                or b"module|loadex" not in docs_all_resp2
+                or b"module|unload" not in docs_all_resp2
             ):
                 raise AssertionError(f"unexpected COMMAND DOCS all RESP2 payload: {docs_all_resp2!r}")
-            if b"module|load" in docs_all_resp2 or b"cluster|reset" in docs_all_resp2:
+            if b"cluster|reset" in docs_all_resp2:
                 raise AssertionError(f"unsupported commands leaked into COMMAND DOCS all RESP2: {docs_all_resp2!r}")
 
             listed_client = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"CLIENT*")
@@ -988,9 +997,9 @@ def run_smoke() -> None:
                 or b"module" not in listed_module
                 or b"module|help" not in listed_module
                 or b"module|list" not in listed_module
-                or b"module|load" in listed_module
-                or b"module|loadex" in listed_module
-                or b"module|unload" in listed_module
+                or b"module|load" not in listed_module
+                or b"module|loadex" not in listed_module
+                or b"module|unload" not in listed_module
             ):
                 raise AssertionError(f"unexpected COMMAND LIST module* result: {listed_module!r}")
 
@@ -1218,9 +1227,12 @@ def run_smoke() -> None:
                 or not isinstance(docs_all.get(b"module"), dict)
                 or not isinstance(docs_all.get(b"module|help"), dict)
                 or not isinstance(docs_all.get(b"module|list"), dict)
+                or not isinstance(docs_all.get(b"module|load"), dict)
+                or not isinstance(docs_all.get(b"module|loadex"), dict)
+                or not isinstance(docs_all.get(b"module|unload"), dict)
             ):
                 raise AssertionError(f"unexpected COMMAND DOCS all RESP3 payload: {docs_all!r}")
-            if b"module|load" in docs_all or b"cluster|reset" in docs_all:
+            if b"cluster|reset" in docs_all:
                 raise AssertionError(f"unsupported commands leaked into COMMAND DOCS all RESP3: {docs_all!r}")
 
             getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"SORT", b"mylist", b"ALPHA", b"STORE", b"out")

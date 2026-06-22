@@ -462,6 +462,15 @@ class RedisPySubsetClient:
         assert isinstance(result, list)
         return result
 
+    def module_load(self, path: bytes):
+        return self._request(b"MODULE", b"LOAD", path)
+
+    def module_loadex(self, path: bytes):
+        return self._request(b"MODULE", b"LOADEX", path)
+
+    def module_unload(self, name: bytes):
+        return self._request(b"MODULE", b"UNLOAD", name)
+
     def slowlog_len(self) -> int:
         return int(self._request(b"SLOWLOG", b"LEN"))
 
@@ -1637,6 +1646,24 @@ def run_smoke() -> None:
                 raise AssertionError("unexpected MEMORY PURGE result")
             if client.module_list() != []:
                 raise AssertionError("unexpected MODULE LIST result")
+            try:
+                client.module_load(b"redis.so")
+                raise AssertionError("expected MODULE LOAD to be disabled")
+            except RespError as exc:
+                if str(exc) != "ERR MODULE LOAD command not allowed by redis-uya standalone profile":
+                    raise AssertionError(f"unexpected MODULE LOAD error: {exc}") from exc
+            try:
+                client.module_loadex(b"redis.so")
+                raise AssertionError("expected MODULE LOADEX to be disabled")
+            except RespError as exc:
+                if str(exc) != "ERR MODULE LOADEX command not allowed by redis-uya standalone profile":
+                    raise AssertionError(f"unexpected MODULE LOADEX error: {exc}") from exc
+            try:
+                client.module_unload(b"json")
+                raise AssertionError("expected MODULE UNLOAD to be disabled")
+            except RespError as exc:
+                if str(exc) != "ERR MODULE UNLOAD command not allowed by redis-uya standalone profile":
+                    raise AssertionError(f"unexpected MODULE UNLOAD error: {exc}") from exc
             try:
                 client._request(b"MEMORY")
                 raise AssertionError("expected MEMORY without subcommand to fail")

@@ -231,6 +231,9 @@ def run_smoke() -> None:
             debug_reply = recv_line(sock)
             if debug_reply != b"-ERR DEBUG command not allowed by redis-uya standalone profile\r\n":
                 raise AssertionError(f"unexpected DEBUG reply: {debug_reply!r}")
+            roundtrip(sock, b"*3\r\n$6\r\nMODULE\r\n$4\r\nLOAD\r\n$8\r\nredis.so\r\n", b"-ERR MODULE LOAD command not allowed by redis-uya standalone profile\r\n")
+            roundtrip(sock, b"*3\r\n$6\r\nMODULE\r\n$6\r\nLOADEX\r\n$8\r\nredis.so\r\n", b"-ERR MODULE LOADEX command not allowed by redis-uya standalone profile\r\n")
+            roundtrip(sock, b"*3\r\n$6\r\nMODULE\r\n$6\r\nUNLOAD\r\n$4\r\njson\r\n", b"-ERR MODULE UNLOAD command not allowed by redis-uya standalone profile\r\n")
             sock.sendall(b"*1\r\n$8\r\nFAILOVER\r\n")
             failover_reply = recv_line(sock)
             if failover_reply != b"-ERR FAILOVER requires connected replicas.\r\n":

@@ -3007,18 +3007,23 @@ MEMORY USAGE key [SAMPLES count]
 ```text
 MODULE HELP
 MODULE LIST
+MODULE LOAD path [arg [arg ...]]
+MODULE LOADEX path [CONFIG name value ...] [ARGS arg ...]
+MODULE UNLOAD name
 ```
 
 返回：
 
 - `HELP`：返回当前支持的 `MODULE` 子命令说明
 - `LIST`：返回已加载模块数组；当前固定为空数组
+- `LOAD` / `LOADEX`：当前统一返回 `ERR MODULE LOAD/LOADEX command not allowed by redis-uya standalone profile`
+- `UNLOAD`：当前统一返回 `ERR MODULE UNLOAD command not allowed by redis-uya standalone profile`
 
 说明：
 
-- 当前实现为 partial：仅支持 `HELP`、`LIST` 和 `COMMAND*` 可见面
-- `COMMAND INFO/LIST/DOCS` 会暴露 `MODULE`、`MODULE|HELP` 与 `MODULE|LIST`
-- 当前不支持 module 加载、卸载或模块 API，因此 `MODULE LOAD`、`MODULE LOADEX` 与 `MODULE UNLOAD` 仍不进入可见命令目录
+- 当前实现为 partial / standalone-error 组合：`HELP`、`LIST` 为 partial；`LOAD`、`LOADEX` 与 `UNLOAD` 为单机安全 profile 下的 standalone-error
+- `COMMAND INFO/LIST/DOCS` 会暴露 `MODULE`、`MODULE|HELP`、`MODULE|LIST`、`MODULE|LOAD`、`MODULE|LOADEX` 与 `MODULE|UNLOAD`
+- 当前不支持 module 加载、卸载或模块 API；禁用子命令不加载动态库、不修改模块列表、不写 AOF 或复制 backlog
 
 ### `SLOWLOG`
 

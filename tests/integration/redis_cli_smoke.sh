@@ -904,6 +904,24 @@ if [[ -n "$MODULE_LIST_RESULT" ]]; then
     exit 1
 fi
 
+MODULE_LOAD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" module load redis.so 2>&1 || true)"
+if [[ "$MODULE_LOAD_RESULT" != "ERR MODULE LOAD command not allowed by redis-uya standalone profile" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected MODULE LOAD disabled error, got '$MODULE_LOAD_RESULT'" >&2
+    exit 1
+fi
+
+MODULE_LOADEX_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" module loadex redis.so 2>&1 || true)"
+if [[ "$MODULE_LOADEX_RESULT" != "ERR MODULE LOADEX command not allowed by redis-uya standalone profile" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected MODULE LOADEX disabled error, got '$MODULE_LOADEX_RESULT'" >&2
+    exit 1
+fi
+
+MODULE_UNLOAD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" module unload json 2>&1 || true)"
+if [[ "$MODULE_UNLOAD_RESULT" != "ERR MODULE UNLOAD command not allowed by redis-uya standalone profile" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected MODULE UNLOAD disabled error, got '$MODULE_UNLOAD_RESULT'" >&2
+    exit 1
+fi
+
 CLIENT_CACHING_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" client caching yes)"
 if [[ "$CLIENT_CACHING_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected CLIENT CACHING YES OK, got '$CLIENT_CACHING_RESULT'" >&2

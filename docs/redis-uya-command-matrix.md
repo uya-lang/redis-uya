@@ -1,7 +1,7 @@
 # redis-uya command matrix
 
 > version: v0.9.1-dev
-> date: 2026-06-21
+> date: 2026-06-22
 > source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`
 > runtime source: `src/command/catalog_generated.uya`
 
@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 178 | 3 | 3 | 35 |
+| Tier A: standalone core | 365 | 259 | 146 | 178 | 6 | 3 | 32 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -26,9 +26,9 @@
 |--------|-------|
 | `full` | `147` |
 | `partial` | `185` |
-| `standalone-error` | `29` |
+| `standalone-error` | `32` |
 | `alias` | `3` |
-| `deferred` | `188` |
+| `deferred` | `185` |
 
 ## Group counts
 
@@ -392,9 +392,9 @@
 | `module` | `server` | `partial` | `-` | `-2` | `-` | `no` | `@slow` |
 | `module|help` | `server` | `partial` | `-` | `2` | `-` | `no` | `@slow` |
 | `module|list` | `server` | `partial` | `-` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `module|load` | `server` | `deferred` | `v0.9.3` | `-3` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `module|loadex` | `server` | `deferred` | `v0.9.3` | `-3` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `module|unload` | `server` | `deferred` | `v0.9.3` | `3` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `module|load` | `server` | `standalone-error` | `v1.1.0` | `-3` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `module|loadex` | `server` | `standalone-error` | `v1.1.0` | `-3` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `module|unload` | `server` | `standalone-error` | `v1.1.0` | `3` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `monitor` | `server` | `partial` | `-` | `1` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `move` | `generic` | `partial` | `-` | `3` | `-` | `no` | `@keyspace, @write, @fast` |
 | `mset` | `string` | `full` | `-` | `-3` | `-` | `no` | `@write, @string, @slow` |

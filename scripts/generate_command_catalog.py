@@ -469,6 +469,9 @@ PARTIAL_NAMES = {
 STANDALONE_ERROR_NAMES = {
     "debug",
     "failover",
+    "module|load",
+    "module|loadex",
+    "module|unload",
     "pfdebug",
 }
 

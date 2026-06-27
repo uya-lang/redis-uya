@@ -1634,6 +1634,22 @@ def run_smoke() -> None:
             except RespError as exc:
                 if str(exc) != "NOPERM User default has no permissions to run the 'get' command":
                     raise AssertionError(f"unexpected ACL denied GET error: {exc}") from exc
+            acl_log_one = client.acl_log(b"1")
+            if (
+                len(acl_log_one) != 1
+                or b"context" not in acl_log_one[0]
+                or b"command" not in acl_log_one[0]
+                or b"object" not in acl_log_one[0]
+                or b"get" not in acl_log_one[0]
+                or b"username" not in acl_log_one[0]
+                or b"default" not in acl_log_one[0]
+            ):
+                raise AssertionError(f"expected ACL LOG to include denied GET command entry, got {acl_log_one!r}")
+            acl_log_two = client.acl_log(b"2")
+            if len(acl_log_two) != 2 or b"dryrun" not in acl_log_two[1]:
+                raise AssertionError(f"expected ACL LOG count to include dryrun entry, got {acl_log_two!r}")
+            if client.acl_log(b"RESET") != "OK" or client.acl_log() != []:
+                raise AssertionError("expected ACL LOG RESET to clear denied entries")
             if client.acl_setuser(b"default", b"+get") != "OK":
                 raise AssertionError("expected ACL SETUSER default +get to return OK")
             if client.acl_dryrun(b"default", b"GET", b"missing") != "OK":

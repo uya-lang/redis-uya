@@ -1680,6 +1680,12 @@ export fn test_connection_process_acl_permission_denial() !void {
     const get_denied: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$3\r\nGET\r\n$7\r\nmissing\r\n"[0: 26], &out[0], 2048, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: get_denied.response_len], &"-NOPERM User default has no permissions to run the 'get' command\r\n"[0: 66]));
 
+    const acl_log_two: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$3\r\nLOG\r\n$1\r\n2\r\n"[0: 29], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_contains(out[0: acl_log_two.response_len], &"$7\r\ncontext\r\n$7\r\ncommand\r\n"[0: 26]));
+    try assert_true(network_connection_contains(out[0: acl_log_two.response_len], &"$7\r\ncontext\r\n$6\r\ndryrun\r\n"[0: 25]));
+    try assert_true(network_connection_contains(out[0: acl_log_two.response_len], &"$6\r\nobject\r\n$3\r\nget\r\n"[0: 21]));
+    try assert_true(network_connection_contains(out[0: acl_log_two.response_len], &"$8\r\nusername\r\n$7\r\ndefault\r\n"[0: 27]));
+
     const multi_ok: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$5\r\nMULTI\r\n"[0: 15], &out[0], 2048, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: multi_ok.response_len], &"+OK\r\n"[0: 5]));
 
@@ -1688,6 +1694,15 @@ export fn test_connection_process_acl_permission_denial() !void {
 
     const discard: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$7\r\nDISCARD\r\n"[0: 17], &out[0], 2048, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: discard.response_len], &"+OK\r\n"[0: 5]));
+
+    const acl_log_one: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$3\r\nLOG\r\n$1\r\n1\r\n"[0: 29], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_contains(out[0: acl_log_one.response_len], &"$7\r\ncontext\r\n$11\r\ntransaction\r\n"[0: 31]));
+
+    const acl_log_reset: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$3\r\nLOG\r\n$5\r\nRESET\r\n"[0: 33], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: acl_log_reset.response_len], &"+OK\r\n"[0: 5]));
+
+    const acl_log_empty: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$3\r\nACL\r\n$3\r\nLOG\r\n"[0: 22], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: acl_log_empty.response_len], &"*0\r\n"[0: 4]));
 
     const allow_get: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$7\r\ndefault\r\n$4\r\n+get\r\n"[0: 49], &out[0], 2048, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: allow_get.response_len], &"+OK\r\n"[0: 5]));

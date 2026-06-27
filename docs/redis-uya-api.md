@@ -105,7 +105,7 @@ ACL WHOAMI
 - `ACL HELP` 返回 Redis 兼容的 ACL 子命令帮助数组
 - `ACL LIST` 返回当前默认用户的 config file 格式描述；默认是 `user default on nopass ~* &* +@all`，执行 `ACL SETUSER default -get` 后会追加 `-get`
 - `ACL LOAD` 当前按未配置 ACL 文件的 Redis 兼容错误返回，不会修改用户状态
-- `ACL LOG` 当前返回空数组；`ACL LOG RESET` 返回 `OK`
+- `ACL LOG [count]` 当前返回默认用户命令权限拒绝的进程内 ring 日志，覆盖 `ACL DRYRUN`、真实命令、事务队列前置拒绝和脚本内部命令拒绝产生的 `NOPERM`；`ACL LOG RESET` 会清空该日志
 - `ACL SAVE` 当前按未配置 ACL 文件的 Redis 兼容错误返回，不会写入 ACL 文件
 - `ACL SETUSER default [attribute ...]` 当前支持不会改变固定默认用户视图的 no-op 修饰符，例如 `on nopass ~* &* +@all`，也支持命令级 `-cmd` / `+cmd`；例如 `ACL SETUSER default -get` 会让后续 `GET` 与 `ACL DRYRUN default GET ...` 返回 `NOPERM User default has no permissions to run the 'get' command`，`ACL SETUSER default +get` 或 `+@all` 会恢复
 - `ACL USERS` 返回当前已知用户名数组；当前仅包含 `default`
@@ -115,7 +115,7 @@ ACL WHOAMI
 
 - 当前实现为 partial，仅暴露 `ACL CAT`、`ACL DELUSER`、`ACL DRYRUN`、`ACL GENPASS`、`ACL GETUSER`、`ACL HELP`、`ACL LIST`、`ACL LOAD`、`ACL LOG`、`ACL SAVE`、`ACL SETUSER`、`ACL USERS`、`ACL WHOAMI` 和 `COMMAND*` 可见面
 - `COMMAND INFO/LIST/DOCS` 会暴露 `ACL`、`ACL|CAT`、`ACL|DELUSER`、`ACL|DRYRUN`、`ACL|GENPASS`、`ACL|GETUSER`、`ACL|HELP`、`ACL|LIST`、`ACL|LOAD`、`ACL|LOG`、`ACL|SAVE`、`ACL|SETUSER`、`ACL|USERS` 与 `ACL|WHOAMI`
-- 当前不支持 ACL 用户存储、密码管理、分类权限、key pattern 权限、ACL 日志或 ACL 文件加载保存；命令级 deny list 是进程内状态，尚未持久化到 ACL 文件或 RDB/AOF
+- 当前不支持 ACL 用户存储、密码管理、分类权限、key pattern 权限、完整 Redis ACL 审计字段或 ACL 文件加载保存；命令级 deny list 与 ACL LOG 都是进程内状态，尚未持久化到 ACL 文件或 RDB/AOF
 
 ### `COMMAND`
 

@@ -826,6 +826,30 @@ if [[ "$ACL_DENY_GET_CMD_RESULT" != "NOPERM User default has no permissions to r
     exit 1
 fi
 
+ACL_LOG_ONE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl log 1)"
+if [[ "$ACL_LOG_ONE_RESULT" != *"context"* || "$ACL_LOG_ONE_RESULT" != *"command"* || "$ACL_LOG_ONE_RESULT" != *"object"* || "$ACL_LOG_ONE_RESULT" != *"get"* || "$ACL_LOG_ONE_RESULT" != *"username"* || "$ACL_LOG_ONE_RESULT" != *"default"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL LOG 1 to include denied GET entry, got '$ACL_LOG_ONE_RESULT'" >&2
+    exit 1
+fi
+
+ACL_LOG_TWO_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl log 2)"
+if [[ "$ACL_LOG_TWO_RESULT" != *"dryrun"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL LOG 2 to include dryrun entry, got '$ACL_LOG_TWO_RESULT'" >&2
+    exit 1
+fi
+
+ACL_LOG_DENIED_RESET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl log reset)"
+if [[ "$ACL_LOG_DENIED_RESET_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL LOG RESET after denied commands OK, got '$ACL_LOG_DENIED_RESET_RESULT'" >&2
+    exit 1
+fi
+
+ACL_LOG_EMPTY_AFTER_RESET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl log)"
+if [[ -n "$ACL_LOG_EMPTY_AFTER_RESET_RESULT" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected empty ACL LOG after reset, got '$ACL_LOG_EMPTY_AFTER_RESET_RESULT'" >&2
+    exit 1
+fi
+
 ACL_ALLOW_GET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser default +get)"
 if [[ "$ACL_ALLOW_GET_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ACL SETUSER default +get OK, got '$ACL_ALLOW_GET_RESULT'" >&2

@@ -1651,8 +1651,10 @@ export fn test_connection_process_reset() !void {
 export fn test_connection_process_acl_permission_denial() !void {
     reset_memory_stats_for_test();
     connection_acl_reset_for_test();
+    connection_client_registry_reset_for_test();
     defer {
         connection_acl_reset_for_test();
+        connection_client_registry_reset_for_test();
     }
     const router: CommandRouter = command_router_new();
     var engine: Engine = engine_new();
@@ -1691,7 +1693,7 @@ export fn test_connection_process_acl_permission_denial() !void {
     try assert_true(network_connection_contains(out[0: acl_log_two.response_len], &"$8\r\nentry-id\r\n"[0: 14]));
     try assert_true(network_connection_contains(out[0: acl_log_two.response_len], &"$17\r\ntimestamp-created\r\n"[0: 24]));
     try assert_true(network_connection_contains(out[0: acl_log_two.response_len], &"$22\r\ntimestamp-last-updated\r\n"[0: 29]));
-    try assert_true(network_connection_contains(out[0: acl_log_two.response_len], &"$11\r\nclient-info\r\n$31\r\nid=0 addr=unknown laddr=unknown\r\n"[0: 56]));
+    try assert_true(network_connection_contains(out[0: acl_log_two.response_len], &"$11\r\nclient-info\r\n$31\r\nid=1 addr=unknown laddr=unknown\r\n"[0: 56]));
 
     const multi_ok: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$5\r\nMULTI\r\n"[0: 15], &out[0], 2048, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: multi_ok.response_len], &"+OK\r\n"[0: 5]));

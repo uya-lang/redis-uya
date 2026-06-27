@@ -843,6 +843,10 @@ if [[ "$ACL_LOG_ONE_RESULT" != *"context"* || "$ACL_LOG_ONE_RESULT" != *"command
     echo "[FAIL] integration/redis_cli_smoke: expected ACL LOG 1 to include denied GET entry, got '$ACL_LOG_ONE_RESULT'" >&2
     exit 1
 fi
+if [[ "$ACL_LOG_ONE_RESULT" == *"id=0 addr=unknown laddr=unknown"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL LOG 1 to include real client id, got '$ACL_LOG_ONE_RESULT'" >&2
+    exit 1
+fi
 
 ACL_LOG_TWO_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl log 2)"
 if [[ "$ACL_LOG_TWO_RESULT" != *"dryrun"* ]]; then

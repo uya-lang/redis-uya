@@ -1651,6 +1651,7 @@ def run_smoke() -> None:
                 or b"timestamp-created" not in acl_log_one[0]
                 or b"timestamp-last-updated" not in acl_log_one[0]
                 or b"client-info" not in acl_log_one[0]
+                or b"id=0 addr=unknown laddr=unknown" in acl_log_one[0]
             ):
                 raise AssertionError(f"expected ACL LOG to include denied GET command entry, got {acl_log_one!r}")
             acl_log_two = client.acl_log(b"2")

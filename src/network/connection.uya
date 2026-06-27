@@ -1938,7 +1938,8 @@ fn connection_acl_log_append_entry(raw: &Sds, entry: &ConnectionAclLogEntry, now
     if now_ms >= entry.created_ms {
         age_seconds = (now_ms - entry.created_ms) / 1000u64;
     }
-    try connection_sds_append_resp_array_header(raw, 12);
+    const timestamp_seconds: u64 = entry.created_ms / 1000u64;
+    try connection_sds_append_resp_array_header(raw, 20);
     try connection_sds_append_resp_bulk(raw, &"reason"[0: 6]);
     try connection_sds_append_resp_bulk(raw, &"command"[0: 7]);
     try connection_sds_append_resp_bulk(raw, &"context"[0: 7]);
@@ -1949,6 +1950,14 @@ fn connection_acl_log_append_entry(raw: &Sds, entry: &ConnectionAclLogEntry, now
     try connection_sds_append_resp_bulk(raw, &"default"[0: 7]);
     try connection_sds_append_resp_bulk(raw, &"age-seconds"[0: 11]);
     try connection_sds_append_resp_integer(raw, age_seconds as i64);
+    try connection_sds_append_resp_bulk(raw, &"client-info"[0: 11]);
+    try connection_sds_append_resp_bulk(raw, &"id=0 addr=unknown laddr=unknown"[0: 31]);
+    try connection_sds_append_resp_bulk(raw, &"entry-id"[0: 8]);
+    try connection_sds_append_resp_integer(raw, entry.sequence as i64);
+    try connection_sds_append_resp_bulk(raw, &"timestamp-created"[0: 17]);
+    try connection_sds_append_resp_integer(raw, timestamp_seconds as i64);
+    try connection_sds_append_resp_bulk(raw, &"timestamp-last-updated"[0: 22]);
+    try connection_sds_append_resp_integer(raw, timestamp_seconds as i64);
     try connection_sds_append_resp_bulk(raw, &"count"[0: 5]);
     try connection_sds_append_resp_integer(raw, entry.count as i64);
 }

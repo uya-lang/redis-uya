@@ -827,7 +827,7 @@ if [[ "$ACL_DENY_GET_CMD_RESULT" != "NOPERM User default has no permissions to r
 fi
 
 ACL_LOG_ONE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl log 1)"
-if [[ "$ACL_LOG_ONE_RESULT" != *"context"* || "$ACL_LOG_ONE_RESULT" != *"command"* || "$ACL_LOG_ONE_RESULT" != *"object"* || "$ACL_LOG_ONE_RESULT" != *"get"* || "$ACL_LOG_ONE_RESULT" != *"username"* || "$ACL_LOG_ONE_RESULT" != *"default"* ]]; then
+if [[ "$ACL_LOG_ONE_RESULT" != *"context"* || "$ACL_LOG_ONE_RESULT" != *"command"* || "$ACL_LOG_ONE_RESULT" != *"object"* || "$ACL_LOG_ONE_RESULT" != *"get"* || "$ACL_LOG_ONE_RESULT" != *"username"* || "$ACL_LOG_ONE_RESULT" != *"default"* || "$ACL_LOG_ONE_RESULT" != *"entry-id"* || "$ACL_LOG_ONE_RESULT" != *"timestamp-created"* || "$ACL_LOG_ONE_RESULT" != *"timestamp-last-updated"* || "$ACL_LOG_ONE_RESULT" != *"client-info"* ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ACL LOG 1 to include denied GET entry, got '$ACL_LOG_ONE_RESULT'" >&2
     exit 1
 fi

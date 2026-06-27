@@ -53,7 +53,7 @@
 - String/Key/Control 命令执行：`PING`、`GET`、`SET`、`DEL`、`EXISTS`、`COPY`、`KEYS`、`RANDOMKEY`、`EXPIRE`、`EXPIREAT`、`EXPIRETIME`、`PEXPIRE`、`PEXPIREAT`、`PEXPIRETIME`、`PERSIST`、`TTL`、`PTTL`、`TIME`、`ROLE`、`INFO` 多 section、`CONFIG GET/HELP/RESETSTAT`、`CLIENT` 兼容子集、`AUTH`、`SAVE`
 - String TTL/算法扩展：`GETEX`、`SETEX`、`PSETEX`、`MSETEX`、`LCS`
 - Hash 最小对象：基于项目内 `Dict` 的最小 hash value 容器
-- Hash 命令子集：`HSET`、`HGET`、`HDEL`、`HEXISTS`、`HLEN`、`HMGET`、`HSETNX`、`HSTRLEN`、`HRANDFIELD`
+- Hash 命令子集：`HSET`、`HGET`、`HDEL`、`HEXISTS`、`HLEN`、`HMGET`、`HSETNX`、`HSTRLEN`、`HRANDFIELD`，以及 field TTL 查询/清理兼容面 `HTTL/HPTTL/HEXPIRETIME/HPEXPIRETIME/HPERSIST`
 - List 最小对象：基于双向链表的最小 list value 容器
 - List 命令子集：`LPUSH`、`LPOP`、`LRANGE`
 - Blocking list/zset 第一批：`BLPOP`、`BRPOP`、`BRPOPLPUSH`、`BLMOVE`、`BLMPOP`、`BZPOPMIN`、`BZPOPMAX`、`BZMPOP` 已支持立即命中、server-side block/unblock、超时返回与 AOF replay
@@ -289,6 +289,7 @@ build/redis-uya 6380 1
 - Geo 第一批 partial：`GEOADD`、`GEODIST`、`GEOHASH`、`GEOPOS`、`GEOSEARCH`、`GEOSEARCHSTORE`、`GEORADIUS`、`GEORADIUS_RO`、`GEORADIUSBYMEMBER`、`GEORADIUSBYMEMBER_RO` 当前可用，但内部暂以 exact zset-backed packed coordinate score 实现，`GEOSEARCHSTORE` 支持目标写入和 `STOREDIST` 整数距离 score，暂不保存 Redis 原生浮点距离，legacy radius 命令复用 `GEOSEARCH ... BYRADIUS` 路径且不支持 `STORE/STOREDIST`，`GEOPOS` 和 `WITHCOORD` 返回当前 packed score 解码后的 `1e-6` 量化坐标，`GEOHASH` 基于当前解码坐标生成 Redis 兼容 geohash 字符串，`WITHHASH` 返回当前 packed score，而不是 Redis 原生 geohash 整数
 - Scripting 第一批 partial：`EVAL`、`EVALSHA`、`EVAL_RO`、`EVALSHA_RO`、`SCRIPT DEBUG/LOAD/EXISTS/FLUSH/KILL` 当前可用，但只支持单条 `return redis.call(...)` 脚本子集；`*_RO` 会拒绝内部写命令，`SCRIPT DEBUG` 是 no-op 兼容面，`SCRIPT KILL` 只覆盖无运行脚本 `NOTBUSY` 错误面；AOF/复制传播的是脚本内部实际执行的命令效果，而不是原始 `EVAL*`
 - Functions 第一批 partial：`FUNCTION HELP`、`FUNCTION LIST`、`FUNCTION STATS`、`FUNCTION FLUSH`、`FUNCTION DELETE`、`FUNCTION LOAD`、`FUNCTION DUMP`、`FUNCTION RESTORE`、`FUNCTION KILL`、`FCALL`、`FCALL_RO` 当前可用，用于暴露 Functions 控制面帮助、空库列表、空库统计、no-op flush、空库删除错误面、加载未支持错误面、空库序列化 payload、空库 payload restore、无运行脚本错误面、空库调用错误面、`COMMAND GETKEYS*` 和 `COMMAND*` 可见面；暂不支持 function library 存储、非空 `FUNCTION RESTORE` 或真实 `FCALL*` 执行
+- Hash field TTL partial：`HTTL`、`HPTTL`、`HEXPIRETIME`、`HPEXPIRETIME` 与 `HPERSIST` 当前可用，支持 `FIELDS numfields field ...` 解析、整数数组回复、field 缺失返回 `-2`、field 存在但无 TTL 返回 `-1`、key 缺失和错类型错误面、`COMMAND*` 可见面与 TCP/redis-py/redis-cli smoke；当前尚未存储真实 field TTL 元数据，因此不支持 `HEXPIRE/HPEXPIRE/HGETEX/HSETEX` 的过期写入语义，也不做 field 级过期扫描、AOF/RDB 持久化或复制传播
 - ACL 第一批 partial：`ACL CAT`、`ACL DELUSER`、`ACL DRYRUN`、`ACL GENPASS`、`ACL GETUSER`、`ACL HELP`、`ACL LIST`、`ACL LOAD`、`ACL LOG`、`ACL SAVE`、`ACL SETUSER`、`ACL USERS`、`ACL WHOAMI` 当前可用，用于暴露 ACL 分类、默认用户不可删除错误面、默认用户 dry-run 命令检查、口令生成、默认用户详情、ACL 控制面帮助、默认用户 config 格式、ACL 文件未配置错误面、空 ACL 日志、默认用户 no-op SETUSER 兼容面、默认用户列表、当前默认用户和 `COMMAND*` 可见面；`ACL CAT category` 当前返回可见命令目录中的匹配命令，`ACL DELUSER` 当前不会删除默认用户，`ACL DRYRUN default ...` 当前按默认用户全权限视图校验命令存在性和 arity，`ACL SETUSER default ...` 当前只接受不会改变固定默认用户视图的 no-op 修饰符，`ACL GENPASS [bits]` 当前返回 Redis 兼容长度的十六进制口令，`ACL LIST` / `ACL GETUSER default` 当前固定返回 nopass 默认用户视图，`ACL LOAD` / `ACL SAVE` 当前按未配置 ACL 文件的 Redis 兼容错误返回，`ACL LOG` 当前为空日志兼容面，暂不反映 `requirepass`；暂不支持 ACL 用户存储、命令权限、key pattern 权限、真实 ACL 日志或 ACL 文件加载保存，安全基线仍由 `requirepass` / `AUTH` 提供
 - Client reply/unblock/pause/flags partial：`CLIENT REPLY ON|OFF|SKIP`、`CLIENT UNBLOCK id [TIMEOUT|ERROR]`、`CLIENT PAUSE timeout [WRITE|ALL]`、`CLIENT TRACKING ON BCAST PREFIX ...`、`CLIENT CACHING YES|NO`、`CLIENT NO-EVICT ON|OFF` 与 `CLIENT NO-TOUCH ON|OFF` 当前可用；`REPLY` 会维护连接级回复抑制状态，`UNBLOCK` 可解除阻塞 pop 等待客户端并返回 timeout 空结果或 `UNBLOCKED` 错误，`PAUSE WRITE` 只阻塞写命令，均进入 `CLIENT HELP` 与 `COMMAND*` 可见面，tracking/flags 子集用于保存连接级兼容状态；尚未提供 server-assisted client-side caching invalidation，也未接入 `maxmemory` 淘汰候选保护或对象访问路径的 LRU/LFU touch 抑制，`REPLY` 也不改变 Pub/Sub push 或 `MONITOR` 推送
 - Module 第一批 partial：`MODULE HELP`、`MODULE LIST` 当前可用；`LIST` 固定返回空数组并进入 `COMMAND*` 可见面，暂不支持 module 加载、卸载或模块 API
@@ -300,6 +301,7 @@ build/redis-uya 6380 1
 - Hash 第一批数值：`HINCRBY`、`HINCRBYFLOAT`
 - Hash 第二批视图：`HKEYS`、`HVALS`、`HGETALL`、`HRANDFIELD`
 - Hash 第三批扫描：`HSCAN`
+- Hash field TTL 查询/清理兼容面：`HTTL`、`HPTTL`、`HEXPIRETIME`、`HPEXPIRETIME`、`HPERSIST`
 - List 第一批基础：`RPUSH`、`RPOP`、`LINDEX`、`LSET`、`LLEN`
 - List 第二批变异：`LINSERT`、`LTRIM`、`LREM`
 - List 第三批条件：`LPUSHX`、`RPUSHX`、`LPOS`

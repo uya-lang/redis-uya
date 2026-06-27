@@ -14765,6 +14765,74 @@ fn command_executor_hgetdel(engine: &Engine, command: &Command, now_ms: u64) Com
     return reply;
 }
 
+fn command_executor_hash_field_ttl_array(engine: &Engine, command: &Command, now_ms: u64, persist_mode: bool) CommandReply {
+    if command.argc < 5 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const fields_token: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    if !command_executor_keyword_eq(fields_token, &"FIELDS"[0: 6]) {
+        return command_executor_syntax_error();
+    }
+    const numfields_data: &[byte] = command_executor_arg(command, 3) catch {
+        return command_executor_wrong_arity();
+    };
+    const numfields_i64: i64 = command_executor_parse_i64(numfields_data) catch {
+        return command_executor_invalid_integer();
+    };
+    if numfields_i64 < 1 {
+        return command_executor_invalid_integer();
+    }
+    const numfields: usize = numfields_i64 as usize;
+    if command.argc != numfields + 4 {
+        return command_executor_syntax_error();
+    }
+
+    const obj: &RedisObject = command_executor_lookup_key_now_or_null(engine, key, now_ms);
+    if obj != null && obj.obj_type != ObjectType.object_hash {
+        return command_executor_wrongtype();
+    }
+
+    var out: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&out);
+    }
+    command_executor_resp_append_array_header(&out, numfields) catch {
+        return command_executor_oom();
+    };
+
+    var index: usize = 4;
+    while index < command.argc {
+        const field: &[byte] = command_executor_arg(command, index) catch {
+            return command_executor_wrong_arity();
+        };
+        var value: i64 = -2;
+        if obj != null {
+            const exists: bool = hash_object_exists_field(obj, field) catch {
+                return command_executor_wrongtype();
+            };
+            if exists {
+                value = -1;
+                if persist_mode {
+                    value = -1;
+                }
+            }
+        }
+        command_executor_resp_append_integer(&out, value) catch {
+            return command_executor_oom();
+        };
+        index = index + 1;
+    }
+
+    return command_executor_owned_raw(out.buf[0: out.len]);
+}
+
 fn command_executor_hexists(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
     if command.argc != 3 {
         return command_executor_wrong_arity();
@@ -19125,6 +19193,15 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
     }
     if command.info.cmd_type == CommandType.command_hgetdel {
         return command_executor_hgetdel(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_httl ||
+        command.info.cmd_type == CommandType.command_hpttl ||
+        command.info.cmd_type == CommandType.command_hexpiretime ||
+        command.info.cmd_type == CommandType.command_hpexpiretime {
+        return command_executor_hash_field_ttl_array(engine, command, now_ms, false);
+    }
+    if command.info.cmd_type == CommandType.command_hpersist {
+        return command_executor_hash_field_ttl_array(engine, command, now_ms, true);
     }
     if command.info.cmd_type == CommandType.command_hexists {
         return command_executor_hexists(engine, command, now_ms);

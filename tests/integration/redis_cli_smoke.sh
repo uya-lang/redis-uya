@@ -2216,6 +2216,36 @@ if [[ "$HSTRLEN_RESULT" != "5" ]]; then
     exit 1
 fi
 
+HTTL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" httl hash fields 2 field missing)"
+if [[ "$HTTL_RESULT" != $'-1\n-2' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HTTL -1/-2, got '$HTTL_RESULT'" >&2
+    exit 1
+fi
+
+HPTTL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hpttl hash fields 2 field missing)"
+if [[ "$HPTTL_RESULT" != $'-1\n-2' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HPTTL -1/-2, got '$HPTTL_RESULT'" >&2
+    exit 1
+fi
+
+HEXPIRETIME_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hexpiretime hash fields 1 field)"
+if [[ "$HEXPIRETIME_RESULT" != "-1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HEXPIRETIME -1, got '$HEXPIRETIME_RESULT'" >&2
+    exit 1
+fi
+
+HPEXPIRETIME_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hpexpiretime hash fields 1 field)"
+if [[ "$HPEXPIRETIME_RESULT" != "-1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HPEXPIRETIME -1, got '$HPEXPIRETIME_RESULT'" >&2
+    exit 1
+fi
+
+HPERSIST_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hpersist hash fields 2 field missing)"
+if [[ "$HPERSIST_RESULT" != $'-1\n-2' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HPERSIST -1/-2, got '$HPERSIST_RESULT'" >&2
+    exit 1
+fi
+
 HGETDEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hgetdel hash fields 2 field missing)"
 if [[ "$HGETDEL_RESULT" != "value" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected HGETDEL value/null, got '$HGETDEL_RESULT'" >&2

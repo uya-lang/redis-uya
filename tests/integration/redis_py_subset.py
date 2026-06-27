@@ -726,6 +726,61 @@ class RedisPySubsetClient:
         assert isinstance(result, list)
         return result
 
+    def httl(self, key: str, *fields: str) -> list[int]:
+        result = self._request(
+            b"HTTL",
+            key.encode(),
+            b"FIELDS",
+            str(len(fields)).encode(),
+            *(field.encode() for field in fields),
+        )
+        assert isinstance(result, list)
+        return [int(item) for item in result]
+
+    def hpttl(self, key: str, *fields: str) -> list[int]:
+        result = self._request(
+            b"HPTTL",
+            key.encode(),
+            b"FIELDS",
+            str(len(fields)).encode(),
+            *(field.encode() for field in fields),
+        )
+        assert isinstance(result, list)
+        return [int(item) for item in result]
+
+    def hexpiretime(self, key: str, *fields: str) -> list[int]:
+        result = self._request(
+            b"HEXPIRETIME",
+            key.encode(),
+            b"FIELDS",
+            str(len(fields)).encode(),
+            *(field.encode() for field in fields),
+        )
+        assert isinstance(result, list)
+        return [int(item) for item in result]
+
+    def hpexpiretime(self, key: str, *fields: str) -> list[int]:
+        result = self._request(
+            b"HPEXPIRETIME",
+            key.encode(),
+            b"FIELDS",
+            str(len(fields)).encode(),
+            *(field.encode() for field in fields),
+        )
+        assert isinstance(result, list)
+        return [int(item) for item in result]
+
+    def hpersist(self, key: str, *fields: str) -> list[int]:
+        result = self._request(
+            b"HPERSIST",
+            key.encode(),
+            b"FIELDS",
+            str(len(fields)).encode(),
+            *(field.encode() for field in fields),
+        )
+        assert isinstance(result, list)
+        return [int(item) for item in result]
+
     def hexists(self, key: str, field: str) -> int:
         return int(self._request(b"HEXISTS", key.encode(), field.encode()))
 
@@ -1928,6 +1983,12 @@ def run_smoke() -> None:
             assert client.hsetnx("hash", "field", "next") == 0
             assert client.hstrlen("hash", "field") == 5
             assert client.hstrlen("hash", "missing") == 0
+            assert client.httl("hash", "field", "missing") == [-1, -2]
+            assert client.hpttl("hash", "field", "missing") == [-1, -2]
+            assert client.hexpiretime("hash", "field") == [-1]
+            assert client.hpexpiretime("hash", "field") == [-1]
+            assert client.hpersist("hash", "field", "missing") == [-1, -2]
+            assert client.httl("missing", "field") == [-2]
             assert client.hgetdel("hash", "field", "missing") == [b"value", None]
             assert client.hget("hash", "field") is None
             assert client.hdel("hash", "field", "counter", "extra") == 2

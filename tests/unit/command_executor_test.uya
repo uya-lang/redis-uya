@@ -783,6 +783,11 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"geosearchstore"[0: 14], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"delex"[0: 5], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"hgetdel"[0: 7], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"httl"[0: 4], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"hpttl"[0: 5], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"hexpiretime"[0: 11], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"hpexpiretime"[0: 12], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"hpersist"[0: 8], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"msetex"[0: 6], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"lcs"[0: 3], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"increx"[0: 6], CommandCatalogStatus.status_partial);
@@ -4024,6 +4029,102 @@ export fn test_command_hdel_hexists_hlen_hmget_hsetnx_hstrlen() !void {
     const hlen_wrongtype_reply: CommandReply = command_execute_at(&engine, &hlen_wrongtype_command, 1000u64);
     try assert_eq_i32(hlen_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
     resp_value_free(&hlen_wrongtype_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_command_hash_field_ttl_partial() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var out: [byte: 256] = [];
+
+    var hset_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nHSET\r\n$4\r\nhash\r\n$5\r\nfield\r\n$5\r\nvalue\r\n"[0: 46]);
+    const hset_command: Command = try command_executor_test_command(&router, &hset_parsed);
+    _ = command_execute_at(&engine, &hset_command, 1000u64);
+    resp_value_free(&hset_parsed.value);
+
+    var httl_parsed: RespParseResult = try parse_resp2(&"*6\r\n$4\r\nHTTL\r\n$4\r\nhash\r\n$6\r\nFIELDS\r\n$1\r\n2\r\n$5\r\nfield\r\n$7\r\nmissing\r\n"[0: 67]);
+    const httl_command: Command = try command_executor_test_command(&router, &httl_parsed);
+    var httl_reply: CommandReply = command_execute_at(&engine, &httl_command, 1000u64);
+    const httl_len: usize = try connection_encode_reply(&httl_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: httl_len], &"*2\r\n:-1\r\n:-2\r\n"[0: 14]));
+    command_reply_cleanup(&httl_reply);
+    resp_value_free(&httl_parsed.value);
+
+    var hpttl_parsed: RespParseResult = try parse_resp2(&"*6\r\n$5\r\nHPTTL\r\n$4\r\nhash\r\n$6\r\nFIELDS\r\n$1\r\n2\r\n$5\r\nfield\r\n$7\r\nmissing\r\n"[0: 68]);
+    const hpttl_command: Command = try command_executor_test_command(&router, &hpttl_parsed);
+    var hpttl_reply: CommandReply = command_execute_at(&engine, &hpttl_command, 1000u64);
+    const hpttl_len: usize = try connection_encode_reply(&hpttl_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: hpttl_len], &"*2\r\n:-1\r\n:-2\r\n"[0: 14]));
+    command_reply_cleanup(&hpttl_reply);
+    resp_value_free(&hpttl_parsed.value);
+
+    var hexpiretime_parsed: RespParseResult = try parse_resp2(&"*5\r\n$11\r\nHEXPIRETIME\r\n$4\r\nhash\r\n$6\r\nFIELDS\r\n$1\r\n1\r\n$5\r\nfield\r\n"[0: 62]);
+    const hexpiretime_command: Command = try command_executor_test_command(&router, &hexpiretime_parsed);
+    var hexpiretime_reply: CommandReply = command_execute_at(&engine, &hexpiretime_command, 1000u64);
+    const hexpiretime_len: usize = try connection_encode_reply(&hexpiretime_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: hexpiretime_len], &"*1\r\n:-1\r\n"[0: 9]));
+    command_reply_cleanup(&hexpiretime_reply);
+    resp_value_free(&hexpiretime_parsed.value);
+
+    var hpexpiretime_parsed: RespParseResult = try parse_resp2(&"*5\r\n$12\r\nHPEXPIRETIME\r\n$4\r\nhash\r\n$6\r\nFIELDS\r\n$1\r\n1\r\n$5\r\nfield\r\n"[0: 63]);
+    const hpexpiretime_command: Command = try command_executor_test_command(&router, &hpexpiretime_parsed);
+    var hpexpiretime_reply: CommandReply = command_execute_at(&engine, &hpexpiretime_command, 1000u64);
+    const hpexpiretime_len: usize = try connection_encode_reply(&hpexpiretime_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: hpexpiretime_len], &"*1\r\n:-1\r\n"[0: 9]));
+    command_reply_cleanup(&hpexpiretime_reply);
+    resp_value_free(&hpexpiretime_parsed.value);
+
+    var hpersist_parsed: RespParseResult = try parse_resp2(&"*6\r\n$8\r\nHPERSIST\r\n$4\r\nhash\r\n$6\r\nFIELDS\r\n$1\r\n2\r\n$5\r\nfield\r\n$7\r\nmissing\r\n"[0: 71]);
+    const hpersist_command: Command = try command_executor_test_command(&router, &hpersist_parsed);
+    var hpersist_reply: CommandReply = command_execute_at(&engine, &hpersist_command, 1000u64);
+    const hpersist_len: usize = try connection_encode_reply(&hpersist_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: hpersist_len], &"*2\r\n:-1\r\n:-2\r\n"[0: 14]));
+    command_reply_cleanup(&hpersist_reply);
+    resp_value_free(&hpersist_parsed.value);
+
+    var missing_key_parsed: RespParseResult = try parse_resp2(&"*5\r\n$4\r\nHTTL\r\n$7\r\nmissing\r\n$6\r\nFIELDS\r\n$1\r\n1\r\n$1\r\na\r\n"[0: 53]);
+    const missing_key_command: Command = try command_executor_test_command(&router, &missing_key_parsed);
+    var missing_key_reply: CommandReply = command_execute_at(&engine, &missing_key_command, 1000u64);
+    const missing_key_len: usize = try connection_encode_reply(&missing_key_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: missing_key_len], &"*1\r\n:-2\r\n"[0: 9]));
+    command_reply_cleanup(&missing_key_reply);
+    resp_value_free(&missing_key_parsed.value);
+
+    var bad_token_parsed: RespParseResult = try parse_resp2(&"*5\r\n$4\r\nHTTL\r\n$4\r\nhash\r\n$3\r\nBAD\r\n$1\r\n1\r\n$5\r\nfield\r\n"[0: 51]);
+    const bad_token_command: Command = try command_executor_test_command(&router, &bad_token_parsed);
+    const bad_token_reply: CommandReply = command_execute_at(&engine, &bad_token_command, 1000u64);
+    try assert_eq_i32(bad_token_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(bad_token_reply.data, &"ERR syntax error"[0: 16]));
+    resp_value_free(&bad_token_parsed.value);
+
+    var bad_count_parsed: RespParseResult = try parse_resp2(&"*5\r\n$4\r\nHTTL\r\n$4\r\nhash\r\n$6\r\nFIELDS\r\n$1\r\nx\r\n$5\r\nfield\r\n"[0: 54]);
+    const bad_count_command: Command = try command_executor_test_command(&router, &bad_count_parsed);
+    const bad_count_reply: CommandReply = command_execute_at(&engine, &bad_count_command, 1000u64);
+    try assert_eq_i32(bad_count_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(bad_count_reply.data, &"ERR value is not an integer or out of range"[0: 43]));
+    resp_value_free(&bad_count_parsed.value);
+
+    var bad_mismatch_parsed: RespParseResult = try parse_resp2(&"*5\r\n$4\r\nHTTL\r\n$4\r\nhash\r\n$6\r\nFIELDS\r\n$1\r\n2\r\n$5\r\nfield\r\n"[0: 54]);
+    const bad_mismatch_command: Command = try command_executor_test_command(&router, &bad_mismatch_parsed);
+    const bad_mismatch_reply: CommandReply = command_execute_at(&engine, &bad_mismatch_command, 1000u64);
+    try assert_eq_i32(bad_mismatch_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(bad_mismatch_reply.data, &"ERR syntax error"[0: 16]));
+    resp_value_free(&bad_mismatch_parsed.value);
+
+    var set_str_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$3\r\nstr\r\n$5\r\nvalue\r\n"[0: 33]);
+    const set_str_command: Command = try command_executor_test_command(&router, &set_str_parsed);
+    _ = command_execute_at(&engine, &set_str_command, 1000u64);
+    resp_value_free(&set_str_parsed.value);
+
+    var wrongtype_parsed: RespParseResult = try parse_resp2(&"*5\r\n$4\r\nHTTL\r\n$3\r\nstr\r\n$6\r\nFIELDS\r\n$1\r\n1\r\n$5\r\nfield\r\n"[0: 53]);
+    const wrongtype_command: Command = try command_executor_test_command(&router, &wrongtype_parsed);
+    const wrongtype_reply: CommandReply = command_execute_at(&engine, &wrongtype_command, 1000u64);
+    try assert_eq_i32(wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(wrongtype_reply.data, &"WRONGTYPE"[0: 9]));
+    resp_value_free(&wrongtype_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

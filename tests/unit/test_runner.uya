@@ -111,6 +111,7 @@ use tests.unit.command_executor_test.test_command_hset_hget;
 use tests.unit.command_executor_test.test_command_hincrby_hincrbyfloat;
 use tests.unit.command_executor_test.test_command_hkeys_hvals_hgetall;
 use tests.unit.command_executor_test.test_command_hdel_hexists_hlen_hmget_hsetnx_hstrlen;
+use tests.unit.command_executor_test.test_command_hash_field_ttl_partial;
 use tests.unit.command_executor_test.test_command_lpush_lpop_lrange;
 use tests.unit.command_executor_test.test_command_streams_first_batch;
 use tests.unit.command_executor_test.test_command_linsert_ltrim_lrem;
@@ -664,6 +665,10 @@ export fn main() i32 {
     const before_exec_hash_field_ops: i32 = failed;
     _ = test_command_hdel_hexists_hlen_hmget_hsetnx_hstrlen() catch { printf("[FAIL] command_executor/hash_field_ops\n" as *byte); failed = failed + 1; };
     if failed == before_exec_hash_field_ops { printf("[PASS] command_executor/hash_field_ops\n" as *byte); }
+
+    const before_exec_hash_field_ttl: i32 = failed;
+    _ = test_command_hash_field_ttl_partial() catch { printf("[FAIL] command_executor/hash_field_ttl\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_hash_field_ttl { printf("[PASS] command_executor/hash_field_ttl\n" as *byte); }
 
     const before_exec_list: i32 = failed;
     _ = test_command_lpush_lpop_lrange() catch { printf("[FAIL] command_executor/list\n" as *byte); failed = failed + 1; };

@@ -187,10 +187,15 @@ export enum CommandType {
     command_pexpiretime,
     command_hdel,
     command_hexists,
+    command_hexpiretime,
     command_hlen,
     command_hmget,
+    command_hpersist,
+    command_hpexpiretime,
+    command_hpttl,
     command_hsetnx,
     command_hstrlen,
+    command_httl,
     command_randomkey,
     command_time,
     command_role,
@@ -272,7 +277,7 @@ export const COMMAND_FLAG_READONLY: u64 = 1u64;
 export const COMMAND_FLAG_WRITE: u64 = 2u64;
 export const COMMAND_FLAG_FAST: u64 = 4u64;
 
-const MIN_COMMAND_COUNT: usize = 237;
+const MIN_COMMAND_COUNT: usize = 242;
 
 fn command_router_name_eq(a: &[byte], b: &[byte]) bool {
     return bytes_ascii_case_eq(a, b);
@@ -1022,6 +1027,21 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
     }
     if index == 236 {
         return command_router_info(CommandType.command_increx, &"INCREX"[0: 6], -2, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 237 {
+        return command_router_info(CommandType.command_httl, &"HTTL"[0: 4], -5, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 238 {
+        return command_router_info(CommandType.command_hpttl, &"HPTTL"[0: 5], -5, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 239 {
+        return command_router_info(CommandType.command_hexpiretime, &"HEXPIRETIME"[0: 11], -5, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 240 {
+        return command_router_info(CommandType.command_hpexpiretime, &"HPEXPIRETIME"[0: 12], -5, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 241 {
+        return command_router_info(CommandType.command_hpersist, &"HPERSIST"[0: 8], -5, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     return error.CommandUnknown;
 }

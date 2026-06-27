@@ -1174,6 +1174,14 @@ export fn test_command_acl_help() !void {
     command_reply_cleanup(&setuser_reset_patterns_reply);
     resp_value_free(&setuser_reset_patterns_parsed.value);
 
+    var setuser_reset_selectors_parsed: RespParseResult = try parse_resp2(&"*5\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$7\r\ndefault\r\n$14\r\nclearselectors\r\n$14\r\nresetselectors\r\n"[0: 81]);
+    const setuser_reset_selectors_command: Command = try command_executor_test_command(&router, &setuser_reset_selectors_parsed);
+    var setuser_reset_selectors_reply: CommandReply = command_execute_at(&engine, &setuser_reset_selectors_command, 1000u64);
+    try assert_eq_i32(setuser_reset_selectors_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(setuser_reset_selectors_reply.data, &"OK"[0: 2]));
+    command_reply_cleanup(&setuser_reset_selectors_reply);
+    resp_value_free(&setuser_reset_selectors_parsed.value);
+
     var setuser_invalid_parsed: RespParseResult = try parse_resp2(&"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$7\r\ndefault\r\n$11\r\ninvalidattr\r\n"[0: 57]);
     const setuser_invalid_command: Command = try command_executor_test_command(&router, &setuser_invalid_parsed);
     var setuser_invalid_reply: CommandReply = command_execute_at(&engine, &setuser_invalid_command, 1000u64);

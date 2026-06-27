@@ -1618,6 +1618,8 @@ def run_smoke() -> None:
                 raise AssertionError("expected ACL SETUSER default resetkeys/resetchannels to return OK")
             if client.acl_list() != [b"user default on nopass ~* &* +@all"]:
                 raise AssertionError("expected ACL SETUSER resetkeys/resetchannels no-op to keep default user view")
+            if client.acl_setuser(b"default", b"clearselectors", b"resetselectors") != "OK":
+                raise AssertionError("expected ACL SETUSER default clearselectors/resetselectors to return OK")
             if client.acl_setuser(b"default", b"-get") != "OK":
                 raise AssertionError("expected ACL SETUSER default -get to return OK")
             denied_acl_list = client.acl_list()

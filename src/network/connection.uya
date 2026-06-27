@@ -1672,6 +1672,12 @@ fn connection_acl_handle_setuser(router: &CommandRouter, command: &Command) Comm
             index = index + 1;
             continue;
         }
+        if connection_keyword_eq(modifier, &"RESETCOMMANDS"[0: 13]) {
+            connection_acl_default_denied_clear_all();
+            connection_acl_default_categories_clear_all();
+            index = index + 1;
+            continue;
+        }
         if modifier.len > 1 && (modifier.ptr[0] == 43 as byte || modifier.ptr[0] == 45 as byte) {
             const reply: CommandReply = connection_acl_setuser_command_modifier(router, modifier);
             if reply.typ == CommandReplyType.reply_error {

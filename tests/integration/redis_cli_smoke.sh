@@ -880,9 +880,21 @@ if [[ "$ACL_DENY_STRING_CATEGORY_GET_RESULT" != "NOPERM User default has no perm
     exit 1
 fi
 
-ACL_ALLOW_STRING_CATEGORY_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser default +@string)"
-if [[ "$ACL_ALLOW_STRING_CATEGORY_RESULT" != "OK" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected ACL SETUSER default +@string OK, got '$ACL_ALLOW_STRING_CATEGORY_RESULT'" >&2
+ACL_DENY_GET_AGAIN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser default -get)"
+if [[ "$ACL_DENY_GET_AGAIN_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL SETUSER default -get after -@string OK, got '$ACL_DENY_GET_AGAIN_RESULT'" >&2
+    exit 1
+fi
+
+ACL_RESETCOMMANDS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser default resetcommands)"
+if [[ "$ACL_RESETCOMMANDS_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL SETUSER default resetcommands OK, got '$ACL_RESETCOMMANDS_RESULT'" >&2
+    exit 1
+fi
+
+ACL_RESETCOMMANDS_LIST_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl list)"
+if [[ "$ACL_RESETCOMMANDS_LIST_RESULT" != "user default on nopass ~* &* +@all" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL LIST reset command rules, got '$ACL_RESETCOMMANDS_LIST_RESULT'" >&2
     exit 1
 fi
 

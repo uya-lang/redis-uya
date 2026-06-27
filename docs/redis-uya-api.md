@@ -99,15 +99,15 @@ ACL WHOAMI
 
 - `ACL CAT` 返回 Redis 兼容的 ACL category 列表；`ACL CAT category` 返回当前可见命令目录中匹配该 category 的命令名
 - `ACL DELUSER missing` 当前返回 `0`；尝试删除 `default` 会返回 Redis 兼容错误
-- `ACL DRYRUN default command [arg ...]` 当前会检查命令存在性、arity 与默认用户命令 deny list；未知用户和未知命令返回 Redis 兼容错误，被 `ACL SETUSER default -cmd` 禁用的命令返回 `NOPERM`
+- `ACL DRYRUN default command [arg ...]` 当前会检查命令存在性、arity、默认用户命令 deny list 与分类 deny list；未知用户和未知命令返回 Redis 兼容错误，被 `ACL SETUSER default -cmd` 或 `-@category` 禁用的命令返回 `NOPERM`
 - `ACL GENPASS` 返回 256-bit 口径的 64 字符十六进制口令；`ACL GENPASS bits` 返回 `ceil(bits / 4)` 个十六进制字符，`bits` 取值范围为 `1..4096`
-- `ACL GETUSER default` 返回当前默认用户详情，并在 `commands` 字段中反映当前命令 deny list；未知用户名返回 null
+- `ACL GETUSER default` 返回当前默认用户详情，并在 `commands` 字段中反映当前命令和分类 deny list；未知用户名返回 null
 - `ACL HELP` 返回 Redis 兼容的 ACL 子命令帮助数组
-- `ACL LIST` 返回当前默认用户的 config file 格式描述；默认是 `user default on nopass ~* &* +@all`，执行 `ACL SETUSER default -get` 后会追加 `-get`
+- `ACL LIST` 返回当前默认用户的 config file 格式描述；默认是 `user default on nopass ~* &* +@all`，执行 `ACL SETUSER default -get` 或 `-@string` 后会追加对应 deny 规则
 - `ACL LOAD` 当前按未配置 ACL 文件的 Redis 兼容错误返回，不会修改用户状态
 - `ACL LOG [count]` 当前返回默认用户命令权限拒绝的进程内 ring 日志，覆盖 `ACL DRYRUN`、真实命令、事务队列前置拒绝和脚本内部命令拒绝产生的 `NOPERM`；`ACL LOG RESET` 会清空该日志
 - `ACL SAVE` 当前按未配置 ACL 文件的 Redis 兼容错误返回，不会写入 ACL 文件
-- `ACL SETUSER default [attribute ...]` 当前支持不会改变固定默认用户视图的 no-op 修饰符，例如 `on nopass ~* &* +@all`，也支持命令级 `-cmd` / `+cmd` 和分类级 `-@category` / `+@category`；例如 `ACL SETUSER default -get` 或 `ACL SETUSER default -@string` 会让后续 `GET` 与 `ACL DRYRUN default GET ...` 返回 `NOPERM User default has no permissions to run the 'get' command`，`ACL SETUSER default +get`、`+@string` 或 `+@all` 会恢复对应拒绝
+- `ACL SETUSER default [attribute ...]` 当前支持不会改变固定默认用户视图的 no-op 修饰符，例如 `on nopass ~* &* +@all`，也支持命令级 `-cmd` / `+cmd`、分类级 `-@category` / `+@category` 和 `resetcommands`；例如 `ACL SETUSER default -get` 或 `ACL SETUSER default -@string` 会让后续 `GET` 与 `ACL DRYRUN default GET ...` 返回 `NOPERM User default has no permissions to run the 'get' command`，`ACL SETUSER default +get`、`+@string`、`+@all` 或 `resetcommands` 会恢复对应拒绝
 - `ACL USERS` 返回当前已知用户名数组；当前仅包含 `default`
 - `ACL WHOAMI` 返回当前连接用户名；当前始终为 `default`
 

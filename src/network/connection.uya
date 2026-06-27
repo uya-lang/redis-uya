@@ -1554,6 +1554,16 @@ fn connection_acl_default_command_rules_sds() !Sds {
     return rules;
 }
 
+fn connection_acl_default_password_marker(runtime: &CommandRuntimeInfo, out: &[byte]) usize {
+    const requirepass: &[byte] = connection_requirepass(runtime);
+    if requirepass.len == 0 || out.len < CONNECTION_SCRIPT_SHA1_HEX_BYTES + 1 {
+        return 0;
+    }
+    out.ptr[0] = 35 as byte;
+    connection_script_sha_hex(requirepass, out[1: CONNECTION_SCRIPT_SHA1_HEX_BYTES]);
+    return CONNECTION_SCRIPT_SHA1_HEX_BYTES + 1;
+}
+
 fn connection_acl_setuser_modifier_error(modifier: &[byte], suffix: &[byte]) CommandReply {
     var err: Sds = sds_empty() catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
@@ -1777,14 +1787,28 @@ fn connection_acl_handle_dryrun(router: &CommandRouter, command: &Command, now_m
     return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
 }
 
-fn connection_acl_handle_list() CommandReply {
+fn connection_acl_handle_list(runtime: &CommandRuntimeInfo) CommandReply {
     var line: Sds = sds_empty() catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
     defer {
         sds_free(&line);
     }
-    _ = sds_cat(&line, &"user default on nopass ~* &* "[0: 29]) catch {
+    _ = sds_cat(&line, &"user default on "[0: 16]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    var password_marker: [byte: CONNECTION_SCRIPT_SHA1_HEX_BYTES + 1] = [];
+    const password_marker_len: usize = connection_acl_default_password_marker(runtime, password_marker[0: CONNECTION_SCRIPT_SHA1_HEX_BYTES + 1]);
+    if password_marker_len > 0 {
+        _ = sds_cat(&line, password_marker[0: password_marker_len]) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+    } else {
+        _ = sds_cat(&line, &"nopass"[0: 6]) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+    }
+    _ = sds_cat(&line, &" ~* &* "[0: 7]) catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
     _ = connection_acl_append_default_command_rules(&line) catch {
@@ -1800,7 +1824,7 @@ fn connection_acl_handle_list() CommandReply {
     return connection_array_reply_owned(reply_list, 1);
 }
 
-fn connection_acl_handle_getuser(command: &Command) CommandReply {
+fn connection_acl_handle_getuser(runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
     if command.argc != 3 {
         return connection_error_reply(&"ERR wrong number of arguments for 'acl|getuser' command"[0: 55]);
     }
@@ -1823,19 +1847,68 @@ fn connection_acl_handle_getuser(command: &Command) CommandReply {
     defer {
         sds_free(&raw);
     }
-    _ = sds_cat(&raw, &"*12\r\n$5\r\nflags\r\n*2\r\n$2\r\non\r\n$6\r\nnopass\r\n$9\r\npasswords\r\n*0\r\n$8\r\ncommands\r\n$"[0: 74]) catch {
+    var password_marker: [byte: CONNECTION_SCRIPT_SHA1_HEX_BYTES + 1] = [];
+    const password_marker_len: usize = connection_acl_default_password_marker(runtime, password_marker[0: CONNECTION_SCRIPT_SHA1_HEX_BYTES + 1]);
+    _ = connection_sds_append_resp_array_header(&raw, 12) catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
-    _ = connection_sds_append_u64(&raw, rules.len as u64) catch {
+    _ = connection_sds_append_resp_bulk(&raw, &"flags"[0: 5]) catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
-    _ = sds_cat(&raw, &"\r\n"[0: 2]) catch {
+    if password_marker_len > 0 {
+        _ = connection_sds_append_resp_array_header(&raw, 1) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+    } else {
+        _ = connection_sds_append_resp_array_header(&raw, 2) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+    }
+    _ = connection_sds_append_resp_bulk(&raw, &"on"[0: 2]) catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
-    _ = sds_cat(&raw, rules.buf[0: rules.len]) catch {
+    if password_marker_len == 0 {
+        _ = connection_sds_append_resp_bulk(&raw, &"nopass"[0: 6]) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+    }
+    _ = connection_sds_append_resp_bulk(&raw, &"passwords"[0: 9]) catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
-    _ = sds_cat(&raw, &"\r\n$4\r\nkeys\r\n$2\r\n~*\r\n$8\r\nchannels\r\n$2\r\n&*\r\n$9\r\nselectors\r\n*0\r\n"[0: 61]) catch {
+    if password_marker_len > 0 {
+        _ = connection_sds_append_resp_array_header(&raw, 1) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+        _ = connection_sds_append_resp_bulk(&raw, password_marker[0: password_marker_len]) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+    } else {
+        _ = connection_sds_append_resp_array_header(&raw, 0) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+    }
+    _ = connection_sds_append_resp_bulk(&raw, &"commands"[0: 8]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = connection_sds_append_resp_bulk(&raw, rules.buf[0: rules.len]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = connection_sds_append_resp_bulk(&raw, &"keys"[0: 4]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = connection_sds_append_resp_bulk(&raw, &"~*"[0: 2]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = connection_sds_append_resp_bulk(&raw, &"channels"[0: 8]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = connection_sds_append_resp_bulk(&raw, &"&*"[0: 2]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = connection_sds_append_resp_bulk(&raw, &"selectors"[0: 9]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = connection_sds_append_resp_array_header(&raw, 0) catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
     return connection_raw_reply_owned(raw.buf[0: raw.len]);
@@ -1958,10 +2031,10 @@ fn connection_handle_acl(
         if command.argc != 2 {
             return connection_error_reply(&"ERR wrong number of arguments for 'acl|list' command"[0: 52]);
         }
-        return connection_acl_handle_list();
+        return connection_acl_handle_list(runtime);
     }
     if connection_keyword_eq(subcommand, &"GETUSER"[0: 7]) {
-        return connection_acl_handle_getuser(command);
+        return connection_acl_handle_getuser(runtime, command);
     }
     if connection_keyword_eq(subcommand, &"LOG"[0: 3]) {
         return connection_acl_handle_log(command, now_ms);

@@ -1859,6 +1859,16 @@ export fn test_connection_process_auth_requirepass_shutdown() !void {
     try assert_true(network_connection_contains(out[0: config_requirepass.response_len], &"requirepass"[0: 11]));
     try assert_true(network_connection_contains(out[0: config_requirepass.response_len], &"secret"[0: 6]));
 
+    const acl_auth_getuser: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*3\r\n$3\r\nACL\r\n$7\r\nGETUSER\r\n$7\r\ndefault\r\n"[0: 39], &out[0], 512, 1000u64);
+    try assert_true(network_connection_contains(out[0: acl_auth_getuser.response_len], &"$9\r\npasswords\r\n*1\r\n$41\r\n#"[0: 25]));
+    try assert_true(!network_connection_contains(out[0: acl_auth_getuser.response_len], &"nopass"[0: 6]));
+    try assert_true(!network_connection_contains(out[0: acl_auth_getuser.response_len], &"secret"[0: 6]));
+
+    const acl_auth_list: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*2\r\n$3\r\nACL\r\n$4\r\nLIST\r\n"[0: 23], &out[0], 512, 1000u64);
+    try assert_true(network_connection_contains(out[0: acl_auth_list.response_len], &"#"[0: 1]));
+    try assert_true(!network_connection_contains(out[0: acl_auth_list.response_len], &"nopass"[0: 6]));
+    try assert_true(!network_connection_contains(out[0: acl_auth_list.response_len], &"secret"[0: 6]));
+
     const multi_auth: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*1\r\n$5\r\nMULTI\r\n"[0: 15], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: multi_auth.response_len], &"+OK\r\n"[0: 5]));
 

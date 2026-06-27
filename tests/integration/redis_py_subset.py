@@ -2380,6 +2380,28 @@ def run_smoke() -> None:
             auth_config = auth_client.config_get("requirepass")
             if auth_config.get("requirepass") != "secret":
                 raise AssertionError(f"unexpected requirepass config: {auth_config!r}")
+            auth_acl_getuser = auth_client.acl_getuser(b"default")
+            if (
+                not isinstance(auth_acl_getuser, list)
+                or len(auth_acl_getuser) < 4
+                or auth_acl_getuser[0] != b"flags"
+                or auth_acl_getuser[1] != [b"on"]
+                or auth_acl_getuser[2] != b"passwords"
+                or not isinstance(auth_acl_getuser[3], list)
+                or len(auth_acl_getuser[3]) != 1
+                or not auth_acl_getuser[3][0].startswith(b"#")
+                or b"nopass" in auth_acl_getuser[1]
+                or auth_acl_getuser[3][0] == b"secret"
+            ):
+                raise AssertionError(f"unexpected ACL GETUSER with requirepass: {auth_acl_getuser!r}")
+            auth_acl_list = auth_client.acl_list()
+            if (
+                auth_acl_list == []
+                or b"#" not in auth_acl_list[0]
+                or b"nopass" in auth_acl_list[0]
+                or b"secret" in auth_acl_list[0]
+            ):
+                raise AssertionError(f"unexpected ACL LIST with requirepass: {auth_acl_list!r}")
             auth_client.shutdown_nosave()
         finally:
             if auth_client is not None:

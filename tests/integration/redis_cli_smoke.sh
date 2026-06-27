@@ -3166,6 +3166,18 @@ if [[ "$AUTH_CONFIG_RESULT" != $'requirepass\nsecret' ]]; then
     exit 1
 fi
 
+AUTH_ACL_GETUSER_RESULT="$(redis-cli -a secret --raw -h 127.0.0.1 -p "$AUTH_PORT" acl getuser default 2>/dev/null)"
+if [[ "$AUTH_ACL_GETUSER_RESULT" != *"passwords"* || "$AUTH_ACL_GETUSER_RESULT" != *"#"* || "$AUTH_ACL_GETUSER_RESULT" == *"nopass"* || "$AUTH_ACL_GETUSER_RESULT" == *"secret"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: unexpected ACL GETUSER with requirepass: '$AUTH_ACL_GETUSER_RESULT'" >&2
+    exit 1
+fi
+
+AUTH_ACL_LIST_RESULT="$(redis-cli -a secret --raw -h 127.0.0.1 -p "$AUTH_PORT" acl list 2>/dev/null)"
+if [[ "$AUTH_ACL_LIST_RESULT" != *"#"* || "$AUTH_ACL_LIST_RESULT" == *"nopass"* || "$AUTH_ACL_LIST_RESULT" == *"secret"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: unexpected ACL LIST with requirepass: '$AUTH_ACL_LIST_RESULT'" >&2
+    exit 1
+fi
+
 redis-cli -a secret --raw -h 127.0.0.1 -p "$AUTH_PORT" shutdown nosave >/dev/null 2>&1 || true
 wait "$AUTH_SERVER_PID" >/dev/null 2>&1 || true
 AUTH_SERVER_PID=""

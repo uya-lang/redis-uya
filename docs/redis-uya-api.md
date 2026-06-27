@@ -101,9 +101,9 @@ ACL WHOAMI
 - `ACL DELUSER missing` 当前返回 `0`；尝试删除 `default` 会返回 Redis 兼容错误
 - `ACL DRYRUN default command [arg ...]` 当前会检查命令存在性、arity、默认用户命令 deny list 与分类 deny list；未知用户和未知命令返回 Redis 兼容错误，被 `ACL SETUSER default -cmd` 或 `-@category` 禁用的命令返回 `NOPERM`
 - `ACL GENPASS` 返回 256-bit 口径的 64 字符十六进制口令；`ACL GENPASS bits` 返回 `ceil(bits / 4)` 个十六进制字符，`bits` 取值范围为 `1..4096`
-- `ACL GETUSER default` 返回当前默认用户详情，并在 `commands` 字段中反映当前命令和分类 deny list；未知用户名返回 null
+- `ACL GETUSER default` 返回当前默认用户详情，并在 `commands` 字段中反映当前命令和分类 deny list；启用 `requirepass` 时 `flags` 不再包含 `nopass`，`passwords` 返回 `#` 开头的哈希标记而不暴露明文；未知用户名返回 null
 - `ACL HELP` 返回 Redis 兼容的 ACL 子命令帮助数组
-- `ACL LIST` 返回当前默认用户的 config file 格式描述；默认是 `user default on nopass ~* &* +@all`，执行 `ACL SETUSER default -get` 或 `-@string` 后会追加对应 deny 规则
+- `ACL LIST` 返回当前默认用户的 config file 格式描述；默认是 `user default on nopass ~* &* +@all`，启用 `requirepass` 时会用 `#` 开头的哈希标记替代 `nopass`，执行 `ACL SETUSER default -get` 或 `-@string` 后会追加对应 deny 规则
 - `ACL LOAD` 当前按未配置 ACL 文件的 Redis 兼容错误返回，不会修改用户状态
 - `ACL LOG [count]` 当前返回默认用户命令权限拒绝的进程内 ring 日志，覆盖 `ACL DRYRUN`、真实命令、事务队列前置拒绝和脚本内部命令拒绝产生的 `NOPERM`；`ACL LOG RESET` 会清空该日志
 - `ACL SAVE` 当前按未配置 ACL 文件的 Redis 兼容错误返回，不会写入 ACL 文件

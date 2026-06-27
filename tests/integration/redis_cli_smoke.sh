@@ -802,6 +802,42 @@ if [[ "$ACL_SETUSER_RESULT" != "OK" ]]; then
     exit 1
 fi
 
+ACL_DENY_GET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser default -get)"
+if [[ "$ACL_DENY_GET_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL SETUSER default -get OK, got '$ACL_DENY_GET_RESULT'" >&2
+    exit 1
+fi
+
+ACL_DENY_LIST_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl list)"
+if [[ "$ACL_DENY_LIST_RESULT" != *"+@all -get"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL LIST to show denied get, got '$ACL_DENY_LIST_RESULT'" >&2
+    exit 1
+fi
+
+ACL_DENY_DRYRUN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl dryrun default get missing 2>&1 || true)"
+if [[ "$ACL_DENY_DRYRUN_RESULT" != "NOPERM User default has no permissions to run the 'get' command" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL DRYRUN denied get error, got '$ACL_DENY_DRYRUN_RESULT'" >&2
+    exit 1
+fi
+
+ACL_DENY_GET_CMD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" get missing 2>&1 || true)"
+if [[ "$ACL_DENY_GET_CMD_RESULT" != "NOPERM User default has no permissions to run the 'get' command" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL denied GET error, got '$ACL_DENY_GET_CMD_RESULT'" >&2
+    exit 1
+fi
+
+ACL_ALLOW_GET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser default +get)"
+if [[ "$ACL_ALLOW_GET_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL SETUSER default +get OK, got '$ACL_ALLOW_GET_RESULT'" >&2
+    exit 1
+fi
+
+ACL_ALLOW_DRYRUN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl dryrun default get missing)"
+if [[ "$ACL_ALLOW_DRYRUN_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL DRYRUN get recovery, got '$ACL_ALLOW_DRYRUN_RESULT'" >&2
+    exit 1
+fi
+
 ACL_SETUSER_INVALID_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser default invalidattr 2>&1 || true)"
 if [[ "$ACL_SETUSER_INVALID_RESULT" != "ERR Error in ACL SETUSER modifier 'invalidattr': Syntax error" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ACL SETUSER invalid modifier error, got '$ACL_SETUSER_INVALID_RESULT'" >&2

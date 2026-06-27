@@ -1614,6 +1614,32 @@ def run_smoke() -> None:
                     raise AssertionError(f"unexpected ACL DRYRUN missing user error: {exc}") from exc
             if client.acl_setuser(b"default", b"on", b"nopass", b"~*", b"&*", b"+@all") != "OK":
                 raise AssertionError("expected ACL SETUSER default no-op modifiers to return OK")
+            if client.acl_setuser(b"default", b"-get") != "OK":
+                raise AssertionError("expected ACL SETUSER default -get to return OK")
+            denied_acl_list = client.acl_list()
+            if not denied_acl_list or b"+@all -get" not in denied_acl_list[0]:
+                raise AssertionError(f"expected ACL LIST to include denied get command, got {denied_acl_list!r}")
+            denied_acl_getuser = client.acl_getuser(b"default")
+            if not isinstance(denied_acl_getuser, list) or b"+@all -get" not in denied_acl_getuser:
+                raise AssertionError(f"expected ACL GETUSER to include denied get command, got {denied_acl_getuser!r}")
+            try:
+                client.acl_dryrun(b"default", b"GET", b"missing")
+                raise AssertionError("expected ACL DRYRUN denied GET to fail")
+            except RespError as exc:
+                if str(exc) != "NOPERM User default has no permissions to run the 'get' command":
+                    raise AssertionError(f"unexpected ACL DRYRUN denied GET error: {exc}") from exc
+            try:
+                client.get("missing")
+                raise AssertionError("expected ACL denied GET to fail")
+            except RespError as exc:
+                if str(exc) != "NOPERM User default has no permissions to run the 'get' command":
+                    raise AssertionError(f"unexpected ACL denied GET error: {exc}") from exc
+            if client.acl_setuser(b"default", b"+get") != "OK":
+                raise AssertionError("expected ACL SETUSER default +get to return OK")
+            if client.acl_dryrun(b"default", b"GET", b"missing") != "OK":
+                raise AssertionError("expected ACL DRYRUN default GET to recover after +get")
+            if client.get("missing") is not None:
+                raise AssertionError("expected GET missing to recover after ACL +get")
             try:
                 client.acl_setuser(b"default", b"invalidattr")
                 raise AssertionError("expected ACL SETUSER invalid modifier to fail")

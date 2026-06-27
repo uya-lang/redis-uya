@@ -191,6 +191,11 @@ class RedisPySubsetClient:
         assert isinstance(result, bytes)
         return result
 
+    def digest(self, key: str) -> bytes | None:
+        result = self._request(b"DIGEST", key.encode())
+        assert result is None or isinstance(result, bytes)
+        return result
+
     def getbit(self, key: str, offset: int) -> int:
         return int(self._request(b"GETBIT", key.encode(), str(offset).encode()))
 
@@ -1437,6 +1442,10 @@ def run_smoke() -> None:
             assert client.append("key", "++") == 7
             assert client.getrange("key", 1, 3) == b"alu"
             assert client.substr("key", 1, 3) == b"alu"
+            assert client.set("digest-key", "Hello world")
+            assert client.digest("digest-key") == b"b6acb9d84a38ff74"
+            assert client.digest("missing") is None
+            assert client.delete("digest-key") == 1
             assert client.getbit("missing", 0) == 0
             assert client.getbit("key", 0) == 0
             assert client.setbit("key", 1, 1) == 1

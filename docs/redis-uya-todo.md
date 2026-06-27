@@ -425,6 +425,7 @@
 - [x] String 第五批范围读写：`SETRANGE`、`GETRANGE`、`SUBSTR` alias
 - [x] String 第六批浮点计数：`INCRBYFLOAT`
 - [x] String INCREX partial：整数模式支持 `BYINT`、`LBOUND/UBOUND`、`SATURATE`、`EX/PX/EXAT/PXAT/PERSIST` 与 `ENX`，`BYFLOAT` 暂未支持
+- [x] String DIGEST partial：`DIGEST key` 支持 128 字节以内 String 的 XXH3_64 十六进制 digest，missing 返回 Null Bulk，错类型返回 `WRONGTYPE`；`DELEX IFDEQ/IFDNE` 暂未接入
 - [x] Hash 第一批数值：`HINCRBY`、`HINCRBYFLOAT`
 - [x] Hash 第二批视图：`HKEYS`、`HVALS`、`HGETALL`、`HRANDFIELD`
 - [x] Hash 第三批扫描：`HSCAN`

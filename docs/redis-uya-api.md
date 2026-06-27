@@ -246,8 +246,28 @@ DELEX key [IFEQ value | IFNE value | IFDEQ digest | IFDNE digest]
 
 说明：
 
-- 当前实现为 partial，仅支持字符串值比较条件；digest 条件需要 Redis 的 XXH3 digest 兼容实现，暂未接入
+- 当前实现为 partial，仅支持字符串值比较条件；`DELEX` 的 digest 条件暂未接入，独立 `DIGEST` 命令已提供短字符串 XXH3_64 查询兼容面
 - `COMMAND INFO/LIST/DOCS` 与 `COMMAND GETKEYS*` 会暴露 `DELEX`，key flags 标记为 `RM/delete`
+
+### `DIGEST`
+
+格式：
+
+```text
+DIGEST key
+```
+
+返回：
+
+- key 不存在：Null Bulk
+- key 存在且是 String，且值长度不超过 128 字节：返回 XXH3_64 digest 的 16 字节小写十六进制 Bulk String
+- key 存在但不是 String：`WRONGTYPE`
+- String 值长度超过 128 字节：`ERR DIGEST only supports string values up to 128 bytes in redis-uya partial`
+
+说明：
+
+- 当前为 partial，只覆盖独立 `DIGEST key` 的短字符串查询；暂不把该 digest 接入 `DELEX IFDEQ/IFDNE`
+- `COMMAND INFO/LIST/DOCS` 与 `COMMAND GETKEYS*` 会暴露 `DIGEST`，key flags 标记为 `RO/access`
 
 ### `INCR`
 

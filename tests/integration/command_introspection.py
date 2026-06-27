@@ -177,6 +177,10 @@ def run_smoke() -> None:
             if not isinstance(listed_delex, list) or b"delex" not in listed_delex:
                 raise AssertionError(f"unexpected COMMAND LIST de* result: {listed_delex!r}")
 
+            listed_digest = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"DI*")
+            if not isinstance(listed_digest, list) or b"digest" not in listed_digest:
+                raise AssertionError(f"unexpected COMMAND LIST di* result: {listed_digest!r}")
+
             listed_mset = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"MSET*")
             if not isinstance(listed_mset, list) or b"mset" not in listed_mset or b"msetex" not in listed_mset or b"msetnx" not in listed_mset:
                 raise AssertionError(f"unexpected COMMAND LIST mset* result: {listed_mset!r}")
@@ -298,8 +302,8 @@ def run_smoke() -> None:
             if acl_list != [b"user default on nopass ~* &* +@all"]:
                 raise AssertionError(f"unexpected ACL LIST: {acl_list!r}")
 
-            info = send_command(sock, b"COMMAND", b"INFO", b"GET", b"FOO", b"CLIENT|ID", b"COPY", b"DELEX", b"HGETDEL", b"RESTORE-ASKING", b"HRANDFIELD", b"WAITAOF", b"SWAPDB", b"LOLWUT", b"REPLCONF", b"SLAVEOF", b"SYNC", b"DEBUG", b"FAILOVER")
-            if not isinstance(info, list) or len(info) != 16:
+            info = send_command(sock, b"COMMAND", b"INFO", b"GET", b"FOO", b"CLIENT|ID", b"COPY", b"DELEX", b"DIGEST", b"HGETDEL", b"RESTORE-ASKING", b"HRANDFIELD", b"WAITAOF", b"SWAPDB", b"LOLWUT", b"REPLCONF", b"SLAVEOF", b"SYNC", b"DEBUG", b"FAILOVER")
+            if not isinstance(info, list) or len(info) != 17:
                 raise AssertionError(f"unexpected COMMAND INFO shape: {info!r}")
             if info[1] is not None:
                 raise AssertionError(f"COMMAND INFO should return null for unknown command: {info!r}")
@@ -311,27 +315,29 @@ def run_smoke() -> None:
                 raise AssertionError(f"COMMAND INFO COPY returned wrong payload: {info!r}")
             if not isinstance(info[4], list) or info[4][0] != b"delex":
                 raise AssertionError(f"COMMAND INFO DELEX returned wrong payload: {info!r}")
-            if not isinstance(info[5], list) or info[5][0] != b"hgetdel":
+            if not isinstance(info[5], list) or info[5][0] != b"digest":
+                raise AssertionError(f"COMMAND INFO DIGEST returned wrong payload: {info!r}")
+            if not isinstance(info[6], list) or info[6][0] != b"hgetdel":
                 raise AssertionError(f"COMMAND INFO HGETDEL returned wrong payload: {info!r}")
-            if not isinstance(info[6], list) or info[6][0] != b"restore-asking":
+            if not isinstance(info[7], list) or info[7][0] != b"restore-asking":
                 raise AssertionError(f"COMMAND INFO RESTORE-ASKING returned wrong payload: {info!r}")
-            if not isinstance(info[7], list) or info[7][0] != b"hrandfield":
+            if not isinstance(info[8], list) or info[8][0] != b"hrandfield":
                 raise AssertionError(f"COMMAND INFO HRANDFIELD returned wrong payload: {info!r}")
-            if not isinstance(info[8], list) or info[8][0] != b"waitaof":
+            if not isinstance(info[9], list) or info[9][0] != b"waitaof":
                 raise AssertionError(f"COMMAND INFO WAITAOF returned wrong payload: {info!r}")
-            if not isinstance(info[9], list) or info[9][0] != b"swapdb":
+            if not isinstance(info[10], list) or info[10][0] != b"swapdb":
                 raise AssertionError(f"COMMAND INFO SWAPDB returned wrong payload: {info!r}")
-            if not isinstance(info[10], list) or info[10][0] != b"lolwut":
+            if not isinstance(info[11], list) or info[11][0] != b"lolwut":
                 raise AssertionError(f"COMMAND INFO LOLWUT returned wrong payload: {info!r}")
-            if not isinstance(info[11], list) or info[11][0] != b"replconf":
+            if not isinstance(info[12], list) or info[12][0] != b"replconf":
                 raise AssertionError(f"COMMAND INFO REPLCONF returned wrong payload: {info!r}")
-            if not isinstance(info[12], list) or info[12][0] != b"slaveof":
+            if not isinstance(info[13], list) or info[13][0] != b"slaveof":
                 raise AssertionError(f"COMMAND INFO SLAVEOF returned wrong payload: {info!r}")
-            if not isinstance(info[13], list) or info[13][0] != b"sync":
+            if not isinstance(info[14], list) or info[14][0] != b"sync":
                 raise AssertionError(f"COMMAND INFO SYNC returned wrong payload: {info!r}")
-            if not isinstance(info[14], list) or info[14][0] != b"debug":
+            if not isinstance(info[15], list) or info[15][0] != b"debug":
                 raise AssertionError(f"COMMAND INFO DEBUG returned wrong payload: {info!r}")
-            if not isinstance(info[15], list) or info[15][0] != b"failover":
+            if not isinstance(info[16], list) or info[16][0] != b"failover":
                 raise AssertionError(f"COMMAND INFO FAILOVER returned wrong payload: {info!r}")
 
             msetex_info = send_command(sock, b"COMMAND", b"INFO", b"MSETEX")

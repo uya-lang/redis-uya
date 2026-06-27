@@ -104,6 +104,7 @@ use tests.unit.command_executor_test.test_command_bgsave;
 use tests.unit.command_executor_test.test_command_bgrewriteaof;
 use tests.unit.command_executor_test.test_command_save_rdb;
 use tests.unit.command_executor_test.test_command_set_get_del_exists;
+use tests.unit.command_executor_test.test_command_digest_partial;
 use tests.unit.command_executor_test.test_command_maxmemory_noeviction;
 use tests.unit.command_executor_test.test_command_maxmemory_allkeys_lru;
 use tests.unit.command_executor_test.test_command_maxmemory_allkeys_lfu;
@@ -637,6 +638,10 @@ export fn main() i32 {
     const before_exec_string: i32 = failed;
     _ = test_command_set_get_del_exists() catch { printf("[FAIL] command_executor/string_key\n" as *byte); failed = failed + 1; };
     if failed == before_exec_string { printf("[PASS] command_executor/string_key\n" as *byte); }
+
+    const before_exec_digest: i32 = failed;
+    _ = test_command_digest_partial() catch { printf("[FAIL] command_executor/digest\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_digest { printf("[PASS] command_executor/digest\n" as *byte); }
 
     const before_exec_maxmemory: i32 = failed;
     _ = test_command_maxmemory_noeviction() catch { printf("[FAIL] command_executor/maxmemory\n" as *byte); failed = failed + 1; };

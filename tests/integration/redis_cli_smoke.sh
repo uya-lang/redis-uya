@@ -109,6 +109,24 @@ if [[ "$GET_RESULT" != "value" ]]; then
     exit 1
 fi
 
+DIGEST_SET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" set digest-key "Hello world")"
+if [[ "$DIGEST_SET_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected DIGEST seed SET OK, got '$DIGEST_SET_RESULT'" >&2
+    exit 1
+fi
+
+DIGEST_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" digest digest-key)"
+if [[ "$DIGEST_RESULT" != "b6acb9d84a38ff74" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected DIGEST b6acb9d84a38ff74, got '$DIGEST_RESULT'" >&2
+    exit 1
+fi
+
+DIGEST_MISSING_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" digest missing)"
+if [[ -n "$DIGEST_MISSING_RESULT" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected empty output on missing DIGEST, got '$DIGEST_MISSING_RESULT'" >&2
+    exit 1
+fi
+
 COPY_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" copy key keycopy)"
 if [[ "$COPY_RESULT" != "1" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected COPY 1, got '$COPY_RESULT'" >&2

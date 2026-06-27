@@ -51,7 +51,7 @@
 - RESP3 最小协议闭环：`HELLO 2/3` 连接级协议切换，支持 Null、Boolean、Map 等常用 RESP3 类型解析和 RESP3 Null 回复
 - 命令路由：最小命令表、大小写匹配、参数数量校验、未知命令错误、RESP Array 转命令
 - String/Key/Control 命令执行：`PING`、`GET`、`SET`、`DEL`、`EXISTS`、`COPY`、`KEYS`、`RANDOMKEY`、`EXPIRE`、`EXPIREAT`、`EXPIRETIME`、`PEXPIRE`、`PEXPIREAT`、`PEXPIRETIME`、`PERSIST`、`TTL`、`PTTL`、`TIME`、`ROLE`、`INFO` 多 section、`CONFIG GET/HELP/RESETSTAT`、`CLIENT` 兼容子集、`AUTH`、`SAVE`
-- String TTL/算法扩展：`GETEX`、`SETEX`、`PSETEX`、`MSETEX`、`LCS`
+- String TTL/算法扩展：`GETEX`、`SETEX`、`PSETEX`、`MSETEX`、`LCS`、`DIGEST` 短字符串 partial
 - Hash 最小对象：基于项目内 `Dict` 的最小 hash value 容器
 - Hash 命令子集：`HSET`、`HGET`、`HDEL`、`HEXISTS`、`HLEN`、`HMGET`、`HSETNX`、`HSTRLEN`、`HRANDFIELD`，以及 field TTL 查询/清理兼容面 `HTTL/HPTTL/HEXPIRETIME/HPEXPIRETIME/HPERSIST`
 - List 最小对象：基于双向链表的最小 list value 容器
@@ -279,6 +279,7 @@ build/redis-uya 6380 1
 - String LCS partial：`LCS key1 key2 [LEN]`
 - String 第五批范围读写：`GETRANGE`、`SUBSTR` alias、`SETRANGE`
 - String 第六批浮点计数：`INCRBYFLOAT`
+- String DIGEST partial：`DIGEST key` 支持 128 字节以内 String 的 XXH3_64 十六进制 digest
 - Key 复制/恢复 partial：`COPY source destination [DB 0] [REPLACE]` 当前可用，支持当前单 DB 内深拷贝对象、保留 source TTL、已存在目标的 `REPLACE` 覆盖和 `COMMAND GETKEYS*` 可见面；`RESTORE-ASKING key ttl serialized-value` 当前复用 `RESTORE` 的单 DB RDB payload 写入路径；非 `0` DB 按当前单 DB 模型返回 `ERR DB index is out of range`
 - Key 单库 DB 管理 partial：`SWAPDB 0 0` 当前作为 no-op 返回 `OK`；任一 DB 参数非 `0` 返回 `ERR DB index is out of range`，暂不支持真实多 DB 数据交换
 - Server 趣味/诊断 partial：`LOLWUT [VERSION version]` 当前返回固定 bulk 文本和 redis-uya 版本，`VERSION` 的非整数参数返回 Redis 兼容整数错误，暂不生成 Redis 原版动态图形

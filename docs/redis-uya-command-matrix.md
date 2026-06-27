@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 183 | 6 | 3 | 27 |
+| Tier A: standalone core | 365 | 259 | 146 | 184 | 6 | 3 | 26 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `190` |
+| `partial` | `191` |
 | `standalone-error` | `32` |
 | `alias` | `3` |
-| `deferred` | `180` |
+| `deferred` | `179` |
 
 ## Group counts
 
@@ -215,7 +215,7 @@
 | `decrby` | `string` | `full` | `-` | `3` | `-` | `no` | `@write, @string, @fast` |
 | `del` | `generic` | `full` | `-` | `-2` | `-` | `no` | `@keyspace, @write, @slow` |
 | `delex` | `string` | `partial` | `-` | `-2` | `-` | `no` | `@write, @string, @fast` |
-| `digest` | `string` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@read, @string, @fast` |
+| `digest` | `string` | `partial` | `-` | `2` | `-` | `no` | `@read, @string, @fast` |
 | `discard` | `transactions` | `full` | `-` | `1` | `-` | `no` | `@fast, @transaction` |
 | `dump` | `generic` | `full` | `-` | `2` | `-` | `no` | `@keyspace, @read, @slow` |
 | `echo` | `connection` | `full` | `-` | `2` | `-` | `no` | `@fast, @connection` |

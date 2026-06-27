@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 242);
+    try assert_eq_i32(command_router_count(&router) as i32, 243);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -110,6 +110,13 @@ export fn test_command_router_lookup_and_case() !void {
     const msetex: CommandInfo = try command_router_lookup(&router, &"MSETEX"[0: 6]);
     try assert_eq_i32(msetex.cmd_type as i32, CommandType.command_msetex as i32);
     try assert_eq_i32(msetex.arity, -4);
+
+    const digest: CommandInfo = try command_router_lookup(&router, &"DIGEST"[0: 6]);
+    try assert_eq_i32(digest.cmd_type as i32, CommandType.command_digest as i32);
+    try assert_eq_i32(digest.arity, 2);
+    try assert_eq_i32(digest.first_key, 1);
+    try assert_eq_i32(digest.last_key, 1);
+    try assert_eq_i32(digest.key_step, 1);
 
     const httl: CommandInfo = try command_router_lookup(&router, &"HTTL"[0: 4]);
     try assert_eq_i32(httl.cmd_type as i32, CommandType.command_httl as i32);

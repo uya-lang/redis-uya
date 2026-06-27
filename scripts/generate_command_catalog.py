@@ -337,6 +337,7 @@ PARTIAL_NAMES = {
     "config|set",
     "copy",
     "delex",
+    "digest",
     "hexpiretime",
     "hgetdel",
     "hpersist",

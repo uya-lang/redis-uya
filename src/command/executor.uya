@@ -1904,6 +1904,204 @@ fn command_executor_string_value(obj: &RedisObject) !&[byte] {
     return obj.value.buf[0: obj.value.len];
 }
 
+const COMMAND_EXECUTOR_XXH3_PRIME64_1: u64 = 0x9E3779B185EBCA87u64;
+const COMMAND_EXECUTOR_XXH3_PRIME64_2: u64 = 0xC2B2AE3D27D4EB4Fu64;
+const COMMAND_EXECUTOR_XXH3_PRIME64_3: u64 = 0x165667B19E3779F9u64;
+const COMMAND_EXECUTOR_XXH3_PRIME_MX1: u64 = 0x165667919E3779F9u64;
+const COMMAND_EXECUTOR_XXH3_PRIME_MX2: u64 = 0x9FB21C651E98DF25u64;
+const COMMAND_EXECUTOR_DIGEST_MAX_LEN: usize = 128;
+
+const COMMAND_EXECUTOR_XXH3_SECRET: [byte: 128] = [
+    0xb8, 0xfe, 0x6c, 0x39, 0x23, 0xa4, 0x4b, 0xbe,
+    0x7c, 0x01, 0x81, 0x2c, 0xf7, 0x21, 0xad, 0x1c,
+    0xde, 0xd4, 0x6d, 0xe9, 0x83, 0x90, 0x97, 0xdb,
+    0x72, 0x40, 0xa4, 0xa4, 0xb7, 0xb3, 0x67, 0x1f,
+    0xcb, 0x79, 0xe6, 0x4e, 0xcc, 0xc0, 0xe5, 0x78,
+    0x82, 0x5a, 0xd0, 0x7d, 0xcc, 0xff, 0x72, 0x21,
+    0xb8, 0x08, 0x46, 0x74, 0xf7, 0x43, 0x24, 0x8e,
+    0xe0, 0x35, 0x90, 0xe6, 0x81, 0x3a, 0x26, 0x4c,
+    0x3c, 0x28, 0x52, 0xbb, 0x91, 0xc3, 0x00, 0xcb,
+    0x88, 0xd0, 0x65, 0x8b, 0x1b, 0x53, 0x2e, 0xa3,
+    0x71, 0x64, 0x48, 0x97, 0xa2, 0x0d, 0xf9, 0x4e,
+    0x38, 0x19, 0xef, 0x46, 0xa9, 0xde, 0xac, 0xd8,
+    0xa8, 0xfa, 0x76, 0x3f, 0xe3, 0x9c, 0x34, 0x3f,
+    0xf9, 0xdc, 0xbb, 0xc7, 0xc7, 0x0b, 0x4f, 0x1d,
+    0x8a, 0x51, 0xe0, 0x4b, 0xcd, 0xb4, 0x59, 0x31,
+    0xc8, 0x9f, 0x7e, 0xc9, 0xd9, 0x78, 0x73, 0x64,
+];
+
+fn command_executor_xxh3_read_u32_le(data: &[byte], offset: usize) u32 {
+    return (data.ptr[offset] as u32) |
+        ((data.ptr[offset + 1] as u32) << 8) |
+        ((data.ptr[offset + 2] as u32) << 16) |
+        ((data.ptr[offset + 3] as u32) << 24);
+}
+
+fn command_executor_xxh3_read_u64_le(data: &[byte], offset: usize) u64 {
+    return (data.ptr[offset] as u64) |
+        ((data.ptr[offset + 1] as u64) << 8) |
+        ((data.ptr[offset + 2] as u64) << 16) |
+        ((data.ptr[offset + 3] as u64) << 24) |
+        ((data.ptr[offset + 4] as u64) << 32) |
+        ((data.ptr[offset + 5] as u64) << 40) |
+        ((data.ptr[offset + 6] as u64) << 48) |
+        ((data.ptr[offset + 7] as u64) << 56);
+}
+
+fn command_executor_xxh3_secret_u32_le(offset: usize) u32 {
+    return (COMMAND_EXECUTOR_XXH3_SECRET[offset] as u32) |
+        ((COMMAND_EXECUTOR_XXH3_SECRET[offset + 1] as u32) << 8) |
+        ((COMMAND_EXECUTOR_XXH3_SECRET[offset + 2] as u32) << 16) |
+        ((COMMAND_EXECUTOR_XXH3_SECRET[offset + 3] as u32) << 24);
+}
+
+fn command_executor_xxh3_secret_u64_le(offset: usize) u64 {
+    return (COMMAND_EXECUTOR_XXH3_SECRET[offset] as u64) |
+        ((COMMAND_EXECUTOR_XXH3_SECRET[offset + 1] as u64) << 8) |
+        ((COMMAND_EXECUTOR_XXH3_SECRET[offset + 2] as u64) << 16) |
+        ((COMMAND_EXECUTOR_XXH3_SECRET[offset + 3] as u64) << 24) |
+        ((COMMAND_EXECUTOR_XXH3_SECRET[offset + 4] as u64) << 32) |
+        ((COMMAND_EXECUTOR_XXH3_SECRET[offset + 5] as u64) << 40) |
+        ((COMMAND_EXECUTOR_XXH3_SECRET[offset + 6] as u64) << 48) |
+        ((COMMAND_EXECUTOR_XXH3_SECRET[offset + 7] as u64) << 56);
+}
+
+fn command_executor_xxh3_rotl64(value: u64, shift: i32) u64 {
+    return (value << shift) | (value >> (64 - shift));
+}
+
+fn command_executor_xxh3_swap32(value: u32) u32 {
+    return ((value & 0xffu32) << 24) |
+        ((value & 0xff00u32) << 8) |
+        ((value >> 8) & 0xff00u32) |
+        ((value >> 24) & 0xffu32);
+}
+
+fn command_executor_xxh3_swap64(value: u64) u64 {
+    return ((value & 0xffu64) << 56) |
+        ((value & 0xff00u64) << 40) |
+        ((value & 0xff0000u64) << 24) |
+        ((value & 0xff000000u64) << 8) |
+        ((value >> 8) & 0xff000000u64) |
+        ((value >> 24) & 0xff0000u64) |
+        ((value >> 40) & 0xff00u64) |
+        ((value >> 56) & 0xffu64);
+}
+
+fn command_executor_xxh64_avalanche(hash: u64) u64 {
+    var h: u64 = hash;
+    h = h ^ (h >> 33);
+    h = h * COMMAND_EXECUTOR_XXH3_PRIME64_2;
+    h = h ^ (h >> 29);
+    h = h * COMMAND_EXECUTOR_XXH3_PRIME64_3;
+    h = h ^ (h >> 32);
+    return h;
+}
+
+fn command_executor_xxh3_avalanche(hash: u64) u64 {
+    var h: u64 = hash ^ (hash >> 37);
+    h = h * COMMAND_EXECUTOR_XXH3_PRIME_MX1;
+    h = h ^ (h >> 32);
+    return h;
+}
+
+fn command_executor_xxh3_rrmxmx(hash: u64, len: usize) u64 {
+    var h: u64 = hash;
+    h = h ^ command_executor_xxh3_rotl64(h, 49) ^ command_executor_xxh3_rotl64(h, 24);
+    h = h * COMMAND_EXECUTOR_XXH3_PRIME_MX2;
+    h = h ^ ((h >> 35) + (len as u64));
+    h = h * COMMAND_EXECUTOR_XXH3_PRIME_MX2;
+    return h ^ (h >> 28);
+}
+
+fn command_executor_xxh3_mul128_fold64(lhs: u64, rhs: u64) u64 {
+    const lo_lo: u64 = (lhs & 0xffffffffu64) * (rhs & 0xffffffffu64);
+    const hi_lo: u64 = (lhs >> 32) * (rhs & 0xffffffffu64);
+    const lo_hi: u64 = (lhs & 0xffffffffu64) * (rhs >> 32);
+    const hi_hi: u64 = (lhs >> 32) * (rhs >> 32);
+    const cross: u64 = (lo_lo >> 32) + (hi_lo & 0xffffffffu64) + lo_hi;
+    const upper: u64 = (hi_lo >> 32) + (cross >> 32) + hi_hi;
+    const lower: u64 = (cross << 32) | (lo_lo & 0xffffffffu64);
+    return lower ^ upper;
+}
+
+fn command_executor_xxh3_mix16(data: &[byte], data_offset: usize, secret_offset: usize) u64 {
+    const input_lo: u64 = command_executor_xxh3_read_u64_le(data, data_offset);
+    const input_hi: u64 = command_executor_xxh3_read_u64_le(data, data_offset + 8);
+    const secret_lo: u64 = command_executor_xxh3_secret_u64_le(secret_offset);
+    const secret_hi: u64 = command_executor_xxh3_secret_u64_le(secret_offset + 8);
+    return command_executor_xxh3_mul128_fold64(input_lo ^ secret_lo, input_hi ^ secret_hi);
+}
+
+fn command_executor_xxh3_64_short(data: &[byte]) !u64 {
+    const len: usize = data.len;
+    if len > COMMAND_EXECUTOR_DIGEST_MAX_LEN {
+        return error.CommandUnsupported;
+    }
+    if len == 0 {
+        const bitflip: u64 = command_executor_xxh3_secret_u64_le(56) ^
+            command_executor_xxh3_secret_u64_le(64);
+        return command_executor_xxh64_avalanche(bitflip);
+    }
+    if len <= 3 {
+        const c1: u32 = data.ptr[0] as u32;
+        const c2: u32 = data.ptr[len >> 1] as u32;
+        const c3: u32 = data.ptr[len - 1] as u32;
+        const combined: u32 = (c1 << 16) | (c2 << 24) | c3 | ((len as u32) << 8);
+        const bitflip_1to3: u64 = (command_executor_xxh3_secret_u32_le(0) ^
+            command_executor_xxh3_secret_u32_le(4)) as u64;
+        return command_executor_xxh64_avalanche((combined as u64) ^ bitflip_1to3);
+    }
+    if len <= 8 {
+        const input1: u32 = command_executor_xxh3_read_u32_le(data, 0);
+        const input2: u32 = command_executor_xxh3_read_u32_le(data, len - 4);
+        const seed_mix: u64 = 0u64 ^ ((command_executor_xxh3_swap32(0u32) as u64) << 32);
+        const bitflip_4to8: u64 = (command_executor_xxh3_secret_u64_le(8) ^
+            command_executor_xxh3_secret_u64_le(16)) - seed_mix;
+        const input64: u64 = (input2 as u64) + ((input1 as u64) << 32);
+        return command_executor_xxh3_rrmxmx(input64 ^ bitflip_4to8, len);
+    }
+    if len <= 16 {
+        const bitflip1: u64 = command_executor_xxh3_secret_u64_le(24) ^
+            command_executor_xxh3_secret_u64_le(32);
+        const bitflip2: u64 = command_executor_xxh3_secret_u64_le(40) ^
+            command_executor_xxh3_secret_u64_le(48);
+        const input_lo: u64 = command_executor_xxh3_read_u64_le(data, 0) ^ bitflip1;
+        const input_hi: u64 = command_executor_xxh3_read_u64_le(data, len - 8) ^ bitflip2;
+        const acc: u64 = (len as u64) + command_executor_xxh3_swap64(input_lo) + input_hi +
+            command_executor_xxh3_mul128_fold64(input_lo, input_hi);
+        return command_executor_xxh3_avalanche(acc);
+    }
+
+    var acc: u64 = (len as u64) * COMMAND_EXECUTOR_XXH3_PRIME64_1;
+    if len > 32 {
+        if len > 64 {
+            if len > 96 {
+                acc = acc + command_executor_xxh3_mix16(data, 48, 96);
+                acc = acc + command_executor_xxh3_mix16(data, len - 64, 112);
+            }
+            acc = acc + command_executor_xxh3_mix16(data, 32, 64);
+            acc = acc + command_executor_xxh3_mix16(data, len - 48, 80);
+        }
+        acc = acc + command_executor_xxh3_mix16(data, 16, 32);
+        acc = acc + command_executor_xxh3_mix16(data, len - 32, 48);
+    }
+    acc = acc + command_executor_xxh3_mix16(data, 0, 0);
+    acc = acc + command_executor_xxh3_mix16(data, len - 16, 16);
+    return command_executor_xxh3_avalanche(acc);
+}
+
+fn command_executor_write_hex_u64(out: &[byte], value: u64) void {
+    const digits: [byte: 16] = [48,49,50,51,52,53,54,55,56,57,97,98,99,100,101,102];
+    var i: usize = 0;
+    while i < 16 {
+        const shift: i32 = ((15 - i) * 4) as i32;
+        const nibble: usize = ((value >> shift) & 0xfu64) as usize;
+        out.ptr[i] = digits[nibble];
+        i = i + 1;
+    }
+}
+
 const COMMAND_EXECUTOR_I64_MAX: i64 = 9223372036854775807;
 const COMMAND_EXECUTOR_I64_MIN: i64 = -9223372036854775807 - 1;
 const COMMAND_EXECUTOR_I64_MAX_U64: u64 = 9223372036854775807u64;
@@ -4570,6 +4768,27 @@ fn command_executor_strlen(engine: &Engine, command: &Command, now_ms: u64) Comm
         return command_executor_wrongtype();
     };
     return command_executor_integer(data.len as i64);
+}
+
+fn command_executor_digest(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 2 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+        return command_executor_reply(CommandReplyType.reply_null_bulk, command_executor_empty_slice(), 0);
+    };
+    const data: &[byte] = command_executor_string_value(obj) catch {
+        return command_executor_wrongtype();
+    };
+    const digest: u64 = command_executor_xxh3_64_short(data) catch {
+        return command_executor_error(&"ERR DIGEST only supports string values up to 128 bytes in redis-uya partial"[0: 75]);
+    };
+    var hex: [byte: 16] = [];
+    command_executor_write_hex_u64(hex[0: 16], digest);
+    return command_executor_owned_bulk_copy(hex[0: 16]);
 }
 
 fn command_executor_getdel(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
@@ -18705,6 +18924,9 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
     }
     if command.info.cmd_type == CommandType.command_increx {
         return command_executor_increx(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_digest {
+        return command_executor_digest(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_decrby {
         return command_executor_decrby(engine, command, now_ms);

@@ -1713,6 +1713,21 @@ export fn test_connection_process_acl_permission_denial() !void {
     const get_after: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$3\r\nGET\r\n$7\r\nmissing\r\n"[0: 26], &out[0], 2048, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: get_after.response_len], &"$-1\r\n"[0: 5]));
 
+    const deny_string_category: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$7\r\ndefault\r\n$8\r\n-@string\r\n"[0: 53], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: deny_string_category.response_len], &"+OK\r\n"[0: 5]));
+
+    const acl_category_list: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$3\r\nACL\r\n$4\r\nLIST\r\n"[0: 23], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_contains(out[0: acl_category_list.response_len], &"-@string"[0: 8]));
+
+    const get_category_denied: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$3\r\nGET\r\n$7\r\nmissing\r\n"[0: 26], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: get_category_denied.response_len], &"-NOPERM User default has no permissions to run the 'get' command\r\n"[0: 66]));
+
+    const allow_string_category: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$7\r\ndefault\r\n$8\r\n+@string\r\n"[0: 53], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: allow_string_category.response_len], &"+OK\r\n"[0: 5]));
+
+    const get_category_after: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$3\r\nGET\r\n$7\r\nmissing\r\n"[0: 26], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: get_category_after.response_len], &"$-1\r\n"[0: 5]));
+
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);
 }

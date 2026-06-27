@@ -862,6 +862,30 @@ if [[ "$ACL_ALLOW_DRYRUN_RESULT" != "OK" ]]; then
     exit 1
 fi
 
+ACL_DENY_STRING_CATEGORY_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser default -@string)"
+if [[ "$ACL_DENY_STRING_CATEGORY_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL SETUSER default -@string OK, got '$ACL_DENY_STRING_CATEGORY_RESULT'" >&2
+    exit 1
+fi
+
+ACL_DENY_STRING_CATEGORY_LIST_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl list)"
+if [[ "$ACL_DENY_STRING_CATEGORY_LIST_RESULT" != *"-@string"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL LIST to show denied string category, got '$ACL_DENY_STRING_CATEGORY_LIST_RESULT'" >&2
+    exit 1
+fi
+
+ACL_DENY_STRING_CATEGORY_GET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" get missing 2>&1 || true)"
+if [[ "$ACL_DENY_STRING_CATEGORY_GET_RESULT" != "NOPERM User default has no permissions to run the 'get' command" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL category denied GET error, got '$ACL_DENY_STRING_CATEGORY_GET_RESULT'" >&2
+    exit 1
+fi
+
+ACL_ALLOW_STRING_CATEGORY_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser default +@string)"
+if [[ "$ACL_ALLOW_STRING_CATEGORY_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL SETUSER default +@string OK, got '$ACL_ALLOW_STRING_CATEGORY_RESULT'" >&2
+    exit 1
+fi
+
 ACL_SETUSER_INVALID_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser default invalidattr 2>&1 || true)"
 if [[ "$ACL_SETUSER_INVALID_RESULT" != "ERR Error in ACL SETUSER modifier 'invalidattr': Syntax error" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ACL SETUSER invalid modifier error, got '$ACL_SETUSER_INVALID_RESULT'" >&2

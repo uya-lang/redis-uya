@@ -9,6 +9,9 @@ use src.command.executor.command_execute_with_runtime_at;
 use src.command.executor.command_reply_cleanup;
 use src.config.ServerConfig;
 use src.config.default_config;
+use src.command.catalog_generated_base.CommandCatalogEntry;
+use src.command.catalog.command_catalog_has_acl_category;
+use src.command.catalog.command_catalog_lookup;
 use src.command.router.Command;
 use src.command.router.CommandInfo;
 use src.command.router.CommandRouter;
@@ -166,6 +169,7 @@ const CONNECTION_SCRIPT_SHA1_BYTES: usize = 20;
 const CONNECTION_SCRIPT_SHA1_HEX_BYTES: usize = 40;
 const CONNECTION_SCRIPT_MAX_CALL_ARGS: usize = 64;
 const CONNECTION_ACL_DENIED_COMMAND_MAX: usize = 64;
+const CONNECTION_ACL_DENIED_CATEGORY_MAX: usize = 32;
 const CONNECTION_ACL_COMMAND_NAME_MAX: usize = 64;
 const CONNECTION_ACL_LOG_MAX: usize = 128;
 const CONNECTION_ACL_LOG_CONTEXT_MAX: usize = 16;
@@ -235,6 +239,7 @@ struct ConnectionAclDeniedCommand {
 }
 
 var connection_acl_default_denied_commands: [ConnectionAclDeniedCommand: CONNECTION_ACL_DENIED_COMMAND_MAX] = [];
+var connection_acl_default_denied_categories: [ConnectionAclDeniedCommand: CONNECTION_ACL_DENIED_CATEGORY_MAX] = [];
 
 struct ConnectionAclLogEntry {
     active: bool,
@@ -1277,6 +1282,38 @@ fn connection_acl_default_denied_clear_all() void {
     }
 }
 
+fn connection_acl_default_category_find(name: &[byte]) i32 {
+    var index: usize = 0;
+    while index < CONNECTION_ACL_DENIED_CATEGORY_MAX {
+        if connection_acl_default_denied_categories[index].active &&
+            connection_keyword_eq(connection_acl_default_denied_categories[index].name[0: connection_acl_default_denied_categories[index].name_len], name) {
+            return index as i32;
+        }
+        index = index + 1;
+    }
+    return -1;
+}
+
+fn connection_acl_default_category_find_free() i32 {
+    var index: usize = 0;
+    while index < CONNECTION_ACL_DENIED_CATEGORY_MAX {
+        if !connection_acl_default_denied_categories[index].active {
+            return index as i32;
+        }
+        index = index + 1;
+    }
+    return -1;
+}
+
+fn connection_acl_default_categories_clear_all() void {
+    var index: usize = 0;
+    while index < CONNECTION_ACL_DENIED_CATEGORY_MAX {
+        connection_acl_default_denied_categories[index].active = false;
+        connection_acl_default_denied_categories[index].name_len = 0;
+        index = index + 1;
+    }
+}
+
 fn connection_acl_log_clear_all() void {
     var index: usize = 0;
     while index < CONNECTION_ACL_LOG_MAX {
@@ -1295,6 +1332,7 @@ fn connection_acl_log_clear_all() void {
 
 export fn connection_acl_reset_for_test() void {
     connection_acl_default_denied_clear_all();
+    connection_acl_default_categories_clear_all();
     connection_acl_log_clear_all();
 }
 
@@ -1339,8 +1377,87 @@ fn connection_acl_default_denied_remove(name: &[byte]) void {
     connection_acl_default_denied_commands[slot_index].name_len = 0;
 }
 
+fn connection_acl_default_category_add(name: &[byte]) !void {
+    if name.len == 0 || name.len > CONNECTION_ACL_COMMAND_NAME_MAX {
+        return error.ConnectionInputTooLarge;
+    }
+    if connection_acl_default_category_find(name) >= 0 {
+        return;
+    }
+    const slot: i32 = connection_acl_default_category_find_free();
+    if slot < 0 {
+        return error.ConnectionInputTooLarge;
+    }
+    const slot_index: usize = slot as usize;
+    if slot_index >= CONNECTION_ACL_DENIED_CATEGORY_MAX {
+        return error.ConnectionInputTooLarge;
+    }
+    connection_acl_default_denied_categories[slot_index].active = true;
+    connection_acl_default_denied_categories[slot_index].name_len = name.len;
+    var i: usize = 0;
+    while i < name.len {
+        connection_acl_default_denied_categories[slot_index].name[i] = connection_ascii_lower(name.ptr[i]);
+        i = i + 1;
+    }
+    while i < CONNECTION_ACL_COMMAND_NAME_MAX {
+        connection_acl_default_denied_categories[slot_index].name[i] = 0 as byte;
+        i = i + 1;
+    }
+}
+
+fn connection_acl_default_category_remove(name: &[byte]) void {
+    const slot: i32 = connection_acl_default_category_find(name);
+    if slot < 0 {
+        return;
+    }
+    const slot_index: usize = slot as usize;
+    if slot_index >= CONNECTION_ACL_DENIED_CATEGORY_MAX {
+        return;
+    }
+    connection_acl_default_denied_categories[slot_index].active = false;
+    connection_acl_default_denied_categories[slot_index].name_len = 0;
+}
+
+fn connection_acl_category_known(category: &[byte]) bool {
+    return connection_keyword_eq(category, &"keyspace"[0: 8]) ||
+        connection_keyword_eq(category, &"read"[0: 4]) ||
+        connection_keyword_eq(category, &"write"[0: 5]) ||
+        connection_keyword_eq(category, &"set"[0: 3]) ||
+        connection_keyword_eq(category, &"sortedset"[0: 9]) ||
+        connection_keyword_eq(category, &"list"[0: 4]) ||
+        connection_keyword_eq(category, &"hash"[0: 4]) ||
+        connection_keyword_eq(category, &"string"[0: 6]) ||
+        connection_keyword_eq(category, &"bitmap"[0: 6]) ||
+        connection_keyword_eq(category, &"hyperloglog"[0: 11]) ||
+        connection_keyword_eq(category, &"geo"[0: 3]) ||
+        connection_keyword_eq(category, &"stream"[0: 6]) ||
+        connection_keyword_eq(category, &"pubsub"[0: 6]) ||
+        connection_keyword_eq(category, &"admin"[0: 5]) ||
+        connection_keyword_eq(category, &"fast"[0: 4]) ||
+        connection_keyword_eq(category, &"slow"[0: 4]) ||
+        connection_keyword_eq(category, &"blocking"[0: 8]) ||
+        connection_keyword_eq(category, &"dangerous"[0: 9]) ||
+        connection_keyword_eq(category, &"connection"[0: 10]) ||
+        connection_keyword_eq(category, &"transaction"[0: 11]) ||
+        connection_keyword_eq(category, &"scripting"[0: 9]);
+}
+
 fn connection_acl_default_command_denied(name: &[byte]) bool {
-    return connection_acl_default_denied_find(name) >= 0;
+    if connection_acl_default_denied_find(name) >= 0 {
+        return true;
+    }
+    const entry: CommandCatalogEntry = command_catalog_lookup(name) catch {
+        return false;
+    };
+    var index: usize = 0;
+    while index < CONNECTION_ACL_DENIED_CATEGORY_MAX {
+        if connection_acl_default_denied_categories[index].active &&
+            command_catalog_has_acl_category(&entry, connection_acl_default_denied_categories[index].name[0: connection_acl_default_denied_categories[index].name_len]) {
+            return true;
+        }
+        index = index + 1;
+    }
+    return false;
 }
 
 fn connection_acl_log_copy_lower(dst: &[byte], src: &[byte]) usize {
@@ -1415,6 +1532,14 @@ fn connection_acl_append_default_command_rules(raw: &Sds) !void {
             try sds_cat(raw, connection_acl_default_denied_commands[index].name[0: connection_acl_default_denied_commands[index].name_len]);
         }
         index = index + 1;
+    }
+    var category_index: usize = 0;
+    while category_index < CONNECTION_ACL_DENIED_CATEGORY_MAX {
+        if connection_acl_default_denied_categories[category_index].active {
+            try sds_cat(raw, &" -@"[0: 3]);
+            try sds_cat(raw, connection_acl_default_denied_categories[category_index].name[0: connection_acl_default_denied_categories[category_index].name_len]);
+        }
+        category_index = category_index + 1;
     }
 }
 
@@ -1491,9 +1616,21 @@ fn connection_acl_setuser_command_modifier(router: &CommandRouter, modifier: &[b
     if command_name.ptr[0] == 64 as byte {
         if op == 43 as byte && connection_keyword_eq(command_name, &"@all"[0: 4]) {
             connection_acl_default_denied_clear_all();
+            connection_acl_default_categories_clear_all();
             return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
         }
-        return connection_error_reply(&"ERR ACL SETUSER redis-uya partial only supports command allow/deny modifiers"[0: 76]);
+        const category: &[byte] = command_name[1: command_name.len - 1];
+        if !connection_acl_category_known(category) {
+            return connection_acl_setuser_modifier_error(modifier, &"': Unknown command or category name in ACL"[0: 42]);
+        }
+        if op == 45 as byte {
+            _ = connection_acl_default_category_add(category) catch {
+                return connection_error_reply(&"ERR ACL SETUSER redis-uya partial category deny list is full"[0: 60]);
+            };
+        } else {
+            connection_acl_default_category_remove(category);
+        }
+        return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
     }
     const info: CommandInfo = command_router_lookup(router, command_name) catch {
         return connection_acl_setuser_modifier_error(modifier, &"': Unknown command or category name in ACL"[0: 42]);
@@ -1531,6 +1668,7 @@ fn connection_acl_handle_setuser(router: &CommandRouter, command: &Command) Comm
         if connection_keyword_eq(modifier, &"ALLCOMMANDS"[0: 11]) ||
             connection_keyword_eq(modifier, &"+@all"[0: 5]) {
             connection_acl_default_denied_clear_all();
+            connection_acl_default_categories_clear_all();
             index = index + 1;
             continue;
         }

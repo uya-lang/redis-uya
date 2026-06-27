@@ -1656,6 +1656,21 @@ def run_smoke() -> None:
                 raise AssertionError("expected ACL DRYRUN default GET to recover after +get")
             if client.get("missing") is not None:
                 raise AssertionError("expected GET missing to recover after ACL +get")
+            if client.acl_setuser(b"default", b"-@string") != "OK":
+                raise AssertionError("expected ACL SETUSER default -@string to return OK")
+            category_acl_list = client.acl_list()
+            if not category_acl_list or b"-@string" not in category_acl_list[0]:
+                raise AssertionError(f"expected ACL LIST to include denied string category, got {category_acl_list!r}")
+            try:
+                client.get("missing")
+                raise AssertionError("expected ACL denied GET through -@string to fail")
+            except RespError as exc:
+                if str(exc) != "NOPERM User default has no permissions to run the 'get' command":
+                    raise AssertionError(f"unexpected ACL category denied GET error: {exc}") from exc
+            if client.acl_setuser(b"default", b"+@string") != "OK":
+                raise AssertionError("expected ACL SETUSER default +@string to return OK")
+            if client.get("missing") is not None:
+                raise AssertionError("expected GET missing to recover after ACL +@string")
             try:
                 client.acl_setuser(b"default", b"invalidattr")
                 raise AssertionError("expected ACL SETUSER invalid modifier to fail")

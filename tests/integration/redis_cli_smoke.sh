@@ -802,6 +802,18 @@ if [[ "$ACL_SETUSER_RESULT" != "OK" ]]; then
     exit 1
 fi
 
+ACL_RESET_PATTERNS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser default resetkeys resetchannels)"
+if [[ "$ACL_RESET_PATTERNS_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL SETUSER default resetkeys/resetchannels OK, got '$ACL_RESET_PATTERNS_RESULT'" >&2
+    exit 1
+fi
+
+ACL_RESET_PATTERNS_LIST_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl list)"
+if [[ "$ACL_RESET_PATTERNS_LIST_RESULT" != "user default on nopass ~* &* +@all" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL SETUSER resetkeys/resetchannels to keep default view, got '$ACL_RESET_PATTERNS_LIST_RESULT'" >&2
+    exit 1
+fi
+
 ACL_DENY_GET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser default -get)"
 if [[ "$ACL_DENY_GET_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ACL SETUSER default -get OK, got '$ACL_DENY_GET_RESULT'" >&2

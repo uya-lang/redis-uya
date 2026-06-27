@@ -107,7 +107,7 @@ ACL WHOAMI
 - `ACL LOAD` 当前按未配置 ACL 文件的 Redis 兼容错误返回，不会修改用户状态
 - `ACL LOG [count]` 当前返回默认用户命令权限拒绝的进程内 ring 日志，覆盖 `ACL DRYRUN`、真实命令、事务队列前置拒绝和脚本内部命令拒绝产生的 `NOPERM`，字段包含 `reason/context/object/username/age-seconds/client-info/entry-id/timestamp-created/timestamp-last-updated/count`；`ACL LOG RESET` 会清空该日志
 - `ACL SAVE` 当前按未配置 ACL 文件的 Redis 兼容错误返回，不会写入 ACL 文件
-- `ACL SETUSER default [attribute ...]` 当前支持不会改变固定默认用户视图的 no-op 修饰符，例如 `on nopass ~* &* +@all`，也支持命令级 `-cmd` / `+cmd`、分类级 `-@category` / `+@category` 和 `resetcommands`；例如 `ACL SETUSER default -get` 或 `ACL SETUSER default -@string` 会让后续 `GET` 与 `ACL DRYRUN default GET ...` 返回 `NOPERM User default has no permissions to run the 'get' command`，`ACL SETUSER default +get`、`+@string`、`+@all` 或 `resetcommands` 会恢复对应拒绝
+- `ACL SETUSER default [attribute ...]` 当前支持不会改变固定默认用户视图的 no-op 修饰符，例如 `on nopass ~* &* +@all resetkeys resetchannels`，也支持命令级 `-cmd` / `+cmd`、分类级 `-@category` / `+@category` 和 `resetcommands`；例如 `ACL SETUSER default -get` 或 `ACL SETUSER default -@string` 会让后续 `GET` 与 `ACL DRYRUN default GET ...` 返回 `NOPERM User default has no permissions to run the 'get' command`，`ACL SETUSER default +get`、`+@string`、`+@all` 或 `resetcommands` 会恢复对应拒绝
 - `ACL USERS` 返回当前已知用户名数组；当前仅包含 `default`
 - `ACL WHOAMI` 返回当前连接用户名；当前始终为 `default`
 

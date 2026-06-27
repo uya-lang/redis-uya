@@ -9248,6 +9248,8 @@ fn command_executor_acl_setuser_noop_modifier(modifier: &[byte]) bool {
         command_executor_keyword_eq(modifier, &"ALLCHANNELS"[0: 11]) ||
         command_executor_keyword_eq(modifier, &"ALLCOMMANDS"[0: 11]) ||
         command_executor_keyword_eq(modifier, &"RESETCOMMANDS"[0: 13]) ||
+        command_executor_keyword_eq(modifier, &"RESETKEYS"[0: 9]) ||
+        command_executor_keyword_eq(modifier, &"RESETCHANNELS"[0: 13]) ||
         command_executor_keyword_eq(modifier, &"~*"[0: 2]) ||
         command_executor_keyword_eq(modifier, &"&*"[0: 2]) {
         return true;
@@ -9272,8 +9274,6 @@ fn command_executor_acl_setuser_mutating_modifier(modifier: &[byte]) bool {
     if command_executor_keyword_eq(modifier, &"OFF"[0: 3]) ||
         command_executor_keyword_eq(modifier, &"RESET"[0: 5]) ||
         command_executor_keyword_eq(modifier, &"RESETPASS"[0: 9]) ||
-        command_executor_keyword_eq(modifier, &"RESETKEYS"[0: 9]) ||
-        command_executor_keyword_eq(modifier, &"RESETCHANNELS"[0: 13]) ||
         command_executor_keyword_eq(modifier, &"CLEARSELECTORS"[0: 14]) ||
         command_executor_keyword_eq(modifier, &"RESETSELECTORS"[0: 14]) {
         return true;

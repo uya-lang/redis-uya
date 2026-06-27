@@ -1588,6 +1588,8 @@ fn connection_acl_setuser_noop_modifier(modifier: &[byte]) bool {
         connection_keyword_eq(modifier, &"NOPASS"[0: 6]) ||
         connection_keyword_eq(modifier, &"ALLKEYS"[0: 7]) ||
         connection_keyword_eq(modifier, &"ALLCHANNELS"[0: 11]) ||
+        connection_keyword_eq(modifier, &"RESETKEYS"[0: 9]) ||
+        connection_keyword_eq(modifier, &"RESETCHANNELS"[0: 13]) ||
         connection_keyword_eq(modifier, &"~*"[0: 2]) ||
         connection_keyword_eq(modifier, &"&*"[0: 2]);
 }
@@ -1596,8 +1598,6 @@ fn connection_acl_setuser_mutating_modifier(modifier: &[byte]) bool {
     if connection_keyword_eq(modifier, &"OFF"[0: 3]) ||
         connection_keyword_eq(modifier, &"RESET"[0: 5]) ||
         connection_keyword_eq(modifier, &"RESETPASS"[0: 9]) ||
-        connection_keyword_eq(modifier, &"RESETKEYS"[0: 9]) ||
-        connection_keyword_eq(modifier, &"RESETCHANNELS"[0: 13]) ||
         connection_keyword_eq(modifier, &"CLEARSELECTORS"[0: 14]) ||
         connection_keyword_eq(modifier, &"RESETSELECTORS"[0: 14]) {
         return true;

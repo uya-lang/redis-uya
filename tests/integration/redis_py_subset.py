@@ -1614,6 +1614,10 @@ def run_smoke() -> None:
                     raise AssertionError(f"unexpected ACL DRYRUN missing user error: {exc}") from exc
             if client.acl_setuser(b"default", b"on", b"nopass", b"~*", b"&*", b"+@all") != "OK":
                 raise AssertionError("expected ACL SETUSER default no-op modifiers to return OK")
+            if client.acl_setuser(b"default", b"resetkeys", b"resetchannels") != "OK":
+                raise AssertionError("expected ACL SETUSER default resetkeys/resetchannels to return OK")
+            if client.acl_list() != [b"user default on nopass ~* &* +@all"]:
+                raise AssertionError("expected ACL SETUSER resetkeys/resetchannels no-op to keep default user view")
             if client.acl_setuser(b"default", b"-get") != "OK":
                 raise AssertionError("expected ACL SETUSER default -get to return OK")
             denied_acl_list = client.acl_list()

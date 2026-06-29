@@ -6043,6 +6043,88 @@ fn command_executor_xread(engine: &Engine, command: &Command, now_ms: u64) Comma
     return command_executor_owned_raw(raw.buf[0: raw.len]);
 }
 
+fn command_executor_xreadgroup(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 7 {
+        return command_executor_wrong_arity();
+    }
+    const group_token: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    if !command_executor_keyword_eq(group_token, &"GROUP"[0: 5]) {
+        return command_executor_syntax_error();
+    }
+    _ = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    _ = command_executor_arg(command, 3) catch {
+        return command_executor_wrong_arity();
+    };
+
+    var index: usize = 4;
+    while index < command.argc {
+        const token: &[byte] = command_executor_arg(command, index) catch {
+            return command_executor_wrong_arity();
+        };
+        if command_executor_keyword_eq(token, &"STREAMS"[0: 7]) {
+            break;
+        }
+        if command_executor_keyword_eq(token, &"COUNT"[0: 5]) {
+            if index + 1 >= command.argc {
+                return command_executor_syntax_error();
+            }
+            const count_data: &[byte] = command_executor_arg(command, index + 1) catch {
+                return command_executor_wrong_arity();
+            };
+            const count_value: i64 = command_executor_parse_i64(count_data) catch {
+                return command_executor_invalid_integer();
+            };
+            if count_value <= 0 {
+                return command_executor_error(&"ERR value is out of range, must be positive"[0: 43]);
+            }
+            index = index + 2;
+        } else if command_executor_keyword_eq(token, &"NOACK"[0: 5]) {
+            index = index + 1;
+        } else if command_executor_keyword_eq(token, &"BLOCK"[0: 5]) {
+            return command_executor_error(&"ERR XREADGROUP BLOCK is not supported yet"[0: 41]);
+        } else {
+            return command_executor_syntax_error();
+        }
+    }
+    if index >= command.argc {
+        return command_executor_syntax_error();
+    }
+    const remaining: usize = command.argc - index - 1;
+    if remaining == 0 || (remaining % 2usize) != 0usize {
+        return command_executor_syntax_error();
+    }
+    const key_count: usize = remaining / 2;
+    const first_key_index: usize = index + 1;
+    const first_id_index: usize = first_key_index + key_count;
+
+    var key_offset: usize = 0;
+    while key_offset < key_count {
+        const key: &[byte] = command_executor_arg(command, first_key_index + key_offset) catch {
+            return command_executor_wrong_arity();
+        };
+        const id_data: &[byte] = command_executor_arg(command, first_id_index + key_offset) catch {
+            return command_executor_wrong_arity();
+        };
+        if !(id_data.len == 1 && id_data.ptr[0] == 62 as byte) {
+            _ = command_executor_parse_stream_id(id_data, 0u64, false, false) catch {
+                return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 57]);
+            };
+        }
+        const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+            return command_executor_error(&"ERR no such key"[0: 14]);
+        };
+        if obj.obj_type != ObjectType.object_stream {
+            return command_executor_wrongtype();
+        }
+        key_offset = key_offset + 1;
+    }
+    return command_executor_error(&"NOGROUP No such consumer group"[0: 30]);
+}
+
 fn command_executor_xsetid(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
     if command.argc < 3 {
         return command_executor_owned_error(&"ERR wrong number of arguments for 'xsetid' command"[0: 50]);
@@ -19209,6 +19291,9 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
     }
     if command.info.cmd_type == CommandType.command_xread {
         return command_executor_xread(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_xreadgroup {
+        return command_executor_xreadgroup(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_xsetid {
         return command_executor_xsetid(engine, command, now_ms);

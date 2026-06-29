@@ -467,6 +467,7 @@ PARTIAL_NAMES = {
     "xpending",
     "xrange",
     "xread",
+    "xreadgroup",
     "xrevrange",
     "xsetid",
     "xtrim",

@@ -201,6 +201,12 @@ def run_smoke() -> None:
             if read != [[b"mystream", [[first, [b"sensor", b"a", b"value", b"1"]], [second, [b"sensor", b"b"]]]]]:
                 raise AssertionError(f"unexpected XREAD payload: {read!r}")
             try:
+                client.command(b"XREADGROUP", b"GROUP", b"group", b"consumer", b"STREAMS", b"mystream", b">")
+                raise AssertionError("XREADGROUP did not fail without consumer groups")
+            except RuntimeError as exc:
+                if "NOGROUP" not in str(exc):
+                    raise AssertionError(f"unexpected XREADGROUP error: {exc}") from exc
+            try:
                 client.command(b"XACK", b"mystream", b"group", first)
                 raise AssertionError("XACK did not fail without consumer groups")
             except RuntimeError as exc:

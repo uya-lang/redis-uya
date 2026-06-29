@@ -830,6 +830,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"xinfo|help"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xinfo|stream"[0: 12], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xpending"[0: 8], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"xreadgroup"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xsetid"[0: 6], CommandCatalogStatus.status_partial);
 
     engine_free(&engine);
@@ -4320,6 +4321,45 @@ export fn test_command_streams_first_batch() !void {
     command_reply_cleanup(&xread_reply);
     resp_value_free(&xread_parsed.value);
 
+    var xreadgroup_parsed: RespParseResult = try parse_resp2(&"*7\r\n$10\r\nXREADGROUP\r\n$5\r\nGROUP\r\n$1\r\ng\r\n$1\r\nc\r\n$7\r\nSTREAMS\r\n$6\r\nstream\r\n$1\r\n>\r\n"[0: 78]);
+    const xreadgroup_command: Command = try command_executor_test_command(&router, &xreadgroup_parsed);
+    const xreadgroup_reply: CommandReply = command_execute_at(&engine, &xreadgroup_command, 1000u64);
+    try assert_eq_i32(xreadgroup_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xreadgroup_reply.data, &"NOGROUP"[0: 7]));
+    resp_value_free(&xreadgroup_parsed.value);
+
+    var xreadgroup_missing_parsed: RespParseResult = try parse_resp2(&"*7\r\n$10\r\nXREADGROUP\r\n$5\r\nGROUP\r\n$1\r\ng\r\n$1\r\nc\r\n$7\r\nSTREAMS\r\n$7\r\nmissing\r\n$1\r\n>\r\n"[0: 79]);
+    const xreadgroup_missing_command: Command = try command_executor_test_command(&router, &xreadgroup_missing_parsed);
+    const xreadgroup_missing_reply: CommandReply = command_execute_at(&engine, &xreadgroup_missing_command, 1000u64);
+    try assert_eq_i32(xreadgroup_missing_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(xreadgroup_missing_reply.data, &"ERR no such key"[0: 14]));
+    resp_value_free(&xreadgroup_missing_parsed.value);
+
+    var xreadgroup_badid_parsed: RespParseResult = try parse_resp2(&"*7\r\n$10\r\nXREADGROUP\r\n$5\r\nGROUP\r\n$1\r\ng\r\n$1\r\nc\r\n$7\r\nSTREAMS\r\n$6\r\nstream\r\n$3\r\nbad\r\n"[0: 80]);
+    const xreadgroup_badid_command: Command = try command_executor_test_command(&router, &xreadgroup_badid_parsed);
+    const xreadgroup_badid_reply: CommandReply = command_execute_at(&engine, &xreadgroup_badid_command, 1000u64);
+    try assert_eq_i32(xreadgroup_badid_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xreadgroup_badid_reply.data, &"Invalid stream ID"[0: 17]));
+    resp_value_free(&xreadgroup_badid_parsed.value);
+
+    var xreadgroup_count_parsed: RespParseResult = try parse_resp2(&"*9\r\n$10\r\nXREADGROUP\r\n$5\r\nGROUP\r\n$1\r\ng\r\n$1\r\nc\r\n$5\r\nCOUNT\r\n$1\r\n1\r\n$7\r\nSTREAMS\r\n$6\r\nstream\r\n$1\r\n>\r\n"[0: 96]);
+    const xreadgroup_count_command: Command = try command_executor_test_command(&router, &xreadgroup_count_parsed);
+    const xreadgroup_count_reply: CommandReply = command_execute_at(&engine, &xreadgroup_count_command, 1000u64);
+    try assert_eq_i32(xreadgroup_count_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xreadgroup_count_reply.data, &"NOGROUP"[0: 7]));
+    resp_value_free(&xreadgroup_count_parsed.value);
+
+    var xreadgroup_arity_parsed: RespParseResult = try parse_resp2(&"*5\r\n$10\r\nXREADGROUP\r\n$5\r\nGROUP\r\n$1\r\ng\r\n$1\r\nc\r\n$7\r\nSTREAMS\r\n"[0: 59]);
+    var xreadgroup_wrong_arity: bool = false;
+    _ = command_from_resp(&router, &xreadgroup_arity_parsed.value) catch |err| {
+        if err == error.CommandWrongArity {
+            xreadgroup_wrong_arity = true;
+        }
+        return;
+    };
+    try assert_true(xreadgroup_wrong_arity);
+    resp_value_free(&xreadgroup_arity_parsed.value);
+
     var xsetid_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nXSETID\r\n$6\r\nstream\r\n$6\r\n1000-1\r\n"[0: 40]);
     const xsetid_command: Command = try command_executor_test_command(&router, &xsetid_parsed);
     const xsetid_reply: CommandReply = command_execute_at(&engine, &xsetid_command, 1000u64);
@@ -4708,6 +4748,13 @@ export fn test_command_streams_first_batch() !void {
     try assert_eq_i32(xclaim_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
     try assert_true(command_executor_test_contains(xclaim_wrongtype_reply.data, &"WRONGTYPE"[0: 9]));
     resp_value_free(&xclaim_wrongtype_parsed.value);
+
+    var xreadgroup_wrongtype_parsed: RespParseResult = try parse_resp2(&"*7\r\n$10\r\nXREADGROUP\r\n$5\r\nGROUP\r\n$1\r\ng\r\n$1\r\nc\r\n$7\r\nSTREAMS\r\n$6\r\nstring\r\n$1\r\n>\r\n"[0: 78]);
+    const xreadgroup_wrongtype_command: Command = try command_executor_test_command(&router, &xreadgroup_wrongtype_parsed);
+    const xreadgroup_wrongtype_reply: CommandReply = command_execute_at(&engine, &xreadgroup_wrongtype_command, 1000u64);
+    try assert_eq_i32(xreadgroup_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xreadgroup_wrongtype_reply.data, &"WRONGTYPE"[0: 9]));
+    resp_value_free(&xreadgroup_wrongtype_parsed.value);
 
     var xautoclaim_wrongtype_parsed: RespParseResult = try parse_resp2(&"*6\r\n$10\r\nXAUTOCLAIM\r\n$6\r\nstring\r\n$1\r\ng\r\n$1\r\nc\r\n$1\r\n0\r\n$3\r\n0-0\r\n"[0: 63]);
     const xautoclaim_wrongtype_command: Command = try command_executor_test_command(&router, &xautoclaim_wrongtype_parsed);

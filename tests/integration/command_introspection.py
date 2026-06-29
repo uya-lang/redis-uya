@@ -1042,6 +1042,7 @@ def run_smoke() -> None:
             if (
                 not isinstance(listed_stream, list)
                 or b"xack" not in listed_stream
+                or b"xackdel" not in listed_stream
                 or b"xadd" not in listed_stream
                 or b"xautoclaim" not in listed_stream
                 or b"xclaim" not in listed_stream

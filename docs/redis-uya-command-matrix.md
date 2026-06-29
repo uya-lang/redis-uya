@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 190 | 6 | 3 | 20 |
+| Tier A: standalone core | 365 | 259 | 146 | 191 | 6 | 3 | 19 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `197` |
+| `partial` | `198` |
 | `standalone-error` | `32` |
 | `alias` | `3` |
-| `deferred` | `173` |
+| `deferred` | `172` |
 
 ## Group counts
 
@@ -557,7 +557,7 @@
 | `waitaof` | `generic` | `partial` | `-` | `4` | `-` | `no` | `@slow, @blocking, @connection` |
 | `watch` | `transactions` | `full` | `-` | `-2` | `-` | `no` | `@fast, @transaction` |
 | `xack` | `stream` | `partial` | `-` | `-4` | `-` | `no` | `@write, @stream, @fast` |
-| `xackdel` | `stream` | `deferred` | `v0.9.1` | `-6` | `-` | `no` | `@write, @stream, @fast` |
+| `xackdel` | `stream` | `partial` | `-` | `-6` | `-` | `no` | `@write, @stream, @fast` |
 | `xadd` | `stream` | `partial` | `-` | `-5` | `-` | `no` | `@write, @stream, @fast` |
 | `xautoclaim` | `stream` | `partial` | `-` | `-6` | `-` | `no` | `@write, @stream, @fast` |
 | `xcfgset` | `stream` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@write, @stream, @fast` |

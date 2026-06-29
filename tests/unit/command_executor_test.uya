@@ -815,6 +815,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"pfselftest"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"pfdebug"[0: 7], CommandCatalogStatus.status_standalone_error);
     try command_executor_test_assert_catalog_status(&"xack"[0: 4], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"xackdel"[0: 7], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xautoclaim"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xclaim"[0: 6], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xdelex"[0: 6], CommandCatalogStatus.status_partial);
@@ -4439,6 +4440,52 @@ export fn test_command_streams_first_batch() !void {
     try assert_true(xack_wrong_arity);
     resp_value_free(&xack_arity_parsed.value);
 
+    var xackdel_parsed: RespParseResult = try parse_resp2(&"*6\r\n$7\r\nXACKDEL\r\n$6\r\nstream\r\n$1\r\ng\r\n$3\r\nIDS\r\n$1\r\n1\r\n$6\r\n1000-0\r\n"[0: 64]);
+    const xackdel_command: Command = try command_executor_test_command(&router, &xackdel_parsed);
+    const xackdel_reply: CommandReply = command_execute_at(&engine, &xackdel_command, 1000u64);
+    try assert_eq_i32(xackdel_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xackdel_reply.data, &"NOGROUP"[0: 7]));
+    resp_value_free(&xackdel_parsed.value);
+
+    var xackdel_acked_parsed: RespParseResult = try parse_resp2(&"*7\r\n$7\r\nXACKDEL\r\n$6\r\nstream\r\n$1\r\ng\r\n$5\r\nACKED\r\n$3\r\nIDS\r\n$1\r\n1\r\n$6\r\n1000-0\r\n"[0: 75]);
+    const xackdel_acked_command: Command = try command_executor_test_command(&router, &xackdel_acked_parsed);
+    const xackdel_acked_reply: CommandReply = command_execute_at(&engine, &xackdel_acked_command, 1000u64);
+    try assert_eq_i32(xackdel_acked_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xackdel_acked_reply.data, &"NOGROUP"[0: 7]));
+    resp_value_free(&xackdel_acked_parsed.value);
+
+    var xackdel_missing_parsed: RespParseResult = try parse_resp2(&"*6\r\n$7\r\nXACKDEL\r\n$7\r\nmissing\r\n$1\r\ng\r\n$3\r\nIDS\r\n$1\r\n1\r\n$6\r\n1000-0\r\n"[0: 65]);
+    const xackdel_missing_command: Command = try command_executor_test_command(&router, &xackdel_missing_parsed);
+    const xackdel_missing_reply: CommandReply = command_execute_at(&engine, &xackdel_missing_command, 1000u64);
+    try assert_eq_i32(xackdel_missing_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(xackdel_missing_reply.data, &"ERR no such key"[0: 14]));
+    resp_value_free(&xackdel_missing_parsed.value);
+
+    var xackdel_badid_parsed: RespParseResult = try parse_resp2(&"*6\r\n$7\r\nXACKDEL\r\n$6\r\nstream\r\n$1\r\ng\r\n$3\r\nIDS\r\n$1\r\n1\r\n$3\r\nbad\r\n"[0: 61]);
+    const xackdel_badid_command: Command = try command_executor_test_command(&router, &xackdel_badid_parsed);
+    const xackdel_badid_reply: CommandReply = command_execute_at(&engine, &xackdel_badid_command, 1000u64);
+    try assert_eq_i32(xackdel_badid_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xackdel_badid_reply.data, &"Invalid stream ID"[0: 17]));
+    resp_value_free(&xackdel_badid_parsed.value);
+
+    var xackdel_badcount_parsed: RespParseResult = try parse_resp2(&"*6\r\n$7\r\nXACKDEL\r\n$6\r\nstream\r\n$1\r\ng\r\n$3\r\nIDS\r\n$1\r\n2\r\n$6\r\n1000-0\r\n"[0: 64]);
+    const xackdel_badcount_command: Command = try command_executor_test_command(&router, &xackdel_badcount_parsed);
+    const xackdel_badcount_reply: CommandReply = command_execute_at(&engine, &xackdel_badcount_command, 1000u64);
+    try assert_eq_i32(xackdel_badcount_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(xackdel_badcount_reply.data, &"ERR wrong number of arguments"[0: 29]));
+    resp_value_free(&xackdel_badcount_parsed.value);
+
+    var xackdel_arity_parsed: RespParseResult = try parse_resp2(&"*5\r\n$7\r\nXACKDEL\r\n$6\r\nstream\r\n$1\r\ng\r\n$3\r\nIDS\r\n$1\r\n1\r\n"[0: 52]);
+    var xackdel_wrong_arity: bool = false;
+    _ = command_from_resp(&router, &xackdel_arity_parsed.value) catch |err| {
+        if err == error.CommandWrongArity {
+            xackdel_wrong_arity = true;
+        }
+        return;
+    };
+    try assert_true(xackdel_wrong_arity);
+    resp_value_free(&xackdel_arity_parsed.value);
+
     var xclaim_parsed: RespParseResult = try parse_resp2(&"*6\r\n$6\r\nXCLAIM\r\n$6\r\nstream\r\n$1\r\ng\r\n$1\r\nc\r\n$1\r\n0\r\n$6\r\n1000-0\r\n"[0: 61]);
     const xclaim_command: Command = try command_executor_test_command(&router, &xclaim_parsed);
     const xclaim_reply: CommandReply = command_execute_at(&engine, &xclaim_command, 1000u64);
@@ -5019,6 +5066,13 @@ export fn test_command_streams_first_batch() !void {
     try assert_eq_i32(xdelex_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
     try assert_true(command_executor_test_contains(xdelex_wrongtype_reply.data, &"WRONGTYPE"[0: 9]));
     resp_value_free(&xdelex_wrongtype_parsed.value);
+
+    var xackdel_wrongtype_parsed: RespParseResult = try parse_resp2(&"*6\r\n$7\r\nXACKDEL\r\n$5\r\nplain\r\n$1\r\ng\r\n$3\r\nIDS\r\n$1\r\n1\r\n$6\r\n1000-0\r\n"[0: 63]);
+    const xackdel_wrongtype_command: Command = try command_executor_test_command(&router, &xackdel_wrongtype_parsed);
+    const xackdel_wrongtype_reply: CommandReply = command_execute_at(&engine, &xackdel_wrongtype_command, 1000u64);
+    try assert_eq_i32(xackdel_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xackdel_wrongtype_reply.data, &"WRONGTYPE"[0: 9]));
+    resp_value_free(&xackdel_wrongtype_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

@@ -447,6 +447,7 @@ PARTIAL_NAMES = {
     "zrevrange",
     "zrevrangebylex",
     "xack",
+    "xackdel",
     "xadd",
     "xautoclaim",
     "xclaim",

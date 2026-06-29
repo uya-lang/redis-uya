@@ -1641,6 +1641,11 @@ def run_smoke() -> None:
                 if str(exc) != "NOPERM User default has no permissions to run the 'get' command":
                     raise AssertionError(f"unexpected ACL denied GET error: {exc}") from exc
             acl_log_one = client.acl_log(b"1")
+            acl_log_client_info = b""
+            if len(acl_log_one) == 1 and b"client-info" in acl_log_one[0]:
+                info_index = acl_log_one[0].index(b"client-info") + 1
+                if info_index < len(acl_log_one[0]) and isinstance(acl_log_one[0][info_index], bytes):
+                    acl_log_client_info = acl_log_one[0][info_index]
             if (
                 len(acl_log_one) != 1
                 or b"context" not in acl_log_one[0]
@@ -1653,7 +1658,11 @@ def run_smoke() -> None:
                 or b"timestamp-created" not in acl_log_one[0]
                 or b"timestamp-last-updated" not in acl_log_one[0]
                 or b"client-info" not in acl_log_one[0]
-                or b"id=0 addr=unknown laddr=unknown" in acl_log_one[0]
+                or b"id=0" in acl_log_client_info
+                or b"addr=unknown" in acl_log_client_info
+                or b"laddr=unknown" in acl_log_client_info
+                or b"addr=127.0.0.1:" not in acl_log_client_info
+                or b"laddr=127.0.0.1:" not in acl_log_client_info
             ):
                 raise AssertionError(f"expected ACL LOG to include denied GET command entry, got {acl_log_one!r}")
             acl_log_two = client.acl_log(b"2")

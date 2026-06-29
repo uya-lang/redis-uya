@@ -89,6 +89,8 @@ error ConnectionScriptMissingReference;
 error ConnectionScriptCacheMiss;
 error ConnectionScriptCommandDisallowed;
 
+const CONNECTION_CLIENT_ADDR_MAX: usize = 32;
+
 export struct ConnectionProcessResult {
     response_len: usize,
     response_head_len: usize,
@@ -123,6 +125,10 @@ export struct ConnectionTransaction {
     watch_engine: &Engine,
     protocol_version: i32,
     client_fd: i32,
+    client_addr_len: usize,
+    client_addr: [byte: CONNECTION_CLIENT_ADDR_MAX],
+    client_local_addr_len: usize,
+    client_local_addr: [byte: CONNECTION_CLIENT_ADDR_MAX],
     client_name_len: usize,
     client_name: [byte: 64],
     client_lib_name_len: usize,
@@ -191,6 +197,10 @@ struct ConnectionClientRegistryEntry {
     client_id: i64,
     fd: i32,
     protocol_version: i32,
+    client_addr_len: usize,
+    client_addr: [byte: CONNECTION_CLIENT_ADDR_MAX],
+    client_local_addr_len: usize,
+    client_local_addr: [byte: CONNECTION_CLIENT_ADDR_MAX],
     client_name_len: usize,
     client_name: [byte: CONNECTION_CLIENT_NAME_MAX],
     client_lib_name_len: usize,
@@ -246,6 +256,10 @@ struct ConnectionAclLogEntry {
     sequence: u64,
     created_ms: u64,
     client_id: i64,
+    client_addr_len: usize,
+    client_addr: [byte: CONNECTION_CLIENT_ADDR_MAX],
+    client_local_addr_len: usize,
+    client_local_addr: [byte: CONNECTION_CLIENT_ADDR_MAX],
     count: u64,
     command_len: usize,
     command: [byte: CONNECTION_ACL_COMMAND_NAME_MAX],
@@ -274,6 +288,10 @@ fn connection_transaction_empty() ConnectionTransaction {
         watch_engine: null as &Engine,
         protocol_version: 2,
         client_fd: -1,
+        client_addr_len: 0,
+        client_addr: [],
+        client_local_addr_len: 0,
+        client_local_addr: [],
         client_name_len: 0,
         client_name: [],
         client_lib_name_len: 0,
@@ -1322,9 +1340,13 @@ fn connection_acl_log_clear_all() void {
         connection_acl_log_entries[index].sequence = 0u64;
         connection_acl_log_entries[index].created_ms = 0u64;
         connection_acl_log_entries[index].client_id = 0;
+        connection_acl_log_entries[index].client_addr_len = 0;
+        connection_acl_log_entries[index].client_local_addr_len = 0;
         connection_acl_log_entries[index].count = 0u64;
         connection_acl_log_entries[index].command_len = 0;
         connection_acl_log_entries[index].context_len = 0;
+        connection_client_registry_copy_bytes(connection_acl_log_entries[index].client_addr[0: CONNECTION_CLIENT_ADDR_MAX], connection_reply_empty_slice(), 0);
+        connection_client_registry_copy_bytes(connection_acl_log_entries[index].client_local_addr[0: CONNECTION_CLIENT_ADDR_MAX], connection_reply_empty_slice(), 0);
         index = index + 1;
     }
     connection_acl_log_next_index = 0;
@@ -1485,6 +1507,18 @@ fn connection_acl_log_append_command_denied(name: &[byte], context: &[byte], now
         connection_acl_log_entries[slot].sequence = connection_acl_log_next_sequence;
         connection_acl_log_entries[slot].created_ms = now_ms;
         connection_acl_log_entries[slot].client_id = client_id;
+        connection_acl_log_entries[slot].client_addr_len = 0;
+        connection_acl_log_entries[slot].client_local_addr_len = 0;
+        const client_slot_idx: i32 = connection_client_registry_find_client_id_slot(client_id);
+        if client_slot_idx >= 0 && client_slot_idx < CONNECTION_CLIENT_REGISTRY_MAX as i32 {
+            const client_slot_usize: usize = client_slot_idx as usize;
+            if client_slot_usize < CONNECTION_CLIENT_REGISTRY_MAX {
+                connection_acl_log_entries[slot].client_addr_len = connection_client_registry[client_slot_usize].client_addr_len;
+                connection_acl_log_entries[slot].client_local_addr_len = connection_client_registry[client_slot_usize].client_local_addr_len;
+                connection_client_registry_copy_bytes(connection_acl_log_entries[slot].client_addr[0: CONNECTION_CLIENT_ADDR_MAX], connection_client_registry[client_slot_usize].client_addr[0: CONNECTION_CLIENT_ADDR_MAX], connection_acl_log_entries[slot].client_addr_len);
+                connection_client_registry_copy_bytes(connection_acl_log_entries[slot].client_local_addr[0: CONNECTION_CLIENT_ADDR_MAX], connection_client_registry[client_slot_usize].client_local_addr[0: CONNECTION_CLIENT_ADDR_MAX], connection_acl_log_entries[slot].client_local_addr_len);
+            }
+        }
         connection_acl_log_entries[slot].count = 1u64;
         connection_acl_log_entries[slot].command_len = connection_acl_log_copy_lower(connection_acl_log_entries[slot].command[0: CONNECTION_ACL_COMMAND_NAME_MAX], name);
         connection_acl_log_entries[slot].context_len = connection_acl_log_copy_lower(connection_acl_log_entries[slot].context[0: CONNECTION_ACL_LOG_CONTEXT_MAX], context);
@@ -1936,14 +1970,25 @@ fn connection_acl_log_requested_count(command: &Command) !usize {
     return parsed as usize;
 }
 
-fn connection_acl_log_append_client_info(raw: &Sds, client_id: i64) !void {
+fn connection_acl_log_append_client_info(raw: &Sds, entry: &ConnectionAclLogEntry) !void {
     var client_info: Sds = try sds_empty();
     defer {
         sds_free(&client_info);
     }
     try sds_cat(&client_info, &"id="[0: 3]);
-    try connection_sds_append_i64(&client_info, client_id);
-    try sds_cat(&client_info, &" addr=unknown laddr=unknown"[0: 27]);
+    try connection_sds_append_i64(&client_info, entry.client_id);
+    try sds_cat(&client_info, &" addr="[0: 6]);
+    if entry.client_addr_len > 0 {
+        try sds_cat(&client_info, entry.client_addr[0: entry.client_addr_len]);
+    } else {
+        try sds_cat(&client_info, &"unknown"[0: 7]);
+    }
+    try sds_cat(&client_info, &" laddr="[0: 7]);
+    if entry.client_local_addr_len > 0 {
+        try sds_cat(&client_info, entry.client_local_addr[0: entry.client_local_addr_len]);
+    } else {
+        try sds_cat(&client_info, &"unknown"[0: 7]);
+    }
     try connection_sds_append_resp_bulk(raw, client_info.buf[0: client_info.len]);
 }
 
@@ -1965,7 +2010,7 @@ fn connection_acl_log_append_entry(raw: &Sds, entry: &ConnectionAclLogEntry, now
     try connection_sds_append_resp_bulk(raw, &"age-seconds"[0: 11]);
     try connection_sds_append_resp_integer(raw, age_seconds as i64);
     try connection_sds_append_resp_bulk(raw, &"client-info"[0: 11]);
-    try connection_acl_log_append_client_info(raw, entry.client_id);
+    try connection_acl_log_append_client_info(raw, entry);
     try connection_sds_append_resp_bulk(raw, &"entry-id"[0: 8]);
     try connection_sds_append_resp_integer(raw, entry.sequence as i64);
     try connection_sds_append_resp_bulk(raw, &"timestamp-created"[0: 17]);
@@ -2442,6 +2487,17 @@ fn connection_client_registry_has_client_id(client_id: i64) bool {
     return false;
 }
 
+fn connection_client_registry_find_client_id_slot(client_id: i64) i32 {
+    var i: usize = 0;
+    while i < CONNECTION_CLIENT_REGISTRY_MAX {
+        if connection_client_registry[i].active && connection_client_registry[i].client_id == client_id {
+            return i as i32;
+        }
+        i = i + 1;
+    }
+    return -1;
+}
+
 fn connection_client_name_valid(name: &[byte]) bool {
     var i: usize = 0;
     while i < name.len {
@@ -2489,17 +2545,40 @@ fn connection_client_registry_copy_bytes(dst: &[byte], src: &[byte], src_len: us
     }
 }
 
+export fn connection_transaction_set_client_addresses(tx: &ConnectionTransaction, addr: &[byte], local_addr: &[byte]) void {
+    if tx == null {
+        return;
+    }
+    var addr_len: usize = addr.len;
+    if addr_len > CONNECTION_CLIENT_ADDR_MAX {
+        addr_len = CONNECTION_CLIENT_ADDR_MAX;
+    }
+    var local_addr_len: usize = local_addr.len;
+    if local_addr_len > CONNECTION_CLIENT_ADDR_MAX {
+        local_addr_len = CONNECTION_CLIENT_ADDR_MAX;
+    }
+    tx.client_addr_len = addr_len;
+    tx.client_local_addr_len = local_addr_len;
+    connection_client_registry_copy_bytes(tx.client_addr[0: CONNECTION_CLIENT_ADDR_MAX], addr, addr_len);
+    connection_client_registry_copy_bytes(tx.client_local_addr[0: CONNECTION_CLIENT_ADDR_MAX], local_addr, local_addr_len);
+    connection_client_registry_sync(tx);
+}
+
 fn connection_client_registry_clear_slot(slot: &ConnectionClientRegistryEntry) void {
     slot.active = false;
     slot.tx_addr = 0 as usize;
     slot.client_id = 0;
     slot.fd = -1;
     slot.protocol_version = 2;
+    slot.client_addr_len = 0;
+    slot.client_local_addr_len = 0;
     slot.client_name_len = 0;
     slot.client_lib_name_len = 0;
     slot.client_lib_ver_len = 0;
     slot.pubsub_count = 0;
     slot.multi_active = false;
+    connection_client_registry_copy_bytes(slot.client_addr[0: CONNECTION_CLIENT_ADDR_MAX], connection_reply_empty_slice(), 0);
+    connection_client_registry_copy_bytes(slot.client_local_addr[0: CONNECTION_CLIENT_ADDR_MAX], connection_reply_empty_slice(), 0);
     connection_client_registry_copy_bytes(slot.client_name[0: CONNECTION_CLIENT_NAME_MAX], connection_reply_empty_slice(), 0);
     connection_client_registry_copy_bytes(slot.client_lib_name[0: CONNECTION_CLIENT_INFO_MAX], connection_reply_empty_slice(), 0);
     connection_client_registry_copy_bytes(slot.client_lib_ver[0: CONNECTION_CLIENT_INFO_MAX], connection_reply_empty_slice(), 0);
@@ -2564,11 +2643,21 @@ fn connection_client_registry_sync(tx: &ConnectionTransaction) void {
     slot.tx_addr = tx_addr;
     slot.fd = tx.client_fd;
     slot.protocol_version = tx.protocol_version;
+    slot.client_addr_len = tx.client_addr_len;
+    if slot.client_addr_len > CONNECTION_CLIENT_ADDR_MAX {
+        slot.client_addr_len = CONNECTION_CLIENT_ADDR_MAX;
+    }
+    slot.client_local_addr_len = tx.client_local_addr_len;
+    if slot.client_local_addr_len > CONNECTION_CLIENT_ADDR_MAX {
+        slot.client_local_addr_len = CONNECTION_CLIENT_ADDR_MAX;
+    }
     slot.client_name_len = tx.client_name_len;
     slot.client_lib_name_len = tx.client_lib_name_len;
     slot.client_lib_ver_len = tx.client_lib_ver_len;
     slot.pubsub_count = tx.pubsub_count;
     slot.multi_active = tx.active;
+    connection_client_registry_copy_bytes(slot.client_addr[0: CONNECTION_CLIENT_ADDR_MAX], tx.client_addr[0: CONNECTION_CLIENT_ADDR_MAX], slot.client_addr_len);
+    connection_client_registry_copy_bytes(slot.client_local_addr[0: CONNECTION_CLIENT_ADDR_MAX], tx.client_local_addr[0: CONNECTION_CLIENT_ADDR_MAX], slot.client_local_addr_len);
     connection_client_registry_copy_bytes(slot.client_name[0: CONNECTION_CLIENT_NAME_MAX], tx.client_name[0: CONNECTION_CLIENT_NAME_MAX], tx.client_name_len);
     connection_client_registry_copy_bytes(slot.client_lib_name[0: CONNECTION_CLIENT_INFO_MAX], tx.client_lib_name[0: CONNECTION_CLIENT_INFO_MAX], tx.client_lib_name_len);
     connection_client_registry_copy_bytes(slot.client_lib_ver[0: CONNECTION_CLIENT_INFO_MAX], tx.client_lib_ver[0: CONNECTION_CLIENT_INFO_MAX], tx.client_lib_ver_len);

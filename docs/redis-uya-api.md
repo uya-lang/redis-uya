@@ -105,7 +105,7 @@ ACL WHOAMI
 - `ACL HELP` 返回 Redis 兼容的 ACL 子命令帮助数组
 - `ACL LIST` 返回当前默认用户的 config file 格式描述；默认是 `user default on nopass ~* &* +@all`，启用 `requirepass` 时会用 `#` 开头的哈希标记替代 `nopass`，执行 `ACL SETUSER default -get` 或 `-@string` 后会追加对应 deny 规则
 - `ACL LOAD` 当前按未配置 ACL 文件的 Redis 兼容错误返回，不会修改用户状态
-- `ACL LOG [count]` 当前返回默认用户命令权限拒绝的进程内 ring 日志，覆盖 `ACL DRYRUN`、真实命令、事务队列前置拒绝和脚本内部命令拒绝产生的 `NOPERM`，字段包含 `reason/context/object/username/age-seconds/client-info/entry-id/timestamp-created/timestamp-last-updated/count`，其中 `client-info` 会记录真实连接 `id`，但 `addr/laddr` 仍为 `unknown`；`ACL LOG RESET` 会清空该日志
+- `ACL LOG [count]` 当前返回默认用户命令权限拒绝的进程内 ring 日志，覆盖 `ACL DRYRUN`、真实命令、事务队列前置拒绝和脚本内部命令拒绝产生的 `NOPERM`，字段包含 `reason/context/object/username/age-seconds/client-info/entry-id/timestamp-created/timestamp-last-updated/count`，其中 `client-info` 会记录拒绝发生时的真实连接 `id/addr/laddr`；`ACL LOG RESET` 会清空该日志
 - `ACL SAVE` 当前按未配置 ACL 文件的 Redis 兼容错误返回，不会写入 ACL 文件
 - `ACL SETUSER default [attribute ...]` 当前支持不会改变固定默认用户视图的 no-op 修饰符，例如 `on nopass ~* &* +@all resetkeys resetchannels clearselectors resetselectors`，也支持命令级 `-cmd` / `+cmd`、分类级 `-@category` / `+@category` 和 `resetcommands`；例如 `ACL SETUSER default -get` 或 `ACL SETUSER default -@string` 会让后续 `GET` 与 `ACL DRYRUN default GET ...` 返回 `NOPERM User default has no permissions to run the 'get' command`，`ACL SETUSER default +get`、`+@string`、`+@all` 或 `resetcommands` 会恢复对应拒绝
 - `ACL USERS` 返回当前已知用户名数组；当前仅包含 `default`
@@ -115,7 +115,7 @@ ACL WHOAMI
 
 - 当前实现为 partial，仅暴露 `ACL CAT`、`ACL DELUSER`、`ACL DRYRUN`、`ACL GENPASS`、`ACL GETUSER`、`ACL HELP`、`ACL LIST`、`ACL LOAD`、`ACL LOG`、`ACL SAVE`、`ACL SETUSER`、`ACL USERS`、`ACL WHOAMI` 和 `COMMAND*` 可见面
 - `COMMAND INFO/LIST/DOCS` 会暴露 `ACL`、`ACL|CAT`、`ACL|DELUSER`、`ACL|DRYRUN`、`ACL|GENPASS`、`ACL|GETUSER`、`ACL|HELP`、`ACL|LIST`、`ACL|LOAD`、`ACL|LOG`、`ACL|SAVE`、`ACL|SETUSER`、`ACL|USERS` 与 `ACL|WHOAMI`
-- 当前不支持 ACL 用户存储、密码管理、完整 Redis 分类授权模型、key pattern 权限、selector 权限、真实客户端地址审计字段或 ACL 文件加载保存；命令级 deny list、分类级 deny list 与 ACL LOG 都是进程内状态，尚未持久化到 ACL 文件或 RDB/AOF
+- 当前不支持 ACL 用户存储、密码管理、完整 Redis 分类授权模型、key pattern 权限、selector 权限或 ACL 文件加载保存；命令级 deny list、分类级 deny list 与 ACL LOG 都是进程内状态，尚未持久化到 ACL 文件或 RDB/AOF
 
 ### `COMMAND`
 

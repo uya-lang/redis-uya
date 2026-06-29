@@ -849,8 +849,8 @@ if [[ "$ACL_LOG_ONE_RESULT" != *"context"* || "$ACL_LOG_ONE_RESULT" != *"command
     echo "[FAIL] integration/redis_cli_smoke: expected ACL LOG 1 to include denied GET entry, got '$ACL_LOG_ONE_RESULT'" >&2
     exit 1
 fi
-if [[ "$ACL_LOG_ONE_RESULT" == *"id=0 addr=unknown laddr=unknown"* ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected ACL LOG 1 to include real client id, got '$ACL_LOG_ONE_RESULT'" >&2
+if [[ "$ACL_LOG_ONE_RESULT" == *"id=0"* || "$ACL_LOG_ONE_RESULT" == *"addr=unknown"* || "$ACL_LOG_ONE_RESULT" == *"laddr=unknown"* || "$ACL_LOG_ONE_RESULT" != *"addr=127.0.0.1:"* || "$ACL_LOG_ONE_RESULT" != *"laddr=127.0.0.1:"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL LOG 1 to include real client id and addresses, got '$ACL_LOG_ONE_RESULT'" >&2
     exit 1
 fi
 

@@ -12,10 +12,13 @@ use src.config.config_copy_bytes;
 use src.network.listener.RedisListener;
 use src.network.listener.listener_open_loopback;
 use src.network.listener.listener_accept;
+use src.network.listener.listener_copy_last_peer_addr;
+use src.network.listener.listener_copy_last_local_addr;
 use src.network.listener.listener_close;
 use src.network.connection.ConnectionProcessResult;
 use src.network.connection.ConnectionTransaction;
 use src.network.connection.connection_client_registry_client_id;
+use src.network.connection.connection_transaction_set_client_addresses;
 use src.network.connection.connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_zero_copy_close_at;
 use src.network.connection.connection_encode_client_unblock_error_reply;
 use src.network.connection.connection_encode_client_unblock_timeout_reply;
@@ -111,6 +114,7 @@ const SERVER_INPUT_CAP: usize = 8192;
 const SERVER_OUTPUT_CAP: usize = 81920;
 const SERVER_BLOCKED_REQUEST_CAP: usize = 2048;
 const SERVER_EVENT_CAP: usize = 16;
+const SERVER_CLIENT_ENDPOINT_MAX: usize = 32;
 const SERVER_WAITPID_WNOHANG: i32 = 1;
 const SERVER_REPL_BACKLOG_BYTES: usize = 16384;
 const SERVER_REPL_LINE_BYTES: usize = 256;
@@ -1945,14 +1949,17 @@ fn server_ms_until_next_cron(server: &RedisServer, now_ms: u64) i32 {
 }
 
 export fn server_accept_once(server: &RedisServer) !void {
-    const fd_result: !i32 = listener_accept(&server.listener);
-    const fd: i32 = fd_result catch |err| {
+    const fd: i32 = listener_accept(&server.listener) catch |err| {
         const eid: i32 = @error_id(err) as i32;
         if eid == EAGAIN || eid == EWOULDBLOCK || eid == EINTR {
             return;
         }
         return err;
     };
+    var peer_addr: [byte: SERVER_CLIENT_ENDPOINT_MAX] = [];
+    var local_addr: [byte: SERVER_CLIENT_ENDPOINT_MAX] = [];
+    const peer_addr_len: usize = listener_copy_last_peer_addr(&peer_addr[0], SERVER_CLIENT_ENDPOINT_MAX);
+    const local_addr_len: usize = listener_copy_last_local_addr(&local_addr[0], SERVER_CLIENT_ENDPOINT_MAX);
 
     if !server_can_accept_client(server) {
         _ = sys_close(fd) catch {};
@@ -1995,6 +2002,11 @@ export fn server_accept_once(server: &RedisServer) !void {
     server.clients[slot].last_interaction_ms = now_ms_safe();
     server.clients[slot].transaction = connection_transaction_new();
     server.clients[slot].transaction.client_fd = fd;
+    connection_transaction_set_client_addresses(
+        &server.clients[slot].transaction,
+        peer_addr[0: peer_addr_len],
+        local_addr[0: local_addr_len],
+    );
     server.clients[slot].async_epoll_interest = 1;
     server.clients[slot].async_waker = Waker{};
     server_client_clear_async_replicaof_host(&server.clients[slot]);

@@ -21,11 +21,19 @@ use libc.EPOLL_CLOEXEC;
 use libc.EPOLLIN;
 use libc.EPOLL_CTL_ADD;
 
+const LISTENER_ENDPOINT_MAX: usize = 32;
+error ListenerOutputTooSmall;
+
 export struct RedisListener {
     listen_fd: i32,
     poll_fd: i32,
     port: u16,
 }
+
+var listener_last_peer_addr_len: usize = 0;
+var listener_last_peer_addr: [byte: LISTENER_ENDPOINT_MAX] = [];
+var listener_last_local_addr_len: usize = 0;
+var listener_last_local_addr: [byte: LISTENER_ENDPOINT_MAX] = [];
 
 fn listener_htons(port: u16) u16 {
     return ((port & (0xFF as u16)) << 8) | ((port >> 8) & (0xFF as u16));
@@ -51,6 +59,93 @@ fn listener_fill_loopback_addr(port: u16, out: &byte) void {
 fn listener_read_port(addr: &byte) u16 {
     const net_port: u16 = addr[2] as u16 | ((addr[3] as u16) << 8);
     return listener_htons(net_port);
+}
+
+fn listener_append_byte(out: &byte, out_cap: usize, pos: &usize, ch: byte) !void {
+    if *pos >= out_cap {
+        return error.ListenerOutputTooSmall;
+    }
+    out[*pos] = ch;
+    *pos = *pos + 1;
+}
+
+fn listener_append_u64(out: &byte, out_cap: usize, pos: &usize, value: u64) !void {
+    if value == 0u64 {
+        try listener_append_byte(out, out_cap, pos, 48 as byte);
+        return;
+    }
+
+    var tmp: [byte: 20] = [];
+    var count: usize = 0;
+    var v: u64 = value;
+    while v > 0u64 {
+        const digit: u64 = v % 10u64;
+        tmp[count] = (48u64 + digit) as byte;
+        count = count + 1;
+        v = v / 10u64;
+    }
+
+    while count > 0 {
+        count = count - 1;
+        try listener_append_byte(out, out_cap, pos, tmp[count]);
+    }
+}
+
+fn listener_format_ipv4_endpoint(addr: &byte, out: &byte, out_cap: usize) usize {
+    var pos: usize = 0;
+    _ = listener_append_u64(out, out_cap, &pos, addr[4] as u64) catch {
+        return 0;
+    };
+    _ = listener_append_byte(out, out_cap, &pos, 46 as byte) catch {
+        return 0;
+    };
+    _ = listener_append_u64(out, out_cap, &pos, addr[5] as u64) catch {
+        return 0;
+    };
+    _ = listener_append_byte(out, out_cap, &pos, 46 as byte) catch {
+        return 0;
+    };
+    _ = listener_append_u64(out, out_cap, &pos, addr[6] as u64) catch {
+        return 0;
+    };
+    _ = listener_append_byte(out, out_cap, &pos, 46 as byte) catch {
+        return 0;
+    };
+    _ = listener_append_u64(out, out_cap, &pos, addr[7] as u64) catch {
+        return 0;
+    };
+    _ = listener_append_byte(out, out_cap, &pos, 58 as byte) catch {
+        return 0;
+    };
+    _ = listener_append_u64(out, out_cap, &pos, listener_read_port(addr) as u64) catch {
+        return 0;
+    };
+    return pos;
+}
+
+fn listener_copy_endpoint(dst: &byte, dst_cap: usize, src: &byte, src_len: usize) usize {
+    var len: usize = src_len;
+    if len > dst_cap {
+        len = dst_cap;
+    }
+    var i: usize = 0;
+    while i < len {
+        dst[i] = src[i];
+        i = i + 1;
+    }
+    while i < dst_cap {
+        dst[i] = 0 as byte;
+        i = i + 1;
+    }
+    return len;
+}
+
+export fn listener_copy_last_peer_addr(out: &byte, out_cap: usize) usize {
+    return listener_copy_endpoint(out, out_cap, &listener_last_peer_addr[0], listener_last_peer_addr_len);
+}
+
+export fn listener_copy_last_local_addr(out: &byte, out_cap: usize) usize {
+    return listener_copy_endpoint(out, out_cap, &listener_last_local_addr[0], listener_last_local_addr_len);
 }
 
 fn listener_backlog(maxclients: i32) i32 {
@@ -106,11 +201,20 @@ export fn listener_open_loopback(port: u16, maxclients: i32) !RedisListener {
 }
 
 export fn listener_accept(listener: &RedisListener) !i32 {
+    listener_last_peer_addr_len = 0;
+    listener_last_local_addr_len = 0;
     var len: u32 = 16;
     var peer: [byte: 16] = [];
     const fd: i32 = try sys_accept(listener.listen_fd, &peer[0] as &void, &len);
     var one: i32 = 1;
     _ = sys_setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one as &void, 4 as u32) catch {};
+    listener_last_peer_addr_len = listener_format_ipv4_endpoint(&peer[0], &listener_last_peer_addr[0], LISTENER_ENDPOINT_MAX);
+    var local_len: u32 = 16;
+    var local: [byte: 16] = [];
+    _ = sys_getsockname(fd, &local[0] as &void, &local_len) catch {
+        return fd;
+    };
+    listener_last_local_addr_len = listener_format_ipv4_endpoint(&local[0], &listener_last_local_addr[0], LISTENER_ENDPOINT_MAX);
     return fd;
 }
 

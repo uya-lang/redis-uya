@@ -2704,6 +2704,7 @@ XPENDING key group [IDLE min-idle-time] start end count [consumer]
 XRANGE key start end [COUNT count]
 XREVRANGE key end start [COUNT count]
 XREAD [COUNT count] STREAMS key [key ...] id [id ...]
+XSETID key last-id [ENTRIESADDED entries-added] [MAXDELETEDID max-deleted-id]
 XTRIM key MAXLEN [=|~] count
 ```
 
@@ -2726,6 +2727,7 @@ XTRIM key MAXLEN [=|~] count
 - `XPENDING`：当前没有 consumer group 模型，因此对现有 stream key 返回 `NOGROUP No such consumer group`
 - `XRANGE` / `XREVRANGE`：返回 `[id, [field, value, ...]]` 形式的嵌套数组，支持 `-` / `+` 边界和 `COUNT`
 - `XREAD`：命中时返回 stream 名与 entry 数组；无新 entry 时返回 Null Array
+- `XSETID`：当前只校验参数、stream key 与类型；对现有 stream key 返回 `ERR XSETID is not supported yet`
 - `XTRIM`：返回被删除的 entry 数量；key 不存在返回 `0`
 
 说明：
@@ -2733,6 +2735,7 @@ XTRIM key MAXLEN [=|~] count
 - 当前实现为 partial：stream 内部暂用项目内 list-backed entry 存储，不是 Redis 原生 radix-tree/listpack 编码
 - `XADD` 当前只支持基础追加和显式完整 id / `*` 自动 id；不支持 `MAXLEN`、`MINID`、`LIMIT`、`NOMKSTREAM` 或 `field value` 之外的扩展选项
 - `XREAD` 当前只支持非阻塞读取；`BLOCK` 会返回明确错误，consumer group 相关语义仍未实现
+- `XSETID` 当前只提供 key/type 校验、`last-id` / `MAXDELETEDID` stream ID 校验和 `ENTRIESADDED` 整数校验，不修改 stream 元数据
 - `XACK` 当前只提供无 group 时的 `NOGROUP` 错误面，不维护 consumer group PEL
 - `XCLAIM` 当前只提供无 group 时的 `NOGROUP` 错误面，不维护 consumer group PEL
 - `XDEL` 当前只做精确 ID 删除，不维护 consumer group PEL

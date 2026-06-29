@@ -1060,6 +1060,7 @@ def run_smoke() -> None:
                 or b"xrange" not in listed_stream
                 or b"xrevrange" not in listed_stream
                 or b"xread" not in listed_stream
+                or b"xsetid" not in listed_stream
                 or b"xtrim" not in listed_stream
                 or b"xautoclaim" in listed_stream
             ):

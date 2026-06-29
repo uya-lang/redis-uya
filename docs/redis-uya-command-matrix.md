@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 186 | 6 | 3 | 24 |
+| Tier A: standalone core | 365 | 259 | 146 | 187 | 6 | 3 | 23 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `193` |
+| `partial` | `194` |
 | `standalone-error` | `32` |
 | `alias` | `3` |
-| `deferred` | `177` |
+| `deferred` | `176` |
 
 ## Group counts
 
@@ -584,7 +584,7 @@
 | `xread` | `stream` | `partial` | `-` | `-4` | `-` | `no` | `@read, @stream, @slow, @blocking` |
 | `xreadgroup` | `stream` | `deferred` | `v0.9.1` | `-7` | `-` | `no` | `@write, @stream, @slow, @blocking` |
 | `xrevrange` | `stream` | `partial` | `-` | `-4` | `-` | `no` | `@read, @stream, @slow` |
-| `xsetid` | `stream` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@write, @stream, @fast` |
+| `xsetid` | `stream` | `partial` | `-` | `-3` | `-` | `no` | `@write, @stream, @fast` |
 | `xtrim` | `stream` | `partial` | `-` | `-4` | `-` | `no` | `@write, @stream, @slow` |
 | `zadd` | `sorted-set` | `full` | `-` | `-4` | `-` | `no` | `@write, @sortedset, @fast` |
 | `zcard` | `sorted-set` | `full` | `-` | `2` | `-` | `no` | `@read, @sortedset, @fast` |

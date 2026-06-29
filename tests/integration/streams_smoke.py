@@ -159,6 +159,12 @@ def run_smoke() -> None:
                 if "NOGROUP" not in str(exc):
                     raise AssertionError(f"unexpected XGROUP SETID error: {exc}") from exc
             try:
+                client.command(b"XAUTOCLAIM", b"mystream", b"group", b"consumer", b"0", b"0-0")
+                raise AssertionError("XAUTOCLAIM did not fail without consumer groups")
+            except RuntimeError as exc:
+                if "NOGROUP" not in str(exc):
+                    raise AssertionError(f"unexpected XAUTOCLAIM error: {exc}") from exc
+            try:
                 client.command(b"XSETID", b"mystream", b"1000-1")
                 raise AssertionError("XSETID did not report deferred stream metadata mutation")
             except RuntimeError as exc:

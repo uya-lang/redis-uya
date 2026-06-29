@@ -815,8 +815,11 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"pfselftest"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"pfdebug"[0: 7], CommandCatalogStatus.status_standalone_error);
     try command_executor_test_assert_catalog_status(&"xack"[0: 4], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"xautoclaim"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xclaim"[0: 6], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xgroup"[0: 6], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"xgroup|createconsumer"[0: 21], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"xgroup|delconsumer"[0: 18], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xgroup|create"[0: 13], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xgroup|destroy"[0: 14], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xgroup|help"[0: 11], CommandCatalogStatus.status_partial);
@@ -827,6 +830,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"xinfo|help"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xinfo|stream"[0: 12], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xpending"[0: 8], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"xsetid"[0: 6], CommandCatalogStatus.status_partial);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);
@@ -4419,6 +4423,38 @@ export fn test_command_streams_first_batch() !void {
     try assert_true(xclaim_wrong_arity);
     resp_value_free(&xclaim_arity_parsed.value);
 
+    var xautoclaim_parsed: RespParseResult = try parse_resp2(&"*6\r\n$10\r\nXAUTOCLAIM\r\n$6\r\nstream\r\n$1\r\ng\r\n$1\r\nc\r\n$1\r\n0\r\n$3\r\n0-0\r\n"[0: 63]);
+    const xautoclaim_command: Command = try command_executor_test_command(&router, &xautoclaim_parsed);
+    const xautoclaim_reply: CommandReply = command_execute_at(&engine, &xautoclaim_command, 1000u64);
+    try assert_eq_i32(xautoclaim_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xautoclaim_reply.data, &"NOGROUP"[0: 7]));
+    resp_value_free(&xautoclaim_parsed.value);
+
+    var xautoclaim_missing_parsed: RespParseResult = try parse_resp2(&"*6\r\n$10\r\nXAUTOCLAIM\r\n$7\r\nmissing\r\n$1\r\ng\r\n$1\r\nc\r\n$1\r\n0\r\n$3\r\n0-0\r\n"[0: 64]);
+    const xautoclaim_missing_command: Command = try command_executor_test_command(&router, &xautoclaim_missing_parsed);
+    const xautoclaim_missing_reply: CommandReply = command_execute_at(&engine, &xautoclaim_missing_command, 1000u64);
+    try assert_eq_i32(xautoclaim_missing_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(xautoclaim_missing_reply.data, &"ERR no such key"[0: 14]));
+    resp_value_free(&xautoclaim_missing_parsed.value);
+
+    var xautoclaim_badid_parsed: RespParseResult = try parse_resp2(&"*6\r\n$10\r\nXAUTOCLAIM\r\n$6\r\nstream\r\n$1\r\ng\r\n$1\r\nc\r\n$1\r\n0\r\n$3\r\nbad\r\n"[0: 63]);
+    const xautoclaim_badid_command: Command = try command_executor_test_command(&router, &xautoclaim_badid_parsed);
+    const xautoclaim_badid_reply: CommandReply = command_execute_at(&engine, &xautoclaim_badid_command, 1000u64);
+    try assert_eq_i32(xautoclaim_badid_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xautoclaim_badid_reply.data, &"Invalid stream ID"[0: 17]));
+    resp_value_free(&xautoclaim_badid_parsed.value);
+
+    var xautoclaim_arity_parsed: RespParseResult = try parse_resp2(&"*5\r\n$10\r\nXAUTOCLAIM\r\n$6\r\nstream\r\n$1\r\ng\r\n$1\r\nc\r\n$1\r\n0\r\n"[0: 54]);
+    var xautoclaim_wrong_arity: bool = false;
+    _ = command_from_resp(&router, &xautoclaim_arity_parsed.value) catch |err| {
+        if err == error.CommandWrongArity {
+            xautoclaim_wrong_arity = true;
+        }
+        return;
+    };
+    try assert_true(xautoclaim_wrong_arity);
+    resp_value_free(&xautoclaim_arity_parsed.value);
+
     var xpending_parsed: RespParseResult = try parse_resp2(&"*3\r\n$8\r\nXPENDING\r\n$6\r\nstream\r\n$1\r\ng\r\n"[0: 37]);
     const xpending_command: Command = try command_executor_test_command(&router, &xpending_parsed);
     const xpending_reply: CommandReply = command_execute_at(&engine, &xpending_command, 1000u64);
@@ -4672,6 +4708,13 @@ export fn test_command_streams_first_batch() !void {
     try assert_eq_i32(xclaim_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
     try assert_true(command_executor_test_contains(xclaim_wrongtype_reply.data, &"WRONGTYPE"[0: 9]));
     resp_value_free(&xclaim_wrongtype_parsed.value);
+
+    var xautoclaim_wrongtype_parsed: RespParseResult = try parse_resp2(&"*6\r\n$10\r\nXAUTOCLAIM\r\n$6\r\nstring\r\n$1\r\ng\r\n$1\r\nc\r\n$1\r\n0\r\n$3\r\n0-0\r\n"[0: 63]);
+    const xautoclaim_wrongtype_command: Command = try command_executor_test_command(&router, &xautoclaim_wrongtype_parsed);
+    const xautoclaim_wrongtype_reply: CommandReply = command_execute_at(&engine, &xautoclaim_wrongtype_command, 1000u64);
+    try assert_eq_i32(xautoclaim_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xautoclaim_wrongtype_reply.data, &"WRONGTYPE"[0: 9]));
+    resp_value_free(&xautoclaim_wrongtype_parsed.value);
 
     var xpending_wrongtype_parsed: RespParseResult = try parse_resp2(&"*3\r\n$8\r\nXPENDING\r\n$6\r\nstring\r\n$1\r\ng\r\n"[0: 37]);
     const xpending_wrongtype_command: Command = try command_executor_test_command(&router, &xpending_wrongtype_parsed);

@@ -5348,6 +5348,40 @@ fn command_executor_xclaim(engine: &Engine, command: &Command, now_ms: u64) Comm
     return command_executor_error(&"NOGROUP No such consumer group"[0: 30]);
 }
 
+fn command_executor_xautoclaim(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 6 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    _ = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    _ = command_executor_arg(command, 3) catch {
+        return command_executor_wrong_arity();
+    };
+    const min_idle_data: &[byte] = command_executor_arg(command, 4) catch {
+        return command_executor_wrong_arity();
+    };
+    _ = command_executor_parse_u64_token(min_idle_data) catch {
+        return command_executor_invalid_integer();
+    };
+    const start_id_data: &[byte] = command_executor_arg(command, 5) catch {
+        return command_executor_wrong_arity();
+    };
+    _ = command_executor_parse_stream_id(start_id_data, 0u64, false, false) catch {
+        return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 57]);
+    };
+    const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+        return command_executor_error(&"ERR no such key"[0: 14]);
+    };
+    if obj.obj_type != ObjectType.object_stream {
+        return command_executor_wrongtype();
+    }
+    return command_executor_error(&"NOGROUP No such consumer group"[0: 30]);
+}
+
 fn command_executor_xpending(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
     if command.argc < 3 {
         return command_executor_wrong_arity();
@@ -19148,6 +19182,9 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
     }
     if command.info.cmd_type == CommandType.command_xclaim {
         return command_executor_xclaim(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_xautoclaim {
+        return command_executor_xautoclaim(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_xdel {
         return command_executor_xdel(engine, command, now_ms);

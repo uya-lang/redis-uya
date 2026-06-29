@@ -1043,6 +1043,7 @@ def run_smoke() -> None:
                 not isinstance(listed_stream, list)
                 or b"xack" not in listed_stream
                 or b"xadd" not in listed_stream
+                or b"xautoclaim" not in listed_stream
                 or b"xclaim" not in listed_stream
                 or b"xdel" not in listed_stream
                 or b"xgroup" not in listed_stream
@@ -1062,7 +1063,6 @@ def run_smoke() -> None:
                 or b"xread" not in listed_stream
                 or b"xsetid" not in listed_stream
                 or b"xtrim" not in listed_stream
-                or b"xautoclaim" in listed_stream
             ):
                 raise AssertionError(f"unexpected COMMAND LIST stream result: {listed_stream!r}")
 

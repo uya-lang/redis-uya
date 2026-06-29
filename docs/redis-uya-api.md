@@ -2687,6 +2687,7 @@ GEORADIUSBYMEMBER_RO key member radius M|KM|FT|MI [WITHCOORD] [WITHDIST] [WITHHA
 ```text
 XACK key group id [id ...]
 XADD key id field value [field value ...]
+XAUTOCLAIM key group consumer min-idle-time start [COUNT count] [JUSTID]
 XCLAIM key group consumer min-idle-time id [id ...] [IDLE ms] [TIME ms-unix-time] [RETRYCOUNT count] [FORCE] [JUSTID]
 XDEL key id [id ...]
 XGROUP CREATE key groupname id-or-$ [MKSTREAM]
@@ -2712,6 +2713,7 @@ XTRIM key MAXLEN [=|~] count
 
 - `XACK`：当前没有 consumer group 模型，因此对现有 stream key 返回 `NOGROUP No such consumer group`
 - `XADD`：成功时返回新增 entry id；`*` 会按当前毫秒时间和单毫秒递增序列生成 id
+- `XAUTOCLAIM`：当前没有 consumer group 模型，因此对现有 stream key 返回 `NOGROUP No such consumer group`
 - `XCLAIM`：当前没有 consumer group 模型，因此对现有 stream key 返回 `NOGROUP No such consumer group`
 - `XDEL`：返回被删除的 entry 数量；key 不存在返回 `0`
 - `XGROUP CREATE`：当前没有 consumer group 模型，因此只校验参数、stream key 与类型；对现有 stream key 返回 `ERR XGROUP CREATE is not supported yet`
@@ -2737,6 +2739,7 @@ XTRIM key MAXLEN [=|~] count
 - `XREAD` 当前只支持非阻塞读取；`BLOCK` 会返回明确错误，consumer group 相关语义仍未实现
 - `XSETID` 当前只提供 key/type 校验、`last-id` / `MAXDELETEDID` stream ID 校验和 `ENTRIESADDED` 整数校验，不修改 stream 元数据
 - `XACK` 当前只提供无 group 时的 `NOGROUP` 错误面，不维护 consumer group PEL
+- `XAUTOCLAIM` 当前只提供无 group 时的 `NOGROUP` 错误面，不维护 consumer group PEL
 - `XCLAIM` 当前只提供无 group 时的 `NOGROUP` 错误面，不维护 consumer group PEL
 - `XDEL` 当前只做精确 ID 删除，不维护 consumer group PEL
 - `XPENDING` 当前只提供无 group 时的 `NOGROUP` 错误面，不维护 consumer group PEL

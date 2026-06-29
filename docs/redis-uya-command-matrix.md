@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 189 | 6 | 3 | 21 |
+| Tier A: standalone core | 365 | 259 | 146 | 190 | 6 | 3 | 20 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `196` |
+| `partial` | `197` |
 | `standalone-error` | `32` |
 | `alias` | `3` |
-| `deferred` | `174` |
+| `deferred` | `173` |
 
 ## Group counts
 
@@ -563,7 +563,7 @@
 | `xcfgset` | `stream` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@write, @stream, @fast` |
 | `xclaim` | `stream` | `partial` | `-` | `-6` | `-` | `no` | `@write, @stream, @fast` |
 | `xdel` | `stream` | `partial` | `-` | `-3` | `-` | `no` | `@write, @stream, @fast` |
-| `xdelex` | `stream` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@write, @stream, @fast` |
+| `xdelex` | `stream` | `partial` | `-` | `-5` | `-` | `no` | `@write, @stream, @fast` |
 | `xgroup` | `stream` | `partial` | `-` | `-2` | `-` | `no` | `@slow` |
 | `xgroup|create` | `stream` | `partial` | `-` | `-5` | `-` | `no` | `@write, @stream, @slow` |
 | `xgroup|createconsumer` | `stream` | `partial` | `-` | `5` | `-` | `no` | `@write, @stream, @slow` |

@@ -2690,6 +2690,7 @@ XADD key id field value [field value ...]
 XAUTOCLAIM key group consumer min-idle-time start [COUNT count] [JUSTID]
 XCLAIM key group consumer min-idle-time id [id ...] [IDLE ms] [TIME ms-unix-time] [RETRYCOUNT count] [FORCE] [JUSTID]
 XDEL key id [id ...]
+XDELEX key [KEEPREF|DELREF|ACKED] IDS numids id [id ...]
 XGROUP CREATE key groupname id-or-$ [MKSTREAM]
 XGROUP CREATECONSUMER key groupname consumer
 XGROUP DELCONSUMER key groupname consumer
@@ -2717,6 +2718,7 @@ XTRIM key MAXLEN [=|~] count
 - `XAUTOCLAIM`：当前没有 consumer group 模型，因此对现有 stream key 返回 `NOGROUP No such consumer group`
 - `XCLAIM`：当前没有 consumer group 模型，因此对现有 stream key 返回 `NOGROUP No such consumer group`
 - `XDEL`：返回被删除的 entry 数量；key 不存在返回 `0`
+- `XDELEX`：返回每个 id 的删除状态数组；`KEEPREF` / `DELREF` 对现有 entry 返回 `1` 并删除、不存在返回 `-1`，`ACKED` 在无 consumer group 状态下返回 `2`
 - `XGROUP CREATE`：当前没有 consumer group 模型，因此只校验参数、stream key 与类型；对现有 stream key 返回 `ERR XGROUP CREATE is not supported yet`
 - `XGROUP CREATECONSUMER` / `XGROUP DELCONSUMER`：当前没有 consumer group 模型，因此对现有 stream key 返回 `NOGROUP No such consumer group`
 - `XGROUP DESTROY`：当前没有 consumer group 模型，因此对 stream key 或缺失 key 返回 `0`
@@ -2745,6 +2747,7 @@ XTRIM key MAXLEN [=|~] count
 - `XAUTOCLAIM` 当前只提供无 group 时的 `NOGROUP` 错误面，不维护 consumer group PEL
 - `XCLAIM` 当前只提供无 group 时的 `NOGROUP` 错误面，不维护 consumer group PEL
 - `XDEL` 当前只做精确 ID 删除，不维护 consumer group PEL
+- `XDELEX` 当前支持 `KEEPREF`、`DELREF`、`ACKED` 与 `IDS` 语法校验；由于没有 consumer group / PEL，`KEEPREF` 与 `DELREF` 行为等同于精确 entry 删除，`ACKED` 只返回未删除状态 `2`
 - `XPENDING` 当前只提供无 group 时的 `NOGROUP` 错误面，不维护 consumer group PEL
 - `XGROUP CREATE` 当前只提供 key/type 校验和明确未支持错误，不创建 consumer group；`XGROUP CREATECONSUMER` / `XGROUP DELCONSUMER` / `XGROUP SETID` 当前只提供无 group 时的 `NOGROUP` 错误面；`XGROUP DESTROY` 当前只提供 empty-state 返回值，不维护 group；consumer 管理和 consumer group 状态仍未实现
 - `XINFO STREAM` 当前支持 key-only 基础元数据和 `FULL [COUNT count]` entry 明细，`XINFO GROUPS` 当前只支持 empty-state 空数组，`XINFO CONSUMERS` 当前只提供无 group 时的 `NOGROUP` 错误面；真实 consumer group 状态仍未实现；`radix-tree-*` 字段为 list-backed partial 占位

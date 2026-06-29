@@ -227,6 +227,17 @@ def run_smoke() -> None:
                 if "NOGROUP" not in str(exc):
                     raise AssertionError(f"unexpected XPENDING error: {exc}") from exc
 
+            xdelex_first = client.command(b"XADD", b"xdelexstream", b"1-0", b"f", b"a")
+            xdelex_second = client.command(b"XADD", b"xdelexstream", b"1-1", b"f", b"b")
+            if xdelex_first != b"1-0" or xdelex_second != b"1-1":
+                raise AssertionError(f"unexpected XDELEX fixture ids: {xdelex_first!r}, {xdelex_second!r}")
+            if client.command(b"XDELEX", b"xdelexstream", b"IDS", b"2", b"1-0", b"9-9") != [1, -1]:
+                raise AssertionError("XDELEX did not report per-id delete states")
+            if client.command(b"XDELEX", b"xdelexstream", b"ACKED", b"IDS", b"1", b"1-1") != [2]:
+                raise AssertionError("XDELEX ACKED did not report not-acked state without consumer groups")
+            if client.command(b"XLEN", b"xdelexstream") != 1:
+                raise AssertionError("XDELEX ACKED deleted an entry without consumer groups")
+
             if client.command(b"XDEL", b"mystream", first) != 1:
                 raise AssertionError("XDEL did not remove the first stream entry")
             if client.command(b"XLEN", b"mystream") != 1:

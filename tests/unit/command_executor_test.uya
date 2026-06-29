@@ -817,6 +817,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"xack"[0: 4], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xautoclaim"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xclaim"[0: 6], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"xdelex"[0: 6], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xgroup"[0: 6], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xgroup|createconsumer"[0: 21], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xgroup|delconsumer"[0: 18], CommandCatalogStatus.status_partial);
@@ -4886,6 +4887,58 @@ export fn test_command_streams_first_batch() !void {
     command_reply_cleanup(&xinfo_consumers_arity_reply);
     resp_value_free(&xinfo_consumers_arity_parsed.value);
 
+    var xdelex_add_first_parsed: RespParseResult = try parse_resp2(&"*5\r\n$4\r\nXADD\r\n$11\r\nxdelexstream\r\n$3\r\n1-0\r\n$1\r\nf\r\n$1\r\na\r\n"[0: 56]);
+    const xdelex_add_first_command: Command = try command_executor_test_command(&router, &xdelex_add_first_parsed);
+    const xdelex_add_first_reply: CommandReply = command_execute_at(&engine, &xdelex_add_first_command, 1000u64);
+    try assert_eq_i32(xdelex_add_first_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    command_reply_cleanup(&xdelex_add_first_reply);
+    resp_value_free(&xdelex_add_first_parsed.value);
+
+    var xdelex_add_second_parsed: RespParseResult = try parse_resp2(&"*5\r\n$4\r\nXADD\r\n$11\r\nxdelexstream\r\n$3\r\n1-1\r\n$1\r\nf\r\n$1\r\nb\r\n"[0: 56]);
+    const xdelex_add_second_command: Command = try command_executor_test_command(&router, &xdelex_add_second_parsed);
+    const xdelex_add_second_reply: CommandReply = command_execute_at(&engine, &xdelex_add_second_command, 1000u64);
+    try assert_eq_i32(xdelex_add_second_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    command_reply_cleanup(&xdelex_add_second_reply);
+    resp_value_free(&xdelex_add_second_parsed.value);
+
+    var xdelex_parsed: RespParseResult = try parse_resp2(&"*6\r\n$6\r\nXDELEX\r\n$11\r\nxdelexstream\r\n$3\r\nIDS\r\n$1\r\n2\r\n$3\r\n1-0\r\n$3\r\n9-9\r\n"[0: 69]);
+    const xdelex_command: Command = try command_executor_test_command(&router, &xdelex_parsed);
+    const xdelex_reply: CommandReply = command_execute_at(&engine, &xdelex_command, 1000u64);
+    const xdelex_len: usize = try connection_encode_reply(&xdelex_reply, &out[0], 1024);
+    try assert_true(command_executor_test_slice_eq(out[0: xdelex_len], &"*2\r\n:1\r\n:-1\r\n"[0: 13]));
+    command_reply_cleanup(&xdelex_reply);
+    resp_value_free(&xdelex_parsed.value);
+
+    var xdelex_acked_parsed: RespParseResult = try parse_resp2(&"*7\r\n$6\r\nXDELEX\r\n$11\r\nxdelexstream\r\n$5\r\nACKED\r\n$3\r\nIDS\r\n$1\r\n1\r\n$3\r\n1-1\r\n"[0: 71]);
+    const xdelex_acked_command: Command = try command_executor_test_command(&router, &xdelex_acked_parsed);
+    const xdelex_acked_reply: CommandReply = command_execute_at(&engine, &xdelex_acked_command, 1000u64);
+    const xdelex_acked_len: usize = try connection_encode_reply(&xdelex_acked_reply, &out[0], 1024);
+    try assert_true(command_executor_test_slice_eq(out[0: xdelex_acked_len], &"*1\r\n:2\r\n"[0: 8]));
+    command_reply_cleanup(&xdelex_acked_reply);
+    resp_value_free(&xdelex_acked_parsed.value);
+
+    var xdelex_missing_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nXDELEX\r\n$7\r\nmissing\r\n$3\r\nIDS\r\n$1\r\n1\r\n$3\r\n1-0\r\n"[0: 54]);
+    const xdelex_missing_command: Command = try command_executor_test_command(&router, &xdelex_missing_parsed);
+    const xdelex_missing_reply: CommandReply = command_execute_at(&engine, &xdelex_missing_command, 1000u64);
+    const xdelex_missing_len: usize = try connection_encode_reply(&xdelex_missing_reply, &out[0], 1024);
+    try assert_true(command_executor_test_slice_eq(out[0: xdelex_missing_len], &"*1\r\n:-1\r\n"[0: 9]));
+    command_reply_cleanup(&xdelex_missing_reply);
+    resp_value_free(&xdelex_missing_parsed.value);
+
+    var xdelex_badid_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nXDELEX\r\n$11\r\nxdelexstream\r\n$3\r\nIDS\r\n$1\r\n1\r\n$3\r\nbad\r\n"[0: 60]);
+    const xdelex_badid_command: Command = try command_executor_test_command(&router, &xdelex_badid_parsed);
+    const xdelex_badid_reply: CommandReply = command_execute_at(&engine, &xdelex_badid_command, 1000u64);
+    try assert_eq_i32(xdelex_badid_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xdelex_badid_reply.data, &"Invalid stream ID"[0: 17]));
+    resp_value_free(&xdelex_badid_parsed.value);
+
+    var xdelex_badcount_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nXDELEX\r\n$11\r\nxdelexstream\r\n$3\r\nIDS\r\n$1\r\n2\r\n$3\r\n1-1\r\n"[0: 60]);
+    const xdelex_badcount_command: Command = try command_executor_test_command(&router, &xdelex_badcount_parsed);
+    const xdelex_badcount_reply: CommandReply = command_execute_at(&engine, &xdelex_badcount_command, 1000u64);
+    try assert_eq_i32(xdelex_badcount_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(xdelex_badcount_reply.data, &"ERR wrong number of arguments"[0: 29]));
+    resp_value_free(&xdelex_badcount_parsed.value);
+
     var xdel_missing_id_parsed: RespParseResult = try parse_resp2(&"*3\r\n$4\r\nXDEL\r\n$6\r\nstream\r\n$6\r\n9999-0\r\n"[0: 38]);
     const xdel_missing_id_command: Command = try command_executor_test_command(&router, &xdel_missing_id_parsed);
     const xdel_missing_id_reply: CommandReply = command_execute_at(&engine, &xdel_missing_id_command, 1000u64);
@@ -4959,6 +5012,13 @@ export fn test_command_streams_first_batch() !void {
     const xdel_wrongtype_reply: CommandReply = command_execute_at(&engine, &xdel_wrongtype_command, 1000u64);
     try assert_eq_i32(xdel_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
     resp_value_free(&xdel_wrongtype_parsed.value);
+
+    var xdelex_wrongtype_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nXDELEX\r\n$5\r\nplain\r\n$3\r\nIDS\r\n$1\r\n1\r\n$3\r\n1-1\r\n"[0: 52]);
+    const xdelex_wrongtype_command: Command = try command_executor_test_command(&router, &xdelex_wrongtype_parsed);
+    const xdelex_wrongtype_reply: CommandReply = command_execute_at(&engine, &xdelex_wrongtype_command, 1000u64);
+    try assert_eq_i32(xdelex_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xdelex_wrongtype_reply.data, &"WRONGTYPE"[0: 9]));
+    resp_value_free(&xdelex_wrongtype_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

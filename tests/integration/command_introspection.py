@@ -1046,6 +1046,7 @@ def run_smoke() -> None:
                 or b"xautoclaim" not in listed_stream
                 or b"xclaim" not in listed_stream
                 or b"xdel" not in listed_stream
+                or b"xdelex" not in listed_stream
                 or b"xgroup" not in listed_stream
                 or b"xgroup|create" not in listed_stream
                 or b"xgroup|destroy" not in listed_stream

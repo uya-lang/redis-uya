@@ -451,6 +451,7 @@ PARTIAL_NAMES = {
     "xautoclaim",
     "xclaim",
     "xdel",
+    "xdelex",
     "xgroup",
     "xgroup|create",
     "xgroup|createconsumer",

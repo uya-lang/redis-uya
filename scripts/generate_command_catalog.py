@@ -452,6 +452,8 @@ PARTIAL_NAMES = {
     "xdel",
     "xgroup",
     "xgroup|create",
+    "xgroup|createconsumer",
+    "xgroup|delconsumer",
     "xgroup|destroy",
     "xgroup|help",
     "xgroup|setid",

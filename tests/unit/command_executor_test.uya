@@ -4395,9 +4395,11 @@ export fn test_command_streams_first_batch() !void {
     const xgroup_help_command: Command = try command_executor_test_command(&router, &xgroup_help_parsed);
     const xgroup_help_reply: CommandReply = command_execute_at(&engine, &xgroup_help_command, 1000u64);
     try assert_eq_i32(xgroup_help_reply.typ as i32, CommandReplyType.reply_array_bulk as i32);
-    const xgroup_help_len: usize = try connection_encode_reply(&xgroup_help_reply, &out[0], 1024);
+    const xgroup_help_len: usize = try connection_encode_reply(&xgroup_help_reply, &out[0], 2048);
     try assert_true(command_executor_test_contains(out[0: xgroup_help_len], &"XGROUP HELP"[0: 11]));
     try assert_true(command_executor_test_contains(out[0: xgroup_help_len], &"XGROUP CREATE"[0: 13]));
+    try assert_true(command_executor_test_contains(out[0: xgroup_help_len], &"XGROUP CREATECONSUMER"[0: 21]));
+    try assert_true(command_executor_test_contains(out[0: xgroup_help_len], &"XGROUP DELCONSUMER"[0: 18]));
     command_reply_cleanup(&xgroup_help_reply);
     resp_value_free(&xgroup_help_parsed.value);
 
@@ -4447,6 +4449,50 @@ export fn test_command_streams_first_batch() !void {
     try assert_eq_i32(xgroup_create_bad_option_reply.typ as i32, CommandReplyType.reply_error as i32);
     try assert_true(command_executor_test_slice_eq(xgroup_create_bad_option_reply.data, &"ERR syntax error"[0: 16]));
     resp_value_free(&xgroup_create_bad_option_parsed.value);
+
+    var xgroup_createconsumer_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nXGROUP\r\n$14\r\nCREATECONSUMER\r\n$6\r\nstream\r\n$1\r\ng\r\n$1\r\nc\r\n"[0: 63]);
+    const xgroup_createconsumer_command: Command = try command_executor_test_command(&router, &xgroup_createconsumer_parsed);
+    const xgroup_createconsumer_reply: CommandReply = command_execute_at(&engine, &xgroup_createconsumer_command, 1000u64);
+    try assert_eq_i32(xgroup_createconsumer_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xgroup_createconsumer_reply.data, &"NOGROUP"[0: 7]));
+    resp_value_free(&xgroup_createconsumer_parsed.value);
+
+    var xgroup_createconsumer_missing_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nXGROUP\r\n$14\r\nCREATECONSUMER\r\n$7\r\nmissing\r\n$1\r\ng\r\n$1\r\nc\r\n"[0: 64]);
+    const xgroup_createconsumer_missing_command: Command = try command_executor_test_command(&router, &xgroup_createconsumer_missing_parsed);
+    const xgroup_createconsumer_missing_reply: CommandReply = command_execute_at(&engine, &xgroup_createconsumer_missing_command, 1000u64);
+    try assert_eq_i32(xgroup_createconsumer_missing_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(xgroup_createconsumer_missing_reply.data, &"ERR no such key"[0: 14]));
+    resp_value_free(&xgroup_createconsumer_missing_parsed.value);
+
+    var xgroup_createconsumer_arity_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nXGROUP\r\n$14\r\nCREATECONSUMER\r\n$6\r\nstream\r\n$1\r\ng\r\n"[0: 56]);
+    const xgroup_createconsumer_arity_command: Command = try command_executor_test_command(&router, &xgroup_createconsumer_arity_parsed);
+    const xgroup_createconsumer_arity_reply: CommandReply = command_execute_at(&engine, &xgroup_createconsumer_arity_command, 1000u64);
+    try assert_eq_i32(xgroup_createconsumer_arity_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(xgroup_createconsumer_arity_reply.data, &"ERR wrong number of arguments for 'xgroup|createconsumer' command"[0: 65]));
+    command_reply_cleanup(&xgroup_createconsumer_arity_reply);
+    resp_value_free(&xgroup_createconsumer_arity_parsed.value);
+
+    var xgroup_delconsumer_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nXGROUP\r\n$11\r\nDELCONSUMER\r\n$6\r\nstream\r\n$1\r\ng\r\n$1\r\nc\r\n"[0: 60]);
+    const xgroup_delconsumer_command: Command = try command_executor_test_command(&router, &xgroup_delconsumer_parsed);
+    const xgroup_delconsumer_reply: CommandReply = command_execute_at(&engine, &xgroup_delconsumer_command, 1000u64);
+    try assert_eq_i32(xgroup_delconsumer_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xgroup_delconsumer_reply.data, &"NOGROUP"[0: 7]));
+    resp_value_free(&xgroup_delconsumer_parsed.value);
+
+    var xgroup_delconsumer_missing_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nXGROUP\r\n$11\r\nDELCONSUMER\r\n$7\r\nmissing\r\n$1\r\ng\r\n$1\r\nc\r\n"[0: 61]);
+    const xgroup_delconsumer_missing_command: Command = try command_executor_test_command(&router, &xgroup_delconsumer_missing_parsed);
+    const xgroup_delconsumer_missing_reply: CommandReply = command_execute_at(&engine, &xgroup_delconsumer_missing_command, 1000u64);
+    try assert_eq_i32(xgroup_delconsumer_missing_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(xgroup_delconsumer_missing_reply.data, &"ERR no such key"[0: 14]));
+    resp_value_free(&xgroup_delconsumer_missing_parsed.value);
+
+    var xgroup_delconsumer_arity_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nXGROUP\r\n$11\r\nDELCONSUMER\r\n$6\r\nstream\r\n$1\r\ng\r\n"[0: 53]);
+    const xgroup_delconsumer_arity_command: Command = try command_executor_test_command(&router, &xgroup_delconsumer_arity_parsed);
+    const xgroup_delconsumer_arity_reply: CommandReply = command_execute_at(&engine, &xgroup_delconsumer_arity_command, 1000u64);
+    try assert_eq_i32(xgroup_delconsumer_arity_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(xgroup_delconsumer_arity_reply.data, &"ERR wrong number of arguments for 'xgroup|delconsumer' command"[0: 62]));
+    command_reply_cleanup(&xgroup_delconsumer_arity_reply);
+    resp_value_free(&xgroup_delconsumer_arity_parsed.value);
 
     var xgroup_destroy_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nXGROUP\r\n$7\r\nDESTROY\r\n$6\r\nstream\r\n$1\r\ng\r\n"[0: 48]);
     const xgroup_destroy_command: Command = try command_executor_test_command(&router, &xgroup_destroy_parsed);
@@ -4587,6 +4633,20 @@ export fn test_command_streams_first_batch() !void {
     try assert_eq_i32(xgroup_create_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
     try assert_true(command_executor_test_contains(xgroup_create_wrongtype_reply.data, &"WRONGTYPE"[0: 9]));
     resp_value_free(&xgroup_create_wrongtype_parsed.value);
+
+    var xgroup_createconsumer_wrongtype_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nXGROUP\r\n$14\r\nCREATECONSUMER\r\n$6\r\nstring\r\n$1\r\ng\r\n$1\r\nc\r\n"[0: 63]);
+    const xgroup_createconsumer_wrongtype_command: Command = try command_executor_test_command(&router, &xgroup_createconsumer_wrongtype_parsed);
+    const xgroup_createconsumer_wrongtype_reply: CommandReply = command_execute_at(&engine, &xgroup_createconsumer_wrongtype_command, 1000u64);
+    try assert_eq_i32(xgroup_createconsumer_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xgroup_createconsumer_wrongtype_reply.data, &"WRONGTYPE"[0: 9]));
+    resp_value_free(&xgroup_createconsumer_wrongtype_parsed.value);
+
+    var xgroup_delconsumer_wrongtype_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nXGROUP\r\n$11\r\nDELCONSUMER\r\n$6\r\nstring\r\n$1\r\ng\r\n$1\r\nc\r\n"[0: 60]);
+    const xgroup_delconsumer_wrongtype_command: Command = try command_executor_test_command(&router, &xgroup_delconsumer_wrongtype_parsed);
+    const xgroup_delconsumer_wrongtype_reply: CommandReply = command_execute_at(&engine, &xgroup_delconsumer_wrongtype_command, 1000u64);
+    try assert_eq_i32(xgroup_delconsumer_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xgroup_delconsumer_wrongtype_reply.data, &"WRONGTYPE"[0: 9]));
+    resp_value_free(&xgroup_delconsumer_wrongtype_parsed.value);
 
     var xgroup_destroy_wrongtype_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nXGROUP\r\n$7\r\nDESTROY\r\n$6\r\nstring\r\n$1\r\ng\r\n"[0: 48]);
     const xgroup_destroy_wrongtype_command: Command = try command_executor_test_command(&router, &xgroup_destroy_wrongtype_parsed);

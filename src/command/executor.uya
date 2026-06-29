@@ -5385,6 +5385,10 @@ fn command_executor_xgroup(engine: &Engine, command: &Command, now_ms: u64) Comm
         _ = list_object_push_tail(reply_list, &"    Prints this help."[0: 21]) catch { object_free(reply_list); return command_executor_oom(); };
         _ = list_object_push_tail(reply_list, &"XGROUP CREATE <key> <groupname> <id-or-$> [MKSTREAM]"[0: 52]) catch { object_free(reply_list); return command_executor_oom(); };
         _ = list_object_push_tail(reply_list, &"    Validates stream keys; consumer group state is still deferred."[0: 66]) catch { object_free(reply_list); return command_executor_oom(); };
+        _ = list_object_push_tail(reply_list, &"XGROUP CREATECONSUMER <key> <groupname> <consumer>"[0: 50]) catch { object_free(reply_list); return command_executor_oom(); };
+        _ = list_object_push_tail(reply_list, &"    Returns NOGROUP until consumer groups are implemented."[0: 58]) catch { object_free(reply_list); return command_executor_oom(); };
+        _ = list_object_push_tail(reply_list, &"XGROUP DELCONSUMER <key> <groupname> <consumer>"[0: 47]) catch { object_free(reply_list); return command_executor_oom(); };
+        _ = list_object_push_tail(reply_list, &"    Returns NOGROUP until consumer groups are implemented."[0: 58]) catch { object_free(reply_list); return command_executor_oom(); };
         _ = list_object_push_tail(reply_list, &"XGROUP DESTROY <key> <groupname>"[0: 32]) catch { object_free(reply_list); return command_executor_oom(); };
         _ = list_object_push_tail(reply_list, &"    Returns 0 while consumer group state is deferred."[0: 53]) catch { object_free(reply_list); return command_executor_oom(); };
         _ = list_object_push_tail(reply_list, &"XGROUP SETID <key> <groupname> <id-or-$> [ENTRIESREAD entries-read]"[0: 67]) catch { object_free(reply_list); return command_executor_oom(); };
@@ -5419,6 +5423,30 @@ fn command_executor_xgroup(engine: &Engine, command: &Command, now_ms: u64) Comm
             return command_executor_wrongtype();
         }
         return command_executor_error(&"ERR XGROUP CREATE is not supported yet"[0: 38]);
+    }
+    if command_executor_keyword_eq(subcommand, &"CREATECONSUMER"[0: 14]) || command_executor_keyword_eq(subcommand, &"DELCONSUMER"[0: 11]) {
+        if command.argc != 5 {
+            if command_executor_keyword_eq(subcommand, &"CREATECONSUMER"[0: 14]) {
+                return command_executor_owned_error(&"ERR wrong number of arguments for 'xgroup|createconsumer' command"[0: 65]);
+            }
+            return command_executor_owned_error(&"ERR wrong number of arguments for 'xgroup|delconsumer' command"[0: 62]);
+        }
+        const key: &[byte] = command_executor_arg(command, 2) catch {
+            return command_executor_wrong_arity();
+        };
+        _ = command_executor_arg(command, 3) catch {
+            return command_executor_wrong_arity();
+        };
+        _ = command_executor_arg(command, 4) catch {
+            return command_executor_wrong_arity();
+        };
+        const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+            return command_executor_error(&"ERR no such key"[0: 14]);
+        };
+        if obj.obj_type != ObjectType.object_stream {
+            return command_executor_wrongtype();
+        }
+        return command_executor_error(&"NOGROUP No such consumer group"[0: 30]);
     }
     if command_executor_keyword_eq(subcommand, &"DESTROY"[0: 7]) {
         if command.argc != 4 {

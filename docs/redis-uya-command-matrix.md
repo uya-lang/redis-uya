@@ -1,7 +1,7 @@
 # redis-uya command matrix
 
 > version: v0.9.1-dev
-> date: 2026-06-29
+> date: 2026-06-30
 > source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`
 > runtime source: `src/command/catalog_generated.uya`
 
@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 191 | 6 | 3 | 19 |
+| Tier A: standalone core | 365 | 259 | 146 | 192 | 6 | 3 | 18 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `198` |
+| `partial` | `199` |
 | `standalone-error` | `32` |
 | `alias` | `3` |
-| `deferred` | `172` |
+| `deferred` | `171` |
 
 ## Group counts
 
@@ -578,7 +578,7 @@
 | `xinfo|help` | `stream` | `partial` | `-` | `2` | `-` | `no` | `@stream, @slow` |
 | `xinfo|stream` | `stream` | `partial` | `-` | `-3` | `-` | `no` | `@read, @stream, @slow` |
 | `xlen` | `stream` | `partial` | `-` | `2` | `-` | `no` | `@read, @stream, @fast` |
-| `xnack` | `stream` | `deferred` | `v0.9.1` | `-7` | `-` | `no` | `@stream` |
+| `xnack` | `stream` | `partial` | `-` | `-7` | `-` | `no` | `@stream` |
 | `xpending` | `stream` | `partial` | `-` | `-3` | `-` | `no` | `@read, @stream, @slow` |
 | `xrange` | `stream` | `partial` | `-` | `-4` | `-` | `no` | `@read, @stream, @slow` |
 | `xread` | `stream` | `partial` | `-` | `-4` | `-` | `no` | `@read, @stream, @slow, @blocking` |

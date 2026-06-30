@@ -819,6 +819,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"xautoclaim"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xclaim"[0: 6], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xdelex"[0: 6], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"xnack"[0: 5], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xgroup"[0: 6], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xgroup|createconsumer"[0: 21], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xgroup|delconsumer"[0: 18], CommandCatalogStatus.status_partial);
@@ -4486,6 +4487,59 @@ export fn test_command_streams_first_batch() !void {
     try assert_true(xackdel_wrong_arity);
     resp_value_free(&xackdel_arity_parsed.value);
 
+    var xnack_parsed: RespParseResult = try parse_resp2(&"*7\r\n$5\r\nXNACK\r\n$6\r\nstream\r\n$1\r\ng\r\n$4\r\nFAIL\r\n$3\r\nIDS\r\n$1\r\n1\r\n$6\r\n1000-0\r\n"[0: 72]);
+    const xnack_command: Command = try command_executor_test_command(&router, &xnack_parsed);
+    const xnack_reply: CommandReply = command_execute_at(&engine, &xnack_command, 1000u64);
+    try assert_eq_i32(xnack_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xnack_reply.data, &"NOGROUP"[0: 7]));
+    resp_value_free(&xnack_parsed.value);
+
+    var xnack_options_parsed: RespParseResult = try parse_resp2(&"*10\r\n$5\r\nXNACK\r\n$6\r\nstream\r\n$1\r\ng\r\n$6\r\nSILENT\r\n$3\r\nIDS\r\n$1\r\n1\r\n$6\r\n1000-0\r\n$10\r\nRETRYCOUNT\r\n$1\r\n2\r\n$5\r\nFORCE\r\n"[0: 110]);
+    const xnack_options_command: Command = try command_executor_test_command(&router, &xnack_options_parsed);
+    const xnack_options_reply: CommandReply = command_execute_at(&engine, &xnack_options_command, 1000u64);
+    try assert_eq_i32(xnack_options_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xnack_options_reply.data, &"NOGROUP"[0: 7]));
+    resp_value_free(&xnack_options_parsed.value);
+
+    var xnack_missing_parsed: RespParseResult = try parse_resp2(&"*7\r\n$5\r\nXNACK\r\n$7\r\nmissing\r\n$1\r\ng\r\n$4\r\nFAIL\r\n$3\r\nIDS\r\n$1\r\n1\r\n$6\r\n1000-0\r\n"[0: 73]);
+    const xnack_missing_command: Command = try command_executor_test_command(&router, &xnack_missing_parsed);
+    const xnack_missing_reply: CommandReply = command_execute_at(&engine, &xnack_missing_command, 1000u64);
+    try assert_eq_i32(xnack_missing_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(xnack_missing_reply.data, &"ERR no such key"[0: 14]));
+    resp_value_free(&xnack_missing_parsed.value);
+
+    var xnack_badmode_parsed: RespParseResult = try parse_resp2(&"*7\r\n$5\r\nXNACK\r\n$6\r\nstream\r\n$1\r\ng\r\n$3\r\nBAD\r\n$3\r\nIDS\r\n$1\r\n1\r\n$6\r\n1000-0\r\n"[0: 71]);
+    const xnack_badmode_command: Command = try command_executor_test_command(&router, &xnack_badmode_parsed);
+    const xnack_badmode_reply: CommandReply = command_execute_at(&engine, &xnack_badmode_command, 1000u64);
+    try assert_eq_i32(xnack_badmode_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xnack_badmode_reply.data, &"syntax error"[0: 12]));
+    resp_value_free(&xnack_badmode_parsed.value);
+
+    var xnack_badid_parsed: RespParseResult = try parse_resp2(&"*7\r\n$5\r\nXNACK\r\n$6\r\nstream\r\n$1\r\ng\r\n$4\r\nFAIL\r\n$3\r\nIDS\r\n$1\r\n1\r\n$3\r\nbad\r\n"[0: 69]);
+    const xnack_badid_command: Command = try command_executor_test_command(&router, &xnack_badid_parsed);
+    const xnack_badid_reply: CommandReply = command_execute_at(&engine, &xnack_badid_command, 1000u64);
+    try assert_eq_i32(xnack_badid_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xnack_badid_reply.data, &"Invalid stream ID"[0: 17]));
+    resp_value_free(&xnack_badid_parsed.value);
+
+    var xnack_badcount_parsed: RespParseResult = try parse_resp2(&"*7\r\n$5\r\nXNACK\r\n$6\r\nstream\r\n$1\r\ng\r\n$4\r\nFAIL\r\n$3\r\nIDS\r\n$1\r\n2\r\n$6\r\n1000-0\r\n"[0: 72]);
+    const xnack_badcount_command: Command = try command_executor_test_command(&router, &xnack_badcount_parsed);
+    const xnack_badcount_reply: CommandReply = command_execute_at(&engine, &xnack_badcount_command, 1000u64);
+    try assert_eq_i32(xnack_badcount_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(xnack_badcount_reply.data, &"ERR wrong number of arguments"[0: 29]));
+    resp_value_free(&xnack_badcount_parsed.value);
+
+    var xnack_arity_parsed: RespParseResult = try parse_resp2(&"*6\r\n$5\r\nXNACK\r\n$6\r\nstream\r\n$1\r\ng\r\n$4\r\nFAIL\r\n$3\r\nIDS\r\n$1\r\n1\r\n"[0: 60]);
+    var xnack_wrong_arity: bool = false;
+    _ = command_from_resp(&router, &xnack_arity_parsed.value) catch |err| {
+        if err == error.CommandWrongArity {
+            xnack_wrong_arity = true;
+        }
+        return;
+    };
+    try assert_true(xnack_wrong_arity);
+    resp_value_free(&xnack_arity_parsed.value);
+
     var xclaim_parsed: RespParseResult = try parse_resp2(&"*6\r\n$6\r\nXCLAIM\r\n$6\r\nstream\r\n$1\r\ng\r\n$1\r\nc\r\n$1\r\n0\r\n$6\r\n1000-0\r\n"[0: 61]);
     const xclaim_command: Command = try command_executor_test_command(&router, &xclaim_parsed);
     const xclaim_reply: CommandReply = command_execute_at(&engine, &xclaim_command, 1000u64);
@@ -5073,6 +5127,13 @@ export fn test_command_streams_first_batch() !void {
     try assert_eq_i32(xackdel_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
     try assert_true(command_executor_test_contains(xackdel_wrongtype_reply.data, &"WRONGTYPE"[0: 9]));
     resp_value_free(&xackdel_wrongtype_parsed.value);
+
+    var xnack_wrongtype_parsed: RespParseResult = try parse_resp2(&"*7\r\n$5\r\nXNACK\r\n$5\r\nplain\r\n$1\r\ng\r\n$4\r\nFAIL\r\n$3\r\nIDS\r\n$1\r\n1\r\n$6\r\n1000-0\r\n"[0: 71]);
+    const xnack_wrongtype_command: Command = try command_executor_test_command(&router, &xnack_wrongtype_parsed);
+    const xnack_wrongtype_reply: CommandReply = command_execute_at(&engine, &xnack_wrongtype_command, 1000u64);
+    try assert_eq_i32(xnack_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xnack_wrongtype_reply.data, &"WRONGTYPE"[0: 9]));
+    resp_value_free(&xnack_wrongtype_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

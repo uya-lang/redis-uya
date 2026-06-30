@@ -2703,6 +2703,7 @@ XINFO CONSUMERS key groupname
 XINFO GROUPS key
 XINFO STREAM key [FULL [COUNT count]]
 XLEN key
+XNACK key group SILENT|FAIL|FATAL IDS numids id [id ...] [RETRYCOUNT count] [FORCE]
 XPENDING key group [IDLE min-idle-time] start end count [consumer]
 XRANGE key start end [COUNT count]
 XREVRANGE key end start [COUNT count]
@@ -2731,6 +2732,7 @@ XTRIM key MAXLEN [=|~] count
 - `XINFO GROUPS`：当前没有 consumer group 模型，因此对 stream key 返回空数组；key 不存在返回 `ERR no such key`
 - `XINFO STREAM`：返回基础 stream 元数据，包括 `length`、`last-generated-id`、`groups=0`、`first-entry` 与 `last-entry`；`FULL [COUNT count]` 返回基础元数据、entry 明细和空 `groups`；key 不存在返回 `ERR no such key`
 - `XLEN`：返回 stream entry 数量；key 不存在返回 `0`
+- `XNACK`：当前没有 consumer group 模型，因此对现有 stream key 返回 `NOGROUP No such consumer group`
 - `XPENDING`：当前没有 consumer group 模型，因此对现有 stream key 返回 `NOGROUP No such consumer group`
 - `XRANGE` / `XREVRANGE`：返回 `[id, [field, value, ...]]` 形式的嵌套数组，支持 `-` / `+` 边界和 `COUNT`
 - `XREAD`：命中时返回 stream 名与 entry 数组；无新 entry 时返回 Null Array
@@ -2747,6 +2749,7 @@ XTRIM key MAXLEN [=|~] count
 - `XSETID` 当前只提供 key/type 校验、`last-id` / `MAXDELETEDID` stream ID 校验和 `ENTRIESADDED` 整数校验，不修改 stream 元数据
 - `XACK` 当前只提供无 group 时的 `NOGROUP` 错误面，不维护 consumer group PEL
 - `XACKDEL` 当前只支持 `KEEPREF`、`DELREF`、`ACKED` 与 `IDS` 语法校验和无 group 时的 `NOGROUP` 错误面，不维护 consumer group PEL，也不会删除 entry
+- `XNACK` 当前只支持 `SILENT` / `FAIL` / `FATAL`、`IDS`、`RETRYCOUNT`、`FORCE` 语法校验和无 group 时的 `NOGROUP` 错误面，不维护 consumer group PEL
 - `XAUTOCLAIM` 当前只提供无 group 时的 `NOGROUP` 错误面，不维护 consumer group PEL
 - `XCLAIM` 当前只提供无 group 时的 `NOGROUP` 错误面，不维护 consumer group PEL
 - `XDEL` 当前只做精确 ID 删除，不维护 consumer group PEL

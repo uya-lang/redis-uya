@@ -221,6 +221,13 @@ def run_smoke() -> None:
                     raise AssertionError(f"unexpected XACKDEL error: {exc}") from exc
 
             try:
+                client.command(b"XNACK", b"mystream", b"group", b"FAIL", b"IDS", b"1", first)
+                raise AssertionError("XNACK did not fail without consumer groups")
+            except RuntimeError as exc:
+                if "NOGROUP" not in str(exc):
+                    raise AssertionError(f"unexpected XNACK error: {exc}") from exc
+
+            try:
                 client.command(b"XCLAIM", b"mystream", b"group", b"consumer", b"0", first)
                 raise AssertionError("XCLAIM did not fail without consumer groups")
             except RuntimeError as exc:

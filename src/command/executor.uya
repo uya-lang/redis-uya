@@ -15558,6 +15558,141 @@ fn command_executor_hgetdel(engine: &Engine, command: &Command, now_ms: u64) Com
     return reply;
 }
 
+fn command_executor_hgetex(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 5 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+
+    var fields_index: usize = 2;
+    const option_or_fields: &[byte] = command_executor_arg(command, fields_index) catch {
+        return command_executor_wrong_arity();
+    };
+    if !command_executor_keyword_eq(option_or_fields, &"FIELDS"[0: 6]) {
+        if command_executor_keyword_eq(option_or_fields, &"PERSIST"[0: 7]) {
+            fields_index = fields_index + 1;
+        } else if command_executor_keyword_eq(option_or_fields, &"EX"[0: 2]) ||
+            command_executor_keyword_eq(option_or_fields, &"PX"[0: 2]) ||
+            command_executor_keyword_eq(option_or_fields, &"EXAT"[0: 4]) ||
+            command_executor_keyword_eq(option_or_fields, &"PXAT"[0: 4]) {
+            if command.argc < 7 {
+                return command_executor_wrong_arity();
+            }
+            const expire_data: &[byte] = command_executor_arg(command, fields_index + 1) catch {
+                return command_executor_wrong_arity();
+            };
+            const expire_value: i64 = command_executor_parse_i64(expire_data) catch {
+                return command_executor_invalid_integer();
+            };
+            if command_executor_keyword_eq(option_or_fields, &"EX"[0: 2]) ||
+                command_executor_keyword_eq(option_or_fields, &"PX"[0: 2]) {
+                if expire_value <= 0 {
+                    return command_executor_invalid_integer();
+                }
+            } else if expire_value < 0 {
+                return command_executor_invalid_integer();
+            }
+            fields_index = fields_index + 2;
+        } else {
+            return command_executor_syntax_error();
+        }
+    }
+
+    if fields_index + 2 > command.argc {
+        return command_executor_wrong_arity();
+    }
+    const fields_token: &[byte] = command_executor_arg(command, fields_index) catch {
+        return command_executor_wrong_arity();
+    };
+    if !command_executor_keyword_eq(fields_token, &"FIELDS"[0: 6]) {
+        return command_executor_syntax_error();
+    }
+    const numfields_data: &[byte] = command_executor_arg(command, fields_index + 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const numfields_i64: i64 = command_executor_parse_i64(numfields_data) catch {
+        return command_executor_invalid_integer();
+    };
+    if numfields_i64 < 1 {
+        return command_executor_invalid_integer();
+    }
+    const numfields: usize = numfields_i64 as usize;
+    if command.argc != fields_index + 2 + numfields {
+        return command_executor_syntax_error();
+    }
+
+    const obj: &RedisObject = command_executor_lookup_key_now_or_null(engine, key, now_ms);
+    if obj != null && obj.obj_type != ObjectType.object_hash {
+        return command_executor_wrongtype();
+    }
+
+    const reply_list: &RedisObject = create_list_object() catch {
+        return command_executor_oom();
+    };
+    var null_map: Sds = sds_empty() catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&null_map);
+    }
+
+    var index: usize = fields_index + 2;
+    while index < command.argc {
+        const field: &[byte] = command_executor_arg(command, index) catch {
+            object_free(reply_list);
+            return command_executor_wrong_arity();
+        };
+        var is_null: bool = false;
+        var data: &[byte] = command_executor_empty_slice();
+        if obj == null {
+            is_null = true;
+        } else {
+            const exists: bool = hash_object_exists_field(obj, field) catch {
+                object_free(reply_list);
+                return command_executor_wrongtype();
+            };
+            if !exists {
+                is_null = true;
+            } else {
+                const field_obj: &RedisObject = hash_object_get_field(obj, field) catch {
+                    object_free(reply_list);
+                    return command_executor_wrongtype();
+                };
+                data = command_executor_string_value(field_obj) catch {
+                    object_free(reply_list);
+                    return command_executor_wrongtype();
+                };
+            }
+        }
+        var flag: [byte: 1] = [];
+        if is_null {
+            flag[0] = 1 as byte;
+        } else {
+            flag[0] = 0 as byte;
+        }
+        _ = list_object_push_tail(reply_list, data) catch {
+            object_free(reply_list);
+            return command_executor_oom();
+        };
+        _ = sds_cat(&null_map, flag[0: 1]) catch {
+            object_free(reply_list);
+            return command_executor_oom();
+        };
+        index = index + 1;
+    }
+
+    const null_map_obj: &RedisObject = create_string_object(null_map.buf[0: null_map.len]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    var reply: CommandReply = command_executor_nullable_array_bulk(reply_list.list_head, numfields, null_map_obj);
+    reply.owned_object = reply_list;
+    return reply;
+}
+
 fn command_executor_hash_field_ttl_array(engine: &Engine, command: &Command, now_ms: u64, persist_mode: bool) CommandReply {
     if command.argc < 5 {
         return command_executor_wrong_arity();
@@ -20013,6 +20148,9 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
     }
     if command.info.cmd_type == CommandType.command_hgetdel {
         return command_executor_hgetdel(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_hgetex {
+        return command_executor_hgetex(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_httl ||
         command.info.cmd_type == CommandType.command_hpttl ||

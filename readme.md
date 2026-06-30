@@ -53,7 +53,7 @@
 - String/Key/Control 命令执行：`PING`、`GET`、`SET`、`DEL`、`EXISTS`、`COPY`、`KEYS`、`RANDOMKEY`、`EXPIRE`、`EXPIREAT`、`EXPIRETIME`、`PEXPIRE`、`PEXPIREAT`、`PEXPIRETIME`、`PERSIST`、`TTL`、`PTTL`、`TIME`、`ROLE`、`INFO` 多 section、`CONFIG GET/HELP/RESETSTAT`、`CLIENT` 兼容子集、`AUTH`、`SAVE`
 - String TTL/算法扩展：`GETEX`、`SETEX`、`PSETEX`、`MSETEX`、`LCS`、`DIGEST` 短字符串 partial
 - Hash 最小对象：基于项目内 `Dict` 的最小 hash value 容器
-- Hash 命令子集：`HSET`、`HGET`、`HDEL`、`HEXISTS`、`HLEN`、`HMGET`、`HSETNX`、`HSTRLEN`、`HRANDFIELD`，以及 field TTL 查询/清理兼容面 `HTTL/HPTTL/HEXPIRETIME/HPEXPIRETIME/HPERSIST`
+- Hash 命令子集：`HSET`、`HGET`、`HDEL`、`HEXISTS`、`HLEN`、`HMGET`、`HSETNX`、`HSTRLEN`、`HRANDFIELD`，以及 field TTL 查询/清理兼容面 `HGETEX/HTTL/HPTTL/HEXPIRETIME/HPEXPIRETIME/HPERSIST`
 - List 最小对象：基于双向链表的最小 list value 容器
 - List 命令子集：`LPUSH`、`LPOP`、`LRANGE`
 - Blocking list/zset 第一批：`BLPOP`、`BRPOP`、`BRPOPLPUSH`、`BLMOVE`、`BLMPOP`、`BZPOPMIN`、`BZPOPMAX`、`BZMPOP` 已支持立即命中、server-side block/unblock、超时返回与 AOF replay
@@ -290,7 +290,7 @@ build/redis-uya 6380 1
 - Geo 第一批 partial：`GEOADD`、`GEODIST`、`GEOHASH`、`GEOPOS`、`GEOSEARCH`、`GEOSEARCHSTORE`、`GEORADIUS`、`GEORADIUS_RO`、`GEORADIUSBYMEMBER`、`GEORADIUSBYMEMBER_RO` 当前可用，但内部暂以 exact zset-backed packed coordinate score 实现，`GEOSEARCHSTORE` 支持目标写入和 `STOREDIST` 整数距离 score，暂不保存 Redis 原生浮点距离，legacy radius 命令复用 `GEOSEARCH ... BYRADIUS` 路径且不支持 `STORE/STOREDIST`，`GEOPOS` 和 `WITHCOORD` 返回当前 packed score 解码后的 `1e-6` 量化坐标，`GEOHASH` 基于当前解码坐标生成 Redis 兼容 geohash 字符串，`WITHHASH` 返回当前 packed score，而不是 Redis 原生 geohash 整数
 - Scripting 第一批 partial：`EVAL`、`EVALSHA`、`EVAL_RO`、`EVALSHA_RO`、`SCRIPT DEBUG/LOAD/EXISTS/FLUSH/KILL` 当前可用，但只支持单条 `return redis.call(...)` 脚本子集；`*_RO` 会拒绝内部写命令，`SCRIPT DEBUG` 是 no-op 兼容面，`SCRIPT KILL` 只覆盖无运行脚本 `NOTBUSY` 错误面；AOF/复制传播的是脚本内部实际执行的命令效果，而不是原始 `EVAL*`
 - Functions 第一批 partial：`FUNCTION HELP`、`FUNCTION LIST`、`FUNCTION STATS`、`FUNCTION FLUSH`、`FUNCTION DELETE`、`FUNCTION LOAD`、`FUNCTION DUMP`、`FUNCTION RESTORE`、`FUNCTION KILL`、`FCALL`、`FCALL_RO` 当前可用，用于暴露 Functions 控制面帮助、空库列表、空库统计、no-op flush、空库删除错误面、加载未支持错误面、空库序列化 payload、空库 payload restore、无运行脚本错误面、空库调用错误面、`COMMAND GETKEYS*` 和 `COMMAND*` 可见面；暂不支持 function library 存储、非空 `FUNCTION RESTORE` 或真实 `FCALL*` 执行
-- Hash field TTL partial：`HTTL`、`HPTTL`、`HEXPIRETIME`、`HPEXPIRETIME` 与 `HPERSIST` 当前可用，支持 `FIELDS numfields field ...` 解析、整数数组回复、field 缺失返回 `-2`、field 存在但无 TTL 返回 `-1`、key 缺失和错类型错误面、`COMMAND*` 可见面与 TCP/redis-py/redis-cli smoke；当前尚未存储真实 field TTL 元数据，因此不支持 `HEXPIRE/HPEXPIRE/HGETEX/HSETEX` 的过期写入语义，也不做 field 级过期扫描、AOF/RDB 持久化或复制传播
+- Hash field TTL partial：`HGETEX`、`HTTL`、`HPTTL`、`HEXPIRETIME`、`HPEXPIRETIME` 与 `HPERSIST` 当前可用，支持 `FIELDS numfields field ...` 解析、`HGETEX` nullable bulk array 回复、TTL option 语法和整数校验、整数数组回复、field 缺失返回 `-2` 或 Null Bulk、field 存在但无 TTL 返回 `-1`、key 缺失和错类型错误面、`COMMAND*` 可见面与 TCP/redis-py/redis-cli smoke；当前尚未存储真实 field TTL 元数据，因此不支持 `HEXPIRE/HPEXPIRE/HSETEX` 的过期写入语义，也不做 field 级过期扫描、AOF/RDB 持久化或复制传播
 - ACL 第一批 partial：`ACL CAT`、`ACL DELUSER`、`ACL DRYRUN`、`ACL GENPASS`、`ACL GETUSER`、`ACL HELP`、`ACL LIST`、`ACL LOAD`、`ACL LOG`、`ACL SAVE`、`ACL SETUSER`、`ACL USERS`、`ACL WHOAMI` 当前可用，用于暴露 ACL 分类、默认用户不可删除错误面、默认用户 dry-run 命令检查、口令生成、默认用户详情、ACL 控制面帮助、默认用户 config 格式、`requirepass` 哈希标记回显、ACL 文件未配置错误面、默认用户 no-op SETUSER 兼容面、默认用户列表、当前默认用户、默认用户命令级 `+cmd/-cmd` 与分类级 `+@category/-@category` 允许/拒绝路径、`resetcommands` 默认命令规则恢复、`resetkeys/resetchannels/clearselectors/resetselectors` 固定默认视图兼容 no-op、ACL 拒绝日志和 `COMMAND*` 可见面；`ACL CAT category` 当前返回可见命令目录中的匹配命令，`ACL DELUSER` 当前不会删除默认用户，`ACL DRYRUN default ...` 当前会校验命令存在性、arity、默认用户命令 deny list 与分类 deny list，`ACL SETUSER default -get` 或 `-@string` 会让后续 `GET` 和 `ACL DRYRUN default GET ...` 返回 `NOPERM`，`ACL SETUSER default +get`、`+@string`、`+@all` 或 `resetcommands` 会恢复对应拒绝，`ACL SETUSER default resetkeys resetchannels clearselectors resetselectors` 当前返回 `OK` 但不会改变固定 `~* &*` 与空 selector 视图，`ACL GENPASS [bits]` 当前返回 Redis 兼容长度的十六进制口令，`ACL LIST` / `ACL GETUSER default` 会反映当前命令、分类 deny list 与 `requirepass` 只读哈希标记，`ACL LOAD` / `ACL SAVE` 当前按未配置 ACL 文件的 Redis 兼容错误返回，`ACL LOG [count]` 当前返回进程内默认用户命令权限拒绝日志，含基础审计字段和拒绝发生时的真实 client id/addr/laddr 并支持 `ACL LOG RESET` 清空；暂不支持 ACL 用户存储、密码管理写入、完整 Redis 分类授权模型、key pattern 权限、selector 权限或 ACL 文件加载保存，安全基线仍由 `requirepass` / `AUTH` 提供
 - Client reply/unblock/pause/flags partial：`CLIENT REPLY ON|OFF|SKIP`、`CLIENT UNBLOCK id [TIMEOUT|ERROR]`、`CLIENT PAUSE timeout [WRITE|ALL]`、`CLIENT TRACKING ON BCAST PREFIX ...`、`CLIENT CACHING YES|NO`、`CLIENT NO-EVICT ON|OFF` 与 `CLIENT NO-TOUCH ON|OFF` 当前可用；`REPLY` 会维护连接级回复抑制状态，`UNBLOCK` 可解除阻塞 pop 等待客户端并返回 timeout 空结果或 `UNBLOCKED` 错误，`PAUSE WRITE` 只阻塞写命令，均进入 `CLIENT HELP` 与 `COMMAND*` 可见面，tracking/flags 子集用于保存连接级兼容状态；尚未提供 server-assisted client-side caching invalidation，也未接入 `maxmemory` 淘汰候选保护或对象访问路径的 LRU/LFU touch 抑制，`REPLY` 也不改变 Pub/Sub push 或 `MONITOR` 推送
 - Module 第一批 partial：`MODULE HELP`、`MODULE LIST` 当前可用；`LIST` 固定返回空数组并进入 `COMMAND*` 可见面，暂不支持 module 加载、卸载或模块 API
@@ -302,7 +302,7 @@ build/redis-uya 6380 1
 - Hash 第一批数值：`HINCRBY`、`HINCRBYFLOAT`
 - Hash 第二批视图：`HKEYS`、`HVALS`、`HGETALL`、`HRANDFIELD`
 - Hash 第三批扫描：`HSCAN`
-- Hash field TTL 查询/清理兼容面：`HTTL`、`HPTTL`、`HEXPIRETIME`、`HPEXPIRETIME`、`HPERSIST`
+- Hash field TTL 查询/清理兼容面：`HGETEX`、`HTTL`、`HPTTL`、`HEXPIRETIME`、`HPEXPIRETIME`、`HPERSIST`
 - List 第一批基础：`RPUSH`、`RPOP`、`LINDEX`、`LSET`、`LLEN`
 - List 第二批变异：`LINSERT`、`LTRIM`、`LREM`
 - List 第三批条件：`LPUSHX`、`RPUSHX`、`LPOS`

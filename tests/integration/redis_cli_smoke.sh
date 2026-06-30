@@ -2382,6 +2382,18 @@ if [[ "$HPERSIST_RESULT" != $'-1\n-2' ]]; then
     exit 1
 fi
 
+HGETEX_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hgetex hash ex 10 fields 2 field missing)"
+if [[ "$HGETEX_RESULT" != "value" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HGETEX value/null, got '$HGETEX_RESULT'" >&2
+    exit 1
+fi
+
+HGETEX_GET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hget hash field)"
+if [[ "$HGETEX_GET_RESULT" != "value" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HGETEX to keep field value, got '$HGETEX_GET_RESULT'" >&2
+    exit 1
+fi
+
 HGETDEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hgetdel hash fields 2 field missing)"
 if [[ "$HGETDEL_RESULT" != "value" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected HGETDEL value/null, got '$HGETDEL_RESULT'" >&2

@@ -731,6 +731,18 @@ class RedisPySubsetClient:
         assert isinstance(result, list)
         return result
 
+    def hgetex(self, key: str, *fields: str, option: bytes | None = None, value: bytes | None = None) -> list[bytes | None]:
+        parts: list[bytes] = [b"HGETEX", key.encode()]
+        if option is not None:
+            parts.append(option)
+            if value is not None:
+                parts.append(value)
+        parts.extend([b"FIELDS", str(len(fields)).encode()])
+        parts.extend(field.encode() for field in fields)
+        result = self._request(*parts)
+        assert isinstance(result, list)
+        return result
+
     def httl(self, key: str, *fields: str) -> list[int]:
         result = self._request(
             b"HTTL",
@@ -2074,6 +2086,9 @@ def run_smoke() -> None:
             assert client.hsetnx("hash", "field", "next") == 0
             assert client.hstrlen("hash", "field") == 5
             assert client.hstrlen("hash", "missing") == 0
+            assert client.hgetex("hash", "field", "missing") == [b"value", None]
+            assert client.hgetex("hash", "field", "missing", option=b"EX", value=b"10") == [b"value", None]
+            assert client.hget("hash", "field") == b"value"
             assert client.httl("hash", "field", "missing") == [-1, -2]
             assert client.hpttl("hash", "field", "missing") == [-1, -2]
             assert client.hexpiretime("hash", "field") == [-1]

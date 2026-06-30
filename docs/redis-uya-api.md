@@ -579,6 +579,27 @@ HGETDEL key FIELDS numfields field [field ...]
 - key 存在但不是 hash 时返回 `WRONGTYPE`
 - 删除最后一个 field 后，当前实现会直接删除整个 hash key
 
+### `HGETEX`
+
+格式：
+
+```text
+HGETEX key [EX seconds|PX milliseconds|EXAT unix-time-seconds|PXAT unix-time-milliseconds|PERSIST] FIELDS numfields field [field ...]
+```
+
+返回：
+
+- 返回与请求 field 顺序一致的 RESP Array
+- 命中 field 返回 Bulk String
+- 缺失 field 返回 Null Bulk
+- key 不存在时，所有请求 field 都返回 Null Bulk
+
+说明：
+
+- 当前实现为 partial，支持 `EX` / `PX` / `EXAT` / `PXAT` / `PERSIST` 语法和整数校验，但尚未保存真实 hash field TTL 元数据，因此不会修改 field TTL 或触发 field 级过期
+- `numfields` 必须为正整数，并且必须与后续 field 数量一致
+- key 存在但不是 hash 时返回 `WRONGTYPE`
+
 ### `HTTL` / `HPTTL`
 
 格式：

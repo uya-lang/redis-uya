@@ -340,6 +340,7 @@ PARTIAL_NAMES = {
     "digest",
     "hexpiretime",
     "hgetdel",
+    "hgetex",
     "hpersist",
     "hpexpiretime",
     "hpttl",

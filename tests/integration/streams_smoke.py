@@ -202,6 +202,8 @@ def run_smoke() -> None:
                 raise AssertionError(f"unexpected XREAD payload: {read!r}")
             if client.command(b"XCFGSET", b"mystream", b"IDMP-DURATION", b"10", b"IDMP-MAXSIZE", b"100") != b"OK":
                 raise AssertionError("XCFGSET did not return OK")
+            if client.command(b"XIDMPRECORD", b"mystream", b"pid", b"iid", first) != b"OK":
+                raise AssertionError("XIDMPRECORD did not return OK")
             try:
                 client.command(b"XREADGROUP", b"GROUP", b"group", b"consumer", b"STREAMS", b"mystream", b">")
                 raise AssertionError("XREADGROUP did not fail without consumer groups")

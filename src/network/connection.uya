@@ -4281,6 +4281,9 @@ fn connection_should_append_aof(command: &Command, reply: &CommandReply) bool {
     if reply.typ == CommandReplyType.reply_error {
         return false;
     }
+    if command.info.cmd_type == CommandType.command_xidmprecord {
+        return false;
+    }
     if command.info.cmd_type == CommandType.command_blpop || command.info.cmd_type == CommandType.command_brpop {
         return reply.typ == CommandReplyType.reply_array_bulk || reply.typ == CommandReplyType.reply_raw_bytes;
     }

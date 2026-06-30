@@ -2699,6 +2699,7 @@ XGROUP DELCONSUMER key groupname consumer
 XGROUP DESTROY key groupname
 XGROUP HELP
 XGROUP SETID key groupname id-or-$ [ENTRIESREAD entries-read]
+XIDMPRECORD key pid iid stream-id
 XINFO HELP
 XINFO CONSUMERS key groupname
 XINFO GROUPS key
@@ -2729,6 +2730,7 @@ XTRIM key MAXLEN [=|~] count
 - `XGROUP DESTROY`：当前没有 consumer group 模型，因此对 stream key 或缺失 key 返回 `0`
 - `XGROUP HELP`：返回当前 XGROUP 兼容面帮助数组
 - `XGROUP SETID`：当前没有 consumer group 模型，因此对现有 stream key 返回 `NOGROUP No such consumer group`
+- `XIDMPRECORD`：对现有 stream entry 返回 `OK`；当前仅校验 `pid` / `iid` 非空、stream id 格式和 entry 存在，不保存 IDMP 记录
 - `XINFO HELP`：返回当前 XINFO 兼容面帮助数组
 - `XINFO CONSUMERS`：当前没有 consumer group 模型，因此对现有 stream key 返回 `NOGROUP No such consumer group`
 - `XINFO GROUPS`：当前没有 consumer group 模型，因此对 stream key 返回空数组；key 不存在返回 `ERR no such key`
@@ -2759,6 +2761,7 @@ XTRIM key MAXLEN [=|~] count
 - `XDELEX` 当前支持 `KEEPREF`、`DELREF`、`ACKED` 与 `IDS` 语法校验；由于没有 consumer group / PEL，`KEEPREF` 与 `DELREF` 行为等同于精确 entry 删除，`ACKED` 只返回未删除状态 `2`
 - `XPENDING` 当前只提供无 group 时的 `NOGROUP` 错误面，不维护 consumer group PEL
 - `XGROUP CREATE` 当前只提供 key/type 校验和明确未支持错误，不创建 consumer group；`XGROUP CREATECONSUMER` / `XGROUP DELCONSUMER` / `XGROUP SETID` 当前只提供无 group 时的 `NOGROUP` 错误面；`XGROUP DESTROY` 当前只提供 empty-state 返回值，不维护 group；consumer 管理和 consumer group 状态仍未实现
+- `XIDMPRECORD` 当前只提供 key/type、pid/iid 非空、stream ID 与 entry 存在性校验；不维护或持久化 stream IDMP 记录，当前 no-op 校验面不进入普通 AOF/复制传播
 - `XINFO STREAM` 当前支持 key-only 基础元数据和 `FULL [COUNT count]` entry 明细，`XINFO GROUPS` 当前只支持 empty-state 空数组，`XINFO CONSUMERS` 当前只提供无 group 时的 `NOGROUP` 错误面；真实 consumer group 状态仍未实现；`radix-tree-*` 字段为 list-backed partial 占位
 - `XTRIM` 当前只支持 `MAXLEN` 与可选 `=` / `~` 操作符；`~` 只是语法兼容占位，仍按精确头部裁剪执行；暂不支持 `MINID` 或 `LIMIT`
 - 当前不支持真实 consumer group 状态命令

@@ -5327,6 +5327,21 @@ fn command_executor_stream_delete_id(obj: &RedisObject, id_data: &[byte]) !bool 
     return false;
 }
 
+fn command_executor_stream_entry_exists(obj: &RedisObject, id_data: &[byte]) !bool {
+    var node: &ListNode = obj.list_head;
+    while node != null {
+        if node.value == null || node.value.obj_type != ObjectType.object_list || node.value.list_head == null {
+            return error.ObjectWrongType;
+        }
+        const entry_id: &[byte] = node.value.list_head.value.value.buf[0: node.value.list_head.value.value.len];
+        if command_executor_slice_eq(entry_id, id_data) {
+            return true;
+        }
+        node = node.next;
+    }
+    return false;
+}
+
 fn command_executor_xdelex(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
     if command.argc < 5 {
         return command_executor_wrong_arity();
@@ -5645,6 +5660,43 @@ fn command_executor_xcfgset(engine: &Engine, command: &Command, now_ms: u64) Com
     };
     if obj.obj_type != ObjectType.object_stream {
         return command_executor_wrongtype();
+    }
+    return command_executor_simple(&"OK"[0: 2]);
+}
+
+fn command_executor_xidmprecord(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 5 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const pid_data: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    const iid_data: &[byte] = command_executor_arg(command, 3) catch {
+        return command_executor_wrong_arity();
+    };
+    if pid_data.len == 0 || iid_data.len == 0 {
+        return command_executor_error(&"ERR pid and iid must be non-empty"[0: 33]);
+    }
+    const id_data: &[byte] = command_executor_arg(command, 4) catch {
+        return command_executor_wrong_arity();
+    };
+    _ = command_executor_parse_stream_id(id_data, 0u64, false, false) catch {
+        return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 57]);
+    };
+    const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+        return command_executor_error(&"ERR no such key"[0: 14]);
+    };
+    if obj.obj_type != ObjectType.object_stream {
+        return command_executor_wrongtype();
+    }
+    const exists: bool = command_executor_stream_entry_exists(obj, id_data) catch {
+        return command_executor_wrongtype();
+    };
+    if !exists {
+        return command_executor_error(&"ERR no such stream entry"[0: 24]);
     }
     return command_executor_simple(&"OK"[0: 2]);
 }
@@ -19614,6 +19666,9 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
     }
     if command.info.cmd_type == CommandType.command_xgroup {
         return command_executor_xgroup(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_xidmprecord {
+        return command_executor_xidmprecord(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_xinfo {
         return command_executor_xinfo(engine, command, now_ms);

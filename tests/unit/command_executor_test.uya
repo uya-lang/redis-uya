@@ -820,6 +820,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"xcfgset"[0: 7], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xclaim"[0: 6], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xdelex"[0: 6], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"xidmprecord"[0: 11], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xnack"[0: 5], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xgroup"[0: 6], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xgroup|createconsumer"[0: 21], CommandCatalogStatus.status_partial);
@@ -4590,6 +4591,52 @@ export fn test_command_streams_first_batch() !void {
     try assert_true(command_executor_test_slice_eq(xcfgset_arity_reply.data, &"ERR wrong number of arguments"[0: 29]));
     resp_value_free(&xcfgset_arity_parsed.value);
 
+    var xidmprecord_parsed: RespParseResult = try parse_resp2(&"*5\r\n$11\r\nXIDMPRECORD\r\n$6\r\nstream\r\n$3\r\npid\r\n$3\r\niid\r\n$6\r\n1000-0\r\n"[0: 64]);
+    const xidmprecord_command: Command = try command_executor_test_command(&router, &xidmprecord_parsed);
+    const xidmprecord_reply: CommandReply = command_execute_at(&engine, &xidmprecord_command, 1000u64);
+    try assert_eq_i32(xidmprecord_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(xidmprecord_reply.data, &"OK"[0: 2]));
+    resp_value_free(&xidmprecord_parsed.value);
+
+    var xidmprecord_missing_parsed: RespParseResult = try parse_resp2(&"*5\r\n$11\r\nXIDMPRECORD\r\n$7\r\nmissing\r\n$3\r\npid\r\n$3\r\niid\r\n$6\r\n1000-0\r\n"[0: 65]);
+    const xidmprecord_missing_command: Command = try command_executor_test_command(&router, &xidmprecord_missing_parsed);
+    const xidmprecord_missing_reply: CommandReply = command_execute_at(&engine, &xidmprecord_missing_command, 1000u64);
+    try assert_eq_i32(xidmprecord_missing_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(xidmprecord_missing_reply.data, &"ERR no such key"[0: 14]));
+    resp_value_free(&xidmprecord_missing_parsed.value);
+
+    var xidmprecord_empty_pid_parsed: RespParseResult = try parse_resp2(&"*5\r\n$11\r\nXIDMPRECORD\r\n$6\r\nstream\r\n$0\r\n\r\n$3\r\niid\r\n$6\r\n1000-0\r\n"[0: 61]);
+    const xidmprecord_empty_pid_command: Command = try command_executor_test_command(&router, &xidmprecord_empty_pid_parsed);
+    const xidmprecord_empty_pid_reply: CommandReply = command_execute_at(&engine, &xidmprecord_empty_pid_command, 1000u64);
+    try assert_eq_i32(xidmprecord_empty_pid_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(xidmprecord_empty_pid_reply.data, &"ERR pid and iid must be non-empty"[0: 33]));
+    resp_value_free(&xidmprecord_empty_pid_parsed.value);
+
+    var xidmprecord_badid_parsed: RespParseResult = try parse_resp2(&"*5\r\n$11\r\nXIDMPRECORD\r\n$6\r\nstream\r\n$3\r\npid\r\n$3\r\niid\r\n$3\r\nbad\r\n"[0: 61]);
+    const xidmprecord_badid_command: Command = try command_executor_test_command(&router, &xidmprecord_badid_parsed);
+    const xidmprecord_badid_reply: CommandReply = command_execute_at(&engine, &xidmprecord_badid_command, 1000u64);
+    try assert_eq_i32(xidmprecord_badid_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xidmprecord_badid_reply.data, &"Invalid stream ID"[0: 17]));
+    resp_value_free(&xidmprecord_badid_parsed.value);
+
+    var xidmprecord_noentry_parsed: RespParseResult = try parse_resp2(&"*5\r\n$11\r\nXIDMPRECORD\r\n$6\r\nstream\r\n$3\r\npid\r\n$3\r\niid\r\n$6\r\n9999-0\r\n"[0: 64]);
+    const xidmprecord_noentry_command: Command = try command_executor_test_command(&router, &xidmprecord_noentry_parsed);
+    const xidmprecord_noentry_reply: CommandReply = command_execute_at(&engine, &xidmprecord_noentry_command, 1000u64);
+    try assert_eq_i32(xidmprecord_noentry_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(xidmprecord_noentry_reply.data, &"ERR no such stream entry"[0: 24]));
+    resp_value_free(&xidmprecord_noentry_parsed.value);
+
+    var xidmprecord_arity_parsed: RespParseResult = try parse_resp2(&"*4\r\n$11\r\nXIDMPRECORD\r\n$6\r\nstream\r\n$3\r\npid\r\n$3\r\niid\r\n"[0: 52]);
+    var xidmprecord_wrong_arity: bool = false;
+    _ = command_from_resp(&router, &xidmprecord_arity_parsed.value) catch |err| {
+        if err == error.CommandWrongArity {
+            xidmprecord_wrong_arity = true;
+        }
+        return;
+    };
+    try assert_true(xidmprecord_wrong_arity);
+    resp_value_free(&xidmprecord_arity_parsed.value);
+
     var xclaim_parsed: RespParseResult = try parse_resp2(&"*6\r\n$6\r\nXCLAIM\r\n$6\r\nstream\r\n$1\r\ng\r\n$1\r\nc\r\n$1\r\n0\r\n$6\r\n1000-0\r\n"[0: 61]);
     const xclaim_command: Command = try command_executor_test_command(&router, &xclaim_parsed);
     const xclaim_reply: CommandReply = command_execute_at(&engine, &xclaim_command, 1000u64);
@@ -5191,6 +5238,13 @@ export fn test_command_streams_first_batch() !void {
     try assert_eq_i32(xcfgset_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
     try assert_true(command_executor_test_contains(xcfgset_wrongtype_reply.data, &"WRONGTYPE"[0: 9]));
     resp_value_free(&xcfgset_wrongtype_parsed.value);
+
+    var xidmprecord_wrongtype_parsed: RespParseResult = try parse_resp2(&"*5\r\n$11\r\nXIDMPRECORD\r\n$5\r\nplain\r\n$3\r\npid\r\n$3\r\niid\r\n$6\r\n1000-0\r\n"[0: 63]);
+    const xidmprecord_wrongtype_command: Command = try command_executor_test_command(&router, &xidmprecord_wrongtype_parsed);
+    const xidmprecord_wrongtype_reply: CommandReply = command_execute_at(&engine, &xidmprecord_wrongtype_command, 1000u64);
+    try assert_eq_i32(xidmprecord_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xidmprecord_wrongtype_reply.data, &"WRONGTYPE"[0: 9]));
+    resp_value_free(&xidmprecord_wrongtype_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

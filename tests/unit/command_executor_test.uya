@@ -817,6 +817,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"xack"[0: 4], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xackdel"[0: 7], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xautoclaim"[0: 10], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"xcfgset"[0: 7], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xclaim"[0: 6], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xdelex"[0: 6], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"xnack"[0: 5], CommandCatalogStatus.status_partial);
@@ -4540,6 +4541,55 @@ export fn test_command_streams_first_batch() !void {
     try assert_true(xnack_wrong_arity);
     resp_value_free(&xnack_arity_parsed.value);
 
+    var xcfgset_parsed: RespParseResult = try parse_resp2(&"*6\r\n$7\r\nXCFGSET\r\n$6\r\nstream\r\n$13\r\nIDMP-DURATION\r\n$2\r\n10\r\n$12\r\nIDMP-MAXSIZE\r\n$3\r\n100\r\n"[0: 85]);
+    const xcfgset_command: Command = try command_executor_test_command(&router, &xcfgset_parsed);
+    const xcfgset_reply: CommandReply = command_execute_at(&engine, &xcfgset_command, 1000u64);
+    try assert_eq_i32(xcfgset_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(xcfgset_reply.data, &"OK"[0: 2]));
+    resp_value_free(&xcfgset_parsed.value);
+
+    var xcfgset_noopts_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nXCFGSET\r\n$6\r\nstream\r\n"[0: 29]);
+    const xcfgset_noopts_command: Command = try command_executor_test_command(&router, &xcfgset_noopts_parsed);
+    const xcfgset_noopts_reply: CommandReply = command_execute_at(&engine, &xcfgset_noopts_command, 1000u64);
+    try assert_eq_i32(xcfgset_noopts_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(xcfgset_noopts_reply.data, &"OK"[0: 2]));
+    resp_value_free(&xcfgset_noopts_parsed.value);
+
+    var xcfgset_missing_parsed: RespParseResult = try parse_resp2(&"*4\r\n$7\r\nXCFGSET\r\n$7\r\nmissing\r\n$13\r\nIDMP-DURATION\r\n$2\r\n10\r\n"[0: 58]);
+    const xcfgset_missing_command: Command = try command_executor_test_command(&router, &xcfgset_missing_parsed);
+    const xcfgset_missing_reply: CommandReply = command_execute_at(&engine, &xcfgset_missing_command, 1000u64);
+    try assert_eq_i32(xcfgset_missing_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(xcfgset_missing_reply.data, &"ERR no such key"[0: 14]));
+    resp_value_free(&xcfgset_missing_parsed.value);
+
+    var xcfgset_badopt_parsed: RespParseResult = try parse_resp2(&"*4\r\n$7\r\nXCFGSET\r\n$6\r\nstream\r\n$3\r\nBAD\r\n$1\r\n1\r\n"[0: 45]);
+    const xcfgset_badopt_command: Command = try command_executor_test_command(&router, &xcfgset_badopt_parsed);
+    const xcfgset_badopt_reply: CommandReply = command_execute_at(&engine, &xcfgset_badopt_command, 1000u64);
+    try assert_eq_i32(xcfgset_badopt_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xcfgset_badopt_reply.data, &"syntax error"[0: 12]));
+    resp_value_free(&xcfgset_badopt_parsed.value);
+
+    var xcfgset_bad_duration_parsed: RespParseResult = try parse_resp2(&"*4\r\n$7\r\nXCFGSET\r\n$6\r\nstream\r\n$13\r\nIDMP-DURATION\r\n$1\r\n0\r\n"[0: 56]);
+    const xcfgset_bad_duration_command: Command = try command_executor_test_command(&router, &xcfgset_bad_duration_parsed);
+    const xcfgset_bad_duration_reply: CommandReply = command_execute_at(&engine, &xcfgset_bad_duration_command, 1000u64);
+    try assert_eq_i32(xcfgset_bad_duration_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(xcfgset_bad_duration_reply.data, &"ERR invalid duration"[0: 20]));
+    resp_value_free(&xcfgset_bad_duration_parsed.value);
+
+    var xcfgset_bad_maxsize_parsed: RespParseResult = try parse_resp2(&"*4\r\n$7\r\nXCFGSET\r\n$6\r\nstream\r\n$12\r\nIDMP-MAXSIZE\r\n$5\r\n10001\r\n"[0: 59]);
+    const xcfgset_bad_maxsize_command: Command = try command_executor_test_command(&router, &xcfgset_bad_maxsize_parsed);
+    const xcfgset_bad_maxsize_reply: CommandReply = command_execute_at(&engine, &xcfgset_bad_maxsize_command, 1000u64);
+    try assert_eq_i32(xcfgset_bad_maxsize_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(xcfgset_bad_maxsize_reply.data, &"ERR invalid maxsize"[0: 19]));
+    resp_value_free(&xcfgset_bad_maxsize_parsed.value);
+
+    var xcfgset_arity_parsed: RespParseResult = try parse_resp2(&"*3\r\n$7\r\nXCFGSET\r\n$6\r\nstream\r\n$13\r\nIDMP-DURATION\r\n"[0: 49]);
+    const xcfgset_arity_command: Command = try command_executor_test_command(&router, &xcfgset_arity_parsed);
+    const xcfgset_arity_reply: CommandReply = command_execute_at(&engine, &xcfgset_arity_command, 1000u64);
+    try assert_eq_i32(xcfgset_arity_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(xcfgset_arity_reply.data, &"ERR wrong number of arguments"[0: 29]));
+    resp_value_free(&xcfgset_arity_parsed.value);
+
     var xclaim_parsed: RespParseResult = try parse_resp2(&"*6\r\n$6\r\nXCLAIM\r\n$6\r\nstream\r\n$1\r\ng\r\n$1\r\nc\r\n$1\r\n0\r\n$6\r\n1000-0\r\n"[0: 61]);
     const xclaim_command: Command = try command_executor_test_command(&router, &xclaim_parsed);
     const xclaim_reply: CommandReply = command_execute_at(&engine, &xclaim_command, 1000u64);
@@ -5134,6 +5184,13 @@ export fn test_command_streams_first_batch() !void {
     try assert_eq_i32(xnack_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
     try assert_true(command_executor_test_contains(xnack_wrongtype_reply.data, &"WRONGTYPE"[0: 9]));
     resp_value_free(&xnack_wrongtype_parsed.value);
+
+    var xcfgset_wrongtype_parsed: RespParseResult = try parse_resp2(&"*4\r\n$7\r\nXCFGSET\r\n$5\r\nplain\r\n$13\r\nIDMP-DURATION\r\n$2\r\n10\r\n"[0: 56]);
+    const xcfgset_wrongtype_command: Command = try command_executor_test_command(&router, &xcfgset_wrongtype_parsed);
+    const xcfgset_wrongtype_reply: CommandReply = command_execute_at(&engine, &xcfgset_wrongtype_command, 1000u64);
+    try assert_eq_i32(xcfgset_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xcfgset_wrongtype_reply.data, &"WRONGTYPE"[0: 9]));
+    resp_value_free(&xcfgset_wrongtype_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

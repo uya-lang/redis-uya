@@ -5600,6 +5600,55 @@ fn command_executor_xnack(engine: &Engine, command: &Command, now_ms: u64) Comma
     return command_executor_error(&"NOGROUP No such consumer group"[0: 30]);
 }
 
+fn command_executor_xcfgset(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 2 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    var index: usize = 2;
+    while index < command.argc {
+        const option: &[byte] = command_executor_arg(command, index) catch {
+            return command_executor_wrong_arity();
+        };
+        if index + 1 >= command.argc {
+            return command_executor_wrong_arity();
+        }
+        const value_data: &[byte] = command_executor_arg(command, index + 1) catch {
+            return command_executor_wrong_arity();
+        };
+        const value: u64 = command_executor_parse_u64_token(value_data) catch {
+            if command_executor_keyword_eq(option, &"IDMP-DURATION"[0: 13]) {
+                return command_executor_error(&"ERR invalid duration"[0: 20]);
+            }
+            if command_executor_keyword_eq(option, &"IDMP-MAXSIZE"[0: 12]) {
+                return command_executor_error(&"ERR invalid maxsize"[0: 19]);
+            }
+            return command_executor_syntax_error();
+        };
+        if command_executor_keyword_eq(option, &"IDMP-DURATION"[0: 13]) {
+            if value == 0u64 || value > 86400u64 {
+                return command_executor_error(&"ERR invalid duration"[0: 20]);
+            }
+        } else if command_executor_keyword_eq(option, &"IDMP-MAXSIZE"[0: 12]) {
+            if value == 0u64 || value > 10000u64 {
+                return command_executor_error(&"ERR invalid maxsize"[0: 19]);
+            }
+        } else {
+            return command_executor_syntax_error();
+        }
+        index = index + 2;
+    }
+    const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+        return command_executor_error(&"ERR no such key"[0: 14]);
+    };
+    if obj.obj_type != ObjectType.object_stream {
+        return command_executor_wrongtype();
+    }
+    return command_executor_simple(&"OK"[0: 2]);
+}
+
 fn command_executor_xclaim(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
     if command.argc < 6 {
         return command_executor_wrong_arity();
@@ -19547,6 +19596,9 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
     }
     if command.info.cmd_type == CommandType.command_xadd {
         return command_executor_xadd(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_xcfgset {
+        return command_executor_xcfgset(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_xclaim {
         return command_executor_xclaim(engine, command, now_ms);

@@ -94,6 +94,7 @@ export enum CommandType {
     command_xackdel,
     command_xadd,
     command_xautoclaim,
+    command_xcfgset,
     command_xclaim,
     command_xdel,
     command_xdelex,
@@ -284,7 +285,7 @@ export const COMMAND_FLAG_READONLY: u64 = 1u64;
 export const COMMAND_FLAG_WRITE: u64 = 2u64;
 export const COMMAND_FLAG_FAST: u64 = 4u64;
 
-const MIN_COMMAND_COUNT: usize = 249;
+const MIN_COMMAND_COUNT: usize = 250;
 
 fn command_router_name_eq(a: &[byte], b: &[byte]) bool {
     return bytes_ascii_case_eq(a, b);
@@ -1070,6 +1071,9 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
     }
     if index == 248 {
         return command_router_info(CommandType.command_xnack, &"XNACK"[0: 5], -7, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 249 {
+        return command_router_info(CommandType.command_xcfgset, &"XCFGSET"[0: 7], -2, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     return error.CommandUnknown;
 }

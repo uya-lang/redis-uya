@@ -450,6 +450,7 @@ PARTIAL_NAMES = {
     "xackdel",
     "xadd",
     "xautoclaim",
+    "xcfgset",
     "xclaim",
     "xdel",
     "xdelex",

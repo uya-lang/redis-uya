@@ -15982,6 +15982,156 @@ fn command_executor_hsetnx(engine: &Engine, command: &Command, now_ms: u64) Comm
     return command_executor_integer(1);
 }
 
+fn command_executor_hsetex(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 6 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+
+    var condition_mode: i32 = 0;
+    var ttl_seen: bool = false;
+    var index: usize = 2;
+    while index < command.argc {
+        const option: &[byte] = command_executor_arg(command, index) catch {
+            return command_executor_wrong_arity();
+        };
+        if command_executor_keyword_eq(option, &"FIELDS"[0: 6]) {
+            break;
+        }
+        if command_executor_keyword_eq(option, &"FNX"[0: 3]) {
+            if condition_mode != 0 {
+                return command_executor_syntax_error();
+            }
+            condition_mode = 1;
+            index = index + 1;
+        } else if command_executor_keyword_eq(option, &"FXX"[0: 3]) {
+            if condition_mode != 0 {
+                return command_executor_syntax_error();
+            }
+            condition_mode = 2;
+            index = index + 1;
+        } else if command_executor_keyword_eq(option, &"KEEPTTL"[0: 7]) {
+            if ttl_seen {
+                return command_executor_syntax_error();
+            }
+            ttl_seen = true;
+            index = index + 1;
+        } else if command_executor_keyword_eq(option, &"EX"[0: 2]) ||
+            command_executor_keyword_eq(option, &"PX"[0: 2]) ||
+            command_executor_keyword_eq(option, &"EXAT"[0: 4]) ||
+            command_executor_keyword_eq(option, &"PXAT"[0: 4]) {
+            if ttl_seen || index + 1 >= command.argc {
+                return command_executor_syntax_error();
+            }
+            const ttl_data: &[byte] = command_executor_arg(command, index + 1) catch {
+                return command_executor_wrong_arity();
+            };
+            const ttl_value: i64 = command_executor_parse_i64(ttl_data) catch {
+                return command_executor_invalid_integer();
+            };
+            if ttl_value <= 0 {
+                return command_executor_invalid_integer();
+            }
+            ttl_seen = true;
+            index = index + 2;
+        } else {
+            return command_executor_syntax_error();
+        }
+    }
+
+    if index >= command.argc {
+        return command_executor_syntax_error();
+    }
+    const fields_token: &[byte] = command_executor_arg(command, index) catch {
+        return command_executor_wrong_arity();
+    };
+    if !command_executor_keyword_eq(fields_token, &"FIELDS"[0: 6]) {
+        return command_executor_syntax_error();
+    }
+    if index + 1 >= command.argc {
+        return command_executor_syntax_error();
+    }
+    const numfields_data: &[byte] = command_executor_arg(command, index + 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const numfields_i64: i64 = command_executor_parse_i64(numfields_data) catch {
+        return command_executor_invalid_integer();
+    };
+    if numfields_i64 < 1 {
+        return command_executor_invalid_integer();
+    }
+    const numfields: usize = numfields_i64 as usize;
+    const fields_start: usize = index + 2;
+    if command.argc - fields_start != numfields * 2 {
+        return command_executor_syntax_error();
+    }
+
+    const existing: &RedisObject = command_executor_lookup_key_now_or_null(engine, key, now_ms);
+    if existing != null && existing.obj_type != ObjectType.object_hash {
+        return command_executor_wrongtype();
+    }
+
+    if condition_mode == 1 && existing != null {
+        var exists_index: usize = fields_start;
+        while exists_index < command.argc {
+            const field: &[byte] = command_executor_arg(command, exists_index) catch {
+                return command_executor_wrong_arity();
+            };
+            const exists: bool = hash_object_exists_field(existing, field) catch {
+                return command_executor_wrongtype();
+            };
+            if exists {
+                return command_executor_integer(0);
+            }
+            exists_index = exists_index + 2;
+        }
+    }
+    if condition_mode == 2 {
+        if existing == null {
+            return command_executor_integer(0);
+        }
+        var exists_index: usize = fields_start;
+        while exists_index < command.argc {
+            const field: &[byte] = command_executor_arg(command, exists_index) catch {
+                return command_executor_wrong_arity();
+            };
+            const exists: bool = hash_object_exists_field(existing, field) catch {
+                return command_executor_wrongtype();
+            };
+            if !exists {
+                return command_executor_integer(0);
+            }
+            exists_index = exists_index + 2;
+        }
+    }
+
+    const hash_obj: &RedisObject = command_executor_hash_lookup_or_create(engine, key, now_ms) catch |err| {
+        if err == error.AllocOutOfMemory {
+            return command_executor_oom();
+        }
+        return command_executor_wrongtype();
+    };
+    var set_index: usize = fields_start;
+    while set_index < command.argc {
+        const field: &[byte] = command_executor_arg(command, set_index) catch {
+            return command_executor_wrong_arity();
+        };
+        const value: &[byte] = command_executor_arg(command, set_index + 1) catch {
+            return command_executor_wrong_arity();
+        };
+        _ = hash_object_set_field(hash_obj, field, value) catch |err| {
+            if err == error.AllocOutOfMemory {
+                return command_executor_oom();
+            }
+            return command_executor_error(&"ERR hash set failed"[0: 19]);
+        };
+        set_index = set_index + 2;
+    }
+    return command_executor_integer(1);
+}
+
 fn command_executor_hincrby(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
     if command.argc != 4 {
         return command_executor_wrong_arity();
@@ -20190,6 +20340,9 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
     }
     if command.info.cmd_type == CommandType.command_hsetnx {
         return command_executor_hsetnx(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_hsetex {
+        return command_executor_hsetex(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_hstrlen {
         return command_executor_hstrlen(engine, command, now_ms);

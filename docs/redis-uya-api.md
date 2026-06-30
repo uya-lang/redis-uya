@@ -600,6 +600,25 @@ HGETEX key [EX seconds|PX milliseconds|EXAT unix-time-seconds|PXAT unix-time-mil
 - `numfields` 必须为正整数，并且必须与后续 field 数量一致
 - key 存在但不是 hash 时返回 `WRONGTYPE`
 
+### `HSETEX`
+
+格式：
+
+```text
+HSETEX key [FNX|FXX] [EX seconds|PX milliseconds|EXAT unix-time-seconds|PXAT unix-time-milliseconds|KEEPTTL] FIELDS numfields field value [field value ...]
+```
+
+返回：
+
+- 条件满足并设置所有 field 时返回 `1`
+- `FNX` / `FXX` 条件不满足时返回 `0`
+
+说明：
+
+- 当前实现为 partial，支持 field 写入、`FNX` / `FXX` 条件、TTL option 语法和整数校验，但尚未保存真实 hash field TTL 元数据，因此不会触发 field 级过期
+- `numfields` 必须为正整数，并且必须与后续 field/value 数量一致
+- key 存在但不是 hash 时返回 `WRONGTYPE`
+
 ### `HTTL` / `HPTTL`
 
 格式：

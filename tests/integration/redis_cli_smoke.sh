@@ -2394,6 +2394,24 @@ if [[ "$HGETEX_GET_RESULT" != "value" ]]; then
     exit 1
 fi
 
+HSETEX_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hsetex hash ex 10 fields 1 fresh one)"
+if [[ "$HSETEX_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HSETEX 1, got '$HSETEX_RESULT'" >&2
+    exit 1
+fi
+
+HSETEX_GET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hget hash fresh)"
+if [[ "$HSETEX_GET_RESULT" != "one" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HSETEX value one, got '$HSETEX_GET_RESULT'" >&2
+    exit 1
+fi
+
+HSETEX_CLEANUP_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hdel hash fresh)"
+if [[ "$HSETEX_CLEANUP_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HSETEX cleanup 1, got '$HSETEX_CLEANUP_RESULT'" >&2
+    exit 1
+fi
+
 HGETDEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hgetdel hash fields 2 field missing)"
 if [[ "$HGETDEL_RESULT" != "value" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected HGETDEL value/null, got '$HGETDEL_RESULT'" >&2

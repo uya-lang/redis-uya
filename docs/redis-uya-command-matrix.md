@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 195 | 6 | 3 | 15 |
+| Tier A: standalone core | 365 | 259 | 146 | 196 | 6 | 3 | 14 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `202` |
+| `partial` | `203` |
 | `standalone-error` | `32` |
 | `alias` | `3` |
-| `deferred` | `168` |
+| `deferred` | `167` |
 
 ## Group counts
 
@@ -319,7 +319,7 @@
 | `hrandfield` | `hash` | `partial` | `-` | `-2` | `-` | `no` | `@read, @hash, @slow` |
 | `hscan` | `hash` | `full` | `-` | `-3` | `-` | `yes` | `@read, @hash, @slow` |
 | `hset` | `hash` | `full` | `-` | `-4` | `-` | `no` | `@write, @hash, @fast` |
-| `hsetex` | `hash` | `deferred` | `v0.9.1` | `-6` | `-` | `no` | `@write, @hash, @fast` |
+| `hsetex` | `hash` | `partial` | `-` | `-6` | `-` | `no` | `@write, @hash, @fast` |
 | `hsetnx` | `hash` | `full` | `-` | `4` | `-` | `no` | `@write, @hash, @fast` |
 | `hstrlen` | `hash` | `full` | `-` | `3` | `-` | `no` | `@read, @hash, @fast` |
 | `httl` | `hash` | `partial` | `-` | `-5` | `-` | `no` | `@read, @hash, @fast` |

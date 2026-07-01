@@ -18876,6 +18876,7 @@ fn command_executor_command_key_flags(info: &CommandInfo, key_ordinal: usize) &[
         info.cmd_type == CommandType.command_increx ||
         info.cmd_type == CommandType.command_incrbyfloat ||
         info.cmd_type == CommandType.command_hexpire ||
+        info.cmd_type == CommandType.command_hpexpire ||
         info.cmd_type == CommandType.command_hincrby ||
         info.cmd_type == CommandType.command_hincrbyfloat ||
         info.cmd_type == CommandType.command_zincrby {
@@ -20429,7 +20430,8 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
     if command.info.cmd_type == CommandType.command_hgetex {
         return command_executor_hgetex(engine, command, now_ms);
     }
-    if command.info.cmd_type == CommandType.command_hexpire {
+    if command.info.cmd_type == CommandType.command_hexpire ||
+        command.info.cmd_type == CommandType.command_hpexpire {
         return command_executor_hash_field_expire_partial(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_httl ||

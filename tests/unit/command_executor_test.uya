@@ -785,6 +785,7 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"digest"[0: 6], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"hgetdel"[0: 7], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"hexpire"[0: 7], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"hpexpire"[0: 8], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"hgetex"[0: 6], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"hsetex"[0: 6], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"httl"[0: 4], CommandCatalogStatus.status_partial);
@@ -4251,6 +4252,43 @@ export fn test_command_hash_field_ttl_partial() !void {
     const hexpire_hget_reply: CommandReply = command_execute_at(&engine, &hexpire_hget_command, 1000u64);
     try assert_eq_i32(hexpire_hget_reply.typ as i32, CommandReplyType.reply_null_bulk as i32);
     resp_value_free(&hexpire_hget_parsed.value);
+
+    var hpexpire_parsed: RespParseResult = try parse_resp2(&"*7\r\n$8\r\nHPEXPIRE\r\n$4\r\nhash\r\n$3\r\n100\r\n$6\r\nFIELDS\r\n$1\r\n2\r\n$5\r\nfield\r\n$7\r\nmissing\r\n"[0: 80]);
+    const hpexpire_command: Command = try command_executor_test_command(&router, &hpexpire_parsed);
+    var hpexpire_reply: CommandReply = command_execute_at(&engine, &hpexpire_command, 1000u64);
+    const hpexpire_len: usize = try connection_encode_reply(&hpexpire_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: hpexpire_len], &"*2\r\n:1\r\n:-2\r\n"[0: 13]));
+    command_reply_cleanup(&hpexpire_reply);
+    resp_value_free(&hpexpire_parsed.value);
+
+    var hpexpire_xx_parsed: RespParseResult = try parse_resp2(&"*7\r\n$8\r\nHPEXPIRE\r\n$4\r\nhash\r\n$3\r\n100\r\n$2\r\nXX\r\n$6\r\nFIELDS\r\n$1\r\n1\r\n$5\r\nfield\r\n"[0: 75]);
+    const hpexpire_xx_command: Command = try command_executor_test_command(&router, &hpexpire_xx_parsed);
+    var hpexpire_xx_reply: CommandReply = command_execute_at(&engine, &hpexpire_xx_command, 1000u64);
+    const hpexpire_xx_len: usize = try connection_encode_reply(&hpexpire_xx_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: hpexpire_xx_len], &"*1\r\n:0\r\n"[0: 8]));
+    command_reply_cleanup(&hpexpire_xx_reply);
+    resp_value_free(&hpexpire_xx_parsed.value);
+
+    var hpexpire_hset_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nHSET\r\n$4\r\nhash\r\n$7\r\nfreshms\r\n$3\r\none\r\n"[0: 46]);
+    const hpexpire_hset_command: Command = try command_executor_test_command(&router, &hpexpire_hset_parsed);
+    const hpexpire_hset_reply: CommandReply = command_execute_at(&engine, &hpexpire_hset_command, 1000u64);
+    try assert_eq_i32(hpexpire_hset_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(hpexpire_hset_reply.integer as i32, 1);
+    resp_value_free(&hpexpire_hset_parsed.value);
+
+    var hpexpire_delete_parsed: RespParseResult = try parse_resp2(&"*7\r\n$8\r\nHPEXPIRE\r\n$4\r\nhash\r\n$1\r\n0\r\n$2\r\nNX\r\n$6\r\nFIELDS\r\n$1\r\n1\r\n$7\r\nfreshms\r\n"[0: 75]);
+    const hpexpire_delete_command: Command = try command_executor_test_command(&router, &hpexpire_delete_parsed);
+    var hpexpire_delete_reply: CommandReply = command_execute_at(&engine, &hpexpire_delete_command, 1000u64);
+    const hpexpire_delete_len: usize = try connection_encode_reply(&hpexpire_delete_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: hpexpire_delete_len], &"*1\r\n:2\r\n"[0: 8]));
+    command_reply_cleanup(&hpexpire_delete_reply);
+    resp_value_free(&hpexpire_delete_parsed.value);
+
+    var hpexpire_hget_parsed: RespParseResult = try parse_resp2(&"*3\r\n$4\r\nHGET\r\n$4\r\nhash\r\n$7\r\nfreshms\r\n"[0: 37]);
+    const hpexpire_hget_command: Command = try command_executor_test_command(&router, &hpexpire_hget_parsed);
+    const hpexpire_hget_reply: CommandReply = command_execute_at(&engine, &hpexpire_hget_command, 1000u64);
+    try assert_eq_i32(hpexpire_hget_reply.typ as i32, CommandReplyType.reply_null_bulk as i32);
+    resp_value_free(&hpexpire_hget_parsed.value);
 
     var hexpire_missing_key_parsed: RespParseResult = try parse_resp2(&"*6\r\n$7\r\nHEXPIRE\r\n$7\r\nmissing\r\n$2\r\n10\r\n$6\r\nFIELDS\r\n$1\r\n1\r\n$1\r\na\r\n"[0: 64]);
     const hexpire_missing_key_command: Command = try command_executor_test_command(&router, &hexpire_missing_key_parsed);

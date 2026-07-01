@@ -2430,6 +2430,36 @@ if [[ -n "$HEXPIRE_GET_RESULT" ]]; then
     exit 1
 fi
 
+HPEXPIRE_HSET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hset hash freshms one)"
+if [[ "$HPEXPIRE_HSET_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HSET freshms 1, got '$HPEXPIRE_HSET_RESULT'" >&2
+    exit 1
+fi
+
+HPEXPIRE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hpexpire hash 100 fields 2 field missing)"
+if [[ "$HPEXPIRE_RESULT" != $'1\n-2' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HPEXPIRE 1/-2, got '$HPEXPIRE_RESULT'" >&2
+    exit 1
+fi
+
+HPEXPIRE_XX_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hpexpire hash 100 xx fields 1 field)"
+if [[ "$HPEXPIRE_XX_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HPEXPIRE XX 0, got '$HPEXPIRE_XX_RESULT'" >&2
+    exit 1
+fi
+
+HPEXPIRE_DELETE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hpexpire hash 0 nx fields 1 freshms)"
+if [[ "$HPEXPIRE_DELETE_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HPEXPIRE delete 2, got '$HPEXPIRE_DELETE_RESULT'" >&2
+    exit 1
+fi
+
+HPEXPIRE_GET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hget hash freshms)"
+if [[ -n "$HPEXPIRE_GET_RESULT" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HPEXPIRE to delete freshms, got '$HPEXPIRE_GET_RESULT'" >&2
+    exit 1
+fi
+
 HGETDEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hgetdel hash fields 2 field missing)"
 if [[ "$HGETDEL_RESULT" != "value" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected HGETDEL value/null, got '$HGETDEL_RESULT'" >&2

@@ -762,6 +762,16 @@ class RedisPySubsetClient:
         assert isinstance(result, list)
         return [int(item) for item in result]
 
+    def hpexpire(self, key: str, milliseconds: int, *fields: str, option: bytes | None = None) -> list[int]:
+        parts: list[bytes] = [b"HPEXPIRE", key.encode(), str(milliseconds).encode()]
+        if option is not None:
+            parts.append(option)
+        parts.extend([b"FIELDS", str(len(fields)).encode()])
+        parts.extend(field.encode() for field in fields)
+        result = self._request(*parts)
+        assert isinstance(result, list)
+        return [int(item) for item in result]
+
     def httl(self, key: str, *fields: str) -> list[int]:
         result = self._request(
             b"HTTL",
@@ -2114,6 +2124,11 @@ def run_smoke() -> None:
             assert client.hexpire("hash", 10, "field", option=b"XX") == [0]
             assert client.hexpire("hash", 0, "fresh", option=b"NX") == [2]
             assert client.hget("hash", "fresh") is None
+            assert client.hset("hash", "freshms", "one") == 1
+            assert client.hpexpire("hash", 100, "field", "missing") == [1, -2]
+            assert client.hpexpire("hash", 100, "field", option=b"XX") == [0]
+            assert client.hpexpire("hash", 0, "freshms", option=b"NX") == [2]
+            assert client.hget("hash", "freshms") is None
             assert client.httl("hash", "field", "missing") == [-1, -2]
             assert client.hpttl("hash", "field", "missing") == [-1, -2]
             assert client.hexpiretime("hash", "field") == [-1]

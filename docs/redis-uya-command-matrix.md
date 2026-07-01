@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 197 | 6 | 3 | 13 |
+| Tier A: standalone core | 365 | 259 | 146 | 198 | 6 | 3 | 12 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `204` |
+| `partial` | `205` |
 | `standalone-error` | `32` |
 | `alias` | `3` |
-| `deferred` | `166` |
+| `deferred` | `165` |
 
 ## Group counts
 
@@ -312,7 +312,7 @@
 | `hotkeys|start` | `server` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `hotkeys|stop` | `server` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `hpersist` | `hash` | `partial` | `-` | `-5` | `-` | `no` | `@write, @hash, @fast` |
-| `hpexpire` | `hash` | `deferred` | `v0.9.1` | `-6` | `-` | `no` | `@write, @hash, @fast` |
+| `hpexpire` | `hash` | `partial` | `-` | `-6` | `-` | `no` | `@write, @hash, @fast` |
 | `hpexpireat` | `hash` | `deferred` | `v0.9.1` | `-6` | `-` | `no` | `@write, @hash, @fast` |
 | `hpexpiretime` | `hash` | `partial` | `-` | `-5` | `-` | `no` | `@read, @hash, @fast` |
 | `hpttl` | `hash` | `partial` | `-` | `-5` | `-` | `no` | `@read, @hash, @fast` |

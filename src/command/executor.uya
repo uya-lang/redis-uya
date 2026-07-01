@@ -5045,17 +5045,32 @@ fn command_executor_lpush(engine: &Engine, command: &Command, now_ms: u64) Comma
 }
 
 fn command_executor_lpop(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
-    if command.argc != 2 {
+    if command.argc < 2 || command.argc > 3 {
         return command_executor_wrong_arity();
     }
     const key: &[byte] = command_executor_arg(command, 1) catch {
         return command_executor_wrong_arity();
     };
+    var count: i64 = -1;
+    if command.argc == 3 {
+        const count_data: &[byte] = command_executor_arg(command, 2) catch {
+            return command_executor_wrong_arity();
+        };
+        count = command_executor_parse_i64(count_data) catch {
+            return command_executor_invalid_integer();
+        };
+        if count < 0 {
+            return command_executor_error(&"ERR value is out of range, must be positive"[0: 43]);
+        }
+    }
     const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
         return command_executor_reply(CommandReplyType.reply_null_bulk, command_executor_empty_slice(), 0);
     };
     if obj.obj_type != ObjectType.object_list {
         return command_executor_wrongtype();
+    }
+    if command.argc == 3 {
+        return command_executor_list_pop_count(engine, key, obj, count as usize, true);
     }
 
     const popped: &RedisObject = list_object_pop_head(obj) catch |err| {
@@ -5077,6 +5092,63 @@ fn command_executor_lpop(engine: &Engine, command: &Command, now_ms: u64) Comman
     }
     var reply: CommandReply = command_executor_bulk(data);
     reply.owned_object = popped;
+    return reply;
+}
+
+fn command_executor_list_pop_count(engine: &Engine, key: &[byte], obj: &RedisObject, count: usize, pop_left: bool) CommandReply {
+    if count == 0 {
+        return command_executor_array_bulk(null as &ListNode, 0);
+    }
+
+    const reply_list: &RedisObject = create_list_object() catch {
+        return command_executor_oom();
+    };
+    var popped_count: usize = 0;
+    while popped_count < count {
+        var popped: &RedisObject = null as &RedisObject;
+        if pop_left {
+            popped = list_object_pop_head(obj) catch |err| {
+                if err == error.ObjectListEmpty {
+                    break;
+                }
+                object_free(reply_list);
+                return command_executor_wrongtype();
+            };
+        } else {
+            popped = list_object_pop_tail(obj) catch |err| {
+                if err == error.ObjectListEmpty {
+                    break;
+                }
+                object_free(reply_list);
+                return command_executor_wrongtype();
+            };
+        }
+        const data: &[byte] = command_executor_string_value(popped) catch {
+            object_free(popped);
+            object_free(reply_list);
+            return command_executor_wrongtype();
+        };
+        _ = list_object_push_tail(reply_list, data) catch |err| {
+            object_free(popped);
+            object_free(reply_list);
+            if err == error.AllocOutOfMemory {
+                return command_executor_oom();
+            }
+            return command_executor_wrongtype();
+        };
+        object_free(popped);
+        popped_count = popped_count + 1;
+    }
+
+    const remaining: usize = list_object_len(obj) catch {
+        object_free(reply_list);
+        return command_executor_wrongtype();
+    };
+    if remaining == 0 {
+        _ = delete_key(engine, key);
+    }
+    var reply: CommandReply = command_executor_array_bulk(reply_list.list_head, popped_count);
+    reply.owned_object = reply_list;
     return reply;
 }
 
@@ -6617,17 +6689,32 @@ fn command_executor_rpush(engine: &Engine, command: &Command, now_ms: u64) Comma
 }
 
 fn command_executor_rpop(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
-    if command.argc != 2 {
+    if command.argc < 2 || command.argc > 3 {
         return command_executor_wrong_arity();
     }
     const key: &[byte] = command_executor_arg(command, 1) catch {
         return command_executor_wrong_arity();
     };
+    var count: i64 = -1;
+    if command.argc == 3 {
+        const count_data: &[byte] = command_executor_arg(command, 2) catch {
+            return command_executor_wrong_arity();
+        };
+        count = command_executor_parse_i64(count_data) catch {
+            return command_executor_invalid_integer();
+        };
+        if count < 0 {
+            return command_executor_error(&"ERR value is out of range, must be positive"[0: 43]);
+        }
+    }
     const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
         return command_executor_reply(CommandReplyType.reply_null_bulk, command_executor_empty_slice(), 0);
     };
     if obj.obj_type != ObjectType.object_list {
         return command_executor_wrongtype();
+    }
+    if command.argc == 3 {
+        return command_executor_list_pop_count(engine, key, obj, count as usize, false);
     }
 
     const popped: &RedisObject = list_object_pop_tail(obj) catch |err| {

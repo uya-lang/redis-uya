@@ -839,18 +839,35 @@ RPUSH key value [value ...]
 
 - 返回 list 新长度，Integer
 
+### `LPOP`
+
+格式：
+
+```text
+LPOP key [count]
+```
+
+返回：
+
+- 不带 `count` 时，成功返回头元素 Bulk String
+- 带 `count` 时，返回从头部弹出的元素数组
+- key 不存在或空 list 返回 Null Bulk
+- `count` 为 `0` 时返回空 Array
+
 ### `RPOP`
 
 格式：
 
 ```text
-RPOP key
+RPOP key [count]
 ```
 
 返回：
 
-- 成功时返回尾元素 Bulk String
+- 不带 `count` 时，成功返回尾元素 Bulk String
+- 带 `count` 时，返回从尾部弹出的元素数组
 - key 不存在或空 list 返回 Null Bulk
+- `count` 为 `0` 时返回空 Array
 
 ### `BLPOP`
 

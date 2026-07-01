@@ -886,14 +886,18 @@ class RedisPySubsetClient:
         assert isinstance(result, list)
         return result
 
-    def lpop(self, key: str) -> bytes | None:
-        return self._request(b"LPOP", key.encode())
+    def lpop(self, key: str, count: int | None = None):
+        if count is None:
+            return self._request(b"LPOP", key.encode())
+        return self._request(b"LPOP", key.encode(), str(count).encode())
 
     def rpush(self, key: str, *values: str) -> int:
         return int(self._request(b"RPUSH", key.encode(), *(value.encode() for value in values)))
 
-    def rpop(self, key: str) -> bytes | None:
-        return self._request(b"RPOP", key.encode())
+    def rpop(self, key: str, count: int | None = None):
+        if count is None:
+            return self._request(b"RPOP", key.encode())
+        return self._request(b"RPOP", key.encode(), str(count).encode())
 
     def lindex(self, key: str, index: int) -> bytes | None:
         return self._request(b"LINDEX", key.encode(), str(index).encode())
@@ -2187,6 +2191,8 @@ def run_smoke() -> None:
             assert client.lpush("list", "a", "b", "c") == 3
             assert client.lrange("list", 0, -1) == [b"c", b"b", b"a"]
             assert client.lpop("list") == b"c"
+            assert client.lpush("countlist", "a", "b", "c") == 3
+            assert client.lpop("countlist", 3) == [b"c", b"b", b"a"]
             assert client.rpush("rlist", "a", "b", "c") == 3
             assert client.llen("rlist") == 3
             assert client.lindex("rlist", 0) == b"a"
@@ -2195,7 +2201,8 @@ def run_smoke() -> None:
             assert client.lrange("rlist", 0, -1) == [b"a", b"mid", b"c"]
             assert client.rpop("rlist") == b"c"
             assert client.llen("rlist") == 2
-            assert client.delete("rlist") == 1
+            assert client.rpop("rlist", 2) == [b"mid", b"a"]
+            assert client.delete("rlist") == 0
             assert client.rpush("wlist", "a", "b", "c", "b", "d") == 5
             assert client.linsert("wlist", "BEFORE", "c", "x") == 6
             assert client.lrange("wlist", 0, -1) == [b"a", b"b", b"x", b"c", b"b", b"d"]

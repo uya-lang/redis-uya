@@ -1290,6 +1290,18 @@ if [[ "$DELEX_MISSING_RESULT" != "0" ]]; then
     exit 1
 fi
 
+LPUSH_COUNT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lpush countlist a b c)"
+if [[ "$LPUSH_COUNT_RESULT" != "3" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected LPUSH countlist 3, got '$LPUSH_COUNT_RESULT'" >&2
+    exit 1
+fi
+
+LPOP_COUNT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lpop countlist 3)"
+if [[ "$LPOP_COUNT_RESULT" != $'c\nb\na' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected LPOP count c/b/a, got '$LPOP_COUNT_RESULT'" >&2
+    exit 1
+fi
+
 RPUSH_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" rpush rlist a b c)"
 if [[ "$RPUSH_RESULT" != "3" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected RPUSH 3, got '$RPUSH_RESULT'" >&2
@@ -1338,9 +1350,15 @@ if [[ "$LLEN_AFTER_RESULT" != "2" ]]; then
     exit 1
 fi
 
+RPOP_COUNT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" rpop rlist 2)"
+if [[ "$RPOP_COUNT_RESULT" != $'mid\na' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected RPOP count mid/a, got '$RPOP_COUNT_RESULT'" >&2
+    exit 1
+fi
+
 RLIST_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del rlist)"
-if [[ "$RLIST_DEL_RESULT" != "1" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected rlist DEL 1, got '$RLIST_DEL_RESULT'" >&2
+if [[ "$RLIST_DEL_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected rlist DEL 0 after RPOP count drained it, got '$RLIST_DEL_RESULT'" >&2
     exit 1
 fi
 

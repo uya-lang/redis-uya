@@ -391,7 +391,7 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
         return command_router_info(CommandType.command_type, &"TYPE"[0: 4], 2, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     if index == 19 {
-        return command_router_info(CommandType.command_lpop, &"LPOP"[0: 4], 2, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+        return command_router_info(CommandType.command_lpop, &"LPOP"[0: 4], -2, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     if index == 20 {
         return command_router_info(CommandType.command_lpush, &"LPUSH"[0: 5], -3, COMMAND_FLAG_WRITE, 1, 1, 1);
@@ -547,7 +547,7 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
         return command_router_info(CommandType.command_rpush, &"RPUSH"[0: 5], -3, COMMAND_FLAG_WRITE, 1, 1, 1);
     }
     if index == 71 {
-        return command_router_info(CommandType.command_rpop, &"RPOP"[0: 4], 2, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+        return command_router_info(CommandType.command_rpop, &"RPOP"[0: 4], -2, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     if index == 72 {
         return command_router_info(CommandType.command_lindex, &"LINDEX"[0: 6], 3, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);

@@ -520,7 +520,7 @@ export fn test_command_router_lookup_and_case() !void {
 
     const lpop: CommandInfo = try command_router_lookup(&router, &"lpop"[0: 4]);
     try assert_eq_i32(lpop.cmd_type as i32, CommandType.command_lpop as i32);
-    try assert_eq_i32(lpop.arity, 2);
+    try assert_eq_i32(lpop.arity, -2);
 
     const blpop: CommandInfo = try command_router_lookup(&router, &"BLPOP"[0: 5]);
     try assert_eq_i32(blpop.cmd_type as i32, CommandType.command_blpop as i32);
@@ -540,7 +540,7 @@ export fn test_command_router_lookup_and_case() !void {
 
     const rpop: CommandInfo = try command_router_lookup(&router, &"rpop"[0: 4]);
     try assert_eq_i32(rpop.cmd_type as i32, CommandType.command_rpop as i32);
-    try assert_eq_i32(rpop.arity, 2);
+    try assert_eq_i32(rpop.arity, -2);
 
     const brpop: CommandInfo = try command_router_lookup(&router, &"BRPOP"[0: 5]);
     try assert_eq_i32(brpop.cmd_type as i32, CommandType.command_brpop as i32);
@@ -1165,6 +1165,7 @@ export fn test_command_router_arity_validation() !void {
     const zrevrangebylex: CommandInfo = try command_router_lookup(&router, &"ZREVRANGEBYLEX"[0: 14]);
     const zremrangebylex: CommandInfo = try command_router_lookup(&router, &"ZREMRANGEBYLEX"[0: 14]);
     const lmove: CommandInfo = try command_router_lookup(&router, &"LMOVE"[0: 5]);
+    const rpop: CommandInfo = try command_router_lookup(&router, &"RPOP"[0: 4]);
     const rpoplpush: CommandInfo = try command_router_lookup(&router, &"RPOPLPUSH"[0: 9]);
     const incrbyfloat: CommandInfo = try command_router_lookup(&router, &"INCRBYFLOAT"[0: 11]);
     const hget: CommandInfo = try command_router_lookup(&router, &"HGET"[0: 4]);
@@ -1234,6 +1235,7 @@ export fn test_command_router_arity_validation() !void {
     try command_validate_arity(&echo, 2);
     try command_validate_arity(&type_info, 2);
     try command_validate_arity(&lpop, 2);
+    try command_validate_arity(&lpop, 3);
     try command_validate_arity(&lpush, 3);
     try command_validate_arity(&lpush, 5);
     try command_validate_arity(&lrange, 4);
@@ -1420,6 +1422,8 @@ export fn test_command_router_arity_validation() !void {
     try command_validate_arity(&zrevrangebylex, 7);
     try command_validate_arity(&zremrangebylex, 4);
     try command_validate_arity(&lmove, 5);
+    try command_validate_arity(&rpop, 2);
+    try command_validate_arity(&rpop, 3);
     try command_validate_arity(&rpoplpush, 3);
     try command_validate_arity(&setrange, 4);
     try command_validate_arity(&incrbyfloat, 3);

@@ -1354,6 +1354,14 @@ def run_smoke() -> None:
             if lcs_getkeys != [b"a", b"b"]:
                 raise AssertionError(f"unexpected COMMAND GETKEYS LCS result: {lcs_getkeys!r}")
 
+            lpop_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"LPOP", b"list", b"2")
+            if lpop_getkeys != [b"list"]:
+                raise AssertionError(f"unexpected COMMAND GETKEYS LPOP result: {lpop_getkeys!r}")
+
+            rpop_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"RPOP", b"list", b"2")
+            if rpop_getkeys != [b"list"]:
+                raise AssertionError(f"unexpected COMMAND GETKEYS RPOP result: {rpop_getkeys!r}")
+
             substr_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"SUBSTR", b"a", b"0", b"1")
             if substr_getkeys != [b"a"]:
                 raise AssertionError(f"unexpected COMMAND GETKEYS SUBSTR result: {substr_getkeys!r}")
@@ -1524,6 +1532,28 @@ def run_smoke() -> None:
                 or b"access" not in lcs_getkeysandflags[1][1]
             ):
                 raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS LCS keys: {lcs_getkeysandflags!r}")
+
+            lpop_getkeysandflags = send_command(sock, b"COMMAND", b"GETKEYSANDFLAGS", b"LPOP", b"list", b"2")
+            if (
+                not isinstance(lpop_getkeysandflags, list)
+                or len(lpop_getkeysandflags) != 1
+                or lpop_getkeysandflags[0][0] != b"list"
+                or b"RW" not in lpop_getkeysandflags[0][1]
+                or b"access" not in lpop_getkeysandflags[0][1]
+                or b"delete" not in lpop_getkeysandflags[0][1]
+            ):
+                raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS LPOP keys: {lpop_getkeysandflags!r}")
+
+            rpop_getkeysandflags = send_command(sock, b"COMMAND", b"GETKEYSANDFLAGS", b"RPOP", b"list", b"2")
+            if (
+                not isinstance(rpop_getkeysandflags, list)
+                or len(rpop_getkeysandflags) != 1
+                or rpop_getkeysandflags[0][0] != b"list"
+                or b"RW" not in rpop_getkeysandflags[0][1]
+                or b"access" not in rpop_getkeysandflags[0][1]
+                or b"delete" not in rpop_getkeysandflags[0][1]
+            ):
+                raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS RPOP keys: {rpop_getkeysandflags!r}")
 
             substr_getkeysandflags = send_command(sock, b"COMMAND", b"GETKEYSANDFLAGS", b"SUBSTR", b"a", b"0", b"1")
             if (

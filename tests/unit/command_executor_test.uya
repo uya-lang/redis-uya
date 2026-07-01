@@ -4604,6 +4604,20 @@ export fn test_command_lpush_lpop_lrange() !void {
     command_reply_cleanup(&lrange_tail_reply);
     resp_value_free(&lrange_tail_parsed.value);
 
+    var lpush_count_parsed: RespParseResult = try parse_resp2(&"*5\r\n$5\r\nLPUSH\r\n$9\r\ncountlist\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\nc\r\n"[0: 51]);
+    const lpush_count_command: Command = try command_executor_test_command(&router, &lpush_count_parsed);
+    _ = command_execute_at(&engine, &lpush_count_command, 1000u64);
+    resp_value_free(&lpush_count_parsed.value);
+
+    var lpop_count_parsed: RespParseResult = try parse_resp2(&"*3\r\n$4\r\nLPOP\r\n$9\r\ncountlist\r\n$1\r\n3\r\n"[0: 36]);
+    const lpop_count_command: Command = try command_executor_test_command(&router, &lpop_count_parsed);
+    var lpop_count_reply: CommandReply = command_execute_at(&engine, &lpop_count_command, 1000u64);
+    try assert_eq_i32(lpop_count_reply.typ as i32, CommandReplyType.reply_array_bulk as i32);
+    const lpop_count_len: usize = try connection_encode_reply(&lpop_count_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: lpop_count_len], &"*3\r\n$1\r\nc\r\n$1\r\nb\r\n$1\r\na\r\n"[0: 25]));
+    command_reply_cleanup(&lpop_count_reply);
+    resp_value_free(&lpop_count_parsed.value);
+
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);
 }
@@ -5655,6 +5669,15 @@ export fn test_command_rpush_rpop_lindex_lset_llen() !void {
     try assert_eq_i32(llen_after_reply.typ as i32, CommandReplyType.reply_integer as i32);
     try assert_eq_i32(llen_after_reply.integer as i32, 2);
     resp_value_free(&llen_after_parsed.value);
+
+    var rpop_count_parsed: RespParseResult = try parse_resp2(&"*3\r\n$4\r\nRPOP\r\n$5\r\nrlist\r\n$1\r\n2\r\n"[0: 32]);
+    const rpop_count_command: Command = try command_executor_test_command(&router, &rpop_count_parsed);
+    var rpop_count_reply: CommandReply = command_execute_at(&engine, &rpop_count_command, 1000u64);
+    try assert_eq_i32(rpop_count_reply.typ as i32, CommandReplyType.reply_array_bulk as i32);
+    const rpop_count_len: usize = try connection_encode_reply(&rpop_count_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: rpop_count_len], &"*2\r\n$3\r\nmid\r\n$1\r\na\r\n"[0: 20]));
+    command_reply_cleanup(&rpop_count_reply);
+    resp_value_free(&rpop_count_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

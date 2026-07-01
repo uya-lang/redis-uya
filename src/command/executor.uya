@@ -15778,6 +15778,8 @@ fn command_executor_hash_field_expire_partial(engine: &Engine, command: &Command
     if time_mode == 1 {
         const now_seconds: i64 = (now_ms / 1000u64) as i64;
         delete_immediately = ttl_value <= now_seconds;
+    } else if time_mode == 2 {
+        delete_immediately = ttl_value <= (now_ms as i64);
     } else {
         delete_immediately = ttl_value <= 0;
     }
@@ -18885,6 +18887,7 @@ fn command_executor_command_key_flags(info: &CommandInfo, key_ordinal: usize) &[
         info.cmd_type == CommandType.command_hexpire ||
         info.cmd_type == CommandType.command_hexpireat ||
         info.cmd_type == CommandType.command_hpexpire ||
+        info.cmd_type == CommandType.command_hpexpireat ||
         info.cmd_type == CommandType.command_hincrby ||
         info.cmd_type == CommandType.command_hincrbyfloat ||
         info.cmd_type == CommandType.command_zincrby {
@@ -20444,6 +20447,9 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
     }
     if command.info.cmd_type == CommandType.command_hexpireat {
         return command_executor_hash_field_expire_partial(engine, command, now_ms, 1);
+    }
+    if command.info.cmd_type == CommandType.command_hpexpireat {
+        return command_executor_hash_field_expire_partial(engine, command, now_ms, 2);
     }
     if command.info.cmd_type == CommandType.command_httl ||
         command.info.cmd_type == CommandType.command_hpttl ||

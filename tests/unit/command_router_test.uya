@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 256);
+    try assert_eq_i32(command_router_count(&router) as i32, 257);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -133,6 +133,10 @@ export fn test_command_router_lookup_and_case() !void {
     const hpexpire: CommandInfo = try command_router_lookup(&router, &"HPEXPIRE"[0: 8]);
     try assert_eq_i32(hpexpire.cmd_type as i32, CommandType.command_hpexpire as i32);
     try assert_eq_i32(hpexpire.arity, -6);
+
+    const hpexpireat: CommandInfo = try command_router_lookup(&router, &"HPEXPIREAT"[0: 10]);
+    try assert_eq_i32(hpexpireat.cmd_type as i32, CommandType.command_hpexpireat as i32);
+    try assert_eq_i32(hpexpireat.arity, -6);
 
     const hpttl: CommandInfo = try command_router_lookup(&router, &"HPTTL"[0: 5]);
     try assert_eq_i32(hpttl.cmd_type as i32, CommandType.command_hpttl as i32);
@@ -1176,6 +1180,7 @@ export fn test_command_router_arity_validation() !void {
     const hexpire: CommandInfo = try command_router_lookup(&router, &"HEXPIRE"[0: 7]);
     const hexpireat: CommandInfo = try command_router_lookup(&router, &"HEXPIREAT"[0: 9]);
     const hpexpire: CommandInfo = try command_router_lookup(&router, &"HPEXPIRE"[0: 8]);
+    const hpexpireat: CommandInfo = try command_router_lookup(&router, &"HPEXPIREAT"[0: 10]);
     const hstrlen: CommandInfo = try command_router_lookup(&router, &"HSTRLEN"[0: 7]);
     const set: CommandInfo = try command_router_lookup(&router, &"SET"[0: 3]);
     const del: CommandInfo = try command_router_lookup(&router, &"DEL"[0: 3]);
@@ -1438,6 +1443,8 @@ export fn test_command_router_arity_validation() !void {
     try command_validate_arity(&hexpireat, 7);
     try command_validate_arity(&hpexpire, 6);
     try command_validate_arity(&hpexpire, 7);
+    try command_validate_arity(&hpexpireat, 6);
+    try command_validate_arity(&hpexpireat, 7);
     try command_validate_arity(&hstrlen, 3);
     try command_validate_arity(&set, 3);
     try command_validate_arity(&set, 5);

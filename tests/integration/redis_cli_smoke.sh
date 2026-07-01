@@ -2491,6 +2491,37 @@ if [[ -n "$HEXPIREAT_GET_RESULT" ]]; then
     exit 1
 fi
 
+HPEXPIREAT_HSET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hset hash freshpm one)"
+if [[ "$HPEXPIREAT_HSET_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HSET freshpm 1, got '$HPEXPIREAT_HSET_RESULT'" >&2
+    exit 1
+fi
+
+FUTURE_MILLISECONDS="$(( $(date +%s) * 1000 + 60000 ))"
+HPEXPIREAT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hpexpireat hash "$FUTURE_MILLISECONDS" fields 2 field missing)"
+if [[ "$HPEXPIREAT_RESULT" != $'1\n-2' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HPEXPIREAT 1/-2, got '$HPEXPIREAT_RESULT'" >&2
+    exit 1
+fi
+
+HPEXPIREAT_XX_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hpexpireat hash "$FUTURE_MILLISECONDS" xx fields 1 field)"
+if [[ "$HPEXPIREAT_XX_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HPEXPIREAT XX 0, got '$HPEXPIREAT_XX_RESULT'" >&2
+    exit 1
+fi
+
+HPEXPIREAT_DELETE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hpexpireat hash 1 nx fields 1 freshpm)"
+if [[ "$HPEXPIREAT_DELETE_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HPEXPIREAT delete 2, got '$HPEXPIREAT_DELETE_RESULT'" >&2
+    exit 1
+fi
+
+HPEXPIREAT_GET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hget hash freshpm)"
+if [[ -n "$HPEXPIREAT_GET_RESULT" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HPEXPIREAT to delete freshpm, got '$HPEXPIREAT_GET_RESULT'" >&2
+    exit 1
+fi
+
 HGETDEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hgetdel hash fields 2 field missing)"
 if [[ "$HGETDEL_RESULT" != "value" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected HGETDEL value/null, got '$HGETDEL_RESULT'" >&2

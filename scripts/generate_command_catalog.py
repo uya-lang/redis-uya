@@ -346,6 +346,7 @@ PARTIAL_NAMES = {
     "hsetex",
     "hpersist",
     "hpexpire",
+    "hpexpireat",
     "hpexpiretime",
     "hpttl",
     "httl",

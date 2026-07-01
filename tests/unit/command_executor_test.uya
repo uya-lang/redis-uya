@@ -3752,6 +3752,20 @@ export fn test_command_hset_hget() !void {
     try assert_eq_i32(hset_update_reply.integer as i32, 0);
     resp_value_free(&hset_update_parsed.value);
 
+    var hset_multi_parsed: RespParseResult = try parse_resp2(&"*6\r\n$4\r\nHSET\r\n$4\r\nhash\r\n$5\r\nfield\r\n$5\r\nagain\r\n$5\r\nother\r\n$3\r\ntwo\r\n"[0: 66]);
+    const hset_multi_command: Command = try command_executor_test_command(&router, &hset_multi_parsed);
+    const hset_multi_reply: CommandReply = command_execute_at(&engine, &hset_multi_command, 1000u64);
+    try assert_eq_i32(hset_multi_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(hset_multi_reply.integer as i32, 1);
+    resp_value_free(&hset_multi_parsed.value);
+
+    var hget_other_parsed: RespParseResult = try parse_resp2(&"*3\r\n$4\r\nHGET\r\n$4\r\nhash\r\n$5\r\nother\r\n"[0: 35]);
+    const hget_other_command: Command = try command_executor_test_command(&router, &hget_other_parsed);
+    const hget_other_reply: CommandReply = command_execute_at(&engine, &hget_other_command, 1000u64);
+    try assert_eq_i32(hget_other_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(hget_other_reply.data, &"two"[0: 3]));
+    resp_value_free(&hget_other_parsed.value);
+
     var hget_missing_parsed: RespParseResult = try parse_resp2(&"*3\r\n$4\r\nHGET\r\n$4\r\nhash\r\n$7\r\nmissing\r\n"[0: 37]);
     const hget_missing_command: Command = try command_executor_test_command(&router, &hget_missing_parsed);
     const hget_missing_reply: CommandReply = command_execute_at(&engine, &hget_missing_command, 1000u64);

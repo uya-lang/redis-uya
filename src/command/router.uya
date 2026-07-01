@@ -430,7 +430,7 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
         return command_router_info(CommandType.command_hget, &"HGET"[0: 4], 3, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     if index == 32 {
-        return command_router_info(CommandType.command_hset, &"HSET"[0: 4], 4, COMMAND_FLAG_WRITE, 1, 1, 1);
+        return command_router_info(CommandType.command_hset, &"HSET"[0: 4], -4, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     if index == 33 {
         return command_router_info(CommandType.command_hincrby, &"HINCRBY"[0: 7], 4, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);

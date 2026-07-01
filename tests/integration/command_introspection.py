@@ -1314,6 +1314,10 @@ def run_smoke() -> None:
             if hgetdel_getkeys != [b"hash"]:
                 raise AssertionError(f"unexpected COMMAND GETKEYS HGETDEL result: {hgetdel_getkeys!r}")
 
+            hset_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"HSET", b"hash", b"field", b"value", b"other", b"two")
+            if hset_getkeys != [b"hash"]:
+                raise AssertionError(f"unexpected COMMAND GETKEYS HSET result: {hset_getkeys!r}")
+
             hmset_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"HMSET", b"hash", b"field", b"value")
             if hmset_getkeys != [b"hash"]:
                 raise AssertionError(f"unexpected COMMAND GETKEYS HMSET result: {hmset_getkeys!r}")
@@ -1409,6 +1413,16 @@ def run_smoke() -> None:
                 or b"delete" not in hgetdel_getkeysandflags[0][1]
             ):
                 raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS HGETDEL keys: {hgetdel_getkeysandflags!r}")
+
+            hset_getkeysandflags = send_command(sock, b"COMMAND", b"GETKEYSANDFLAGS", b"HSET", b"hash", b"field", b"value", b"other", b"two")
+            if (
+                not isinstance(hset_getkeysandflags, list)
+                or len(hset_getkeysandflags) != 1
+                or hset_getkeysandflags[0][0] != b"hash"
+                or b"RW" not in hset_getkeysandflags[0][1]
+                or b"update" not in hset_getkeysandflags[0][1]
+            ):
+                raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS HSET keys: {hset_getkeysandflags!r}")
 
             hmset_getkeysandflags = send_command(sock, b"COMMAND", b"GETKEYSANDFLAGS", b"HMSET", b"hash", b"field", b"value")
             if (

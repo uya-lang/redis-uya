@@ -2262,6 +2262,24 @@ if [[ "$HGET_RESULT" != "value" ]]; then
     exit 1
 fi
 
+HSET_MULTI_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hset hash multi one second two)"
+if [[ "$HSET_MULTI_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HSET multi 2, got '$HSET_MULTI_RESULT'" >&2
+    exit 1
+fi
+
+HSET_MULTI_HMGET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hmget hash multi second)"
+if [[ "$HSET_MULTI_HMGET_RESULT" != $'one\ntwo' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HSET multi fields one/two, got '$HSET_MULTI_HMGET_RESULT'" >&2
+    exit 1
+fi
+
+HSET_MULTI_HDEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hdel hash multi second)"
+if [[ "$HSET_MULTI_HDEL_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HSET multi cleanup delete 2, got '$HSET_MULTI_HDEL_RESULT'" >&2
+    exit 1
+fi
+
 HINCRBY_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hincrby hash counter 2)"
 if [[ "$HINCRBY_RESULT" != "2" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected HINCRBY 2, got '$HINCRBY_RESULT'" >&2

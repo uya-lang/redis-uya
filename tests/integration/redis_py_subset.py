@@ -678,8 +678,8 @@ class RedisPySubsetClient:
     def pexpiretime(self, key: str) -> int:
         return int(self._request(b"PEXPIRETIME", key.encode()))
 
-    def hset(self, key: str, field: str, value: str) -> int:
-        return int(self._request(b"HSET", key.encode(), field.encode(), value.encode()))
+    def hset(self, key: str, *field_values: str) -> int:
+        return int(self._request(b"HSET", key.encode(), *(item.encode() for item in field_values)))
 
     def hget(self, key: str, field: str) -> bytes | None:
         return self._request(b"HGET", key.encode(), field.encode())
@@ -2134,6 +2134,9 @@ def run_smoke() -> None:
             assert client.hexists("hash", "missing") == 0
             assert client.hlen("hash") == 3
             assert client.hmget("hash", "field", "missing", "counter") == [b"value", None, b"2"]
+            assert client.hset("hash", "multi", "one", "second", "two") == 2
+            assert client.hmget("hash", "multi", "second") == [b"one", b"two"]
+            assert client.hdel("hash", "multi", "second") == 2
             assert client.hmset("hash", "multi", "one", "second", "two")
             assert client.hmget("hash", "multi", "second") == [b"one", b"two"]
             assert client.hdel("hash", "multi", "second") == 2

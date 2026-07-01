@@ -1447,7 +1447,10 @@ fn command_executor_growth_write_command(command: &Command) bool {
     if cmd_type == CommandType.command_zadd {
         return command.argc >= 4;
     }
-    if cmd_type == CommandType.command_hset || cmd_type == CommandType.command_hsetnx {
+    if cmd_type == CommandType.command_hset {
+        return command.argc >= 4 && (command.argc % 2usize) == 0;
+    }
+    if cmd_type == CommandType.command_hsetnx {
         return command.argc == 4;
     }
     if cmd_type == CommandType.command_hmset {
@@ -16021,52 +16024,41 @@ fn command_executor_hmget(engine: &Engine, command: &Command, now_ms: u64) Comma
 }
 
 fn command_executor_hset(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
-    if command.argc != 4 {
+    if command.argc < 4 || (command.argc % 2usize) != 0 {
         return command_executor_wrong_arity();
     }
     const key: &[byte] = command_executor_arg(command, 1) catch {
         return command_executor_wrong_arity();
     };
-    const field: &[byte] = command_executor_arg(command, 2) catch {
-        return command_executor_wrong_arity();
-    };
-    const value: &[byte] = command_executor_arg(command, 3) catch {
-        return command_executor_wrong_arity();
+
+    const hash_obj: &RedisObject = command_executor_hash_lookup_or_create(engine, key, now_ms) catch |err| {
+        if err == error.CommandWrongType {
+            return command_executor_wrongtype();
+        }
+        return command_executor_oom();
     };
 
-    const existing: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
-        const hash_obj: &RedisObject = create_hash_object() catch {
-            return command_executor_oom();
+    var added: i64 = 0;
+    var index: usize = 2;
+    while index < command.argc {
+        const field: &[byte] = command_executor_arg(command, index) catch {
+            return command_executor_wrong_arity();
+        };
+        const value: &[byte] = command_executor_arg(command, index + 1) catch {
+            return command_executor_wrong_arity();
         };
         const inserted: bool = hash_object_set_field(hash_obj, field, value) catch |err| {
-            object_free(hash_obj);
             if err == error.AllocOutOfMemory {
                 return command_executor_oom();
             }
             return command_executor_error(&"ERR hash set failed"[0: 19]);
         };
-        _ = set_key_at(engine, key, hash_obj, now_ms) catch {
-            object_free(hash_obj);
-            return command_executor_oom();
-        };
-        _ = inserted;
-        return command_executor_integer(1);
-    };
-
-    if existing.obj_type != ObjectType.object_hash {
-        return command_executor_wrongtype();
-    }
-
-    const inserted: bool = hash_object_set_field(existing, field, value) catch |err| {
-        if err == error.AllocOutOfMemory {
-            return command_executor_oom();
+        if inserted {
+            added = added + 1;
         }
-        return command_executor_error(&"ERR hash set failed"[0: 19]);
-    };
-    if inserted {
-        return command_executor_integer(1);
+        index = index + 2;
     }
-    return command_executor_integer(0);
+    return command_executor_integer(added);
 }
 
 fn command_executor_hmset(engine: &Engine, command: &Command, now_ms: u64) CommandReply {

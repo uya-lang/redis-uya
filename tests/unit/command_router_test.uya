@@ -916,7 +916,7 @@ export fn test_command_router_lookup_and_case() !void {
 
     const hset: CommandInfo = try command_router_lookup(&router, &"HSET"[0: 4]);
     try assert_eq_i32(hset.cmd_type as i32, CommandType.command_hset as i32);
-    try assert_eq_i32(hset.arity, 4);
+    try assert_eq_i32(hset.arity, -4);
 
     const hincrby: CommandInfo = try command_router_lookup(&router, &"HINCRBY"[0: 7]);
     try assert_eq_i32(hincrby.cmd_type as i32, CommandType.command_hincrby as i32);
@@ -1425,6 +1425,7 @@ export fn test_command_router_arity_validation() !void {
     try command_validate_arity(&incrbyfloat, 3);
     try command_validate_arity(&hget, 3);
     try command_validate_arity(&hset, 4);
+    try command_validate_arity(&hset, 6);
     try command_validate_arity(&hincrby, 4);
     try command_validate_arity(&hincrbyfloat, 4);
     try command_validate_arity(&hkeys, 2);
@@ -1532,6 +1533,15 @@ export fn test_command_router_arity_validation() !void {
         return;
     };
     try assert_true(saw_hmset_wrong);
+
+    var saw_hset_wrong: bool = false;
+    _ = command_validate_arity(&hset, 5) catch |err| {
+        if err == error.CommandWrongArity {
+            saw_hset_wrong = true;
+        }
+        return;
+    };
+    try assert_true(saw_hset_wrong);
 }
 
 export fn test_command_router_unknown_command() !void {

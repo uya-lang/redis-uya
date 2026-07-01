@@ -448,6 +448,25 @@ GETEX key PXAT unix-time-milliseconds
 - `EXAT` / `PXAT` 使用绝对时间；若时间点已到或已过，会在返回当前值后删除 key
 - AOF 中只写入 TTL / `PERSIST` 状态变更；相对 TTL 选项会折算成绝对 `PEXPIREAT`
 
+### `HSET`
+
+格式：
+
+```text
+HSET key field value [field value ...]
+```
+
+返回：
+
+- 返回本次新创建的 field 数量
+- 覆盖已有 field 不计入返回值
+
+说明：
+
+- key 不存在时会创建 hash
+- key 存在但不是 hash 时返回 `WRONGTYPE`
+- 参数数量必须为 key 后接一组或多组 field/value
+
 ### `HINCRBY`
 
 格式：

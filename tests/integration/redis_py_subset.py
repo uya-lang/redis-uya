@@ -752,6 +752,16 @@ class RedisPySubsetClient:
         parts.extend([b"FIELDS", b"1", field.encode(), value.encode()])
         return int(self._request(*parts))
 
+    def hexpire(self, key: str, seconds: int, *fields: str, option: bytes | None = None) -> list[int]:
+        parts: list[bytes] = [b"HEXPIRE", key.encode(), str(seconds).encode()]
+        if option is not None:
+            parts.append(option)
+        parts.extend([b"FIELDS", str(len(fields)).encode()])
+        parts.extend(field.encode() for field in fields)
+        result = self._request(*parts)
+        assert isinstance(result, list)
+        return [int(item) for item in result]
+
     def httl(self, key: str, *fields: str) -> list[int]:
         result = self._request(
             b"HTTL",
@@ -2100,7 +2110,10 @@ def run_smoke() -> None:
             assert client.hget("hash", "field") == b"value"
             assert client.hsetex("hash", "fresh", "one", option=b"EX", option_value=b"10") == 1
             assert client.hget("hash", "fresh") == b"one"
-            assert client.hdel("hash", "fresh") == 1
+            assert client.hexpire("hash", 10, "field", "missing") == [1, -2]
+            assert client.hexpire("hash", 10, "field", option=b"XX") == [0]
+            assert client.hexpire("hash", 0, "fresh", option=b"NX") == [2]
+            assert client.hget("hash", "fresh") is None
             assert client.httl("hash", "field", "missing") == [-1, -2]
             assert client.hpttl("hash", "field", "missing") == [-1, -2]
             assert client.hexpiretime("hash", "field") == [-1]

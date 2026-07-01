@@ -1,7 +1,7 @@
 # redis-uya command matrix
 
 > version: v0.9.1-dev
-> date: 2026-06-30
+> date: 2026-07-01
 > source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`
 > runtime source: `src/command/catalog_generated.uya`
 
@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 196 | 6 | 3 | 14 |
+| Tier A: standalone core | 365 | 259 | 146 | 197 | 6 | 3 | 13 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `203` |
+| `partial` | `204` |
 | `standalone-error` | `32` |
 | `alias` | `3` |
-| `deferred` | `167` |
+| `deferred` | `166` |
 
 ## Group counts
 
@@ -292,7 +292,7 @@
 | `hdel` | `hash` | `full` | `-` | `-3` | `-` | `no` | `@write, @hash, @fast` |
 | `hello` | `connection` | `partial` | `-` | `-1` | `-` | `no` | `@fast, @connection` |
 | `hexists` | `hash` | `full` | `-` | `3` | `-` | `no` | `@read, @hash, @fast` |
-| `hexpire` | `hash` | `deferred` | `v0.9.1` | `-6` | `-` | `no` | `@write, @hash, @fast` |
+| `hexpire` | `hash` | `partial` | `-` | `-6` | `-` | `no` | `@write, @hash, @fast` |
 | `hexpireat` | `hash` | `deferred` | `v0.9.1` | `-6` | `-` | `no` | `@write, @hash, @fast` |
 | `hexpiretime` | `hash` | `partial` | `-` | `-5` | `-` | `no` | `@read, @hash, @fast` |
 | `hget` | `hash` | `full` | `-` | `3` | `-` | `no` | `@read, @hash, @fast` |

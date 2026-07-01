@@ -2406,9 +2406,27 @@ if [[ "$HSETEX_GET_RESULT" != "one" ]]; then
     exit 1
 fi
 
-HSETEX_CLEANUP_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hdel hash fresh)"
-if [[ "$HSETEX_CLEANUP_RESULT" != "1" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected HSETEX cleanup 1, got '$HSETEX_CLEANUP_RESULT'" >&2
+HEXPIRE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hexpire hash 10 fields 2 field missing)"
+if [[ "$HEXPIRE_RESULT" != $'1\n-2' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HEXPIRE 1/-2, got '$HEXPIRE_RESULT'" >&2
+    exit 1
+fi
+
+HEXPIRE_XX_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hexpire hash 10 xx fields 1 field)"
+if [[ "$HEXPIRE_XX_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HEXPIRE XX 0, got '$HEXPIRE_XX_RESULT'" >&2
+    exit 1
+fi
+
+HEXPIRE_DELETE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hexpire hash 0 nx fields 1 fresh)"
+if [[ "$HEXPIRE_DELETE_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HEXPIRE delete 2, got '$HEXPIRE_DELETE_RESULT'" >&2
+    exit 1
+fi
+
+HEXPIRE_GET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hget hash fresh)"
+if [[ -n "$HEXPIRE_GET_RESULT" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HEXPIRE to delete fresh, got '$HEXPIRE_GET_RESULT'" >&2
     exit 1
 fi
 

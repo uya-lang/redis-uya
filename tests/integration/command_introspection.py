@@ -206,6 +206,14 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"unexpected COMMAND LIST hget* result: {listed_hget!r}")
 
+            listed_hexpire = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"HEXP*")
+            if (
+                not isinstance(listed_hexpire, list)
+                or b"hexpire" not in listed_hexpire
+                or b"hexpiretime" not in listed_hexpire
+            ):
+                raise AssertionError(f"unexpected COMMAND LIST hexp* result: {listed_hexpire!r}")
+
             listed_restore = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"RESTORE*")
             if (
                 not isinstance(listed_restore, list)
@@ -326,6 +334,9 @@ def run_smoke() -> None:
                 raise AssertionError(f"COMMAND INFO HGETDEL returned wrong payload: {info!r}")
             if not isinstance(info[7], list) or info[7][0] != b"hgetex":
                 raise AssertionError(f"COMMAND INFO HGETEX returned wrong payload: {info!r}")
+            hexpire_info = send_command(sock, b"COMMAND", b"INFO", b"HEXPIRE")
+            if not isinstance(hexpire_info, list) or len(hexpire_info) != 1 or hexpire_info[0][0] != b"hexpire":
+                raise AssertionError(f"COMMAND INFO HEXPIRE returned wrong payload: {hexpire_info!r}")
             if not isinstance(info[8], list) or info[8][0] != b"restore-asking":
                 raise AssertionError(f"COMMAND INFO RESTORE-ASKING returned wrong payload: {info!r}")
             if not isinstance(info[9], list) or info[9][0] != b"hrandfield":
@@ -1281,6 +1292,10 @@ def run_smoke() -> None:
             if hgetex_getkeys != [b"hash"]:
                 raise AssertionError(f"unexpected COMMAND GETKEYS HGETEX result: {hgetex_getkeys!r}")
 
+            hexpire_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"HEXPIRE", b"hash", b"10", b"FIELDS", b"1", b"field")
+            if hexpire_getkeys != [b"hash"]:
+                raise AssertionError(f"unexpected COMMAND GETKEYS HEXPIRE result: {hexpire_getkeys!r}")
+
             msetex_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"MSETEX", b"2", b"a", b"1", b"b", b"2", b"PX", b"1000")
             if msetex_getkeys != [b"a", b"b"]:
                 raise AssertionError(f"unexpected COMMAND GETKEYS MSETEX result: {msetex_getkeys!r}")
@@ -1362,6 +1377,17 @@ def run_smoke() -> None:
                 or b"access" not in hgetex_getkeysandflags[0][1]
             ):
                 raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS HGETEX keys: {hgetex_getkeysandflags!r}")
+
+            hexpire_getkeysandflags = send_command(sock, b"COMMAND", b"GETKEYSANDFLAGS", b"HEXPIRE", b"hash", b"10", b"FIELDS", b"1", b"field")
+            if (
+                not isinstance(hexpire_getkeysandflags, list)
+                or len(hexpire_getkeysandflags) != 1
+                or hexpire_getkeysandflags[0][0] != b"hash"
+                or b"RW" not in hexpire_getkeysandflags[0][1]
+                or b"access" not in hexpire_getkeysandflags[0][1]
+                or b"update" not in hexpire_getkeysandflags[0][1]
+            ):
+                raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS HEXPIRE keys: {hexpire_getkeysandflags!r}")
 
             msetex_getkeysandflags = send_command(sock, b"COMMAND", b"GETKEYSANDFLAGS", b"MSETEX", b"2", b"a", b"1", b"b", b"2", b"PX", b"1000")
             if (

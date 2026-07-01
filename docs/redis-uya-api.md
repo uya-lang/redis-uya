@@ -619,13 +619,14 @@ HSETEX key [FNX|FXX] [EX seconds|PX milliseconds|EXAT unix-time-seconds|PXAT uni
 - `numfields` 必须为正整数，并且必须与后续 field/value 数量一致
 - key 存在但不是 hash 时返回 `WRONGTYPE`
 
-### `HEXPIRE` / `HPEXPIRE`
+### `HEXPIRE` / `HPEXPIRE` / `HEXPIREAT`
 
 格式：
 
 ```text
 HEXPIRE key seconds [NX|XX|GT|LT] FIELDS numfields field [field ...]
 HPEXPIRE key milliseconds [NX|XX|GT|LT] FIELDS numfields field [field ...]
+HEXPIREAT key unix-time-seconds [NX|XX|GT|LT] FIELDS numfields field [field ...]
 ```
 
 返回：
@@ -633,12 +634,12 @@ HPEXPIRE key milliseconds [NX|XX|GT|LT] FIELDS numfields field [field ...]
 - 返回与请求 field 顺序一致的 Integer Array
 - field 存在且条件允许设置过期时间：`1`
 - field 存在但 `XX` / `GT` 等条件不满足：`0`
-- `seconds <= 0` 或 `milliseconds <= 0` 且条件允许时删除该 field：`2`
+- 相对 TTL `<= 0` 或绝对时间戳已到期且条件允许时删除该 field：`2`
 - field 或 key 不存在：`-2`
 
 说明：
 
-- 当前实现为 partial，支持 `NX` / `XX` / `GT` / `LT` 条件、相对 TTL 整数校验、field 删除和数组回复，但尚未保存真实 hash field TTL 元数据，因此正 TTL 不会触发后续 field 级过期
+- 当前实现为 partial，支持 `NX` / `XX` / `GT` / `LT` 条件、相对 TTL / 绝对秒时间戳整数校验、field 删除和数组回复，但尚未保存真实 hash field TTL 元数据，因此未来过期时间不会触发后续 field 级过期
 - 在无 field TTL 元数据场景下，存在 field 视为无过期时间：`NX` / `LT` 可以匹配，`XX` / `GT` 不匹配
 - `numfields` 必须为正整数，并且必须与后续 field 数量一致
 - key 存在但不是 hash 时返回 `WRONGTYPE`
@@ -682,7 +683,7 @@ HPEXPIRETIME key FIELDS numfields field [field ...]
 说明：
 
 - 当前实现为 partial，尚未保存真实 hash field TTL 元数据，因此不会返回正绝对过期时间
-- `HEXPIRETIME` 与 `HPEXPIRETIME` 只覆盖无 field TTL 元数据场景的查询兼容面，不代表 `HEXPIRE/HPEXPIRE` 正 TTL 已保存真实 field TTL 元数据
+- `HEXPIRETIME` 与 `HPEXPIRETIME` 只覆盖无 field TTL 元数据场景的查询兼容面，不代表 `HEXPIRE/HPEXPIRE/HEXPIREAT` 未来过期时间已保存真实 field TTL 元数据
 
 ### `HPERSIST`
 

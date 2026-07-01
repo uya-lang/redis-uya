@@ -15761,7 +15761,7 @@ fn command_executor_hash_field_ttl_array(engine: &Engine, command: &Command, now
     return command_executor_owned_raw(out.buf[0: out.len]);
 }
 
-fn command_executor_hash_field_expire_partial(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+fn command_executor_hash_field_expire_partial(engine: &Engine, command: &Command, now_ms: u64, time_mode: i32) CommandReply {
     if command.argc < 6 {
         return command_executor_wrong_arity();
     }
@@ -15774,6 +15774,13 @@ fn command_executor_hash_field_expire_partial(engine: &Engine, command: &Command
     const ttl_value: i64 = command_executor_parse_i64(ttl_data) catch {
         return command_executor_invalid_integer();
     };
+    var delete_immediately: bool = false;
+    if time_mode == 1 {
+        const now_seconds: i64 = (now_ms / 1000u64) as i64;
+        delete_immediately = ttl_value <= now_seconds;
+    } else {
+        delete_immediately = ttl_value <= 0;
+    }
 
     var condition_mode: i32 = 0;
     var index: usize = 3;
@@ -15854,7 +15861,7 @@ fn command_executor_hash_field_expire_partial(engine: &Engine, command: &Command
                 }
                 if !condition_matches {
                     value = 0;
-                } else if ttl_value <= 0 {
+                } else if delete_immediately {
                     const deleted: bool = hash_object_delete_field(obj, field) catch {
                         return command_executor_wrongtype();
                     };
@@ -18876,6 +18883,7 @@ fn command_executor_command_key_flags(info: &CommandInfo, key_ordinal: usize) &[
         info.cmd_type == CommandType.command_increx ||
         info.cmd_type == CommandType.command_incrbyfloat ||
         info.cmd_type == CommandType.command_hexpire ||
+        info.cmd_type == CommandType.command_hexpireat ||
         info.cmd_type == CommandType.command_hpexpire ||
         info.cmd_type == CommandType.command_hincrby ||
         info.cmd_type == CommandType.command_hincrbyfloat ||
@@ -20432,7 +20440,10 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
     }
     if command.info.cmd_type == CommandType.command_hexpire ||
         command.info.cmd_type == CommandType.command_hpexpire {
-        return command_executor_hash_field_expire_partial(engine, command, now_ms);
+        return command_executor_hash_field_expire_partial(engine, command, now_ms, 0);
+    }
+    if command.info.cmd_type == CommandType.command_hexpireat {
+        return command_executor_hash_field_expire_partial(engine, command, now_ms, 1);
     }
     if command.info.cmd_type == CommandType.command_httl ||
         command.info.cmd_type == CommandType.command_hpttl ||

@@ -762,6 +762,16 @@ class RedisPySubsetClient:
         assert isinstance(result, list)
         return [int(item) for item in result]
 
+    def hexpireat(self, key: str, unix_seconds: int, *fields: str, option: bytes | None = None) -> list[int]:
+        parts: list[bytes] = [b"HEXPIREAT", key.encode(), str(unix_seconds).encode()]
+        if option is not None:
+            parts.append(option)
+        parts.extend([b"FIELDS", str(len(fields)).encode()])
+        parts.extend(field.encode() for field in fields)
+        result = self._request(*parts)
+        assert isinstance(result, list)
+        return [int(item) for item in result]
+
     def hpexpire(self, key: str, milliseconds: int, *fields: str, option: bytes | None = None) -> list[int]:
         parts: list[bytes] = [b"HPEXPIRE", key.encode(), str(milliseconds).encode()]
         if option is not None:
@@ -2129,6 +2139,12 @@ def run_smoke() -> None:
             assert client.hpexpire("hash", 100, "field", option=b"XX") == [0]
             assert client.hpexpire("hash", 0, "freshms", option=b"NX") == [2]
             assert client.hget("hash", "freshms") is None
+            assert client.hset("hash", "freshat", "one") == 1
+            future_seconds = int(time.time()) + 60
+            assert client.hexpireat("hash", future_seconds, "field", "missing") == [1, -2]
+            assert client.hexpireat("hash", future_seconds, "field", option=b"XX") == [0]
+            assert client.hexpireat("hash", 1, "freshat", option=b"NX") == [2]
+            assert client.hget("hash", "freshat") is None
             assert client.httl("hash", "field", "missing") == [-1, -2]
             assert client.hpttl("hash", "field", "missing") == [-1, -2]
             assert client.hexpiretime("hash", "field") == [-1]

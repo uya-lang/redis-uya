@@ -210,6 +210,7 @@ def run_smoke() -> None:
             if (
                 not isinstance(listed_hexpire, list)
                 or b"hexpire" not in listed_hexpire
+                or b"hexpireat" not in listed_hexpire
                 or b"hexpiretime" not in listed_hexpire
             ):
                 raise AssertionError(f"unexpected COMMAND LIST hexp* result: {listed_hexpire!r}")
@@ -345,6 +346,9 @@ def run_smoke() -> None:
             hexpire_info = send_command(sock, b"COMMAND", b"INFO", b"HEXPIRE")
             if not isinstance(hexpire_info, list) or len(hexpire_info) != 1 or hexpire_info[0][0] != b"hexpire":
                 raise AssertionError(f"COMMAND INFO HEXPIRE returned wrong payload: {hexpire_info!r}")
+            hexpireat_info = send_command(sock, b"COMMAND", b"INFO", b"HEXPIREAT")
+            if not isinstance(hexpireat_info, list) or len(hexpireat_info) != 1 or hexpireat_info[0][0] != b"hexpireat":
+                raise AssertionError(f"COMMAND INFO HEXPIREAT returned wrong payload: {hexpireat_info!r}")
             hpexpire_info = send_command(sock, b"COMMAND", b"INFO", b"HPEXPIRE")
             if not isinstance(hpexpire_info, list) or len(hpexpire_info) != 1 or hpexpire_info[0][0] != b"hpexpire":
                 raise AssertionError(f"COMMAND INFO HPEXPIRE returned wrong payload: {hpexpire_info!r}")
@@ -1307,6 +1311,10 @@ def run_smoke() -> None:
             if hexpire_getkeys != [b"hash"]:
                 raise AssertionError(f"unexpected COMMAND GETKEYS HEXPIRE result: {hexpire_getkeys!r}")
 
+            hexpireat_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"HEXPIREAT", b"hash", b"2000000000", b"FIELDS", b"1", b"field")
+            if hexpireat_getkeys != [b"hash"]:
+                raise AssertionError(f"unexpected COMMAND GETKEYS HEXPIREAT result: {hexpireat_getkeys!r}")
+
             hpexpire_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"HPEXPIRE", b"hash", b"100", b"FIELDS", b"1", b"field")
             if hpexpire_getkeys != [b"hash"]:
                 raise AssertionError(f"unexpected COMMAND GETKEYS HPEXPIRE result: {hpexpire_getkeys!r}")
@@ -1403,6 +1411,17 @@ def run_smoke() -> None:
                 or b"update" not in hexpire_getkeysandflags[0][1]
             ):
                 raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS HEXPIRE keys: {hexpire_getkeysandflags!r}")
+
+            hexpireat_getkeysandflags = send_command(sock, b"COMMAND", b"GETKEYSANDFLAGS", b"HEXPIREAT", b"hash", b"2000000000", b"FIELDS", b"1", b"field")
+            if (
+                not isinstance(hexpireat_getkeysandflags, list)
+                or len(hexpireat_getkeysandflags) != 1
+                or hexpireat_getkeysandflags[0][0] != b"hash"
+                or b"RW" not in hexpireat_getkeysandflags[0][1]
+                or b"access" not in hexpireat_getkeysandflags[0][1]
+                or b"update" not in hexpireat_getkeysandflags[0][1]
+            ):
+                raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS HEXPIREAT keys: {hexpireat_getkeysandflags!r}")
 
             hpexpire_getkeysandflags = send_command(sock, b"COMMAND", b"GETKEYSANDFLAGS", b"HPEXPIRE", b"hash", b"100", b"FIELDS", b"1", b"field")
             if (

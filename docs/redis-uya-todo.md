@@ -430,6 +430,7 @@
 - [x] Hash 第二批视图：`HKEYS`、`HVALS`、`HGETALL`、`HRANDFIELD`
 - [x] Hash 第三批扫描：`HSCAN`
 - [x] Hash 字段扩展：`HGETDEL`
+- [x] Hash legacy alias：`HMSET` 多 field 写入返回 `OK`，覆盖错类型、参数数量、`COMMAND*` 和 redis-py/redis-cli smoke
 - [x] Hash field TTL 兼容面：`HGETEX`、`HSETEX`、`HEXPIRE`、`HPEXPIRE`、`HEXPIREAT`、`HPEXPIREAT`、`HTTL`、`HPTTL`、`HEXPIRETIME`、`HPEXPIRETIME`、`HPERSIST` 已补无 field TTL 元数据场景的 partial；`HGETEX` 返回 field 值并校验 TTL option，`HSETEX` 写入 field 值并校验 `FNX/FXX` 与 TTL option，`HEXPIRE/HPEXPIRE/HEXPIREAT/HPEXPIREAT` 校验 `NX/XX/GT/LT` 并支持相对 TTL `<= 0` 或绝对时间戳已到期时删除 field，TTL 查询存在 field 返回 `-1`，缺失 field/key 返回 `-2`，真实 field TTL 写入和过期仍待后续补齐
 - [x] List 第一批基础：`RPUSH`、`RPOP`、`LINDEX`、`LSET`、`LLEN`
 - [x] List 第二批：`LINSERT`、`LTRIM`、`LREM`

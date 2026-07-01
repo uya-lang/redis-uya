@@ -202,6 +202,7 @@ export enum CommandType {
     command_hsetex,
     command_hlen,
     command_hmget,
+    command_hmset,
     command_hpersist,
     command_hpexpire,
     command_hpexpireat,
@@ -292,7 +293,7 @@ export const COMMAND_FLAG_READONLY: u64 = 1u64;
 export const COMMAND_FLAG_WRITE: u64 = 2u64;
 export const COMMAND_FLAG_FAST: u64 = 4u64;
 
-const MIN_COMMAND_COUNT: usize = 257;
+const MIN_COMMAND_COUNT: usize = 258;
 
 fn command_router_name_eq(a: &[byte], b: &[byte]) bool {
     return bytes_ascii_case_eq(a, b);
@@ -1102,6 +1103,9 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
     }
     if index == 256 {
         return command_router_info(CommandType.command_hpexpireat, &"HPEXPIREAT"[0: 10], -6, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 257 {
+        return command_router_info(CommandType.command_hmset, &"HMSET"[0: 5], -4, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     return error.CommandUnknown;
 }

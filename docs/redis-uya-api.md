@@ -746,6 +746,24 @@ HMGET key field [field ...]
 - 缺失 field 返回 Null Bulk
 - key 不存在时，所有请求 field 都返回 Null Bulk
 
+### `HMSET`
+
+格式：
+
+```text
+HMSET key field value [field value ...]
+```
+
+返回：
+
+- 写入成功：`OK`
+
+说明：
+
+- key 不存在时会创建 hash
+- key 存在但不是 hash 时返回 `WRONGTYPE`
+- 参数数量必须为 key 后接一组或多组 field/value
+
 ### `HSETNX`
 
 格式：

@@ -2334,6 +2334,24 @@ if [[ "$HMGET_RESULT" != $'value\n\n2' ]]; then
     exit 1
 fi
 
+HMSET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hmset hash multi one second two)"
+if [[ "$HMSET_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HMSET OK, got '$HMSET_RESULT'" >&2
+    exit 1
+fi
+
+HMSET_HMGET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hmget hash multi second)"
+if [[ "$HMSET_HMGET_RESULT" != $'one\ntwo' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HMSET fields one/two, got '$HMSET_HMGET_RESULT'" >&2
+    exit 1
+fi
+
+HMSET_HDEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hdel hash multi second)"
+if [[ "$HMSET_HDEL_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HMSET cleanup delete 2, got '$HMSET_HDEL_RESULT'" >&2
+    exit 1
+fi
+
 HSETNX_NEW_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hsetnx hash extra value)"
 if [[ "$HSETNX_NEW_RESULT" != "1" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected HSETNX new 1, got '$HSETNX_NEW_RESULT'" >&2

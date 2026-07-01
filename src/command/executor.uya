@@ -1450,6 +1450,9 @@ fn command_executor_growth_write_command(command: &Command) bool {
     if cmd_type == CommandType.command_hset || cmd_type == CommandType.command_hsetnx {
         return command.argc == 4;
     }
+    if cmd_type == CommandType.command_hmset {
+        return command.argc >= 4 && (command.argc % 2usize) == 0;
+    }
     if cmd_type == CommandType.command_expire || cmd_type == CommandType.command_pexpireat {
         return command.argc == 3;
     }
@@ -16066,6 +16069,40 @@ fn command_executor_hset(engine: &Engine, command: &Command, now_ms: u64) Comman
     return command_executor_integer(0);
 }
 
+fn command_executor_hmset(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 4 || (command.argc % 2usize) != 0 {
+        return command_executor_wrong_arity();
+    }
+    const key: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+
+    const hash_obj: &RedisObject = command_executor_hash_lookup_or_create(engine, key, now_ms) catch |err| {
+        if err == error.CommandWrongType {
+            return command_executor_wrongtype();
+        }
+        return command_executor_oom();
+    };
+
+    var index: usize = 2;
+    while index < command.argc {
+        const field: &[byte] = command_executor_arg(command, index) catch {
+            return command_executor_wrong_arity();
+        };
+        const value: &[byte] = command_executor_arg(command, index + 1) catch {
+            return command_executor_wrong_arity();
+        };
+        _ = hash_object_set_field(hash_obj, field, value) catch |err| {
+            if err == error.AllocOutOfMemory {
+                return command_executor_oom();
+            }
+            return command_executor_error(&"ERR hash set failed"[0: 19]);
+        };
+        index = index + 2;
+    }
+    return command_executor_simple(&"OK"[0: 2]);
+}
+
 fn command_executor_hsetnx(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
     if command.argc != 4 {
         return command_executor_wrong_arity();
@@ -18925,6 +18962,7 @@ fn command_executor_command_key_flags(info: &CommandInfo, key_ordinal: usize) &[
         info.cmd_type == CommandType.command_pexpireat ||
         info.cmd_type == CommandType.command_lset ||
         info.cmd_type == CommandType.command_hset ||
+        info.cmd_type == CommandType.command_hmset ||
         info.cmd_type == CommandType.command_zadd {
         return &"RW|update"[0: 9];
     }
@@ -20431,6 +20469,9 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
     }
     if command.info.cmd_type == CommandType.command_hset {
         return command_executor_hset(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_hmset {
+        return command_executor_hmset(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_hdel {
         return command_executor_hdel(engine, command, now_ms);

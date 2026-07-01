@@ -858,6 +858,9 @@ class RedisPySubsetClient:
         assert isinstance(result, list)
         return result
 
+    def hmset(self, key: str, *field_values: str) -> bool:
+        return self._request(b"HMSET", key.encode(), *(item.encode() for item in field_values)) == "OK"
+
     def hsetnx(self, key: str, field: str, value: str) -> int:
         return int(self._request(b"HSETNX", key.encode(), field.encode(), value.encode()))
 
@@ -2131,6 +2134,9 @@ def run_smoke() -> None:
             assert client.hexists("hash", "missing") == 0
             assert client.hlen("hash") == 3
             assert client.hmget("hash", "field", "missing", "counter") == [b"value", None, b"2"]
+            assert client.hmset("hash", "multi", "one", "second", "two")
+            assert client.hmget("hash", "multi", "second") == [b"one", b"two"]
+            assert client.hdel("hash", "multi", "second") == 2
             assert client.hsetnx("hash", "extra", "value") == 1
             assert client.hsetnx("hash", "field", "next") == 0
             assert client.hstrlen("hash", "field") == 5

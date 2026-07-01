@@ -3991,6 +3991,28 @@ export fn test_command_hdel_hexists_hlen_hmget_hsetnx_hstrlen() !void {
     command_reply_cleanup(&hmget_reply);
     resp_value_free(&hmget_parsed.value);
 
+    var hmset_parsed: RespParseResult = try parse_resp2(&"*6\r\n$5\r\nHMSET\r\n$4\r\nhash\r\n$5\r\nmulti\r\n$3\r\none\r\n$6\r\nsecond\r\n$3\r\ntwo\r\n"[0: 66]);
+    const hmset_command: Command = try command_executor_test_command(&router, &hmset_parsed);
+    const hmset_reply: CommandReply = command_execute_at(&engine, &hmset_command, 1000u64);
+    try assert_eq_i32(hmset_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(hmset_reply.data, &"OK"[0: 2]));
+    resp_value_free(&hmset_parsed.value);
+
+    var hmset_hmget_parsed: RespParseResult = try parse_resp2(&"*4\r\n$5\r\nHMGET\r\n$4\r\nhash\r\n$5\r\nmulti\r\n$6\r\nsecond\r\n"[0: 48]);
+    const hmset_hmget_command: Command = try command_executor_test_command(&router, &hmset_hmget_parsed);
+    var hmset_hmget_reply: CommandReply = command_execute_at(&engine, &hmset_hmget_command, 1000u64);
+    const hmset_hmget_len: usize = try connection_encode_reply(&hmset_hmget_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: hmset_hmget_len], &"*2\r\n$3\r\none\r\n$3\r\ntwo\r\n"[0: 22]));
+    command_reply_cleanup(&hmset_hmget_reply);
+    resp_value_free(&hmset_hmget_parsed.value);
+
+    var hmset_hdel_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nHDEL\r\n$4\r\nhash\r\n$5\r\nmulti\r\n$6\r\nsecond\r\n"[0: 47]);
+    const hmset_hdel_command: Command = try command_executor_test_command(&router, &hmset_hdel_parsed);
+    const hmset_hdel_reply: CommandReply = command_execute_at(&engine, &hmset_hdel_command, 1000u64);
+    try assert_eq_i32(hmset_hdel_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(hmset_hdel_reply.integer as i32, 2);
+    resp_value_free(&hmset_hdel_parsed.value);
+
     var hsetnx_new_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nHSETNX\r\n$4\r\nhash\r\n$5\r\nextra\r\n$5\r\nvalue\r\n"[0: 48]);
     const hsetnx_new_command: Command = try command_executor_test_command(&router, &hsetnx_new_parsed);
     const hsetnx_new_reply: CommandReply = command_execute_at(&engine, &hsetnx_new_command, 1000u64);
@@ -4096,6 +4118,13 @@ export fn test_command_hdel_hexists_hlen_hmget_hsetnx_hstrlen() !void {
     const set_str_command: Command = try command_executor_test_command(&router, &set_str_parsed);
     _ = command_execute_at(&engine, &set_str_command, 1000u64);
     resp_value_free(&set_str_parsed.value);
+
+    var hmset_wrongtype_parsed: RespParseResult = try parse_resp2(&"*4\r\n$5\r\nHMSET\r\n$3\r\nstr\r\n$1\r\nf\r\n$1\r\nv\r\n"[0: 38]);
+    const hmset_wrongtype_command: Command = try command_executor_test_command(&router, &hmset_wrongtype_parsed);
+    const hmset_wrongtype_reply: CommandReply = command_execute_at(&engine, &hmset_wrongtype_command, 1000u64);
+    try assert_eq_i32(hmset_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(hmset_wrongtype_reply.data, &"WRONGTYPE"[0: 9]));
+    resp_value_free(&hmset_wrongtype_parsed.value);
 
     var hgetdel_wrongtype_parsed: RespParseResult = try parse_resp2(&"*5\r\n$7\r\nHGETDEL\r\n$3\r\nstr\r\n$6\r\nFIELDS\r\n$1\r\n1\r\n$5\r\nfield\r\n"[0: 56]);
     const hgetdel_wrongtype_command: Command = try command_executor_test_command(&router, &hgetdel_wrongtype_parsed);

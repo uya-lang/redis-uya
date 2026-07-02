@@ -8,7 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 BIN = ROOT / "build" / "redis-uya"
-RESP2_PUBSUB_RESTRICTED = b"-ERR only SUBSCRIBE / PSUBSCRIBE / UNSUBSCRIBE / PUNSUBSCRIBE / PING / QUIT are allowed in this context\r\n"
+RESP2_PUBSUB_RESTRICTED = b"-ERR only SUBSCRIBE / PSUBSCRIBE / SSUBSCRIBE / UNSUBSCRIBE / PUNSUBSCRIBE / SUNSUBSCRIBE / PING / QUIT are allowed in this context\r\n"
 
 
 def find_free_port() -> int:
@@ -138,6 +138,74 @@ def run_smoke() -> None:
                             b"*3\r\n$6\r\nPUBSUB\r\n$11\r\nSHARDNUMSUB\r\n$6\r\nshard1\r\n",
                             b"*2\r\n$6\r\nshard1\r\n:0\r\n",
                         )
+
+                with connect_with_retry(port, time.monotonic() + 5.0) as shard_sock:
+                    shard_sock.settimeout(2.0)
+                    roundtrip(
+                        shard_sock,
+                        b"*2\r\n$10\r\nSSUBSCRIBE\r\n$6\r\nshard1\r\n",
+                        b"*3\r\n$10\r\nssubscribe\r\n$6\r\nshard1\r\n:1\r\n",
+                    )
+
+                    with connect_with_retry(port, time.monotonic() + 5.0) as info_sock:
+                        info_sock.settimeout(2.0)
+                        roundtrip(
+                            info_sock,
+                            b"*2\r\n$6\r\nPUBSUB\r\n$13\r\nSHARDCHANNELS\r\n",
+                            b"*1\r\n$6\r\nshard1\r\n",
+                        )
+                        roundtrip(
+                            info_sock,
+                            b"*3\r\n$6\r\nPUBSUB\r\n$13\r\nSHARDCHANNELS\r\n$6\r\nshard?\r\n",
+                            b"*1\r\n$6\r\nshard1\r\n",
+                        )
+                        roundtrip(
+                            info_sock,
+                            b"*4\r\n$6\r\nPUBSUB\r\n$11\r\nSHARDNUMSUB\r\n$6\r\nshard1\r\n$5\r\nghost\r\n",
+                            b"*4\r\n$6\r\nshard1\r\n:1\r\n$5\r\nghost\r\n:0\r\n",
+                        )
+
+                    with connect_with_retry(port, time.monotonic() + 5.0) as pub_sock:
+                        pub_sock.settimeout(2.0)
+                        roundtrip(
+                            pub_sock,
+                            b"*3\r\n$8\r\nSPUBLISH\r\n$6\r\nshard1\r\n$6\r\nshello\r\n",
+                            b":1\r\n",
+                        )
+
+                    shard_actual = recv_exact(shard_sock, len(b"*3\r\n$8\r\nsmessage\r\n$6\r\nshard1\r\n$6\r\nshello\r\n"))
+                    if shard_actual != b"*3\r\n$8\r\nsmessage\r\n$6\r\nshard1\r\n$6\r\nshello\r\n":
+                        raise AssertionError(f"unexpected shard pubsub message: {shard_actual!r}")
+
+                    with connect_with_retry(port, time.monotonic() + 5.0) as pub_sock:
+                        pub_sock.settimeout(2.0)
+                        roundtrip(
+                            pub_sock,
+                            b"*3\r\n$7\r\nPUBLISH\r\n$6\r\nshard1\r\n$6\r\nnormal\r\n",
+                            b":0\r\n",
+                        )
+
+                    roundtrip(
+                        shard_sock,
+                        b"*2\r\n$12\r\nSUNSUBSCRIBE\r\n$6\r\nshard1\r\n",
+                        b"*3\r\n$12\r\nsunsubscribe\r\n$6\r\nshard1\r\n:0\r\n",
+                    )
+
+                    with connect_with_retry(port, time.monotonic() + 5.0) as pub_sock:
+                        pub_sock.settimeout(2.0)
+                        roundtrip(
+                            pub_sock,
+                            b"*3\r\n$8\r\nSPUBLISH\r\n$6\r\nshard1\r\n$5\r\nfinal\r\n",
+                            b":0\r\n",
+                        )
+
+                    shard_sock.settimeout(0.2)
+                    try:
+                        shard_extra = shard_sock.recv(1)
+                    except socket.timeout:
+                        shard_extra = b""
+                    if shard_extra != b"":
+                        raise AssertionError(f"unexpected shard message after sunsubscribe: {shard_extra!r}")
 
                 with connect_with_retry(port, time.monotonic() + 5.0) as pub_sock:
                     pub_sock.settimeout(2.0)

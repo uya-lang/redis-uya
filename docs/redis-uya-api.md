@@ -3635,14 +3635,14 @@ PUBSUB SHARDNUMSUB [shardchannel ...]
 - `CHANNELS`：当前存在直连订阅的频道数组；带 `pattern` 时按 glob 过滤
 - `NUMPAT`：当前 pattern 订阅总数，Integer
 - `NUMSUB`：扁平数组 `[channel, subscriber_count, ...]`，不计 pattern 订阅
-- `SHARDCHANNELS`：当前返回空数组
-- `SHARDNUMSUB`：当前对每个请求 shard channel 返回 `0`
+- `SHARDCHANNELS`：当前存在 shard 订阅的频道数组；带 `pattern` 时按 glob 过滤
+- `SHARDNUMSUB`：扁平数组 `[shardchannel, subscriber_count, ...]`
 
 说明：
 
 - `CHANNELS` 只统计直连频道订阅，不把 pattern 订阅投影为频道
 - `NUMPAT` 统计当前连接注册表里的 pattern 订阅项总数
-- 当前尚未实现 `SSUBSCRIBE/SPUBLISH`，因此 `SHARDCHANNELS/SHARDNUMSUB` 只固化空结果边界
+- `SHARDCHANNELS/SHARDNUMSUB` 只统计 `SSUBSCRIBE` 注册的 shard 频道
 - RESP2 订阅态下 `PUBSUB` 仍不在允许命令集合内
 
 ### `PSUBSCRIBE`
@@ -3691,6 +3691,54 @@ PUNSUBSCRIBE pattern [pattern ...]
 返回：
 
 - 每个 pattern 返回一个取消订阅确认：`["punsubscribe", pattern, remaining_count]`
+
+### `SSUBSCRIBE`
+
+格式：
+
+```text
+SSUBSCRIBE shardchannel [shardchannel ...]
+```
+
+返回：
+
+- 每个 shard channel 返回一个订阅确认：`["ssubscribe", shardchannel, count]`
+
+说明：
+
+- 当前实现为 standalone 连接级 shard 订阅注册表，不做 Cluster slot 路由
+- RESP2 订阅态下允许继续执行 `SSUBSCRIBE/SUNSUBSCRIBE`
+
+### `SUNSUBSCRIBE`
+
+格式：
+
+```text
+SUNSUBSCRIBE
+SUNSUBSCRIBE shardchannel [shardchannel ...]
+```
+
+返回：
+
+- 每个 shard channel 返回一个取消订阅确认：`["sunsubscribe", shardchannel, remaining_count]`
+
+### `SPUBLISH`
+
+格式：
+
+```text
+SPUBLISH shardchannel message
+```
+
+返回：
+
+- 收到消息的 shard 订阅者数量，Integer
+
+说明：
+
+- 订阅者会收到 `["smessage", shardchannel, message]`
+- `SPUBLISH` 只投递给 `SSUBSCRIBE` 订阅者，不投递给普通 `SUBSCRIBE/PSUBSCRIBE`
+- 当前不把 `SPUBLISH` 追加到 AOF，也不复制到 backlog
 
 ### `PUBLISH`
 

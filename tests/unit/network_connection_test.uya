@@ -1932,14 +1932,27 @@ export fn test_connection_process_pubsub_commands() !void {
     try assert_true(network_connection_contains(out[0: psubscribe.response_len], &"chan*"[0: 5]));
     try assert_true(network_connection_contains(out[0: psubscribe.response_len], &":2\r\n"[0: 4]));
 
+    const ssubscribe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$10\r\nSSUBSCRIBE\r\n$6\r\nshard1\r\n"[0: 33], &out[0], 256, 1000u64);
+    try assert_true(network_connection_contains(out[0: ssubscribe.response_len], &"ssubscribe"[0: 10]));
+    try assert_true(network_connection_contains(out[0: ssubscribe.response_len], &"shard1"[0: 6]));
+    try assert_true(network_connection_contains(out[0: ssubscribe.response_len], &":3\r\n"[0: 4]));
+
     const blocked_get: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n"[0: 22], &out[0], 256, 1000u64);
-    try assert_true(network_connection_contains(out[0: blocked_get.response_len], &"only SUBSCRIBE / PSUBSCRIBE / UNSUBSCRIBE / PUNSUBSCRIBE / PING / QUIT are allowed in this context"[0: 98]));
+    try assert_true(network_connection_contains(out[0: blocked_get.response_len], &"only SUBSCRIBE / PSUBSCRIBE / SSUBSCRIBE / UNSUBSCRIBE / PUNSUBSCRIBE / SUNSUBSCRIBE / PING / QUIT are allowed in this context"[0: 126]));
 
     const blocked_publish: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$7\r\nPUBLISH\r\n$5\r\nchan1\r\n$5\r\nhello\r\n"[0: 39], &out[0], 256, 1000u64);
-    try assert_true(network_connection_contains(out[0: blocked_publish.response_len], &"only SUBSCRIBE / PSUBSCRIBE / UNSUBSCRIBE / PUNSUBSCRIBE / PING / QUIT are allowed in this context"[0: 98]));
+    try assert_true(network_connection_contains(out[0: blocked_publish.response_len], &"only SUBSCRIBE / PSUBSCRIBE / SSUBSCRIBE / UNSUBSCRIBE / PUNSUBSCRIBE / SUNSUBSCRIBE / PING / QUIT are allowed in this context"[0: 126]));
+
+    const blocked_spublish: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$8\r\nSPUBLISH\r\n$6\r\nshard1\r\n$5\r\nhello\r\n"[0: 41], &out[0], 256, 1000u64);
+    try assert_true(network_connection_contains(out[0: blocked_spublish.response_len], &"only SUBSCRIBE / PSUBSCRIBE / SSUBSCRIBE / UNSUBSCRIBE / PUNSUBSCRIBE / SUNSUBSCRIBE / PING / QUIT are allowed in this context"[0: 126]));
 
     const ping_subscribed: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$4\r\nPING\r\n"[0: 14], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: ping_subscribed.response_len], &"+PONG\r\n"[0: 7]));
+
+    const sunsubscribe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$12\r\nSUNSUBSCRIBE\r\n$6\r\nshard1\r\n"[0: 35], &out[0], 256, 1000u64);
+    try assert_true(network_connection_contains(out[0: sunsubscribe.response_len], &"sunsubscribe"[0: 12]));
+    try assert_true(network_connection_contains(out[0: sunsubscribe.response_len], &"shard1"[0: 6]));
+    try assert_true(network_connection_contains(out[0: sunsubscribe.response_len], &":2\r\n"[0: 4]));
 
     const punsubscribe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$12\r\nPUNSUBSCRIBE\r\n$5\r\nchan*\r\n"[0: 34], &out[0], 256, 1000u64);
     try assert_true(network_connection_contains(out[0: punsubscribe.response_len], &"punsubscribe"[0: 12]));
@@ -1990,11 +2003,14 @@ export fn test_connection_process_pubsub_introspection() !void {
     sub_tx.client_fd = 21;
     var direct_tx: ConnectionTransaction = connection_transaction_new();
     direct_tx.client_fd = 22;
+    var shard_tx: ConnectionTransaction = connection_transaction_new();
+    shard_tx.client_fd = 24;
     var info_tx: ConnectionTransaction = connection_transaction_new();
     info_tx.client_fd = 23;
     defer {
         connection_transaction_reset(&sub_tx);
         connection_transaction_reset(&direct_tx);
+        connection_transaction_reset(&shard_tx);
         connection_transaction_reset(&info_tx);
         connection_pubsub_reset_for_test();
     }
@@ -2004,6 +2020,7 @@ export fn test_connection_process_pubsub_introspection() !void {
     _ = try connection_process_input_with_transaction_at(&engine, &router, &sub_tx, &"*2\r\n$10\r\nPSUBSCRIBE\r\n$5\r\nchan*\r\n"[0: 32], &out[0], 2048, 1000u64);
     _ = try connection_process_input_with_transaction_at(&engine, &router, &direct_tx, &"*2\r\n$9\r\nSUBSCRIBE\r\n$5\r\nchan1\r\n"[0: 30], &out[0], 2048, 1000u64);
     _ = try connection_process_input_with_transaction_at(&engine, &router, &direct_tx, &"*2\r\n$9\r\nSUBSCRIBE\r\n$3\r\nzed\r\n"[0: 28], &out[0], 2048, 1000u64);
+    _ = try connection_process_input_with_transaction_at(&engine, &router, &shard_tx, &"*2\r\n$10\r\nSSUBSCRIBE\r\n$6\r\nshard1\r\n"[0: 33], &out[0], 2048, 1000u64);
 
     const channels: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &info_tx, &"*2\r\n$6\r\nPUBSUB\r\n$8\r\nCHANNELS\r\n"[0: 30], &out[0], 2048, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: channels.response_len], &"*2\r\n$5\r\nchan1\r\n$3\r\nzed\r\n"[0: 24]));
@@ -2021,10 +2038,13 @@ export fn test_connection_process_pubsub_introspection() !void {
     try assert_true(network_connection_slice_eq(out[0: numsub_empty.response_len], &"*0\r\n"[0: 4]));
 
     const shardchannels: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &info_tx, &"*2\r\n$6\r\nPUBSUB\r\n$13\r\nSHARDCHANNELS\r\n"[0: 36], &out[0], 2048, 1000u64);
-    try assert_true(network_connection_slice_eq(out[0: shardchannels.response_len], &"*0\r\n"[0: 4]));
+    try assert_true(network_connection_slice_eq(out[0: shardchannels.response_len], &"*1\r\n$6\r\nshard1\r\n"[0: 16]));
+
+    const shardchannels_pattern: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &info_tx, &"*3\r\n$6\r\nPUBSUB\r\n$13\r\nSHARDCHANNELS\r\n$6\r\nshard?\r\n"[0: 48], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: shardchannels_pattern.response_len], &"*1\r\n$6\r\nshard1\r\n"[0: 16]));
 
     const shardnumsub: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &info_tx, &"*4\r\n$6\r\nPUBSUB\r\n$11\r\nSHARDNUMSUB\r\n$6\r\nshard1\r\n$6\r\nshard2\r\n"[0: 58], &out[0], 2048, 1000u64);
-    try assert_true(network_connection_slice_eq(out[0: shardnumsub.response_len], &"*4\r\n$6\r\nshard1\r\n:0\r\n$6\r\nshard2\r\n:0\r\n"[0: 36]));
+    try assert_true(network_connection_slice_eq(out[0: shardnumsub.response_len], &"*4\r\n$6\r\nshard1\r\n:1\r\n$6\r\nshard2\r\n:0\r\n"[0: 36]));
 
     const help: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &info_tx, &"*2\r\n$6\r\nPUBSUB\r\n$4\r\nHELP\r\n"[0: 26], &out[0], 2048, 1000u64);
     try assert_true(network_connection_contains(out[0: help.response_len], &"PUBSUB <subcommand> [<arg> [value] [opt] ...]. Subcommands are:"[0: 63]));

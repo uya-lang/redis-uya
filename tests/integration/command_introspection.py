@@ -197,6 +197,14 @@ def run_smoke() -> None:
             if not isinstance(listed_substr, list) or listed_substr != [b"substr"]:
                 raise AssertionError(f"unexpected COMMAND LIST substr result: {listed_substr!r}")
 
+            listed_sharded_pubsub = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"S*SUBSCRIBE")
+            if (
+                not isinstance(listed_sharded_pubsub, list)
+                or b"ssubscribe" not in listed_sharded_pubsub
+                or b"sunsubscribe" not in listed_sharded_pubsub
+            ):
+                raise AssertionError(f"unexpected COMMAND LIST sharded pubsub result: {listed_sharded_pubsub!r}")
+
             listed_hget = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"HGET*")
             if (
                 not isinstance(listed_hget, list)
@@ -351,6 +359,15 @@ def run_smoke() -> None:
             hmset_info = send_command(sock, b"COMMAND", b"INFO", b"HMSET")
             if not isinstance(hmset_info, list) or len(hmset_info) != 1 or hmset_info[0][0] != b"hmset":
                 raise AssertionError(f"COMMAND INFO HMSET returned wrong payload: {hmset_info!r}")
+            sharded_pubsub_info = send_command(sock, b"COMMAND", b"INFO", b"SPUBLISH", b"SSUBSCRIBE", b"SUNSUBSCRIBE")
+            if (
+                not isinstance(sharded_pubsub_info, list)
+                or len(sharded_pubsub_info) != 3
+                or sharded_pubsub_info[0][0] != b"spublish"
+                or sharded_pubsub_info[1][0] != b"ssubscribe"
+                or sharded_pubsub_info[2][0] != b"sunsubscribe"
+            ):
+                raise AssertionError(f"COMMAND INFO sharded pubsub returned wrong payload: {sharded_pubsub_info!r}")
             hexpire_info = send_command(sock, b"COMMAND", b"INFO", b"HEXPIRE")
             if not isinstance(hexpire_info, list) or len(hexpire_info) != 1 or hexpire_info[0][0] != b"hexpire":
                 raise AssertionError(f"COMMAND INFO HEXPIRE returned wrong payload: {hexpire_info!r}")

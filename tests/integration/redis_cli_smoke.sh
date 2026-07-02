@@ -109,6 +109,18 @@ if [[ "$GET_RESULT" != "value" ]]; then
     exit 1
 fi
 
+SPUBLISH_EMPTY_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" spublish shard1 hello)"
+if [[ "$SPUBLISH_EMPTY_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SPUBLISH empty subscriber count 0, got '$SPUBLISH_EMPTY_RESULT'" >&2
+    exit 1
+fi
+
+SHARDNUMSUB_EMPTY_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" pubsub shardnumsub shard1)"
+if [[ "$SHARDNUMSUB_EMPTY_RESULT" != $'shard1\n0' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected PUBSUB SHARDNUMSUB shard1/0, got '$SHARDNUMSUB_EMPTY_RESULT'" >&2
+    exit 1
+fi
+
 DIGEST_SET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" set digest-key "Hello world")"
 if [[ "$DIGEST_SET_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected DIGEST seed SET OK, got '$DIGEST_SET_RESULT'" >&2

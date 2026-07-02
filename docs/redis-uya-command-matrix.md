@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 200 | 6 | 3 | 10 |
+| Tier A: standalone core | 365 | 259 | 146 | 203 | 6 | 3 | 7 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `207` |
+| `partial` | `210` |
 | `standalone-error` | `32` |
 | `alias` | `3` |
-| `deferred` | `163` |
+| `deferred` | `160` |
 
 ## Group counts
 
@@ -482,17 +482,17 @@
 | `sort` | `generic` | `partial` | `-` | `-2` | `-` | `yes` | `@write, @set, @sortedset, @list, @slow, @dangerous` |
 | `sort_ro` | `generic` | `full` | `-` | `-2` | `-` | `yes` | `@read, @set, @sortedset, @list, @slow, @dangerous` |
 | `spop` | `set` | `full` | `-` | `-2` | `-` | `no` | `@write, @set, @fast` |
-| `spublish` | `pubsub` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@pubsub, @fast` |
+| `spublish` | `pubsub` | `partial` | `-` | `3` | `-` | `no` | `@pubsub, @fast` |
 | `srandmember` | `set` | `full` | `-` | `-2` | `-` | `no` | `@read, @set, @slow` |
 | `srem` | `set` | `full` | `-` | `-3` | `-` | `no` | `@write, @set, @fast` |
 | `sscan` | `set` | `full` | `-` | `-3` | `-` | `yes` | `@read, @set, @slow` |
-| `ssubscribe` | `pubsub` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@pubsub, @slow` |
+| `ssubscribe` | `pubsub` | `partial` | `-` | `-2` | `-` | `no` | `@pubsub, @slow` |
 | `strlen` | `string` | `full` | `-` | `2` | `-` | `no` | `@read, @string, @fast` |
 | `subscribe` | `pubsub` | `partial` | `-` | `-2` | `-` | `no` | `@pubsub, @slow` |
 | `substr` | `string` | `alias` | `-` | `4` | `-` | `no` | `@read, @string, @slow` |
 | `sunion` | `set` | `full` | `-` | `-2` | `-` | `no` | `@read, @set, @slow` |
 | `sunionstore` | `set` | `full` | `-` | `-3` | `-` | `no` | `@write, @set, @slow` |
-| `sunsubscribe` | `pubsub` | `deferred` | `v0.9.1` | `-1` | `-` | `no` | `@pubsub, @slow` |
+| `sunsubscribe` | `pubsub` | `partial` | `-` | `-1` | `-` | `no` | `@pubsub, @slow` |
 | `swapdb` | `server` | `partial` | `-` | `3` | `-` | `no` | `@keyspace, @write, @fast, @dangerous` |
 | `sync` | `server` | `partial` | `-` | `1` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `tdigest.add` | `tdigest` | `deferred` | `v0.9.2` | `-2` | `tdigest` | `no` | `@tdigest, @write, @slow` |

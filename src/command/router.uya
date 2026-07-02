@@ -159,6 +159,9 @@ export enum CommandType {
     command_unsubscribe,
     command_publish,
     command_pubsub,
+    command_ssubscribe,
+    command_sunsubscribe,
+    command_spublish,
     command_cluster,
     command_asking,
     command_readonly,
@@ -293,7 +296,7 @@ export const COMMAND_FLAG_READONLY: u64 = 1u64;
 export const COMMAND_FLAG_WRITE: u64 = 2u64;
 export const COMMAND_FLAG_FAST: u64 = 4u64;
 
-const MIN_COMMAND_COUNT: usize = 258;
+const MIN_COMMAND_COUNT: usize = 261;
 
 fn command_router_name_eq(a: &[byte], b: &[byte]) bool {
     return bytes_ascii_case_eq(a, b);
@@ -1106,6 +1109,15 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
     }
     if index == 257 {
         return command_router_info(CommandType.command_hmset, &"HMSET"[0: 5], -4, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 258 {
+        return command_router_info(CommandType.command_ssubscribe, &"SSUBSCRIBE"[0: 10], -2, COMMAND_FLAG_FAST, 0, 0, 0);
+    }
+    if index == 259 {
+        return command_router_info(CommandType.command_sunsubscribe, &"SUNSUBSCRIBE"[0: 12], -1, COMMAND_FLAG_FAST, 0, 0, 0);
+    }
+    if index == 260 {
+        return command_router_info(CommandType.command_spublish, &"SPUBLISH"[0: 8], 3, COMMAND_FLAG_FAST, 0, 0, 0);
     }
     return error.CommandUnknown;
 }

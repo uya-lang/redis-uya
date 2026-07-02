@@ -129,7 +129,7 @@ server open
 - `CONFIG GET` 从 `CommandRuntimeInfo` 暴露运行时配置快照，支持 `maxclients`、`databases` 等兼容字段
 - `MEMORY` / `SLOWLOG` / `LATENCY` 由 `command/executor.uya` 执行；其中 `MEMORY MALLOC-STATS` 当前暴露 redis-uya allocator / object-pool 计数而非 Redis 原生 jemalloc 报告，`MEMORY PURGE` 当前是 no-op allocator purge 兼容面，`SLOWLOG` 记录 runtime-measured 命令耗时并受 `CONFIG SET slowlog-log-slower-than` 和 `slowlog-max-len` 控制但精度受毫秒级时间源限制，`LATENCY` 当前记录受 `latency-monitor-threshold` 控制的 `command` 事件进程内历史与 top-level 命令名累计直方图，`CONFIG SET latency-tracking yes|no` 可控制后续直方图采样，子命令名粒度后续再接入观测管线
 - `MODULE HELP/LIST` 由 `command/executor.uya` 执行，当前只暴露空模块列表兼容面和 `COMMAND*` 可见面；`MODULE LOAD/LOADEX/UNLOAD` 同样由 `command/executor.uya` 执行为单机安全 profile 的 `standalone-error`，不加载动态库、不维护模块 API 状态，也不进入 AOF/复制传播
-- RedisBloom `BF.*` / `CF.*` 模块命令当前由通用模块禁用路径作为 `standalone-error` 处理；命令可见但不加载 RedisBloom、不维护 Bloom/Cuckoo filter 编码，也不进入 AOF/复制传播
+- RedisBloom `BF.*` / `CF.*` / `CMS.*` 模块命令当前由通用模块禁用路径作为 `standalone-error` 处理；命令可见但不加载 RedisBloom、不维护 Bloom/Cuckoo/Count-Min Sketch 编码，也不进入 AOF/复制传播
 - `MONITOR` 由 `connection.uya` 维护连接级 monitor 状态和全局 fd 注册表；普通命令成功执行后向 monitor fd 推送兼容行，连接关闭和 `RESET` 会清理注册项
 - `DEBUG` 由 `command/executor.uya` 执行为单机安全 profile 的 `standalone-error`；命令进入路由和 `COMMAND*` 可见面，但不会开放 Redis 内部调试/破坏性子命令，也不进入 AOF/复制传播
 - `HOTKEYS` 由 `command/executor.uya` 执行为 standalone 诊断兼容 partial；`HELP/GET/RESET/START/STOP` 进入路由和 `COMMAND*` 可见面，当前不维护热 key 采样状态，`GET` 返回空数组，状态变更子命令为 no-op

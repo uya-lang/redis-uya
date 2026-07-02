@@ -299,7 +299,7 @@ export const COMMAND_FLAG_READONLY: u64 = 1u64;
 export const COMMAND_FLAG_WRITE: u64 = 2u64;
 export const COMMAND_FLAG_FAST: u64 = 4u64;
 
-const MIN_COMMAND_COUNT: usize = 285;
+const MIN_COMMAND_COUNT: usize = 291;
 
 fn command_router_name_eq(a: &[byte], b: &[byte]) bool {
     return bytes_ascii_case_eq(a, b);
@@ -1193,6 +1193,24 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
     }
     if index == 284 {
         return command_router_info(CommandType.command_module_unsupported, &"CF.SCANDUMP"[0: 11], 3, COMMAND_FLAG_WRITE, 1, 1, 1);
+    }
+    if index == 285 {
+        return command_router_info(CommandType.command_module_unsupported, &"CMS.INCRBY"[0: 10], -2, COMMAND_FLAG_WRITE, 1, 1, 1);
+    }
+    if index == 286 {
+        return command_router_info(CommandType.command_module_unsupported, &"CMS.INFO"[0: 8], 2, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 287 {
+        return command_router_info(CommandType.command_module_unsupported, &"CMS.INITBYDIM"[0: 13], 4, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 288 {
+        return command_router_info(CommandType.command_module_unsupported, &"CMS.INITBYPROB"[0: 14], 4, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 289 {
+        return command_router_info(CommandType.command_module_unsupported, &"CMS.MERGE"[0: 9], -3, COMMAND_FLAG_WRITE, 1, 1, 1);
+    }
+    if index == 290 {
+        return command_router_info(CommandType.command_module_unsupported, &"CMS.QUERY"[0: 9], -2, COMMAND_FLAG_READONLY, 1, 1, 1);
     }
     return error.CommandUnknown;
 }

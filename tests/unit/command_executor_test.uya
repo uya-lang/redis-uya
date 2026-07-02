@@ -831,6 +831,12 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"cf.mexists"[0: 10], CommandCatalogStatus.status_standalone_error);
     try command_executor_test_assert_catalog_status(&"cf.reserve"[0: 10], CommandCatalogStatus.status_standalone_error);
     try command_executor_test_assert_catalog_status(&"cf.scandump"[0: 11], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"cms.incrby"[0: 10], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"cms.info"[0: 8], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"cms.initbydim"[0: 13], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"cms.initbyprob"[0: 14], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"cms.merge"[0: 9], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"cms.query"[0: 9], CommandCatalogStatus.status_standalone_error);
     try command_executor_test_assert_catalog_status(&"zdiff"[0: 5], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"zdiffstore"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"zinter"[0: 6], CommandCatalogStatus.status_partial);
@@ -9115,6 +9121,22 @@ export fn test_command_bloom_module_disabled() !void {
     try assert_true(command_executor_test_slice_eq(cf_loadchunk_reply.data, &"ERR CF.LOADCHUNK command not allowed by redis-uya standalone profile"[0: 68]));
     command_reply_cleanup(&cf_loadchunk_reply);
     resp_value_free(&cf_loadchunk_parsed.value);
+
+    var cms_incrby_parsed: RespParseResult = try parse_resp2(&"*4\r\n$10\r\nCMS.INCRBY\r\n$3\r\ncms\r\n$1\r\nx\r\n$1\r\n1\r\n"[0: 44]);
+    const cms_incrby_command: Command = try command_executor_test_command(&router, &cms_incrby_parsed);
+    var cms_incrby_reply: CommandReply = command_execute_at(&engine, &cms_incrby_command, 1000u64);
+    try assert_eq_i32(cms_incrby_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(cms_incrby_reply.data, &"ERR CMS.INCRBY command not allowed by redis-uya standalone profile"[0: 66]));
+    command_reply_cleanup(&cms_incrby_reply);
+    resp_value_free(&cms_incrby_parsed.value);
+
+    var cms_query_parsed: RespParseResult = try parse_resp2(&"*3\r\n$9\r\nCMS.QUERY\r\n$3\r\ncms\r\n$1\r\nx\r\n"[0: 35]);
+    const cms_query_command: Command = try command_executor_test_command(&router, &cms_query_parsed);
+    var cms_query_reply: CommandReply = command_execute_at(&engine, &cms_query_command, 1000u64);
+    try assert_eq_i32(cms_query_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(cms_query_reply.data, &"ERR CMS.QUERY command not allowed by redis-uya standalone profile"[0: 65]));
+    command_reply_cleanup(&cms_query_reply);
+    resp_value_free(&cms_query_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

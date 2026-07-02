@@ -1891,6 +1891,12 @@ def run_smoke() -> None:
                 if str(exc) != "ERR CF.ADD command not allowed by redis-uya standalone profile":
                     raise AssertionError(f"unexpected CF.ADD error: {exc}") from exc
             try:
+                client._request(b"CMS.INCRBY", b"cms", b"x", b"1")
+                raise AssertionError("expected CMS.INCRBY to be disabled")
+            except RespError as exc:
+                if str(exc) != "ERR CMS.INCRBY command not allowed by redis-uya standalone profile":
+                    raise AssertionError(f"unexpected CMS.INCRBY error: {exc}") from exc
+            try:
                 client._request(b"MEMORY")
                 raise AssertionError("expected MEMORY without subcommand to fail")
             except RespError as exc:

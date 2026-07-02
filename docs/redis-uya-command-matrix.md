@@ -1,7 +1,7 @@
 # redis-uya command matrix
 
 > version: v0.9.1-dev
-> date: 2026-07-01
+> date: 2026-07-02
 > source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`
 > runtime source: `src/command/catalog_generated.uya`
 
@@ -18,7 +18,7 @@
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
 | Tier A: standalone core | 365 | 259 | 146 | 209 | 7 | 3 | 0 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
-| Tier C: module commands | 153 | 146 | 0 | 0 | 22 | 0 | 131 |
+| Tier C: module commands | 153 | 146 | 0 | 0 | 28 | 0 | 125 |
 
 ## Status counts
 
@@ -26,9 +26,9 @@
 |--------|-------|
 | `full` | `147` |
 | `partial` | `216` |
-| `standalone-error` | `55` |
+| `standalone-error` | `61` |
 | `alias` | `3` |
-| `deferred` | `131` |
+| `deferred` | `125` |
 
 ## Group counts
 
@@ -188,12 +188,12 @@
 | `cluster|slaves` | `cluster` | `standalone-error` | `v1.1.0` | `3` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `cluster|slot-stats` | `cluster` | `standalone-error` | `v1.1.0` | `-4` | `-` | `no` | `-` |
 | `cluster|slots` | `cluster` | `partial` | `-` | `2` | `-` | `no` | `@slow` |
-| `cms.incrby` | `cms` | `deferred` | `v0.9.2` | `-2` | `cms` | `no` | `@cms, @write` |
-| `cms.info` | `cms` | `deferred` | `v0.9.2` | `2` | `cms` | `no` | `@cms, @read, @fast` |
-| `cms.initbydim` | `cms` | `deferred` | `v0.9.2` | `4` | `cms` | `no` | `@cms, @write, @fast` |
-| `cms.initbyprob` | `cms` | `deferred` | `v0.9.2` | `4` | `cms` | `no` | `@cms, @write, @fast` |
-| `cms.merge` | `cms` | `deferred` | `v0.9.2` | `-3` | `cms` | `no` | `@cms, @write` |
-| `cms.query` | `cms` | `deferred` | `v0.9.2` | `-2` | `cms` | `no` | `@cms, @read` |
+| `cms.incrby` | `cms` | `standalone-error` | `v1.1.0` | `-2` | `cms` | `no` | `@cms, @write` |
+| `cms.info` | `cms` | `standalone-error` | `v1.1.0` | `2` | `cms` | `no` | `@cms, @read, @fast` |
+| `cms.initbydim` | `cms` | `standalone-error` | `v1.1.0` | `4` | `cms` | `no` | `@cms, @write, @fast` |
+| `cms.initbyprob` | `cms` | `standalone-error` | `v1.1.0` | `4` | `cms` | `no` | `@cms, @write, @fast` |
+| `cms.merge` | `cms` | `standalone-error` | `v1.1.0` | `-3` | `cms` | `no` | `@cms, @write` |
+| `cms.query` | `cms` | `standalone-error` | `v1.1.0` | `-2` | `cms` | `no` | `@cms, @read` |
 | `command` | `server` | `partial` | `-` | `-1` | `-` | `no` | `@slow, @connection` |
 | `command|count` | `server` | `full` | `-` | `2` | `-` | `no` | `@slow, @connection` |
 | `command|docs` | `server` | `partial` | `-` | `-2` | `-` | `no` | `@slow, @connection` |

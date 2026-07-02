@@ -3324,6 +3324,28 @@ CF.SCANDUMP key iterator
 - 当前实现为 `standalone-error`：命令进入运行时路由和 `COMMAND*` 可见面，但 redis-uya 不加载 RedisBloom 模块，也不维护 Cuckoo filter 编码
 - `CF.*` 不读取或修改本地 keyspace，不写入 AOF 或复制 backlog
 
+### RedisBloom `CMS.*`
+
+格式：
+
+```text
+CMS.INCRBY key item increment [item increment ...]
+CMS.INFO key
+CMS.INITBYDIM key width depth
+CMS.INITBYPROB key error probability
+CMS.MERGE destination numkeys source [source ...] [WEIGHTS weight [weight ...]]
+CMS.QUERY key item [item ...]
+```
+
+返回：
+
+- 当前统一返回：`-ERR <CMS command> command not allowed by redis-uya standalone profile`
+
+说明：
+
+- 当前实现为 `standalone-error`：命令进入运行时路由和 `COMMAND*` 可见面，但 redis-uya 不加载 RedisBloom 模块，也不维护 Count-Min Sketch 编码
+- `CMS.*` 不读取或修改本地 keyspace，不写入 AOF 或复制 backlog
+
 ### `SLOWLOG`
 
 格式：

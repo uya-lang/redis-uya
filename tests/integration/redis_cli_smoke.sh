@@ -1082,6 +1082,12 @@ if [[ "$CF_ADD_RESULT" != "ERR CF.ADD command not allowed by redis-uya standalon
     exit 1
 fi
 
+CMS_INCRBY_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" cms.incrby cms x 1 2>&1 || true)"
+if [[ "$CMS_INCRBY_RESULT" != "ERR CMS.INCRBY command not allowed by redis-uya standalone profile" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected CMS.INCRBY disabled error, got '$CMS_INCRBY_RESULT'" >&2
+    exit 1
+fi
+
 HOTKEYS_HELP_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hotkeys help)"
 if [[ "$HOTKEYS_HELP_RESULT" != *"HOTKEYS GET"* ]] || [[ "$HOTKEYS_HELP_RESULT" != *"HOTKEYS START"* ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected HOTKEYS HELP payload, got '$HOTKEYS_HELP_RESULT'" >&2

@@ -591,6 +591,15 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"CF commands missing from COMMAND INFO: {cf_info!r}")
 
+            cms_info = send_command(sock, b"COMMAND", b"INFO", b"CMS.INCRBY", b"CMS.INFO", b"CMS.INITBYDIM", b"CMS.INITBYPROB", b"CMS.MERGE", b"CMS.QUERY")
+            cms_names = [b"cms.incrby", b"cms.info", b"cms.initbydim", b"cms.initbyprob", b"cms.merge", b"cms.query"]
+            if (
+                not isinstance(cms_info, list)
+                or len(cms_info) != len(cms_names)
+                or any(not isinstance(item, list) or item[0] != name for item, name in zip(cms_info, cms_names))
+            ):
+                raise AssertionError(f"CMS commands missing from COMMAND INFO: {cms_info!r}")
+
             hotkeys_info = send_command(sock, b"COMMAND", b"INFO", b"HOTKEYS", b"HOTKEYS|HELP", b"HOTKEYS|GET", b"HOTKEYS|RESET", b"HOTKEYS|START", b"HOTKEYS|STOP")
             if (
                 not isinstance(hotkeys_info, list)
@@ -971,6 +980,12 @@ def run_smoke() -> None:
                 or b"cf.mexists" not in docs_all_resp2
                 or b"cf.reserve" not in docs_all_resp2
                 or b"cf.scandump" not in docs_all_resp2
+                or b"cms.incrby" not in docs_all_resp2
+                or b"cms.info" not in docs_all_resp2
+                or b"cms.initbydim" not in docs_all_resp2
+                or b"cms.initbyprob" not in docs_all_resp2
+                or b"cms.merge" not in docs_all_resp2
+                or b"cms.query" not in docs_all_resp2
             ):
                 raise AssertionError(f"unexpected COMMAND DOCS all RESP2 payload: {docs_all_resp2!r}")
             if b"cluster|reset" in docs_all_resp2:
@@ -1179,6 +1194,18 @@ def run_smoke() -> None:
                 or b"cf.scandump" not in listed_cf
             ):
                 raise AssertionError(f"unexpected COMMAND LIST CF.* result: {listed_cf!r}")
+
+            listed_cms = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"CMS.*")
+            if (
+                not isinstance(listed_cms, list)
+                or b"cms.incrby" not in listed_cms
+                or b"cms.info" not in listed_cms
+                or b"cms.initbydim" not in listed_cms
+                or b"cms.initbyprob" not in listed_cms
+                or b"cms.merge" not in listed_cms
+                or b"cms.query" not in listed_cms
+            ):
+                raise AssertionError(f"unexpected COMMAND LIST CMS.* result: {listed_cms!r}")
 
             listed_slowlog = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"SLOWLOG*")
             if (
@@ -1436,6 +1463,12 @@ def run_smoke() -> None:
                 or not isinstance(docs_all.get(b"cf.mexists"), dict)
                 or not isinstance(docs_all.get(b"cf.reserve"), dict)
                 or not isinstance(docs_all.get(b"cf.scandump"), dict)
+                or not isinstance(docs_all.get(b"cms.incrby"), dict)
+                or not isinstance(docs_all.get(b"cms.info"), dict)
+                or not isinstance(docs_all.get(b"cms.initbydim"), dict)
+                or not isinstance(docs_all.get(b"cms.initbyprob"), dict)
+                or not isinstance(docs_all.get(b"cms.merge"), dict)
+                or not isinstance(docs_all.get(b"cms.query"), dict)
             ):
                 raise AssertionError(f"unexpected COMMAND DOCS all RESP3 payload: {docs_all!r}")
             if b"cluster|reset" in docs_all:

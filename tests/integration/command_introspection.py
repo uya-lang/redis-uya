@@ -570,6 +570,25 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"module commands missing from COMMAND INFO: {module_info!r}")
 
+            hotkeys_info = send_command(sock, b"COMMAND", b"INFO", b"HOTKEYS", b"HOTKEYS|HELP", b"HOTKEYS|GET", b"HOTKEYS|RESET", b"HOTKEYS|START", b"HOTKEYS|STOP")
+            if (
+                not isinstance(hotkeys_info, list)
+                or len(hotkeys_info) != 6
+                or not isinstance(hotkeys_info[0], list)
+                or hotkeys_info[0][0] != b"hotkeys"
+                or not isinstance(hotkeys_info[1], list)
+                or hotkeys_info[1][0] != b"hotkeys|help"
+                or not isinstance(hotkeys_info[2], list)
+                or hotkeys_info[2][0] != b"hotkeys|get"
+                or not isinstance(hotkeys_info[3], list)
+                or hotkeys_info[3][0] != b"hotkeys|reset"
+                or not isinstance(hotkeys_info[4], list)
+                or hotkeys_info[4][0] != b"hotkeys|start"
+                or not isinstance(hotkeys_info[5], list)
+                or hotkeys_info[5][0] != b"hotkeys|stop"
+            ):
+                raise AssertionError(f"hotkeys commands missing from COMMAND INFO: {hotkeys_info!r}")
+
             function_info = send_command(sock, b"COMMAND", b"INFO", b"FUNCTION", b"FUNCTION|HELP", b"FUNCTION|LIST", b"FUNCTION|STATS", b"FUNCTION|FLUSH", b"FUNCTION|DELETE", b"FUNCTION|LOAD", b"FUNCTION|DUMP", b"FUNCTION|RESTORE", b"FUNCTION|KILL")
             if (
                 not isinstance(function_info, list)
@@ -967,6 +986,10 @@ def run_smoke() -> None:
             listed_failover = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"FAIL*")
             if not isinstance(listed_failover, list) or b"failover" not in listed_failover:
                 raise AssertionError(f"unexpected COMMAND LIST FAIL* result: {listed_failover!r}")
+
+            listed_hotkeys = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"HOTKEYS*")
+            if not isinstance(listed_hotkeys, list) or b"hotkeys" not in listed_hotkeys or b"hotkeys|get" not in listed_hotkeys:
+                raise AssertionError(f"unexpected COMMAND LIST HOTKEYS* result: {listed_hotkeys!r}")
 
             listed_bitmap = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"BIT*")
             if (

@@ -1070,6 +1070,36 @@ if [[ "$MODULE_UNLOAD_RESULT" != "ERR MODULE UNLOAD command not allowed by redis
     exit 1
 fi
 
+HOTKEYS_HELP_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hotkeys help)"
+if [[ "$HOTKEYS_HELP_RESULT" != *"HOTKEYS GET"* ]] || [[ "$HOTKEYS_HELP_RESULT" != *"HOTKEYS START"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HOTKEYS HELP payload, got '$HOTKEYS_HELP_RESULT'" >&2
+    exit 1
+fi
+
+HOTKEYS_GET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hotkeys get)"
+if [[ -n "$HOTKEYS_GET_RESULT" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected empty HOTKEYS GET, got '$HOTKEYS_GET_RESULT'" >&2
+    exit 1
+fi
+
+HOTKEYS_START_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hotkeys start sample 1)"
+if [[ "$HOTKEYS_START_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HOTKEYS START OK, got '$HOTKEYS_START_RESULT'" >&2
+    exit 1
+fi
+
+HOTKEYS_STOP_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hotkeys stop)"
+if [[ "$HOTKEYS_STOP_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HOTKEYS STOP OK, got '$HOTKEYS_STOP_RESULT'" >&2
+    exit 1
+fi
+
+HOTKEYS_RESET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hotkeys reset)"
+if [[ "$HOTKEYS_RESET_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HOTKEYS RESET OK, got '$HOTKEYS_RESET_RESULT'" >&2
+    exit 1
+fi
+
 CLIENT_CACHING_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" client caching yes)"
 if [[ "$CLIENT_CACHING_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected CLIENT CACHING YES OK, got '$CLIENT_CACHING_RESULT'" >&2

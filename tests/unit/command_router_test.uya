@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 261);
+    try assert_eq_i32(command_router_count(&router) as i32, 262);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -826,6 +826,10 @@ export fn test_command_router_lookup_and_case() !void {
     try assert_eq_i32(failover_info.cmd_type as i32, CommandType.command_failover as i32);
     try assert_eq_i32(failover_info.arity, -1);
 
+    const hotkeys_info: CommandInfo = try command_router_lookup(&router, &"HOTKEYS"[0: 7]);
+    try assert_eq_i32(hotkeys_info.cmd_type as i32, CommandType.command_hotkeys as i32);
+    try assert_eq_i32(hotkeys_info.arity, -2);
+
     const sort_info: CommandInfo = try command_router_lookup(&router, &"SORT"[0: 4]);
     try assert_eq_i32(sort_info.cmd_type as i32, CommandType.command_sort as i32);
     try assert_eq_i32(sort_info.arity, -2);
@@ -1209,6 +1213,7 @@ export fn test_command_router_arity_validation() !void {
     const randomkey: CommandInfo = try command_router_lookup(&router, &"RANDOMKEY"[0: 9]);
     const time_info: CommandInfo = try command_router_lookup(&router, &"TIME"[0: 4]);
     const role_info: CommandInfo = try command_router_lookup(&router, &"ROLE"[0: 4]);
+    const hotkeys: CommandInfo = try command_router_lookup(&router, &"HOTKEYS"[0: 7]);
     const pexpire: CommandInfo = try command_router_lookup(&router, &"PEXPIRE"[0: 7]);
     const persist: CommandInfo = try command_router_lookup(&router, &"PERSIST"[0: 7]);
     const pexpireat: CommandInfo = try command_router_lookup(&router, &"PEXPIREAT"[0: 9]);
@@ -1230,6 +1235,8 @@ export fn test_command_router_arity_validation() !void {
     try command_validate_arity(&sunsubscribe, 1);
     try command_validate_arity(&sunsubscribe, 2);
     try command_validate_arity(&spublish, 3);
+    try command_validate_arity(&hotkeys, 2);
+    try command_validate_arity(&hotkeys, 3);
     try command_validate_arity(&multi, 1);
     try command_validate_arity(&exec, 1);
     try command_validate_arity(&discard, 1);

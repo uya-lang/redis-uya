@@ -3353,6 +3353,30 @@ DEBUG subcommand [arg ...]
 - `DEBUG` 不写入 AOF 或复制 backlog，也不会改变运行时状态
 - 后续如需要开发态内部调试能力，必须先引入显式配置开关、权限边界和独立测试矩阵
 
+### `HOTKEYS`
+
+格式：
+
+```text
+HOTKEYS HELP
+HOTKEYS GET
+HOTKEYS RESET
+HOTKEYS START [arg ...]
+HOTKEYS STOP
+```
+
+返回：
+
+- `HELP`：返回当前支持的 `HOTKEYS` 子命令说明
+- `GET`：当前返回空数组
+- `RESET` / `START` / `STOP`：当前返回 `+OK`
+
+说明：
+
+- 当前实现为 standalone 诊断兼容 partial：命令进入运行时路由和 `COMMAND*` 可见面，但 redis-uya 尚未实现热 key 采样器
+- `START/STOP/RESET` 为 no-op，不启动后台采样、不维护热 key 状态
+- `HOTKEYS` 不写入 AOF 或复制 backlog
+
 ### `INFO`
 
 格式：

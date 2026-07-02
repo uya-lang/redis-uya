@@ -9247,6 +9247,111 @@ fn command_executor_module(command: &Command) CommandReply {
     return command_executor_owned_error(err.buf[0: err.len]);
 }
 
+fn command_executor_hotkeys_help() CommandReply {
+    const reply_list: &RedisObject = create_list_object() catch {
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"HOTKEYS <subcommand> [<arg> ...]. Subcommands are:"[0: 50]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"HOTKEYS HELP"[0: 12]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"    Prints this help."[0: 21]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"HOTKEYS GET"[0: 11]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"    Return hot key samples; redis-uya currently returns an empty sample set."[0: 76]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"HOTKEYS RESET"[0: 13]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"    Reset hot key samples; redis-uya treats this as a no-op."[0: 60]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"HOTKEYS START [options]"[0: 23]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"    Start hot key sampling; redis-uya treats this as a no-op."[0: 61]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"HOTKEYS STOP"[0: 12]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"    Stop hot key sampling; redis-uya treats this as a no-op."[0: 60]) catch {
+        object_free(reply_list);
+        return command_executor_oom();
+    };
+    return command_executor_owned_array(reply_list);
+}
+
+fn command_executor_hotkeys(command: &Command) CommandReply {
+    if command.argc < 2 {
+        return command_executor_owned_error(&"ERR wrong number of arguments for 'hotkeys' command"[0: 51]);
+    }
+
+    const subcommand: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_owned_error(&"ERR wrong number of arguments for 'hotkeys' command"[0: 51]);
+    };
+    if command_executor_keyword_eq(subcommand, &"HELP"[0: 4]) {
+        if command.argc != 2 {
+            return command_executor_owned_error(&"ERR wrong number of arguments for 'hotkeys|help' command"[0: 56]);
+        }
+        return command_executor_hotkeys_help();
+    }
+    if command_executor_keyword_eq(subcommand, &"GET"[0: 3]) {
+        if command.argc != 2 {
+            return command_executor_owned_error(&"ERR wrong number of arguments for 'hotkeys|get' command"[0: 55]);
+        }
+        return command_executor_owned_raw(&"*0\r\n"[0: 4]);
+    }
+    if command_executor_keyword_eq(subcommand, &"RESET"[0: 5]) {
+        if command.argc != 2 {
+            return command_executor_owned_error(&"ERR wrong number of arguments for 'hotkeys|reset' command"[0: 57]);
+        }
+        return command_executor_simple(&"OK"[0: 2]);
+    }
+    if command_executor_keyword_eq(subcommand, &"START"[0: 5]) {
+        return command_executor_simple(&"OK"[0: 2]);
+    }
+    if command_executor_keyword_eq(subcommand, &"STOP"[0: 4]) {
+        if command.argc != 2 {
+            return command_executor_owned_error(&"ERR wrong number of arguments for 'hotkeys|stop' command"[0: 56]);
+        }
+        return command_executor_simple(&"OK"[0: 2]);
+    }
+
+    var err: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&err);
+    }
+    _ = command_executor_info_append(&err, &"ERR unknown subcommand '"[0: 24]) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append(&err, subcommand) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append(&err, &"'. Try HOTKEYS HELP."[0: 20]) catch {
+        return command_executor_oom();
+    };
+    return command_executor_owned_error(err.buf[0: err.len]);
+}
+
 fn command_executor_slowlog(command: &Command) CommandReply {
     if command.argc < 2 {
         return command_executor_owned_error(&"ERR wrong number of arguments for 'slowlog' command"[0: 49]);
@@ -18237,6 +18342,14 @@ fn command_executor_command_visible_module_subcommand(name: &[byte]) bool {
         command_executor_slice_eq(name, &"unload"[0: 6]);
 }
 
+fn command_executor_command_visible_hotkeys_subcommand(name: &[byte]) bool {
+    return command_executor_slice_eq(name, &"help"[0: 4]) ||
+        command_executor_slice_eq(name, &"get"[0: 3]) ||
+        command_executor_slice_eq(name, &"reset"[0: 5]) ||
+        command_executor_slice_eq(name, &"start"[0: 5]) ||
+        command_executor_slice_eq(name, &"stop"[0: 4]);
+}
+
 fn command_executor_command_visible_slowlog_subcommand(name: &[byte]) bool {
     return command_executor_slice_eq(name, &"help"[0: 4]) ||
         command_executor_slice_eq(name, &"get"[0: 3]) ||
@@ -18287,6 +18400,9 @@ fn command_executor_command_visible_subcommand(parent_name: &[byte], subcommand_
     }
     if command_executor_slice_eq(parent_name, &"module"[0: 6]) {
         return command_executor_command_visible_module_subcommand(subcommand_name);
+    }
+    if command_executor_slice_eq(parent_name, &"hotkeys"[0: 7]) {
+        return command_executor_command_visible_hotkeys_subcommand(subcommand_name);
     }
     if command_executor_slice_eq(parent_name, &"slowlog"[0: 7]) {
         return command_executor_command_visible_slowlog_subcommand(subcommand_name);
@@ -20498,6 +20614,9 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
     }
     if command.info.cmd_type == CommandType.command_failover {
         return command_executor_failover(runtime, command);
+    }
+    if command.info.cmd_type == CommandType.command_hotkeys {
+        return command_executor_hotkeys(command);
     }
     if command.info.cmd_type == CommandType.command_wait {
         return command_executor_wait(runtime, command);

@@ -130,6 +130,7 @@ server open
 - `MODULE HELP/LIST` 由 `command/executor.uya` 执行，当前只暴露空模块列表兼容面和 `COMMAND*` 可见面；`MODULE LOAD/LOADEX/UNLOAD` 同样由 `command/executor.uya` 执行为单机安全 profile 的 `standalone-error`，不加载动态库、不维护模块 API 状态，也不进入 AOF/复制传播
 - `MONITOR` 由 `connection.uya` 维护连接级 monitor 状态和全局 fd 注册表；普通命令成功执行后向 monitor fd 推送兼容行，连接关闭和 `RESET` 会清理注册项
 - `DEBUG` 由 `command/executor.uya` 执行为单机安全 profile 的 `standalone-error`；命令进入路由和 `COMMAND*` 可见面，但不会开放 Redis 内部调试/破坏性子命令，也不进入 AOF/复制传播
+- `HOTKEYS` 由 `command/executor.uya` 执行为 standalone 诊断兼容 partial；`HELP/GET/RESET/START/STOP` 进入路由和 `COMMAND*` 可见面，当前不维护热 key 采样状态，`GET` 返回空数组，状态变更子命令为 no-op
 - `XACK/XACKDEL/XADD/XAUTOCLAIM/XCFGSET/XCLAIM/XDEL/XDELEX/XGROUP CREATE/XGROUP CREATECONSUMER/XGROUP DELCONSUMER/XGROUP DESTROY/XGROUP HELP/XGROUP SETID/XIDMPRECORD/XINFO HELP/XINFO GROUPS/XINFO CONSUMERS/XINFO STREAM/XLEN/XNACK/XPENDING/XRANGE/XREVRANGE/XREAD/XREADGROUP/XSETID/XTRIM` 由 `command/executor.uya` 执行；当前覆盖基础 stream 追加、精确 ID 删除、`XCFGSET` IDMP 配置 no-op 校验面、`XIDMPRECORD` stream entry IDMP 记录 no-op 校验面、`XDELEX` per-id 删除状态兼容面、XGROUP/XINFO 帮助兼容面、`XACK` / `XACKDEL` / `XNACK` / `XAUTOCLAIM` / `XCLAIM` / `XPENDING` 无 group 错误面、`XGROUP CREATE` key/type 校验与明确未支持错误、`XGROUP CREATECONSUMER` / `XGROUP DELCONSUMER` 无 group 错误面、`XGROUP DESTROY` empty-state 返回值、`XGROUP SETID` 无 group 错误面、`XREADGROUP` 非阻塞语法校验与无 group 错误面、`XSETID` key/type/ID 校验与明确未支持错误、key-only stream 元数据、`XINFO STREAM FULL [COUNT count]` entry 明细、empty-state group 列表、无 group 时的 `XINFO CONSUMERS` 错误面、长度、范围读取、非阻塞 `XREAD` 和 `MAXLEN` 头部裁剪，持久化层的 RDB/AOF rewrite 会写出显式 stream id，普通 AOF append 对 `XADD *` 仍按原始请求回放并重新生成 id，当前 `XIDMPRECORD` no-op 校验面不进入普通 AOF/复制传播；`XACKDEL` / `XCFGSET` / `XIDMPRECORD` / `XNACK` / `XDELEX` 不维护 consumer group / PEL 或 IDMP 元数据，`XDELEX ACKED` 只返回未删除状态
 - `EVAL/EVALSHA/EVAL_RO/EVALSHA_RO/SCRIPT DEBUG/LOAD/EXISTS/FLUSH/KILL` 由 `connection.uya` 处理，因为脚本缓存、事务重放、AOF append 和 replication backlog 需要连接层传播边界；当前仅支持单条 `return redis.call(...)` 子集，`*_RO` 在执行前解析内部命令并拒绝写标记命令，`SCRIPT DEBUG` 是 no-op 兼容面，`SCRIPT KILL` 只覆盖无运行脚本错误面
 - `FUNCTION HELP/LIST/STATS/FLUSH/DELETE/DUMP/RESTORE/KILL` 与 `FCALL/FCALL_RO` 由 `command/executor.uya` 执行，当前只提供 Functions 控制面的帮助、空库列表、空库统计、no-op flush、空库删除错误面、空库序列化 payload、空库 payload restore、无运行脚本错误面、空库调用错误面、`COMMAND GETKEYS*` 和 `COMMAND*` 可见面，function library 存储与真实 `FCALL*` 执行后续再补
@@ -152,10 +153,10 @@ server open
 ## 5. Pub/Sub 最小闭环
 
 - `connection.uya` 维护固定容量订阅注册表，记录 `fd -> channel/pattern` 与连接协议版本
-- `SUBSCRIBE` / `UNSUBSCRIBE` / `PSUBSCRIBE` / `PUNSUBSCRIBE` 在连接层更新注册表并返回确认消息
-- `PUBLISH` 在连接层按频道和 pattern 扫描订阅表，向匹配 fd 推送 `message` / `pmessage` 事件，并向发布者返回接收者数量
-- `PUBSUB HELP/CHANNELS/NUMPAT/NUMSUB` 直接复用同一份订阅注册表；`SHARDCHANNELS/SHARDNUMSUB` 当前返回空结果边界，不额外维护 shard 订阅状态
-- RESP2 订阅态在连接层限制为 `SUBSCRIBE` / `PSUBSCRIBE` / `UNSUBSCRIBE` / `PUNSUBSCRIBE` / `PING` / `QUIT` / `RESET`；RESP3 订阅态保持普通命令可继续执行
+- `SUBSCRIBE` / `UNSUBSCRIBE` / `PSUBSCRIBE` / `PUNSUBSCRIBE` / `SSUBSCRIBE` / `SUNSUBSCRIBE` 在连接层更新注册表并返回确认消息
+- `PUBLISH` 在连接层按频道和 pattern 扫描订阅表，向匹配 fd 推送 `message` / `pmessage` 事件，并向发布者返回接收者数量；`SPUBLISH` 只扫描 shard 订阅项并推送 `smessage`
+- `PUBSUB HELP/CHANNELS/NUMPAT/NUMSUB` 直接复用同一份订阅注册表；`SHARDCHANNELS/SHARDNUMSUB` 统计 `SSUBSCRIBE` 注册的 shard 订阅项
+- RESP2 订阅态在连接层限制为 `SUBSCRIBE` / `PSUBSCRIBE` / `SSUBSCRIBE` / `UNSUBSCRIBE` / `PUNSUBSCRIBE` / `SUNSUBSCRIBE` / `PING` / `QUIT` / `RESET`；RESP3 订阅态保持普通命令可继续执行
 - 客户端关闭时，`server.uya` 会清理该 fd 的订阅项
 
 当前 Pub/Sub 已覆盖直连订阅、pattern 订阅、`PUBSUB` 管理面第一批与 RESP2/RESP3 订阅态限制，但仍不包含高水位背压队列。

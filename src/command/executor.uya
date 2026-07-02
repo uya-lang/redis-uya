@@ -10529,6 +10529,25 @@ fn command_executor_migrate(runtime: &CommandRuntimeInfo, command: &Command) Com
     return command_executor_error(&"ERR MIGRATE command not allowed by redis-uya standalone profile"[0: 63]);
 }
 
+fn command_executor_module_unsupported(command: &Command) CommandReply {
+    var err: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&err);
+    }
+    _ = command_executor_info_append(&err, &"ERR "[0: 4]) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append(&err, command.info.name) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append(&err, &" command not allowed by redis-uya standalone profile"[0: 52]) catch {
+        return command_executor_oom();
+    };
+    return command_executor_owned_error(err.buf[0: err.len]);
+}
+
 fn command_executor_swapdb(runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
     _ = runtime;
     if command.argc != 3 {
@@ -20592,6 +20611,9 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
     }
     if command.info.cmd_type == CommandType.command_module {
         return command_executor_module(command);
+    }
+    if command.info.cmd_type == CommandType.command_module_unsupported {
+        return command_executor_module_unsupported(command);
     }
     if command.info.cmd_type == CommandType.command_slowlog {
         return command_executor_slowlog(command);

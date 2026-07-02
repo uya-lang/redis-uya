@@ -146,6 +146,7 @@ use tests.unit.command_executor_test.test_command_dump;
 use tests.unit.command_executor_test.test_command_select_and_object;
 use tests.unit.command_executor_test.test_command_memory;
 use tests.unit.command_executor_test.test_command_module;
+use tests.unit.command_executor_test.test_command_bloom_module_disabled;
 use tests.unit.command_executor_test.test_command_hotkeys;
 use tests.unit.command_executor_test.test_command_slowlog;
 use tests.unit.command_executor_test.test_command_latency;
@@ -809,6 +810,10 @@ export fn main() i32 {
     const before_exec_module: i32 = failed;
     _ = test_command_module() catch { printf("[FAIL] command_executor/module\n" as *byte); failed = failed + 1; };
     if failed == before_exec_module { printf("[PASS] command_executor/module\n" as *byte); }
+
+    const before_exec_bloom_module_disabled: i32 = failed;
+    _ = test_command_bloom_module_disabled() catch { printf("[FAIL] command_executor/bloom_module_disabled\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_bloom_module_disabled { printf("[PASS] command_executor/bloom_module_disabled\n" as *byte); }
 
     const before_exec_hotkeys: i32 = failed;
     _ = test_command_hotkeys() catch { printf("[FAIL] command_executor/hotkeys\n" as *byte); failed = failed + 1; };

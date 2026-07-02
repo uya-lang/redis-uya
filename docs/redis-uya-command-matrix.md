@@ -18,7 +18,7 @@
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
 | Tier A: standalone core | 365 | 259 | 146 | 209 | 7 | 3 | 0 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
-| Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
+| Tier C: module commands | 153 | 146 | 0 | 0 | 10 | 0 | 143 |
 
 ## Status counts
 
@@ -26,9 +26,9 @@
 |--------|-------|
 | `full` | `147` |
 | `partial` | `216` |
-| `standalone-error` | `33` |
+| `standalone-error` | `43` |
 | `alias` | `3` |
-| `deferred` | `153` |
+| `deferred` | `143` |
 
 ## Group counts
 
@@ -101,16 +101,16 @@
 | `arset` | `array` | `deferred` | `v0.9.2` | `-4` | `array` | `no` | `@write, @array, @fast` |
 | `asking` | `cluster` | `standalone-error` | `v1.1.0` | `1` | `-` | `no` | `@fast, @connection` |
 | `auth` | `connection` | `partial` | `-` | `-2` | `-` | `no` | `@fast, @connection` |
-| `bf.add` | `bf` | `deferred` | `v0.9.2` | `3` | `bf` | `no` | `@bloom, @write, @slow` |
-| `bf.card` | `bf` | `deferred` | `v0.9.2` | `2` | `bf` | `no` | `@bloom, @read, @fast` |
-| `bf.exists` | `bf` | `deferred` | `v0.9.2` | `3` | `bf` | `no` | `@bloom, @read, @slow` |
-| `bf.info` | `bf` | `deferred` | `v0.9.2` | `-2` | `bf` | `no` | `@bloom, @read, @fast` |
-| `bf.insert` | `bf` | `deferred` | `v0.9.2` | `-3` | `bf` | `no` | `@bloom, @write, @slow` |
-| `bf.loadchunk` | `bf` | `deferred` | `v0.9.2` | `4` | `bf` | `no` | `@bloom, @write, @slow` |
-| `bf.madd` | `bf` | `deferred` | `v0.9.2` | `-2` | `bf` | `no` | `@bloom, @write, @slow` |
-| `bf.mexists` | `bf` | `deferred` | `v0.9.2` | `-2` | `bf` | `no` | `@bloom, @read, @slow` |
-| `bf.reserve` | `bf` | `deferred` | `v0.9.2` | `-4` | `bf` | `no` | `@bloom, @write, @fast` |
-| `bf.scandump` | `bf` | `deferred` | `v0.9.2` | `3` | `bf` | `no` | `@bloom, @write, @slow` |
+| `bf.add` | `bf` | `standalone-error` | `v1.1.0` | `3` | `bf` | `no` | `@bloom, @write, @slow` |
+| `bf.card` | `bf` | `standalone-error` | `v1.1.0` | `2` | `bf` | `no` | `@bloom, @read, @fast` |
+| `bf.exists` | `bf` | `standalone-error` | `v1.1.0` | `3` | `bf` | `no` | `@bloom, @read, @slow` |
+| `bf.info` | `bf` | `standalone-error` | `v1.1.0` | `-2` | `bf` | `no` | `@bloom, @read, @fast` |
+| `bf.insert` | `bf` | `standalone-error` | `v1.1.0` | `-3` | `bf` | `no` | `@bloom, @write, @slow` |
+| `bf.loadchunk` | `bf` | `standalone-error` | `v1.1.0` | `4` | `bf` | `no` | `@bloom, @write, @slow` |
+| `bf.madd` | `bf` | `standalone-error` | `v1.1.0` | `-2` | `bf` | `no` | `@bloom, @write, @slow` |
+| `bf.mexists` | `bf` | `standalone-error` | `v1.1.0` | `-2` | `bf` | `no` | `@bloom, @read, @slow` |
+| `bf.reserve` | `bf` | `standalone-error` | `v1.1.0` | `-4` | `bf` | `no` | `@bloom, @write, @fast` |
+| `bf.scandump` | `bf` | `standalone-error` | `v1.1.0` | `3` | `bf` | `no` | `@bloom, @write, @slow` |
 | `bgrewriteaof` | `server` | `partial` | `-` | `1` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `bgsave` | `server` | `partial` | `-` | `-1` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `bitcount` | `bitmap` | `full` | `-` | `-2` | `-` | `no` | `@read, @bitmap, @slow` |

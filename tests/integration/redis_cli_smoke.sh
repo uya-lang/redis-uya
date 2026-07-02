@@ -1070,6 +1070,12 @@ if [[ "$MODULE_UNLOAD_RESULT" != "ERR MODULE UNLOAD command not allowed by redis
     exit 1
 fi
 
+BF_ADD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" bf.add bf x 2>&1 || true)"
+if [[ "$BF_ADD_RESULT" != "ERR BF.ADD command not allowed by redis-uya standalone profile" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected BF.ADD disabled error, got '$BF_ADD_RESULT'" >&2
+    exit 1
+fi
+
 HOTKEYS_HELP_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hotkeys help)"
 if [[ "$HOTKEYS_HELP_RESULT" != *"HOTKEYS GET"* ]] || [[ "$HOTKEYS_HELP_RESULT" != *"HOTKEYS START"* ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected HOTKEYS HELP payload, got '$HOTKEYS_HELP_RESULT'" >&2

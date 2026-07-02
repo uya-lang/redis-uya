@@ -489,8 +489,19 @@ PARTIAL_NAMES = {
 }
 
 STANDALONE_ERROR_NAMES = {
+    "bf.add",
+    "bf.card",
+    "bf.exists",
+    "bf.info",
+    "bf.insert",
+    "bf.loadchunk",
+    "bf.madd",
+    "bf.mexists",
+    "bf.reserve",
+    "bf.scandump",
     "debug",
     "failover",
+    "migrate",
     "module|load",
     "module|loadex",
     "module|unload",

@@ -819,6 +819,18 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"bf.mexists"[0: 10], CommandCatalogStatus.status_standalone_error);
     try command_executor_test_assert_catalog_status(&"bf.reserve"[0: 10], CommandCatalogStatus.status_standalone_error);
     try command_executor_test_assert_catalog_status(&"bf.scandump"[0: 11], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"cf.add"[0: 6], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"cf.addnx"[0: 8], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"cf.count"[0: 8], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"cf.del"[0: 6], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"cf.exists"[0: 9], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"cf.info"[0: 7], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"cf.insert"[0: 9], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"cf.insertnx"[0: 11], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"cf.loadchunk"[0: 12], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"cf.mexists"[0: 10], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"cf.reserve"[0: 10], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"cf.scandump"[0: 11], CommandCatalogStatus.status_standalone_error);
     try command_executor_test_assert_catalog_status(&"zdiff"[0: 5], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"zdiffstore"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"zinter"[0: 6], CommandCatalogStatus.status_partial);
@@ -9087,6 +9099,22 @@ export fn test_command_bloom_module_disabled() !void {
     try assert_true(command_executor_test_slice_eq(bf_loadchunk_reply.data, &"ERR BF.LOADCHUNK command not allowed by redis-uya standalone profile"[0: 68]));
     command_reply_cleanup(&bf_loadchunk_reply);
     resp_value_free(&bf_loadchunk_parsed.value);
+
+    var cf_add_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nCF.ADD\r\n$2\r\ncf\r\n$1\r\nx\r\n"[0: 31]);
+    const cf_add_command: Command = try command_executor_test_command(&router, &cf_add_parsed);
+    var cf_add_reply: CommandReply = command_execute_at(&engine, &cf_add_command, 1000u64);
+    try assert_eq_i32(cf_add_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(cf_add_reply.data, &"ERR CF.ADD command not allowed by redis-uya standalone profile"[0: 62]));
+    command_reply_cleanup(&cf_add_reply);
+    resp_value_free(&cf_add_parsed.value);
+
+    var cf_loadchunk_parsed: RespParseResult = try parse_resp2(&"*4\r\n$12\r\nCF.LOADCHUNK\r\n$2\r\ncf\r\n$1\r\n0\r\n$4\r\ndata\r\n"[0: 48]);
+    const cf_loadchunk_command: Command = try command_executor_test_command(&router, &cf_loadchunk_parsed);
+    var cf_loadchunk_reply: CommandReply = command_execute_at(&engine, &cf_loadchunk_command, 1000u64);
+    try assert_eq_i32(cf_loadchunk_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(cf_loadchunk_reply.data, &"ERR CF.LOADCHUNK command not allowed by redis-uya standalone profile"[0: 68]));
+    command_reply_cleanup(&cf_loadchunk_reply);
+    resp_value_free(&cf_loadchunk_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

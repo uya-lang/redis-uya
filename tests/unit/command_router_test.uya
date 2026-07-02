@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 273);
+    try assert_eq_i32(command_router_count(&router) as i32, 285);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -317,6 +317,54 @@ export fn test_command_router_lookup_and_case() !void {
     const bf_scandump: CommandInfo = try command_router_lookup(&router, &"BF.SCANDUMP"[0: 11]);
     try assert_eq_i32(bf_scandump.cmd_type as i32, CommandType.command_module_unsupported as i32);
     try assert_eq_i32(bf_scandump.arity, 3);
+
+    const cf_add: CommandInfo = try command_router_lookup(&router, &"CF.ADD"[0: 6]);
+    try assert_eq_i32(cf_add.cmd_type as i32, CommandType.command_module_unsupported as i32);
+    try assert_eq_i32(cf_add.arity, 3);
+
+    const cf_addnx: CommandInfo = try command_router_lookup(&router, &"CF.ADDNX"[0: 8]);
+    try assert_eq_i32(cf_addnx.cmd_type as i32, CommandType.command_module_unsupported as i32);
+    try assert_eq_i32(cf_addnx.arity, 3);
+
+    const cf_count: CommandInfo = try command_router_lookup(&router, &"CF.COUNT"[0: 8]);
+    try assert_eq_i32(cf_count.cmd_type as i32, CommandType.command_module_unsupported as i32);
+    try assert_eq_i32(cf_count.arity, 3);
+
+    const cf_del: CommandInfo = try command_router_lookup(&router, &"CF.DEL"[0: 6]);
+    try assert_eq_i32(cf_del.cmd_type as i32, CommandType.command_module_unsupported as i32);
+    try assert_eq_i32(cf_del.arity, 3);
+
+    const cf_exists: CommandInfo = try command_router_lookup(&router, &"CF.EXISTS"[0: 9]);
+    try assert_eq_i32(cf_exists.cmd_type as i32, CommandType.command_module_unsupported as i32);
+    try assert_eq_i32(cf_exists.arity, 3);
+
+    const cf_info: CommandInfo = try command_router_lookup(&router, &"CF.INFO"[0: 7]);
+    try assert_eq_i32(cf_info.cmd_type as i32, CommandType.command_module_unsupported as i32);
+    try assert_eq_i32(cf_info.arity, 2);
+
+    const cf_insert: CommandInfo = try command_router_lookup(&router, &"CF.INSERT"[0: 9]);
+    try assert_eq_i32(cf_insert.cmd_type as i32, CommandType.command_module_unsupported as i32);
+    try assert_eq_i32(cf_insert.arity, -3);
+
+    const cf_insertnx: CommandInfo = try command_router_lookup(&router, &"CF.INSERTNX"[0: 11]);
+    try assert_eq_i32(cf_insertnx.cmd_type as i32, CommandType.command_module_unsupported as i32);
+    try assert_eq_i32(cf_insertnx.arity, -3);
+
+    const cf_loadchunk: CommandInfo = try command_router_lookup(&router, &"CF.LOADCHUNK"[0: 12]);
+    try assert_eq_i32(cf_loadchunk.cmd_type as i32, CommandType.command_module_unsupported as i32);
+    try assert_eq_i32(cf_loadchunk.arity, 4);
+
+    const cf_mexists: CommandInfo = try command_router_lookup(&router, &"CF.MEXISTS"[0: 10]);
+    try assert_eq_i32(cf_mexists.cmd_type as i32, CommandType.command_module_unsupported as i32);
+    try assert_eq_i32(cf_mexists.arity, -2);
+
+    const cf_reserve: CommandInfo = try command_router_lookup(&router, &"CF.RESERVE"[0: 10]);
+    try assert_eq_i32(cf_reserve.cmd_type as i32, CommandType.command_module_unsupported as i32);
+    try assert_eq_i32(cf_reserve.arity, -3);
+
+    const cf_scandump: CommandInfo = try command_router_lookup(&router, &"CF.SCANDUMP"[0: 11]);
+    try assert_eq_i32(cf_scandump.cmd_type as i32, CommandType.command_module_unsupported as i32);
+    try assert_eq_i32(cf_scandump.arity, 3);
 
     const slowlog: CommandInfo = try command_router_lookup(&router, &"SLOWLOG"[0: 7]);
     try assert_eq_i32(slowlog.cmd_type as i32, CommandType.command_slowlog as i32);
@@ -1271,6 +1319,9 @@ export fn test_command_router_arity_validation() !void {
     const bf_info: CommandInfo = try command_router_lookup(&router, &"BF.INFO"[0: 7]);
     const bf_insert: CommandInfo = try command_router_lookup(&router, &"BF.INSERT"[0: 9]);
     const bf_reserve: CommandInfo = try command_router_lookup(&router, &"BF.RESERVE"[0: 10]);
+    const cf_add: CommandInfo = try command_router_lookup(&router, &"CF.ADD"[0: 6]);
+    const cf_insert: CommandInfo = try command_router_lookup(&router, &"CF.INSERT"[0: 9]);
+    const cf_reserve: CommandInfo = try command_router_lookup(&router, &"CF.RESERVE"[0: 10]);
 
     try command_validate_arity(&hello, 1);
     try command_validate_arity(&hello, 2);
@@ -1301,6 +1352,11 @@ export fn test_command_router_arity_validation() !void {
     try command_validate_arity(&bf_insert, 8);
     try command_validate_arity(&bf_reserve, 4);
     try command_validate_arity(&bf_reserve, 8);
+    try command_validate_arity(&cf_add, 3);
+    try command_validate_arity(&cf_insert, 3);
+    try command_validate_arity(&cf_insert, 8);
+    try command_validate_arity(&cf_reserve, 3);
+    try command_validate_arity(&cf_reserve, 7);
     try command_validate_arity(&get, 2);
     try command_validate_arity(&incr, 2);
     try command_validate_arity(&decr, 2);

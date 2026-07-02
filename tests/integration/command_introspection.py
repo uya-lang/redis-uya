@@ -582,6 +582,15 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"BF commands missing from COMMAND INFO: {bf_info!r}")
 
+            cf_info = send_command(sock, b"COMMAND", b"INFO", b"CF.ADD", b"CF.ADDNX", b"CF.COUNT", b"CF.DEL", b"CF.EXISTS", b"CF.INFO", b"CF.INSERT", b"CF.INSERTNX", b"CF.LOADCHUNK", b"CF.MEXISTS", b"CF.RESERVE", b"CF.SCANDUMP")
+            cf_names = [b"cf.add", b"cf.addnx", b"cf.count", b"cf.del", b"cf.exists", b"cf.info", b"cf.insert", b"cf.insertnx", b"cf.loadchunk", b"cf.mexists", b"cf.reserve", b"cf.scandump"]
+            if (
+                not isinstance(cf_info, list)
+                or len(cf_info) != len(cf_names)
+                or any(not isinstance(item, list) or item[0] != name for item, name in zip(cf_info, cf_names))
+            ):
+                raise AssertionError(f"CF commands missing from COMMAND INFO: {cf_info!r}")
+
             hotkeys_info = send_command(sock, b"COMMAND", b"INFO", b"HOTKEYS", b"HOTKEYS|HELP", b"HOTKEYS|GET", b"HOTKEYS|RESET", b"HOTKEYS|START", b"HOTKEYS|STOP")
             if (
                 not isinstance(hotkeys_info, list)
@@ -950,6 +959,18 @@ def run_smoke() -> None:
                 or b"bf.mexists" not in docs_all_resp2
                 or b"bf.reserve" not in docs_all_resp2
                 or b"bf.scandump" not in docs_all_resp2
+                or b"cf.add" not in docs_all_resp2
+                or b"cf.addnx" not in docs_all_resp2
+                or b"cf.count" not in docs_all_resp2
+                or b"cf.del" not in docs_all_resp2
+                or b"cf.exists" not in docs_all_resp2
+                or b"cf.info" not in docs_all_resp2
+                or b"cf.insert" not in docs_all_resp2
+                or b"cf.insertnx" not in docs_all_resp2
+                or b"cf.loadchunk" not in docs_all_resp2
+                or b"cf.mexists" not in docs_all_resp2
+                or b"cf.reserve" not in docs_all_resp2
+                or b"cf.scandump" not in docs_all_resp2
             ):
                 raise AssertionError(f"unexpected COMMAND DOCS all RESP2 payload: {docs_all_resp2!r}")
             if b"cluster|reset" in docs_all_resp2:
@@ -1140,6 +1161,24 @@ def run_smoke() -> None:
                 or b"bf.scandump" not in listed_bf
             ):
                 raise AssertionError(f"unexpected COMMAND LIST BF.* result: {listed_bf!r}")
+
+            listed_cf = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"CF.*")
+            if (
+                not isinstance(listed_cf, list)
+                or b"cf.add" not in listed_cf
+                or b"cf.addnx" not in listed_cf
+                or b"cf.count" not in listed_cf
+                or b"cf.del" not in listed_cf
+                or b"cf.exists" not in listed_cf
+                or b"cf.info" not in listed_cf
+                or b"cf.insert" not in listed_cf
+                or b"cf.insertnx" not in listed_cf
+                or b"cf.loadchunk" not in listed_cf
+                or b"cf.mexists" not in listed_cf
+                or b"cf.reserve" not in listed_cf
+                or b"cf.scandump" not in listed_cf
+            ):
+                raise AssertionError(f"unexpected COMMAND LIST CF.* result: {listed_cf!r}")
 
             listed_slowlog = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"SLOWLOG*")
             if (
@@ -1385,6 +1424,18 @@ def run_smoke() -> None:
                 or not isinstance(docs_all.get(b"bf.mexists"), dict)
                 or not isinstance(docs_all.get(b"bf.reserve"), dict)
                 or not isinstance(docs_all.get(b"bf.scandump"), dict)
+                or not isinstance(docs_all.get(b"cf.add"), dict)
+                or not isinstance(docs_all.get(b"cf.addnx"), dict)
+                or not isinstance(docs_all.get(b"cf.count"), dict)
+                or not isinstance(docs_all.get(b"cf.del"), dict)
+                or not isinstance(docs_all.get(b"cf.exists"), dict)
+                or not isinstance(docs_all.get(b"cf.info"), dict)
+                or not isinstance(docs_all.get(b"cf.insert"), dict)
+                or not isinstance(docs_all.get(b"cf.insertnx"), dict)
+                or not isinstance(docs_all.get(b"cf.loadchunk"), dict)
+                or not isinstance(docs_all.get(b"cf.mexists"), dict)
+                or not isinstance(docs_all.get(b"cf.reserve"), dict)
+                or not isinstance(docs_all.get(b"cf.scandump"), dict)
             ):
                 raise AssertionError(f"unexpected COMMAND DOCS all RESP3 payload: {docs_all!r}")
             if b"cluster|reset" in docs_all:

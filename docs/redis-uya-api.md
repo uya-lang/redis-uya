@@ -3296,6 +3296,34 @@ BF.SCANDUMP key iterator
 - 当前实现为 `standalone-error`：命令进入运行时路由和 `COMMAND*` 可见面，但 redis-uya 不加载 RedisBloom 模块，也不维护 Bloom filter 编码
 - `BF.*` 不读取或修改本地 keyspace，不写入 AOF 或复制 backlog
 
+### RedisBloom `CF.*`
+
+格式：
+
+```text
+CF.ADD key item
+CF.ADDNX key item
+CF.COUNT key item
+CF.DEL key item
+CF.EXISTS key item
+CF.INFO key
+CF.INSERT key [CAPACITY capacity] [NOCREATE] ITEMS item [item ...]
+CF.INSERTNX key [CAPACITY capacity] [NOCREATE] ITEMS item [item ...]
+CF.LOADCHUNK key iterator data
+CF.MEXISTS key item [item ...]
+CF.RESERVE key capacity [BUCKETSIZE bucketsize] [MAXITERATIONS maxiterations] [EXPANSION expansion]
+CF.SCANDUMP key iterator
+```
+
+返回：
+
+- 当前统一返回：`-ERR <CF command> command not allowed by redis-uya standalone profile`
+
+说明：
+
+- 当前实现为 `standalone-error`：命令进入运行时路由和 `COMMAND*` 可见面，但 redis-uya 不加载 RedisBloom 模块，也不维护 Cuckoo filter 编码
+- `CF.*` 不读取或修改本地 keyspace，不写入 AOF 或复制 backlog
+
 ### `SLOWLOG`
 
 格式：

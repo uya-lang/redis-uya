@@ -299,7 +299,7 @@ export const COMMAND_FLAG_READONLY: u64 = 1u64;
 export const COMMAND_FLAG_WRITE: u64 = 2u64;
 export const COMMAND_FLAG_FAST: u64 = 4u64;
 
-const MIN_COMMAND_COUNT: usize = 273;
+const MIN_COMMAND_COUNT: usize = 285;
 
 fn command_router_name_eq(a: &[byte], b: &[byte]) bool {
     return bytes_ascii_case_eq(a, b);
@@ -1157,6 +1157,42 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
     }
     if index == 272 {
         return command_router_info(CommandType.command_module_unsupported, &"BF.SCANDUMP"[0: 11], 3, COMMAND_FLAG_WRITE, 1, 1, 1);
+    }
+    if index == 273 {
+        return command_router_info(CommandType.command_module_unsupported, &"CF.ADD"[0: 6], 3, COMMAND_FLAG_WRITE, 1, 1, 1);
+    }
+    if index == 274 {
+        return command_router_info(CommandType.command_module_unsupported, &"CF.ADDNX"[0: 8], 3, COMMAND_FLAG_WRITE, 1, 1, 1);
+    }
+    if index == 275 {
+        return command_router_info(CommandType.command_module_unsupported, &"CF.COUNT"[0: 8], 3, COMMAND_FLAG_READONLY, 1, 1, 1);
+    }
+    if index == 276 {
+        return command_router_info(CommandType.command_module_unsupported, &"CF.DEL"[0: 6], 3, COMMAND_FLAG_WRITE, 1, 1, 1);
+    }
+    if index == 277 {
+        return command_router_info(CommandType.command_module_unsupported, &"CF.EXISTS"[0: 9], 3, COMMAND_FLAG_READONLY, 1, 1, 1);
+    }
+    if index == 278 {
+        return command_router_info(CommandType.command_module_unsupported, &"CF.INFO"[0: 7], 2, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 279 {
+        return command_router_info(CommandType.command_module_unsupported, &"CF.INSERT"[0: 9], -3, COMMAND_FLAG_WRITE, 1, 1, 1);
+    }
+    if index == 280 {
+        return command_router_info(CommandType.command_module_unsupported, &"CF.INSERTNX"[0: 11], -3, COMMAND_FLAG_WRITE, 1, 1, 1);
+    }
+    if index == 281 {
+        return command_router_info(CommandType.command_module_unsupported, &"CF.LOADCHUNK"[0: 12], 4, COMMAND_FLAG_WRITE, 1, 1, 1);
+    }
+    if index == 282 {
+        return command_router_info(CommandType.command_module_unsupported, &"CF.MEXISTS"[0: 10], -2, COMMAND_FLAG_READONLY, 1, 1, 1);
+    }
+    if index == 283 {
+        return command_router_info(CommandType.command_module_unsupported, &"CF.RESERVE"[0: 10], -3, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 284 {
+        return command_router_info(CommandType.command_module_unsupported, &"CF.SCANDUMP"[0: 11], 3, COMMAND_FLAG_WRITE, 1, 1, 1);
     }
     return error.CommandUnknown;
 }

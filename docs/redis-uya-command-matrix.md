@@ -18,7 +18,7 @@
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
 | Tier A: standalone core | 365 | 259 | 146 | 209 | 7 | 3 | 0 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
-| Tier C: module commands | 153 | 146 | 0 | 0 | 10 | 0 | 143 |
+| Tier C: module commands | 153 | 146 | 0 | 0 | 22 | 0 | 131 |
 
 ## Status counts
 
@@ -26,9 +26,9 @@
 |--------|-------|
 | `full` | `147` |
 | `partial` | `216` |
-| `standalone-error` | `43` |
+| `standalone-error` | `55` |
 | `alias` | `3` |
-| `deferred` | `143` |
+| `deferred` | `131` |
 
 ## Group counts
 
@@ -126,18 +126,18 @@
 | `bzmpop` | `sorted-set` | `partial` | `-` | `-5` | `-` | `no` | `@write, @sortedset, @slow, @blocking` |
 | `bzpopmax` | `sorted-set` | `partial` | `-` | `-3` | `-` | `no` | `@write, @sortedset, @fast, @blocking` |
 | `bzpopmin` | `sorted-set` | `partial` | `-` | `-3` | `-` | `no` | `@write, @sortedset, @fast, @blocking` |
-| `cf.add` | `cf` | `deferred` | `v0.9.2` | `3` | `cf` | `no` | `@cuckoo, @write, @slow` |
-| `cf.addnx` | `cf` | `deferred` | `v0.9.2` | `3` | `cf` | `no` | `@cuckoo, @write, @slow` |
-| `cf.count` | `cf` | `deferred` | `v0.9.2` | `3` | `cf` | `no` | `@cuckoo, @read, @slow` |
-| `cf.del` | `cf` | `deferred` | `v0.9.2` | `3` | `cf` | `no` | `@cuckoo, @write, @slow` |
-| `cf.exists` | `cf` | `deferred` | `v0.9.2` | `3` | `cf` | `no` | `@cuckoo, @read, @slow` |
-| `cf.info` | `cf` | `deferred` | `v0.9.2` | `2` | `cf` | `no` | `@cuckoo, @read, @fast` |
-| `cf.insert` | `cf` | `deferred` | `v0.9.2` | `-3` | `cf` | `no` | `@cuckoo, @write, @slow` |
-| `cf.insertnx` | `cf` | `deferred` | `v0.9.2` | `-3` | `cf` | `no` | `@cuckoo, @write, @slow` |
-| `cf.loadchunk` | `cf` | `deferred` | `v0.9.2` | `4` | `cf` | `no` | `@cuckoo, @write, @slow` |
-| `cf.mexists` | `cf` | `deferred` | `v0.9.2` | `-2` | `cf` | `no` | `@cuckoo, @read, @slow` |
-| `cf.reserve` | `cf` | `deferred` | `v0.9.2` | `-3` | `cf` | `no` | `@cuckoo, @write, @fast` |
-| `cf.scandump` | `cf` | `deferred` | `v0.9.2` | `3` | `cf` | `no` | `@cuckoo, @write, @slow` |
+| `cf.add` | `cf` | `standalone-error` | `v1.1.0` | `3` | `cf` | `no` | `@cuckoo, @write, @slow` |
+| `cf.addnx` | `cf` | `standalone-error` | `v1.1.0` | `3` | `cf` | `no` | `@cuckoo, @write, @slow` |
+| `cf.count` | `cf` | `standalone-error` | `v1.1.0` | `3` | `cf` | `no` | `@cuckoo, @read, @slow` |
+| `cf.del` | `cf` | `standalone-error` | `v1.1.0` | `3` | `cf` | `no` | `@cuckoo, @write, @slow` |
+| `cf.exists` | `cf` | `standalone-error` | `v1.1.0` | `3` | `cf` | `no` | `@cuckoo, @read, @slow` |
+| `cf.info` | `cf` | `standalone-error` | `v1.1.0` | `2` | `cf` | `no` | `@cuckoo, @read, @fast` |
+| `cf.insert` | `cf` | `standalone-error` | `v1.1.0` | `-3` | `cf` | `no` | `@cuckoo, @write, @slow` |
+| `cf.insertnx` | `cf` | `standalone-error` | `v1.1.0` | `-3` | `cf` | `no` | `@cuckoo, @write, @slow` |
+| `cf.loadchunk` | `cf` | `standalone-error` | `v1.1.0` | `4` | `cf` | `no` | `@cuckoo, @write, @slow` |
+| `cf.mexists` | `cf` | `standalone-error` | `v1.1.0` | `-2` | `cf` | `no` | `@cuckoo, @read, @slow` |
+| `cf.reserve` | `cf` | `standalone-error` | `v1.1.0` | `-3` | `cf` | `no` | `@cuckoo, @write, @fast` |
+| `cf.scandump` | `cf` | `standalone-error` | `v1.1.0` | `3` | `cf` | `no` | `@cuckoo, @write, @slow` |
 | `client` | `connection` | `partial` | `-` | `-2` | `-` | `no` | `@slow` |
 | `client|caching` | `connection` | `partial` | `-` | `3` | `-` | `no` | `@slow, @connection` |
 | `client|getname` | `connection` | `partial` | `-` | `2` | `-` | `no` | `@slow, @connection` |

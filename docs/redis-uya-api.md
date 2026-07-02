@@ -1902,6 +1902,23 @@ RESTORE-ASKING key ttl serialized-value
 - 当前实现为迁移兼容 partial，复用 `RESTORE` 的单 DB RDB payload 写入路径
 - 当前不支持集群 ASKING 状态校验，也不支持 `REPLACE` / `ABSTTL` / `IDLETIME` / `FREQ`
 
+### `MIGRATE`
+
+格式：
+
+```text
+MIGRATE host port key destination-db timeout [COPY] [REPLACE] [AUTH password] [AUTH2 username password] [KEYS key [key ...]]
+```
+
+返回：
+
+- 当前统一返回：`-ERR MIGRATE command not allowed by redis-uya standalone profile`
+
+说明：
+
+- 当前实现为 `standalone-error`：命令进入运行时路由和 `COMMAND*` 可见面，但 redis-uya 单机安全 profile 不主动连接远端 Redis、不执行跨实例 `DUMP/RESTORE` 迁移
+- `MIGRATE` 不写入 AOF 或复制 backlog，也不会改变本地 keyspace
+
 ### `SELECT`
 
 格式：

@@ -10523,6 +10523,12 @@ fn command_executor_move(runtime: &CommandRuntimeInfo, command: &Command) Comman
     return command_executor_error(&"ERR source and destination objects are the same"[0: 47]);
 }
 
+fn command_executor_migrate(runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
+    _ = runtime;
+    _ = command;
+    return command_executor_error(&"ERR MIGRATE command not allowed by redis-uya standalone profile"[0: 63]);
+}
+
 fn command_executor_swapdb(runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
     _ = runtime;
     if command.argc != 3 {
@@ -20602,6 +20608,9 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
     }
     if command.info.cmd_type == CommandType.command_move {
         return command_executor_move(runtime, command);
+    }
+    if command.info.cmd_type == CommandType.command_migrate {
+        return command_executor_migrate(runtime, command);
     }
     if command.info.cmd_type == CommandType.command_swapdb {
         return command_executor_swapdb(runtime, command);

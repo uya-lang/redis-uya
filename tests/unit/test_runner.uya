@@ -164,6 +164,7 @@ use tests.unit.command_executor_test.test_command_swapdb;
 use tests.unit.command_executor_test.test_command_lolwut;
 use tests.unit.command_executor_test.test_command_debug;
 use tests.unit.command_executor_test.test_command_failover;
+use tests.unit.command_executor_test.test_command_migrate;
 use tests.unit.command_executor_test.test_command_wait;
 use tests.unit.command_executor_test.test_command_sort;
 use tests.unit.command_executor_test.test_command_error_paths;
@@ -880,6 +881,10 @@ export fn main() i32 {
     const before_exec_failover: i32 = failed;
     _ = test_command_failover() catch { printf("[FAIL] command_executor/failover\n" as *byte); failed = failed + 1; };
     if failed == before_exec_failover { printf("[PASS] command_executor/failover\n" as *byte); }
+
+    const before_exec_migrate: i32 = failed;
+    _ = test_command_migrate() catch { printf("[FAIL] command_executor/migrate\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_migrate { printf("[PASS] command_executor/migrate\n" as *byte); }
 
     const before_exec_wait: i32 = failed;
     _ = test_command_wait() catch { printf("[FAIL] command_executor/wait\n" as *byte); failed = failed + 1; };

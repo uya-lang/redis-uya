@@ -2962,6 +2962,12 @@ if [[ "$DEBUG_RESULT" != "ERR DEBUG command not allowed by redis-uya standalone 
     exit 1
 fi
 
+MIGRATE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" migrate 127.0.0.1 6380 k 0 1000 2>&1 || true)"
+if [[ "$MIGRATE_RESULT" != "ERR MIGRATE command not allowed by redis-uya standalone profile" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected MIGRATE disabled error, got '$MIGRATE_RESULT'" >&2
+    exit 1
+fi
+
 FAILOVER_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" failover 2>&1 || true)"
 if [[ "$FAILOVER_RESULT" != "ERR FAILOVER requires connected replicas." ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected FAILOVER no replicas error, got '$FAILOVER_RESULT'" >&2

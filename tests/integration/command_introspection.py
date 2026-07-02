@@ -359,6 +359,9 @@ def run_smoke() -> None:
             hmset_info = send_command(sock, b"COMMAND", b"INFO", b"HMSET")
             if not isinstance(hmset_info, list) or len(hmset_info) != 1 or hmset_info[0][0] != b"hmset":
                 raise AssertionError(f"COMMAND INFO HMSET returned wrong payload: {hmset_info!r}")
+            migrate_info = send_command(sock, b"COMMAND", b"INFO", b"MIGRATE")
+            if not isinstance(migrate_info, list) or len(migrate_info) != 1 or migrate_info[0][0] != b"migrate":
+                raise AssertionError(f"COMMAND INFO MIGRATE returned wrong payload: {migrate_info!r}")
             sharded_pubsub_info = send_command(sock, b"COMMAND", b"INFO", b"SPUBLISH", b"SSUBSCRIBE", b"SUNSUBSCRIBE")
             if (
                 not isinstance(sharded_pubsub_info, list)
@@ -986,6 +989,10 @@ def run_smoke() -> None:
             listed_failover = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"FAIL*")
             if not isinstance(listed_failover, list) or b"failover" not in listed_failover:
                 raise AssertionError(f"unexpected COMMAND LIST FAIL* result: {listed_failover!r}")
+
+            listed_migrate = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"MIGR*")
+            if not isinstance(listed_migrate, list) or listed_migrate != [b"migrate"]:
+                raise AssertionError(f"unexpected COMMAND LIST MIGR* result: {listed_migrate!r}")
 
             listed_hotkeys = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"HOTKEYS*")
             if not isinstance(listed_hotkeys, list) or b"hotkeys" not in listed_hotkeys or b"hotkeys|get" not in listed_hotkeys:

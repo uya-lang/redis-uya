@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 146 | 209 | 6 | 3 | 1 |
+| Tier A: standalone core | 365 | 259 | 146 | 209 | 7 | 3 | 0 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 0 | 0 | 153 |
 
@@ -26,9 +26,9 @@
 |--------|-------|
 | `full` | `147` |
 | `partial` | `216` |
-| `standalone-error` | `32` |
+| `standalone-error` | `33` |
 | `alias` | `3` |
-| `deferred` | `154` |
+| `deferred` | `153` |
 
 ## Group counts
 
@@ -388,7 +388,7 @@
 | `memory|stats` | `server` | `partial` | `-` | `2` | `-` | `no` | `@slow` |
 | `memory|usage` | `server` | `partial` | `-` | `-3` | `-` | `no` | `@read, @slow` |
 | `mget` | `string` | `full` | `-` | `-2` | `-` | `no` | `@read, @string, @fast` |
-| `migrate` | `generic` | `deferred` | `v0.9.1` | `-6` | `-` | `no` | `@keyspace, @write, @slow, @dangerous` |
+| `migrate` | `generic` | `standalone-error` | `v1.1.0` | `-6` | `-` | `no` | `@keyspace, @write, @slow, @dangerous` |
 | `module` | `server` | `partial` | `-` | `-2` | `-` | `no` | `@slow` |
 | `module|help` | `server` | `partial` | `-` | `2` | `-` | `no` | `@slow` |
 | `module|list` | `server` | `partial` | `-` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |

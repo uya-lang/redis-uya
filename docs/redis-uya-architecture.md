@@ -118,6 +118,7 @@ server open
 - `PFADD` / `PFCOUNT` / `PFMERGE` 当前使用项目内 set 对象保存 exact HLL 成员视图；`PFSELFTEST` 是 no-op self-test 兼容面，返回 `OK`，不触发 Redis 原生 HLL 编码自检；`PFDEBUG` 是安全 profile 下的 standalone-error，不开放内部 HLL 调试输出
 - `SWAPDB` 当前由执行层按单 DB 模型处理；`0 0` 是 no-op partial，任一非 `0` DB 返回越界错误，真实多 DB 数据交换保留到多 DB 模型落地后再补
 - `LOLWUT` 当前由执行层返回固定 bulk 文本 partial，只校验 `VERSION` 的整数参数，不读取或修改存储状态
+- `MIGRATE` 当前由执行层作为单机安全 profile 的 `standalone-error` 处理；命令可见但不会建立远端连接、不会执行跨实例迁移，也不进入 AOF/复制传播
 - `WAIT` / `WAITAOF` 由执行层提供当前复制/持久化等待兼容面；`WAIT` 在无副本 ACK 收敛路径下返回 `0`，`WAITAOF` 返回 `[local, replicas]`，其中本地确认按 `numlocal` 归一到 `0/1`，副本 AOF ACK 当前固定为 `0`
 - 空闲客户端不再阻塞活跃客户端
 - `v0.8.0` 已新增 `io_uring` 主机能力评估报告，但生产事件循环仍绑定在 epoll 路径；后续只有在独立原型和 benchmark 证明收益后才考虑切换

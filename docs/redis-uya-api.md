@@ -3346,6 +3346,29 @@ CMS.QUERY key item [item ...]
 - 当前实现为 `standalone-error`：命令进入运行时路由和 `COMMAND*` 可见面，但 redis-uya 不加载 RedisBloom 模块，也不维护 Count-Min Sketch 编码
 - `CMS.*` 不读取或修改本地 keyspace，不写入 AOF 或复制 backlog
 
+### RedisBloom `TOPK.*`
+
+格式：
+
+```text
+TOPK.ADD key item [item ...]
+TOPK.COUNT key item [item ...]
+TOPK.INCRBY key item increment [item increment ...]
+TOPK.INFO key
+TOPK.LIST key [WITHCOUNT]
+TOPK.QUERY key item [item ...]
+TOPK.RESERVE key topk [width depth decay]
+```
+
+返回：
+
+- 当前统一返回：`-ERR <TOPK command> command not allowed by redis-uya standalone profile`
+
+说明：
+
+- 当前实现为 `standalone-error`：命令进入运行时路由和 `COMMAND*` 可见面，但 redis-uya 不加载 RedisBloom 模块，也不维护 Top-K 编码
+- `TOPK.*` 不读取或修改本地 keyspace，不写入 AOF 或复制 backlog
+
 ### `SLOWLOG`
 
 格式：

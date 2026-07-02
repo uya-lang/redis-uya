@@ -600,6 +600,15 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"CMS commands missing from COMMAND INFO: {cms_info!r}")
 
+            topk_info = send_command(sock, b"COMMAND", b"INFO", b"TOPK.ADD", b"TOPK.COUNT", b"TOPK.INCRBY", b"TOPK.INFO", b"TOPK.LIST", b"TOPK.QUERY", b"TOPK.RESERVE")
+            topk_names = [b"topk.add", b"topk.count", b"topk.incrby", b"topk.info", b"topk.list", b"topk.query", b"topk.reserve"]
+            if (
+                not isinstance(topk_info, list)
+                or len(topk_info) != len(topk_names)
+                or any(not isinstance(item, list) or item[0] != name for item, name in zip(topk_info, topk_names))
+            ):
+                raise AssertionError(f"TOPK commands missing from COMMAND INFO: {topk_info!r}")
+
             hotkeys_info = send_command(sock, b"COMMAND", b"INFO", b"HOTKEYS", b"HOTKEYS|HELP", b"HOTKEYS|GET", b"HOTKEYS|RESET", b"HOTKEYS|START", b"HOTKEYS|STOP")
             if (
                 not isinstance(hotkeys_info, list)
@@ -986,6 +995,13 @@ def run_smoke() -> None:
                 or b"cms.initbyprob" not in docs_all_resp2
                 or b"cms.merge" not in docs_all_resp2
                 or b"cms.query" not in docs_all_resp2
+                or b"topk.add" not in docs_all_resp2
+                or b"topk.count" not in docs_all_resp2
+                or b"topk.incrby" not in docs_all_resp2
+                or b"topk.info" not in docs_all_resp2
+                or b"topk.list" not in docs_all_resp2
+                or b"topk.query" not in docs_all_resp2
+                or b"topk.reserve" not in docs_all_resp2
             ):
                 raise AssertionError(f"unexpected COMMAND DOCS all RESP2 payload: {docs_all_resp2!r}")
             if b"cluster|reset" in docs_all_resp2:
@@ -1206,6 +1222,19 @@ def run_smoke() -> None:
                 or b"cms.query" not in listed_cms
             ):
                 raise AssertionError(f"unexpected COMMAND LIST CMS.* result: {listed_cms!r}")
+
+            listed_topk = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"TOPK.*")
+            if (
+                not isinstance(listed_topk, list)
+                or b"topk.add" not in listed_topk
+                or b"topk.count" not in listed_topk
+                or b"topk.incrby" not in listed_topk
+                or b"topk.info" not in listed_topk
+                or b"topk.list" not in listed_topk
+                or b"topk.query" not in listed_topk
+                or b"topk.reserve" not in listed_topk
+            ):
+                raise AssertionError(f"unexpected COMMAND LIST TOPK.* result: {listed_topk!r}")
 
             listed_slowlog = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"SLOWLOG*")
             if (
@@ -1469,6 +1498,13 @@ def run_smoke() -> None:
                 or not isinstance(docs_all.get(b"cms.initbyprob"), dict)
                 or not isinstance(docs_all.get(b"cms.merge"), dict)
                 or not isinstance(docs_all.get(b"cms.query"), dict)
+                or not isinstance(docs_all.get(b"topk.add"), dict)
+                or not isinstance(docs_all.get(b"topk.count"), dict)
+                or not isinstance(docs_all.get(b"topk.incrby"), dict)
+                or not isinstance(docs_all.get(b"topk.info"), dict)
+                or not isinstance(docs_all.get(b"topk.list"), dict)
+                or not isinstance(docs_all.get(b"topk.query"), dict)
+                or not isinstance(docs_all.get(b"topk.reserve"), dict)
             ):
                 raise AssertionError(f"unexpected COMMAND DOCS all RESP3 payload: {docs_all!r}")
             if b"cluster|reset" in docs_all:

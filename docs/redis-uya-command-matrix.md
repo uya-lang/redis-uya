@@ -18,7 +18,7 @@
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
 | Tier A: standalone core | 365 | 259 | 146 | 209 | 7 | 3 | 0 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
-| Tier C: module commands | 153 | 146 | 0 | 0 | 28 | 0 | 125 |
+| Tier C: module commands | 153 | 146 | 0 | 0 | 35 | 0 | 118 |
 
 ## Status counts
 
@@ -26,9 +26,9 @@
 |--------|-------|
 | `full` | `147` |
 | `partial` | `216` |
-| `standalone-error` | `61` |
+| `standalone-error` | `68` |
 | `alias` | `3` |
-| `deferred` | `125` |
+| `deferred` | `118` |
 
 ## Group counts
 
@@ -510,13 +510,13 @@
 | `tdigest.revrank` | `tdigest` | `deferred` | `v0.9.2` | `-2` | `tdigest` | `no` | `@tdigest, @read` |
 | `tdigest.trimmed_mean` | `tdigest` | `deferred` | `v0.9.2` | `4` | `tdigest` | `no` | `@tdigest, @read` |
 | `time` | `server` | `full` | `-` | `1` | `-` | `no` | `@fast` |
-| `topk.add` | `topk` | `deferred` | `v0.9.2` | `-2` | `topk` | `no` | `@topk, @write, @slow` |
-| `topk.count` | `topk` | `deferred` | `v0.9.2` | `-2` | `topk` | `no` | `@topk, @read, @slow` |
-| `topk.incrby` | `topk` | `deferred` | `v0.9.2` | `-2` | `topk` | `no` | `@topk, @write, @slow` |
-| `topk.info` | `topk` | `deferred` | `v0.9.2` | `2` | `topk` | `no` | `@topk, @read, @fast` |
-| `topk.list` | `topk` | `deferred` | `v0.9.2` | `-2` | `topk` | `no` | `@topk, @read, @slow` |
-| `topk.query` | `topk` | `deferred` | `v0.9.2` | `-2` | `topk` | `no` | `@topk, @read, @slow` |
-| `topk.reserve` | `topk` | `deferred` | `v0.9.2` | `-3` | `topk` | `no` | `@topk, @write, @fast` |
+| `topk.add` | `topk` | `standalone-error` | `v1.1.0` | `-2` | `topk` | `no` | `@topk, @write, @slow` |
+| `topk.count` | `topk` | `standalone-error` | `v1.1.0` | `-2` | `topk` | `no` | `@topk, @read, @slow` |
+| `topk.incrby` | `topk` | `standalone-error` | `v1.1.0` | `-2` | `topk` | `no` | `@topk, @write, @slow` |
+| `topk.info` | `topk` | `standalone-error` | `v1.1.0` | `2` | `topk` | `no` | `@topk, @read, @fast` |
+| `topk.list` | `topk` | `standalone-error` | `v1.1.0` | `-2` | `topk` | `no` | `@topk, @read, @slow` |
+| `topk.query` | `topk` | `standalone-error` | `v1.1.0` | `-2` | `topk` | `no` | `@topk, @read, @slow` |
+| `topk.reserve` | `topk` | `standalone-error` | `v1.1.0` | `-3` | `topk` | `no` | `@topk, @write, @fast` |
 | `touch` | `generic` | `full` | `-` | `-2` | `-` | `no` | `@keyspace, @read, @fast` |
 | `ts.add` | `timeseries` | `deferred` | `v0.9.2` | `-4` | `ts` | `no` | `@timeseries, @write, @slow` |
 | `ts.alter` | `timeseries` | `deferred` | `v0.9.2` | `-2` | `ts` | `no` | `@timeseries, @write, @slow` |

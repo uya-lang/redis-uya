@@ -1088,6 +1088,12 @@ if [[ "$CMS_INCRBY_RESULT" != "ERR CMS.INCRBY command not allowed by redis-uya s
     exit 1
 fi
 
+TOPK_ADD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" topk.add topk x 2>&1 || true)"
+if [[ "$TOPK_ADD_RESULT" != "ERR TOPK.ADD command not allowed by redis-uya standalone profile" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected TOPK.ADD disabled error, got '$TOPK_ADD_RESULT'" >&2
+    exit 1
+fi
+
 HOTKEYS_HELP_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hotkeys help)"
 if [[ "$HOTKEYS_HELP_RESULT" != *"HOTKEYS GET"* ]] || [[ "$HOTKEYS_HELP_RESULT" != *"HOTKEYS START"* ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected HOTKEYS HELP payload, got '$HOTKEYS_HELP_RESULT'" >&2

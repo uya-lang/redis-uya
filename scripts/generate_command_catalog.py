@@ -533,6 +533,13 @@ STANDALONE_ERROR_NAMES = {
     "module|loadex",
     "module|unload",
     "pfdebug",
+    "topk.add",
+    "topk.count",
+    "topk.incrby",
+    "topk.info",
+    "topk.list",
+    "topk.query",
+    "topk.reserve",
 }
 
 ALIAS_NAMES = {

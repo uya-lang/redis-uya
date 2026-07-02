@@ -609,6 +609,15 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"TOPK commands missing from COMMAND INFO: {topk_info!r}")
 
+            tdigest_info = send_command(sock, b"COMMAND", b"INFO", b"TDIGEST.ADD", b"TDIGEST.BYRANK", b"TDIGEST.BYREVRANK", b"TDIGEST.CDF", b"TDIGEST.CREATE", b"TDIGEST.INFO", b"TDIGEST.MAX", b"TDIGEST.MERGE", b"TDIGEST.MIN", b"TDIGEST.QUANTILE", b"TDIGEST.RANK", b"TDIGEST.RESET", b"TDIGEST.REVRANK", b"TDIGEST.TRIMMED_MEAN")
+            tdigest_names = [b"tdigest.add", b"tdigest.byrank", b"tdigest.byrevrank", b"tdigest.cdf", b"tdigest.create", b"tdigest.info", b"tdigest.max", b"tdigest.merge", b"tdigest.min", b"tdigest.quantile", b"tdigest.rank", b"tdigest.reset", b"tdigest.revrank", b"tdigest.trimmed_mean"]
+            if (
+                not isinstance(tdigest_info, list)
+                or len(tdigest_info) != len(tdigest_names)
+                or any(not isinstance(item, list) or item[0] != name for item, name in zip(tdigest_info, tdigest_names))
+            ):
+                raise AssertionError(f"TDIGEST commands missing from COMMAND INFO: {tdigest_info!r}")
+
             hotkeys_info = send_command(sock, b"COMMAND", b"INFO", b"HOTKEYS", b"HOTKEYS|HELP", b"HOTKEYS|GET", b"HOTKEYS|RESET", b"HOTKEYS|START", b"HOTKEYS|STOP")
             if (
                 not isinstance(hotkeys_info, list)
@@ -1002,6 +1011,20 @@ def run_smoke() -> None:
                 or b"topk.list" not in docs_all_resp2
                 or b"topk.query" not in docs_all_resp2
                 or b"topk.reserve" not in docs_all_resp2
+                or b"tdigest.add" not in docs_all_resp2
+                or b"tdigest.byrank" not in docs_all_resp2
+                or b"tdigest.byrevrank" not in docs_all_resp2
+                or b"tdigest.cdf" not in docs_all_resp2
+                or b"tdigest.create" not in docs_all_resp2
+                or b"tdigest.info" not in docs_all_resp2
+                or b"tdigest.max" not in docs_all_resp2
+                or b"tdigest.merge" not in docs_all_resp2
+                or b"tdigest.min" not in docs_all_resp2
+                or b"tdigest.quantile" not in docs_all_resp2
+                or b"tdigest.rank" not in docs_all_resp2
+                or b"tdigest.reset" not in docs_all_resp2
+                or b"tdigest.revrank" not in docs_all_resp2
+                or b"tdigest.trimmed_mean" not in docs_all_resp2
             ):
                 raise AssertionError(f"unexpected COMMAND DOCS all RESP2 payload: {docs_all_resp2!r}")
             if b"cluster|reset" in docs_all_resp2:
@@ -1235,6 +1258,26 @@ def run_smoke() -> None:
                 or b"topk.reserve" not in listed_topk
             ):
                 raise AssertionError(f"unexpected COMMAND LIST TOPK.* result: {listed_topk!r}")
+
+            listed_tdigest = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"TDIGEST.*")
+            if (
+                not isinstance(listed_tdigest, list)
+                or b"tdigest.add" not in listed_tdigest
+                or b"tdigest.byrank" not in listed_tdigest
+                or b"tdigest.byrevrank" not in listed_tdigest
+                or b"tdigest.cdf" not in listed_tdigest
+                or b"tdigest.create" not in listed_tdigest
+                or b"tdigest.info" not in listed_tdigest
+                or b"tdigest.max" not in listed_tdigest
+                or b"tdigest.merge" not in listed_tdigest
+                or b"tdigest.min" not in listed_tdigest
+                or b"tdigest.quantile" not in listed_tdigest
+                or b"tdigest.rank" not in listed_tdigest
+                or b"tdigest.reset" not in listed_tdigest
+                or b"tdigest.revrank" not in listed_tdigest
+                or b"tdigest.trimmed_mean" not in listed_tdigest
+            ):
+                raise AssertionError(f"unexpected COMMAND LIST TDIGEST.* result: {listed_tdigest!r}")
 
             listed_slowlog = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"SLOWLOG*")
             if (
@@ -1505,6 +1548,20 @@ def run_smoke() -> None:
                 or not isinstance(docs_all.get(b"topk.list"), dict)
                 or not isinstance(docs_all.get(b"topk.query"), dict)
                 or not isinstance(docs_all.get(b"topk.reserve"), dict)
+                or not isinstance(docs_all.get(b"tdigest.add"), dict)
+                or not isinstance(docs_all.get(b"tdigest.byrank"), dict)
+                or not isinstance(docs_all.get(b"tdigest.byrevrank"), dict)
+                or not isinstance(docs_all.get(b"tdigest.cdf"), dict)
+                or not isinstance(docs_all.get(b"tdigest.create"), dict)
+                or not isinstance(docs_all.get(b"tdigest.info"), dict)
+                or not isinstance(docs_all.get(b"tdigest.max"), dict)
+                or not isinstance(docs_all.get(b"tdigest.merge"), dict)
+                or not isinstance(docs_all.get(b"tdigest.min"), dict)
+                or not isinstance(docs_all.get(b"tdigest.quantile"), dict)
+                or not isinstance(docs_all.get(b"tdigest.rank"), dict)
+                or not isinstance(docs_all.get(b"tdigest.reset"), dict)
+                or not isinstance(docs_all.get(b"tdigest.revrank"), dict)
+                or not isinstance(docs_all.get(b"tdigest.trimmed_mean"), dict)
             ):
                 raise AssertionError(f"unexpected COMMAND DOCS all RESP3 payload: {docs_all!r}")
             if b"cluster|reset" in docs_all:

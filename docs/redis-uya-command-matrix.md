@@ -18,7 +18,7 @@
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
 | Tier A: standalone core | 365 | 259 | 146 | 209 | 7 | 3 | 0 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
-| Tier C: module commands | 153 | 146 | 0 | 0 | 35 | 0 | 118 |
+| Tier C: module commands | 153 | 146 | 0 | 0 | 49 | 0 | 104 |
 
 ## Status counts
 
@@ -26,9 +26,9 @@
 |--------|-------|
 | `full` | `147` |
 | `partial` | `216` |
-| `standalone-error` | `68` |
+| `standalone-error` | `82` |
 | `alias` | `3` |
-| `deferred` | `118` |
+| `deferred` | `104` |
 
 ## Group counts
 
@@ -495,20 +495,20 @@
 | `sunsubscribe` | `pubsub` | `partial` | `-` | `-1` | `-` | `no` | `@pubsub, @slow` |
 | `swapdb` | `server` | `partial` | `-` | `3` | `-` | `no` | `@keyspace, @write, @fast, @dangerous` |
 | `sync` | `server` | `partial` | `-` | `1` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `tdigest.add` | `tdigest` | `deferred` | `v0.9.2` | `-2` | `tdigest` | `no` | `@tdigest, @write, @slow` |
-| `tdigest.byrank` | `tdigest` | `deferred` | `v0.9.2` | `-2` | `tdigest` | `no` | `@tdigest, @read` |
-| `tdigest.byrevrank` | `tdigest` | `deferred` | `v0.9.2` | `-2` | `tdigest` | `no` | `@tdigest, @read` |
-| `tdigest.cdf` | `tdigest` | `deferred` | `v0.9.2` | `-2` | `tdigest` | `no` | `@tdigest, @read` |
-| `tdigest.create` | `tdigest` | `deferred` | `v0.9.2` | `-2` | `tdigest` | `no` | `@tdigest, @write` |
-| `tdigest.info` | `tdigest` | `deferred` | `v0.9.2` | `2` | `tdigest` | `no` | `@tdigest, @read` |
-| `tdigest.max` | `tdigest` | `deferred` | `v0.9.2` | `2` | `tdigest` | `no` | `@tdigest, @read, @fast` |
-| `tdigest.merge` | `tdigest` | `deferred` | `v0.9.2` | `-3` | `tdigest` | `no` | `@tdigest, @write, @slow` |
-| `tdigest.min` | `tdigest` | `deferred` | `v0.9.2` | `2` | `tdigest` | `no` | `@tdigest, @read, @fast` |
-| `tdigest.quantile` | `tdigest` | `deferred` | `v0.9.2` | `-2` | `tdigest` | `no` | `@tdigest, @read` |
-| `tdigest.rank` | `tdigest` | `deferred` | `v0.9.2` | `-2` | `tdigest` | `no` | `@tdigest, @read` |
-| `tdigest.reset` | `tdigest` | `deferred` | `v0.9.2` | `2` | `tdigest` | `no` | `@tdigest, @write, @fast` |
-| `tdigest.revrank` | `tdigest` | `deferred` | `v0.9.2` | `-2` | `tdigest` | `no` | `@tdigest, @read` |
-| `tdigest.trimmed_mean` | `tdigest` | `deferred` | `v0.9.2` | `4` | `tdigest` | `no` | `@tdigest, @read` |
+| `tdigest.add` | `tdigest` | `standalone-error` | `v1.1.0` | `-2` | `tdigest` | `no` | `@tdigest, @write, @slow` |
+| `tdigest.byrank` | `tdigest` | `standalone-error` | `v1.1.0` | `-2` | `tdigest` | `no` | `@tdigest, @read` |
+| `tdigest.byrevrank` | `tdigest` | `standalone-error` | `v1.1.0` | `-2` | `tdigest` | `no` | `@tdigest, @read` |
+| `tdigest.cdf` | `tdigest` | `standalone-error` | `v1.1.0` | `-2` | `tdigest` | `no` | `@tdigest, @read` |
+| `tdigest.create` | `tdigest` | `standalone-error` | `v1.1.0` | `-2` | `tdigest` | `no` | `@tdigest, @write` |
+| `tdigest.info` | `tdigest` | `standalone-error` | `v1.1.0` | `2` | `tdigest` | `no` | `@tdigest, @read` |
+| `tdigest.max` | `tdigest` | `standalone-error` | `v1.1.0` | `2` | `tdigest` | `no` | `@tdigest, @read, @fast` |
+| `tdigest.merge` | `tdigest` | `standalone-error` | `v1.1.0` | `-3` | `tdigest` | `no` | `@tdigest, @write, @slow` |
+| `tdigest.min` | `tdigest` | `standalone-error` | `v1.1.0` | `2` | `tdigest` | `no` | `@tdigest, @read, @fast` |
+| `tdigest.quantile` | `tdigest` | `standalone-error` | `v1.1.0` | `-2` | `tdigest` | `no` | `@tdigest, @read` |
+| `tdigest.rank` | `tdigest` | `standalone-error` | `v1.1.0` | `-2` | `tdigest` | `no` | `@tdigest, @read` |
+| `tdigest.reset` | `tdigest` | `standalone-error` | `v1.1.0` | `2` | `tdigest` | `no` | `@tdigest, @write, @fast` |
+| `tdigest.revrank` | `tdigest` | `standalone-error` | `v1.1.0` | `-2` | `tdigest` | `no` | `@tdigest, @read` |
+| `tdigest.trimmed_mean` | `tdigest` | `standalone-error` | `v1.1.0` | `4` | `tdigest` | `no` | `@tdigest, @read` |
 | `time` | `server` | `full` | `-` | `1` | `-` | `no` | `@fast` |
 | `topk.add` | `topk` | `standalone-error` | `v1.1.0` | `-2` | `topk` | `no` | `@topk, @write, @slow` |
 | `topk.count` | `topk` | `standalone-error` | `v1.1.0` | `-2` | `topk` | `no` | `@topk, @read, @slow` |

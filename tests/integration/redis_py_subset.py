@@ -1903,6 +1903,12 @@ def run_smoke() -> None:
                 if str(exc) != "ERR TOPK.ADD command not allowed by redis-uya standalone profile":
                     raise AssertionError(f"unexpected TOPK.ADD error: {exc}") from exc
             try:
+                client._request(b"TDIGEST.ADD", b"td", b"1")
+                raise AssertionError("expected TDIGEST.ADD to be disabled")
+            except RespError as exc:
+                if str(exc) != "ERR TDIGEST.ADD command not allowed by redis-uya standalone profile":
+                    raise AssertionError(f"unexpected TDIGEST.ADD error: {exc}") from exc
+            try:
                 client._request(b"MEMORY")
                 raise AssertionError("expected MEMORY without subcommand to fail")
             except RespError as exc:

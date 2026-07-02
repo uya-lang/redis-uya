@@ -3369,6 +3369,36 @@ TOPK.RESERVE key topk [width depth decay]
 - 当前实现为 `standalone-error`：命令进入运行时路由和 `COMMAND*` 可见面，但 redis-uya 不加载 RedisBloom 模块，也不维护 Top-K 编码
 - `TOPK.*` 不读取或修改本地 keyspace，不写入 AOF 或复制 backlog
 
+### RedisBloom `TDIGEST.*`
+
+格式：
+
+```text
+TDIGEST.ADD key value [value ...]
+TDIGEST.BYRANK key rank [rank ...]
+TDIGEST.BYREVRANK key reverse_rank [reverse_rank ...]
+TDIGEST.CDF key value [value ...]
+TDIGEST.CREATE key [COMPRESSION compression]
+TDIGEST.INFO key
+TDIGEST.MAX key
+TDIGEST.MERGE destination numkeys source [source ...] [COMPRESSION compression] [OVERRIDE]
+TDIGEST.MIN key
+TDIGEST.QUANTILE key quantile [quantile ...]
+TDIGEST.RANK key value [value ...]
+TDIGEST.RESET key
+TDIGEST.REVRANK key value [value ...]
+TDIGEST.TRIMMED_MEAN key low_cut_quantile high_cut_quantile
+```
+
+返回：
+
+- 当前统一返回：`-ERR <TDIGEST command> command not allowed by redis-uya standalone profile`
+
+说明：
+
+- 当前实现为 `standalone-error`：命令进入运行时路由和 `COMMAND*` 可见面，但 redis-uya 不加载 RedisBloom 模块，也不维护 t-digest 编码
+- `TDIGEST.*` 不读取或修改本地 keyspace，不写入 AOF 或复制 backlog
+
 ### `SLOWLOG`
 
 格式：

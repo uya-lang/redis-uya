@@ -844,6 +844,20 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"topk.list"[0: 9], CommandCatalogStatus.status_standalone_error);
     try command_executor_test_assert_catalog_status(&"topk.query"[0: 10], CommandCatalogStatus.status_standalone_error);
     try command_executor_test_assert_catalog_status(&"topk.reserve"[0: 12], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"tdigest.add"[0: 11], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"tdigest.byrank"[0: 14], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"tdigest.byrevrank"[0: 17], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"tdigest.cdf"[0: 11], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"tdigest.create"[0: 14], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"tdigest.info"[0: 12], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"tdigest.max"[0: 11], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"tdigest.merge"[0: 13], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"tdigest.min"[0: 11], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"tdigest.quantile"[0: 16], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"tdigest.rank"[0: 12], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"tdigest.reset"[0: 13], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"tdigest.revrank"[0: 15], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"tdigest.trimmed_mean"[0: 20], CommandCatalogStatus.status_standalone_error);
     try command_executor_test_assert_catalog_status(&"zdiff"[0: 5], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"zdiffstore"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"zinter"[0: 6], CommandCatalogStatus.status_partial);
@@ -9160,6 +9174,22 @@ export fn test_command_bloom_module_disabled() !void {
     try assert_true(command_executor_test_slice_eq(topk_info_reply.data, &"ERR TOPK.INFO command not allowed by redis-uya standalone profile"[0: 65]));
     command_reply_cleanup(&topk_info_reply);
     resp_value_free(&topk_info_parsed.value);
+
+    var tdigest_add_parsed: RespParseResult = try parse_resp2(&"*3\r\n$11\r\nTDIGEST.ADD\r\n$2\r\ntd\r\n$1\r\n1\r\n"[0: 37]);
+    const tdigest_add_command: Command = try command_executor_test_command(&router, &tdigest_add_parsed);
+    var tdigest_add_reply: CommandReply = command_execute_at(&engine, &tdigest_add_command, 1000u64);
+    try assert_eq_i32(tdigest_add_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(tdigest_add_reply.data, &"ERR TDIGEST.ADD command not allowed by redis-uya standalone profile"[0: 67]));
+    command_reply_cleanup(&tdigest_add_reply);
+    resp_value_free(&tdigest_add_parsed.value);
+
+    var tdigest_info_parsed: RespParseResult = try parse_resp2(&"*2\r\n$12\r\nTDIGEST.INFO\r\n$2\r\ntd\r\n"[0: 31]);
+    const tdigest_info_command: Command = try command_executor_test_command(&router, &tdigest_info_parsed);
+    var tdigest_info_reply: CommandReply = command_execute_at(&engine, &tdigest_info_command, 1000u64);
+    try assert_eq_i32(tdigest_info_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(tdigest_info_reply.data, &"ERR TDIGEST.INFO command not allowed by redis-uya standalone profile"[0: 68]));
+    command_reply_cleanup(&tdigest_info_reply);
+    resp_value_free(&tdigest_info_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

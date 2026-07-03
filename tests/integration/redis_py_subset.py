@@ -1385,11 +1385,17 @@ class RedisPySubsetClient:
     def dump(self, key: str) -> bytes | None:
         return self._request(b"DUMP", key.encode())
 
-    def restore(self, key: str, ttl_ms: int, payload: bytes) -> bool:
-        return self._request(b"RESTORE", key.encode(), str(ttl_ms).encode(), payload) == "OK"
+    def restore(self, key: str, ttl_ms: int, payload: bytes, replace: bool = False) -> bool:
+        parts = [b"RESTORE", key.encode(), str(ttl_ms).encode(), payload]
+        if replace:
+            parts.append(b"REPLACE")
+        return self._request(*parts) == "OK"
 
-    def restore_asking(self, key: str, ttl_ms: int, payload: bytes) -> bool:
-        return self._request(b"RESTORE-ASKING", key.encode(), str(ttl_ms).encode(), payload) == "OK"
+    def restore_asking(self, key: str, ttl_ms: int, payload: bytes, replace: bool = False) -> bool:
+        parts = [b"RESTORE-ASKING", key.encode(), str(ttl_ms).encode(), payload]
+        if replace:
+            parts.append(b"REPLACE")
+        return self._request(*parts) == "OK"
 
     def save(self) -> bool:
         return self._request(b"SAVE") == "OK"
@@ -2505,8 +2511,28 @@ def run_smoke() -> None:
             dump_payload = client.dump("dump-src")
             if dump_payload is None or dump_payload[0:8] != b"RUYARDB1":
                 raise AssertionError(f"unexpected dump payload: {dump_payload!r}")
+            assert client.set("dump-dst", "old")
+            try:
+                client.restore("dump-dst", 1500, dump_payload)
+                raise AssertionError("expected RESTORE without REPLACE to reject existing key")
+            except RespError as exc:
+                if str(exc) != "BUSYKEY Target key name already exists.":
+                    raise AssertionError(f"unexpected RESTORE busykey error: {exc}") from exc
+            assert client.restore("dump-dst", 1500, dump_payload, replace=True)
+            assert client.get("dump-dst") == b"value"
+            dump_pttl = client.pttl("dump-dst")
+            if dump_pttl <= 0 or dump_pttl > 1500:
+                raise AssertionError(f"unexpected dump restore pttl: {dump_pttl}")
+            assert client.delete("dump-dst") == 1
             assert client.restore("dump-dst", 1500, dump_payload)
             assert client.get("dump-dst") == b"value"
+            assert client.set("dump-asking", "old")
+            assert client.pexpire("dump-asking", 5000)
+            assert client.restore_asking("dump-asking", 0, dump_payload, replace=True)
+            assert client.get("dump-asking") == b"value"
+            if client.pttl("dump-asking") != -1:
+                raise AssertionError("expected RESTORE-ASKING REPLACE ttl=0 to clear target ttl")
+            assert client.delete("dump-asking") == 1
             assert client.restore_asking("dump-asking", 0, dump_payload)
             assert client.get("dump-asking") == b"value"
             dump_pttl = client.pttl("dump-dst")

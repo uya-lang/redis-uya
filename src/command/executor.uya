@@ -10993,7 +10993,7 @@ fn command_executor_dump(engine: &Engine, command: &Command, now_ms: u64) Comman
 }
 
 fn command_executor_restore(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
-    if command.argc != 4 {
+    if command.argc < 4 {
         return command_executor_wrong_arity();
     }
     const key: &[byte] = command_executor_arg(command, 1) catch {
@@ -11011,9 +11011,22 @@ fn command_executor_restore(engine: &Engine, command: &Command, now_ms: u64) Com
     if ttl_ms < 0 {
         return command_executor_invalid_integer();
     }
+    var replace: bool = false;
+    var option_index: usize = 4;
+    while option_index < command.argc {
+        const option: &[byte] = command_executor_arg(command, option_index) catch {
+            return command_executor_wrong_arity();
+        };
+        if command_executor_keyword_eq(option, &"REPLACE"[0: 7]) {
+            replace = true;
+            option_index = option_index + 1;
+            continue;
+        }
+        return command_executor_syntax_error();
+    }
     const existing: &RedisObject = command_executor_lookup_key_now_or_null(engine, key, now_ms);
-    if existing != null {
-        return command_executor_error(&"BUSYKEY Target key name already exists."[0: 37]);
+    if existing != null && !replace {
+        return command_executor_error(&"BUSYKEY Target key name already exists."[0: 39]);
     }
 
     var temp_engine: Engine = engine_new();
@@ -11067,6 +11080,8 @@ fn command_executor_restore(engine: &Engine, command: &Command, now_ms: u64) Com
             _ = delete_key(engine, key);
             return command_executor_oom();
         };
+    } else {
+        _ = clear_key_expire(engine, key);
     }
     return command_executor_simple(&"OK"[0: 2]);
 }

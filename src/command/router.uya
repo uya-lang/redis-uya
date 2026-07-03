@@ -655,7 +655,7 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
         return command_router_info(CommandType.command_dump, &"DUMP"[0: 4], 2, COMMAND_FLAG_READONLY, 1, 1, 1);
     }
     if index == 105 {
-        return command_router_info(CommandType.command_restore, &"RESTORE"[0: 7], 4, COMMAND_FLAG_WRITE, 1, 1, 1);
+        return command_router_info(CommandType.command_restore, &"RESTORE"[0: 7], -4, COMMAND_FLAG_WRITE, 1, 1, 1);
     }
     if index == 106 {
         return command_router_info(CommandType.command_select, &"SELECT"[0: 6], 2, COMMAND_FLAG_FAST, 0, 0, 0);
@@ -937,7 +937,7 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
         return command_router_info(CommandType.command_copy, &"COPY"[0: 4], -3, COMMAND_FLAG_WRITE, 1, 2, 1);
     }
     if index == 199 {
-        return command_router_info(CommandType.command_restore, &"RESTORE-ASKING"[0: 14], 4, COMMAND_FLAG_WRITE, 1, 1, 1);
+        return command_router_info(CommandType.command_restore, &"RESTORE-ASKING"[0: 14], -4, COMMAND_FLAG_WRITE, 1, 1, 1);
     }
     if index == 200 {
         return command_router_info(CommandType.command_blmove, &"BLMOVE"[0: 6], 6, COMMAND_FLAG_WRITE, 1, 2, 1);

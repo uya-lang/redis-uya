@@ -1885,6 +1885,12 @@ def run_smoke() -> None:
                 if str(exc) != "ERR ARCOUNT command not allowed by redis-uya standalone profile":
                     raise AssertionError(f"unexpected ARCOUNT error: {exc}") from exc
             try:
+                client._request(b"JSON.GET", b"js")
+                raise AssertionError("expected JSON.GET to be disabled")
+            except RespError as exc:
+                if str(exc) != "ERR JSON.GET command not allowed by redis-uya standalone profile":
+                    raise AssertionError(f"unexpected JSON.GET error: {exc}") from exc
+            try:
                 client._request(b"BF.ADD", b"bf", b"x")
                 raise AssertionError("expected BF.ADD to be disabled")
             except RespError as exc:

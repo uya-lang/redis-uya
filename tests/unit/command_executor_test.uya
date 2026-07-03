@@ -9146,6 +9146,32 @@ export fn test_command_bloom_module_disabled() !void {
     try command_executor_test_assert_catalog_status(&"arscan"[0: 6], CommandCatalogStatus.status_standalone_error);
     try command_executor_test_assert_catalog_status(&"arseek"[0: 6], CommandCatalogStatus.status_standalone_error);
     try command_executor_test_assert_catalog_status(&"arset"[0: 5], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"json.arrappend"[0: 14], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"json.arrindex"[0: 13], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"json.arrinsert"[0: 14], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"json.arrlen"[0: 11], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"json.arrpop"[0: 11], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"json.arrtrim"[0: 12], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"json.clear"[0: 10], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"json.debug"[0: 10], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"json.debug|help"[0: 15], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"json.debug|memory"[0: 17], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"json.del"[0: 8], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"json.forget"[0: 11], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"json.get"[0: 8], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"json.merge"[0: 10], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"json.mget"[0: 9], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"json.mset"[0: 9], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"json.numincrby"[0: 14], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"json.nummultby"[0: 14], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"json.objkeys"[0: 12], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"json.objlen"[0: 11], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"json.resp"[0: 9], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"json.set"[0: 8], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"json.strappend"[0: 14], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"json.strlen"[0: 11], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"json.toggle"[0: 11], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"json.type"[0: 9], CommandCatalogStatus.status_standalone_error);
 
     var arcount_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nARCOUNT\r\n$2\r\nar\r\n"[0: 25]);
     const arcount_command: Command = try command_executor_test_command(&router, &arcount_parsed);
@@ -9162,6 +9188,30 @@ export fn test_command_bloom_module_disabled() !void {
     try assert_true(command_executor_test_slice_eq(arset_reply.data, &"ERR ARSET command not allowed by redis-uya standalone profile"[0: 61]));
     command_reply_cleanup(&arset_reply);
     resp_value_free(&arset_parsed.value);
+
+    var json_get_parsed: RespParseResult = try parse_resp2(&"*2\r\n$8\r\nJSON.GET\r\n$2\r\njs\r\n"[0: 26]);
+    const json_get_command: Command = try command_executor_test_command(&router, &json_get_parsed);
+    var json_get_reply: CommandReply = command_execute_at(&engine, &json_get_command, 1000u64);
+    try assert_eq_i32(json_get_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(json_get_reply.data, &"ERR JSON.GET command not allowed by redis-uya standalone profile"[0: 64]));
+    command_reply_cleanup(&json_get_reply);
+    resp_value_free(&json_get_parsed.value);
+
+    var json_set_parsed: RespParseResult = try parse_resp2(&"*4\r\n$8\r\nJSON.SET\r\n$2\r\njs\r\n$1\r\n.\r\n$2\r\n{}\r\n"[0: 41]);
+    const json_set_command: Command = try command_executor_test_command(&router, &json_set_parsed);
+    var json_set_reply: CommandReply = command_execute_at(&engine, &json_set_command, 1000u64);
+    try assert_eq_i32(json_set_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(json_set_reply.data, &"ERR JSON.SET command not allowed by redis-uya standalone profile"[0: 64]));
+    command_reply_cleanup(&json_set_reply);
+    resp_value_free(&json_set_parsed.value);
+
+    var json_debug_parsed: RespParseResult = try parse_resp2(&"*2\r\n$10\r\nJSON.DEBUG\r\n$4\r\nHELP\r\n"[0: 31]);
+    const json_debug_command: Command = try command_executor_test_command(&router, &json_debug_parsed);
+    var json_debug_reply: CommandReply = command_execute_at(&engine, &json_debug_command, 1000u64);
+    try assert_eq_i32(json_debug_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(json_debug_reply.data, &"ERR JSON.DEBUG command not allowed by redis-uya standalone profile"[0: 66]));
+    command_reply_cleanup(&json_debug_reply);
+    resp_value_free(&json_debug_parsed.value);
 
     var bf_add_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nBF.ADD\r\n$2\r\nbf\r\n$1\r\nx\r\n"[0: 31]);
     const bf_add_command: Command = try command_executor_test_command(&router, &bf_add_parsed);

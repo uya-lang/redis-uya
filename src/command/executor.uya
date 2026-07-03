@@ -18367,6 +18367,11 @@ fn command_executor_command_visible_module_subcommand(name: &[byte]) bool {
         command_executor_slice_eq(name, &"unload"[0: 6]);
 }
 
+fn command_executor_command_visible_json_debug_subcommand(name: &[byte]) bool {
+    return command_executor_slice_eq(name, &"help"[0: 4]) ||
+        command_executor_slice_eq(name, &"memory"[0: 6]);
+}
+
 fn command_executor_command_visible_hotkeys_subcommand(name: &[byte]) bool {
     return command_executor_slice_eq(name, &"help"[0: 4]) ||
         command_executor_slice_eq(name, &"get"[0: 3]) ||
@@ -18425,6 +18430,9 @@ fn command_executor_command_visible_subcommand(parent_name: &[byte], subcommand_
     }
     if command_executor_slice_eq(parent_name, &"module"[0: 6]) {
         return command_executor_command_visible_module_subcommand(subcommand_name);
+    }
+    if command_executor_slice_eq(parent_name, &"json.debug"[0: 10]) {
+        return command_executor_command_visible_json_debug_subcommand(subcommand_name);
     }
     if command_executor_slice_eq(parent_name, &"hotkeys"[0: 7]) {
         return command_executor_command_visible_hotkeys_subcommand(subcommand_name);

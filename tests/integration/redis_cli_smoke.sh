@@ -1076,6 +1076,12 @@ if [[ "$ARCOUNT_RESULT" != "ERR ARCOUNT command not allowed by redis-uya standal
     exit 1
 fi
 
+JSON_GET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" json.get js 2>&1 || true)"
+if [[ "$JSON_GET_RESULT" != "ERR JSON.GET command not allowed by redis-uya standalone profile" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected JSON.GET disabled error, got '$JSON_GET_RESULT'" >&2
+    exit 1
+fi
+
 BF_ADD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" bf.add bf x 2>&1 || true)"
 if [[ "$BF_ADD_RESULT" != "ERR BF.ADD command not allowed by redis-uya standalone profile" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected BF.ADD disabled error, got '$BF_ADD_RESULT'" >&2

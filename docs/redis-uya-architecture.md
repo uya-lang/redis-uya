@@ -130,6 +130,7 @@ server open
 - `MEMORY` / `SLOWLOG` / `LATENCY` 由 `command/executor.uya` 执行；其中 `MEMORY MALLOC-STATS` 当前暴露 redis-uya allocator / object-pool 计数而非 Redis 原生 jemalloc 报告，`MEMORY PURGE` 当前是 no-op allocator purge 兼容面，`SLOWLOG` 记录 runtime-measured 命令耗时并受 `CONFIG SET slowlog-log-slower-than` 和 `slowlog-max-len` 控制但精度受毫秒级时间源限制，`LATENCY` 当前记录受 `latency-monitor-threshold` 控制的 `command` 事件进程内历史与 top-level 命令名累计直方图，`CONFIG SET latency-tracking yes|no` 可控制后续直方图采样，子命令名粒度后续再接入观测管线
 - `MODULE HELP/LIST` 由 `command/executor.uya` 执行，当前只暴露空模块列表兼容面和 `COMMAND*` 可见面；`MODULE LOAD/LOADEX/UNLOAD` 同样由 `command/executor.uya` 执行为单机安全 profile 的 `standalone-error`，不加载动态库、不维护模块 API 状态，也不进入 AOF/复制传播
 - Redis Array `AR*` 模块命令当前由通用模块禁用路径作为 `standalone-error` 处理；命令可见但不加载 Redis Array、不维护 Array 编码，也不进入 AOF/复制传播
+- RedisJSON `JSON.*` 模块命令当前由通用模块禁用路径作为 `standalone-error` 处理；命令可见但不加载 RedisJSON、不维护 JSON 编码或 JSONPath 解析器，也不进入 AOF/复制传播
 - RedisBloom `BF.*` / `CF.*` / `CMS.*` / `TOPK.*` / `TDIGEST.*` 模块命令当前由通用模块禁用路径作为 `standalone-error` 处理；命令可见但不加载 RedisBloom、不维护 Bloom/Cuckoo/Count-Min Sketch/Top-K/t-digest 编码，也不进入 AOF/复制传播
 - RedisTimeSeries `TS.*` 模块命令当前由通用模块禁用路径作为 `standalone-error` 处理；命令可见但不加载 RedisTimeSeries、不维护 time series 编码，也不进入 AOF/复制传播
 - `MONITOR` 由 `connection.uya` 维护连接级 monitor 状态和全局 fd 注册表；普通命令成功执行后向 monitor fd 推送兼容行，连接关闭和 `RESET` 会清理注册项

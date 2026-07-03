@@ -3304,6 +3304,46 @@ ARSET key index value [value ...]
 - 当前实现为 `standalone-error`：命令进入运行时路由和 `COMMAND*` 可见面，但 redis-uya 不加载 Redis Array 模块，也不维护 Array 编码
 - `AR*` 不读取或修改本地 keyspace，不写入 AOF 或复制 backlog
 
+### RedisJSON `JSON.*`
+
+格式：
+
+```text
+JSON.ARRAPPEND key path value [value ...]
+JSON.ARRINDEX key path value [start [stop]]
+JSON.ARRINSERT key path index value [value ...]
+JSON.ARRLEN key [path]
+JSON.ARRPOP key [path [index]]
+JSON.ARRTRIM key path start stop
+JSON.CLEAR key [path]
+JSON.DEBUG [HELP | MEMORY key [path]]
+JSON.DEL key [path]
+JSON.FORGET key [path]
+JSON.GET key [INDENT indent] [NEWLINE newline] [SPACE space] [path ...]
+JSON.MERGE key path value
+JSON.MGET key [key ...] path
+JSON.MSET key path value [key path value ...]
+JSON.NUMINCRBY key path value
+JSON.NUMMULTBY key path value
+JSON.OBJKEYS key [path]
+JSON.OBJLEN key [path]
+JSON.RESP key [path]
+JSON.SET key path value [NX | XX]
+JSON.STRAPPEND key [path] value
+JSON.STRLEN key [path]
+JSON.TOGGLE key path
+JSON.TYPE key [path]
+```
+
+返回：
+
+- 当前统一返回：`-ERR <JSON command> command not allowed by redis-uya standalone profile`
+
+说明：
+
+- 当前实现为 `standalone-error`：命令进入运行时路由和 `COMMAND*` 可见面，但 redis-uya 不加载 RedisJSON 模块，也不维护 JSON 编码或 JSONPath 解析器
+- `JSON.*` 不读取或修改本地 keyspace，不写入 AOF 或复制 backlog
+
 ### RedisBloom `BF.*`
 
 格式：

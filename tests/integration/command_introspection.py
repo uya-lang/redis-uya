@@ -582,6 +582,15 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"AR commands missing from COMMAND INFO: {ar_info!r}")
 
+            json_info = send_command(sock, b"COMMAND", b"INFO", b"JSON.ARRAPPEND", b"JSON.ARRINDEX", b"JSON.ARRINSERT", b"JSON.ARRLEN", b"JSON.ARRPOP", b"JSON.ARRTRIM", b"JSON.CLEAR", b"JSON.DEBUG", b"JSON.DEBUG|HELP", b"JSON.DEBUG|MEMORY", b"JSON.DEL", b"JSON.FORGET", b"JSON.GET", b"JSON.MERGE", b"JSON.MGET", b"JSON.MSET", b"JSON.NUMINCRBY", b"JSON.NUMMULTBY", b"JSON.OBJKEYS", b"JSON.OBJLEN", b"JSON.RESP", b"JSON.SET", b"JSON.STRAPPEND", b"JSON.STRLEN", b"JSON.TOGGLE", b"JSON.TYPE")
+            json_names = [b"json.arrappend", b"json.arrindex", b"json.arrinsert", b"json.arrlen", b"json.arrpop", b"json.arrtrim", b"json.clear", b"json.debug", b"json.debug|help", b"json.debug|memory", b"json.del", b"json.forget", b"json.get", b"json.merge", b"json.mget", b"json.mset", b"json.numincrby", b"json.nummultby", b"json.objkeys", b"json.objlen", b"json.resp", b"json.set", b"json.strappend", b"json.strlen", b"json.toggle", b"json.type"]
+            if (
+                not isinstance(json_info, list)
+                or len(json_info) != len(json_names)
+                or any(not isinstance(item, list) or item[0] != name for item, name in zip(json_info, json_names))
+            ):
+                raise AssertionError(f"JSON commands missing from COMMAND INFO: {json_info!r}")
+
             bf_info = send_command(sock, b"COMMAND", b"INFO", b"BF.ADD", b"BF.CARD", b"BF.EXISTS", b"BF.INFO", b"BF.INSERT", b"BF.LOADCHUNK", b"BF.MADD", b"BF.MEXISTS", b"BF.RESERVE", b"BF.SCANDUMP")
             bf_names = [b"bf.add", b"bf.card", b"bf.exists", b"bf.info", b"bf.insert", b"bf.loadchunk", b"bf.madd", b"bf.mexists", b"bf.reserve", b"bf.scandump"]
             if (
@@ -1361,6 +1370,38 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"unexpected COMMAND LIST AR* result: {listed_ar!r}")
 
+            listed_json = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"JSON.*")
+            if (
+                not isinstance(listed_json, list)
+                or b"json.arrappend" not in listed_json
+                or b"json.arrindex" not in listed_json
+                or b"json.arrinsert" not in listed_json
+                or b"json.arrlen" not in listed_json
+                or b"json.arrpop" not in listed_json
+                or b"json.arrtrim" not in listed_json
+                or b"json.clear" not in listed_json
+                or b"json.debug" not in listed_json
+                or b"json.debug|help" not in listed_json
+                or b"json.debug|memory" not in listed_json
+                or b"json.del" not in listed_json
+                or b"json.forget" not in listed_json
+                or b"json.get" not in listed_json
+                or b"json.merge" not in listed_json
+                or b"json.mget" not in listed_json
+                or b"json.mset" not in listed_json
+                or b"json.numincrby" not in listed_json
+                or b"json.nummultby" not in listed_json
+                or b"json.objkeys" not in listed_json
+                or b"json.objlen" not in listed_json
+                or b"json.resp" not in listed_json
+                or b"json.set" not in listed_json
+                or b"json.strappend" not in listed_json
+                or b"json.strlen" not in listed_json
+                or b"json.toggle" not in listed_json
+                or b"json.type" not in listed_json
+            ):
+                raise AssertionError(f"unexpected COMMAND LIST JSON.* result: {listed_json!r}")
+
             listed_slowlog = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"SLOWLOG*")
             if (
                 not isinstance(listed_slowlog, list)
@@ -1613,6 +1654,32 @@ def run_smoke() -> None:
                 or not isinstance(docs_all.get(b"arscan"), dict)
                 or not isinstance(docs_all.get(b"arseek"), dict)
                 or not isinstance(docs_all.get(b"arset"), dict)
+                or not isinstance(docs_all.get(b"json.arrappend"), dict)
+                or not isinstance(docs_all.get(b"json.arrindex"), dict)
+                or not isinstance(docs_all.get(b"json.arrinsert"), dict)
+                or not isinstance(docs_all.get(b"json.arrlen"), dict)
+                or not isinstance(docs_all.get(b"json.arrpop"), dict)
+                or not isinstance(docs_all.get(b"json.arrtrim"), dict)
+                or not isinstance(docs_all.get(b"json.clear"), dict)
+                or not isinstance(docs_all.get(b"json.debug"), dict)
+                or not isinstance(docs_all.get(b"json.debug|help"), dict)
+                or not isinstance(docs_all.get(b"json.debug|memory"), dict)
+                or not isinstance(docs_all.get(b"json.del"), dict)
+                or not isinstance(docs_all.get(b"json.forget"), dict)
+                or not isinstance(docs_all.get(b"json.get"), dict)
+                or not isinstance(docs_all.get(b"json.merge"), dict)
+                or not isinstance(docs_all.get(b"json.mget"), dict)
+                or not isinstance(docs_all.get(b"json.mset"), dict)
+                or not isinstance(docs_all.get(b"json.numincrby"), dict)
+                or not isinstance(docs_all.get(b"json.nummultby"), dict)
+                or not isinstance(docs_all.get(b"json.objkeys"), dict)
+                or not isinstance(docs_all.get(b"json.objlen"), dict)
+                or not isinstance(docs_all.get(b"json.resp"), dict)
+                or not isinstance(docs_all.get(b"json.set"), dict)
+                or not isinstance(docs_all.get(b"json.strappend"), dict)
+                or not isinstance(docs_all.get(b"json.strlen"), dict)
+                or not isinstance(docs_all.get(b"json.toggle"), dict)
+                or not isinstance(docs_all.get(b"json.type"), dict)
                 or not isinstance(docs_all.get(b"bf.add"), dict)
                 or not isinstance(docs_all.get(b"bf.card"), dict)
                 or not isinstance(docs_all.get(b"bf.exists"), dict)

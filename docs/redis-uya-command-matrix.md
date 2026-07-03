@@ -18,7 +18,7 @@
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
 | Tier A: standalone core | 365 | 259 | 146 | 209 | 7 | 3 | 0 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
-| Tier C: module commands | 153 | 146 | 0 | 0 | 84 | 0 | 69 |
+| Tier C: module commands | 153 | 146 | 0 | 0 | 110 | 0 | 43 |
 
 ## Status counts
 
@@ -26,9 +26,9 @@
 |--------|-------|
 | `full` | `147` |
 | `partial` | `216` |
-| `standalone-error` | `117` |
+| `standalone-error` | `143` |
 | `alias` | `3` |
-| `deferred` | `69` |
+| `deferred` | `43` |
 
 ## Group counts
 
@@ -329,32 +329,32 @@
 | `incrbyfloat` | `string` | `full` | `-` | `3` | `-` | `no` | `@write, @string, @fast` |
 | `increx` | `string` | `partial` | `-` | `-2` | `-` | `no` | `@fast, @string, @write` |
 | `info` | `server` | `partial` | `-` | `-1` | `-` | `no` | `@slow, @dangerous` |
-| `json.arrappend` | `json` | `deferred` | `v0.9.2` | `-3` | `json` | `no` | `@json, @write, @slow` |
-| `json.arrindex` | `json` | `deferred` | `v0.9.2` | `-4` | `json` | `no` | `@json, @read, @slow` |
-| `json.arrinsert` | `json` | `deferred` | `v0.9.2` | `-4` | `json` | `no` | `@json, @write, @slow` |
-| `json.arrlen` | `json` | `deferred` | `v0.9.2` | `-2` | `json` | `no` | `@json, @read, @slow` |
-| `json.arrpop` | `json` | `deferred` | `v0.9.2` | `-2` | `json` | `no` | `@json, @write, @slow` |
-| `json.arrtrim` | `json` | `deferred` | `v0.9.2` | `5` | `json` | `no` | `@json, @write, @slow` |
-| `json.clear` | `json` | `deferred` | `v0.9.2` | `-2` | `json` | `no` | `@json, @write, @slow` |
-| `json.debug` | `json` | `deferred` | `v0.9.2` | `0` | `json` | `no` | `-` |
-| `json.debug|help` | `json` | `deferred` | `v0.9.2` | `0` | `json` | `no` | `-` |
-| `json.debug|memory` | `json` | `deferred` | `v0.9.2` | `-2` | `json` | `no` | `@json, @read` |
-| `json.del` | `json` | `deferred` | `v0.9.2` | `-2` | `json` | `no` | `@json, @write, @slow` |
-| `json.forget` | `json` | `deferred` | `v0.9.2` | `-2` | `json` | `no` | `@json, @write, @slow` |
-| `json.get` | `json` | `deferred` | `v0.9.2` | `-2` | `json` | `no` | `@json, @read, @slow` |
-| `json.merge` | `json` | `deferred` | `v0.9.2` | `4` | `json` | `no` | `@json, @write, @slow` |
-| `json.mget` | `json` | `deferred` | `v0.9.2` | `-2` | `json` | `no` | `@json, @read, @slow` |
-| `json.mset` | `json` | `deferred` | `v0.9.2` | `-1` | `json` | `no` | `@json, @write, @slow` |
-| `json.numincrby` | `json` | `deferred` | `v0.9.2` | `4` | `json` | `no` | `@json, @write, @slow` |
-| `json.nummultby` | `json` | `deferred` | `v0.9.2` | `4` | `json` | `no` | `@json, @write, @slow` |
-| `json.objkeys` | `json` | `deferred` | `v0.9.2` | `-2` | `json` | `no` | `@json, @read, @slow` |
-| `json.objlen` | `json` | `deferred` | `v0.9.2` | `-2` | `json` | `no` | `@json, @read, @slow` |
-| `json.resp` | `json` | `deferred` | `v0.9.2` | `-2` | `json` | `no` | `@json, @read, @slow` |
-| `json.set` | `json` | `deferred` | `v0.9.2` | `-4` | `json` | `no` | `@json, @write, @slow` |
-| `json.strappend` | `json` | `deferred` | `v0.9.2` | `-3` | `json` | `no` | `@json, @write, @slow` |
-| `json.strlen` | `json` | `deferred` | `v0.9.2` | `-2` | `json` | `no` | `@json, @read, @slow` |
-| `json.toggle` | `json` | `deferred` | `v0.9.2` | `3` | `json` | `no` | `@json, @write, @slow` |
-| `json.type` | `json` | `deferred` | `v0.9.2` | `-2` | `json` | `no` | `@json, @read, @slow` |
+| `json.arrappend` | `json` | `standalone-error` | `v1.1.0` | `-3` | `json` | `no` | `@json, @write, @slow` |
+| `json.arrindex` | `json` | `standalone-error` | `v1.1.0` | `-4` | `json` | `no` | `@json, @read, @slow` |
+| `json.arrinsert` | `json` | `standalone-error` | `v1.1.0` | `-4` | `json` | `no` | `@json, @write, @slow` |
+| `json.arrlen` | `json` | `standalone-error` | `v1.1.0` | `-2` | `json` | `no` | `@json, @read, @slow` |
+| `json.arrpop` | `json` | `standalone-error` | `v1.1.0` | `-2` | `json` | `no` | `@json, @write, @slow` |
+| `json.arrtrim` | `json` | `standalone-error` | `v1.1.0` | `5` | `json` | `no` | `@json, @write, @slow` |
+| `json.clear` | `json` | `standalone-error` | `v1.1.0` | `-2` | `json` | `no` | `@json, @write, @slow` |
+| `json.debug` | `json` | `standalone-error` | `v1.1.0` | `0` | `json` | `no` | `-` |
+| `json.debug|help` | `json` | `standalone-error` | `v1.1.0` | `0` | `json` | `no` | `-` |
+| `json.debug|memory` | `json` | `standalone-error` | `v1.1.0` | `-2` | `json` | `no` | `@json, @read` |
+| `json.del` | `json` | `standalone-error` | `v1.1.0` | `-2` | `json` | `no` | `@json, @write, @slow` |
+| `json.forget` | `json` | `standalone-error` | `v1.1.0` | `-2` | `json` | `no` | `@json, @write, @slow` |
+| `json.get` | `json` | `standalone-error` | `v1.1.0` | `-2` | `json` | `no` | `@json, @read, @slow` |
+| `json.merge` | `json` | `standalone-error` | `v1.1.0` | `4` | `json` | `no` | `@json, @write, @slow` |
+| `json.mget` | `json` | `standalone-error` | `v1.1.0` | `-2` | `json` | `no` | `@json, @read, @slow` |
+| `json.mset` | `json` | `standalone-error` | `v1.1.0` | `-1` | `json` | `no` | `@json, @write, @slow` |
+| `json.numincrby` | `json` | `standalone-error` | `v1.1.0` | `4` | `json` | `no` | `@json, @write, @slow` |
+| `json.nummultby` | `json` | `standalone-error` | `v1.1.0` | `4` | `json` | `no` | `@json, @write, @slow` |
+| `json.objkeys` | `json` | `standalone-error` | `v1.1.0` | `-2` | `json` | `no` | `@json, @read, @slow` |
+| `json.objlen` | `json` | `standalone-error` | `v1.1.0` | `-2` | `json` | `no` | `@json, @read, @slow` |
+| `json.resp` | `json` | `standalone-error` | `v1.1.0` | `-2` | `json` | `no` | `@json, @read, @slow` |
+| `json.set` | `json` | `standalone-error` | `v1.1.0` | `-4` | `json` | `no` | `@json, @write, @slow` |
+| `json.strappend` | `json` | `standalone-error` | `v1.1.0` | `-3` | `json` | `no` | `@json, @write, @slow` |
+| `json.strlen` | `json` | `standalone-error` | `v1.1.0` | `-2` | `json` | `no` | `@json, @read, @slow` |
+| `json.toggle` | `json` | `standalone-error` | `v1.1.0` | `3` | `json` | `no` | `@json, @write, @slow` |
+| `json.type` | `json` | `standalone-error` | `v1.1.0` | `-2` | `json` | `no` | `@json, @read, @slow` |
 | `keys` | `generic` | `full` | `-` | `2` | `-` | `yes` | `@keyspace, @read, @slow, @dangerous` |
 | `lastsave` | `server` | `full` | `-` | `1` | `-` | `no` | `@admin, @fast, @dangerous` |
 | `latency` | `server` | `partial` | `-` | `-2` | `-` | `no` | `@slow` |

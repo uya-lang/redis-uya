@@ -11013,6 +11013,10 @@ fn command_executor_restore(engine: &Engine, command: &Command, now_ms: u64) Com
     }
     var replace: bool = false;
     var absttl: bool = false;
+    var idletime_specified: bool = false;
+    var idle_seconds: u64 = 0u64;
+    var freq_specified: bool = false;
+    var freq_value: u64 = 0u64;
     var option_index: usize = 4;
     while option_index < command.argc {
         const option: &[byte] = command_executor_arg(command, option_index) catch {
@@ -11026,6 +11030,37 @@ fn command_executor_restore(engine: &Engine, command: &Command, now_ms: u64) Com
         if command_executor_keyword_eq(option, &"ABSTTL"[0: 6]) {
             absttl = true;
             option_index = option_index + 1;
+            continue;
+        }
+        if command_executor_keyword_eq(option, &"IDLETIME"[0: 8]) {
+            if idletime_specified || freq_specified || option_index + 1 >= command.argc {
+                return command_executor_syntax_error();
+            }
+            const idle_data: &[byte] = command_executor_arg(command, option_index + 1) catch {
+                return command_executor_syntax_error();
+            };
+            idle_seconds = command_executor_parse_u64_token(idle_data) catch {
+                return command_executor_invalid_integer();
+            };
+            idletime_specified = true;
+            option_index = option_index + 2;
+            continue;
+        }
+        if command_executor_keyword_eq(option, &"FREQ"[0: 4]) {
+            if freq_specified || idletime_specified || option_index + 1 >= command.argc {
+                return command_executor_syntax_error();
+            }
+            const freq_data: &[byte] = command_executor_arg(command, option_index + 1) catch {
+                return command_executor_syntax_error();
+            };
+            freq_value = command_executor_parse_u64_token(freq_data) catch {
+                return command_executor_invalid_integer();
+            };
+            if freq_value > 255u64 {
+                return command_executor_invalid_integer();
+            }
+            freq_specified = true;
+            option_index = option_index + 2;
             continue;
         }
         return command_executor_syntax_error();
@@ -11081,6 +11116,16 @@ fn command_executor_restore(engine: &Engine, command: &Command, now_ms: u64) Com
         object_free(clone);
         return command_executor_oom();
     };
+    if idletime_specified {
+        if idle_seconds > now_ms / 1000u64 {
+            clone.lru_at_ms = 0u64;
+        } else {
+            clone.lru_at_ms = now_ms - idle_seconds * 1000u64;
+        }
+    }
+    if freq_specified {
+        clone.lfu_counter = freq_value;
+    }
     if ttl_ms > 0 {
         var expire_at_ms: u64 = now_ms + ttl_ms as u64;
         if absttl {

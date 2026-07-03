@@ -1385,20 +1385,28 @@ class RedisPySubsetClient:
     def dump(self, key: str) -> bytes | None:
         return self._request(b"DUMP", key.encode())
 
-    def restore(self, key: str, ttl_ms: int, payload: bytes, replace: bool = False, absttl: bool = False) -> bool:
+    def restore(self, key: str, ttl_ms: int, payload: bytes, replace: bool = False, absttl: bool = False, idletime: int | None = None, freq: int | None = None) -> bool:
         parts = [b"RESTORE", key.encode(), str(ttl_ms).encode(), payload]
         if replace:
             parts.append(b"REPLACE")
         if absttl:
             parts.append(b"ABSTTL")
+        if idletime is not None:
+            parts.extend([b"IDLETIME", str(idletime).encode()])
+        if freq is not None:
+            parts.extend([b"FREQ", str(freq).encode()])
         return self._request(*parts) == "OK"
 
-    def restore_asking(self, key: str, ttl_ms: int, payload: bytes, replace: bool = False, absttl: bool = False) -> bool:
+    def restore_asking(self, key: str, ttl_ms: int, payload: bytes, replace: bool = False, absttl: bool = False, idletime: int | None = None, freq: int | None = None) -> bool:
         parts = [b"RESTORE-ASKING", key.encode(), str(ttl_ms).encode(), payload]
         if replace:
             parts.append(b"REPLACE")
         if absttl:
             parts.append(b"ABSTTL")
+        if idletime is not None:
+            parts.extend([b"IDLETIME", str(idletime).encode()])
+        if freq is not None:
+            parts.extend([b"FREQ", str(freq).encode()])
         return self._request(*parts) == "OK"
 
     def save(self) -> bool:
@@ -2543,12 +2551,21 @@ def run_smoke() -> None:
             dump_abs_pttl = client.pttl("dump-abs")
             if dump_abs_pttl <= 0 or dump_abs_pttl > 4500:
                 raise AssertionError(f"unexpected RESTORE ABSTTL pttl: {dump_abs_pttl}")
+            assert client.restore("dump-idle", 0, dump_payload, idletime=3)
+            dump_idle = client.object_idletime("dump-idle")
+            if dump_idle is None or dump_idle < 3 or dump_idle > 4:
+                raise AssertionError(f"unexpected RESTORE IDLETIME value: {dump_idle}")
+            assert client.restore("dump-freq", 0, dump_payload, freq=7)
+            assert client.config_set("maxmemory-policy", "allkeys-lfu")
+            if client.object_freq("dump-freq") != 7:
+                raise AssertionError("unexpected RESTORE FREQ value")
+            assert client.config_set("maxmemory-policy", "noeviction")
             assert client.restore_asking("dump-asking", 0, dump_payload)
             assert client.get("dump-asking") == b"value"
             dump_pttl = client.pttl("dump-dst")
             if dump_pttl <= 0 or dump_pttl > 1500:
                 raise AssertionError(f"unexpected dump restore pttl: {dump_pttl}")
-            assert client.delete("dump-src", "dump-dst", "dump-asking", "dump-abs") == 4
+            assert client.delete("dump-src", "dump-dst", "dump-asking", "dump-abs", "dump-idle", "dump-freq") == 6
 
             assert client.bgrewriteaof()
             assert client.quit()

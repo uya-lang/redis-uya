@@ -125,11 +125,11 @@ class RedisPySubsetClient:
     def incrby(self, key: str, amount: int) -> int:
         return int(self._request(b"INCRBY", key.encode(), str(amount).encode()))
 
-    def increx(self, key: str, *options: str) -> list[int]:
+    def increx(self, key: str, *options: str) -> list[int | bytes]:
         result = self._request(b"INCREX", key.encode(), *(option.encode() for option in options))
         if not isinstance(result, list):
             raise AssertionError(f"unexpected INCREX result: {result!r}")
-        return [int(item) for item in result]
+        return result
 
     def decrby(self, key: str, amount: int) -> int:
         return int(self._request(b"DECRBY", key.encode(), str(amount).encode()))
@@ -1495,12 +1495,9 @@ def run_smoke() -> None:
             assert 0 < client.pttl("excounter") <= 1500
             assert client.increx("excounter", "PERSIST") == [9, 1]
             assert client.pttl("excounter") == -1
-            try:
-                client.increx("excounter", "BYFLOAT", "1.5")
-                raise AssertionError("expected INCREX BYFLOAT to fail in current partial")
-            except RespError as exc:
-                if "INCREX BYFLOAT is not supported" not in str(exc):
-                    raise
+            assert client.increx("fxcounter", "BYFLOAT", "1.5") == [b"1.5", b"1.5"]
+            assert client.increx("fxcounter", "BYFLOAT", "2.25", "UBOUND", "3", "SATURATE") == [b"3", b"1.5"]
+            assert client.increx("fxcounter", "BYFLOAT", "1", "UBOUND", "3") == [b"3", b"0"]
             assert client.decr("counter") == 4
             assert client.decrby("counter", 2) == 2
             assert client.incrbyfloat("fcounter", "1.5") == b"1.5"
@@ -2045,7 +2042,7 @@ def run_smoke() -> None:
             assert client.delex("delex-digest", "IFDNE", delex_digest.decode("ascii")) == 0
             assert client.delex("delex-digest", "IFDNE", "0000000000000000") == 1
             assert client.delete("counter") == 1
-            assert client.delete("excounter", "fcounter", "nx-key", "gs-key", "sx-key", "mk1", "mk2", "mn1", "mn2", "me1", "me2", "lcs-a", "lcs-b", "allones", "srca", "srcb", "dstbit", "bf", "hll", "dsthll", "emptyhll", "geo", "geodst", "distdst", "lua-key", "slow-k", "latency-k") == 27
+            assert client.delete("excounter", "fxcounter", "fcounter", "nx-key", "gs-key", "sx-key", "mk1", "mk2", "mn1", "mn2", "me1", "me2", "lcs-a", "lcs-b", "allones", "srca", "srcb", "dstbit", "bf", "hll", "dsthll", "emptyhll", "geo", "geodst", "distdst", "lua-key", "slow-k", "latency-k") == 28
             assert client.echo("hi") == b"hi"
             assert client.key_type("key") == "string"
             assert client.dbsize() == 1

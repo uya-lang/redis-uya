@@ -416,7 +416,7 @@
 
 ### T. 基础类型与管理命令
 
-- [x] String 第一批：`APPEND`、`STRLEN`、`GETDEL`、`DELEX`（`IFEQ/IFNE` partial，digest 条件暂未支持）
+- [x] String 第一批：`APPEND`、`STRLEN`、`GETDEL`、`DELEX`（`IFEQ/IFNE` value 条件与 `IFDEQ/IFDNE` 短字符串 digest 条件）
 - [x] String 第二批计数：`INCR`、`DECR`、`INCRBY`、`DECRBY`
 - [x] String 第三批原子写入：`GETSET`、`SETNX`、`SETEX`
 - [x] String 第四批多 key：`MGET`、`MSET`、`MSETNX`
@@ -424,7 +424,7 @@
 - [x] String LCS partial：`LCS key1 key2 [LEN]`（`IDX/MINMATCHLEN/WITHMATCHLEN` 暂未支持）
 - [x] String 第五批范围读写：`SETRANGE`、`GETRANGE`、`SUBSTR` alias
 - [x] String 第六批浮点计数：`INCRBYFLOAT`
-- [x] String INCREX partial：整数模式支持 `BYINT`、`LBOUND/UBOUND`、`SATURATE`、`EX/PX/EXAT/PXAT/PERSIST` 与 `ENX`，`BYFLOAT` 暂未支持
+- [x] String INCREX partial：整数模式支持 `BYINT`、浮点模式支持 `BYFLOAT`，覆盖 `LBOUND/UBOUND`、`SATURATE`、`EX/PX/EXAT/PXAT/PERSIST` 与 `ENX`
 - [x] String DIGEST partial：`DIGEST key` 支持 128 字节以内 String 的 XXH3_64 十六进制 digest，missing 返回 Null Bulk，错类型返回 `WRONGTYPE`；`DELEX IFDEQ/IFDNE` 复用同一短字符串 digest 口径
 - [x] Hash 第一批数值：`HINCRBY`、`HINCRBYFLOAT`
 - [x] Hash 第二批视图：`HKEYS`、`HVALS`、`HGETALL`、`HRANDFIELD`

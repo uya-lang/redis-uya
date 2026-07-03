@@ -546,31 +546,27 @@ fn command_executor_parse_f64(data: &[byte]) !f64 {
     return parsed;
 }
 
-fn command_executor_set_float_string(engine: &Engine, key: &[byte], value: f64, now_ms: u64) CommandReply {
+fn command_executor_format_float(out: &[byte], value: f64) !usize {
     if isnan(value) != 0 || isinf(value) != 0 {
-        return command_executor_error(&"ERR increment would produce NaN or Infinity"[0: 42]);
+        return error.CommandInvalidFloat;
+    }
+    if out.len == 0usize {
+        return error.CommandInvalidFloat;
     }
     if value == 0.0 {
-        const zero_obj: &RedisObject = create_string_object(&"0"[0: 1]) catch {
-            return command_executor_oom();
-        };
-        _ = set_key_at(engine, key, zero_obj, now_ms) catch {
-            object_free(zero_obj);
-            return command_executor_oom();
-        };
-        return command_executor_bulk(&"0"[0: 1]);
+        out.ptr[0] = 48 as byte;
+        return 1usize;
     }
 
-    var buf: [byte: 128] = [];
-    const written: i32 = snprintf(&buf[0] as *byte, 128usize, "%.17g" as *byte, value);
-    if written <= 0 || written >= 128 {
-        return command_executor_error(&"ERR increment would produce NaN or Infinity"[0: 42]);
+    const written: i32 = snprintf(out.ptr as *byte, out.len, "%.17g" as *byte, value);
+    if written <= 0 || written >= out.len as i32 {
+        return error.CommandInvalidFloat;
     }
     var text_len: usize = written as usize;
     var exp_index: usize = text_len;
     var scan: usize = 0;
     while scan < text_len {
-        if buf[scan] == 101 as byte || buf[scan] == 69 as byte {
+        if out.ptr[scan] == 101 as byte || out.ptr[scan] == 69 as byte {
             exp_index = scan;
             break;
         }
@@ -579,7 +575,7 @@ fn command_executor_set_float_string(engine: &Engine, key: &[byte], value: f64, 
     var dot_index: usize = exp_index;
     scan = 0;
     while scan < exp_index {
-        if buf[scan] == 46 as byte {
+        if out.ptr[scan] == 46 as byte {
             dot_index = scan;
             break;
         }
@@ -587,7 +583,7 @@ fn command_executor_set_float_string(engine: &Engine, key: &[byte], value: f64, 
     }
     if dot_index < exp_index {
         var frac_end: usize = exp_index;
-        while frac_end > dot_index + 1 && frac_end <= text_len && frac_end - 1 < 128usize && buf[frac_end - 1] == 48 as byte {
+        while frac_end > dot_index + 1 && frac_end <= text_len && frac_end - 1 < out.len && out.ptr[frac_end - 1] == 48 as byte {
             frac_end = frac_end - 1;
         }
         if frac_end == dot_index + 1 {
@@ -596,8 +592,8 @@ fn command_executor_set_float_string(engine: &Engine, key: &[byte], value: f64, 
         if exp_index < text_len {
             var move_src: usize = exp_index;
             var move_dst: usize = frac_end;
-            while move_src < text_len && move_src < 128usize && move_dst < 128usize {
-                buf[move_dst] = buf[move_src];
+            while move_src < text_len && move_src < out.len && move_dst < out.len {
+                out.ptr[move_dst] = out.ptr[move_src];
                 move_dst = move_dst + 1;
                 move_src = move_src + 1;
             }
@@ -606,6 +602,14 @@ fn command_executor_set_float_string(engine: &Engine, key: &[byte], value: f64, 
             text_len = frac_end;
         }
     }
+    return text_len;
+}
+
+fn command_executor_set_float_string(engine: &Engine, key: &[byte], value: f64, now_ms: u64) CommandReply {
+    var buf: [byte: 128] = [];
+    const text_len: usize = command_executor_format_float(buf[0: 128], value) catch {
+        return command_executor_error(&"ERR increment would produce NaN or Infinity"[0: 42]);
+    };
     const text: &[byte] = buf[0: text_len];
     const obj: &RedisObject = create_string_object(text) catch {
         return command_executor_oom();
@@ -654,54 +658,10 @@ fn command_executor_hash_set_integer_field(obj: &RedisObject, field: &[byte], va
 }
 
 fn command_executor_hash_set_float_field(obj: &RedisObject, field: &[byte], value: f64) CommandReply {
-    if isnan(value) != 0 || isinf(value) != 0 {
-        return command_executor_error(&"ERR increment would produce NaN or Infinity"[0: 42]);
-    }
     var buf: [byte: 128] = [];
-    const written: i32 = snprintf(&buf[0] as *byte, 128usize, "%.17g" as *byte, value);
-    if written <= 0 || written >= 128 {
+    const text_len: usize = command_executor_format_float(buf[0: 128], value) catch {
         return command_executor_error(&"ERR increment would produce NaN or Infinity"[0: 42]);
-    }
-    var text_len: usize = written as usize;
-    var exp_index: usize = text_len;
-    var scan: usize = 0;
-    while scan < text_len {
-        if buf[scan] == 101 as byte || buf[scan] == 69 as byte {
-            exp_index = scan;
-            break;
-        }
-        scan = scan + 1;
-    }
-    var dot_index: usize = exp_index;
-    scan = 0;
-    while scan < exp_index {
-        if buf[scan] == 46 as byte {
-            dot_index = scan;
-            break;
-        }
-        scan = scan + 1;
-    }
-    if dot_index < exp_index {
-        var frac_end: usize = exp_index;
-        while frac_end > dot_index + 1 && frac_end <= text_len && frac_end - 1 < 128usize && buf[frac_end - 1] == 48 as byte {
-            frac_end = frac_end - 1;
-        }
-        if frac_end == dot_index + 1 {
-            frac_end = dot_index;
-        }
-        if exp_index < text_len {
-            var move_src: usize = exp_index;
-            var move_dst: usize = frac_end;
-            while move_src < text_len && move_src < 128usize && move_dst < 128usize {
-                buf[move_dst] = buf[move_src];
-                move_dst = move_dst + 1;
-                move_src = move_src + 1;
-            }
-            text_len = move_dst;
-        } else {
-            text_len = frac_end;
-        }
-    }
+    };
     _ = hash_object_set_field(obj, field, buf[0: text_len]) catch |err| {
         if err == error.AllocOutOfMemory {
             return command_executor_oom();
@@ -2221,6 +2181,12 @@ struct CommandExecutorIncrexOptions {
     delta: i64,
     lower: i64,
     upper: i64,
+    float_delta: f64,
+    float_lower: f64,
+    float_upper: f64,
+    use_float: bool,
+    has_lower: bool,
+    has_upper: bool,
     saturate: bool,
     expire_mode: i32,
     expire_value: i64,
@@ -2229,10 +2195,6 @@ struct CommandExecutorIncrexOptions {
 
 fn command_executor_increx_invalid_expire() CommandReply {
     return command_executor_error(&"ERR invalid expire time in 'increx' command"[0: 43]);
-}
-
-fn command_executor_increx_byfloat_unsupported() CommandReply {
-    return command_executor_error(&"ERR INCREX BYFLOAT is not supported by redis-uya partial"[0: 56]);
 }
 
 fn command_executor_increx_integer_reply(new_value: i64, actual_increment: i64) CommandReply {
@@ -2260,11 +2222,44 @@ fn command_executor_increx_integer_reply(new_value: i64, actual_increment: i64) 
     return command_executor_owned_raw(raw.buf[0: raw.len]);
 }
 
+fn command_executor_increx_float_reply(new_value: f64, actual_increment: f64) CommandReply {
+    var new_buf: [byte: 128] = [];
+    var increment_buf: [byte: 128] = [];
+    const new_len: usize = command_executor_format_float(new_buf[0: 128], new_value) catch {
+        return command_executor_error(&"ERR increment would produce NaN or Infinity"[0: 42]);
+    };
+    const increment_len: usize = command_executor_format_float(increment_buf[0: 128], actual_increment) catch {
+        return command_executor_error(&"ERR increment would produce NaN or Infinity"[0: 42]);
+    };
+    var raw: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&raw);
+    }
+    _ = command_executor_resp_append_array_header(&raw, 2usize) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_resp_append_bulk(&raw, new_buf[0: new_len]) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_resp_append_bulk(&raw, increment_buf[0: increment_len]) catch {
+        return command_executor_oom();
+    };
+    return command_executor_owned_raw(raw.buf[0: raw.len]);
+}
+
 fn command_executor_increx_parse_options(command: &Command) !CommandExecutorIncrexOptions {
     var options: CommandExecutorIncrexOptions = CommandExecutorIncrexOptions{
         delta: 1,
         lower: COMMAND_EXECUTOR_I64_MIN,
         upper: COMMAND_EXECUTOR_I64_MAX,
+        float_delta: 1.0,
+        float_lower: 0.0,
+        float_upper: 0.0,
+        use_float: false,
+        has_lower: false,
+        has_upper: false,
         saturate: false,
         expire_mode: 0,
         expire_value: 0,
@@ -2275,35 +2270,43 @@ fn command_executor_increx_parse_options(command: &Command) !CommandExecutorIncr
     var saw_upper: bool = false;
     var saw_saturate: bool = false;
     var saw_enx: bool = false;
+    var delta_index: usize = 0;
+    var lower_index: usize = 0;
+    var upper_index: usize = 0;
 
     var index: usize = 2;
     while index < command.argc {
         const option: &[byte] = try command_executor_arg(command, index);
         if command_executor_keyword_eq(option, &"BYFLOAT"[0: 7]) {
-            return error.CommandUnsupported;
-        }
-        if command_executor_keyword_eq(option, &"BYINT"[0: 5]) {
             if saw_increment || index + 1 >= command.argc {
                 return error.CommandInvalidRequest;
             }
-            const delta_data: &[byte] = try command_executor_arg(command, index + 1);
-            options.delta = try command_executor_parse_i64_full(delta_data);
+            options.use_float = true;
+            delta_index = index + 1;
+            saw_increment = true;
+            index = index + 2;
+        } else if command_executor_keyword_eq(option, &"BYINT"[0: 5]) {
+            if saw_increment || index + 1 >= command.argc {
+                return error.CommandInvalidRequest;
+            }
+            options.use_float = false;
+            delta_index = index + 1;
             saw_increment = true;
             index = index + 2;
         } else if command_executor_keyword_eq(option, &"LBOUND"[0: 6]) {
             if saw_lower || index + 1 >= command.argc {
                 return error.CommandInvalidRequest;
             }
-            const lower_data: &[byte] = try command_executor_arg(command, index + 1);
-            options.lower = try command_executor_parse_i64_full(lower_data);
+            lower_index = index + 1;
+            options.has_lower = true;
             saw_lower = true;
             index = index + 2;
         } else if command_executor_keyword_eq(option, &"UBOUND"[0: 6]) {
             if saw_upper || index + 1 >= command.argc {
                 return error.CommandInvalidRequest;
             }
-            const upper_data: &[byte] = try command_executor_arg(command, index + 1);
-            options.upper = try command_executor_parse_i64_full(upper_data);
+            upper_index = index + 1;
+            options.has_upper = true;
             saw_upper = true;
             index = index + 2;
         } else if command_executor_keyword_eq(option, &"SATURATE"[0: 8]) {
@@ -2375,8 +2378,38 @@ fn command_executor_increx_parse_options(command: &Command) !CommandExecutorIncr
         }
     }
 
-    if options.lower > options.upper {
-        return error.CommandInvalidRequest;
+    if options.use_float {
+        if saw_increment {
+            const delta_data: &[byte] = try command_executor_arg(command, delta_index);
+            options.float_delta = try command_executor_parse_f64(delta_data);
+        }
+        if options.has_lower {
+            const lower_data: &[byte] = try command_executor_arg(command, lower_index);
+            options.float_lower = try command_executor_parse_f64(lower_data);
+        }
+        if options.has_upper {
+            const upper_data: &[byte] = try command_executor_arg(command, upper_index);
+            options.float_upper = try command_executor_parse_f64(upper_data);
+        }
+        if options.has_lower && options.has_upper && options.float_lower > options.float_upper {
+            return error.CommandInvalidRequest;
+        }
+    } else {
+        if saw_increment {
+            const delta_data: &[byte] = try command_executor_arg(command, delta_index);
+            options.delta = try command_executor_parse_i64_full(delta_data);
+        }
+        if options.has_lower {
+            const lower_data: &[byte] = try command_executor_arg(command, lower_index);
+            options.lower = try command_executor_parse_i64_full(lower_data);
+        }
+        if options.has_upper {
+            const upper_data: &[byte] = try command_executor_arg(command, upper_index);
+            options.upper = try command_executor_parse_i64_full(upper_data);
+        }
+        if options.lower > options.upper {
+            return error.CommandInvalidRequest;
+        }
     }
     if options.enx && (options.expire_mode < 1 || options.expire_mode > 4) {
         return error.CommandInvalidRequest;
@@ -2415,6 +2448,69 @@ fn command_executor_increx_apply_expire(engine: &Engine, key: &[byte], options: 
         return command_executor_oom();
     };
     return command_executor_simple(&"OK"[0: 2]);
+}
+
+fn command_executor_increx_float(engine: &Engine, key: &[byte], options: &CommandExecutorIncrexOptions, now_ms: u64) CommandReply {
+    var current: f64 = 0.0;
+    var had_ttl: bool = false;
+    const existing: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
+        null as &RedisObject;
+    };
+    if existing != null {
+        const data: &[byte] = command_executor_string_value(existing) catch {
+            return command_executor_wrongtype();
+        };
+        current = command_executor_parse_f64(data) catch {
+            return command_executor_error(&"ERR value is not a valid float"[0: 30]);
+        };
+        had_ttl = true;
+        const ttl_result: !u64 = get_key_expire_at(engine, key);
+        const ttl_value: u64 = ttl_result catch {
+            had_ttl = false;
+            0u64;
+        };
+        _ = ttl_value;
+    }
+
+    var next: f64 = current + options.float_delta;
+    if isnan(next) != 0 || isinf(next) != 0 {
+        if !options.saturate {
+            return command_executor_error(&"ERR increment would produce NaN or Infinity"[0: 42]);
+        }
+        if options.float_delta > 0.0 && options.has_upper {
+            next = options.float_upper;
+        } else if options.float_delta < 0.0 && options.has_lower {
+            next = options.float_lower;
+        } else {
+            return command_executor_error(&"ERR increment would produce NaN or Infinity"[0: 42]);
+        }
+    }
+
+    if options.has_lower && next < options.float_lower {
+        if !options.saturate {
+            return command_executor_increx_float_reply(current, 0.0);
+        }
+        next = options.float_lower;
+    } else if options.has_upper && next > options.float_upper {
+        if !options.saturate {
+            return command_executor_increx_float_reply(current, 0.0);
+        }
+        next = options.float_upper;
+    }
+
+    const actual_increment: f64 = next - current;
+    if isnan(actual_increment) != 0 || isinf(actual_increment) != 0 {
+        return command_executor_error(&"ERR increment would produce NaN or Infinity"[0: 42]);
+    }
+    const set_reply: CommandReply = command_executor_set_float_string(engine, key, next, now_ms);
+    if set_reply.typ == CommandReplyType.reply_error {
+        return set_reply;
+    }
+    const expire_reply: CommandReply = command_executor_increx_apply_expire(engine, key, options, had_ttl, now_ms);
+    if expire_reply.typ == CommandReplyType.reply_error {
+        return expire_reply;
+    }
+    return command_executor_increx_float_reply(next, actual_increment);
 }
 
 fn command_executor_store_string(engine: &Engine, key: &[byte], value: &[byte], now_ms: u64) CommandReply {
@@ -3159,17 +3255,20 @@ fn command_executor_increx(engine: &Engine, command: &Command, now_ms: u64) Comm
     };
     const options_result: !CommandExecutorIncrexOptions = command_executor_increx_parse_options(command);
     const options: CommandExecutorIncrexOptions = options_result catch |err| {
-        if err == error.CommandUnsupported {
-            return command_executor_increx_byfloat_unsupported();
-        }
         if err == error.CommandInvalidInteger {
             return command_executor_invalid_integer();
+        }
+        if err == error.CommandInvalidFloat {
+            return command_executor_error(&"ERR value is not a valid float"[0: 30]);
         }
         if err == error.CommandInvalidExpire {
             return command_executor_increx_invalid_expire();
         }
         return command_executor_syntax_error();
     };
+    if options.use_float {
+        return command_executor_increx_float(engine, key, &options, now_ms);
+    }
 
     var current: i64 = 0;
     var had_ttl: bool = false;

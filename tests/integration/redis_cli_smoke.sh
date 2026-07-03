@@ -223,6 +223,18 @@ if [[ "$INCREX_SATURATE_RESULT" != $'10\n6' ]]; then
     exit 1
 fi
 
+INCREX_BYFLOAT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" increx fxcounter byfloat 1.5)"
+if [[ "$INCREX_BYFLOAT_RESULT" != $'1.5\n1.5' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected INCREX BYFLOAT 1.5/1.5, got '$INCREX_BYFLOAT_RESULT'" >&2
+    exit 1
+fi
+
+INCREX_BYFLOAT_SATURATE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" increx fxcounter byfloat 2.25 ubound 3 saturate)"
+if [[ "$INCREX_BYFLOAT_SATURATE_RESULT" != $'3\n1.5' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected INCREX BYFLOAT saturate 3/1.5, got '$INCREX_BYFLOAT_SATURATE_RESULT'" >&2
+    exit 1
+fi
+
 SETNX_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" setnx nx-key first)"
 if [[ "$SETNX_RESULT" != "1" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected setnx 1, got '$SETNX_RESULT'" >&2
@@ -2908,9 +2920,9 @@ fi
 
 redis-cli --raw -h 127.0.0.1 -p "$PORT" del sx-key >/dev/null
 
-TEMP_STRING_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del excounter fcounter nx-key gs-key allones srca srcb dstbit bf hll dsthll emptyhll geo lua-key slow-k latency-k)"
-if [[ "$TEMP_STRING_DEL_RESULT" != "16" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected temp string DEL 16, got '$TEMP_STRING_DEL_RESULT'" >&2
+TEMP_STRING_DEL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del excounter fxcounter fcounter nx-key gs-key allones srca srcb dstbit bf hll dsthll emptyhll geo lua-key slow-k latency-k)"
+if [[ "$TEMP_STRING_DEL_RESULT" != "17" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected temp string DEL 17, got '$TEMP_STRING_DEL_RESULT'" >&2
     exit 1
 fi
 

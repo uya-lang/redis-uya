@@ -2810,12 +2810,39 @@ export fn test_command_set_get_del_exists() !void {
     try assert_eq_i32(increx_ttl_reply.integer as i32, -1);
     resp_value_free(&increx_ttl_parsed.value);
 
-    var increx_byfloat_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nINCREX\r\n$8\r\nfcounter\r\n$7\r\nBYFLOAT\r\n$3\r\n1.0\r\n"[0: 52]);
+    var increx_byfloat_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nINCREX\r\n$9\r\nfxcounter\r\n$7\r\nBYFLOAT\r\n$3\r\n1.5\r\n"[0: 53]);
     const increx_byfloat_command: Command = try command_executor_test_command(&router, &increx_byfloat_parsed);
-    const increx_byfloat_reply: CommandReply = command_execute_at(&engine, &increx_byfloat_command, 1000u64);
-    try assert_eq_i32(increx_byfloat_reply.typ as i32, CommandReplyType.reply_error as i32);
-    try assert_true(command_executor_test_slice_eq(increx_byfloat_reply.data, &"ERR INCREX BYFLOAT is not supported by redis-uya partial"[0: 56]));
+    var increx_byfloat_reply: CommandReply = command_execute_at(&engine, &increx_byfloat_command, 1000u64);
+    try assert_eq_i32(increx_byfloat_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    var increx_byfloat_len: usize = try connection_encode_reply(&increx_byfloat_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: increx_byfloat_len], &"*2\r\n$3\r\n1.5\r\n$3\r\n1.5\r\n"[0: 22]));
+    command_reply_cleanup(&increx_byfloat_reply);
     resp_value_free(&increx_byfloat_parsed.value);
+
+    var increx_byfloat_get_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nGET\r\n$9\r\nfxcounter\r\n"[0: 28]);
+    const increx_byfloat_get_command: Command = try command_executor_test_command(&router, &increx_byfloat_get_parsed);
+    const increx_byfloat_get_reply: CommandReply = command_execute_at(&engine, &increx_byfloat_get_command, 1000u64);
+    try assert_eq_i32(increx_byfloat_get_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(increx_byfloat_get_reply.data, &"1.5"[0: 3]));
+    resp_value_free(&increx_byfloat_get_parsed.value);
+
+    var increx_byfloat_saturate_parsed: RespParseResult = try parse_resp2(&"*7\r\n$6\r\nINCREX\r\n$9\r\nfxcounter\r\n$7\r\nBYFLOAT\r\n$4\r\n2.25\r\n$6\r\nUBOUND\r\n$1\r\n3\r\n$8\r\nSATURATE\r\n"[0: 87]);
+    const increx_byfloat_saturate_command: Command = try command_executor_test_command(&router, &increx_byfloat_saturate_parsed);
+    var increx_byfloat_saturate_reply: CommandReply = command_execute_at(&engine, &increx_byfloat_saturate_command, 1000u64);
+    try assert_eq_i32(increx_byfloat_saturate_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    var increx_byfloat_saturate_len: usize = try connection_encode_reply(&increx_byfloat_saturate_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: increx_byfloat_saturate_len], &"*2\r\n$1\r\n3\r\n$3\r\n1.5\r\n"[0: 20]));
+    command_reply_cleanup(&increx_byfloat_saturate_reply);
+    resp_value_free(&increx_byfloat_saturate_parsed.value);
+
+    var increx_byfloat_noop_parsed: RespParseResult = try parse_resp2(&"*6\r\n$6\r\nINCREX\r\n$9\r\nfxcounter\r\n$7\r\nBYFLOAT\r\n$1\r\n1\r\n$6\r\nUBOUND\r\n$1\r\n3\r\n"[0: 70]);
+    const increx_byfloat_noop_command: Command = try command_executor_test_command(&router, &increx_byfloat_noop_parsed);
+    var increx_byfloat_noop_reply: CommandReply = command_execute_at(&engine, &increx_byfloat_noop_command, 1000u64);
+    try assert_eq_i32(increx_byfloat_noop_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    var increx_byfloat_noop_len: usize = try connection_encode_reply(&increx_byfloat_noop_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: increx_byfloat_noop_len], &"*2\r\n$1\r\n3\r\n$1\r\n0\r\n"[0: 18]));
+    command_reply_cleanup(&increx_byfloat_noop_reply);
+    resp_value_free(&increx_byfloat_noop_parsed.value);
 
     var increx_hash_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nHSET\r\n$5\r\nihash\r\n$5\r\nfield\r\n$5\r\nvalue\r\n"[0: 47]);
     const increx_hash_command: Command = try command_executor_test_command(&router, &increx_hash_parsed);
@@ -2830,11 +2857,11 @@ export fn test_command_set_get_del_exists() !void {
     try assert_true(command_executor_test_slice_eq(increx_wrongtype_reply.data, &"WRONGTYPE Operation against a key holding the wrong kind of value"[0: 65]));
     resp_value_free(&increx_wrongtype_parsed.value);
 
-    var increx_cleanup_parsed: RespParseResult = try parse_resp2(&"*4\r\n$3\r\nDEL\r\n$9\r\nexcounter\r\n$6\r\nttlcnt\r\n$5\r\nihash\r\n"[0: 51]);
+    var increx_cleanup_parsed: RespParseResult = try parse_resp2(&"*5\r\n$3\r\nDEL\r\n$9\r\nexcounter\r\n$6\r\nttlcnt\r\n$5\r\nihash\r\n$9\r\nfxcounter\r\n"[0: 66]);
     const increx_cleanup_command: Command = try command_executor_test_command(&router, &increx_cleanup_parsed);
     const increx_cleanup_reply: CommandReply = command_execute_at(&engine, &increx_cleanup_command, 1000u64);
     try assert_eq_i32(increx_cleanup_reply.typ as i32, CommandReplyType.reply_integer as i32);
-    try assert_eq_i32(increx_cleanup_reply.integer as i32, 3);
+    try assert_eq_i32(increx_cleanup_reply.integer as i32, 4);
     resp_value_free(&increx_cleanup_parsed.value);
 
     var decr_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nDECR\r\n$7\r\ncounter\r\n"[0: 28]);

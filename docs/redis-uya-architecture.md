@@ -113,8 +113,8 @@ server open
 - `ZDIFF` / `ZINTER` / `ZINTERSTORE` / `ZUNION` / `ZUNIONSTORE` 这类 sorted-set 多 key 命令在执行层扫描项目内 zset `(score, member)` 排序视图；`ZINTER` / `ZINTERSTORE` / `ZUNION` / `ZUNIONSTORE` 当前支持整数 score 的默认 SUM 聚合、整数 `WEIGHTS` 和 `AGGREGATE SUM|MIN|MAX`，仍不支持 Redis 原生浮点 score / weight 口径
 - `SUBSTR` 是运行时路由层对 `GETRANGE` 的兼容 alias，执行层复用同一个字符串范围读取路径
 - `LCS` 当前由执行层按字符串值计算最长公共子序列，支持基础 Bulk String 返回和 `LEN`；`IDX` / `MINMATCHLEN` / `WITHMATCHLEN` 明细输出暂未实现，大输入有 4096 字节 partial guard
-- `INCREX` 当前在执行层实现 integer-mode partial，复用字符串整数解析和 TTL 写入路径，回复通过 raw RESP 编码返回两个 Integer；`BYFLOAT` 尚未接入浮点模式
-- `DIGEST` 当前在执行层实现短字符串 partial，使用 XXH3_64 生成 16 字节小写十六进制 Bulk String；missing 返回 Null Bulk，错类型返回 `WRONGTYPE`，超过 128 字节的 String 返回显式 partial 错误，`DELEX IFDEQ/IFDNE` 尚未复用该 digest
+- `INCREX` 当前在执行层实现 partial：默认 / `BYINT` 复用字符串整数解析并通过 raw RESP 编码返回两个 Integer；`BYFLOAT` 复用 `INCRBYFLOAT` 的浮点解析、归一化和 TTL 写入路径，并返回两个 Bulk String
+- `DIGEST` 当前在执行层实现短字符串 partial，使用 XXH3_64 生成 16 字节小写十六进制 Bulk String；missing 返回 Null Bulk，错类型返回 `WRONGTYPE`，超过 128 字节的 String 返回显式 partial 错误，`DELEX IFDEQ/IFDNE` 复用同一 digest 口径
 - `PFADD` / `PFCOUNT` / `PFMERGE` 当前使用项目内 set 对象保存 exact HLL 成员视图；`PFSELFTEST` 是 no-op self-test 兼容面，返回 `OK`，不触发 Redis 原生 HLL 编码自检；`PFDEBUG` 是安全 profile 下的 standalone-error，不开放内部 HLL 调试输出
 - `SWAPDB` 当前由执行层按单 DB 模型处理；`0 0` 是 no-op partial，任一非 `0` DB 返回越界错误，真实多 DB 数据交换保留到多 DB 模型落地后再补
 - `LOLWUT` 当前由执行层返回固定 bulk 文本 partial，只校验 `VERSION` 的整数参数，不读取或修改存储状态

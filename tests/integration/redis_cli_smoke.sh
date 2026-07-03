@@ -1100,6 +1100,12 @@ if [[ "$TDIGEST_ADD_RESULT" != "ERR TDIGEST.ADD command not allowed by redis-uya
     exit 1
 fi
 
+TS_ADD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" ts.add ts '*' 1 2>&1 || true)"
+if [[ "$TS_ADD_RESULT" != "ERR TS.ADD command not allowed by redis-uya standalone profile" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected TS.ADD disabled error, got '$TS_ADD_RESULT'" >&2
+    exit 1
+fi
+
 HOTKEYS_HELP_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hotkeys help)"
 if [[ "$HOTKEYS_HELP_RESULT" != *"HOTKEYS GET"* ]] || [[ "$HOTKEYS_HELP_RESULT" != *"HOTKEYS START"* ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected HOTKEYS HELP payload, got '$HOTKEYS_HELP_RESULT'" >&2

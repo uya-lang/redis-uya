@@ -3399,6 +3399,39 @@ TDIGEST.TRIMMED_MEAN key low_cut_quantile high_cut_quantile
 - 当前实现为 `standalone-error`：命令进入运行时路由和 `COMMAND*` 可见面，但 redis-uya 不加载 RedisBloom 模块，也不维护 t-digest 编码
 - `TDIGEST.*` 不读取或修改本地 keyspace，不写入 AOF 或复制 backlog
 
+### RedisTimeSeries `TS.*`
+
+格式：
+
+```text
+TS.ADD key timestamp value [RETENTION retentionPeriod] [ENCODING encoding] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value ...]
+TS.ALTER key [RETENTION retentionPeriod] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value ...]
+TS.CREATE key [RETENTION retentionPeriod] [ENCODING encoding] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value ...]
+TS.CREATERULE sourceKey destKey AGGREGATION aggregator bucketDuration [alignTimestamp]
+TS.DECRBY key decrement [TIMESTAMP timestamp] [RETENTION retentionPeriod] [UNCOMPRESSED] [CHUNK_SIZE size] [LABELS label value ...]
+TS.DEL key fromTimestamp toTimestamp
+TS.DELETERULE sourceKey destKey
+TS.GET key [LATEST]
+TS.INCRBY key increment [TIMESTAMP timestamp] [RETENTION retentionPeriod] [UNCOMPRESSED] [CHUNK_SIZE size] [LABELS label value ...]
+TS.INFO key [DEBUG]
+TS.MADD key timestamp value [key timestamp value ...]
+TS.MGET [LATEST] [WITHLABELS | SELECTED_LABELS label ...] FILTER filterExpr [filterExpr ...]
+TS.MRANGE fromTimestamp toTimestamp [LATEST] [FILTER_BY_TS ts ...] [FILTER_BY_VALUE min max] [WITHLABELS | SELECTED_LABELS label ...] [COUNT count] [ALIGN align] [AGGREGATION aggregator bucketDuration] FILTER filterExpr [filterExpr ...]
+TS.MREVRANGE fromTimestamp toTimestamp [LATEST] [FILTER_BY_TS ts ...] [FILTER_BY_VALUE min max] [WITHLABELS | SELECTED_LABELS label ...] [COUNT count] [ALIGN align] [AGGREGATION aggregator bucketDuration] FILTER filterExpr [filterExpr ...]
+TS.QUERYINDEX filterExpr [filterExpr ...]
+TS.RANGE key fromTimestamp toTimestamp [LATEST] [FILTER_BY_TS ts ...] [FILTER_BY_VALUE min max] [COUNT count] [ALIGN align] [AGGREGATION aggregator bucketDuration]
+TS.REVRANGE key fromTimestamp toTimestamp [LATEST] [FILTER_BY_TS ts ...] [FILTER_BY_VALUE min max] [COUNT count] [ALIGN align] [AGGREGATION aggregator bucketDuration]
+```
+
+返回：
+
+- 当前统一返回：`-ERR <TS command> command not allowed by redis-uya standalone profile`
+
+说明：
+
+- 当前实现为 `standalone-error`：命令进入运行时路由和 `COMMAND*` 可见面，但 redis-uya 不加载 RedisTimeSeries 模块，也不维护 time series 编码
+- `TS.*` 不读取或修改本地 keyspace，不写入 AOF 或复制 backlog
+
 ### `SLOWLOG`
 
 格式：

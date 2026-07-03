@@ -618,6 +618,15 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"TDIGEST commands missing from COMMAND INFO: {tdigest_info!r}")
 
+            ts_info = send_command(sock, b"COMMAND", b"INFO", b"TS.ADD", b"TS.ALTER", b"TS.CREATE", b"TS.CREATERULE", b"TS.DECRBY", b"TS.DEL", b"TS.DELETERULE", b"TS.GET", b"TS.INCRBY", b"TS.INFO", b"TS.MADD", b"TS.MGET", b"TS.MRANGE", b"TS.MREVRANGE", b"TS.QUERYINDEX", b"TS.RANGE", b"TS.REVRANGE")
+            ts_names = [b"ts.add", b"ts.alter", b"ts.create", b"ts.createrule", b"ts.decrby", b"ts.del", b"ts.deleterule", b"ts.get", b"ts.incrby", b"ts.info", b"ts.madd", b"ts.mget", b"ts.mrange", b"ts.mrevrange", b"ts.queryindex", b"ts.range", b"ts.revrange"]
+            if (
+                not isinstance(ts_info, list)
+                or len(ts_info) != len(ts_names)
+                or any(not isinstance(item, list) or item[0] != name for item, name in zip(ts_info, ts_names))
+            ):
+                raise AssertionError(f"TS commands missing from COMMAND INFO: {ts_info!r}")
+
             hotkeys_info = send_command(sock, b"COMMAND", b"INFO", b"HOTKEYS", b"HOTKEYS|HELP", b"HOTKEYS|GET", b"HOTKEYS|RESET", b"HOTKEYS|START", b"HOTKEYS|STOP")
             if (
                 not isinstance(hotkeys_info, list)
@@ -1025,6 +1034,23 @@ def run_smoke() -> None:
                 or b"tdigest.reset" not in docs_all_resp2
                 or b"tdigest.revrank" not in docs_all_resp2
                 or b"tdigest.trimmed_mean" not in docs_all_resp2
+                or b"ts.add" not in docs_all_resp2
+                or b"ts.alter" not in docs_all_resp2
+                or b"ts.create" not in docs_all_resp2
+                or b"ts.createrule" not in docs_all_resp2
+                or b"ts.decrby" not in docs_all_resp2
+                or b"ts.del" not in docs_all_resp2
+                or b"ts.deleterule" not in docs_all_resp2
+                or b"ts.get" not in docs_all_resp2
+                or b"ts.incrby" not in docs_all_resp2
+                or b"ts.info" not in docs_all_resp2
+                or b"ts.madd" not in docs_all_resp2
+                or b"ts.mget" not in docs_all_resp2
+                or b"ts.mrange" not in docs_all_resp2
+                or b"ts.mrevrange" not in docs_all_resp2
+                or b"ts.queryindex" not in docs_all_resp2
+                or b"ts.range" not in docs_all_resp2
+                or b"ts.revrange" not in docs_all_resp2
             ):
                 raise AssertionError(f"unexpected COMMAND DOCS all RESP2 payload: {docs_all_resp2!r}")
             if b"cluster|reset" in docs_all_resp2:
@@ -1278,6 +1304,29 @@ def run_smoke() -> None:
                 or b"tdigest.trimmed_mean" not in listed_tdigest
             ):
                 raise AssertionError(f"unexpected COMMAND LIST TDIGEST.* result: {listed_tdigest!r}")
+
+            listed_ts = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"TS.*")
+            if (
+                not isinstance(listed_ts, list)
+                or b"ts.add" not in listed_ts
+                or b"ts.alter" not in listed_ts
+                or b"ts.create" not in listed_ts
+                or b"ts.createrule" not in listed_ts
+                or b"ts.decrby" not in listed_ts
+                or b"ts.del" not in listed_ts
+                or b"ts.deleterule" not in listed_ts
+                or b"ts.get" not in listed_ts
+                or b"ts.incrby" not in listed_ts
+                or b"ts.info" not in listed_ts
+                or b"ts.madd" not in listed_ts
+                or b"ts.mget" not in listed_ts
+                or b"ts.mrange" not in listed_ts
+                or b"ts.mrevrange" not in listed_ts
+                or b"ts.queryindex" not in listed_ts
+                or b"ts.range" not in listed_ts
+                or b"ts.revrange" not in listed_ts
+            ):
+                raise AssertionError(f"unexpected COMMAND LIST TS.* result: {listed_ts!r}")
 
             listed_slowlog = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"SLOWLOG*")
             if (
@@ -1562,6 +1611,23 @@ def run_smoke() -> None:
                 or not isinstance(docs_all.get(b"tdigest.reset"), dict)
                 or not isinstance(docs_all.get(b"tdigest.revrank"), dict)
                 or not isinstance(docs_all.get(b"tdigest.trimmed_mean"), dict)
+                or not isinstance(docs_all.get(b"ts.add"), dict)
+                or not isinstance(docs_all.get(b"ts.alter"), dict)
+                or not isinstance(docs_all.get(b"ts.create"), dict)
+                or not isinstance(docs_all.get(b"ts.createrule"), dict)
+                or not isinstance(docs_all.get(b"ts.decrby"), dict)
+                or not isinstance(docs_all.get(b"ts.del"), dict)
+                or not isinstance(docs_all.get(b"ts.deleterule"), dict)
+                or not isinstance(docs_all.get(b"ts.get"), dict)
+                or not isinstance(docs_all.get(b"ts.incrby"), dict)
+                or not isinstance(docs_all.get(b"ts.info"), dict)
+                or not isinstance(docs_all.get(b"ts.madd"), dict)
+                or not isinstance(docs_all.get(b"ts.mget"), dict)
+                or not isinstance(docs_all.get(b"ts.mrange"), dict)
+                or not isinstance(docs_all.get(b"ts.mrevrange"), dict)
+                or not isinstance(docs_all.get(b"ts.queryindex"), dict)
+                or not isinstance(docs_all.get(b"ts.range"), dict)
+                or not isinstance(docs_all.get(b"ts.revrange"), dict)
             ):
                 raise AssertionError(f"unexpected COMMAND DOCS all RESP3 payload: {docs_all!r}")
             if b"cluster|reset" in docs_all:

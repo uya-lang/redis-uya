@@ -554,6 +554,23 @@ STANDALONE_ERROR_NAMES = {
     "topk.list",
     "topk.query",
     "topk.reserve",
+    "ts.add",
+    "ts.alter",
+    "ts.create",
+    "ts.createrule",
+    "ts.decrby",
+    "ts.del",
+    "ts.deleterule",
+    "ts.get",
+    "ts.incrby",
+    "ts.info",
+    "ts.madd",
+    "ts.mget",
+    "ts.mrange",
+    "ts.mrevrange",
+    "ts.queryindex",
+    "ts.range",
+    "ts.revrange",
 }
 
 ALIAS_NAMES = {

@@ -858,6 +858,23 @@ export fn test_command_command_catalog_core() !void {
     try command_executor_test_assert_catalog_status(&"tdigest.reset"[0: 13], CommandCatalogStatus.status_standalone_error);
     try command_executor_test_assert_catalog_status(&"tdigest.revrank"[0: 15], CommandCatalogStatus.status_standalone_error);
     try command_executor_test_assert_catalog_status(&"tdigest.trimmed_mean"[0: 20], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ts.add"[0: 6], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ts.alter"[0: 8], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ts.create"[0: 9], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ts.createrule"[0: 13], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ts.decrby"[0: 9], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ts.del"[0: 6], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ts.deleterule"[0: 13], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ts.get"[0: 6], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ts.incrby"[0: 9], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ts.info"[0: 7], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ts.madd"[0: 7], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ts.mget"[0: 7], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ts.mrange"[0: 9], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ts.mrevrange"[0: 12], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ts.queryindex"[0: 13], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ts.range"[0: 8], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ts.revrange"[0: 11], CommandCatalogStatus.status_standalone_error);
     try command_executor_test_assert_catalog_status(&"zdiff"[0: 5], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"zdiffstore"[0: 10], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"zinter"[0: 6], CommandCatalogStatus.status_partial);
@@ -9190,6 +9207,22 @@ export fn test_command_bloom_module_disabled() !void {
     try assert_true(command_executor_test_slice_eq(tdigest_info_reply.data, &"ERR TDIGEST.INFO command not allowed by redis-uya standalone profile"[0: 68]));
     command_reply_cleanup(&tdigest_info_reply);
     resp_value_free(&tdigest_info_parsed.value);
+
+    var ts_add_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nTS.ADD\r\n$2\r\nts\r\n$1\r\n*\r\n$1\r\n1\r\n"[0: 38]);
+    const ts_add_command: Command = try command_executor_test_command(&router, &ts_add_parsed);
+    var ts_add_reply: CommandReply = command_execute_at(&engine, &ts_add_command, 1000u64);
+    try assert_eq_i32(ts_add_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(ts_add_reply.data, &"ERR TS.ADD command not allowed by redis-uya standalone profile"[0: 62]));
+    command_reply_cleanup(&ts_add_reply);
+    resp_value_free(&ts_add_parsed.value);
+
+    var ts_get_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nTS.GET\r\n$2\r\nts\r\n"[0: 24]);
+    const ts_get_command: Command = try command_executor_test_command(&router, &ts_get_parsed);
+    var ts_get_reply: CommandReply = command_execute_at(&engine, &ts_get_command, 1000u64);
+    try assert_eq_i32(ts_get_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(ts_get_reply.data, &"ERR TS.GET command not allowed by redis-uya standalone profile"[0: 62]));
+    command_reply_cleanup(&ts_get_reply);
+    resp_value_free(&ts_get_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

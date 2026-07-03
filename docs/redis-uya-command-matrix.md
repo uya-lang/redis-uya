@@ -18,7 +18,7 @@
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
 | Tier A: standalone core | 365 | 259 | 146 | 209 | 7 | 3 | 0 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
-| Tier C: module commands | 153 | 146 | 0 | 0 | 49 | 0 | 104 |
+| Tier C: module commands | 153 | 146 | 0 | 0 | 66 | 0 | 87 |
 
 ## Status counts
 
@@ -26,9 +26,9 @@
 |--------|-------|
 | `full` | `147` |
 | `partial` | `216` |
-| `standalone-error` | `82` |
+| `standalone-error` | `99` |
 | `alias` | `3` |
-| `deferred` | `104` |
+| `deferred` | `87` |
 
 ## Group counts
 
@@ -518,23 +518,23 @@
 | `topk.query` | `topk` | `standalone-error` | `v1.1.0` | `-2` | `topk` | `no` | `@topk, @read, @slow` |
 | `topk.reserve` | `topk` | `standalone-error` | `v1.1.0` | `-3` | `topk` | `no` | `@topk, @write, @fast` |
 | `touch` | `generic` | `full` | `-` | `-2` | `-` | `no` | `@keyspace, @read, @fast` |
-| `ts.add` | `timeseries` | `deferred` | `v0.9.2` | `-4` | `ts` | `no` | `@timeseries, @write, @slow` |
-| `ts.alter` | `timeseries` | `deferred` | `v0.9.2` | `-2` | `ts` | `no` | `@timeseries, @write, @slow` |
-| `ts.create` | `timeseries` | `deferred` | `v0.9.2` | `-2` | `ts` | `no` | `@timeseries, @write, @fast` |
-| `ts.createrule` | `timeseries` | `deferred` | `v0.9.2` | `-6` | `ts` | `no` | `@timeseries, @write, @fast` |
-| `ts.decrby` | `timeseries` | `deferred` | `v0.9.2` | `-3` | `ts` | `no` | `@timeseries, @write, @slow` |
-| `ts.del` | `timeseries` | `deferred` | `v0.9.2` | `4` | `ts` | `no` | `@timeseries, @write, @slow` |
-| `ts.deleterule` | `timeseries` | `deferred` | `v0.9.2` | `3` | `ts` | `no` | `@timeseries, @write, @fast` |
-| `ts.get` | `timeseries` | `deferred` | `v0.9.2` | `-2` | `ts` | `no` | `@timeseries, @read, @fast` |
-| `ts.incrby` | `timeseries` | `deferred` | `v0.9.2` | `-3` | `ts` | `no` | `@timeseries, @write, @slow` |
-| `ts.info` | `timeseries` | `deferred` | `v0.9.2` | `-2` | `ts` | `no` | `@timeseries, @read, @fast` |
-| `ts.madd` | `timeseries` | `deferred` | `v0.9.2` | `-1` | `ts` | `no` | `@timeseries, @write, @slow` |
-| `ts.mget` | `timeseries` | `deferred` | `v0.9.2` | `-1` | `ts` | `no` | `@timeseries, @read, @slow` |
-| `ts.mrange` | `timeseries` | `deferred` | `v0.9.2` | `-3` | `ts` | `no` | `@timeseries, @read, @slow` |
-| `ts.mrevrange` | `timeseries` | `deferred` | `v0.9.2` | `-3` | `ts` | `no` | `@timeseries, @read, @slow` |
-| `ts.queryindex` | `timeseries` | `deferred` | `v0.9.2` | `-1` | `ts` | `no` | `@timeseries, @read, @slow` |
-| `ts.range` | `timeseries` | `deferred` | `v0.9.2` | `-4` | `ts` | `no` | `@timeseries, @read, @slow` |
-| `ts.revrange` | `timeseries` | `deferred` | `v0.9.2` | `-4` | `ts` | `no` | `@timeseries, @read, @slow` |
+| `ts.add` | `timeseries` | `standalone-error` | `v1.1.0` | `-4` | `ts` | `no` | `@timeseries, @write, @slow` |
+| `ts.alter` | `timeseries` | `standalone-error` | `v1.1.0` | `-2` | `ts` | `no` | `@timeseries, @write, @slow` |
+| `ts.create` | `timeseries` | `standalone-error` | `v1.1.0` | `-2` | `ts` | `no` | `@timeseries, @write, @fast` |
+| `ts.createrule` | `timeseries` | `standalone-error` | `v1.1.0` | `-6` | `ts` | `no` | `@timeseries, @write, @fast` |
+| `ts.decrby` | `timeseries` | `standalone-error` | `v1.1.0` | `-3` | `ts` | `no` | `@timeseries, @write, @slow` |
+| `ts.del` | `timeseries` | `standalone-error` | `v1.1.0` | `4` | `ts` | `no` | `@timeseries, @write, @slow` |
+| `ts.deleterule` | `timeseries` | `standalone-error` | `v1.1.0` | `3` | `ts` | `no` | `@timeseries, @write, @fast` |
+| `ts.get` | `timeseries` | `standalone-error` | `v1.1.0` | `-2` | `ts` | `no` | `@timeseries, @read, @fast` |
+| `ts.incrby` | `timeseries` | `standalone-error` | `v1.1.0` | `-3` | `ts` | `no` | `@timeseries, @write, @slow` |
+| `ts.info` | `timeseries` | `standalone-error` | `v1.1.0` | `-2` | `ts` | `no` | `@timeseries, @read, @fast` |
+| `ts.madd` | `timeseries` | `standalone-error` | `v1.1.0` | `-1` | `ts` | `no` | `@timeseries, @write, @slow` |
+| `ts.mget` | `timeseries` | `standalone-error` | `v1.1.0` | `-1` | `ts` | `no` | `@timeseries, @read, @slow` |
+| `ts.mrange` | `timeseries` | `standalone-error` | `v1.1.0` | `-3` | `ts` | `no` | `@timeseries, @read, @slow` |
+| `ts.mrevrange` | `timeseries` | `standalone-error` | `v1.1.0` | `-3` | `ts` | `no` | `@timeseries, @read, @slow` |
+| `ts.queryindex` | `timeseries` | `standalone-error` | `v1.1.0` | `-1` | `ts` | `no` | `@timeseries, @read, @slow` |
+| `ts.range` | `timeseries` | `standalone-error` | `v1.1.0` | `-4` | `ts` | `no` | `@timeseries, @read, @slow` |
+| `ts.revrange` | `timeseries` | `standalone-error` | `v1.1.0` | `-4` | `ts` | `no` | `@timeseries, @read, @slow` |
 | `ttl` | `generic` | `full` | `-` | `2` | `-` | `no` | `@keyspace, @read, @fast` |
 | `type` | `generic` | `full` | `-` | `2` | `-` | `no` | `@keyspace, @read, @fast` |
 | `unlink` | `generic` | `full` | `-` | `-2` | `-` | `no` | `@keyspace, @write, @fast` |

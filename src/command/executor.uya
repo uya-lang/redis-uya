@@ -11012,6 +11012,7 @@ fn command_executor_restore(engine: &Engine, command: &Command, now_ms: u64) Com
         return command_executor_invalid_integer();
     }
     var replace: bool = false;
+    var absttl: bool = false;
     var option_index: usize = 4;
     while option_index < command.argc {
         const option: &[byte] = command_executor_arg(command, option_index) catch {
@@ -11019,6 +11020,11 @@ fn command_executor_restore(engine: &Engine, command: &Command, now_ms: u64) Com
         };
         if command_executor_keyword_eq(option, &"REPLACE"[0: 7]) {
             replace = true;
+            option_index = option_index + 1;
+            continue;
+        }
+        if command_executor_keyword_eq(option, &"ABSTTL"[0: 6]) {
+            absttl = true;
             option_index = option_index + 1;
             continue;
         }
@@ -11076,7 +11082,11 @@ fn command_executor_restore(engine: &Engine, command: &Command, now_ms: u64) Com
         return command_executor_oom();
     };
     if ttl_ms > 0 {
-        _ = set_key_expire_at(engine, key, now_ms + ttl_ms as u64) catch {
+        var expire_at_ms: u64 = now_ms + ttl_ms as u64;
+        if absttl {
+            expire_at_ms = ttl_ms as u64;
+        }
+        _ = set_key_expire_at(engine, key, expire_at_ms) catch {
             _ = delete_key(engine, key);
             return command_executor_oom();
         };

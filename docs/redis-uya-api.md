@@ -1869,7 +1869,7 @@ DUMP key
 格式：
 
 ```text
-RESTORE key ttl serialized-value [REPLACE]
+RESTORE key ttl serialized-value [REPLACE] [ABSTTL]
 ```
 
 返回：
@@ -1882,14 +1882,15 @@ RESTORE key ttl serialized-value [REPLACE]
 
 - `ttl` 为相对毫秒 TTL，`0` 表示不过期
 - 支持 `REPLACE` 覆盖已存在的 target；`ttl=0` 覆盖时会清除 target 原有 TTL
-- 当前实现不支持 `ABSTTL` / `IDLETIME` / `FREQ`
+- 支持 `ABSTTL` 将非零 `ttl` 解释为绝对 Unix 毫秒过期时间
+- 当前实现不支持 `IDLETIME` / `FREQ`
 
 ### `RESTORE-ASKING`
 
 格式：
 
 ```text
-RESTORE-ASKING key ttl serialized-value [REPLACE]
+RESTORE-ASKING key ttl serialized-value [REPLACE] [ABSTTL]
 ```
 
 返回：
@@ -1902,7 +1903,8 @@ RESTORE-ASKING key ttl serialized-value [REPLACE]
 
 - 当前实现为迁移兼容 partial，复用 `RESTORE` 的单 DB RDB payload 写入路径
 - 支持 `REPLACE` 覆盖已存在的 target；`ttl=0` 覆盖时会清除 target 原有 TTL
-- 当前不支持集群 ASKING 状态校验，也不支持 `ABSTTL` / `IDLETIME` / `FREQ`
+- 支持 `ABSTTL` 将非零 `ttl` 解释为绝对 Unix 毫秒过期时间
+- 当前不支持集群 ASKING 状态校验，也不支持 `IDLETIME` / `FREQ`
 
 ### `MIGRATE`
 

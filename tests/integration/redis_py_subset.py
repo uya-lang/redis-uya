@@ -1385,16 +1385,20 @@ class RedisPySubsetClient:
     def dump(self, key: str) -> bytes | None:
         return self._request(b"DUMP", key.encode())
 
-    def restore(self, key: str, ttl_ms: int, payload: bytes, replace: bool = False) -> bool:
+    def restore(self, key: str, ttl_ms: int, payload: bytes, replace: bool = False, absttl: bool = False) -> bool:
         parts = [b"RESTORE", key.encode(), str(ttl_ms).encode(), payload]
         if replace:
             parts.append(b"REPLACE")
+        if absttl:
+            parts.append(b"ABSTTL")
         return self._request(*parts) == "OK"
 
-    def restore_asking(self, key: str, ttl_ms: int, payload: bytes, replace: bool = False) -> bool:
+    def restore_asking(self, key: str, ttl_ms: int, payload: bytes, replace: bool = False, absttl: bool = False) -> bool:
         parts = [b"RESTORE-ASKING", key.encode(), str(ttl_ms).encode(), payload]
         if replace:
             parts.append(b"REPLACE")
+        if absttl:
+            parts.append(b"ABSTTL")
         return self._request(*parts) == "OK"
 
     def save(self) -> bool:
@@ -2533,12 +2537,18 @@ def run_smoke() -> None:
             if client.pttl("dump-asking") != -1:
                 raise AssertionError("expected RESTORE-ASKING REPLACE ttl=0 to clear target ttl")
             assert client.delete("dump-asking") == 1
+            dump_abs_deadline = int(time.time() * 1000) + 4500
+            assert client.restore("dump-abs", dump_abs_deadline, dump_payload, absttl=True)
+            assert client.get("dump-abs") == b"value"
+            dump_abs_pttl = client.pttl("dump-abs")
+            if dump_abs_pttl <= 0 or dump_abs_pttl > 4500:
+                raise AssertionError(f"unexpected RESTORE ABSTTL pttl: {dump_abs_pttl}")
             assert client.restore_asking("dump-asking", 0, dump_payload)
             assert client.get("dump-asking") == b"value"
             dump_pttl = client.pttl("dump-dst")
             if dump_pttl <= 0 or dump_pttl > 1500:
                 raise AssertionError(f"unexpected dump restore pttl: {dump_pttl}")
-            assert client.delete("dump-src", "dump-dst", "dump-asking") == 3
+            assert client.delete("dump-src", "dump-dst", "dump-asking", "dump-abs") == 4
 
             assert client.bgrewriteaof()
             assert client.quit()

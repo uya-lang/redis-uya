@@ -591,6 +591,15 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"JSON commands missing from COMMAND INFO: {json_info!r}")
 
+            vector_info = send_command(sock, b"COMMAND", b"INFO", b"VADD", b"VCARD", b"VDIM", b"VEMB", b"VGETATTR", b"VINFO", b"VISMEMBER", b"VLINKS", b"VRANDMEMBER", b"VRANGE", b"VREM", b"VSETATTR", b"VSIM")
+            vector_names = [b"vadd", b"vcard", b"vdim", b"vemb", b"vgetattr", b"vinfo", b"vismember", b"vlinks", b"vrandmember", b"vrange", b"vrem", b"vsetattr", b"vsim"]
+            if (
+                not isinstance(vector_info, list)
+                or len(vector_info) != len(vector_names)
+                or any(not isinstance(item, list) or item[0] != name for item, name in zip(vector_info, vector_names))
+            ):
+                raise AssertionError(f"Vector Set commands missing from COMMAND INFO: {vector_info!r}")
+
             bf_info = send_command(sock, b"COMMAND", b"INFO", b"BF.ADD", b"BF.CARD", b"BF.EXISTS", b"BF.INFO", b"BF.INSERT", b"BF.LOADCHUNK", b"BF.MADD", b"BF.MEXISTS", b"BF.RESERVE", b"BF.SCANDUMP")
             bf_names = [b"bf.add", b"bf.card", b"bf.exists", b"bf.info", b"bf.insert", b"bf.loadchunk", b"bf.madd", b"bf.mexists", b"bf.reserve", b"bf.scandump"]
             if (
@@ -1402,6 +1411,25 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"unexpected COMMAND LIST JSON.* result: {listed_json!r}")
 
+            listed_vector = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"V*")
+            if (
+                not isinstance(listed_vector, list)
+                or b"vadd" not in listed_vector
+                or b"vcard" not in listed_vector
+                or b"vdim" not in listed_vector
+                or b"vemb" not in listed_vector
+                or b"vgetattr" not in listed_vector
+                or b"vinfo" not in listed_vector
+                or b"vismember" not in listed_vector
+                or b"vlinks" not in listed_vector
+                or b"vrandmember" not in listed_vector
+                or b"vrange" not in listed_vector
+                or b"vrem" not in listed_vector
+                or b"vsetattr" not in listed_vector
+                or b"vsim" not in listed_vector
+            ):
+                raise AssertionError(f"unexpected COMMAND LIST V* result: {listed_vector!r}")
+
             listed_slowlog = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"SLOWLOG*")
             if (
                 not isinstance(listed_slowlog, list)
@@ -1680,6 +1708,19 @@ def run_smoke() -> None:
                 or not isinstance(docs_all.get(b"json.strlen"), dict)
                 or not isinstance(docs_all.get(b"json.toggle"), dict)
                 or not isinstance(docs_all.get(b"json.type"), dict)
+                or not isinstance(docs_all.get(b"vadd"), dict)
+                or not isinstance(docs_all.get(b"vcard"), dict)
+                or not isinstance(docs_all.get(b"vdim"), dict)
+                or not isinstance(docs_all.get(b"vemb"), dict)
+                or not isinstance(docs_all.get(b"vgetattr"), dict)
+                or not isinstance(docs_all.get(b"vinfo"), dict)
+                or not isinstance(docs_all.get(b"vismember"), dict)
+                or not isinstance(docs_all.get(b"vlinks"), dict)
+                or not isinstance(docs_all.get(b"vrandmember"), dict)
+                or not isinstance(docs_all.get(b"vrange"), dict)
+                or not isinstance(docs_all.get(b"vrem"), dict)
+                or not isinstance(docs_all.get(b"vsetattr"), dict)
+                or not isinstance(docs_all.get(b"vsim"), dict)
                 or not isinstance(docs_all.get(b"bf.add"), dict)
                 or not isinstance(docs_all.get(b"bf.card"), dict)
                 or not isinstance(docs_all.get(b"bf.exists"), dict)

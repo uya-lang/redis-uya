@@ -615,6 +615,19 @@ STANDALONE_ERROR_NAMES = {
     "ts.queryindex",
     "ts.range",
     "ts.revrange",
+    "vadd",
+    "vcard",
+    "vdim",
+    "vemb",
+    "vgetattr",
+    "vinfo",
+    "vismember",
+    "vlinks",
+    "vrandmember",
+    "vrange",
+    "vrem",
+    "vsetattr",
+    "vsim",
 }
 
 ALIAS_NAMES = {

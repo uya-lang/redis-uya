@@ -9172,6 +9172,19 @@ export fn test_command_bloom_module_disabled() !void {
     try command_executor_test_assert_catalog_status(&"json.strlen"[0: 11], CommandCatalogStatus.status_standalone_error);
     try command_executor_test_assert_catalog_status(&"json.toggle"[0: 11], CommandCatalogStatus.status_standalone_error);
     try command_executor_test_assert_catalog_status(&"json.type"[0: 9], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"vadd"[0: 4], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"vcard"[0: 5], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"vdim"[0: 4], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"vemb"[0: 4], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"vgetattr"[0: 8], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"vinfo"[0: 5], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"vismember"[0: 9], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"vlinks"[0: 6], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"vrandmember"[0: 11], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"vrange"[0: 6], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"vrem"[0: 4], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"vsetattr"[0: 8], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"vsim"[0: 4], CommandCatalogStatus.status_standalone_error);
 
     var arcount_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nARCOUNT\r\n$2\r\nar\r\n"[0: 25]);
     const arcount_command: Command = try command_executor_test_command(&router, &arcount_parsed);
@@ -9212,6 +9225,22 @@ export fn test_command_bloom_module_disabled() !void {
     try assert_true(command_executor_test_slice_eq(json_debug_reply.data, &"ERR JSON.DEBUG command not allowed by redis-uya standalone profile"[0: 66]));
     command_reply_cleanup(&json_debug_reply);
     resp_value_free(&json_debug_parsed.value);
+
+    var vadd_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nVADD\r\n$2\r\nvs\r\n"[0: 22]);
+    const vadd_command: Command = try command_executor_test_command(&router, &vadd_parsed);
+    var vadd_reply: CommandReply = command_execute_at(&engine, &vadd_command, 1000u64);
+    try assert_eq_i32(vadd_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(vadd_reply.data, &"ERR VADD command not allowed by redis-uya standalone profile"[0: 60]));
+    command_reply_cleanup(&vadd_reply);
+    resp_value_free(&vadd_parsed.value);
+
+    var vrange_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nVRANGE\r\n$2\r\nvs\r\n$1\r\n0\r\n$1\r\n1\r\n"[0: 38]);
+    const vrange_command: Command = try command_executor_test_command(&router, &vrange_parsed);
+    var vrange_reply: CommandReply = command_execute_at(&engine, &vrange_command, 1000u64);
+    try assert_eq_i32(vrange_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(vrange_reply.data, &"ERR VRANGE command not allowed by redis-uya standalone profile"[0: 62]));
+    command_reply_cleanup(&vrange_reply);
+    resp_value_free(&vrange_parsed.value);
 
     var bf_add_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nBF.ADD\r\n$2\r\nbf\r\n$1\r\nx\r\n"[0: 31]);
     const bf_add_command: Command = try command_executor_test_command(&router, &bf_add_parsed);

@@ -18,7 +18,7 @@
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
 | Tier A: standalone core | 365 | 259 | 146 | 209 | 7 | 3 | 0 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
-| Tier C: module commands | 153 | 146 | 0 | 0 | 110 | 0 | 43 |
+| Tier C: module commands | 153 | 146 | 0 | 0 | 123 | 0 | 30 |
 
 ## Status counts
 
@@ -26,9 +26,9 @@
 |--------|-------|
 | `full` | `147` |
 | `partial` | `216` |
-| `standalone-error` | `143` |
+| `standalone-error` | `156` |
 | `alias` | `3` |
-| `deferred` | `43` |
+| `deferred` | `30` |
 
 ## Group counts
 
@@ -540,19 +540,19 @@
 | `unlink` | `generic` | `full` | `-` | `-2` | `-` | `no` | `@keyspace, @write, @fast` |
 | `unsubscribe` | `pubsub` | `partial` | `-` | `-1` | `-` | `no` | `@pubsub, @slow` |
 | `unwatch` | `transactions` | `full` | `-` | `1` | `-` | `no` | `@fast, @transaction` |
-| `vadd` | `vector_set` | `deferred` | `v0.9.2` | `0` | `vector_set` | `no` | `-` |
-| `vcard` | `vector_set` | `deferred` | `v0.9.2` | `0` | `vector_set` | `no` | `-` |
-| `vdim` | `vector_set` | `deferred` | `v0.9.2` | `0` | `vector_set` | `no` | `-` |
-| `vemb` | `vector_set` | `deferred` | `v0.9.2` | `0` | `vector_set` | `no` | `-` |
-| `vgetattr` | `vector_set` | `deferred` | `v0.9.2` | `0` | `vector_set` | `no` | `-` |
-| `vinfo` | `vector_set` | `deferred` | `v0.9.2` | `0` | `vector_set` | `no` | `-` |
-| `vismember` | `vector_set` | `deferred` | `v0.9.2` | `3` | `vector_set` | `no` | `-` |
-| `vlinks` | `vector_set` | `deferred` | `v0.9.2` | `0` | `vector_set` | `no` | `-` |
-| `vrandmember` | `vector_set` | `deferred` | `v0.9.2` | `0` | `vector_set` | `no` | `-` |
-| `vrange` | `vector_set` | `deferred` | `v0.9.2` | `-4` | `vector_set` | `no` | `-` |
-| `vrem` | `vector_set` | `deferred` | `v0.9.2` | `0` | `vector_set` | `no` | `-` |
-| `vsetattr` | `vector_set` | `deferred` | `v0.9.2` | `0` | `vector_set` | `no` | `-` |
-| `vsim` | `vector_set` | `deferred` | `v0.9.2` | `0` | `vector_set` | `no` | `-` |
+| `vadd` | `vector_set` | `standalone-error` | `v1.1.0` | `0` | `vector_set` | `no` | `-` |
+| `vcard` | `vector_set` | `standalone-error` | `v1.1.0` | `0` | `vector_set` | `no` | `-` |
+| `vdim` | `vector_set` | `standalone-error` | `v1.1.0` | `0` | `vector_set` | `no` | `-` |
+| `vemb` | `vector_set` | `standalone-error` | `v1.1.0` | `0` | `vector_set` | `no` | `-` |
+| `vgetattr` | `vector_set` | `standalone-error` | `v1.1.0` | `0` | `vector_set` | `no` | `-` |
+| `vinfo` | `vector_set` | `standalone-error` | `v1.1.0` | `0` | `vector_set` | `no` | `-` |
+| `vismember` | `vector_set` | `standalone-error` | `v1.1.0` | `3` | `vector_set` | `no` | `-` |
+| `vlinks` | `vector_set` | `standalone-error` | `v1.1.0` | `0` | `vector_set` | `no` | `-` |
+| `vrandmember` | `vector_set` | `standalone-error` | `v1.1.0` | `0` | `vector_set` | `no` | `-` |
+| `vrange` | `vector_set` | `standalone-error` | `v1.1.0` | `-4` | `vector_set` | `no` | `-` |
+| `vrem` | `vector_set` | `standalone-error` | `v1.1.0` | `0` | `vector_set` | `no` | `-` |
+| `vsetattr` | `vector_set` | `standalone-error` | `v1.1.0` | `0` | `vector_set` | `no` | `-` |
+| `vsim` | `vector_set` | `standalone-error` | `v1.1.0` | `0` | `vector_set` | `no` | `-` |
 | `wait` | `generic` | `partial` | `-` | `3` | `-` | `no` | `@slow, @blocking, @connection` |
 | `waitaof` | `generic` | `partial` | `-` | `4` | `-` | `no` | `@slow, @blocking, @connection` |
 | `watch` | `transactions` | `full` | `-` | `-2` | `-` | `no` | `@fast, @transaction` |

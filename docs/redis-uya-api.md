@@ -3344,6 +3344,35 @@ JSON.TYPE key [path]
 - 当前实现为 `standalone-error`：命令进入运行时路由和 `COMMAND*` 可见面，但 redis-uya 不加载 RedisJSON 模块，也不维护 JSON 编码或 JSONPath 解析器
 - `JSON.*` 不读取或修改本地 keyspace，不写入 AOF 或复制 backlog
 
+### Redis Vector Set `V*`
+
+格式：
+
+```text
+VADD key [options]
+VCARD key
+VDIM key
+VEMB key element [options]
+VGETATTR key element
+VINFO key
+VISMEMBER key element
+VLINKS key element [options]
+VRANDMEMBER key [count]
+VRANGE key start stop [options]
+VREM key element
+VSETATTR key element attribute
+VSIM key vector [options]
+```
+
+返回：
+
+- 当前统一返回：`-ERR <Vector Set command> command not allowed by redis-uya standalone profile`
+
+说明：
+
+- 当前实现为 `standalone-error`：命令进入运行时路由和 `COMMAND*` 可见面，但 redis-uya 不维护向量索引、向量距离计算或 Vector Set 编码
+- `V*` 不读取或修改本地 keyspace，不写入 AOF 或复制 backlog
+
 ### RedisBloom `BF.*`
 
 格式：

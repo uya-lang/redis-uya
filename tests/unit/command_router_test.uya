@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 371);
+    try assert_eq_i32(command_router_count(&router) as i32, 384);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -489,6 +489,22 @@ export fn test_command_router_lookup_and_case() !void {
     const json_debug: CommandInfo = try command_router_lookup(&router, &"JSON.DEBUG"[0: 10]);
     try assert_eq_i32(json_debug.cmd_type as i32, CommandType.command_module_unsupported as i32);
     try assert_eq_i32(json_debug.arity, -1);
+
+    const vadd: CommandInfo = try command_router_lookup(&router, &"VADD"[0: 4]);
+    try assert_eq_i32(vadd.cmd_type as i32, CommandType.command_module_unsupported as i32);
+    try assert_eq_i32(vadd.arity, -1);
+
+    const vcard: CommandInfo = try command_router_lookup(&router, &"vcard"[0: 5]);
+    try assert_eq_i32(vcard.cmd_type as i32, CommandType.command_module_unsupported as i32);
+    try assert_eq_i32(vcard.arity, -1);
+
+    const vismember: CommandInfo = try command_router_lookup(&router, &"VISMEMBER"[0: 9]);
+    try assert_eq_i32(vismember.cmd_type as i32, CommandType.command_module_unsupported as i32);
+    try assert_eq_i32(vismember.arity, 3);
+
+    const vrange: CommandInfo = try command_router_lookup(&router, &"VRANGE"[0: 6]);
+    try assert_eq_i32(vrange.cmd_type as i32, CommandType.command_module_unsupported as i32);
+    try assert_eq_i32(vrange.arity, -4);
 
     const slowlog: CommandInfo = try command_router_lookup(&router, &"SLOWLOG"[0: 7]);
     try assert_eq_i32(slowlog.cmd_type as i32, CommandType.command_slowlog as i32);
@@ -1469,6 +1485,9 @@ export fn test_command_router_arity_validation() !void {
     const json_set: CommandInfo = try command_router_lookup(&router, &"JSON.SET"[0: 8]);
     const json_mset: CommandInfo = try command_router_lookup(&router, &"JSON.MSET"[0: 9]);
     const json_debug: CommandInfo = try command_router_lookup(&router, &"JSON.DEBUG"[0: 10]);
+    const vadd: CommandInfo = try command_router_lookup(&router, &"VADD"[0: 4]);
+    const vismember: CommandInfo = try command_router_lookup(&router, &"VISMEMBER"[0: 9]);
+    const vrange: CommandInfo = try command_router_lookup(&router, &"VRANGE"[0: 6]);
 
     try command_validate_arity(&hello, 1);
     try command_validate_arity(&hello, 2);
@@ -1545,6 +1564,11 @@ export fn test_command_router_arity_validation() !void {
     try command_validate_arity(&json_mset, 7);
     try command_validate_arity(&json_debug, 1);
     try command_validate_arity(&json_debug, 3);
+    try command_validate_arity(&vadd, 1);
+    try command_validate_arity(&vadd, 4);
+    try command_validate_arity(&vismember, 3);
+    try command_validate_arity(&vrange, 4);
+    try command_validate_arity(&vrange, 8);
     try command_validate_arity(&get, 2);
     try command_validate_arity(&incr, 2);
     try command_validate_arity(&decr, 2);

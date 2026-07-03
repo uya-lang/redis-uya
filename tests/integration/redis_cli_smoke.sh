@@ -1082,6 +1082,12 @@ if [[ "$JSON_GET_RESULT" != "ERR JSON.GET command not allowed by redis-uya stand
     exit 1
 fi
 
+VADD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" vadd vs 2>&1 || true)"
+if [[ "$VADD_RESULT" != "ERR VADD command not allowed by redis-uya standalone profile" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected VADD disabled error, got '$VADD_RESULT'" >&2
+    exit 1
+fi
+
 BF_ADD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" bf.add bf x 2>&1 || true)"
 if [[ "$BF_ADD_RESULT" != "ERR BF.ADD command not allowed by redis-uya standalone profile" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected BF.ADD disabled error, got '$BF_ADD_RESULT'" >&2

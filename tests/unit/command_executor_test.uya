@@ -9185,6 +9185,36 @@ export fn test_command_bloom_module_disabled() !void {
     try command_executor_test_assert_catalog_status(&"vrem"[0: 4], CommandCatalogStatus.status_standalone_error);
     try command_executor_test_assert_catalog_status(&"vsetattr"[0: 8], CommandCatalogStatus.status_standalone_error);
     try command_executor_test_assert_catalog_status(&"vsim"[0: 4], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ft._list"[0: 8], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ft.aggregate"[0: 12], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ft.aliasadd"[0: 11], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ft.aliasdel"[0: 11], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ft.aliasupdate"[0: 14], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ft.alter"[0: 8], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ft.config|get"[0: 13], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ft.config|help"[0: 14], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ft.config|set"[0: 13], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ft.create"[0: 9], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ft.cursor|del"[0: 13], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ft.cursor|read"[0: 14], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ft.dictadd"[0: 10], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ft.dictdel"[0: 10], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ft.dictdump"[0: 11], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ft.dropindex"[0: 12], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ft.explain"[0: 10], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ft.explaincli"[0: 13], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ft.hybrid"[0: 9], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ft.info"[0: 7], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ft.profile"[0: 10], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ft.search"[0: 9], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ft.spellcheck"[0: 13], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ft.sugadd"[0: 9], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ft.sugdel"[0: 9], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ft.sugget"[0: 9], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ft.suglen"[0: 9], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ft.syndump"[0: 10], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ft.synupdate"[0: 12], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ft.tagvals"[0: 10], CommandCatalogStatus.status_standalone_error);
 
     var arcount_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nARCOUNT\r\n$2\r\nar\r\n"[0: 25]);
     const arcount_command: Command = try command_executor_test_command(&router, &arcount_parsed);
@@ -9241,6 +9271,30 @@ export fn test_command_bloom_module_disabled() !void {
     try assert_true(command_executor_test_slice_eq(vrange_reply.data, &"ERR VRANGE command not allowed by redis-uya standalone profile"[0: 62]));
     command_reply_cleanup(&vrange_reply);
     resp_value_free(&vrange_parsed.value);
+
+    var ft_search_parsed: RespParseResult = try parse_resp2(&"*3\r\n$9\r\nFT.SEARCH\r\n$3\r\nidx\r\n$1\r\n*\r\n"[0: 35]);
+    const ft_search_command: Command = try command_executor_test_command(&router, &ft_search_parsed);
+    var ft_search_reply: CommandReply = command_execute_at(&engine, &ft_search_command, 1000u64);
+    try assert_eq_i32(ft_search_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(ft_search_reply.data, &"ERR FT.SEARCH command not allowed by redis-uya standalone profile"[0: 65]));
+    command_reply_cleanup(&ft_search_reply);
+    resp_value_free(&ft_search_parsed.value);
+
+    var ft_config_parsed: RespParseResult = try parse_resp2(&"*3\r\n$9\r\nFT.CONFIG\r\n$3\r\nGET\r\n$1\r\n*\r\n"[0: 35]);
+    const ft_config_command: Command = try command_executor_test_command(&router, &ft_config_parsed);
+    var ft_config_reply: CommandReply = command_execute_at(&engine, &ft_config_command, 1000u64);
+    try assert_eq_i32(ft_config_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(ft_config_reply.data, &"ERR FT.CONFIG command not allowed by redis-uya standalone profile"[0: 65]));
+    command_reply_cleanup(&ft_config_reply);
+    resp_value_free(&ft_config_parsed.value);
+
+    var ft_cursor_parsed: RespParseResult = try parse_resp2(&"*4\r\n$9\r\nFT.CURSOR\r\n$4\r\nREAD\r\n$3\r\nidx\r\n$1\r\n1\r\n"[0: 45]);
+    const ft_cursor_command: Command = try command_executor_test_command(&router, &ft_cursor_parsed);
+    var ft_cursor_reply: CommandReply = command_execute_at(&engine, &ft_cursor_command, 1000u64);
+    try assert_eq_i32(ft_cursor_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(ft_cursor_reply.data, &"ERR FT.CURSOR command not allowed by redis-uya standalone profile"[0: 65]));
+    command_reply_cleanup(&ft_cursor_reply);
+    resp_value_free(&ft_cursor_parsed.value);
 
     var bf_add_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nBF.ADD\r\n$2\r\nbf\r\n$1\r\nx\r\n"[0: 31]);
     const bf_add_command: Command = try command_executor_test_command(&router, &bf_add_parsed);

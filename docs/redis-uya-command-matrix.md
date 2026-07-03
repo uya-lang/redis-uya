@@ -18,7 +18,7 @@
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
 | Tier A: standalone core | 365 | 259 | 146 | 209 | 7 | 3 | 0 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
-| Tier C: module commands | 153 | 146 | 0 | 0 | 123 | 0 | 30 |
+| Tier C: module commands | 153 | 146 | 0 | 0 | 153 | 0 | 0 |
 
 ## Status counts
 
@@ -26,9 +26,9 @@
 |--------|-------|
 | `full` | `147` |
 | `partial` | `216` |
-| `standalone-error` | `156` |
+| `standalone-error` | `186` |
 | `alias` | `3` |
-| `deferred` | `30` |
+| `deferred` | `0` |
 
 ## Group counts
 
@@ -233,36 +233,36 @@
 | `fcall_ro` | `scripting` | `partial` | `-` | `-3` | `-` | `no` | `@slow, @scripting` |
 | `flushall` | `server` | `partial` | `-` | `-1` | `-` | `no` | `@keyspace, @write, @slow, @dangerous` |
 | `flushdb` | `server` | `partial` | `-` | `-1` | `-` | `no` | `@keyspace, @write, @slow, @dangerous` |
-| `ft._list` | `search` | `deferred` | `v0.9.2` | `0` | `ft` | `no` | `@admin, @search, @slow` |
-| `ft.aggregate` | `search` | `deferred` | `v0.9.2` | `-3` | `ft` | `no` | `@search, @read, @fast` |
-| `ft.aliasadd` | `search` | `deferred` | `v0.9.2` | `3` | `ft` | `no` | `@search` |
-| `ft.aliasdel` | `search` | `deferred` | `v0.9.2` | `2` | `ft` | `no` | `@search` |
-| `ft.aliasupdate` | `search` | `deferred` | `v0.9.2` | `3` | `ft` | `no` | `@search` |
-| `ft.alter` | `search` | `deferred` | `v0.9.2` | `-6` | `ft` | `no` | `@search` |
-| `ft.config|get` | `search` | `deferred` | `v0.9.2` | `2` | `ft` | `no` | `@admin, @search` |
-| `ft.config|help` | `search` | `deferred` | `v0.9.2` | `2` | `ft` | `no` | `@admin, @search` |
-| `ft.config|set` | `search` | `deferred` | `v0.9.2` | `3` | `ft` | `no` | `@admin, @search` |
-| `ft.create` | `search` | `deferred` | `v0.9.2` | `-3` | `ft` | `no` | `@search` |
-| `ft.cursor|del` | `search` | `deferred` | `v0.9.2` | `3` | `ft` | `no` | `@read, @search` |
-| `ft.cursor|read` | `search` | `deferred` | `v0.9.2` | `-3` | `ft` | `no` | `@read, @search` |
-| `ft.dictadd` | `search` | `deferred` | `v0.9.2` | `-2` | `ft` | `no` | `@search` |
-| `ft.dictdel` | `search` | `deferred` | `v0.9.2` | `-2` | `ft` | `no` | `@search` |
-| `ft.dictdump` | `search` | `deferred` | `v0.9.2` | `2` | `ft` | `no` | `@search` |
-| `ft.dropindex` | `search` | `deferred` | `v0.9.2` | `-2` | `ft` | `no` | `@dangerous, @search, @slow, @write` |
-| `ft.explain` | `search` | `deferred` | `v0.9.2` | `-3` | `ft` | `no` | `@search` |
-| `ft.explaincli` | `search` | `deferred` | `v0.9.2` | `-3` | `ft` | `no` | `@search` |
-| `ft.hybrid` | `search` | `deferred` | `v0.9.2` | `-7` | `ft` | `no` | `@read, @search` |
-| `ft.info` | `search` | `deferred` | `v0.9.2` | `2` | `ft` | `no` | `@search` |
-| `ft.profile` | `search` | `deferred` | `v0.9.2` | `-5` | `ft` | `no` | `@read, @search` |
-| `ft.search` | `search` | `deferred` | `v0.9.2` | `-3` | `ft` | `no` | `@read, @search` |
-| `ft.spellcheck` | `search` | `deferred` | `v0.9.2` | `-3` | `ft` | `no` | `@search` |
-| `ft.sugadd` | `suggestion` | `deferred` | `v0.9.2` | `-4` | `ft` | `no` | `@search, @write` |
-| `ft.sugdel` | `suggestion` | `deferred` | `v0.9.2` | `3` | `ft` | `no` | `@search, @write` |
-| `ft.sugget` | `suggestion` | `deferred` | `v0.9.2` | `-3` | `ft` | `no` | `@search` |
-| `ft.suglen` | `suggestion` | `deferred` | `v0.9.2` | `2` | `ft` | `no` | `@search` |
-| `ft.syndump` | `search` | `deferred` | `v0.9.2` | `2` | `ft` | `no` | `@search` |
-| `ft.synupdate` | `search` | `deferred` | `v0.9.2` | `-3` | `ft` | `no` | `@search` |
-| `ft.tagvals` | `search` | `deferred` | `v0.9.2` | `3` | `ft` | `no` | `@dangerous, @read, @search, @slow` |
+| `ft._list` | `search` | `standalone-error` | `v1.1.0` | `0` | `ft` | `no` | `@admin, @search, @slow` |
+| `ft.aggregate` | `search` | `standalone-error` | `v1.1.0` | `-3` | `ft` | `no` | `@search, @read, @fast` |
+| `ft.aliasadd` | `search` | `standalone-error` | `v1.1.0` | `3` | `ft` | `no` | `@search` |
+| `ft.aliasdel` | `search` | `standalone-error` | `v1.1.0` | `2` | `ft` | `no` | `@search` |
+| `ft.aliasupdate` | `search` | `standalone-error` | `v1.1.0` | `3` | `ft` | `no` | `@search` |
+| `ft.alter` | `search` | `standalone-error` | `v1.1.0` | `-6` | `ft` | `no` | `@search` |
+| `ft.config|get` | `search` | `standalone-error` | `v1.1.0` | `2` | `ft` | `no` | `@admin, @search` |
+| `ft.config|help` | `search` | `standalone-error` | `v1.1.0` | `2` | `ft` | `no` | `@admin, @search` |
+| `ft.config|set` | `search` | `standalone-error` | `v1.1.0` | `3` | `ft` | `no` | `@admin, @search` |
+| `ft.create` | `search` | `standalone-error` | `v1.1.0` | `-3` | `ft` | `no` | `@search` |
+| `ft.cursor|del` | `search` | `standalone-error` | `v1.1.0` | `3` | `ft` | `no` | `@read, @search` |
+| `ft.cursor|read` | `search` | `standalone-error` | `v1.1.0` | `-3` | `ft` | `no` | `@read, @search` |
+| `ft.dictadd` | `search` | `standalone-error` | `v1.1.0` | `-2` | `ft` | `no` | `@search` |
+| `ft.dictdel` | `search` | `standalone-error` | `v1.1.0` | `-2` | `ft` | `no` | `@search` |
+| `ft.dictdump` | `search` | `standalone-error` | `v1.1.0` | `2` | `ft` | `no` | `@search` |
+| `ft.dropindex` | `search` | `standalone-error` | `v1.1.0` | `-2` | `ft` | `no` | `@dangerous, @search, @slow, @write` |
+| `ft.explain` | `search` | `standalone-error` | `v1.1.0` | `-3` | `ft` | `no` | `@search` |
+| `ft.explaincli` | `search` | `standalone-error` | `v1.1.0` | `-3` | `ft` | `no` | `@search` |
+| `ft.hybrid` | `search` | `standalone-error` | `v1.1.0` | `-7` | `ft` | `no` | `@read, @search` |
+| `ft.info` | `search` | `standalone-error` | `v1.1.0` | `2` | `ft` | `no` | `@search` |
+| `ft.profile` | `search` | `standalone-error` | `v1.1.0` | `-5` | `ft` | `no` | `@read, @search` |
+| `ft.search` | `search` | `standalone-error` | `v1.1.0` | `-3` | `ft` | `no` | `@read, @search` |
+| `ft.spellcheck` | `search` | `standalone-error` | `v1.1.0` | `-3` | `ft` | `no` | `@search` |
+| `ft.sugadd` | `suggestion` | `standalone-error` | `v1.1.0` | `-4` | `ft` | `no` | `@search, @write` |
+| `ft.sugdel` | `suggestion` | `standalone-error` | `v1.1.0` | `3` | `ft` | `no` | `@search, @write` |
+| `ft.sugget` | `suggestion` | `standalone-error` | `v1.1.0` | `-3` | `ft` | `no` | `@search` |
+| `ft.suglen` | `suggestion` | `standalone-error` | `v1.1.0` | `2` | `ft` | `no` | `@search` |
+| `ft.syndump` | `search` | `standalone-error` | `v1.1.0` | `2` | `ft` | `no` | `@search` |
+| `ft.synupdate` | `search` | `standalone-error` | `v1.1.0` | `-3` | `ft` | `no` | `@search` |
+| `ft.tagvals` | `search` | `standalone-error` | `v1.1.0` | `3` | `ft` | `no` | `@dangerous, @read, @search, @slow` |
 | `function` | `scripting` | `partial` | `-` | `-2` | `-` | `no` | `@slow` |
 | `function|delete` | `scripting` | `partial` | `-` | `3` | `-` | `no` | `@write, @slow, @scripting` |
 | `function|dump` | `scripting` | `partial` | `-` | `2` | `-` | `no` | `@slow, @scripting` |

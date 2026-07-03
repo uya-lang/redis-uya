@@ -600,6 +600,15 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"Vector Set commands missing from COMMAND INFO: {vector_info!r}")
 
+            ft_info = send_command(sock, b"COMMAND", b"INFO", b"FT._LIST", b"FT.AGGREGATE", b"FT.ALIASADD", b"FT.ALIASDEL", b"FT.ALIASUPDATE", b"FT.ALTER", b"FT.CONFIG|GET", b"FT.CONFIG|HELP", b"FT.CONFIG|SET", b"FT.CREATE", b"FT.CURSOR|DEL", b"FT.CURSOR|READ", b"FT.DICTADD", b"FT.DICTDEL", b"FT.DICTDUMP", b"FT.DROPINDEX", b"FT.EXPLAIN", b"FT.EXPLAINCLI", b"FT.HYBRID", b"FT.INFO", b"FT.PROFILE", b"FT.SEARCH", b"FT.SPELLCHECK", b"FT.SUGADD", b"FT.SUGDEL", b"FT.SUGGET", b"FT.SUGLEN", b"FT.SYNDUMP", b"FT.SYNUPDATE", b"FT.TAGVALS")
+            ft_names = [b"ft._list", b"ft.aggregate", b"ft.aliasadd", b"ft.aliasdel", b"ft.aliasupdate", b"ft.alter", b"ft.config|get", b"ft.config|help", b"ft.config|set", b"ft.create", b"ft.cursor|del", b"ft.cursor|read", b"ft.dictadd", b"ft.dictdel", b"ft.dictdump", b"ft.dropindex", b"ft.explain", b"ft.explaincli", b"ft.hybrid", b"ft.info", b"ft.profile", b"ft.search", b"ft.spellcheck", b"ft.sugadd", b"ft.sugdel", b"ft.sugget", b"ft.suglen", b"ft.syndump", b"ft.synupdate", b"ft.tagvals"]
+            if (
+                not isinstance(ft_info, list)
+                or len(ft_info) != len(ft_names)
+                or any(not isinstance(item, list) or item[0] != name for item, name in zip(ft_info, ft_names))
+            ):
+                raise AssertionError(f"FT commands missing from COMMAND INFO: {ft_info!r}")
+
             bf_info = send_command(sock, b"COMMAND", b"INFO", b"BF.ADD", b"BF.CARD", b"BF.EXISTS", b"BF.INFO", b"BF.INSERT", b"BF.LOADCHUNK", b"BF.MADD", b"BF.MEXISTS", b"BF.RESERVE", b"BF.SCANDUMP")
             bf_names = [b"bf.add", b"bf.card", b"bf.exists", b"bf.info", b"bf.insert", b"bf.loadchunk", b"bf.madd", b"bf.mexists", b"bf.reserve", b"bf.scandump"]
             if (
@@ -1078,6 +1087,7 @@ def run_smoke() -> None:
                 or b"ts.queryindex" not in docs_all_resp2
                 or b"ts.range" not in docs_all_resp2
                 or b"ts.revrange" not in docs_all_resp2
+                or any(name not in docs_all_resp2 for name in ft_names)
             ):
                 raise AssertionError(f"unexpected COMMAND DOCS all RESP2 payload: {docs_all_resp2!r}")
             if b"cluster|reset" in docs_all_resp2:
@@ -1429,6 +1439,13 @@ def run_smoke() -> None:
                 or b"vsim" not in listed_vector
             ):
                 raise AssertionError(f"unexpected COMMAND LIST V* result: {listed_vector!r}")
+
+            listed_ft = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"FT.*")
+            if (
+                not isinstance(listed_ft, list)
+                or any(name not in listed_ft for name in ft_names)
+            ):
+                raise AssertionError(f"unexpected COMMAND LIST FT.* result: {listed_ft!r}")
 
             listed_slowlog = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"SLOWLOG*")
             if (
@@ -1787,6 +1804,7 @@ def run_smoke() -> None:
                 or not isinstance(docs_all.get(b"ts.queryindex"), dict)
                 or not isinstance(docs_all.get(b"ts.range"), dict)
                 or not isinstance(docs_all.get(b"ts.revrange"), dict)
+                or any(not isinstance(docs_all.get(name), dict) for name in ft_names)
             ):
                 raise AssertionError(f"unexpected COMMAND DOCS all RESP3 payload: {docs_all!r}")
             if b"cluster|reset" in docs_all:

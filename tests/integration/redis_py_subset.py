@@ -1897,6 +1897,12 @@ def run_smoke() -> None:
                 if str(exc) != "ERR VADD command not allowed by redis-uya standalone profile":
                     raise AssertionError(f"unexpected VADD error: {exc}") from exc
             try:
+                client._request(b"FT.SEARCH", b"idx", b"*")
+                raise AssertionError("expected FT.SEARCH to be disabled")
+            except RespError as exc:
+                if str(exc) != "ERR FT.SEARCH command not allowed by redis-uya standalone profile":
+                    raise AssertionError(f"unexpected FT.SEARCH error: {exc}") from exc
+            try:
                 client._request(b"BF.ADD", b"bf", b"x")
                 raise AssertionError("expected BF.ADD to be disabled")
             except RespError as exc:

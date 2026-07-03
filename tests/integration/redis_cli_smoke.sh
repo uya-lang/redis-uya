@@ -1088,6 +1088,12 @@ if [[ "$VADD_RESULT" != "ERR VADD command not allowed by redis-uya standalone pr
     exit 1
 fi
 
+FT_SEARCH_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" ft.search idx '*' 2>&1 || true)"
+if [[ "$FT_SEARCH_RESULT" != "ERR FT.SEARCH command not allowed by redis-uya standalone profile" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected FT.SEARCH disabled error, got '$FT_SEARCH_RESULT'" >&2
+    exit 1
+fi
+
 BF_ADD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" bf.add bf x 2>&1 || true)"
 if [[ "$BF_ADD_RESULT" != "ERR BF.ADD command not allowed by redis-uya standalone profile" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected BF.ADD disabled error, got '$BF_ADD_RESULT'" >&2

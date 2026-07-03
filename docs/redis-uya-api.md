@@ -3344,6 +3344,52 @@ JSON.TYPE key [path]
 - 当前实现为 `standalone-error`：命令进入运行时路由和 `COMMAND*` 可见面，但 redis-uya 不加载 RedisJSON 模块，也不维护 JSON 编码或 JSONPath 解析器
 - `JSON.*` 不读取或修改本地 keyspace，不写入 AOF 或复制 backlog
 
+### RediSearch `FT.*`
+
+格式：
+
+```text
+FT._LIST
+FT.AGGREGATE index query [options]
+FT.ALIASADD alias index
+FT.ALIASDEL alias
+FT.ALIASUPDATE alias index
+FT.ALTER index SCHEMA ADD field options
+FT.CONFIG GET name
+FT.CONFIG HELP
+FT.CONFIG SET name value
+FT.CREATE index [options] SCHEMA field options [field options ...]
+FT.CURSOR DEL index cursor_id
+FT.CURSOR READ index cursor_id [COUNT count]
+FT.DICTADD dict term [term ...]
+FT.DICTDEL dict term [term ...]
+FT.DICTDUMP dict
+FT.DROPINDEX index [DD]
+FT.EXPLAIN index query [DIALECT dialect]
+FT.EXPLAINCLI index query [DIALECT dialect]
+FT.HYBRID index query [options]
+FT.INFO index
+FT.PROFILE index SEARCH|AGGREGATE QUERY query [options]
+FT.SEARCH index query [options]
+FT.SPELLCHECK index query [options]
+FT.SUGADD key string score [options]
+FT.SUGDEL key string
+FT.SUGGET key prefix [options]
+FT.SUGLEN key
+FT.SYNDUMP index
+FT.SYNUPDATE index synonym_group_id [SKIPINITIALSCAN] term [term ...]
+FT.TAGVALS index field
+```
+
+返回：
+
+- 当前统一返回：`-ERR <FT command> command not allowed by redis-uya standalone profile`
+
+说明：
+
+- 当前实现为 `standalone-error`：命令进入运行时路由和 `COMMAND*` 可见面，但 redis-uya 不加载 RediSearch 模块，也不维护全文索引、查询计划、游标、同义词或 suggestion 编码
+- `FT.*` 不读取或修改本地 keyspace，不写入 AOF 或复制 backlog
+
 ### Redis Vector Set `V*`
 
 格式：

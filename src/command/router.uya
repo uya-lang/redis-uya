@@ -299,7 +299,7 @@ export const COMMAND_FLAG_READONLY: u64 = 1u64;
 export const COMMAND_FLAG_WRITE: u64 = 2u64;
 export const COMMAND_FLAG_FAST: u64 = 4u64;
 
-const MIN_COMMAND_COUNT: usize = 329;
+const MIN_COMMAND_COUNT: usize = 347;
 
 fn command_router_name_eq(a: &[byte], b: &[byte]) bool {
     return bytes_ascii_case_eq(a, b);
@@ -1325,6 +1325,60 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
     }
     if index == 328 {
         return command_router_info(CommandType.command_module_unsupported, &"TS.REVRANGE"[0: 11], -4, COMMAND_FLAG_READONLY, 1, 1, 1);
+    }
+    if index == 329 {
+        return command_router_info(CommandType.command_module_unsupported, &"ARCOUNT"[0: 7], 2, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 330 {
+        return command_router_info(CommandType.command_module_unsupported, &"ARDEL"[0: 5], -3, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 331 {
+        return command_router_info(CommandType.command_module_unsupported, &"ARDELRANGE"[0: 10], -4, COMMAND_FLAG_WRITE, 1, 1, 1);
+    }
+    if index == 332 {
+        return command_router_info(CommandType.command_module_unsupported, &"ARGET"[0: 5], 3, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 333 {
+        return command_router_info(CommandType.command_module_unsupported, &"ARGETRANGE"[0: 10], 4, COMMAND_FLAG_READONLY, 1, 1, 1);
+    }
+    if index == 334 {
+        return command_router_info(CommandType.command_module_unsupported, &"ARGREP"[0: 6], -6, COMMAND_FLAG_READONLY, 1, 1, 1);
+    }
+    if index == 335 {
+        return command_router_info(CommandType.command_module_unsupported, &"ARINFO"[0: 6], -2, COMMAND_FLAG_READONLY, 1, 1, 1);
+    }
+    if index == 336 {
+        return command_router_info(CommandType.command_module_unsupported, &"ARINSERT"[0: 8], -3, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 337 {
+        return command_router_info(CommandType.command_module_unsupported, &"ARLASTITEMS"[0: 11], -3, COMMAND_FLAG_READONLY, 1, 1, 1);
+    }
+    if index == 338 {
+        return command_router_info(CommandType.command_module_unsupported, &"ARLEN"[0: 5], 2, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 339 {
+        return command_router_info(CommandType.command_module_unsupported, &"ARMGET"[0: 6], -3, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 340 {
+        return command_router_info(CommandType.command_module_unsupported, &"ARMSET"[0: 6], -4, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 341 {
+        return command_router_info(CommandType.command_module_unsupported, &"ARNEXT"[0: 6], 2, COMMAND_FLAG_READONLY | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 342 {
+        return command_router_info(CommandType.command_module_unsupported, &"AROP"[0: 4], -5, COMMAND_FLAG_READONLY, 1, 1, 1);
+    }
+    if index == 343 {
+        return command_router_info(CommandType.command_module_unsupported, &"ARRING"[0: 6], -4, COMMAND_FLAG_WRITE, 1, 1, 1);
+    }
+    if index == 344 {
+        return command_router_info(CommandType.command_module_unsupported, &"ARSCAN"[0: 6], -4, COMMAND_FLAG_READONLY, 1, 1, 1);
+    }
+    if index == 345 {
+        return command_router_info(CommandType.command_module_unsupported, &"ARSEEK"[0: 6], 3, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
+    }
+    if index == 346 {
+        return command_router_info(CommandType.command_module_unsupported, &"ARSET"[0: 5], -4, COMMAND_FLAG_WRITE | COMMAND_FLAG_FAST, 1, 1, 1);
     }
     return error.CommandUnknown;
 }

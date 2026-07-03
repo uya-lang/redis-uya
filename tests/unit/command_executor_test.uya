@@ -9128,6 +9128,41 @@ export fn test_command_bloom_module_disabled() !void {
     const router: CommandRouter = command_router_new();
     var engine: Engine = engine_new();
 
+    try command_executor_test_assert_catalog_status(&"arcount"[0: 7], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ardel"[0: 5], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"ardelrange"[0: 10], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"arget"[0: 5], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"argetrange"[0: 10], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"argrep"[0: 6], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"arinfo"[0: 6], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"arinsert"[0: 8], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"arlastitems"[0: 11], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"arlen"[0: 5], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"armget"[0: 6], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"armset"[0: 6], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"arnext"[0: 6], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"arop"[0: 4], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"arring"[0: 6], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"arscan"[0: 6], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"arseek"[0: 6], CommandCatalogStatus.status_standalone_error);
+    try command_executor_test_assert_catalog_status(&"arset"[0: 5], CommandCatalogStatus.status_standalone_error);
+
+    var arcount_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nARCOUNT\r\n$2\r\nar\r\n"[0: 25]);
+    const arcount_command: Command = try command_executor_test_command(&router, &arcount_parsed);
+    var arcount_reply: CommandReply = command_execute_at(&engine, &arcount_command, 1000u64);
+    try assert_eq_i32(arcount_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(arcount_reply.data, &"ERR ARCOUNT command not allowed by redis-uya standalone profile"[0: 63]));
+    command_reply_cleanup(&arcount_reply);
+    resp_value_free(&arcount_parsed.value);
+
+    var arset_parsed: RespParseResult = try parse_resp2(&"*4\r\n$5\r\nARSET\r\n$2\r\nar\r\n$1\r\n0\r\n$1\r\nx\r\n"[0: 37]);
+    const arset_command: Command = try command_executor_test_command(&router, &arset_parsed);
+    var arset_reply: CommandReply = command_execute_at(&engine, &arset_command, 1000u64);
+    try assert_eq_i32(arset_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(arset_reply.data, &"ERR ARSET command not allowed by redis-uya standalone profile"[0: 61]));
+    command_reply_cleanup(&arset_reply);
+    resp_value_free(&arset_parsed.value);
+
     var bf_add_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nBF.ADD\r\n$2\r\nbf\r\n$1\r\nx\r\n"[0: 31]);
     const bf_add_command: Command = try command_executor_test_command(&router, &bf_add_parsed);
     var bf_add_reply: CommandReply = command_execute_at(&engine, &bf_add_command, 1000u64);

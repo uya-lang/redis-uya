@@ -1879,6 +1879,12 @@ def run_smoke() -> None:
                 if str(exc) != "ERR MODULE UNLOAD command not allowed by redis-uya standalone profile":
                     raise AssertionError(f"unexpected MODULE UNLOAD error: {exc}") from exc
             try:
+                client._request(b"ARCOUNT", b"ar")
+                raise AssertionError("expected ARCOUNT to be disabled")
+            except RespError as exc:
+                if str(exc) != "ERR ARCOUNT command not allowed by redis-uya standalone profile":
+                    raise AssertionError(f"unexpected ARCOUNT error: {exc}") from exc
+            try:
                 client._request(b"BF.ADD", b"bf", b"x")
                 raise AssertionError("expected BF.ADD to be disabled")
             except RespError as exc:

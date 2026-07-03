@@ -573,6 +573,15 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"module commands missing from COMMAND INFO: {module_info!r}")
 
+            ar_info = send_command(sock, b"COMMAND", b"INFO", b"ARCOUNT", b"ARDEL", b"ARDELRANGE", b"ARGET", b"ARGETRANGE", b"ARGREP", b"ARINFO", b"ARINSERT", b"ARLASTITEMS", b"ARLEN", b"ARMGET", b"ARMSET", b"ARNEXT", b"AROP", b"ARRING", b"ARSCAN", b"ARSEEK", b"ARSET")
+            ar_names = [b"arcount", b"ardel", b"ardelrange", b"arget", b"argetrange", b"argrep", b"arinfo", b"arinsert", b"arlastitems", b"arlen", b"armget", b"armset", b"arnext", b"arop", b"arring", b"arscan", b"arseek", b"arset"]
+            if (
+                not isinstance(ar_info, list)
+                or len(ar_info) != len(ar_names)
+                or any(not isinstance(item, list) or item[0] != name for item, name in zip(ar_info, ar_names))
+            ):
+                raise AssertionError(f"AR commands missing from COMMAND INFO: {ar_info!r}")
+
             bf_info = send_command(sock, b"COMMAND", b"INFO", b"BF.ADD", b"BF.CARD", b"BF.EXISTS", b"BF.INFO", b"BF.INSERT", b"BF.LOADCHUNK", b"BF.MADD", b"BF.MEXISTS", b"BF.RESERVE", b"BF.SCANDUMP")
             bf_names = [b"bf.add", b"bf.card", b"bf.exists", b"bf.info", b"bf.insert", b"bf.loadchunk", b"bf.madd", b"bf.mexists", b"bf.reserve", b"bf.scandump"]
             if (
@@ -1328,6 +1337,30 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"unexpected COMMAND LIST TS.* result: {listed_ts!r}")
 
+            listed_ar = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"AR*")
+            if (
+                not isinstance(listed_ar, list)
+                or b"arcount" not in listed_ar
+                or b"ardel" not in listed_ar
+                or b"ardelrange" not in listed_ar
+                or b"arget" not in listed_ar
+                or b"argetrange" not in listed_ar
+                or b"argrep" not in listed_ar
+                or b"arinfo" not in listed_ar
+                or b"arinsert" not in listed_ar
+                or b"arlastitems" not in listed_ar
+                or b"arlen" not in listed_ar
+                or b"armget" not in listed_ar
+                or b"armset" not in listed_ar
+                or b"arnext" not in listed_ar
+                or b"arop" not in listed_ar
+                or b"arring" not in listed_ar
+                or b"arscan" not in listed_ar
+                or b"arseek" not in listed_ar
+                or b"arset" not in listed_ar
+            ):
+                raise AssertionError(f"unexpected COMMAND LIST AR* result: {listed_ar!r}")
+
             listed_slowlog = send_command(sock, b"COMMAND", b"LIST", b"FILTERBY", b"PATTERN", b"SLOWLOG*")
             if (
                 not isinstance(listed_slowlog, list)
@@ -1562,6 +1595,24 @@ def run_smoke() -> None:
                 or not isinstance(docs_all.get(b"module|load"), dict)
                 or not isinstance(docs_all.get(b"module|loadex"), dict)
                 or not isinstance(docs_all.get(b"module|unload"), dict)
+                or not isinstance(docs_all.get(b"arcount"), dict)
+                or not isinstance(docs_all.get(b"ardel"), dict)
+                or not isinstance(docs_all.get(b"ardelrange"), dict)
+                or not isinstance(docs_all.get(b"arget"), dict)
+                or not isinstance(docs_all.get(b"argetrange"), dict)
+                or not isinstance(docs_all.get(b"argrep"), dict)
+                or not isinstance(docs_all.get(b"arinfo"), dict)
+                or not isinstance(docs_all.get(b"arinsert"), dict)
+                or not isinstance(docs_all.get(b"arlastitems"), dict)
+                or not isinstance(docs_all.get(b"arlen"), dict)
+                or not isinstance(docs_all.get(b"armget"), dict)
+                or not isinstance(docs_all.get(b"armset"), dict)
+                or not isinstance(docs_all.get(b"arnext"), dict)
+                or not isinstance(docs_all.get(b"arop"), dict)
+                or not isinstance(docs_all.get(b"arring"), dict)
+                or not isinstance(docs_all.get(b"arscan"), dict)
+                or not isinstance(docs_all.get(b"arseek"), dict)
+                or not isinstance(docs_all.get(b"arset"), dict)
                 or not isinstance(docs_all.get(b"bf.add"), dict)
                 or not isinstance(docs_all.get(b"bf.card"), dict)
                 or not isinstance(docs_all.get(b"bf.exists"), dict)

@@ -3270,6 +3270,40 @@ MODULE UNLOAD name
 - `COMMAND INFO/LIST/DOCS` 会暴露 `MODULE`、`MODULE|HELP`、`MODULE|LIST`、`MODULE|LOAD`、`MODULE|LOADEX` 与 `MODULE|UNLOAD`
 - 当前不支持 module 加载、卸载或模块 API；禁用子命令不加载动态库、不修改模块列表、不写 AOF 或复制 backlog
 
+### Redis Array `AR*`
+
+格式：
+
+```text
+ARCOUNT key
+ARDEL key index [index ...]
+ARDELRANGE key start stop [count]
+ARGET key index
+ARGETRANGE key start stop
+ARGREP key pattern [LIMIT offset count]
+ARINFO key [path]
+ARINSERT key index value [value ...]
+ARLASTITEMS key count [path]
+ARLEN key
+ARMGET key path [key path ...]
+ARMSET key path value [key path value ...]
+ARNEXT key
+AROP key operation [arg ...]
+ARRING key size value [value ...]
+ARSCAN key cursor [MATCH pattern] [COUNT count]
+ARSEEK key index
+ARSET key index value [value ...]
+```
+
+返回：
+
+- 当前统一返回：`-ERR <AR command> command not allowed by redis-uya standalone profile`
+
+说明：
+
+- 当前实现为 `standalone-error`：命令进入运行时路由和 `COMMAND*` 可见面，但 redis-uya 不加载 Redis Array 模块，也不维护 Array 编码
+- `AR*` 不读取或修改本地 keyspace，不写入 AOF 或复制 backlog
+
 ### RedisBloom `BF.*`
 
 格式：

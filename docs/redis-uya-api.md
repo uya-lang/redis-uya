@@ -240,13 +240,14 @@ DELEX key [IFEQ value | IFNE value | IFDEQ digest | IFDNE digest]
 - 未带条件时：key 存在则删除并返回 `1`，key 不存在返回 `0`
 - `IFEQ value`：当前 String 值等于 `value` 时删除并返回 `1`，否则返回 `0`
 - `IFNE value`：当前 String 值不等于 `value` 时删除并返回 `1`，否则返回 `0`
+- `IFDEQ digest`：当前 String 的 XXH3_64 十六进制 digest 等于 `digest` 时删除并返回 `1`，否则返回 `0`
+- `IFDNE digest`：当前 String 的 XXH3_64 十六进制 digest 不等于 `digest` 时删除并返回 `1`，否则返回 `0`
 - 条件路径中 key 不存在：`0`
 - 条件路径中 key 存在且不是 String：`WRONGTYPE`
-- `IFDEQ` / `IFDNE` 当前返回 `ERR DELEX digest conditions are not supported by redis-uya partial`
 
 说明：
 
-- 当前实现为 partial，仅支持字符串值比较条件；`DELEX` 的 digest 条件暂未接入，独立 `DIGEST` 命令已提供短字符串 XXH3_64 查询兼容面
+- 当前实现为 partial，支持 String 值比较条件，以及与 `DIGEST` 相同的 128 字节以内 String XXH3_64 digest 条件；digest 条件遇到超过 128 字节的 String 返回 `ERR DIGEST only supports string values up to 128 bytes in redis-uya partial`
 - `COMMAND INFO/LIST/DOCS` 与 `COMMAND GETKEYS*` 会暴露 `DELEX`，key flags 标记为 `RM/delete`
 
 ### `DIGEST`
@@ -266,7 +267,7 @@ DIGEST key
 
 说明：
 
-- 当前为 partial，只覆盖独立 `DIGEST key` 的短字符串查询；暂不把该 digest 接入 `DELEX IFDEQ/IFDNE`
+- 当前为 partial，覆盖独立 `DIGEST key` 的短字符串查询，并供 `DELEX IFDEQ/IFDNE` 复用同一 digest 口径
 - `COMMAND INFO/LIST/DOCS` 与 `COMMAND GETKEYS*` 会暴露 `DIGEST`，key flags 标记为 `RO/access`
 
 ### `INCR`

@@ -4833,6 +4833,7 @@ fn command_executor_delex(engine: &Engine, command: &Command, now_ms: u64) Comma
     }
 
     var expect_match: bool = true;
+    var compare_digest: bool = false;
     const option: &[byte] = command_executor_arg(command, 2) catch {
         return command_executor_wrong_arity();
     };
@@ -4840,9 +4841,12 @@ fn command_executor_delex(engine: &Engine, command: &Command, now_ms: u64) Comma
         expect_match = true;
     } else if command_executor_keyword_eq(option, &"IFNE"[0: 4]) {
         expect_match = false;
-    } else if command_executor_keyword_eq(option, &"IFDEQ"[0: 5]) ||
-        command_executor_keyword_eq(option, &"IFDNE"[0: 5]) {
-        return command_executor_error(&"ERR DELEX digest conditions are not supported by redis-uya partial"[0: 66]);
+    } else if command_executor_keyword_eq(option, &"IFDEQ"[0: 5]) {
+        expect_match = true;
+        compare_digest = true;
+    } else if command_executor_keyword_eq(option, &"IFDNE"[0: 5]) {
+        expect_match = false;
+        compare_digest = true;
     } else {
         return command_executor_syntax_error();
     }
@@ -4856,7 +4860,17 @@ fn command_executor_delex(engine: &Engine, command: &Command, now_ms: u64) Comma
     const current: &[byte] = command_executor_string_value(obj) catch {
         return command_executor_wrongtype();
     };
-    const matched: bool = command_executor_slice_eq(current, value);
+    var matched: bool = false;
+    if compare_digest {
+        const digest: u64 = command_executor_xxh3_64_short(current) catch {
+            return command_executor_error(&"ERR DIGEST only supports string values up to 128 bytes in redis-uya partial"[0: 75]);
+        };
+        var hex: [byte: 16] = [];
+        command_executor_write_hex_u64(hex[0: 16], digest);
+        matched = command_executor_slice_eq(hex[0: 16], value);
+    } else {
+        matched = command_executor_slice_eq(current, value);
+    }
     if expect_match {
         if !matched {
             return command_executor_integer(0);

@@ -2036,6 +2036,14 @@ def run_smoke() -> None:
             assert client.get("delex-key") == b"value"
             assert client.delex("delex-key", "IFNE", "other") == 1
             assert client.delex("delex-key") == 0
+            assert client.set("delex-digest", "Hello world")
+            delex_digest = client.digest("delex-digest")
+            if delex_digest != b"b6acb9d84a38ff74":
+                raise AssertionError(f"unexpected DELEX digest value: {delex_digest!r}")
+            assert client.delex("delex-digest", "IFDEQ", delex_digest.decode("ascii")) == 1
+            assert client.set("delex-digest", "Hello world")
+            assert client.delex("delex-digest", "IFDNE", delex_digest.decode("ascii")) == 0
+            assert client.delex("delex-digest", "IFDNE", "0000000000000000") == 1
             assert client.delete("counter") == 1
             assert client.delete("excounter", "fcounter", "nx-key", "gs-key", "sx-key", "mk1", "mk2", "mn1", "mn2", "me1", "me2", "lcs-a", "lcs-b", "allones", "srca", "srcb", "dstbit", "bf", "hll", "dsthll", "emptyhll", "geo", "geodst", "distdst", "lua-key", "slow-k", "latency-k") == 27
             assert client.echo("hi") == b"hi"

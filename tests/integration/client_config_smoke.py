@@ -435,6 +435,19 @@ def run_smoke() -> None:
                 if array_pairs_to_dict(policy_raw).get("maxmemory-policy") != "allkeys-lru":
                     raise AssertionError(f"unexpected CONFIG GET maxmemory-policy after SET: {policy_raw!r}")
 
+                if send_command(sock, b"CONFIG", b"SET", b"maxmemory", b"64mb", b"maxmemory-policy", b"volatile-lru") != "OK":
+                    raise AssertionError("CONFIG SET multi-parameter maxmemory/policy failed")
+                multi_max_raw = send_command(sock, b"CONFIG", b"GET", b"maxmemory")
+                if array_pairs_to_dict(multi_max_raw).get("maxmemory") != "67108864":
+                    raise AssertionError(f"unexpected CONFIG GET maxmemory after multi SET: {multi_max_raw!r}")
+                multi_policy_raw = send_command(sock, b"CONFIG", b"GET", b"maxmemory-policy")
+                if array_pairs_to_dict(multi_policy_raw).get("maxmemory-policy") != "volatile-lru":
+                    raise AssertionError(f"unexpected CONFIG GET maxmemory-policy after multi SET: {multi_policy_raw!r}")
+                if send_command(sock, b"CONFIG", b"SET", b"maxmemory", b"1mb") != "OK":
+                    raise AssertionError("CONFIG SET maxmemory restore failed")
+                if send_command(sock, b"CONFIG", b"SET", b"maxmemory-policy", b"allkeys-lru") != "OK":
+                    raise AssertionError("CONFIG SET maxmemory-policy restore failed")
+
                 if send_command(sock, b"CONFIG", b"SET", b"save", b"60 10") != "OK":
                     raise AssertionError("CONFIG SET save failed")
                 save_raw = send_command(sock, b"CONFIG", b"GET", b"save")

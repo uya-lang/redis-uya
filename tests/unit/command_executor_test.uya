@@ -417,6 +417,15 @@ export fn test_command_info_and_config() !void {
     try assert_true(command_executor_test_slice_eq(config_set_requirepass_reply.config_after.requirepass[0: 4], &"next"[0: 4]));
     resp_value_free(&config_set_requirepass_parsed.value);
 
+    var config_set_multi_parsed: RespParseResult = try parse_resp2(&"*6\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$9\r\nmaxmemory\r\n$3\r\n2mb\r\n$16\r\nlatency-tracking\r\n$2\r\nno\r\n"[0: 80]);
+    const config_set_multi_command: Command = try command_executor_test_command(&router, &config_set_multi_parsed);
+    const config_set_multi_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_set_multi_command, 5000u64);
+    try assert_eq_i32(config_set_multi_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_eq_i32(config_set_multi_reply.request_config_set as i32, 1);
+    try assert_eq_i32(config_set_multi_reply.config_after.maxmemory as i32, 2097152);
+    try assert_eq_i32(config_set_multi_reply.config_after.latency_tracking as i32, 0);
+    resp_value_free(&config_set_multi_parsed.value);
+
     var config_set_bad_value_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$9\r\nmaxmemory\r\n$5\r\nbogus\r\n"[0: 51]);
     const config_set_bad_value_command: Command = try command_executor_test_command(&router, &config_set_bad_value_parsed);
     const config_set_bad_value_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_set_bad_value_command, 5000u64);
@@ -430,6 +439,14 @@ export fn test_command_info_and_config() !void {
     try assert_eq_i32(config_set_bad_bool_reply.typ as i32, CommandReplyType.reply_error as i32);
     try assert_true(command_executor_test_slice_eq(config_set_bad_bool_reply.data, &"ERR Invalid argument for CONFIG SET"[0: 35]));
     resp_value_free(&config_set_bad_bool_parsed.value);
+
+    var config_set_multi_bad_parsed: RespParseResult = try parse_resp2(&"*6\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$9\r\nmaxmemory\r\n$3\r\n2mb\r\n$16\r\nlatency-tracking\r\n$5\r\nmaybe\r\n"[0: 83]);
+    const config_set_multi_bad_command: Command = try command_executor_test_command(&router, &config_set_multi_bad_parsed);
+    const config_set_multi_bad_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_set_multi_bad_command, 5000u64);
+    try assert_eq_i32(config_set_multi_bad_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_eq_i32(config_set_multi_bad_reply.request_config_set as i32, 0);
+    try assert_true(command_executor_test_slice_eq(config_set_multi_bad_reply.data, &"ERR Invalid argument for CONFIG SET"[0: 35]));
+    resp_value_free(&config_set_multi_bad_parsed.value);
 
     var config_set_unknown_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$6\r\nfoobar\r\n$1\r\n1\r\n"[0: 44]);
     const config_set_unknown_command: Command = try command_executor_test_command(&router, &config_set_unknown_parsed);

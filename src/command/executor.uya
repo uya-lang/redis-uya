@@ -20807,6 +20807,52 @@ export fn command_reply_cleanup(reply: &CommandReply) void {
     }
 }
 
+fn command_executor_latency_uses_subcommand_name(cmd_type: CommandType) bool {
+    return cmd_type == CommandType.command_acl ||
+        cmd_type == CommandType.command_cluster ||
+        cmd_type == CommandType.command_command ||
+        cmd_type == CommandType.command_config ||
+        cmd_type == CommandType.command_function ||
+        cmd_type == CommandType.command_hotkeys ||
+        cmd_type == CommandType.command_memory ||
+        cmd_type == CommandType.command_module ||
+        cmd_type == CommandType.command_object ||
+        cmd_type == CommandType.command_pubsub ||
+        cmd_type == CommandType.command_script ||
+        cmd_type == CommandType.command_slowlog ||
+        cmd_type == CommandType.command_xgroup ||
+        cmd_type == CommandType.command_xinfo;
+}
+
+fn command_executor_latency_histogram_name(command: &Command, out: &[byte]) &[byte] {
+    if !command_executor_latency_uses_subcommand_name(command.info.cmd_type) || command.argc < 2 || out.len == 0usize {
+        return command.info.name;
+    }
+    const subcommand: &[byte] = command_executor_arg(command, 1) catch {
+        return command.info.name;
+    };
+    if subcommand.len == 0usize {
+        return command.info.name;
+    }
+    const total_len: usize = command.info.name.len + 1usize + subcommand.len;
+    if total_len > out.len {
+        return command.info.name;
+    }
+    var index: usize = 0;
+    while index < command.info.name.len {
+        out.ptr[index] = command.info.name.ptr[index];
+        index = index + 1;
+    }
+    out.ptr[index] = 124 as byte;
+    index = index + 1;
+    var sub_index: usize = 0;
+    while sub_index < subcommand.len {
+        out.ptr[index + sub_index] = subcommand.ptr[sub_index];
+        sub_index = sub_index + 1;
+    }
+    return out[0: total_len];
+}
+
 fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRuntimeInfo, command: &Command, now_ms: u64) CommandReply {
     const default_single_node: bool = runtime.cluster_topology == null ||
         (runtime.cluster_topology.node_count == 1 && runtime.cluster_topology.local_index == 0);
@@ -21629,7 +21675,9 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
         slowlog_append(command, now_ms / 1000u64, duration_us, runtime.config.slowlog_max_len);
     }
     if command.info.cmd_type != CommandType.command_latency {
-        latency_record_command(now_ms / 1000u64, duration_us, command.info.name, runtime.config.latency_tracking, runtime.config.latency_monitor_threshold);
+        var latency_name_buf: [byte: 129] = [];
+        const latency_name: &[byte] = command_executor_latency_histogram_name(command, latency_name_buf[0: 129]);
+        latency_record_command(now_ms / 1000u64, duration_us, latency_name, runtime.config.latency_tracking, runtime.config.latency_monitor_threshold);
     }
     return reply;
 }

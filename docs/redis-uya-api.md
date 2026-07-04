@@ -3645,16 +3645,16 @@ LATENCY GRAPH event
 - `HISTORY`：返回指定 event 的历史数组；当前支持 `command` 事件
 - `RESET`：返回已清除 event 数；无参数时清空全部事件，也可按 event 名清理
 - `DOCTOR`：返回 minimal 诊断文本 Bulk String
-- `HISTOGRAM [command ...]`：返回命令延迟直方图数组；当前按 top-level 命令名记录 `calls` 与 `histogram_usec` 累计桶，可按命令名过滤
+- `HISTOGRAM [command ...]`：返回命令延迟直方图数组；当前按普通命令名或容器子命令名记录 `calls` 与 `histogram_usec` 累计桶，可按命令名过滤
 - `GRAPH`：返回指定 event 的 ASCII graph 文本；当前对有历史的 `command` 事件返回最小文本说明
 
 说明：
 
-- 当前实现为 partial：按 `latency-monitor-threshold` 采样普通命令执行耗时并写入 `command` 事件的进程内历史，同时写入 top-level 命令名直方图；`LATENCY` 自身不写入 latency 历史或直方图
+- 当前实现为 partial：按 `latency-monitor-threshold` 采样普通命令执行耗时并写入 `command` 事件的进程内历史，同时写入命令直方图；容器命令会按 `parent|subcommand` 记录，例如 `config|set`
 - 当前 `command` 事件耗时基于 redis-uya 运行时时间源，精度受毫秒级时钟限制
 - `LATENCY RESET` 只清理 event 历史；命令直方图按 Redis 习惯由 `CONFIG RESETSTAT` 清理
 - `CONFIG SET latency-monitor-threshold <milliseconds>` 可控制后续 `LATENCY LATEST/HISTORY/GRAPH` 的 `command` 事件采样；`0` 禁用事件采样，正数表示记录大于等于该毫秒门限的命令事件
-- 当前直方图使用 Redis 兼容的 RESP2 map-as-array 形状和固定微秒桶，但只按 top-level 命令名聚合；`CONFIG SET latency-tracking yes|no` 可控制后续命令直方图采样，尚未实现子命令名粒度直方图
+- 当前直方图使用 Redis 兼容的 RESP2 map-as-array 形状和固定微秒桶；普通命令按 top-level 名称聚合，容器命令按子命令名称聚合；`CONFIG SET latency-tracking yes|no` 可控制后续命令直方图采样
 
 ### `MONITOR`
 

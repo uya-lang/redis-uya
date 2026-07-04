@@ -478,6 +478,9 @@ def run_smoke() -> None:
                     raise AssertionError("CONFIG SET latency-monitor-threshold high failed")
                 if array_pairs_to_dict(send_command(sock, b"CONFIG", b"GET", b"latency-monitor-threshold")).get("latency-monitor-threshold") != "1000000":
                     raise AssertionError("CONFIG GET latency-monitor-threshold did not reflect high threshold")
+                config_set_histogram = send_command(sock, b"LATENCY", b"HISTOGRAM", b"CONFIG|SET")
+                if not isinstance(config_set_histogram, list) or b"config|set" not in config_set_histogram:
+                    raise AssertionError(f"latency histogram did not record CONFIG SET subcommand: {config_set_histogram!r}")
                 if send_command(sock, b"LATENCY", b"RESET") not in (0, 1):
                     raise AssertionError("LATENCY RESET before threshold check failed")
                 if send_command(sock, b"SET", b"latency-threshold-off", b"1") != "OK":

@@ -1337,6 +1337,12 @@ if [[ "$LATENCY_HISTOGRAM_SET_RESULT" != *"set"* ]] || [[ "$LATENCY_HISTOGRAM_SE
     exit 1
 fi
 
+LATENCY_HISTOGRAM_CONFIG_SET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" latency histogram CONFIG\|SET)"
+if [[ "$LATENCY_HISTOGRAM_CONFIG_SET_RESULT" != *"config|set"* ]] || [[ "$LATENCY_HISTOGRAM_CONFIG_SET_RESULT" != *"calls"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected LATENCY HISTOGRAM CONFIG|SET payload, got '$LATENCY_HISTOGRAM_CONFIG_SET_RESULT'" >&2
+    exit 1
+fi
+
 LATENCY_HISTOGRAM_MISSING_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" latency histogram missing)"
 if [[ -n "$LATENCY_HISTOGRAM_MISSING_RESULT" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected empty LATENCY HISTOGRAM missing result, got '$LATENCY_HISTOGRAM_MISSING_RESULT'" >&2

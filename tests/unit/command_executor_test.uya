@@ -10013,6 +10013,21 @@ export fn test_command_latency() !void {
     command_reply_cleanup(&histogram_reply);
     resp_value_free(&histogram_parsed.value);
 
+    var config_set_latency_histogram_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$16\r\nlatency-tracking\r\n$3\r\nyes\r\n"[0: 57]);
+    const config_set_latency_histogram_command: Command = try command_executor_test_command(&router, &config_set_latency_histogram_parsed);
+    const config_set_latency_histogram_reply: CommandReply = command_execute_at(&engine, &config_set_latency_histogram_command, 2000u64);
+    try assert_eq_i32(config_set_latency_histogram_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    resp_value_free(&config_set_latency_histogram_parsed.value);
+
+    var histogram_config_set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$7\r\nLATENCY\r\n$9\r\nHISTOGRAM\r\n$10\r\nCONFIG|SET\r\n"[0: 49]);
+    const histogram_config_set_command: Command = try command_executor_test_command(&router, &histogram_config_set_parsed);
+    var histogram_config_set_reply: CommandReply = command_execute_at(&engine, &histogram_config_set_command, 1000u64);
+    try assert_eq_i32(histogram_config_set_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    try assert_true(command_executor_test_contains(histogram_config_set_reply.data, &"$10\r\nconfig|set\r\n"[0: 17]));
+    try assert_true(command_executor_test_contains(histogram_config_set_reply.data, &"$5\r\ncalls\r\n:1\r\n"[0: 15]));
+    command_reply_cleanup(&histogram_config_set_reply);
+    resp_value_free(&histogram_config_set_parsed.value);
+
     var histogram_missing_parsed: RespParseResult = try parse_resp2(&"*3\r\n$7\r\nLATENCY\r\n$9\r\nHISTOGRAM\r\n$7\r\nmissing\r\n"[0: 45]);
     const histogram_missing_command: Command = try command_executor_test_command(&router, &histogram_missing_parsed);
     var histogram_missing_reply: CommandReply = command_execute_at(&engine, &histogram_missing_command, 1000u64);

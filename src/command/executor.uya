@@ -3539,10 +3539,45 @@ fn command_executor_lcs_value(engine: &Engine, key: &[byte], now_ms: u64) !&[byt
     return command_executor_string_value(obj);
 }
 
-fn command_executor_lcs_compute(a: &[byte], b: &[byte], return_len: bool) CommandReply {
+fn command_executor_lcs_append_idx_match(raw: &Sds, start_a: usize, end_a: usize, start_b: usize, end_b: usize, match_len: usize, with_match_len: bool) !void {
+    if with_match_len {
+        try command_executor_resp_append_array_header(raw, 3usize);
+    } else {
+        try command_executor_resp_append_array_header(raw, 2usize);
+    }
+    try command_executor_resp_append_array_header(raw, 2usize);
+    try command_executor_resp_append_integer(raw, start_a as i64);
+    try command_executor_resp_append_integer(raw, end_a as i64);
+    try command_executor_resp_append_array_header(raw, 2usize);
+    try command_executor_resp_append_integer(raw, start_b as i64);
+    try command_executor_resp_append_integer(raw, end_b as i64);
+    if with_match_len {
+        try command_executor_resp_append_integer(raw, match_len as i64);
+    }
+}
+
+fn command_executor_lcs_idx_reply_empty(lcs_len: usize) CommandReply {
+    var raw: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&raw);
+    }
+    _ = command_executor_resp_append_array_header(&raw, 4usize) catch { return command_executor_oom(); };
+    _ = command_executor_resp_append_bulk(&raw, &"matches"[0: 7]) catch { return command_executor_oom(); };
+    _ = command_executor_resp_append_array_header(&raw, 0usize) catch { return command_executor_oom(); };
+    _ = command_executor_resp_append_bulk(&raw, &"len"[0: 3]) catch { return command_executor_oom(); };
+    _ = command_executor_resp_append_integer(&raw, lcs_len as i64) catch { return command_executor_oom(); };
+    return command_executor_owned_raw(raw.buf[0: raw.len]);
+}
+
+fn command_executor_lcs_compute(a: &[byte], b: &[byte], return_len: bool, return_idx: bool, min_match_len: usize, with_match_len: bool) CommandReply {
     if a.len == 0 || b.len == 0 {
         if return_len {
             return command_executor_integer(0);
+        }
+        if return_idx {
+            return command_executor_lcs_idx_reply_empty(0usize);
         }
         return command_executor_bulk(command_executor_empty_slice());
     }
@@ -3593,6 +3628,145 @@ fn command_executor_lcs_compute(a: &[byte], b: &[byte], return_len: bool) Comman
         redis_free(raw_cells);
         return command_executor_integer(lcs_len as i64);
     }
+    if return_idx {
+        if lcs_len == 0 {
+            redis_free(raw_cells);
+            return command_executor_lcs_idx_reply_empty(0usize);
+        }
+        const segment_capacity: usize = lcs_len;
+        const start_a_raw: &byte = redis_malloc(segment_capacity * command_executor_lcs_usize_stride()) catch {
+            redis_free(raw_cells);
+            return command_executor_oom();
+        };
+        const end_a_raw: &byte = redis_malloc(segment_capacity * command_executor_lcs_usize_stride()) catch {
+            redis_free(start_a_raw);
+            redis_free(raw_cells);
+            return command_executor_oom();
+        };
+        const start_b_raw: &byte = redis_malloc(segment_capacity * command_executor_lcs_usize_stride()) catch {
+            redis_free(end_a_raw);
+            redis_free(start_a_raw);
+            redis_free(raw_cells);
+            return command_executor_oom();
+        };
+        const end_b_raw: &byte = redis_malloc(segment_capacity * command_executor_lcs_usize_stride()) catch {
+            redis_free(start_b_raw);
+            redis_free(end_a_raw);
+            redis_free(start_a_raw);
+            redis_free(raw_cells);
+            return command_executor_oom();
+        };
+        const len_raw: &byte = redis_malloc(segment_capacity * command_executor_lcs_usize_stride()) catch {
+            redis_free(end_b_raw);
+            redis_free(start_b_raw);
+            redis_free(end_a_raw);
+            redis_free(start_a_raw);
+            redis_free(raw_cells);
+            return command_executor_oom();
+        };
+        const start_a_values: &usize = start_a_raw as &usize;
+        const end_a_values: &usize = end_a_raw as &usize;
+        const start_b_values: &usize = start_b_raw as &usize;
+        const end_b_values: &usize = end_b_raw as &usize;
+        const len_values: &usize = len_raw as &usize;
+        defer {
+            redis_free(len_raw);
+        }
+        defer {
+            redis_free(end_b_raw);
+        }
+        defer {
+            redis_free(start_b_raw);
+        }
+        defer {
+            redis_free(end_a_raw);
+        }
+        defer {
+            redis_free(start_a_raw);
+        }
+        defer {
+            redis_free(raw_cells);
+        }
+
+        var segment_count: usize = 0;
+        var segment_active: bool = false;
+        var segment_start_a: usize = 0;
+        var segment_start_b: usize = 0;
+        var segment_end_a: usize = 0;
+        var segment_end_b: usize = 0;
+        var segment_len: usize = 0;
+        var ai_idx: usize = 0;
+        var bi_idx: usize = 0;
+        while ai_idx < a.len && bi_idx < b.len {
+            if a.ptr[ai_idx] == b.ptr[bi_idx] {
+                if !segment_active {
+                    segment_active = true;
+                    segment_start_a = ai_idx;
+                    segment_start_b = bi_idx;
+                    segment_len = 0;
+                }
+                segment_end_a = ai_idx;
+                segment_end_b = bi_idx;
+                segment_len = segment_len + 1;
+                ai_idx = ai_idx + 1;
+                bi_idx = bi_idx + 1;
+            } else {
+                if segment_active {
+                    if segment_len >= min_match_len {
+                        *command_executor_lcs_cell_at(start_a_values, segment_count) = segment_start_a;
+                        *command_executor_lcs_cell_at(end_a_values, segment_count) = segment_end_a;
+                        *command_executor_lcs_cell_at(start_b_values, segment_count) = segment_start_b;
+                        *command_executor_lcs_cell_at(end_b_values, segment_count) = segment_end_b;
+                        *command_executor_lcs_cell_at(len_values, segment_count) = segment_len;
+                        segment_count = segment_count + 1;
+                    }
+                    segment_active = false;
+                }
+                const down_next: &usize = command_executor_lcs_cell_at(cells, (ai_idx + 1) * width + bi_idx);
+                const right_next: &usize = command_executor_lcs_cell_at(cells, ai_idx * width + (bi_idx + 1));
+                if *down_next >= *right_next {
+                    ai_idx = ai_idx + 1;
+                } else {
+                    bi_idx = bi_idx + 1;
+                }
+            }
+        }
+        if segment_active && segment_len >= min_match_len {
+            *command_executor_lcs_cell_at(start_a_values, segment_count) = segment_start_a;
+            *command_executor_lcs_cell_at(end_a_values, segment_count) = segment_end_a;
+            *command_executor_lcs_cell_at(start_b_values, segment_count) = segment_start_b;
+            *command_executor_lcs_cell_at(end_b_values, segment_count) = segment_end_b;
+            *command_executor_lcs_cell_at(len_values, segment_count) = segment_len;
+            segment_count = segment_count + 1;
+        }
+
+        var raw: Sds = sds_empty() catch {
+            return command_executor_oom();
+        };
+        defer {
+            sds_free(&raw);
+        }
+        _ = command_executor_resp_append_array_header(&raw, 4usize) catch { return command_executor_oom(); };
+        _ = command_executor_resp_append_bulk(&raw, &"matches"[0: 7]) catch { return command_executor_oom(); };
+        _ = command_executor_resp_append_array_header(&raw, segment_count) catch { return command_executor_oom(); };
+        var emit_index: usize = segment_count;
+        while emit_index > 0 {
+            emit_index = emit_index - 1;
+            _ = command_executor_lcs_append_idx_match(
+                &raw,
+                *command_executor_lcs_cell_at(start_a_values, emit_index),
+                *command_executor_lcs_cell_at(end_a_values, emit_index),
+                *command_executor_lcs_cell_at(start_b_values, emit_index),
+                *command_executor_lcs_cell_at(end_b_values, emit_index),
+                *command_executor_lcs_cell_at(len_values, emit_index),
+                with_match_len,
+            ) catch { return command_executor_oom(); };
+        }
+        _ = command_executor_resp_append_bulk(&raw, &"len"[0: 3]) catch { return command_executor_oom(); };
+        _ = command_executor_resp_append_integer(&raw, lcs_len as i64) catch { return command_executor_oom(); };
+        const reply: CommandReply = command_executor_owned_raw(raw.buf[0: raw.len]);
+        return reply;
+    }
     if lcs_len == 0 {
         redis_free(raw_cells);
         return command_executor_bulk(command_executor_empty_slice());
@@ -3639,24 +3813,53 @@ fn command_executor_lcs(engine: &Engine, command: &Command, now_ms: u64) Command
         return command_executor_wrong_arity();
     };
     var return_len: bool = false;
+    var return_idx: bool = false;
+    var min_match_len: usize = 0;
+    var saw_min_match_len: bool = false;
+    var with_match_len: bool = false;
     var option_index: usize = 3;
     while option_index < command.argc {
         const option: &[byte] = command_executor_arg(command, option_index) catch {
             return command_executor_wrong_arity();
         };
         if command_executor_keyword_eq(option, &"LEN"[0: 3]) {
-            if return_len || command.argc != 4 {
+            if return_len || return_idx || saw_min_match_len || with_match_len {
                 return command_executor_syntax_error();
             }
             return_len = true;
-        } else if command_executor_keyword_eq(option, &"IDX"[0: 3]) ||
-            command_executor_keyword_eq(option, &"MINMATCHLEN"[0: 11]) ||
-            command_executor_keyword_eq(option, &"WITHMATCHLEN"[0: 12]) {
-            return command_executor_error(&"ERR LCS IDX options are not supported by redis-uya partial"[0: 58]);
+        } else if command_executor_keyword_eq(option, &"IDX"[0: 3]) {
+            if return_len || return_idx {
+                return command_executor_syntax_error();
+            }
+            return_idx = true;
+        } else if command_executor_keyword_eq(option, &"MINMATCHLEN"[0: 11]) {
+            if return_len || saw_min_match_len || option_index + 1 >= command.argc {
+                return command_executor_syntax_error();
+            }
+            const min_data: &[byte] = command_executor_arg(command, option_index + 1) catch {
+                return command_executor_wrong_arity();
+            };
+            const min_value: i64 = command_executor_parse_i64_full(min_data) catch {
+                return command_executor_invalid_integer();
+            };
+            if min_value < 0 {
+                return command_executor_syntax_error();
+            }
+            min_match_len = min_value as usize;
+            saw_min_match_len = true;
+            option_index = option_index + 1;
+        } else if command_executor_keyword_eq(option, &"WITHMATCHLEN"[0: 12]) {
+            if return_len || with_match_len {
+                return command_executor_syntax_error();
+            }
+            with_match_len = true;
         } else {
             return command_executor_syntax_error();
         }
         option_index = option_index + 1;
+    }
+    if (saw_min_match_len || with_match_len) && !return_idx {
+        return command_executor_syntax_error();
     }
 
     const a: &[byte] = command_executor_lcs_value(engine, key_a, now_ms) catch {
@@ -3665,7 +3868,7 @@ fn command_executor_lcs(engine: &Engine, command: &Command, now_ms: u64) Command
     const b: &[byte] = command_executor_lcs_value(engine, key_b, now_ms) catch {
         return command_executor_wrongtype();
     };
-    return command_executor_lcs_compute(a, b, return_len);
+    return command_executor_lcs_compute(a, b, return_len, return_idx, min_match_len, with_match_len);
 }
 
 fn command_executor_getbit(engine: &Engine, command: &Command, now_ms: u64) CommandReply {

@@ -2558,6 +2558,24 @@ export fn test_command_set_get_del_exists() !void {
     try assert_eq_i32(lcs_len_reply.integer as i32, 6);
     resp_value_free(&lcs_len_parsed.value);
 
+    var lcs_idx_parsed: RespParseResult = try parse_resp2(&"*4\r\n$3\r\nLCS\r\n$5\r\nlcs-a\r\n$5\r\nlcs-b\r\n$3\r\nIDX\r\n"[0: 44]);
+    const lcs_idx_command: Command = try command_executor_test_command(&router, &lcs_idx_parsed);
+    var lcs_idx_reply: CommandReply = command_execute_at(&engine, &lcs_idx_command, 1000u64);
+    try assert_eq_i32(lcs_idx_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    var lcs_idx_len: usize = try connection_encode_reply(&lcs_idx_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: lcs_idx_len], &"*4\r\n$7\r\nmatches\r\n*2\r\n*2\r\n*2\r\n:4\r\n:7\r\n*2\r\n:5\r\n:8\r\n*2\r\n*2\r\n:2\r\n:3\r\n*2\r\n:0\r\n:1\r\n$3\r\nlen\r\n:6\r\n"[0: 90]));
+    command_reply_cleanup(&lcs_idx_reply);
+    resp_value_free(&lcs_idx_parsed.value);
+
+    var lcs_idx_min_parsed: RespParseResult = try parse_resp2(&"*7\r\n$3\r\nLCS\r\n$5\r\nlcs-a\r\n$5\r\nlcs-b\r\n$3\r\nIDX\r\n$11\r\nMINMATCHLEN\r\n$1\r\n3\r\n$12\r\nWITHMATCHLEN\r\n"[0: 88]);
+    const lcs_idx_min_command: Command = try command_executor_test_command(&router, &lcs_idx_min_parsed);
+    var lcs_idx_min_reply: CommandReply = command_execute_at(&engine, &lcs_idx_min_command, 1000u64);
+    try assert_eq_i32(lcs_idx_min_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    var lcs_idx_min_len: usize = try connection_encode_reply(&lcs_idx_min_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: lcs_idx_min_len], &"*4\r\n$7\r\nmatches\r\n*1\r\n*3\r\n*2\r\n:4\r\n:7\r\n*2\r\n:5\r\n:8\r\n:4\r\n$3\r\nlen\r\n:6\r\n"[0: 66]));
+    command_reply_cleanup(&lcs_idx_min_reply);
+    resp_value_free(&lcs_idx_min_parsed.value);
+
     var substr_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nSUBSTR\r\n$3\r\nkey\r\n$1\r\n1\r\n$1\r\n3\r\n"[0: 39]);
     const substr_command: Command = try command_executor_test_command(&router, &substr_parsed);
     var substr_reply: CommandReply = command_execute_at(&engine, &substr_command, 1000u64);
@@ -10335,11 +10353,12 @@ export fn test_command_error_paths() !void {
     try assert_eq_i32(msetex_bad_numkeys_reply.typ as i32, CommandReplyType.reply_error as i32);
     resp_value_free(&msetex_bad_numkeys_parsed.value);
 
-    var lcs_unsupported_parsed: RespParseResult = try parse_resp2(&"*6\r\n$3\r\nLCS\r\n$3\r\nkey\r\n$7\r\nmissing\r\n$3\r\nIDX\r\n$11\r\nMINMATCHLEN\r\n$1\r\n2\r\n"[0: 69]);
-    const lcs_unsupported_command: Command = try command_executor_test_command(&router, &lcs_unsupported_parsed);
-    const lcs_unsupported_reply: CommandReply = command_execute_at(&engine, &lcs_unsupported_command, 1000u64);
-    try assert_eq_i32(lcs_unsupported_reply.typ as i32, CommandReplyType.reply_error as i32);
-    resp_value_free(&lcs_unsupported_parsed.value);
+    var lcs_bad_idx_option_parsed: RespParseResult = try parse_resp2(&"*4\r\n$3\r\nLCS\r\n$3\r\nkey\r\n$7\r\nmissing\r\n$12\r\nWITHMATCHLEN\r\n"[0: 54]);
+    const lcs_bad_idx_option_command: Command = try command_executor_test_command(&router, &lcs_bad_idx_option_parsed);
+    const lcs_bad_idx_option_reply: CommandReply = command_execute_at(&engine, &lcs_bad_idx_option_command, 1000u64);
+    try assert_eq_i32(lcs_bad_idx_option_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(lcs_bad_idx_option_reply.data, &"ERR syntax error"[0: 16]));
+    resp_value_free(&lcs_bad_idx_option_parsed.value);
 
     var expire_bad_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nEXPIRE\r\n$3\r\nkey\r\n$3\r\nbad\r\n"[0: 36]);
     const expire_bad_command: Command = try command_executor_test_command(&router, &expire_bad_parsed);

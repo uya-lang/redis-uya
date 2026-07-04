@@ -338,6 +338,18 @@ if [[ "$LCS_LEN_RESULT" != "6" ]]; then
     exit 1
 fi
 
+LCS_IDX_RESULT="$(redis-cli --json -h 127.0.0.1 -p "$PORT" lcs lcs-a lcs-b idx)"
+if [[ "$LCS_IDX_RESULT" != '["matches",[[[4,7],[5,8]],[[2,3],[0,1]]],"len",6]' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected LCS IDX matches, got '$LCS_IDX_RESULT'" >&2
+    exit 1
+fi
+
+LCS_IDX_MIN_RESULT="$(redis-cli --json -h 127.0.0.1 -p "$PORT" lcs lcs-a lcs-b idx minmatchlen 3 withmatchlen)"
+if [[ "$LCS_IDX_MIN_RESULT" != '["matches",[[[4,7],[5,8],4]],"len",6]' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected LCS IDX MINMATCHLEN matches, got '$LCS_IDX_MIN_RESULT'" >&2
+    exit 1
+fi
+
 STRLEN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" strlen key)"
 if [[ "$STRLEN_RESULT" != "5" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected strlen 5, got '$STRLEN_RESULT'" >&2

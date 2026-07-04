@@ -2177,18 +2177,22 @@ MSETEX numkeys key value [key value ...] [NX|XX] [EX seconds|PX milliseconds|EXA
 ```text
 LCS key1 key2
 LCS key1 key2 LEN
+LCS key1 key2 IDX [MINMATCHLEN n] [WITHMATCHLEN]
 ```
 
 返回：
 
 - 未带选项：返回两个字符串值的最长公共子序列，Bulk String
 - `LEN`：返回最长公共子序列长度，Integer
+- `IDX`：返回 `matches` 明细数组和 `len`
+- `MINMATCHLEN n`：仅在 `IDX` 模式下返回长度不小于 `n` 的连续匹配段
+- `WITHMATCHLEN`：仅在 `IDX` 模式下为每个匹配段追加匹配长度
 
 说明：
 
 - 缺失 key 按空字符串处理
 - 任一 key 存在且不是 String：`WRONGTYPE`
-- 当前实现为 partial：只支持基础结果和 `LEN`，`IDX` / `MINMATCHLEN` / `WITHMATCHLEN` 返回 partial 限制错误
+- 当前实现为 partial：支持基础结果、`LEN`、`IDX`、`MINMATCHLEN` 和 `WITHMATCHLEN`
 - 为避免当前 DP 实现对大字符串造成不可控内存放大，任一输入长度超过 4096 字节时返回 partial 限制错误
 
 ### `GETRANGE`

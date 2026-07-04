@@ -421,7 +421,7 @@
 - [x] String 第三批原子写入：`GETSET`、`SETNX`、`SETEX`
 - [x] String 第四批多 key：`MGET`、`MSET`、`MSETNX`
 - [x] String 多 key TTL partial：`MSETEX`（`NX/XX`、`EX/PX/EXAT/PXAT/KEEPTTL`）
-- [x] String LCS partial：`LCS key1 key2 [LEN]`（`IDX/MINMATCHLEN/WITHMATCHLEN` 暂未支持）
+- [x] String LCS partial：`LCS key1 key2 [LEN|IDX [MINMATCHLEN n] [WITHMATCHLEN]]`，大输入保留 4096 字节 partial guard
 - [x] String 第五批范围读写：`SETRANGE`、`GETRANGE`、`SUBSTR` alias
 - [x] String 第六批浮点计数：`INCRBYFLOAT`
 - [x] String INCREX partial：整数模式支持 `BYINT`、浮点模式支持 `BYFLOAT`，覆盖 `LBOUND/UBOUND`、`SATURATE`、`EX/PX/EXAT/PXAT/PERSIST` 与 `ENX`

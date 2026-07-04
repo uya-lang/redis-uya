@@ -178,6 +178,9 @@ class RedisPySubsetClient:
         result = self._request(b"LCS", key1.encode(), key2.encode(), *(option.encode() for option in options))
         if options and options[0].upper() == "LEN":
             return int(result)
+        if any(option.upper() == "IDX" for option in options):
+            assert isinstance(result, list)
+            return result
         assert isinstance(result, bytes)
         return result
 
@@ -1521,6 +1524,18 @@ def run_smoke() -> None:
             assert client.mset({"lcs-a": "ohmytext", "lcs-b": "mynewtext"})
             assert client.lcs("lcs-a", "lcs-b") == b"mytext"
             assert client.lcs("lcs-a", "lcs-b", "LEN") == 6
+            assert client.lcs("lcs-a", "lcs-b", "IDX") == [
+                b"matches",
+                [[[4, 7], [5, 8]], [[2, 3], [0, 1]]],
+                b"len",
+                6,
+            ]
+            assert client.lcs("lcs-a", "lcs-b", "IDX", "MINMATCHLEN", "3", "WITHMATCHLEN") == [
+                b"matches",
+                [[[4, 7], [5, 8], 4]],
+                b"len",
+                6,
+            ]
             assert client.strlen("key") == 5
             assert client.append("key", "++") == 7
             assert client.getrange("key", 1, 3) == b"alu"

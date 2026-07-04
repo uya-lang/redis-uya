@@ -164,12 +164,25 @@ def run_smoke() -> None:
             except RuntimeError as exc:
                 if "NOGROUP" not in str(exc):
                     raise AssertionError(f"unexpected XAUTOCLAIM error: {exc}") from exc
+            future_id = b"9999999999999-0"
+            if client.command(b"XSETID", b"mystream", future_id) != b"OK":
+                raise AssertionError("XSETID did not return OK")
+            after_xsetid = client.command(b"XINFO", b"STREAM", b"mystream")
+            if (
+                not isinstance(after_xsetid, list)
+                or b"last-generated-id" not in after_xsetid
+                or after_xsetid[after_xsetid.index(b"last-generated-id") + 1] != future_id
+            ):
+                raise AssertionError(f"XSETID did not update last-generated-id: {after_xsetid!r}")
+            third = client.command(b"XADD", b"mystream", b"*", b"sensor", b"c")
+            if third != b"9999999999999-1":
+                raise AssertionError(f"XADD did not continue after XSETID: {third!r}")
             try:
-                client.command(b"XSETID", b"mystream", b"1000-1")
-                raise AssertionError("XSETID did not report deferred stream metadata mutation")
+                client.command(b"XSETID", b"mystream", first)
+                raise AssertionError("XSETID accepted an id below the current stream top item")
             except RuntimeError as exc:
-                if "XSETID is not supported yet" not in str(exc):
-                    raise AssertionError(f"unexpected XSETID error: {exc}") from exc
+                if "smaller than the target stream top item" not in str(exc):
+                    raise AssertionError(f"unexpected XSETID backward error: {exc}") from exc
             try:
                 client.command(b"XGROUP", b"CREATECONSUMER", b"mystream", b"group", b"consumer")
                 raise AssertionError("XGROUP CREATECONSUMER did not fail without consumer groups")
@@ -190,11 +203,11 @@ def run_smoke() -> None:
                     raise AssertionError(f"unexpected XINFO CONSUMERS error: {exc}") from exc
 
             ranged = client.command(b"XRANGE", b"mystream", b"-", b"+")
-            if ranged != [[first, [b"sensor", b"a", b"value", b"1"]], [second, [b"sensor", b"b"]]]:
+            if ranged != [[first, [b"sensor", b"a", b"value", b"1"]], [second, [b"sensor", b"b"]], [third, [b"sensor", b"c"]]]:
                 raise AssertionError(f"unexpected XRANGE payload: {ranged!r}")
 
             rev = client.command(b"XREVRANGE", b"mystream", b"+", b"-", b"COUNT", b"1")
-            if rev != [[second, [b"sensor", b"b"]]]:
+            if rev != [[third, [b"sensor", b"c"]]]:
                 raise AssertionError(f"unexpected XREVRANGE payload: {rev!r}")
 
             read = client.command(b"XREAD", b"COUNT", b"2", b"STREAMS", b"mystream", b"0-0")
@@ -307,11 +320,11 @@ def run_smoke() -> None:
 
             if client.command(b"XDEL", b"mystream", first) != 1:
                 raise AssertionError("XDEL did not remove the first stream entry")
-            if client.command(b"XLEN", b"mystream") != 1:
-                raise AssertionError("XLEN did not report one stream entry after XDEL")
+            if client.command(b"XLEN", b"mystream") != 2:
+                raise AssertionError("XLEN did not report two stream entries after XDEL")
 
-            if client.command(b"XTRIM", b"mystream", b"MAXLEN", b"~", b"0") != 1:
-                raise AssertionError("XTRIM did not remove one stream entry")
+            if client.command(b"XTRIM", b"mystream", b"MAXLEN", b"~", b"0") != 2:
+                raise AssertionError("XTRIM did not remove two stream entries")
             if client.command(b"XLEN", b"mystream") != 0:
                 raise AssertionError("XLEN did not report zero stream entries after trim")
 

@@ -6212,7 +6212,7 @@ fn command_executor_xidmprecord(engine: &Engine, command: &Command, now_ms: u64)
     const id_data: &[byte] = command_executor_arg(command, 4) catch {
         return command_executor_wrong_arity();
     };
-    _ = command_executor_parse_stream_id(id_data, 0u64, false, false) catch {
+    const parsed_id: StreamId = command_executor_parse_stream_id(id_data, 0u64, false, false) catch {
         return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 57]);
     };
     const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
@@ -7045,7 +7045,7 @@ fn command_executor_xsetid(engine: &Engine, command: &Command, now_ms: u64) Comm
     const id_data: &[byte] = command_executor_arg(command, 2) catch {
         return command_executor_wrong_arity();
     };
-    _ = command_executor_parse_stream_id(id_data, 0u64, false, false) catch {
+    const parsed_id: StreamId = command_executor_parse_stream_id(id_data, 0u64, false, false) catch {
         return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 57]);
     };
 
@@ -7080,7 +7080,15 @@ fn command_executor_xsetid(engine: &Engine, command: &Command, now_ms: u64) Comm
     if obj.obj_type != ObjectType.object_stream {
         return command_executor_wrongtype();
     }
-    return command_executor_error(&"ERR XSETID is not supported yet"[0: 31]);
+    if obj.list_len > 0 {
+        const last_id: StreamId = StreamId{ ms: obj.stream_last_ms, seq: obj.stream_last_seq, is_min: false, is_max: false, is_dollar: false };
+        if command_executor_stream_id_cmp(&parsed_id, &last_id) < 0 {
+            return command_executor_error(&"ERR The ID specified in XSETID is smaller than the target stream top item"[0: 73]);
+        }
+    }
+    obj.stream_last_ms = parsed_id.ms;
+    obj.stream_last_seq = parsed_id.seq;
+    return command_executor_simple(&"OK"[0: 2]);
 }
 
 fn command_executor_rpush(engine: &Engine, command: &Command, now_ms: u64) CommandReply {

@@ -5029,12 +5029,35 @@ export fn test_command_streams_first_batch() !void {
     try assert_true(xreadgroup_wrong_arity);
     resp_value_free(&xreadgroup_arity_parsed.value);
 
-    var xsetid_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nXSETID\r\n$6\r\nstream\r\n$6\r\n1000-1\r\n"[0: 40]);
+    var xsetid_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nXSETID\r\n$6\r\nstream\r\n$6\r\n1001-0\r\n"[0: 40]);
     const xsetid_command: Command = try command_executor_test_command(&router, &xsetid_parsed);
     const xsetid_reply: CommandReply = command_execute_at(&engine, &xsetid_command, 1000u64);
-    try assert_eq_i32(xsetid_reply.typ as i32, CommandReplyType.reply_error as i32);
-    try assert_true(command_executor_test_slice_eq(xsetid_reply.data, &"ERR XSETID is not supported yet"[0: 31]));
+    try assert_eq_i32(xsetid_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(xsetid_reply.data, &"OK"[0: 2]));
     resp_value_free(&xsetid_parsed.value);
+
+    var xinfo_after_xsetid_parsed: RespParseResult = try parse_resp2(&"*3\r\n$5\r\nXINFO\r\n$6\r\nSTREAM\r\n$6\r\nstream\r\n"[0: 39]);
+    const xinfo_after_xsetid_command: Command = try command_executor_test_command(&router, &xinfo_after_xsetid_parsed);
+    const xinfo_after_xsetid_reply: CommandReply = command_execute_at(&engine, &xinfo_after_xsetid_command, 1000u64);
+    const xinfo_after_xsetid_len: usize = try connection_encode_reply(&xinfo_after_xsetid_reply, &out[0], 2048);
+    try assert_true(command_executor_test_contains(out[0: xinfo_after_xsetid_len], &"$17\r\nlast-generated-id\r\n$6\r\n1001-0\r\n"[0: 36]));
+    command_reply_cleanup(&xinfo_after_xsetid_reply);
+    resp_value_free(&xinfo_after_xsetid_parsed.value);
+
+    var xadd_after_xsetid_parsed: RespParseResult = try parse_resp2(&"*5\r\n$4\r\nXADD\r\n$6\r\nstream\r\n$1\r\n*\r\n$1\r\nf\r\n$1\r\nv\r\n"[0: 47]);
+    const xadd_after_xsetid_command: Command = try command_executor_test_command(&router, &xadd_after_xsetid_parsed);
+    const xadd_after_xsetid_reply: CommandReply = command_execute_at(&engine, &xadd_after_xsetid_command, 1000u64);
+    try assert_eq_i32(xadd_after_xsetid_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(xadd_after_xsetid_reply.data, &"1001-1"[0: 6]));
+    command_reply_cleanup(&xadd_after_xsetid_reply);
+    resp_value_free(&xadd_after_xsetid_parsed.value);
+
+    var xsetid_backward_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nXSETID\r\n$6\r\nstream\r\n$5\r\n999-9\r\n"[0: 39]);
+    const xsetid_backward_command: Command = try command_executor_test_command(&router, &xsetid_backward_parsed);
+    const xsetid_backward_reply: CommandReply = command_execute_at(&engine, &xsetid_backward_command, 1000u64);
+    try assert_eq_i32(xsetid_backward_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_contains(xsetid_backward_reply.data, &"smaller than the target stream top item"[0: 39]));
+    resp_value_free(&xsetid_backward_parsed.value);
 
     var xsetid_missing_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nXSETID\r\n$7\r\nmissing\r\n$6\r\n1000-1\r\n"[0: 41]);
     const xsetid_missing_command: Command = try command_executor_test_command(&router, &xsetid_missing_parsed);
@@ -5057,18 +5080,18 @@ export fn test_command_streams_first_batch() !void {
     try assert_true(command_executor_test_slice_eq(xsetid_bad_option_reply.data, &"ERR syntax error"[0: 16]));
     resp_value_free(&xsetid_bad_option_parsed.value);
 
-    var xsetid_entries_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nXSETID\r\n$6\r\nstream\r\n$6\r\n1000-1\r\n$12\r\nENTRIESADDED\r\n$1\r\n2\r\n"[0: 66]);
+    var xsetid_entries_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nXSETID\r\n$6\r\nstream\r\n$6\r\n1001-1\r\n$12\r\nENTRIESADDED\r\n$1\r\n2\r\n"[0: 66]);
     const xsetid_entries_command: Command = try command_executor_test_command(&router, &xsetid_entries_parsed);
     const xsetid_entries_reply: CommandReply = command_execute_at(&engine, &xsetid_entries_command, 1000u64);
-    try assert_eq_i32(xsetid_entries_reply.typ as i32, CommandReplyType.reply_error as i32);
-    try assert_true(command_executor_test_slice_eq(xsetid_entries_reply.data, &"ERR XSETID is not supported yet"[0: 31]));
+    try assert_eq_i32(xsetid_entries_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(xsetid_entries_reply.data, &"OK"[0: 2]));
     resp_value_free(&xsetid_entries_parsed.value);
 
-    var xsetid_maxdel_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nXSETID\r\n$6\r\nstream\r\n$6\r\n1000-1\r\n$12\r\nMAXDELETEDID\r\n$3\r\n0-0\r\n"[0: 68]);
+    var xsetid_maxdel_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nXSETID\r\n$6\r\nstream\r\n$6\r\n1001-1\r\n$12\r\nMAXDELETEDID\r\n$3\r\n0-0\r\n"[0: 68]);
     const xsetid_maxdel_command: Command = try command_executor_test_command(&router, &xsetid_maxdel_parsed);
     const xsetid_maxdel_reply: CommandReply = command_execute_at(&engine, &xsetid_maxdel_command, 1000u64);
-    try assert_eq_i32(xsetid_maxdel_reply.typ as i32, CommandReplyType.reply_error as i32);
-    try assert_true(command_executor_test_slice_eq(xsetid_maxdel_reply.data, &"ERR XSETID is not supported yet"[0: 31]));
+    try assert_eq_i32(xsetid_maxdel_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(xsetid_maxdel_reply.data, &"OK"[0: 2]));
     resp_value_free(&xsetid_maxdel_parsed.value);
 
     var xsetid_arity_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nXSETID\r\n$6\r\nstream\r\n"[0: 28]);

@@ -4807,6 +4807,51 @@ export fn test_command_streams_first_batch() !void {
     command_reply_cleanup(&xadd_second_reply);
     resp_value_free(&xadd_second_parsed.value);
 
+    var xadd_trim_seed_parsed: RespParseResult = try parse_resp2(&"*5\r\n$4\r\nXADD\r\n$10\r\ntrimstream\r\n$3\r\n1-0\r\n$1\r\nf\r\n$1\r\na\r\n"[0: 54]);
+    const xadd_trim_seed_command: Command = try command_executor_test_command(&router, &xadd_trim_seed_parsed);
+    const xadd_trim_seed_reply: CommandReply = command_execute_at(&engine, &xadd_trim_seed_command, 1000u64);
+    try assert_eq_i32(xadd_trim_seed_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(xadd_trim_seed_reply.data, &"1-0"[0: 3]));
+    command_reply_cleanup(&xadd_trim_seed_reply);
+    resp_value_free(&xadd_trim_seed_parsed.value);
+
+    var xadd_trim_parsed: RespParseResult = try parse_resp2(&"*8\r\n$4\r\nXADD\r\n$10\r\ntrimstream\r\n$6\r\nMAXLEN\r\n$1\r\n=\r\n$1\r\n1\r\n$3\r\n1-1\r\n$1\r\nf\r\n$1\r\nb\r\n"[0: 80]);
+    const xadd_trim_command: Command = try command_executor_test_command(&router, &xadd_trim_parsed);
+    const xadd_trim_reply: CommandReply = command_execute_at(&engine, &xadd_trim_command, 1000u64);
+    try assert_eq_i32(xadd_trim_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(xadd_trim_reply.data, &"1-1"[0: 3]));
+    command_reply_cleanup(&xadd_trim_reply);
+    resp_value_free(&xadd_trim_parsed.value);
+
+    var xlen_trim_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nXLEN\r\n$10\r\ntrimstream\r\n"[0: 31]);
+    const xlen_trim_command: Command = try command_executor_test_command(&router, &xlen_trim_parsed);
+    const xlen_trim_reply: CommandReply = command_execute_at(&engine, &xlen_trim_command, 1000u64);
+    try assert_eq_i32(xlen_trim_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(xlen_trim_reply.integer as i32, 1);
+    resp_value_free(&xlen_trim_parsed.value);
+
+    var xrange_trim_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nXRANGE\r\n$10\r\ntrimstream\r\n$1\r\n-\r\n$1\r\n+\r\n"[0: 47]);
+    const xrange_trim_command: Command = try command_executor_test_command(&router, &xrange_trim_parsed);
+    const xrange_trim_reply: CommandReply = command_execute_at(&engine, &xrange_trim_command, 1000u64);
+    const xrange_trim_len: usize = try connection_encode_reply(&xrange_trim_reply, &out[0], 1024);
+    try assert_true(!command_executor_test_contains(out[0: xrange_trim_len], &"$3\r\n1-0\r\n"[0: 9]));
+    try assert_true(command_executor_test_contains(out[0: xrange_trim_len], &"$3\r\n1-1\r\n"[0: 9]));
+    command_reply_cleanup(&xrange_trim_reply);
+    resp_value_free(&xrange_trim_parsed.value);
+
+    var xadd_nomkstream_parsed: RespParseResult = try parse_resp2(&"*6\r\n$4\r\nXADD\r\n$7\r\nmissing\r\n$10\r\nNOMKSTREAM\r\n$1\r\n*\r\n$1\r\nf\r\n$1\r\nv\r\n"[0: 65]);
+    const xadd_nomkstream_command: Command = try command_executor_test_command(&router, &xadd_nomkstream_parsed);
+    const xadd_nomkstream_reply: CommandReply = command_execute_at(&engine, &xadd_nomkstream_command, 1000u64);
+    try assert_eq_i32(xadd_nomkstream_reply.typ as i32, CommandReplyType.reply_null_bulk as i32);
+    resp_value_free(&xadd_nomkstream_parsed.value);
+
+    var xlen_nomkstream_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nXLEN\r\n$7\r\nmissing\r\n"[0: 27]);
+    const xlen_nomkstream_command: Command = try command_executor_test_command(&router, &xlen_nomkstream_parsed);
+    const xlen_nomkstream_reply: CommandReply = command_execute_at(&engine, &xlen_nomkstream_command, 1000u64);
+    try assert_eq_i32(xlen_nomkstream_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(xlen_nomkstream_reply.integer as i32, 0);
+    resp_value_free(&xlen_nomkstream_parsed.value);
+
     var xlen_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nXLEN\r\n$6\r\nstream\r\n"[0: 26]);
     const xlen_command: Command = try command_executor_test_command(&router, &xlen_parsed);
     const xlen_reply: CommandReply = command_execute_at(&engine, &xlen_command, 1000u64);

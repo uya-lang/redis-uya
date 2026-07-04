@@ -5516,24 +5516,99 @@ fn command_executor_stream_lookup_or_create(engine: &Engine, key: &[byte], now_m
     return existing;
 }
 
+fn command_executor_stream_trim_maxlen(obj: &RedisObject, threshold: usize) !usize {
+    var removed: usize = 0;
+    while obj.list_len > threshold {
+        const popped: &RedisObject = try list_object_pop_head(obj);
+        object_free(popped);
+        removed = removed + 1;
+    }
+    return removed;
+}
+
 fn command_executor_xadd(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
-    if command.argc < 5 || ((command.argc - 3) % 2usize) != 0usize {
+    if command.argc < 5 {
         return command_executor_wrong_arity();
     }
     const key: &[byte] = command_executor_arg(command, 1) catch {
         return command_executor_wrong_arity();
     };
-    const id_token: &[byte] = command_executor_arg(command, 2) catch {
+
+    var nomkstream: bool = false;
+    var maxlen_enabled: bool = false;
+    var maxlen_threshold: usize = 0;
+    var id_index: usize = 2;
+    while id_index < command.argc {
+        const option: &[byte] = command_executor_arg(command, id_index) catch {
+            return command_executor_wrong_arity();
+        };
+        if command_executor_keyword_eq(option, &"NOMKSTREAM"[0: 10]) {
+            if nomkstream {
+                return command_executor_syntax_error();
+            }
+            nomkstream = true;
+            id_index = id_index + 1;
+            continue;
+        }
+        if command_executor_keyword_eq(option, &"MAXLEN"[0: 6]) {
+            if maxlen_enabled || id_index + 1 >= command.argc {
+                return command_executor_syntax_error();
+            }
+            var threshold_index: usize = id_index + 1;
+            const maybe_operator: &[byte] = command_executor_arg(command, threshold_index) catch {
+                return command_executor_wrong_arity();
+            };
+            const exact: bool = maybe_operator.len == 1 && maybe_operator.ptr[0] == 61 as byte;
+            const approximate: bool = maybe_operator.len == 1 && maybe_operator.ptr[0] == 126 as byte;
+            if exact || approximate {
+                threshold_index = threshold_index + 1;
+                if threshold_index >= command.argc {
+                    return command_executor_syntax_error();
+                }
+            }
+            const threshold_data: &[byte] = command_executor_arg(command, threshold_index) catch {
+                return command_executor_wrong_arity();
+            };
+            const threshold: i64 = command_executor_parse_i64(threshold_data) catch {
+                return command_executor_invalid_integer();
+            };
+            if threshold < 0 {
+                return command_executor_invalid_integer();
+            }
+            maxlen_enabled = true;
+            maxlen_threshold = threshold as usize;
+            id_index = threshold_index + 1;
+            continue;
+        }
+        if command_executor_keyword_eq(option, &"MINID"[0: 5]) || command_executor_keyword_eq(option, &"LIMIT"[0: 5]) {
+            return command_executor_syntax_error();
+        }
+        break;
+    }
+    if id_index >= command.argc || ((command.argc - id_index - 1) % 2usize) != 0usize {
+        return command_executor_wrong_arity();
+    }
+    const id_token: &[byte] = command_executor_arg(command, id_index) catch {
         return command_executor_wrong_arity();
     };
 
     var created: bool = false;
-    const stream_obj: &RedisObject = command_executor_stream_lookup_or_create(engine, key, now_ms, &created) catch |err| {
-        if err == error.ObjectWrongType {
+    var stream_obj: &RedisObject = null;
+    if nomkstream {
+        stream_obj = lookup_key_at(engine, key, now_ms) catch {
+            return command_executor_reply(CommandReplyType.reply_null_bulk, command_executor_empty_slice(), 0);
+        };
+        if stream_obj.obj_type != ObjectType.object_stream {
             return command_executor_wrongtype();
         }
-        return command_executor_oom();
-    };
+    } else {
+        stream_obj = command_executor_stream_lookup_or_create(engine, key, now_ms, &created) catch |err| {
+            if err == error.ObjectWrongType {
+                return command_executor_wrongtype();
+            }
+            return command_executor_oom();
+        };
+    }
 
     var id_ms: u64 = now_ms;
     var id_seq: u64 = 0u64;
@@ -5589,7 +5664,7 @@ fn command_executor_xadd(engine: &Engine, command: &Command, now_ms: u64) Comman
         }
         return command_executor_oom();
     };
-    var index: usize = 3;
+    var index: usize = id_index + 1;
     while index < command.argc {
         const field: &[byte] = command_executor_arg(command, index) catch {
             object_free(entry);
@@ -5628,6 +5703,11 @@ fn command_executor_xadd(engine: &Engine, command: &Command, now_ms: u64) Comman
         }
         return command_executor_oom();
     };
+    if maxlen_enabled {
+        _ = command_executor_stream_trim_maxlen(stream_obj, maxlen_threshold) catch {
+            return command_executor_wrongtype();
+        };
+    }
     return command_executor_owned_bulk_copy(id_sds.buf[0: id_sds.len]);
 }
 
@@ -20902,14 +20982,9 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
         if obj.obj_type != ObjectType.object_stream {
             return command_executor_wrongtype();
         }
-        var removed: usize = 0;
-        while obj.list_len > threshold as usize {
-            const popped: &RedisObject = list_object_pop_head(obj) catch {
-                return command_executor_wrongtype();
-            };
-            object_free(popped);
-            removed = removed + 1;
-        }
+        const removed: usize = command_executor_stream_trim_maxlen(obj, threshold as usize) catch {
+            return command_executor_wrongtype();
+        };
         return command_executor_integer(removed as i64);
     }
     if command.info.cmd_type == CommandType.command_lmove {

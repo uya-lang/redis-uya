@@ -256,6 +256,19 @@ def run_smoke() -> None:
             if client.command(b"XLEN", b"xdelexstream") != 1:
                 raise AssertionError("XDELEX ACKED deleted an entry without consumer groups")
 
+            if client.command(b"XADD", b"trimstream", b"1-0", b"f", b"a") != b"1-0":
+                raise AssertionError("XADD trimstream seed failed")
+            if client.command(b"XADD", b"trimstream", b"MAXLEN", b"=", b"1", b"1-1", b"f", b"b") != b"1-1":
+                raise AssertionError("XADD MAXLEN did not append expected id")
+            if client.command(b"XLEN", b"trimstream") != 1:
+                raise AssertionError("XADD MAXLEN did not trim to one entry")
+            if client.command(b"XRANGE", b"trimstream", b"-", b"+") != [[b"1-1", [b"f", b"b"]]]:
+                raise AssertionError("XADD MAXLEN kept the wrong stream entry")
+            if client.command(b"XADD", b"nomk", b"NOMKSTREAM", b"*", b"f", b"v") is not None:
+                raise AssertionError("XADD NOMKSTREAM on missing key did not return null")
+            if client.command(b"XLEN", b"nomk") != 0:
+                raise AssertionError("XADD NOMKSTREAM created a missing stream")
+
             if client.command(b"XDEL", b"mystream", first) != 1:
                 raise AssertionError("XDEL did not remove the first stream entry")
             if client.command(b"XLEN", b"mystream") != 1:
@@ -290,6 +303,12 @@ def run_smoke() -> None:
             replayed = replay_client.command(b"XRANGE", b"mystream", b"-", b"+")
             if not isinstance(replayed, list) or len(replayed) != 0:
                 raise AssertionError(f"unexpected replayed stream payload: {replayed!r}")
+            if replay_client.command(b"XLEN", b"trimstream") != 1:
+                raise AssertionError("AOF replay did not preserve XADD MAXLEN trim result")
+            if replay_client.command(b"XRANGE", b"trimstream", b"-", b"+") != [[b"1-1", [b"f", b"b"]]]:
+                raise AssertionError("AOF replay restored the wrong XADD MAXLEN entry")
+            if replay_client.command(b"XLEN", b"nomk") != 0:
+                raise AssertionError("AOF replay created NOMKSTREAM missing key")
             if replay_client.command(b"QUIT") != b"OK":
                 raise AssertionError("replay QUIT failed")
         finally:

@@ -286,6 +286,24 @@ def run_smoke() -> None:
                 raise AssertionError("XTRIM MAXLEN LIMIT did not cap removals")
             if client.command(b"XRANGE", b"xtrimlimit", b"-", b"+") != [[b"1-2", [b"f", b"c"]]]:
                 raise AssertionError("XTRIM MAXLEN LIMIT kept the wrong stream entry")
+            if client.command(b"XADD", b"minidstream", b"1-0", b"f", b"a") != b"1-0":
+                raise AssertionError("XADD minidstream seed 1-0 failed")
+            if client.command(b"XADD", b"minidstream", b"1-1", b"f", b"b") != b"1-1":
+                raise AssertionError("XADD minidstream seed 1-1 failed")
+            if client.command(b"XADD", b"minidstream", b"MINID", b"=", b"1-2", b"LIMIT", b"1", b"1-2", b"f", b"c") != b"1-2":
+                raise AssertionError("XADD MINID LIMIT did not append expected id")
+            if client.command(b"XRANGE", b"minidstream", b"-", b"+") != [[b"1-1", [b"f", b"b"]], [b"1-2", [b"f", b"c"]]]:
+                raise AssertionError("XADD MINID LIMIT trimmed the wrong stream entries")
+            if client.command(b"XADD", b"xtrimminid", b"1-0", b"f", b"a") != b"1-0":
+                raise AssertionError("XADD xtrimminid seed 1-0 failed")
+            if client.command(b"XADD", b"xtrimminid", b"1-1", b"f", b"b") != b"1-1":
+                raise AssertionError("XADD xtrimminid seed 1-1 failed")
+            if client.command(b"XADD", b"xtrimminid", b"1-2", b"f", b"c") != b"1-2":
+                raise AssertionError("XADD xtrimminid seed 1-2 failed")
+            if client.command(b"XTRIM", b"xtrimminid", b"MINID", b"1-2", b"LIMIT", b"1") != 1:
+                raise AssertionError("XTRIM MINID LIMIT did not cap removals")
+            if client.command(b"XRANGE", b"xtrimminid", b"-", b"+") != [[b"1-1", [b"f", b"b"]], [b"1-2", [b"f", b"c"]]]:
+                raise AssertionError("XTRIM MINID LIMIT kept the wrong stream entries")
 
             if client.command(b"XDEL", b"mystream", first) != 1:
                 raise AssertionError("XDEL did not remove the first stream entry")
@@ -331,6 +349,10 @@ def run_smoke() -> None:
                 raise AssertionError("AOF replay restored the wrong XADD MAXLEN LIMIT entries")
             if replay_client.command(b"XRANGE", b"xtrimlimit", b"-", b"+") != [[b"1-2", [b"f", b"c"]]]:
                 raise AssertionError("AOF replay restored the wrong XTRIM MAXLEN LIMIT entry")
+            if replay_client.command(b"XRANGE", b"minidstream", b"-", b"+") != [[b"1-1", [b"f", b"b"]], [b"1-2", [b"f", b"c"]]]:
+                raise AssertionError("AOF replay restored the wrong XADD MINID LIMIT entries")
+            if replay_client.command(b"XRANGE", b"xtrimminid", b"-", b"+") != [[b"1-1", [b"f", b"b"]], [b"1-2", [b"f", b"c"]]]:
+                raise AssertionError("AOF replay restored the wrong XTRIM MINID LIMIT entries")
             if replay_client.command(b"QUIT") != b"OK":
                 raise AssertionError("replay QUIT failed")
         finally:

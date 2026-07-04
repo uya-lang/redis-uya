@@ -640,6 +640,18 @@ if [[ "$GEORADIUS_RESULT" != $'Palermo\nCatania' ]]; then
     exit 1
 fi
 
+GEORADIUS_STORE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" georadius geo 15 37 200 km STORE georout)"
+if [[ "$GEORADIUS_STORE_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected GEORADIUS STORE 2, got '$GEORADIUS_STORE_RESULT'" >&2
+    exit 1
+fi
+
+GEORADIUS_STORE_ZRANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrange georout 0 -1)"
+if [[ "$GEORADIUS_STORE_ZRANGE_RESULT" != $'Palermo\nCatania' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected GEORADIUS STORE destination Palermo/Catania, got '$GEORADIUS_STORE_ZRANGE_RESULT'" >&2
+    exit 1
+fi
+
 GEORADIUS_RO_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" georadius_ro geo 15 37 200 km)"
 if [[ "$GEORADIUS_RO_RESULT" != $'Palermo\nCatania' ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected GEORADIUS_RO Palermo/Catania, got '$GEORADIUS_RO_RESULT'" >&2
@@ -649,6 +661,18 @@ fi
 GEORADIUSBYMEMBER_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" georadiusbymember geo Palermo 200 km)"
 if [[ "$GEORADIUSBYMEMBER_RESULT" != $'Palermo\nCatania' ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected GEORADIUSBYMEMBER Palermo/Catania, got '$GEORADIUSBYMEMBER_RESULT'" >&2
+    exit 1
+fi
+
+GEORADIUSBYMEMBER_STOREDIST_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" georadiusbymember geo Palermo 200 km STOREDIST geobmdist)"
+if [[ "$GEORADIUSBYMEMBER_STOREDIST_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected GEORADIUSBYMEMBER STOREDIST 2, got '$GEORADIUSBYMEMBER_STOREDIST_RESULT'" >&2
+    exit 1
+fi
+
+GEORADIUSBYMEMBER_STOREDIST_SCORE="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zscore geobmdist Catania)"
+if [[ "$GEORADIUSBYMEMBER_STOREDIST_SCORE" != "166" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected GEORADIUSBYMEMBER STOREDIST score 166, got '$GEORADIUSBYMEMBER_STOREDIST_SCORE'" >&2
     exit 1
 fi
 

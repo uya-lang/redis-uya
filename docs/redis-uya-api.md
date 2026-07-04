@@ -2755,18 +2755,19 @@ GEOSEARCHSTORE destination source FROMLONLAT longitude latitude BYBOX width heig
 格式：
 
 ```text
-GEORADIUS key longitude latitude radius M|KM|FT|MI [WITHCOORD] [WITHDIST] [WITHHASH] [COUNT count [ANY]] [ASC|DESC]
+GEORADIUS key longitude latitude radius M|KM|FT|MI [WITHCOORD] [WITHDIST] [WITHHASH] [COUNT count [ANY]] [ASC|DESC] [STORE key|STOREDIST key]
 ```
 
 返回：
 
 - 默认返回 member 数组
 - 带附加选项时返回嵌套数组，顺序为 `member`, `dist`, `hash`, `coord`
+- 带 `STORE` 或 `STOREDIST` 时返回写入目标 key 的 member 数量，Integer
 
 说明：
 
 - 当前实现为 partial，复用 `GEOSEARCH key FROMLONLAT longitude latitude BYRADIUS radius unit ...` 的执行路径
-- 当前只覆盖未带 `STORE` / `STOREDIST` 的 legacy 查询兼容面；`STORE` 或 `STOREDIST` 会返回语法错误，暂不写入目标 key
+- `STORE` 写入的 zset score 为当前 packed coordinate score；`STOREDIST` 按请求单位写入截断后的整数距离 score；两者当前不支持与 `WITHDIST` / `WITHCOORD` / `WITHHASH` 组合
 - 当前 `WITHHASH` 返回当前 packed score 整数，不是 Redis 原生 geohash 整数
 - 当前 `WITHCOORD` 返回量化到 `1e-6` 的经纬度字符串
 
@@ -2795,18 +2796,19 @@ GEORADIUS_RO key longitude latitude radius M|KM|FT|MI [WITHCOORD] [WITHDIST] [WI
 格式：
 
 ```text
-GEORADIUSBYMEMBER key member radius M|KM|FT|MI [WITHCOORD] [WITHDIST] [WITHHASH] [COUNT count [ANY]] [ASC|DESC]
+GEORADIUSBYMEMBER key member radius M|KM|FT|MI [WITHCOORD] [WITHDIST] [WITHHASH] [COUNT count [ANY]] [ASC|DESC] [STORE key|STOREDIST key]
 ```
 
 返回：
 
 - 默认返回 member 数组
 - 带附加选项时返回嵌套数组，顺序为 `member`, `dist`, `hash`, `coord`
+- 带 `STORE` 或 `STOREDIST` 时返回写入目标 key 的 member 数量，Integer
 
 说明：
 
 - 当前实现为 partial，复用 `GEOSEARCH key FROMMEMBER member BYRADIUS radius unit ...` 的执行路径
-- 当前只覆盖未带 `STORE` / `STOREDIST` 的 legacy 查询兼容面；`STORE` 或 `STOREDIST` 会返回语法错误，暂不写入目标 key
+- `STORE` 写入的 zset score 为当前 packed coordinate score；`STOREDIST` 按请求单位写入截断后的整数距离 score；两者当前不支持与 `WITHDIST` / `WITHCOORD` / `WITHHASH` 组合
 - center member 不存在时返回 `ERR could not decode requested zset member`
 - 当前 `WITHHASH` 返回当前 packed score 整数，不是 Redis 原生 geohash 整数
 - 当前 `WITHCOORD` 返回量化到 `1e-6` 的经纬度字符串

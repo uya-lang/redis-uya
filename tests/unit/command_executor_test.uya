@@ -3444,6 +3444,37 @@ export fn test_command_set_get_del_exists() !void {
     command_reply_cleanup(&geosearchstore_zscore_reply);
     resp_value_free(&geosearchstore_zscore_parsed.value);
 
+    var georadius_store_ok_parsed: RespParseResult = try parse_resp2(&"*8\r\n$9\r\nGEORADIUS\r\n$3\r\ngeo\r\n$2\r\n15\r\n$2\r\n37\r\n$3\r\n200\r\n$2\r\nkm\r\n$5\r\nSTORE\r\n$7\r\ngeorout\r\n"[0: 85]);
+    const georadius_store_ok_command: Command = try command_executor_test_command(&router, &georadius_store_ok_parsed);
+    const georadius_store_ok_reply: CommandReply = command_execute_at(&engine, &georadius_store_ok_command, 1000u64);
+    try assert_eq_i32(georadius_store_ok_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(georadius_store_ok_reply.integer as i32, 2);
+    resp_value_free(&georadius_store_ok_parsed.value);
+
+    var georadius_store_zrange_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nZRANGE\r\n$7\r\ngeorout\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 44]);
+    const georadius_store_zrange_command: Command = try command_executor_test_command(&router, &georadius_store_zrange_parsed);
+    var georadius_store_zrange_reply: CommandReply = command_execute_at(&engine, &georadius_store_zrange_command, 1000u64);
+    const georadius_store_zrange_len: usize = try connection_encode_reply(&georadius_store_zrange_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: georadius_store_zrange_len], &"*2\r\n$7\r\nPalermo\r\n$7\r\nCatania\r\n"[0: 30]));
+    command_reply_cleanup(&georadius_store_zrange_reply);
+    resp_value_free(&georadius_store_zrange_parsed.value);
+
+    var georadiusbymember_storedist_ok_parsed: RespParseResult = try parse_resp2(&"*7\r\n$17\r\nGEORADIUSBYMEMBER\r\n$3\r\ngeo\r\n$7\r\nPalermo\r\n$3\r\n200\r\n$2\r\nkm\r\n$9\r\nSTOREDIST\r\n$9\r\ngeobmdist\r\n"[0: 97]);
+    const georadiusbymember_storedist_ok_command: Command = try command_executor_test_command(&router, &georadiusbymember_storedist_ok_parsed);
+    const georadiusbymember_storedist_ok_reply: CommandReply = command_execute_at(&engine, &georadiusbymember_storedist_ok_command, 1000u64);
+    try assert_eq_i32(georadiusbymember_storedist_ok_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(georadiusbymember_storedist_ok_reply.integer as i32, 2);
+    resp_value_free(&georadiusbymember_storedist_ok_parsed.value);
+
+    var georadiusbymember_storedist_zrange_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nZRANGE\r\n$9\r\ngeobmdist\r\n$1\r\n0\r\n$2\r\n-1\r\n$10\r\nWITHSCORES\r\n"[0: 63]);
+    const georadiusbymember_storedist_zrange_command: Command = try command_executor_test_command(&router, &georadiusbymember_storedist_zrange_parsed);
+    var georadiusbymember_storedist_zrange_reply: CommandReply = command_execute_at(&engine, &georadiusbymember_storedist_zrange_command, 1000u64);
+    const georadiusbymember_storedist_zrange_len: usize = try connection_encode_reply(&georadiusbymember_storedist_zrange_reply, &out[0], 256);
+    try assert_true(command_executor_test_contains(out[0: georadiusbymember_storedist_zrange_len], &"$7\r\nPalermo\r\n$1\r\n0\r\n"[0: 20]));
+    try assert_true(command_executor_test_contains(out[0: georadiusbymember_storedist_zrange_len], &"$7\r\nCatania\r\n$3\r\n166\r\n"[0: 22]));
+    command_reply_cleanup(&georadiusbymember_storedist_zrange_reply);
+    resp_value_free(&georadiusbymember_storedist_zrange_parsed.value);
+
     var geosearchstore_empty_parsed: RespParseResult = try parse_resp2(&"*9\r\n$14\r\nGEOSEARCHSTORE\r\n$6\r\ngeodst\r\n$3\r\ngeo\r\n$10\r\nFROMLONLAT\r\n$1\r\n0\r\n$1\r\n0\r\n$8\r\nBYRADIUS\r\n$1\r\n1\r\n$1\r\nm\r\n"[0: 105]);
     const geosearchstore_empty_command: Command = try command_executor_test_command(&router, &geosearchstore_empty_parsed);
     const geosearchstore_empty_reply: CommandReply = command_execute_at(&engine, &geosearchstore_empty_command, 1000u64);
@@ -3535,11 +3566,11 @@ export fn test_command_set_get_del_exists() !void {
     try assert_true(command_executor_test_slice_eq(geo_type_reply.data, &"zset"[0: 4]));
     resp_value_free(&geo_type_parsed.value);
 
-    var del_geo_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nDEL\r\n$3\r\ngeo\r\n$7\r\ndistdst\r\n"[0: 35]);
+    var del_geo_parsed: RespParseResult = try parse_resp2(&"*5\r\n$3\r\nDEL\r\n$3\r\ngeo\r\n$7\r\ndistdst\r\n$7\r\ngeorout\r\n$9\r\ngeobmdist\r\n"[0: 63]);
     const del_geo_command: Command = try command_executor_test_command(&router, &del_geo_parsed);
     const del_geo_reply: CommandReply = command_execute_at(&engine, &del_geo_command, 1000u64);
     try assert_eq_i32(del_geo_reply.typ as i32, CommandReplyType.reply_integer as i32);
-    try assert_eq_i32(del_geo_reply.integer as i32, 2);
+    try assert_eq_i32(del_geo_reply.integer as i32, 4);
     resp_value_free(&del_geo_parsed.value);
 
     var setrange_parsed: RespParseResult = try parse_resp2(&"*4\r\n$8\r\nSETRANGE\r\n$3\r\nkey\r\n$1\r\n5\r\n$2\r\n__\r\n"[0: 42]);
@@ -10887,7 +10918,7 @@ export fn test_command_error_paths() !void {
     try assert_true(command_executor_test_slice_eq(georadius_wrongtype_reply.data, &"WRONGTYPE Operation against a key holding the wrong kind of value"[0: 65]));
     resp_value_free(&georadius_wrongtype_parsed.value);
 
-    var georadius_store_parsed: RespParseResult = try parse_resp2(&"*8\r\n$9\r\nGEORADIUS\r\n$3\r\ngeo\r\n$2\r\n15\r\n$2\r\n37\r\n$3\r\n200\r\n$2\r\nkm\r\n$5\r\nSTORE\r\n$3\r\nout\r\n"[0: 81]);
+    var georadius_store_parsed: RespParseResult = try parse_resp2(&"*9\r\n$9\r\nGEORADIUS\r\n$3\r\ngeo\r\n$2\r\n15\r\n$2\r\n37\r\n$3\r\n200\r\n$2\r\nkm\r\n$8\r\nWITHDIST\r\n$5\r\nSTORE\r\n$3\r\nout\r\n"[0: 95]);
     const georadius_store_command: Command = try command_executor_test_command(&router, &georadius_store_parsed);
     const georadius_store_reply: CommandReply = command_execute_at(&engine, &georadius_store_command, 1000u64);
     try assert_eq_i32(georadius_store_reply.typ as i32, CommandReplyType.reply_error as i32);
@@ -10901,7 +10932,7 @@ export fn test_command_error_paths() !void {
     try assert_true(command_executor_test_slice_eq(georadiusbymember_wrongtype_reply.data, &"WRONGTYPE Operation against a key holding the wrong kind of value"[0: 65]));
     resp_value_free(&georadiusbymember_wrongtype_parsed.value);
 
-    var georadiusbymember_store_parsed: RespParseResult = try parse_resp2(&"*7\r\n$17\r\nGEORADIUSBYMEMBER\r\n$3\r\ngeo\r\n$7\r\nPalermo\r\n$3\r\n200\r\n$2\r\nkm\r\n$5\r\nSTORE\r\n$3\r\nout\r\n"[0: 87]);
+    var georadiusbymember_store_parsed: RespParseResult = try parse_resp2(&"*8\r\n$17\r\nGEORADIUSBYMEMBER\r\n$3\r\ngeo\r\n$7\r\nPalermo\r\n$3\r\n200\r\n$2\r\nkm\r\n$8\r\nWITHDIST\r\n$5\r\nSTORE\r\n$3\r\nout\r\n"[0: 101]);
     const georadiusbymember_store_command: Command = try command_executor_test_command(&router, &georadiusbymember_store_parsed);
     const georadiusbymember_store_reply: CommandReply = command_execute_at(&engine, &georadiusbymember_store_command, 1000u64);
     try assert_eq_i32(georadiusbymember_store_reply.typ as i32, CommandReplyType.reply_error as i32);

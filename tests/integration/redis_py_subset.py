@@ -278,7 +278,7 @@ class RedisPySubsetClient:
 
     def georadius(self, key: str, longitude: str, latitude: str, radius: str, unit: str, *parts: str):
         result = self._request(b"GEORADIUS", key.encode(), longitude.encode(), latitude.encode(), radius.encode(), unit.encode(), *(part.encode() for part in parts))
-        assert isinstance(result, list)
+        assert isinstance(result, (int, list))
         return result
 
     def georadiusbymember_ro(self, key: str, member: str, radius: str, unit: str, *parts: str):
@@ -288,7 +288,7 @@ class RedisPySubsetClient:
 
     def georadiusbymember(self, key: str, member: str, radius: str, unit: str, *parts: str):
         result = self._request(b"GEORADIUSBYMEMBER", key.encode(), member.encode(), radius.encode(), unit.encode(), *(part.encode() for part in parts))
-        assert isinstance(result, list)
+        assert isinstance(result, (int, list))
         return result
 
     def eval(self, script: str, numkeys: int, *parts: str):
@@ -1624,6 +1624,10 @@ def run_smoke() -> None:
             assert client.zrange("geodst", 0, -1) == [b"Palermo", b"Catania"]
             assert client.geosearchstore("distdst", "geo", "FROMMEMBER", "Palermo", "BYRADIUS", "200", "km", "STOREDIST") == 2
             assert client.zscore("distdst", "Catania") == b"166"
+            assert client.georadius("geo", "15", "37", "200", "km", "STORE", "georout") == 2
+            assert client.zrange("georout", 0, -1) == [b"Palermo", b"Catania"]
+            assert client.georadiusbymember("geo", "Palermo", "200", "km", "STOREDIST", "geobmdist") == 2
+            assert client.zscore("geobmdist", "Catania") == b"166"
             assert client.georadius("geo", "15", "37", "200", "km") == [b"Palermo", b"Catania"]
             assert client.georadius_ro("geo", "15", "37", "200", "km") == [b"Palermo", b"Catania"]
             assert client.georadiusbymember("geo", "Palermo", "200", "km") == [b"Palermo", b"Catania"]
@@ -2074,7 +2078,7 @@ def run_smoke() -> None:
             assert client.delex("delex-digest", "IFDNE", delex_digest.decode("ascii")) == 0
             assert client.delex("delex-digest", "IFDNE", "0000000000000000") == 1
             assert client.delete("counter") == 1
-            assert client.delete("excounter", "fxcounter", "fcounter", "nx-key", "gs-key", "sx-key", "mk1", "mk2", "mn1", "mn2", "me1", "me2", "lcs-a", "lcs-b", "allones", "srca", "srcb", "dstbit", "bf", "hll", "dsthll", "emptyhll", "geo", "geodst", "distdst", "lua-key", "slow-k", "latency-k") == 28
+            assert client.delete("excounter", "fxcounter", "fcounter", "nx-key", "gs-key", "sx-key", "mk1", "mk2", "mn1", "mn2", "me1", "me2", "lcs-a", "lcs-b", "allones", "srca", "srcb", "dstbit", "bf", "hll", "dsthll", "emptyhll", "geo", "geodst", "distdst", "georout", "geobmdist", "lua-key", "slow-k", "latency-k") == 30
             assert client.echo("hi") == b"hi"
             assert client.key_type("key") == "string"
             assert client.dbsize() == 1

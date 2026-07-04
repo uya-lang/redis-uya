@@ -15248,7 +15248,7 @@ fn command_executor_geosearchstore(engine: &Engine, command: &Command, now_ms: u
     return command_executor_geo_search_store_run(engine, destination, source, &options, now_ms);
 }
 
-fn command_executor_georadius_ro(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+fn command_executor_georadius(engine: &Engine, command: &Command, now_ms: u64, store_allowed: bool) CommandReply {
     if command.argc < 6 {
         return command_executor_wrong_arity();
     }
@@ -15283,6 +15283,8 @@ fn command_executor_georadius_ro(engine: &Engine, command: &Command, now_ms: u64
     options.by_radius = true;
     options.radius_m = radius * unit_scale;
     options.unit_scale = unit_scale;
+    var store_enabled: bool = false;
+    var store_destination: &[byte] = command_executor_empty_slice();
 
     var index: usize = 6;
     while index < command.argc {
@@ -15346,13 +15348,28 @@ fn command_executor_georadius_ro(engine: &Engine, command: &Command, now_ms: u64
             index = index + 1;
             continue;
         }
+        if command_executor_keyword_eq(token, &"STORE"[0: 5]) || command_executor_keyword_eq(token, &"STOREDIST"[0: 9]) {
+            if !store_allowed || store_enabled || options.withcoord || options.withdist || options.withhash || index + 1 >= command.argc {
+                return command_executor_syntax_error();
+            }
+            options.storedist = command_executor_keyword_eq(token, &"STOREDIST"[0: 9]);
+            store_destination = command_executor_arg(command, index + 1) catch {
+                return command_executor_wrong_arity();
+            };
+            store_enabled = true;
+            index = index + 2;
+            continue;
+        }
         return command_executor_syntax_error();
     }
 
+    if store_enabled {
+        return command_executor_geo_search_store_run(engine, store_destination, key, &options, now_ms);
+    }
     return command_executor_geo_search_run(engine, key, &options, now_ms);
 }
 
-fn command_executor_georadiusbymember_ro(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+fn command_executor_georadiusbymember(engine: &Engine, command: &Command, now_ms: u64, store_allowed: bool) CommandReply {
     if command.argc < 5 {
         return command_executor_wrong_arity();
     }
@@ -15378,6 +15395,8 @@ fn command_executor_georadiusbymember_ro(engine: &Engine, command: &Command, now
     options.by_radius = true;
     options.radius_m = radius * unit_scale;
     options.unit_scale = unit_scale;
+    var store_enabled: bool = false;
+    var store_destination: &[byte] = command_executor_empty_slice();
 
     var index: usize = 5;
     while index < command.argc {
@@ -15441,9 +15460,24 @@ fn command_executor_georadiusbymember_ro(engine: &Engine, command: &Command, now
             index = index + 1;
             continue;
         }
+        if command_executor_keyword_eq(token, &"STORE"[0: 5]) || command_executor_keyword_eq(token, &"STOREDIST"[0: 9]) {
+            if !store_allowed || store_enabled || options.withcoord || options.withdist || options.withhash || index + 1 >= command.argc {
+                return command_executor_syntax_error();
+            }
+            options.storedist = command_executor_keyword_eq(token, &"STOREDIST"[0: 9]);
+            store_destination = command_executor_arg(command, index + 1) catch {
+                return command_executor_wrong_arity();
+            };
+            store_enabled = true;
+            index = index + 2;
+            continue;
+        }
         return command_executor_syntax_error();
     }
 
+    if store_enabled {
+        return command_executor_geo_search_store_run(engine, store_destination, key, &options, now_ms);
+    }
     return command_executor_geo_search_run(engine, key, &options, now_ms);
 }
 
@@ -20887,16 +20921,16 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
         return command_executor_geohash(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_georadius {
-        return command_executor_georadius_ro(engine, command, now_ms);
+        return command_executor_georadius(engine, command, now_ms, true);
     }
     if command.info.cmd_type == CommandType.command_georadius_ro {
-        return command_executor_georadius_ro(engine, command, now_ms);
+        return command_executor_georadius(engine, command, now_ms, false);
     }
     if command.info.cmd_type == CommandType.command_georadiusbymember {
-        return command_executor_georadiusbymember_ro(engine, command, now_ms);
+        return command_executor_georadiusbymember(engine, command, now_ms, true);
     }
     if command.info.cmd_type == CommandType.command_georadiusbymember_ro {
-        return command_executor_georadiusbymember_ro(engine, command, now_ms);
+        return command_executor_georadiusbymember(engine, command, now_ms, false);
     }
     if command.info.cmd_type == CommandType.command_geosearch {
         return command_executor_geosearch(engine, command, now_ms);

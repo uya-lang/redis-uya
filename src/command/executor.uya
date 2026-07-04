@@ -5516,9 +5516,9 @@ fn command_executor_stream_lookup_or_create(engine: &Engine, key: &[byte], now_m
     return existing;
 }
 
-fn command_executor_stream_trim_maxlen(obj: &RedisObject, threshold: usize) !usize {
+fn command_executor_stream_trim_maxlen(obj: &RedisObject, threshold: usize, limit: i64) !usize {
     var removed: usize = 0;
-    while obj.list_len > threshold {
+    while obj.list_len > threshold && (limit < 0 || (removed as i64) < limit) {
         const popped: &RedisObject = try list_object_pop_head(obj);
         object_free(popped);
         removed = removed + 1;
@@ -5537,6 +5537,7 @@ fn command_executor_xadd(engine: &Engine, command: &Command, now_ms: u64) Comman
     var nomkstream: bool = false;
     var maxlen_enabled: bool = false;
     var maxlen_threshold: usize = 0;
+    var maxlen_limit: i64 = -1;
     var id_index: usize = 2;
     while id_index < command.argc {
         const option: &[byte] = command_executor_arg(command, id_index) catch {
@@ -5578,6 +5579,26 @@ fn command_executor_xadd(engine: &Engine, command: &Command, now_ms: u64) Comman
             maxlen_enabled = true;
             maxlen_threshold = threshold as usize;
             id_index = threshold_index + 1;
+            if id_index < command.argc {
+                const maybe_limit: &[byte] = command_executor_arg(command, id_index) catch {
+                    return command_executor_wrong_arity();
+                };
+                if command_executor_keyword_eq(maybe_limit, &"LIMIT"[0: 5]) {
+                    if id_index + 1 >= command.argc {
+                        return command_executor_syntax_error();
+                    }
+                    const limit_data: &[byte] = command_executor_arg(command, id_index + 1) catch {
+                        return command_executor_wrong_arity();
+                    };
+                    maxlen_limit = command_executor_parse_i64(limit_data) catch {
+                        return command_executor_invalid_integer();
+                    };
+                    if maxlen_limit < 0 {
+                        return command_executor_invalid_integer();
+                    }
+                    id_index = id_index + 2;
+                }
+            }
             continue;
         }
         if command_executor_keyword_eq(option, &"MINID"[0: 5]) || command_executor_keyword_eq(option, &"LIMIT"[0: 5]) {
@@ -5704,7 +5725,7 @@ fn command_executor_xadd(engine: &Engine, command: &Command, now_ms: u64) Comman
         return command_executor_oom();
     };
     if maxlen_enabled {
-        _ = command_executor_stream_trim_maxlen(stream_obj, maxlen_threshold) catch {
+        _ = command_executor_stream_trim_maxlen(stream_obj, maxlen_threshold, maxlen_limit) catch {
             return command_executor_wrongtype();
         };
     }
@@ -20943,7 +20964,7 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
         return command_executor_xsetid(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_xtrim {
-        if command.argc != 4 && command.argc != 5 {
+        if command.argc < 4 || command.argc > 7 {
             return command_executor_wrong_arity();
         }
         const key: &[byte] = command_executor_arg(command, 1) catch {
@@ -20956,16 +20977,16 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
             return command_executor_syntax_error();
         }
         var threshold_index: usize = 3;
-        if command.argc == 5 {
-            const operator: &[byte] = command_executor_arg(command, 3) catch {
-                return command_executor_wrong_arity();
-            };
-            const exact: bool = operator.len == 1 && operator.ptr[0] == 61 as byte;
-            const approximate: bool = operator.len == 1 && operator.ptr[0] == 126 as byte;
-            if !exact && !approximate {
-                return command_executor_syntax_error();
-            }
+        const maybe_operator: &[byte] = command_executor_arg(command, 3) catch {
+            return command_executor_wrong_arity();
+        };
+        const exact: bool = maybe_operator.len == 1 && maybe_operator.ptr[0] == 61 as byte;
+        const approximate: bool = maybe_operator.len == 1 && maybe_operator.ptr[0] == 126 as byte;
+        if exact || approximate {
             threshold_index = 4;
+        }
+        if threshold_index >= command.argc {
+            return command_executor_syntax_error();
         }
         const threshold_data: &[byte] = command_executor_arg(command, threshold_index) catch {
             return command_executor_wrong_arity();
@@ -20976,13 +20997,35 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
         if threshold < 0 {
             return command_executor_invalid_integer();
         }
+        var limit: i64 = -1;
+        const next_index: usize = threshold_index + 1;
+        if next_index < command.argc {
+            if next_index + 1 >= command.argc {
+                return command_executor_syntax_error();
+            }
+            const limit_kw: &[byte] = command_executor_arg(command, next_index) catch {
+                return command_executor_wrong_arity();
+            };
+            if !command_executor_keyword_eq(limit_kw, &"LIMIT"[0: 5]) {
+                return command_executor_syntax_error();
+            }
+            const limit_data: &[byte] = command_executor_arg(command, next_index + 1) catch {
+                return command_executor_wrong_arity();
+            };
+            limit = command_executor_parse_i64(limit_data) catch {
+                return command_executor_invalid_integer();
+            };
+            if limit < 0 {
+                return command_executor_invalid_integer();
+            }
+        }
         const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
             return command_executor_integer(0);
         };
         if obj.obj_type != ObjectType.object_stream {
             return command_executor_wrongtype();
         }
-        const removed: usize = command_executor_stream_trim_maxlen(obj, threshold as usize) catch {
+        const removed: usize = command_executor_stream_trim_maxlen(obj, threshold as usize, limit) catch {
             return command_executor_wrongtype();
         };
         return command_executor_integer(removed as i64);

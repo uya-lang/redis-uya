@@ -2839,7 +2839,7 @@ GEORADIUSBYMEMBER_RO key member radius M|KM|FT|MI [WITHCOORD] [WITHDIST] [WITHHA
 ```text
 XACK key group id [id ...]
 XACKDEL key group [KEEPREF|DELREF|ACKED] IDS numids id [id ...]
-XADD key [NOMKSTREAM] [MAXLEN [=|~] count] id field value [field value ...]
+XADD key [NOMKSTREAM] [MAXLEN [=|~] count [LIMIT count]] id field value [field value ...]
 XCFGSET key [IDMP-DURATION seconds] [IDMP-MAXSIZE size]
 XAUTOCLAIM key group consumer min-idle-time start [COUNT count] [JUSTID]
 XCLAIM key group consumer min-idle-time id [id ...] [IDLE ms] [TIME ms-unix-time] [RETRYCOUNT count] [FORCE] [JUSTID]
@@ -2864,7 +2864,7 @@ XREVRANGE key end start [COUNT count]
 XREAD [COUNT count] STREAMS key [key ...] id [id ...]
 XREADGROUP GROUP group consumer [COUNT count] [NOACK] STREAMS key [key ...] id [id ...]
 XSETID key last-id [ENTRIESADDED entries-added] [MAXDELETEDID max-deleted-id]
-XTRIM key MAXLEN [=|~] count
+XTRIM key MAXLEN [=|~] count [LIMIT count]
 ```
 
 返回：
@@ -2899,7 +2899,7 @@ XTRIM key MAXLEN [=|~] count
 说明：
 
 - 当前实现为 partial：stream 内部暂用项目内 list-backed entry 存储，不是 Redis 原生 radix-tree/listpack 编码
-- `XADD` 当前支持基础追加、显式完整 id / `*` 自动 id、`NOMKSTREAM` 和 `MAXLEN [=|~] count`；`~` 只是语法兼容占位，仍按精确头部裁剪执行；暂不支持 `MINID`、`LIMIT` 或 `field value` 之外的扩展选项
+- `XADD` 当前支持基础追加、显式完整 id / `*` 自动 id、`NOMKSTREAM` 和 `MAXLEN [=|~] count [LIMIT count]`；`~` 只是语法兼容占位，仍按精确头部裁剪执行；暂不支持 `MINID` 或 `field value` 之外的扩展选项
 - `XCFGSET` 当前只提供 key/type 校验和 `IDMP-DURATION` / `IDMP-MAXSIZE` 范围校验；不维护或持久化 stream IDMP 配置
 - `XREAD` 当前只支持非阻塞读取；`BLOCK` 会返回明确错误，consumer group 相关语义仍未实现
 - `XREADGROUP` 当前只支持非阻塞语法校验和无 group 时的 `NOGROUP` 错误面；`BLOCK` 会返回明确错误，不维护 consumer group PEL
@@ -2915,7 +2915,7 @@ XTRIM key MAXLEN [=|~] count
 - `XGROUP CREATE` 当前只提供 key/type 校验和明确未支持错误，不创建 consumer group；`XGROUP CREATECONSUMER` / `XGROUP DELCONSUMER` / `XGROUP SETID` 当前只提供无 group 时的 `NOGROUP` 错误面；`XGROUP DESTROY` 当前只提供 empty-state 返回值，不维护 group；consumer 管理和 consumer group 状态仍未实现
 - `XIDMPRECORD` 当前只提供 key/type、pid/iid 非空、stream ID 与 entry 存在性校验；不维护或持久化 stream IDMP 记录，当前 no-op 校验面不进入普通 AOF/复制传播
 - `XINFO STREAM` 当前支持 key-only 基础元数据和 `FULL [COUNT count]` entry 明细，`XINFO GROUPS` 当前只支持 empty-state 空数组，`XINFO CONSUMERS` 当前只提供无 group 时的 `NOGROUP` 错误面；真实 consumer group 状态仍未实现；`radix-tree-*` 字段为 list-backed partial 占位
-- `XTRIM` 当前只支持 `MAXLEN` 与可选 `=` / `~` 操作符；`~` 只是语法兼容占位，仍按精确头部裁剪执行；暂不支持 `MINID` 或 `LIMIT`
+- `XTRIM` 当前只支持 `MAXLEN`、可选 `=` / `~` 操作符与 `LIMIT count`；`~` 只是语法兼容占位，仍按精确头部裁剪执行；暂不支持 `MINID`
 - 当前不支持真实 consumer group 状态命令
 - 项目内 RDB 与 AOF rewrite 会保存显式 stream ID；普通 AOF append 仍记录原始请求，因此 `XADD *` 回放会重新生成 ID，只承诺恢复条目内容与顺序
 

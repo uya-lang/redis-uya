@@ -268,6 +268,24 @@ def run_smoke() -> None:
                 raise AssertionError("XADD NOMKSTREAM on missing key did not return null")
             if client.command(b"XLEN", b"nomk") != 0:
                 raise AssertionError("XADD NOMKSTREAM created a missing stream")
+            if client.command(b"XADD", b"limitstream", b"1-0", b"f", b"a") != b"1-0":
+                raise AssertionError("XADD limitstream seed 1-0 failed")
+            if client.command(b"XADD", b"limitstream", b"1-1", b"f", b"b") != b"1-1":
+                raise AssertionError("XADD limitstream seed 1-1 failed")
+            if client.command(b"XADD", b"limitstream", b"MAXLEN", b"~", b"1", b"LIMIT", b"1", b"1-2", b"f", b"c") != b"1-2":
+                raise AssertionError("XADD MAXLEN LIMIT did not append expected id")
+            if client.command(b"XRANGE", b"limitstream", b"-", b"+") != [[b"1-1", [b"f", b"b"]], [b"1-2", [b"f", b"c"]]]:
+                raise AssertionError("XADD MAXLEN LIMIT trimmed the wrong number of entries")
+            if client.command(b"XADD", b"xtrimlimit", b"1-0", b"f", b"a") != b"1-0":
+                raise AssertionError("XADD xtrimlimit seed 1-0 failed")
+            if client.command(b"XADD", b"xtrimlimit", b"1-1", b"f", b"b") != b"1-1":
+                raise AssertionError("XADD xtrimlimit seed 1-1 failed")
+            if client.command(b"XADD", b"xtrimlimit", b"1-2", b"f", b"c") != b"1-2":
+                raise AssertionError("XADD xtrimlimit seed 1-2 failed")
+            if client.command(b"XTRIM", b"xtrimlimit", b"MAXLEN", b"0", b"LIMIT", b"2") != 2:
+                raise AssertionError("XTRIM MAXLEN LIMIT did not cap removals")
+            if client.command(b"XRANGE", b"xtrimlimit", b"-", b"+") != [[b"1-2", [b"f", b"c"]]]:
+                raise AssertionError("XTRIM MAXLEN LIMIT kept the wrong stream entry")
 
             if client.command(b"XDEL", b"mystream", first) != 1:
                 raise AssertionError("XDEL did not remove the first stream entry")
@@ -309,6 +327,10 @@ def run_smoke() -> None:
                 raise AssertionError("AOF replay restored the wrong XADD MAXLEN entry")
             if replay_client.command(b"XLEN", b"nomk") != 0:
                 raise AssertionError("AOF replay created NOMKSTREAM missing key")
+            if replay_client.command(b"XRANGE", b"limitstream", b"-", b"+") != [[b"1-1", [b"f", b"b"]], [b"1-2", [b"f", b"c"]]]:
+                raise AssertionError("AOF replay restored the wrong XADD MAXLEN LIMIT entries")
+            if replay_client.command(b"XRANGE", b"xtrimlimit", b"-", b"+") != [[b"1-2", [b"f", b"c"]]]:
+                raise AssertionError("AOF replay restored the wrong XTRIM MAXLEN LIMIT entry")
             if replay_client.command(b"QUIT") != b"OK":
                 raise AssertionError("replay QUIT failed")
         finally:

@@ -4839,6 +4839,41 @@ export fn test_command_streams_first_batch() !void {
     command_reply_cleanup(&xrange_trim_reply);
     resp_value_free(&xrange_trim_parsed.value);
 
+    var xadd_limit_seed_a_parsed: RespParseResult = try parse_resp2(&"*5\r\n$4\r\nXADD\r\n$11\r\nlimitstream\r\n$3\r\n1-0\r\n$1\r\nf\r\n$1\r\na\r\n"[0: 55]);
+    const xadd_limit_seed_a_command: Command = try command_executor_test_command(&router, &xadd_limit_seed_a_parsed);
+    _ = command_execute_at(&engine, &xadd_limit_seed_a_command, 1000u64);
+    resp_value_free(&xadd_limit_seed_a_parsed.value);
+
+    var xadd_limit_seed_b_parsed: RespParseResult = try parse_resp2(&"*5\r\n$4\r\nXADD\r\n$11\r\nlimitstream\r\n$3\r\n1-1\r\n$1\r\nf\r\n$1\r\nb\r\n"[0: 55]);
+    const xadd_limit_seed_b_command: Command = try command_executor_test_command(&router, &xadd_limit_seed_b_parsed);
+    _ = command_execute_at(&engine, &xadd_limit_seed_b_command, 1000u64);
+    resp_value_free(&xadd_limit_seed_b_parsed.value);
+
+    var xadd_limit_parsed: RespParseResult = try parse_resp2(&"*10\r\n$4\r\nXADD\r\n$11\r\nlimitstream\r\n$6\r\nMAXLEN\r\n$1\r\n~\r\n$1\r\n1\r\n$5\r\nLIMIT\r\n$1\r\n1\r\n$3\r\n1-2\r\n$1\r\nf\r\n$1\r\nc\r\n"[0: 100]);
+    const xadd_limit_command: Command = try command_executor_test_command(&router, &xadd_limit_parsed);
+    const xadd_limit_reply: CommandReply = command_execute_at(&engine, &xadd_limit_command, 1000u64);
+    try assert_eq_i32(xadd_limit_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_slice_eq(xadd_limit_reply.data, &"1-2"[0: 3]));
+    command_reply_cleanup(&xadd_limit_reply);
+    resp_value_free(&xadd_limit_parsed.value);
+
+    var xlen_limit_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nXLEN\r\n$11\r\nlimitstream\r\n"[0: 32]);
+    const xlen_limit_command: Command = try command_executor_test_command(&router, &xlen_limit_parsed);
+    const xlen_limit_reply: CommandReply = command_execute_at(&engine, &xlen_limit_command, 1000u64);
+    try assert_eq_i32(xlen_limit_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(xlen_limit_reply.integer as i32, 2);
+    resp_value_free(&xlen_limit_parsed.value);
+
+    var xrange_limit_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nXRANGE\r\n$11\r\nlimitstream\r\n$1\r\n-\r\n$1\r\n+\r\n"[0: 48]);
+    const xrange_limit_command: Command = try command_executor_test_command(&router, &xrange_limit_parsed);
+    const xrange_limit_reply: CommandReply = command_execute_at(&engine, &xrange_limit_command, 1000u64);
+    const xrange_limit_len: usize = try connection_encode_reply(&xrange_limit_reply, &out[0], 1024);
+    try assert_true(!command_executor_test_contains(out[0: xrange_limit_len], &"$3\r\n1-0\r\n"[0: 9]));
+    try assert_true(command_executor_test_contains(out[0: xrange_limit_len], &"$3\r\n1-1\r\n"[0: 9]));
+    try assert_true(command_executor_test_contains(out[0: xrange_limit_len], &"$3\r\n1-2\r\n"[0: 9]));
+    command_reply_cleanup(&xrange_limit_reply);
+    resp_value_free(&xrange_limit_parsed.value);
+
     var xadd_nomkstream_parsed: RespParseResult = try parse_resp2(&"*6\r\n$4\r\nXADD\r\n$7\r\nmissing\r\n$10\r\nNOMKSTREAM\r\n$1\r\n*\r\n$1\r\nf\r\n$1\r\nv\r\n"[0: 65]);
     const xadd_nomkstream_command: Command = try command_executor_test_command(&router, &xadd_nomkstream_parsed);
     const xadd_nomkstream_reply: CommandReply = command_execute_at(&engine, &xadd_nomkstream_command, 1000u64);
@@ -5729,6 +5764,35 @@ export fn test_command_streams_first_batch() !void {
     try assert_eq_i32(xtrim_missing_reply.typ as i32, CommandReplyType.reply_integer as i32);
     try assert_eq_i32(xtrim_missing_reply.integer as i32, 0);
     resp_value_free(&xtrim_missing_parsed.value);
+
+    var xtrim_limit_seed_a_parsed: RespParseResult = try parse_resp2(&"*5\r\n$4\r\nXADD\r\n$10\r\nxtrimlimit\r\n$3\r\n1-0\r\n$1\r\nf\r\n$1\r\na\r\n"[0: 54]);
+    const xtrim_limit_seed_a_command: Command = try command_executor_test_command(&router, &xtrim_limit_seed_a_parsed);
+    _ = command_execute_at(&engine, &xtrim_limit_seed_a_command, 1000u64);
+    resp_value_free(&xtrim_limit_seed_a_parsed.value);
+
+    var xtrim_limit_seed_b_parsed: RespParseResult = try parse_resp2(&"*5\r\n$4\r\nXADD\r\n$10\r\nxtrimlimit\r\n$3\r\n1-1\r\n$1\r\nf\r\n$1\r\nb\r\n"[0: 54]);
+    const xtrim_limit_seed_b_command: Command = try command_executor_test_command(&router, &xtrim_limit_seed_b_parsed);
+    _ = command_execute_at(&engine, &xtrim_limit_seed_b_command, 1000u64);
+    resp_value_free(&xtrim_limit_seed_b_parsed.value);
+
+    var xtrim_limit_seed_c_parsed: RespParseResult = try parse_resp2(&"*5\r\n$4\r\nXADD\r\n$10\r\nxtrimlimit\r\n$3\r\n1-2\r\n$1\r\nf\r\n$1\r\nc\r\n"[0: 54]);
+    const xtrim_limit_seed_c_command: Command = try command_executor_test_command(&router, &xtrim_limit_seed_c_parsed);
+    _ = command_execute_at(&engine, &xtrim_limit_seed_c_command, 1000u64);
+    resp_value_free(&xtrim_limit_seed_c_parsed.value);
+
+    var xtrim_limit_parsed: RespParseResult = try parse_resp2(&"*6\r\n$5\r\nXTRIM\r\n$10\r\nxtrimlimit\r\n$6\r\nMAXLEN\r\n$1\r\n0\r\n$5\r\nLIMIT\r\n$1\r\n2\r\n"[0: 69]);
+    const xtrim_limit_command: Command = try command_executor_test_command(&router, &xtrim_limit_parsed);
+    const xtrim_limit_reply: CommandReply = command_execute_at(&engine, &xtrim_limit_command, 1000u64);
+    try assert_eq_i32(xtrim_limit_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(xtrim_limit_reply.integer as i32, 2);
+    resp_value_free(&xtrim_limit_parsed.value);
+
+    var xlen_xtrim_limit_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nXLEN\r\n$10\r\nxtrimlimit\r\n"[0: 31]);
+    const xlen_xtrim_limit_command: Command = try command_executor_test_command(&router, &xlen_xtrim_limit_parsed);
+    const xlen_xtrim_limit_reply: CommandReply = command_execute_at(&engine, &xlen_xtrim_limit_command, 1000u64);
+    try assert_eq_i32(xlen_xtrim_limit_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(xlen_xtrim_limit_reply.integer as i32, 1);
+    resp_value_free(&xlen_xtrim_limit_parsed.value);
 
     var xdel_parsed: RespParseResult = try parse_resp2(&"*3\r\n$4\r\nXDEL\r\n$6\r\nstream\r\n$6\r\n1000-1\r\n"[0: 38]);
     const xdel_command: Command = try command_executor_test_command(&router, &xdel_parsed);

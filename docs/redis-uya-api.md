@@ -1419,18 +1419,21 @@ ZREMRANGEBYLEX key min max
 格式：
 
 ```text
-ZREVRANGE key start stop [WITHSCORES]
+ZREVRANGE key start stop [BYSCORE | BYLEX] [LIMIT offset count] [WITHSCORES]
 ```
 
 返回：
 
 - 返回按 score 降序排列后的索引区间成员
+- 带 `BYSCORE` 时把 `start` / `stop` 解释为整数 score 闭区间，`start` 是 max、`stop` 是 min
+- 带 `BYLEX` 时把 `start` / `stop` 解释为 Redis lex 边界，`start` 是 max、`stop` 是 min
 - 带 `WITHSCORES` 时返回 member / score 交错数组
 
 说明：
 
 - 当前支持正负索引、闭区间 `[start, stop]` 和 `WITHSCORES`
-- 当前不支持通过 `ZREVRANGE ... BYSCORE/BYLEX/LIMIT` 复用新版 `ZRANGE` 扩展语法；score 范围请使用 `ZREVRANGEBYSCORE`
+- 当前 `BYSCORE` 模式支持 `WITHSCORES` 和 `LIMIT offset count`；`offset` 必须非负，`count < 0` 表示不限制数量
+- 当前 `BYLEX` 模式支持 Redis lex 边界 token：`-`、`+`、`[value`、`(value`，支持 `LIMIT offset count`，不支持与 `WITHSCORES` 组合
 - 当前项目内 ZSet score 使用整数语义
 
 ### `ZREVRANGEBYLEX`

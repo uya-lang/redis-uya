@@ -6885,6 +6885,45 @@ export fn test_command_zadd_zrem_zrange() !void {
     command_reply_cleanup(&zrevrange_scores_reply);
     resp_value_free(&zrevrange_scores_parsed.value);
 
+    var zrevrange_byscore_scores_parsed: RespParseResult = try parse_resp2(&"*6\r\n$9\r\nZREVRANGE\r\n$4\r\nzset\r\n$1\r\n3\r\n$1\r\n1\r\n$7\r\nBYSCORE\r\n$10\r\nWITHSCORES\r\n"[0: 73]);
+    const zrevrange_byscore_scores_command: Command = try command_executor_test_command(&router, &zrevrange_byscore_scores_parsed);
+    var zrevrange_byscore_scores_reply: CommandReply = command_execute_at(&engine, &zrevrange_byscore_scores_command, 1000u64);
+    const zrevrange_byscore_scores_len: usize = try connection_encode_reply(&zrevrange_byscore_scores_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: zrevrange_byscore_scores_len], &"*6\r\n$1\r\nc\r\n$1\r\n3\r\n$1\r\nb\r\n$1\r\n2\r\n$1\r\na\r\n$1\r\n1\r\n"[0: 46]));
+    command_reply_cleanup(&zrevrange_byscore_scores_reply);
+    resp_value_free(&zrevrange_byscore_scores_parsed.value);
+
+    var zrevrange_byscore_limit_parsed: RespParseResult = try parse_resp2(&"*8\r\n$9\r\nZREVRANGE\r\n$4\r\nzset\r\n$1\r\n3\r\n$1\r\n1\r\n$7\r\nBYSCORE\r\n$5\r\nLIMIT\r\n$1\r\n1\r\n$1\r\n1\r\n"[0: 81]);
+    const zrevrange_byscore_limit_command: Command = try command_executor_test_command(&router, &zrevrange_byscore_limit_parsed);
+    var zrevrange_byscore_limit_reply: CommandReply = command_execute_at(&engine, &zrevrange_byscore_limit_command, 1000u64);
+    const zrevrange_byscore_limit_len: usize = try connection_encode_reply(&zrevrange_byscore_limit_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: zrevrange_byscore_limit_len], &"*1\r\n$1\r\nb\r\n"[0: 11]));
+    command_reply_cleanup(&zrevrange_byscore_limit_reply);
+    resp_value_free(&zrevrange_byscore_limit_parsed.value);
+
+    var zrevrange_bylex_parsed: RespParseResult = try parse_resp2(&"*5\r\n$9\r\nZREVRANGE\r\n$3\r\nlex\r\n$6\r\n[delta\r\n$6\r\n(alpha\r\n$5\r\nBYLEX\r\n"[0: 63]);
+    const zrevrange_bylex_command: Command = try command_executor_test_command(&router, &zrevrange_bylex_parsed);
+    var zrevrange_bylex_reply: CommandReply = command_execute_at(&engine, &zrevrange_bylex_command, 1000u64);
+    const zrevrange_bylex_len: usize = try connection_encode_reply(&zrevrange_bylex_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: zrevrange_bylex_len], &"*3\r\n$5\r\ndelta\r\n$7\r\ncharlie\r\n$4\r\nbeta\r\n"[0: 38]));
+    command_reply_cleanup(&zrevrange_bylex_reply);
+    resp_value_free(&zrevrange_bylex_parsed.value);
+
+    var zrevrange_bylex_limit_parsed: RespParseResult = try parse_resp2(&"*8\r\n$9\r\nZREVRANGE\r\n$3\r\nlex\r\n$1\r\n+\r\n$1\r\n-\r\n$5\r\nBYLEX\r\n$5\r\nLIMIT\r\n$1\r\n1\r\n$1\r\n2\r\n"[0: 78]);
+    const zrevrange_bylex_limit_command: Command = try command_executor_test_command(&router, &zrevrange_bylex_limit_parsed);
+    var zrevrange_bylex_limit_reply: CommandReply = command_execute_at(&engine, &zrevrange_bylex_limit_command, 1000u64);
+    const zrevrange_bylex_limit_len: usize = try connection_encode_reply(&zrevrange_bylex_limit_reply, &out[0], 256);
+    try assert_true(command_executor_test_slice_eq(out[0: zrevrange_bylex_limit_len], &"*2\r\n$7\r\ncharlie\r\n$4\r\nbeta\r\n"[0: 27]));
+    command_reply_cleanup(&zrevrange_bylex_limit_reply);
+    resp_value_free(&zrevrange_bylex_limit_parsed.value);
+
+    var zrevrange_bylex_scores_parsed: RespParseResult = try parse_resp2(&"*6\r\n$9\r\nZREVRANGE\r\n$3\r\nlex\r\n$6\r\n[alpha\r\n$8\r\n[charlie\r\n$5\r\nBYLEX\r\n$10\r\nWITHSCORES\r\n"[0: 82]);
+    const zrevrange_bylex_scores_command: Command = try command_executor_test_command(&router, &zrevrange_bylex_scores_parsed);
+    const zrevrange_bylex_scores_reply: CommandReply = command_execute_at(&engine, &zrevrange_bylex_scores_command, 1000u64);
+    try assert_eq_i32(zrevrange_bylex_scores_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(zrevrange_bylex_scores_reply.data, &"ERR syntax error"[0: 16]));
+    resp_value_free(&zrevrange_bylex_scores_parsed.value);
+
     var zrevrange_missing_parsed: RespParseResult = try parse_resp2(&"*4\r\n$9\r\nZREVRANGE\r\n$7\r\nmissing\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 47]);
     const zrevrange_missing_command: Command = try command_executor_test_command(&router, &zrevrange_missing_parsed);
     var zrevrange_missing_reply: CommandReply = command_execute_at(&engine, &zrevrange_missing_command, 1000u64);

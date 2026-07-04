@@ -108,7 +108,7 @@ server open
 - `HRANDFIELD` 当前复用 hash field 字典序视图提供 deterministic random-field partial，支持 `count`、负数重复与 `WITHVALUES`，真实随机采样保留为后续完整语义
 - Hash field TTL 兼容命令当前只提供无 TTL 元数据场景：`HGETEX` 返回 field 值并校验 `EX/PX/EXAT/PXAT/PERSIST`，`HSETEX` 写入 field 值并校验 `FNX/FXX` 与 `EX/PX/EXAT/PXAT/KEEPTTL`，`HEXPIRE/HPEXPIRE/HEXPIREAT/HPEXPIREAT` 校验 `NX/XX/GT/LT` 并在相对 TTL `<= 0` 或绝对时间戳已到期时删除 field；未来过期时间仍不保存 field TTL；`HTTL/HPTTL/HEXPIRETIME/HPEXPIRETIME/HPERSIST` 对存在 field 返回 `-1`、缺失 field/key 返回 `-2`；真实 field TTL 存储、过期扫描、持久化与复制传播仍未接入对象布局
 - `ZMPOP` 是非阻塞 sorted-set multi-pop，执行层复用 zset pop 编码与删除路径；连接层只在成功返回数组时追加 AOF，空结果不落盘
-- `ZRANGE` / `ZREVRANGE` 当前复用 rank-based zset 视图，支持正负索引、`REV` 和 `WITHSCORES`；`ZRANGE ... BYSCORE`、`ZRANGEBYSCORE` / `ZREVRANGEBYSCORE` 支持整数 score 闭区间、`WITHSCORES` 和 `LIMIT`；`ZRANGE ... BYLEX` 复用 lex 边界扫描，支持 `REV` 和 `LIMIT`，不支持 `WITHSCORES`
+- `ZRANGE` / `ZREVRANGE` 当前复用 rank-based zset 视图，支持正负索引、`REV` 和 `WITHSCORES`；`ZRANGE ... BYSCORE`、`ZREVRANGE ... BYSCORE`、`ZRANGEBYSCORE` / `ZREVRANGEBYSCORE` 支持整数 score 闭区间、`WITHSCORES` 和 `LIMIT`；`ZRANGE ... BYLEX` / `ZREVRANGE ... BYLEX` 复用 lex 边界扫描，支持 `REV` 和 `LIMIT`，不支持 `WITHSCORES`
 - `ZRANGESTORE` 当前复用 rank-based、score-range 或 lex-range 视图写回项目内 zset，支持 `BYSCORE`、`BYLEX`、`REV` 和 `LIMIT` 并保留源 member 的整数 score
 - `ZDIFF` / `ZINTER` / `ZINTERSTORE` / `ZUNION` / `ZUNIONSTORE` 这类 sorted-set 多 key 命令在执行层扫描项目内 zset `(score, member)` 排序视图；`ZINTER` / `ZINTERSTORE` / `ZUNION` / `ZUNIONSTORE` 当前支持整数 score 的默认 SUM 聚合、整数 `WEIGHTS` 和 `AGGREGATE SUM|MIN|MAX`，仍不支持 Redis 原生浮点 score / weight 口径
 - `SUBSTR` 是运行时路由层对 `GETRANGE` 的兼容 alias，执行层复用同一个字符串范围读取路径

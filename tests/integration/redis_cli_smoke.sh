@@ -1752,6 +1752,18 @@ if [[ "$ZRANGE_BYLEX_REV_RESULT" != $'delta\ncharlie\nbeta' ]]; then
     exit 1
 fi
 
+ZREVRANGE_BYLEX_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrevrange lex '[delta' '(alpha' bylex)"
+if [[ "$ZREVRANGE_BYLEX_RESULT" != $'delta\ncharlie\nbeta' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZREVRANGE BYLEX delta/charlie/beta, got '$ZREVRANGE_BYLEX_RESULT'" >&2
+    exit 1
+fi
+
+ZREVRANGE_BYLEX_LIMIT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrevrange lex + - bylex limit 1 2)"
+if [[ "$ZREVRANGE_BYLEX_LIMIT_RESULT" != $'charlie\nbeta' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZREVRANGE BYLEX LIMIT charlie/beta, got '$ZREVRANGE_BYLEX_LIMIT_RESULT'" >&2
+    exit 1
+fi
+
 ZRANGESTORE_BYLEX_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrangestore zlexstore lex '[alpha' '[charlie' bylex)"
 if [[ "$ZRANGESTORE_BYLEX_RESULT" != "3" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ZRANGESTORE BYLEX count 3, got '$ZRANGESTORE_BYLEX_RESULT'" >&2
@@ -2211,6 +2223,18 @@ fi
 ZREVRANGE_WITHSCORES_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrevrange zset 0 1 withscores)"
 if [[ "$ZREVRANGE_WITHSCORES_RESULT" != $'a\n4\nb\n2' ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ZREVRANGE WITHSCORES a/4/b/2, got '$ZREVRANGE_WITHSCORES_RESULT'" >&2
+    exit 1
+fi
+
+ZREVRANGE_BYSCORE_WITHSCORES_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrevrange zset 4 2 byscore withscores)"
+if [[ "$ZREVRANGE_BYSCORE_WITHSCORES_RESULT" != $'a\n4\nb\n2' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZREVRANGE BYSCORE WITHSCORES a/4/b/2, got '$ZREVRANGE_BYSCORE_WITHSCORES_RESULT'" >&2
+    exit 1
+fi
+
+ZREVRANGE_BYSCORE_LIMIT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zrevrange zset 4 2 byscore limit 1 1)"
+if [[ "$ZREVRANGE_BYSCORE_LIMIT_RESULT" != "b" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ZREVRANGE BYSCORE LIMIT b, got '$ZREVRANGE_BYSCORE_LIMIT_RESULT'" >&2
     exit 1
 fi
 

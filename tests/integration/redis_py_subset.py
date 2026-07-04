@@ -1109,8 +1109,25 @@ class RedisPySubsetClient:
             parts.extend([b"LIMIT", str(limit_start).encode(), str(limit_num).encode()])
         return int(self._request(*parts))
 
-    def zrevrange(self, key: str, start: int, stop: int, withscores: bool = False) -> list[bytes]:
+    def zrevrange(
+        self,
+        key: str,
+        start: int | str,
+        stop: int | str,
+        withscores: bool = False,
+        byscore: bool = False,
+        bylex: bool = False,
+        limit_start: int | None = None,
+        limit_num: int | None = None,
+    ) -> list[bytes]:
         parts: list[bytes] = [b"ZREVRANGE", key.encode(), str(start).encode(), str(stop).encode()]
+        if byscore:
+            parts.append(b"BYSCORE")
+        if bylex:
+            parts.append(b"BYLEX")
+        if limit_start is not None or limit_num is not None:
+            assert limit_start is not None and limit_num is not None
+            parts.extend([b"LIMIT", str(limit_start).encode(), str(limit_num).encode()])
         if withscores:
             parts.append(b"WITHSCORES")
         result = self._request(*parts)
@@ -2398,6 +2415,8 @@ def run_smoke() -> None:
             assert client.zrevrangebylex("lex", "[delta", "(alpha") == [b"delta", b"charlie", b"beta"]
             assert client.zrevrangebylex("lex", "+", "-", offset=1, count=2) == [b"charlie", b"beta"]
             assert client.zrevrangebylex("lex", "[charlie", "-", offset=0, count=-1) == [b"charlie", b"beta", b"alpha"]
+            assert client.zrevrange("lex", "[delta", "(alpha", bylex=True) == [b"delta", b"charlie", b"beta"]
+            assert client.zrevrange("lex", "+", "-", bylex=True, limit_start=1, limit_num=2) == [b"charlie", b"beta"]
             assert client.zremrangebylex("lex", "[alpha", "[charlie") == 3
             assert client.zrangebylex("lex", "-", "+") == [b"delta"]
             assert client.zremrangebylex("lex", "-", "+") == 1
@@ -2473,6 +2492,9 @@ def run_smoke() -> None:
             assert client.zrange("zset", 2, 4, byscore=True, withscores=True, limit_start=1, limit_num=1) == [b"a", b"4"]
             assert client.zrevrange("zset", 0, -1) == [b"a", b"b"]
             assert client.zrevrange("zset", 0, 1, withscores=True) == [b"a", b"4", b"b", b"2"]
+            assert client.zrevrange("zset", 4, 2, byscore=True) == [b"a", b"b"]
+            assert client.zrevrange("zset", 4, 2, byscore=True, withscores=True) == [b"a", b"4", b"b", b"2"]
+            assert client.zrevrange("zset", 4, 2, byscore=True, limit_start=1, limit_num=1) == [b"b"]
             assert client.zrangebyscore("zset", 2, 4) == [b"b", b"a"]
             assert client.zrangebyscore("zset", 2, 4, withscores=True) == [b"b", b"2", b"a", b"4"]
             assert client.zrangebyscore("zset", 2, 4, start=1, num=1) == [b"a"]

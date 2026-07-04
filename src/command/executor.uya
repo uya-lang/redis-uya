@@ -15916,7 +15916,7 @@ fn command_executor_zrangestore(engine: &Engine, command: &Command, now_ms: u64)
 }
 
 fn command_executor_zrevrange(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
-    if command.argc != 4 && command.argc != 5 {
+    if command.argc < 4 {
         return command_executor_wrong_arity();
     }
     const key: &[byte] = command_executor_arg(command, 1) catch {
@@ -15928,22 +15928,73 @@ fn command_executor_zrevrange(engine: &Engine, command: &Command, now_ms: u64) C
     const stop_data: &[byte] = command_executor_arg(command, 3) catch {
         return command_executor_wrong_arity();
     };
-    const start: i64 = command_executor_parse_i64(start_data) catch {
-        return command_executor_invalid_integer();
-    };
-    const stop: i64 = command_executor_parse_i64(stop_data) catch {
-        return command_executor_invalid_integer();
-    };
 
     var with_scores: bool = false;
-    if command.argc == 5 {
-        const option: &[byte] = command_executor_arg(command, 4) catch {
+    var by_score: bool = false;
+    var by_lex: bool = false;
+    var limit_enabled: bool = false;
+    var limit_offset: usize = 0;
+    var limit_count: i64 = -1;
+    var index: usize = 4;
+    while index < command.argc {
+        const option: &[byte] = command_executor_arg(command, index) catch {
             return command_executor_wrong_arity();
         };
-        if !command_executor_keyword_eq(option, &"WITHSCORES"[0: 10]) {
-            return command_executor_syntax_error();
+        if command_executor_keyword_eq(option, &"WITHSCORES"[0: 10]) {
+            if with_scores {
+                return command_executor_syntax_error();
+            }
+            with_scores = true;
+            index = index + 1;
+            continue;
         }
-        with_scores = true;
+        if command_executor_keyword_eq(option, &"BYSCORE"[0: 7]) {
+            if by_score || by_lex {
+                return command_executor_syntax_error();
+            }
+            by_score = true;
+            index = index + 1;
+            continue;
+        }
+        if command_executor_keyword_eq(option, &"BYLEX"[0: 5]) {
+            if by_score || by_lex {
+                return command_executor_syntax_error();
+            }
+            by_lex = true;
+            index = index + 1;
+            continue;
+        }
+        if command_executor_keyword_eq(option, &"LIMIT"[0: 5]) {
+            if limit_enabled || index + 2 >= command.argc {
+                return command_executor_syntax_error();
+            }
+            const offset_data: &[byte] = command_executor_arg(command, index + 1) catch {
+                return command_executor_wrong_arity();
+            };
+            const count_data: &[byte] = command_executor_arg(command, index + 2) catch {
+                return command_executor_wrong_arity();
+            };
+            const offset_i64: i64 = command_executor_parse_i64(offset_data) catch {
+                return command_executor_invalid_integer();
+            };
+            if offset_i64 < 0 {
+                return command_executor_error(&"ERR offset out of range"[0: 23]);
+            }
+            limit_enabled = true;
+            limit_offset = offset_i64 as usize;
+            limit_count = command_executor_parse_i64(count_data) catch {
+                return command_executor_invalid_integer();
+            };
+            index = index + 3;
+            continue;
+        }
+        return command_executor_syntax_error();
+    }
+    if by_lex && with_scores {
+        return command_executor_syntax_error();
+    }
+    if limit_enabled && !by_score && !by_lex {
+        return command_executor_syntax_error();
     }
 
     const obj: &RedisObject = lookup_key_at(engine, key, now_ms) catch {
@@ -15952,6 +16003,30 @@ fn command_executor_zrevrange(engine: &Engine, command: &Command, now_ms: u64) C
     if obj.obj_type != ObjectType.object_zset {
         return command_executor_wrongtype();
     }
+    if by_score {
+        const max_score: i64 = command_executor_parse_i64(start_data) catch {
+            return command_executor_invalid_integer();
+        };
+        const min_score: i64 = command_executor_parse_i64(stop_data) catch {
+            return command_executor_invalid_integer();
+        };
+        return command_executor_zscore_range_reply(obj, min_score, max_score, true, with_scores, limit_enabled, limit_offset, limit_count);
+    }
+    if by_lex {
+        const max_bound: CommandExecutorZLexBound = command_executor_zlex_parse_bound(start_data) catch {
+            return command_executor_error(&"ERR min or max not valid string range item"[0: 42]);
+        };
+        const min_bound: CommandExecutorZLexBound = command_executor_zlex_parse_bound(stop_data) catch {
+            return command_executor_error(&"ERR min or max not valid string range item"[0: 42]);
+        };
+        return command_executor_zlex_range_reply(obj, &min_bound, &max_bound, true, limit_enabled, limit_offset, limit_count);
+    }
+    const start: i64 = command_executor_parse_i64(start_data) catch {
+        return command_executor_invalid_integer();
+    };
+    const stop: i64 = command_executor_parse_i64(stop_data) catch {
+        return command_executor_invalid_integer();
+    };
     return command_executor_zrange_rank_reply(obj, start, stop, true, with_scores);
 }
 

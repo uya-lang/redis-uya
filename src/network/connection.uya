@@ -46,6 +46,7 @@ use src.storage.engine.engine_watch_register_client;
 use src.storage.engine.engine_watch_unregister_client;
 use src.storage.engine.engine_watch_version;
 use src.storage.engine.lookup_key_at;
+use src.storage.engine.lookup_key_no_touch_at;
 use src.storage.dict.DictIterator;
 use src.storage.dict.DictEntry;
 use src.storage.dict.dict_iter_new;
@@ -740,14 +741,21 @@ fn connection_command_is_blocking_pop(cmd_type: CommandType) bool {
         cmd_type == CommandType.command_bzmpop;
 }
 
-fn connection_should_block_pop_command(engine: &Engine, command: &Command, now_ms: u64) bool {
+fn connection_lookup_key_for_client_at(engine: &Engine, tx: &ConnectionTransaction, key: &[byte], now_ms: u64) !&RedisObject {
+    if tx != null && tx.no_touch_enabled {
+        return lookup_key_no_touch_at(engine, key, now_ms);
+    }
+    return lookup_key_at(engine, key, now_ms);
+}
+
+fn connection_should_block_pop_command(engine: &Engine, tx: &ConnectionTransaction, command: &Command, now_ms: u64) bool {
     if command.info.cmd_type == CommandType.command_blpop || command.info.cmd_type == CommandType.command_brpop {
         var index: usize = 1;
         while index + 1 < command.argc {
             const key: &[byte] = command_arg_data(command, index) catch {
                 return false;
             };
-            const obj_result: !&RedisObject = lookup_key_at(engine, key, now_ms);
+            const obj_result: !&RedisObject = connection_lookup_key_for_client_at(engine, tx, key, now_ms);
             if obj_result.error_id != 0 {
                 index = index + 1;
                 continue;
@@ -769,7 +777,7 @@ fn connection_should_block_pop_command(engine: &Engine, command: &Command, now_m
         const source: &[byte] = command_arg_data(command, 1) catch {
             return false;
         };
-        const obj: &RedisObject = lookup_key_at(engine, source, now_ms) catch {
+        const obj: &RedisObject = connection_lookup_key_for_client_at(engine, tx, source, now_ms) catch {
             return true;
         };
         if obj.obj_type != ObjectType.object_list {
@@ -784,7 +792,7 @@ fn connection_should_block_pop_command(engine: &Engine, command: &Command, now_m
             const key_z: &[byte] = command_arg_data(command, index_z) catch {
                 return false;
             };
-            const obj_result_z: !&RedisObject = lookup_key_at(engine, key_z, now_ms);
+            const obj_result_z: !&RedisObject = connection_lookup_key_for_client_at(engine, tx, key_z, now_ms);
             if obj_result_z.error_id != 0 {
                 index_z = index_z + 1;
                 continue;
@@ -820,7 +828,7 @@ fn connection_should_block_pop_command(engine: &Engine, command: &Command, now_m
             const key_bzm: &[byte] = command_arg_data(command, index_bzm) catch {
                 return false;
             };
-            const obj_result_bzm: !&RedisObject = lookup_key_at(engine, key_bzm, now_ms);
+            const obj_result_bzm: !&RedisObject = connection_lookup_key_for_client_at(engine, tx, key_bzm, now_ms);
             if obj_result_bzm.error_id != 0 {
                 index_bzm = index_bzm + 1;
                 continue;
@@ -856,7 +864,7 @@ fn connection_should_block_pop_command(engine: &Engine, command: &Command, now_m
             const key_blm: &[byte] = command_arg_data(command, index_blm) catch {
                 return false;
             };
-            const obj_result_blm: !&RedisObject = lookup_key_at(engine, key_blm, now_ms);
+            const obj_result_blm: !&RedisObject = connection_lookup_key_for_client_at(engine, tx, key_blm, now_ms);
             if obj_result_blm.error_id != 0 {
                 index_blm = index_blm + 1;
                 continue;
@@ -4538,7 +4546,7 @@ fn connection_execute_blocking_pop_command_at(
     };
 
     const timed_out: bool = tx.blocking_deadline_ms != 0u64 && now_ms >= tx.blocking_deadline_ms;
-    if timed_out || !connection_should_block_pop_command(engine, command, now_ms) {
+    if timed_out || !connection_should_block_pop_command(engine, tx, command, now_ms) {
         connection_blocking_clear(tx);
         return connection_execute_standard_command_at(
             engine,
@@ -6477,6 +6485,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
     zero_copy_bulk: bool,
 ) !ConnectionProcessResult {
     runtime.protocol_version = tx.protocol_version;
+    runtime.no_touch_enabled = tx.no_touch_enabled;
     const parsed_result: !RespParseResult = connection_parse_input_for_protocol(tx, input);
     const parsed: RespParseResult = parsed_result catch |err| {
         if err == error.RespIncomplete {

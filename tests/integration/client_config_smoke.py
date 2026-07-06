@@ -448,6 +448,27 @@ def run_smoke() -> None:
                 if send_command(sock, b"CONFIG", b"SET", b"maxmemory-policy", b"allkeys-lru") != "OK":
                     raise AssertionError("CONFIG SET maxmemory-policy restore failed")
 
+                if send_command(sock, b"CONFIG", b"SET", b"maxmemory-policy", b"allkeys-lfu") != "OK":
+                    raise AssertionError("CONFIG SET maxmemory-policy allkeys-lfu for no-touch failed")
+                if send_command(sock, b"SET", b"client-no-touch-key", b"value") != "OK":
+                    raise AssertionError("SET before CLIENT NO-TOUCH check failed")
+                if send_command(sock, b"OBJECT", b"FREQ", b"client-no-touch-key") != 1:
+                    raise AssertionError("unexpected initial OBJECT FREQ before CLIENT NO-TOUCH")
+                if send_command(sock, b"CLIENT", b"NO-TOUCH", b"ON") != "OK":
+                    raise AssertionError("CLIENT NO-TOUCH ON failed")
+                if send_command(sock, b"GET", b"client-no-touch-key") != b"value":
+                    raise AssertionError("GET with CLIENT NO-TOUCH ON failed")
+                if send_command(sock, b"OBJECT", b"FREQ", b"client-no-touch-key") != 1:
+                    raise AssertionError("CLIENT NO-TOUCH ON still updated OBJECT FREQ")
+                if send_command(sock, b"CLIENT", b"NO-TOUCH", b"OFF") != "OK":
+                    raise AssertionError("CLIENT NO-TOUCH OFF failed")
+                if send_command(sock, b"GET", b"client-no-touch-key") != b"value":
+                    raise AssertionError("GET after CLIENT NO-TOUCH OFF failed")
+                if send_command(sock, b"OBJECT", b"FREQ", b"client-no-touch-key") != 2:
+                    raise AssertionError("CLIENT NO-TOUCH OFF did not restore OBJECT FREQ updates")
+                if send_command(sock, b"CONFIG", b"SET", b"maxmemory-policy", b"allkeys-lru") != "OK":
+                    raise AssertionError("CONFIG SET maxmemory-policy restore after no-touch failed")
+
                 if send_command(sock, b"CONFIG", b"SET", b"save", b"60 10") != "OK":
                     raise AssertionError("CONFIG SET save failed")
                 save_raw = send_command(sock, b"CONFIG", b"GET", b"save")

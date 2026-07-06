@@ -3801,7 +3801,7 @@ CLIENT HELP
 - `CLIENT CACHING`：保存当前连接的 caching 标志，成功返回 `+OK`
 - `CLIENT SETNAME`：保存连接级客户端名，成功返回 `+OK`
 - `CLIENT NO-EVICT`：保存当前连接的 no-evict 标志，成功返回 `+OK`
-- `CLIENT NO-TOUCH`：保存当前连接的 no-touch 标志，成功返回 `+OK`
+- `CLIENT NO-TOUCH`：保存当前连接的 no-touch 标志，成功返回 `+OK`；开启后普通命令对象访问路径不刷新 LRU/LFU touch 统计
 - `CLIENT INFO`：返回当前连接的最小客户端信息行，包含 `id/name/resp/multi/sub/lib-name/lib-ver`
 - `CLIENT LIST`：返回当前活跃连接的最小信息行快照，每行包含 `id/name/resp/multi/sub/lib-name/lib-ver`
 - `CLIENT KILL ID id [SKIPME yes|no]`：按连接 ID 关闭活跃连接；默认 `SKIPME yes` 不关闭当前连接，显式 `SKIPME no` 可关闭当前连接，返回整数 `0/1`
@@ -3824,7 +3824,7 @@ CLIENT HELP
 - `CLIENT TRACKING` 当前只保存连接级状态和 `BCAST PREFIX` 列表，不发送 invalidation push
 - `CLIENT CACHING` 当前只保存连接级兼容标志，尚未提供 server-assisted client-side caching invalidation
 - `CLIENT NO-EVICT` 当前只保存连接级兼容标志，尚未接入 `maxmemory` 淘汰候选保护
-- `CLIENT NO-TOUCH` 当前只保存连接级兼容标志，尚未接入对象访问路径的 LRU/LFU touch 抑制
+- `CLIENT NO-TOUCH` 当前按连接级标志接入命令执行与阻塞 pop 预检查对象访问路径，开启后抑制 LRU/LFU touch 刷新；`OBJECT IDLETIME/FREQ` 查询本身仍不刷新 touch 统计
 
 ### `CLUSTER`
 

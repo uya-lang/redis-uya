@@ -9313,9 +9313,37 @@ export fn test_command_select_and_object() !void {
     try assert_eq_i32(object_freq_after_get_reply.integer as i32, 2);
     resp_value_free(&object_freq_after_get_parsed.value);
 
+    runtime.no_touch_enabled = true;
+
+    var get_no_touch_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nGET\r\n$4\r\nokey\r\n"[0: 23]);
+    const get_no_touch_command: Command = try command_executor_test_command(&router, &get_no_touch_parsed);
+    _ = command_execute_with_runtime_at(&engine, &runtime, &get_no_touch_command, 4500u64);
+    resp_value_free(&get_no_touch_parsed.value);
+
+    var object_freq_after_no_touch_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nOBJECT\r\n$4\r\nFREQ\r\n$4\r\nokey\r\n"[0: 36]);
+    const object_freq_after_no_touch_command: Command = try command_executor_test_command(&router, &object_freq_after_no_touch_parsed);
+    const object_freq_after_no_touch_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &object_freq_after_no_touch_command, 4500u64);
+    try assert_eq_i32(object_freq_after_no_touch_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(object_freq_after_no_touch_reply.integer as i32, 2);
+    resp_value_free(&object_freq_after_no_touch_parsed.value);
+
+    runtime.no_touch_enabled = false;
+
+    var get_touch_again_parsed: RespParseResult = try parse_resp2(&"*2\r\n$3\r\nGET\r\n$4\r\nokey\r\n"[0: 23]);
+    const get_touch_again_command: Command = try command_executor_test_command(&router, &get_touch_again_parsed);
+    _ = command_execute_with_runtime_at(&engine, &runtime, &get_touch_again_command, 5000u64);
+    resp_value_free(&get_touch_again_parsed.value);
+
+    var object_freq_after_touch_again_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nOBJECT\r\n$4\r\nFREQ\r\n$4\r\nokey\r\n"[0: 36]);
+    const object_freq_after_touch_again_command: Command = try command_executor_test_command(&router, &object_freq_after_touch_again_parsed);
+    const object_freq_after_touch_again_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &object_freq_after_touch_again_command, 5000u64);
+    try assert_eq_i32(object_freq_after_touch_again_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(object_freq_after_touch_again_reply.integer as i32, 3);
+    resp_value_free(&object_freq_after_touch_again_parsed.value);
+
     var object_idletime_lfu_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nOBJECT\r\n$8\r\nIDLETIME\r\n$4\r\nokey\r\n"[0: 40]);
     const object_idletime_lfu_command: Command = try command_executor_test_command(&router, &object_idletime_lfu_parsed);
-    const object_idletime_lfu_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &object_idletime_lfu_command, 4000u64);
+    const object_idletime_lfu_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &object_idletime_lfu_command, 5000u64);
     try assert_eq_i32(object_idletime_lfu_reply.typ as i32, CommandReplyType.reply_error as i32);
     try assert_true(command_executor_test_contains(object_idletime_lfu_reply.data, &"LFU maxmemory policy is selected"[0: 32]));
     resp_value_free(&object_idletime_lfu_parsed.value);

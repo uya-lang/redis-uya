@@ -23,6 +23,7 @@ use src.network.connection.connection_transaction_reset;
 use src.network.connection.connection_transaction_set_client_addresses;
 use src.network.connection.connection_pubsub_reset_for_test;
 use src.network.connection.connection_monitor_reset_for_test;
+use src.config.MaxmemoryPolicy;
 use src.storage.engine.Engine;
 use src.storage.engine.engine_new;
 use src.storage.engine.engine_free;
@@ -1379,6 +1380,32 @@ export fn test_connection_process_client_commands() !void {
 
     const no_touch_bad: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$6\r\nCLIENT\r\n$8\r\nNO-TOUCH\r\n$3\r\nBAD\r\n"[0: 39], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: no_touch_bad.response_len], &"-ERR syntax error\r\n"[0: 19]));
+
+    var lfu_runtime: CommandRuntimeInfo = command_runtime_default();
+    lfu_runtime.config.maxmemory_policy = MaxmemoryPolicy.maxmemory_allkeys_lfu;
+    const no_touch_set: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &lfu_runtime, &router, &tx, &"*3\r\n$3\r\nSET\r\n$5\r\nntkey\r\n$5\r\nvalue\r\n"[0: 35], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: no_touch_set.response_len], &"+OK\r\n"[0: 5]));
+
+    const no_touch_freq_before: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &lfu_runtime, &router, &tx, &"*3\r\n$6\r\nOBJECT\r\n$4\r\nFREQ\r\n$5\r\nntkey\r\n"[0: 37], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: no_touch_freq_before.response_len], &":1\r\n"[0: 4]));
+
+    const no_touch_enable: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &lfu_runtime, &router, &tx, &"*3\r\n$6\r\nCLIENT\r\n$8\r\nNO-TOUCH\r\n$2\r\nON\r\n"[0: 38], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: no_touch_enable.response_len], &"+OK\r\n"[0: 5]));
+
+    const no_touch_get: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &lfu_runtime, &router, &tx, &"*2\r\n$3\r\nGET\r\n$5\r\nntkey\r\n"[0: 24], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: no_touch_get.response_len], &"$5\r\nvalue\r\n"[0: 11]));
+
+    const no_touch_freq_after_get: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &lfu_runtime, &router, &tx, &"*3\r\n$6\r\nOBJECT\r\n$4\r\nFREQ\r\n$5\r\nntkey\r\n"[0: 37], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: no_touch_freq_after_get.response_len], &":1\r\n"[0: 4]));
+
+    const no_touch_disable: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &lfu_runtime, &router, &tx, &"*3\r\n$6\r\nCLIENT\r\n$8\r\nNO-TOUCH\r\n$3\r\nOFF\r\n"[0: 39], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: no_touch_disable.response_len], &"+OK\r\n"[0: 5]));
+
+    const no_touch_get_after_off: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &lfu_runtime, &router, &tx, &"*2\r\n$3\r\nGET\r\n$5\r\nntkey\r\n"[0: 24], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: no_touch_get_after_off.response_len], &"$5\r\nvalue\r\n"[0: 11]));
+
+    const no_touch_freq_after_off: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &lfu_runtime, &router, &tx, &"*3\r\n$6\r\nOBJECT\r\n$4\r\nFREQ\r\n$5\r\nntkey\r\n"[0: 37], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: no_touch_freq_after_off.response_len], &":2\r\n"[0: 4]));
 
     const no_evict_on: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$6\r\nCLIENT\r\n$8\r\nNO-EVICT\r\n$2\r\nON\r\n"[0: 38], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: no_evict_on.response_len], &"+OK\r\n"[0: 5]));

@@ -4474,9 +4474,16 @@ export fn test_command_hash_field_ttl_partial() !void {
     const hexpire_xx_command: Command = try command_executor_test_command(&router, &hexpire_xx_parsed);
     var hexpire_xx_reply: CommandReply = command_execute_at(&engine, &hexpire_xx_command, 1000u64);
     const hexpire_xx_len: usize = try connection_encode_reply(&hexpire_xx_reply, &out[0], 256);
-    try assert_true(command_executor_test_slice_eq(out[0: hexpire_xx_len], &"*1\r\n:0\r\n"[0: 8]));
+    try assert_true(command_executor_test_slice_eq(out[0: hexpire_xx_len], &"*1\r\n:1\r\n"[0: 8]));
     command_reply_cleanup(&hexpire_xx_reply);
     resp_value_free(&hexpire_xx_parsed.value);
+
+    var hexpire_clear_ttl_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nHSET\r\n$4\r\nhash\r\n$5\r\nfresh\r\n$5\r\nthree\r\n"[0: 46]);
+    const hexpire_clear_ttl_command: Command = try command_executor_test_command(&router, &hexpire_clear_ttl_parsed);
+    const hexpire_clear_ttl_reply: CommandReply = command_execute_at(&engine, &hexpire_clear_ttl_command, 1000u64);
+    try assert_eq_i32(hexpire_clear_ttl_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(hexpire_clear_ttl_reply.integer as i32, 0);
+    resp_value_free(&hexpire_clear_ttl_parsed.value);
 
     var hexpire_delete_parsed: RespParseResult = try parse_resp2(&"*7\r\n$7\r\nHEXPIRE\r\n$4\r\nhash\r\n$1\r\n0\r\n$2\r\nNX\r\n$6\r\nFIELDS\r\n$1\r\n1\r\n$5\r\nfresh\r\n"[0: 72]);
     const hexpire_delete_command: Command = try command_executor_test_command(&router, &hexpire_delete_parsed);
@@ -4504,7 +4511,7 @@ export fn test_command_hash_field_ttl_partial() !void {
     const hpexpire_xx_command: Command = try command_executor_test_command(&router, &hpexpire_xx_parsed);
     var hpexpire_xx_reply: CommandReply = command_execute_at(&engine, &hpexpire_xx_command, 1000u64);
     const hpexpire_xx_len: usize = try connection_encode_reply(&hpexpire_xx_reply, &out[0], 256);
-    try assert_true(command_executor_test_slice_eq(out[0: hpexpire_xx_len], &"*1\r\n:0\r\n"[0: 8]));
+    try assert_true(command_executor_test_slice_eq(out[0: hpexpire_xx_len], &"*1\r\n:1\r\n"[0: 8]));
     command_reply_cleanup(&hpexpire_xx_reply);
     resp_value_free(&hpexpire_xx_parsed.value);
 
@@ -4541,7 +4548,7 @@ export fn test_command_hash_field_ttl_partial() !void {
     const hexpireat_xx_command: Command = try command_executor_test_command(&router, &hexpireat_xx_parsed);
     var hexpireat_xx_reply: CommandReply = command_execute_at(&engine, &hexpireat_xx_command, 1000u64);
     const hexpireat_xx_len: usize = try connection_encode_reply(&hexpireat_xx_reply, &out[0], 256);
-    try assert_true(command_executor_test_slice_eq(out[0: hexpireat_xx_len], &"*1\r\n:0\r\n"[0: 8]));
+    try assert_true(command_executor_test_slice_eq(out[0: hexpireat_xx_len], &"*1\r\n:1\r\n"[0: 8]));
     command_reply_cleanup(&hexpireat_xx_reply);
     resp_value_free(&hexpireat_xx_parsed.value);
 
@@ -4578,7 +4585,7 @@ export fn test_command_hash_field_ttl_partial() !void {
     const hpexpireat_xx_command: Command = try command_executor_test_command(&router, &hpexpireat_xx_parsed);
     var hpexpireat_xx_reply: CommandReply = command_execute_at(&engine, &hpexpireat_xx_command, 1000u64);
     const hpexpireat_xx_len: usize = try connection_encode_reply(&hpexpireat_xx_reply, &out[0], 256);
-    try assert_true(command_executor_test_slice_eq(out[0: hpexpireat_xx_len], &"*1\r\n:0\r\n"[0: 8]));
+    try assert_true(command_executor_test_slice_eq(out[0: hpexpireat_xx_len], &"*1\r\n:1\r\n"[0: 8]));
     command_reply_cleanup(&hpexpireat_xx_reply);
     resp_value_free(&hpexpireat_xx_parsed.value);
 
@@ -4658,7 +4665,7 @@ export fn test_command_hash_field_ttl_partial() !void {
     const httl_command: Command = try command_executor_test_command(&router, &httl_parsed);
     var httl_reply: CommandReply = command_execute_at(&engine, &httl_command, 1000u64);
     const httl_len: usize = try connection_encode_reply(&httl_reply, &out[0], 256);
-    try assert_true(command_executor_test_slice_eq(out[0: httl_len], &"*2\r\n:-1\r\n:-2\r\n"[0: 14]));
+    try assert_true(command_executor_test_slice_eq(out[0: httl_len], &"*2\r\n:1\r\n:-2\r\n"[0: 13]));
     command_reply_cleanup(&httl_reply);
     resp_value_free(&httl_parsed.value);
 
@@ -4666,7 +4673,7 @@ export fn test_command_hash_field_ttl_partial() !void {
     const hpttl_command: Command = try command_executor_test_command(&router, &hpttl_parsed);
     var hpttl_reply: CommandReply = command_execute_at(&engine, &hpttl_command, 1000u64);
     const hpttl_len: usize = try connection_encode_reply(&hpttl_reply, &out[0], 256);
-    try assert_true(command_executor_test_slice_eq(out[0: hpttl_len], &"*2\r\n:-1\r\n:-2\r\n"[0: 14]));
+    try assert_true(command_executor_test_slice_eq(out[0: hpttl_len], &"*2\r\n:1000\r\n:-2\r\n"[0: 16]));
     command_reply_cleanup(&hpttl_reply);
     resp_value_free(&hpttl_parsed.value);
 
@@ -4674,7 +4681,7 @@ export fn test_command_hash_field_ttl_partial() !void {
     const hexpiretime_command: Command = try command_executor_test_command(&router, &hexpiretime_parsed);
     var hexpiretime_reply: CommandReply = command_execute_at(&engine, &hexpiretime_command, 1000u64);
     const hexpiretime_len: usize = try connection_encode_reply(&hexpiretime_reply, &out[0], 256);
-    try assert_true(command_executor_test_slice_eq(out[0: hexpiretime_len], &"*1\r\n:-1\r\n"[0: 9]));
+    try assert_true(command_executor_test_slice_eq(out[0: hexpiretime_len], &"*1\r\n:2\r\n"[0: 8]));
     command_reply_cleanup(&hexpiretime_reply);
     resp_value_free(&hexpiretime_parsed.value);
 
@@ -4682,7 +4689,7 @@ export fn test_command_hash_field_ttl_partial() !void {
     const hpexpiretime_command: Command = try command_executor_test_command(&router, &hpexpiretime_parsed);
     var hpexpiretime_reply: CommandReply = command_execute_at(&engine, &hpexpiretime_command, 1000u64);
     const hpexpiretime_len: usize = try connection_encode_reply(&hpexpiretime_reply, &out[0], 256);
-    try assert_true(command_executor_test_slice_eq(out[0: hpexpiretime_len], &"*1\r\n:-1\r\n"[0: 9]));
+    try assert_true(command_executor_test_slice_eq(out[0: hpexpiretime_len], &"*1\r\n:2000\r\n"[0: 11]));
     command_reply_cleanup(&hpexpiretime_reply);
     resp_value_free(&hpexpiretime_parsed.value);
 
@@ -4690,7 +4697,7 @@ export fn test_command_hash_field_ttl_partial() !void {
     const hpersist_command: Command = try command_executor_test_command(&router, &hpersist_parsed);
     var hpersist_reply: CommandReply = command_execute_at(&engine, &hpersist_command, 1000u64);
     const hpersist_len: usize = try connection_encode_reply(&hpersist_reply, &out[0], 256);
-    try assert_true(command_executor_test_slice_eq(out[0: hpersist_len], &"*2\r\n:-1\r\n:-2\r\n"[0: 14]));
+    try assert_true(command_executor_test_slice_eq(out[0: hpersist_len], &"*2\r\n:1\r\n:-2\r\n"[0: 13]));
     command_reply_cleanup(&hpersist_reply);
     resp_value_free(&hpersist_parsed.value);
 

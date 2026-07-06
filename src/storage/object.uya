@@ -58,6 +58,7 @@ export struct RedisObject {
     value: Sds,
     int_value: i64,
     hash_dict: Dict,
+    hash_expire_dict: Dict,
     list_head: &ListNode,
     list_tail: &ListNode,
     list_len: usize,
@@ -236,6 +237,7 @@ fn object_init_base(obj: &RedisObject, obj_type: ObjectType, encoding: Encoding,
     obj.value = value;
     obj.int_value = int_value;
     obj.hash_dict = dict_new();
+    obj.hash_expire_dict = dict_new();
     obj.list_head = null as &ListNode;
     obj.list_tail = null as &ListNode;
     obj.list_len = 0;
@@ -390,7 +392,7 @@ export fn create_stream_object() !&RedisObject {
     return obj;
 }
 
-export fn hash_object_set_field(obj: &RedisObject, field: &[byte], data: &[byte]) !bool {
+fn hash_object_set_field_internal(obj: &RedisObject, field: &[byte], data: &[byte], clear_ttl: bool) !bool {
     if obj == null || obj.obj_type != ObjectType.object_hash {
         return error.ObjectWrongType;
     }
@@ -403,6 +405,9 @@ export fn hash_object_set_field(obj: &RedisObject, field: &[byte], data: &[byte]
             return err;
         };
         _ = inserted;
+        if clear_ttl {
+            _ = dict_delete(&obj.hash_expire_dict, field);
+        }
         return true;
     };
 
@@ -410,7 +415,18 @@ export fn hash_object_set_field(obj: &RedisObject, field: &[byte], data: &[byte]
     object_free(object_usize_to_object(old_value));
     const updated: bool = try dict_insert(&obj.hash_dict, field, object_ptr_to_usize(field_obj));
     _ = updated;
+    if clear_ttl {
+        _ = dict_delete(&obj.hash_expire_dict, field);
+    }
     return false;
+}
+
+export fn hash_object_set_field(obj: &RedisObject, field: &[byte], data: &[byte]) !bool {
+    return hash_object_set_field_internal(obj, field, data, true);
+}
+
+export fn hash_object_set_field_keep_ttl(obj: &RedisObject, field: &[byte], data: &[byte]) !bool {
+    return hash_object_set_field_internal(obj, field, data, false);
 }
 
 export fn hash_object_get_field(obj: &RedisObject, field: &[byte]) !&RedisObject {
@@ -433,6 +449,7 @@ export fn hash_object_delete_field(obj: &RedisObject, field: &[byte]) !bool {
         return false;
     };
     object_free(object_usize_to_object(value));
+    _ = dict_delete(&obj.hash_expire_dict, field);
     return dict_delete(&obj.hash_dict, field);
 }
 
@@ -452,6 +469,79 @@ export fn hash_object_len(obj: &RedisObject) !usize {
         return error.ObjectWrongType;
     }
     return dict_len(&obj.hash_dict);
+}
+
+export fn hash_object_set_field_expire_at(obj: &RedisObject, field: &[byte], expire_at_ms: u64) !bool {
+    if obj == null || obj.obj_type != ObjectType.object_hash {
+        return error.ObjectWrongType;
+    }
+    const exists_result: !usize = dict_lookup(&obj.hash_dict, field);
+    _ = exists_result catch {
+        return error.ObjectFieldNotFound;
+    };
+    return dict_insert(&obj.hash_expire_dict, field, expire_at_ms as usize);
+}
+
+export fn hash_object_get_field_expire_at(obj: &RedisObject, field: &[byte]) !u64 {
+    if obj == null || obj.obj_type != ObjectType.object_hash {
+        return error.ObjectWrongType;
+    }
+    const value_result: !usize = dict_lookup(&obj.hash_expire_dict, field);
+    const value: usize = value_result catch {
+        return error.ObjectFieldNotFound;
+    };
+    return value as u64;
+}
+
+export fn hash_object_clear_field_expire(obj: &RedisObject, field: &[byte]) !bool {
+    if obj == null || obj.obj_type != ObjectType.object_hash {
+        return error.ObjectWrongType;
+    }
+    return dict_delete(&obj.hash_expire_dict, field);
+}
+
+export fn hash_object_field_has_expire(obj: &RedisObject, field: &[byte]) !bool {
+    if obj == null || obj.obj_type != ObjectType.object_hash {
+        return error.ObjectWrongType;
+    }
+    const value_result: !usize = dict_lookup(&obj.hash_expire_dict, field);
+    _ = value_result catch {
+        return false;
+    };
+    return true;
+}
+
+export fn hash_object_delete_expired_field(obj: &RedisObject, field: &[byte], now_ms: u64) !bool {
+    const expire_at_ms: u64 = hash_object_get_field_expire_at(obj, field) catch |err| {
+        if err == error.ObjectFieldNotFound {
+            return false;
+        }
+        return err;
+    };
+    if expire_at_ms > now_ms {
+        return false;
+    }
+    _ = try hash_object_delete_field(obj, field);
+    return true;
+}
+
+export fn hash_object_delete_expired_fields(obj: &RedisObject, now_ms: u64) !usize {
+    if obj == null || obj.obj_type != ObjectType.object_hash {
+        return error.ObjectWrongType;
+    }
+    var removed: usize = 0;
+    var iter: DictIterator = dict_iter_new();
+    var entry: &DictEntry = dict_iter_next(&obj.hash_expire_dict, &iter);
+    while entry != null {
+        if (entry.value as u64) <= now_ms {
+            const deleted: bool = try hash_object_delete_field(obj, entry.key.buf[0: entry.key.len]);
+            if deleted {
+                removed = removed + 1;
+            }
+        }
+        entry = dict_iter_next(&obj.hash_expire_dict, &iter);
+    }
+    return removed;
 }
 
 export fn list_object_push_head(obj: &RedisObject, data: &[byte]) !usize {
@@ -1185,6 +1275,16 @@ export fn object_clone(obj: &RedisObject) !&RedisObject {
             );
             hash_entry = dict_iter_next(&obj.hash_dict, &hash_iter);
         }
+        var hash_expire_iter: DictIterator = dict_iter_new();
+        var hash_expire_entry: &DictEntry = dict_iter_next(&obj.hash_expire_dict, &hash_expire_iter);
+        while hash_expire_entry != null {
+            _ = try hash_object_set_field_expire_at(
+                cloned_hash,
+                hash_expire_entry.key.buf[0: hash_expire_entry.key.len],
+                hash_expire_entry.value as u64,
+            );
+            hash_expire_entry = dict_iter_next(&obj.hash_expire_dict, &hash_expire_iter);
+        }
         return cloned_hash;
     }
 
@@ -1266,6 +1366,7 @@ export fn object_free(obj: &RedisObject) void {
         }
     }
     dict_free(&obj.hash_dict);
+    dict_free(&obj.hash_expire_dict);
     sds_free(&obj.value);
     object_release(obj);
 }

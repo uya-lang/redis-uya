@@ -619,7 +619,9 @@ HGETEX key [EX seconds|PX milliseconds|EXAT unix-time-seconds|PXAT unix-time-mil
 
 说明：
 
-- 当前实现为 partial，支持 `EX` / `PX` / `EXAT` / `PXAT` / `PERSIST` 语法和整数校验，但尚未保存真实 hash field TTL 元数据，因此不会修改 field TTL 或触发 field 级过期
+- `EX` / `PX` / `EXAT` / `PXAT` 会为命中 field 写入绝对毫秒级过期时间；`PERSIST` 会移除命中 field 的 field TTL
+- 访问 hash field 时会惰性清理已到期 field；删除最后一个 field 后，当前实现会删除整个 hash key
+- field TTL 当前是运行期对象元数据；RDB、AOF rewrite 与复制传播尚未保存/恢复 field TTL
 - `numfields` 必须为正整数，并且必须与后续 field 数量一致
 - key 存在但不是 hash 时返回 `WRONGTYPE`
 
@@ -638,7 +640,8 @@ HSETEX key [FNX|FXX] [EX seconds|PX milliseconds|EXAT unix-time-seconds|PXAT uni
 
 说明：
 
-- 当前实现为 partial，支持 field 写入、`FNX` / `FXX` 条件、TTL option 语法和整数校验，但尚未保存真实 hash field TTL 元数据，因此不会触发 field 级过期
+- 支持 field 写入、`FNX` / `FXX` 条件、TTL option 语法和整数校验；`EX` / `PX` / `EXAT` / `PXAT` 会为写入 field 设置 field TTL，`KEEPTTL` 会保留已有 field TTL
+- 普通写入路径（例如 `HSET` / `HMSET` / `HINCRBY`）会清理目标 field 的 field TTL
 - `numfields` 必须为正整数，并且必须与后续 field/value 数量一致
 - key 存在但不是 hash 时返回 `WRONGTYPE`
 
@@ -663,8 +666,8 @@ HPEXPIREAT key unix-time-milliseconds [NX|XX|GT|LT] FIELDS numfields field [fiel
 
 说明：
 
-- 当前实现为 partial，支持 `NX` / `XX` / `GT` / `LT` 条件、相对 TTL / 绝对时间戳整数校验、field 删除和数组回复，但尚未保存真实 hash field TTL 元数据，因此未来过期时间不会触发后续 field 级过期
-- 在无 field TTL 元数据场景下，存在 field 视为无过期时间：`NX` / `LT` 可以匹配，`XX` / `GT` 不匹配
+- 当前会保存 field 级绝对毫秒过期时间，并在 hash field 访问路径惰性删除到期 field
+- `NX` 匹配无 field TTL 的 field，`XX` 匹配已有 field TTL 的 field，`GT` / `LT` 按当前 field TTL 比较；无 field TTL 在 `LT` 中按无穷大处理
 - `numfields` 必须为正整数，并且必须与后续 field 数量一致
 - key 存在但不是 hash 时返回 `WRONGTYPE`
 
@@ -680,12 +683,13 @@ HPTTL key FIELDS numfields field [field ...]
 返回：
 
 - 返回与请求 field 顺序一致的 Integer Array
+- field 存在且有 TTL 时，`HTTL` 返回剩余秒数，`HPTTL` 返回剩余毫秒数
 - field 存在但没有 field TTL：`-1`
 - field 或 key 不存在：`-2`
 
 说明：
 
-- 当前实现为 partial，尚未保存真实 hash field TTL 元数据，因此不会返回正 TTL
+- 查询前会惰性清理已到期 field
 - `numfields` 必须为正整数，并且必须与后续 field 数量一致
 - key 存在但不是 hash 时返回 `WRONGTYPE`
 
@@ -701,13 +705,13 @@ HPEXPIRETIME key FIELDS numfields field [field ...]
 返回：
 
 - 返回与请求 field 顺序一致的 Integer Array
+- field 存在且有 TTL 时，`HEXPIRETIME` 返回秒级 Unix 时间戳，`HPEXPIRETIME` 返回毫秒级 Unix 时间戳
 - field 存在但没有 field TTL：`-1`
 - field 或 key 不存在：`-2`
 
 说明：
 
-- 当前实现为 partial，尚未保存真实 hash field TTL 元数据，因此不会返回正绝对过期时间
-- `HEXPIRETIME` 与 `HPEXPIRETIME` 只覆盖无 field TTL 元数据场景的查询兼容面，不代表 `HEXPIRE/HPEXPIRE/HEXPIREAT/HPEXPIREAT` 未来过期时间已保存真实 field TTL 元数据
+- 查询前会惰性清理已到期 field
 
 ### `HPERSIST`
 
@@ -720,12 +724,13 @@ HPERSIST key FIELDS numfields field [field ...]
 返回：
 
 - 返回与请求 field 顺序一致的 Integer Array
+- field 存在且移除了 field TTL：`1`
 - field 存在但没有 field TTL：`-1`
 - field 或 key 不存在：`-2`
 
 说明：
 
-- 当前实现为 partial，尚未保存真实 hash field TTL 元数据，因此不会返回 `1`
+- 查询前会惰性清理已到期 field
 - `numfields` 必须为正整数，并且必须与后续 field 数量一致
 - key 存在但不是 hash 时返回 `WRONGTYPE`
 

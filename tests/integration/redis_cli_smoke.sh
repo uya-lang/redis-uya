@@ -2701,8 +2701,14 @@ if [[ "$HEXPIRE_RESULT" != $'1\n-2' ]]; then
 fi
 
 HEXPIRE_XX_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hexpire hash 10 xx fields 1 field)"
-if [[ "$HEXPIRE_XX_RESULT" != "0" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected HEXPIRE XX 0, got '$HEXPIRE_XX_RESULT'" >&2
+if [[ "$HEXPIRE_XX_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HEXPIRE XX 1, got '$HEXPIRE_XX_RESULT'" >&2
+    exit 1
+fi
+
+HEXPIRE_CLEAR_TTL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hset hash fresh three)"
+if [[ "$HEXPIRE_CLEAR_TTL_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HSET fresh update 0, got '$HEXPIRE_CLEAR_TTL_RESULT'" >&2
     exit 1
 fi
 
@@ -2731,8 +2737,8 @@ if [[ "$HPEXPIRE_RESULT" != $'1\n-2' ]]; then
 fi
 
 HPEXPIRE_XX_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hpexpire hash 100 xx fields 1 field)"
-if [[ "$HPEXPIRE_XX_RESULT" != "0" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected HPEXPIRE XX 0, got '$HPEXPIRE_XX_RESULT'" >&2
+if [[ "$HPEXPIRE_XX_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HPEXPIRE XX 1, got '$HPEXPIRE_XX_RESULT'" >&2
     exit 1
 fi
 
@@ -2762,8 +2768,8 @@ if [[ "$HEXPIREAT_RESULT" != $'1\n-2' ]]; then
 fi
 
 HEXPIREAT_XX_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hexpireat hash "$FUTURE_SECONDS" xx fields 1 field)"
-if [[ "$HEXPIREAT_XX_RESULT" != "0" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected HEXPIREAT XX 0, got '$HEXPIREAT_XX_RESULT'" >&2
+if [[ "$HEXPIREAT_XX_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HEXPIREAT XX 1, got '$HEXPIREAT_XX_RESULT'" >&2
     exit 1
 fi
 
@@ -2793,8 +2799,8 @@ if [[ "$HPEXPIREAT_RESULT" != $'1\n-2' ]]; then
 fi
 
 HPEXPIREAT_XX_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hpexpireat hash "$FUTURE_MILLISECONDS" xx fields 1 field)"
-if [[ "$HPEXPIREAT_XX_RESULT" != "0" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected HPEXPIREAT XX 0, got '$HPEXPIREAT_XX_RESULT'" >&2
+if [[ "$HPEXPIREAT_XX_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected HPEXPIREAT XX 1, got '$HPEXPIREAT_XX_RESULT'" >&2
     exit 1
 fi
 

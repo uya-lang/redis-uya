@@ -2302,31 +2302,35 @@ def run_smoke() -> None:
             assert client.hsetex("hash", "fresh", "one", option=b"EX", option_value=b"10") == 1
             assert client.hget("hash", "fresh") == b"one"
             assert client.hexpire("hash", 10, "field", "missing") == [1, -2]
-            assert client.hexpire("hash", 10, "field", option=b"XX") == [0]
+            assert client.hexpire("hash", 10, "field", option=b"XX") == [1]
+            assert client.hset("hash", "fresh", "three") == 0
             assert client.hexpire("hash", 0, "fresh", option=b"NX") == [2]
             assert client.hget("hash", "fresh") is None
             assert client.hset("hash", "freshms", "one") == 1
             assert client.hpexpire("hash", 100, "field", "missing") == [1, -2]
-            assert client.hpexpire("hash", 100, "field", option=b"XX") == [0]
+            assert client.hpexpire("hash", 100, "field", option=b"XX") == [1]
             assert client.hpexpire("hash", 0, "freshms", option=b"NX") == [2]
             assert client.hget("hash", "freshms") is None
             assert client.hset("hash", "freshat", "one") == 1
             future_seconds = int(time.time()) + 60
             assert client.hexpireat("hash", future_seconds, "field", "missing") == [1, -2]
-            assert client.hexpireat("hash", future_seconds, "field", option=b"XX") == [0]
+            assert client.hexpireat("hash", future_seconds, "field", option=b"XX") == [1]
             assert client.hexpireat("hash", 1, "freshat", option=b"NX") == [2]
             assert client.hget("hash", "freshat") is None
             assert client.hset("hash", "freshpm", "one") == 1
             future_milliseconds = int(time.time() * 1000) + 60000
             assert client.hpexpireat("hash", future_milliseconds, "field", "missing") == [1, -2]
-            assert client.hpexpireat("hash", future_milliseconds, "field", option=b"XX") == [0]
+            assert client.hpexpireat("hash", future_milliseconds, "field", option=b"XX") == [1]
             assert client.hpexpireat("hash", 1, "freshpm", option=b"NX") == [2]
             assert client.hget("hash", "freshpm") is None
-            assert client.httl("hash", "field", "missing") == [-1, -2]
-            assert client.hpttl("hash", "field", "missing") == [-1, -2]
-            assert client.hexpiretime("hash", "field") == [-1]
-            assert client.hpexpiretime("hash", "field") == [-1]
-            assert client.hpersist("hash", "field", "missing") == [-1, -2]
+            ttl_values = client.httl("hash", "field", "missing")
+            assert ttl_values[0] > 0 and ttl_values[1] == -2
+            pttl_values = client.hpttl("hash", "field", "missing")
+            assert pttl_values[0] > 0 and pttl_values[1] == -2
+            assert client.hexpiretime("hash", "field")[0] >= future_seconds
+            assert client.hpexpiretime("hash", "field") == [future_milliseconds]
+            assert client.hpersist("hash", "field", "missing") == [1, -2]
+            assert client.httl("hash", "field") == [-1]
             assert client.httl("missing", "field") == [-2]
             assert client.hgetdel("hash", "field", "missing") == [b"value", None]
             assert client.hget("hash", "field") is None

@@ -1833,11 +1833,40 @@ export fn test_connection_process_acl_named_user_metadata() !void {
     const users_after_del: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$3\r\nACL\r\n$5\r\nUSERS\r\n"[0: 24], &out[0], 4096, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: users_after_del.response_len], &"*1\r\n$7\r\ndefault\r\n"[0: 17]));
 
-    const invalid_bob: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$3\r\nbob\r\n$7\r\n>secret\r\n"[0: 48], &out[0], 4096, 1000u64);
-    try assert_true(network_connection_slice_eq(out[0: invalid_bob.response_len], &"-ERR ACL SETUSER redis-uya partial only supports named user metadata modifiers\r\n"[0: 80]));
+    const set_bob_password: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*5\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$3\r\nbob\r\n$2\r\non\r\n$7\r\n>secret\r\n"[0: 56], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: set_bob_password.response_len], &"+OK\r\n"[0: 5]));
 
     const getuser_bob: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$7\r\nGETUSER\r\n$3\r\nbob\r\n"[0: 35], &out[0], 4096, 1000u64);
-    try assert_true(network_connection_slice_eq(out[0: getuser_bob.response_len], &"$-1\r\n"[0: 5]));
+    try assert_true(network_connection_contains(out[0: getuser_bob.response_len], &"$9\r\npasswords\r\n*1\r\n$41\r\n#"[0: 25]));
+    try assert_true(!network_connection_contains(out[0: getuser_bob.response_len], &"secret"[0: 6]));
+
+    const list_with_bob_password: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$3\r\nACL\r\n$4\r\nLIST\r\n"[0: 23], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_contains(out[0: list_with_bob_password.response_len], &"user bob on #"[0: 13]));
+    try assert_true(!network_connection_contains(out[0: list_with_bob_password.response_len], &"secret"[0: 6]));
+
+    var bob_auth_tx: ConnectionTransaction = connection_transaction_new();
+    defer {
+        connection_transaction_reset(&bob_auth_tx);
+    }
+    const auth_bob_wrong: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &bob_auth_tx, &"*3\r\n$4\r\nAUTH\r\n$3\r\nbob\r\n$5\r\nwrong\r\n"[0: 34], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: auth_bob_wrong.response_len], &"-WRONGPASS invalid username-password pair or user is disabled.\r\n"[0: 64]));
+    try assert_eq_i32(bob_auth_tx.authenticated as i32, 0);
+
+    const auth_bob_ok: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &bob_auth_tx, &"*3\r\n$4\r\nAUTH\r\n$3\r\nbob\r\n$6\r\nsecret\r\n"[0: 35], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: auth_bob_ok.response_len], &"+OK\r\n"[0: 5]));
+    try assert_eq_i32(bob_auth_tx.authenticated as i32, 1);
+
+    const whoami_bob: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &bob_auth_tx, &"*2\r\n$3\r\nACL\r\n$6\r\nWHOAMI\r\n"[0: 25], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: whoami_bob.response_len], &"$3\r\nbob\r\n"[0: 9]));
+
+    var bob_hello_tx: ConnectionTransaction = connection_transaction_new();
+    defer {
+        connection_transaction_reset(&bob_hello_tx);
+    }
+    const hello_bob_ok: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &bob_hello_tx, &"*5\r\n$5\r\nHELLO\r\n$1\r\n3\r\n$4\r\nAUTH\r\n$3\r\nbob\r\n$6\r\nsecret\r\n"[0: 53], &out[0], 4096, 1000u64);
+    try assert_true(out[0] == 37 as byte);
+    try assert_eq_i32(bob_hello_tx.authenticated as i32, 1);
+    try assert_eq_i32(bob_hello_tx.protocol_version, 3);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

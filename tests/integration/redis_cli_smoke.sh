@@ -1034,6 +1034,48 @@ if [[ "$ACL_DRYRUN_ALICE_RESULT" != "OK" ]]; then
     exit 1
 fi
 
+ACL_SETUSER_BOB_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser bob on '>secret')"
+if [[ "$ACL_SETUSER_BOB_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL SETUSER bob password OK, got '$ACL_SETUSER_BOB_RESULT'" >&2
+    exit 1
+fi
+
+ACL_GETUSER_BOB_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl getuser bob)"
+if [[ "$ACL_GETUSER_BOB_RESULT" != *"passwords"* || "$ACL_GETUSER_BOB_RESULT" != *"#"* || "$ACL_GETUSER_BOB_RESULT" == *"secret"* || "$ACL_GETUSER_BOB_RESULT" == *"nopass"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL GETUSER bob hashed password details, got '$ACL_GETUSER_BOB_RESULT'" >&2
+    exit 1
+fi
+
+ACL_LIST_WITH_BOB_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl list)"
+if [[ "$ACL_LIST_WITH_BOB_RESULT" != *"user bob on #"* || "$ACL_LIST_WITH_BOB_RESULT" == *"secret"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL LIST to include bob hashed password, got '$ACL_LIST_WITH_BOB_RESULT'" >&2
+    exit 1
+fi
+
+ACL_AUTH_BOB_WRONG_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" auth bob wrong 2>&1 || true)"
+if [[ "$ACL_AUTH_BOB_WRONG_RESULT" != "WRONGPASS invalid username-password pair or user is disabled." ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected AUTH bob wrong WRONGPASS, got '$ACL_AUTH_BOB_WRONG_RESULT'" >&2
+    exit 1
+fi
+
+ACL_AUTH_BOB_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" auth bob secret)"
+if [[ "$ACL_AUTH_BOB_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected AUTH bob OK, got '$ACL_AUTH_BOB_RESULT'" >&2
+    exit 1
+fi
+
+ACL_WHOAMI_BOB_RESULT="$(redis-cli --user bob -a secret --raw -h 127.0.0.1 -p "$PORT" acl whoami 2>/dev/null)"
+if [[ "$ACL_WHOAMI_BOB_RESULT" != "bob" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL WHOAMI bob after named auth, got '$ACL_WHOAMI_BOB_RESULT'" >&2
+    exit 1
+fi
+
+ACL_DELUSER_BOB_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl deluser bob)"
+if [[ "$ACL_DELUSER_BOB_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL DELUSER bob 1, got '$ACL_DELUSER_BOB_RESULT'" >&2
+    exit 1
+fi
+
 ACL_SETUSER_ALICE_OFF_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser alice off)"
 if [[ "$ACL_SETUSER_ALICE_OFF_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ACL SETUSER alice off OK, got '$ACL_SETUSER_ALICE_OFF_RESULT'" >&2

@@ -136,6 +136,8 @@ export struct ConnectionTransaction {
     client_lib_name: [byte: 64],
     client_lib_ver_len: usize,
     client_lib_ver: [byte: 64],
+    username_len: usize,
+    username: [byte: CONNECTION_ACL_USER_NAME_MAX],
     pubsub_count: usize,
     authenticated: bool,
     tracking_enabled: bool,
@@ -180,6 +182,7 @@ const CONNECTION_ACL_DENIED_CATEGORY_MAX: usize = 32;
 const CONNECTION_ACL_COMMAND_NAME_MAX: usize = 64;
 const CONNECTION_ACL_USER_MAX: usize = 32;
 const CONNECTION_ACL_USER_NAME_MAX: usize = 64;
+const CONNECTION_ACL_USER_PASSWORD_MAX: usize = 128;
 const CONNECTION_ACL_LOG_MAX: usize = 128;
 const CONNECTION_ACL_LOG_CONTEXT_MAX: usize = 16;
 
@@ -261,6 +264,8 @@ struct ConnectionAclUser {
     nopass: bool,
     name_len: usize,
     name: [byte: CONNECTION_ACL_USER_NAME_MAX],
+    password_len: usize,
+    password: [byte: CONNECTION_ACL_USER_PASSWORD_MAX],
 }
 
 var connection_acl_users: [ConnectionAclUser: CONNECTION_ACL_USER_MAX] = [];
@@ -312,6 +317,8 @@ fn connection_transaction_empty() ConnectionTransaction {
         client_lib_name: [],
         client_lib_ver_len: 0,
         client_lib_ver: [],
+        username_len: 0,
+        username: [],
         pubsub_count: 0,
         authenticated: false,
         tracking_enabled: false,
@@ -1396,9 +1403,15 @@ fn connection_acl_users_clear_all() void {
         connection_acl_users[index].enabled = false;
         connection_acl_users[index].nopass = true;
         connection_acl_users[index].name_len = 0;
+        connection_acl_users[index].password_len = 0;
         var i: usize = 0;
         while i < CONNECTION_ACL_USER_NAME_MAX {
             connection_acl_users[index].name[i] = 0 as byte;
+            i = i + 1;
+        }
+        i = 0;
+        while i < CONNECTION_ACL_USER_PASSWORD_MAX {
+            connection_acl_users[index].password[i] = 0 as byte;
             i = i + 1;
         }
         index = index + 1;
@@ -1446,6 +1459,7 @@ fn connection_acl_user_create_or_get(username: &[byte]) !usize {
         connection_acl_users[slot_index_new].enabled = false;
         connection_acl_users[slot_index_new].nopass = true;
         connection_acl_users[slot_index_new].name_len = username.len;
+        connection_acl_users[slot_index_new].password_len = 0;
         var i: usize = 0;
         while i < username.len {
             connection_acl_users[slot_index_new].name[i] = username.ptr[i];
@@ -1476,6 +1490,7 @@ fn connection_acl_user_delete(username: &[byte]) bool {
     connection_acl_users[slot_index].enabled = false;
     connection_acl_users[slot_index].nopass = true;
     connection_acl_users[slot_index].name_len = 0;
+    connection_acl_users[slot_index].password_len = 0;
     return true;
 }
 
@@ -1717,14 +1732,82 @@ fn connection_acl_default_command_rules_sds() !Sds {
     return rules;
 }
 
-fn connection_acl_default_password_marker(runtime: &CommandRuntimeInfo, out: &[byte]) usize {
-    const requirepass: &[byte] = connection_requirepass(runtime);
-    if requirepass.len == 0 || out.len < CONNECTION_SCRIPT_SHA1_HEX_BYTES + 1 {
+fn connection_acl_password_marker(password: &[byte], out: &[byte]) usize {
+    if password.len == 0 || out.len < CONNECTION_SCRIPT_SHA1_HEX_BYTES + 1 {
         return 0;
     }
     out.ptr[0] = 35 as byte;
-    connection_script_sha_hex(requirepass, out[1: CONNECTION_SCRIPT_SHA1_HEX_BYTES]);
+    connection_script_sha_hex(password, out[1: CONNECTION_SCRIPT_SHA1_HEX_BYTES]);
     return CONNECTION_SCRIPT_SHA1_HEX_BYTES + 1;
+}
+
+fn connection_acl_default_password_marker(runtime: &CommandRuntimeInfo, out: &[byte]) usize {
+    return connection_acl_password_marker(connection_requirepass(runtime), out);
+}
+
+fn connection_set_authenticated_user(tx: &ConnectionTransaction, username: &[byte]) void {
+    if tx == null {
+        return;
+    }
+    var len: usize = username.len;
+    if len > CONNECTION_ACL_USER_NAME_MAX {
+        len = CONNECTION_ACL_USER_NAME_MAX;
+    }
+    tx.username_len = len;
+    var i: usize = 0;
+    while i < len {
+        tx.username[i] = username.ptr[i];
+        i = i + 1;
+    }
+    while i < CONNECTION_ACL_USER_NAME_MAX {
+        tx.username[i] = 0 as byte;
+        i = i + 1;
+    }
+}
+
+fn connection_current_username(tx: &ConnectionTransaction) &[byte] {
+    if tx != null && tx.username_len > 0 {
+        return tx.username[0: tx.username_len];
+    }
+    return &"default"[0: 7];
+}
+
+fn connection_clear_authenticated_user(tx: &ConnectionTransaction) void {
+    if tx == null {
+        return;
+    }
+    tx.username_len = 0;
+    var i: usize = 0;
+    while i < CONNECTION_ACL_USER_NAME_MAX {
+        tx.username[i] = 0 as byte;
+        i = i + 1;
+    }
+}
+
+fn connection_acl_named_user_set_password(user: &ConnectionAclUser, password: &[byte]) !void {
+    if password.len == 0 || password.len > CONNECTION_ACL_USER_PASSWORD_MAX {
+        return error.ConnectionInputTooLarge;
+    }
+    var i: usize = 0;
+    while i < password.len {
+        user.password[i] = password.ptr[i];
+        i = i + 1;
+    }
+    while i < CONNECTION_ACL_USER_PASSWORD_MAX {
+        user.password[i] = 0 as byte;
+        i = i + 1;
+    }
+    user.password_len = password.len;
+    user.nopass = false;
+}
+
+fn connection_acl_named_user_clear_password(user: &ConnectionAclUser) void {
+    user.password_len = 0;
+    var i: usize = 0;
+    while i < CONNECTION_ACL_USER_PASSWORD_MAX {
+        user.password[i] = 0 as byte;
+        i = i + 1;
+    }
 }
 
 fn connection_acl_setuser_modifier_error(modifier: &[byte], suffix: &[byte]) CommandReply {
@@ -1856,6 +1939,14 @@ fn connection_acl_setuser_named(router: &CommandRouter, username: &[byte], comma
             validate_index = validate_index + 1;
             continue;
         }
+        if validate_modifier.len > 1 &&
+            (validate_modifier.ptr[0] == 62 as byte || validate_modifier.ptr[0] == 60 as byte) {
+            if validate_modifier.len - 1 > CONNECTION_ACL_USER_PASSWORD_MAX {
+                return connection_acl_setuser_modifier_error(validate_modifier, &"': Password is too long"[0: 23]);
+            }
+            validate_index = validate_index + 1;
+            continue;
+        }
         if connection_acl_setuser_mutating_modifier(validate_modifier) {
             return connection_error_reply(&"ERR ACL SETUSER redis-uya partial only supports named user metadata modifiers"[0: 77]);
         }
@@ -1884,9 +1975,33 @@ fn connection_acl_setuser_named(router: &CommandRouter, username: &[byte], comma
             index = index + 1;
             continue;
         }
-        if connection_keyword_eq(modifier, &"NOPASS"[0: 6]) ||
-            connection_keyword_eq(modifier, &"RESETPASS"[0: 9]) {
+        if connection_keyword_eq(modifier, &"NOPASS"[0: 6]) {
             connection_acl_users[slot].nopass = true;
+            connection_acl_named_user_clear_password(&connection_acl_users[slot]);
+            index = index + 1;
+            continue;
+        }
+        if connection_keyword_eq(modifier, &"RESETPASS"[0: 9]) {
+            connection_acl_users[slot].nopass = false;
+            connection_acl_named_user_clear_password(&connection_acl_users[slot]);
+            index = index + 1;
+            continue;
+        }
+        if modifier.len > 1 && modifier.ptr[0] == 62 as byte {
+            const password: &[byte] = modifier[1: modifier.len - 1];
+            _ = connection_acl_named_user_set_password(&connection_acl_users[slot], password) catch {
+                return connection_acl_setuser_modifier_error(modifier, &"': Password is too long"[0: 23]);
+            };
+            index = index + 1;
+            continue;
+        }
+        if modifier.len > 1 && modifier.ptr[0] == 60 as byte {
+            const remove_password: &[byte] = modifier[1: modifier.len - 1];
+            if remove_password.len == connection_acl_users[slot].password_len &&
+                connection_slice_eq(connection_acl_users[slot].password[0: connection_acl_users[slot].password_len], remove_password) {
+                connection_acl_named_user_clear_password(&connection_acl_users[slot]);
+                connection_acl_users[slot].nopass = false;
+            }
             index = index + 1;
             continue;
         }
@@ -2042,6 +2157,12 @@ fn connection_acl_append_named_config_line(raw: &Sds, user: &ConnectionAclUser) 
     }
     if user.nopass {
         try sds_cat(raw, &"nopass"[0: 6]);
+    } else if user.password_len > 0 {
+        var password_marker: [byte: CONNECTION_SCRIPT_SHA1_HEX_BYTES + 1] = [];
+        const password_marker_len: usize = connection_acl_password_marker(user.password[0: user.password_len], password_marker[0: CONNECTION_SCRIPT_SHA1_HEX_BYTES + 1]);
+        if password_marker_len > 0 {
+            try sds_cat(raw, password_marker[0: password_marker_len]);
+        }
     }
     try sds_cat(raw, &" ~* &* +@all"[0: 12]);
 }
@@ -2145,9 +2266,20 @@ fn connection_acl_getuser_named(user: &ConnectionAclUser) CommandReply {
     _ = connection_sds_append_resp_bulk(&raw, &"passwords"[0: 9]) catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
-    _ = connection_sds_append_resp_array_header(&raw, 0) catch {
-        return connection_error_reply(&"ERR out of memory"[0: 17]);
-    };
+    if user.password_len > 0 {
+        var password_marker: [byte: CONNECTION_SCRIPT_SHA1_HEX_BYTES + 1] = [];
+        const password_marker_len: usize = connection_acl_password_marker(user.password[0: user.password_len], password_marker[0: CONNECTION_SCRIPT_SHA1_HEX_BYTES + 1]);
+        _ = connection_sds_append_resp_array_header(&raw, 1) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+        _ = connection_sds_append_resp_bulk(&raw, password_marker[0: password_marker_len]) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+    } else {
+        _ = connection_sds_append_resp_array_header(&raw, 0) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+    }
     _ = connection_sds_append_resp_bulk(&raw, &"commands"[0: 8]) catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
@@ -2453,6 +2585,7 @@ fn connection_handle_acl(
     engine: &Engine,
     runtime: &CommandRuntimeInfo,
     router: &CommandRouter,
+    tx: &ConnectionTransaction,
     command: &Command,
     now_ms: u64,
     client_id: i64,
@@ -2486,6 +2619,12 @@ fn connection_handle_acl(
     }
     if connection_keyword_eq(subcommand, &"LOG"[0: 3]) {
         return connection_acl_handle_log(command, now_ms);
+    }
+    if connection_keyword_eq(subcommand, &"WHOAMI"[0: 6]) {
+        if command.argc != 2 {
+            return connection_error_reply(&"ERR wrong number of arguments for 'acl|whoami' command"[0: 54]);
+        }
+        return connection_make_reply(CommandReplyType.reply_bulk_string, connection_current_username(tx), 0);
     }
     return command_execute_with_runtime_at(engine, runtime, command, now_ms);
 }
@@ -2823,6 +2962,7 @@ fn connection_reset_state(tx: &ConnectionTransaction) void {
     tx.client_lib_name_len = 0;
     tx.client_lib_ver_len = 0;
     tx.authenticated = false;
+    connection_clear_authenticated_user(tx);
     connection_client_tracking_clear(tx);
     tx.reply_off_enabled = false;
     tx.reply_skip_next = false;
@@ -3290,6 +3430,49 @@ fn connection_auth_no_password_reply() CommandReply {
     return connection_error_reply(&"ERR AUTH <password> called without any password configured for the default user. Are you sure your configuration is correct?"[0: 124]);
 }
 
+fn connection_authenticate_named_user(tx: &ConnectionTransaction, username: &[byte], password: &[byte]) CommandReply {
+    const slot: i32 = connection_acl_user_find(username);
+    if slot < 0 || slot >= CONNECTION_ACL_USER_MAX as i32 {
+        tx.authenticated = false;
+        connection_clear_authenticated_user(tx);
+        return connection_wrongpass_reply();
+    }
+    const slot_index: usize = slot as usize;
+    if slot_index >= CONNECTION_ACL_USER_MAX {
+        tx.authenticated = false;
+        connection_clear_authenticated_user(tx);
+        return connection_wrongpass_reply();
+    }
+    const user: &ConnectionAclUser = &connection_acl_users[slot_index];
+    if !user.enabled {
+        tx.authenticated = false;
+        connection_clear_authenticated_user(tx);
+        return connection_wrongpass_reply();
+    }
+    if user.nopass {
+        tx.authenticated = true;
+        connection_set_authenticated_user(tx, user.name[0: user.name_len]);
+        return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+    }
+    if user.password_len == 0 || password.len != user.password_len {
+        tx.authenticated = false;
+        connection_clear_authenticated_user(tx);
+        return connection_wrongpass_reply();
+    }
+    var i: usize = 0;
+    while i < password.len {
+        if password.ptr[i] != user.password[i] {
+            tx.authenticated = false;
+            connection_clear_authenticated_user(tx);
+            return connection_wrongpass_reply();
+        }
+        i = i + 1;
+    }
+    tx.authenticated = true;
+    connection_set_authenticated_user(tx, user.name[0: user.name_len]);
+    return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+}
+
 fn connection_handle_auth(tx: &ConnectionTransaction, runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
     if command.argc != 2 && command.argc != 3 {
         return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
@@ -3302,9 +3485,13 @@ fn connection_handle_auth(tx: &ConnectionTransaction, runtime: &CommandRuntimeIn
                 return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
             };
             if !connection_keyword_eq(username_no_pass, &"default"[0: 7]) {
-                return connection_wrongpass_reply();
+                const named_password_no_pass: &[byte] = command_arg_data(command, 2) catch {
+                    return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+                };
+                return connection_authenticate_named_user(tx, username_no_pass, named_password_no_pass);
             }
             tx.authenticated = true;
+            connection_set_authenticated_user(tx, &"default"[0: 7]);
             return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
         }
         return connection_auth_no_password_reply();
@@ -3320,7 +3507,10 @@ fn connection_handle_auth(tx: &ConnectionTransaction, runtime: &CommandRuntimeIn
             return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
         };
         if !connection_keyword_eq(username, &"default"[0: 7]) {
-            return connection_wrongpass_reply();
+            const named_password: &[byte] = command_arg_data(command, 2) catch {
+                return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+            };
+            return connection_authenticate_named_user(tx, username, named_password);
         }
         password = command_arg_data(command, 2) catch {
             return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
@@ -3329,43 +3519,49 @@ fn connection_handle_auth(tx: &ConnectionTransaction, runtime: &CommandRuntimeIn
 
     if password.len != requirepass.len {
         tx.authenticated = false;
+        connection_clear_authenticated_user(tx);
         return connection_wrongpass_reply();
     }
     var i: usize = 0;
     while i < password.len {
         if password.ptr[i] != requirepass.ptr[i] {
             tx.authenticated = false;
+            connection_clear_authenticated_user(tx);
             return connection_wrongpass_reply();
         }
         i = i + 1;
     }
     tx.authenticated = true;
+    connection_set_authenticated_user(tx, &"default"[0: 7]);
     return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
 }
 
 fn connection_authenticate_username_password(tx: &ConnectionTransaction, runtime: &CommandRuntimeInfo, username: &[byte], password: &[byte]) CommandReply {
     const requirepass: &[byte] = connection_requirepass(runtime);
     if !connection_keyword_eq(username, &"default"[0: 7]) {
-        tx.authenticated = false;
-        return connection_wrongpass_reply();
+        return connection_authenticate_named_user(tx, username, password);
     }
     if requirepass.len == 0 {
         tx.authenticated = true;
+        connection_set_authenticated_user(tx, &"default"[0: 7]);
         return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
     }
     if password.len != requirepass.len {
         tx.authenticated = false;
+        connection_clear_authenticated_user(tx);
         return connection_wrongpass_reply();
     }
     var i: usize = 0;
     while i < password.len {
         if password.ptr[i] != requirepass.ptr[i] {
             tx.authenticated = false;
+            connection_clear_authenticated_user(tx);
             return connection_wrongpass_reply();
         }
         i = i + 1;
     }
     tx.authenticated = true;
+    connection_set_authenticated_user(tx, &"default"[0: 7]);
     return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
 }
 
@@ -5635,7 +5831,7 @@ fn connection_transaction_execute_at(
         } else if connection_acl_default_command_denied(command.info.name) {
             reply = connection_acl_permission_denied_reply(command.info.name, &"transaction"[0: 11], now_ms, connection_acl_log_client_id(tx));
         } else if command.info.cmd_type == CommandType.command_acl {
-            reply = connection_handle_acl(engine, runtime, router, &command, now_ms, connection_acl_log_client_id(tx));
+            reply = connection_handle_acl(engine, runtime, router, tx, &command, now_ms, connection_acl_log_client_id(tx));
         } else {
             reply = command_execute_with_runtime_at(engine, runtime, &command, now_ms);
         }
@@ -5775,7 +5971,7 @@ fn connection_execute_standard_command_at(
     if connection_acl_default_command_denied(command.info.name) {
         reply = connection_acl_permission_denied_reply(command.info.name, &"command"[0: 7], now_ms, connection_acl_log_client_id(tx));
     } else if command.info.cmd_type == CommandType.command_acl {
-        reply = connection_handle_acl(engine, runtime, router, command, now_ms, connection_acl_log_client_id(tx));
+        reply = connection_handle_acl(engine, runtime, router, tx, command, now_ms, connection_acl_log_client_id(tx));
     } else {
         reply = command_execute_with_runtime_at(engine, runtime, command, now_ms);
     }

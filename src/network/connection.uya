@@ -1772,6 +1772,10 @@ fn connection_current_username(tx: &ConnectionTransaction) &[byte] {
     return &"default"[0: 7];
 }
 
+fn connection_current_user_is_default(tx: &ConnectionTransaction) bool {
+    return connection_keyword_eq(connection_current_username(tx), &"default"[0: 7]);
+}
+
 fn connection_clear_authenticated_user(tx: &ConnectionTransaction) void {
     if tx == null {
         return;
@@ -5577,6 +5581,7 @@ fn connection_execute_script_effect_at(
     now_ms: u64,
     rewrite_failed: &bool,
     client_id: i64,
+    default_user_permissions: bool,
 ) CommandReply {
     const raw_cmd: &[byte] = raw_obj.value.buf[0: raw_obj.value.len];
     const parsed: RespParseResult = parse_resp2(raw_cmd) catch {
@@ -5596,7 +5601,7 @@ fn connection_execute_script_effect_at(
         object_free(raw_obj);
         return connection_error_reply(&"ERR command is not allowed from script"[0: 38]);
     }
-    if connection_acl_default_command_denied(inner_command.info.name) {
+    if default_user_permissions && connection_acl_default_command_denied(inner_command.info.name) {
         resp_value_free(&parsed.value);
         object_free(raw_obj);
         return connection_acl_permission_denied_reply(inner_command.info.name, &"script"[0: 6], now_ms, client_id);
@@ -5637,6 +5642,7 @@ fn connection_handle_eval_like_at(
     now_ms: u64,
     rewrite_failed: &bool,
     client_id: i64,
+    default_user_permissions: bool,
     use_sha: bool,
     read_only: bool,
 ) CommandReply {
@@ -5698,7 +5704,7 @@ fn connection_handle_eval_like_at(
         }
         resp_value_free(&parsed_inner.value);
     }
-    return connection_execute_script_effect_at(engine, runtime, router, aof, rewrite_buf, backlog, raw_obj, now_ms, rewrite_failed, client_id);
+    return connection_execute_script_effect_at(engine, runtime, router, aof, rewrite_buf, backlog, raw_obj, now_ms, rewrite_failed, client_id, default_user_permissions);
 }
 
 fn connection_execute_script_command_at(
@@ -5733,6 +5739,7 @@ fn connection_execute_script_command_at(
             now_ms,
             rewrite_failed,
             connection_acl_log_client_id(tx),
+            connection_current_user_is_default(tx),
             command.info.cmd_type == CommandType.command_evalsha || command.info.cmd_type == CommandType.command_evalsha_ro,
             command.info.cmd_type == CommandType.command_eval_ro || command.info.cmd_type == CommandType.command_evalsha_ro,
         );
@@ -5841,12 +5848,13 @@ fn connection_transaction_execute_at(
                 now_ms,
                 rewrite_failed,
                 connection_acl_log_client_id(tx),
+                connection_current_user_is_default(tx),
                 command.info.cmd_type == CommandType.command_evalsha || command.info.cmd_type == CommandType.command_evalsha_ro,
                 command.info.cmd_type == CommandType.command_eval_ro || command.info.cmd_type == CommandType.command_evalsha_ro,
             );
         } else if command.info.cmd_type == CommandType.command_auth {
             reply = connection_handle_auth(tx, runtime, &command);
-        } else if connection_acl_default_command_denied(command.info.name) {
+        } else if connection_current_user_is_default(tx) && connection_acl_default_command_denied(command.info.name) {
             reply = connection_acl_permission_denied_reply(command.info.name, &"transaction"[0: 11], now_ms, connection_acl_log_client_id(tx));
         } else if command.info.cmd_type == CommandType.command_acl {
             reply = connection_handle_acl(engine, runtime, router, tx, &command, now_ms, connection_acl_log_client_id(tx));
@@ -5986,7 +5994,7 @@ fn connection_execute_standard_command_at(
     const reply_off_before: bool = tx.reply_off_enabled;
     const reply_skip_before: bool = tx.reply_skip_next;
     var reply: CommandReply = connection_empty_reply();
-    if connection_acl_default_command_denied(command.info.name) {
+    if connection_current_user_is_default(tx) && connection_acl_default_command_denied(command.info.name) {
         reply = connection_acl_permission_denied_reply(command.info.name, &"command"[0: 7], now_ms, connection_acl_log_client_id(tx));
     } else if command.info.cmd_type == CommandType.command_acl {
         reply = connection_handle_acl(engine, runtime, router, tx, command, now_ms, connection_acl_log_client_id(tx));
@@ -7184,7 +7192,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
             resp_value_free(&parsed.value);
             return ConnectionProcessResult{ response_len: blocking_tx_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
         }
-        if connection_acl_default_command_denied(command.info.name) {
+        if connection_current_user_is_default(tx) && connection_acl_default_command_denied(command.info.name) {
             const acl_tx_reply: CommandReply = connection_acl_permission_denied_reply(command.info.name, &"transaction"[0: 11], now_ms, connection_acl_log_client_id(tx));
             const acl_tx_n: usize = try connection_encode_reply_for_command(tx, &command, &acl_tx_reply, out, out_cap, reply_off_before, reply_skip_before);
             command_reply_cleanup(&acl_tx_reply);
@@ -7283,7 +7291,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
         resp_value_free(&parsed.value);
         return ConnectionProcessResult{ response_len: restricted_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
     }
-    if connection_acl_default_command_denied(command.info.name) {
+    if connection_current_user_is_default(tx) && connection_acl_default_command_denied(command.info.name) {
         const acl_reply: CommandReply = connection_acl_permission_denied_reply(command.info.name, &"command"[0: 7], now_ms, connection_acl_log_client_id(tx));
         const acl_n: usize = try connection_encode_reply_for_command(tx, &command, &acl_reply, out, out_cap, reply_off_before, reply_skip_before);
         command_reply_cleanup(&acl_reply);

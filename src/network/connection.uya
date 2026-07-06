@@ -178,6 +178,8 @@ const CONNECTION_SCRIPT_MAX_CALL_ARGS: usize = 64;
 const CONNECTION_ACL_DENIED_COMMAND_MAX: usize = 64;
 const CONNECTION_ACL_DENIED_CATEGORY_MAX: usize = 32;
 const CONNECTION_ACL_COMMAND_NAME_MAX: usize = 64;
+const CONNECTION_ACL_USER_MAX: usize = 32;
+const CONNECTION_ACL_USER_NAME_MAX: usize = 64;
 const CONNECTION_ACL_LOG_MAX: usize = 128;
 const CONNECTION_ACL_LOG_CONTEXT_MAX: usize = 16;
 
@@ -252,6 +254,16 @@ struct ConnectionAclDeniedCommand {
 
 var connection_acl_default_denied_commands: [ConnectionAclDeniedCommand: CONNECTION_ACL_DENIED_COMMAND_MAX] = [];
 var connection_acl_default_denied_categories: [ConnectionAclDeniedCommand: CONNECTION_ACL_DENIED_CATEGORY_MAX] = [];
+
+struct ConnectionAclUser {
+    active: bool,
+    enabled: bool,
+    nopass: bool,
+    name_len: usize,
+    name: [byte: CONNECTION_ACL_USER_NAME_MAX],
+}
+
+var connection_acl_users: [ConnectionAclUser: CONNECTION_ACL_USER_MAX] = [];
 
 struct ConnectionAclLogEntry {
     active: bool,
@@ -992,6 +1004,20 @@ fn connection_keyword_eq(a: &[byte], b: &[byte]) bool {
     return true;
 }
 
+fn connection_slice_eq(a: &[byte], b: &[byte]) bool {
+    if a.len != b.len {
+        return false;
+    }
+    var i: usize = 0;
+    while i < a.len {
+        if a.ptr[i] != b.ptr[i] {
+            return false;
+        }
+        i = i + 1;
+    }
+    return true;
+}
+
 fn connection_sds_append_ascii_lower(buf: &Sds, data: &[byte]) !void {
     var tmp: [byte: 1] = [];
     var i: usize = 0;
@@ -1363,9 +1389,100 @@ fn connection_acl_log_clear_all() void {
     connection_acl_log_next_sequence = 1u64;
 }
 
+fn connection_acl_users_clear_all() void {
+    var index: usize = 0;
+    while index < CONNECTION_ACL_USER_MAX {
+        connection_acl_users[index].active = false;
+        connection_acl_users[index].enabled = false;
+        connection_acl_users[index].nopass = true;
+        connection_acl_users[index].name_len = 0;
+        var i: usize = 0;
+        while i < CONNECTION_ACL_USER_NAME_MAX {
+            connection_acl_users[index].name[i] = 0 as byte;
+            i = i + 1;
+        }
+        index = index + 1;
+    }
+}
+
+fn connection_acl_user_find(username: &[byte]) i32 {
+    var index: usize = 0;
+    while index < CONNECTION_ACL_USER_MAX {
+        if connection_acl_users[index].active &&
+            connection_slice_eq(connection_acl_users[index].name[0: connection_acl_users[index].name_len], username) {
+            return index as i32;
+        }
+        index = index + 1;
+    }
+    return -1;
+}
+
+fn connection_acl_user_find_free() i32 {
+    var index: usize = 0;
+    while index < CONNECTION_ACL_USER_MAX {
+        if !connection_acl_users[index].active {
+            return index as i32;
+        }
+        index = index + 1;
+    }
+    return -1;
+}
+
+fn connection_acl_user_create_or_get(username: &[byte]) !usize {
+    if username.len == 0 || username.len > CONNECTION_ACL_USER_NAME_MAX {
+        return error.ConnectionInputTooLarge;
+    }
+    var slot: i32 = connection_acl_user_find(username);
+    if slot < 0 {
+        slot = connection_acl_user_find_free();
+        if slot < 0 {
+            return error.ConnectionInputTooLarge;
+        }
+        const slot_index_new: usize = slot as usize;
+        if slot_index_new >= CONNECTION_ACL_USER_MAX {
+            return error.ConnectionInputTooLarge;
+        }
+        connection_acl_users[slot_index_new].active = true;
+        connection_acl_users[slot_index_new].enabled = false;
+        connection_acl_users[slot_index_new].nopass = true;
+        connection_acl_users[slot_index_new].name_len = username.len;
+        var i: usize = 0;
+        while i < username.len {
+            connection_acl_users[slot_index_new].name[i] = username.ptr[i];
+            i = i + 1;
+        }
+        while i < CONNECTION_ACL_USER_NAME_MAX {
+            connection_acl_users[slot_index_new].name[i] = 0 as byte;
+            i = i + 1;
+        }
+    }
+    const slot_index: usize = slot as usize;
+    if slot_index >= CONNECTION_ACL_USER_MAX {
+        return error.ConnectionInputTooLarge;
+    }
+    return slot_index;
+}
+
+fn connection_acl_user_delete(username: &[byte]) bool {
+    const slot: i32 = connection_acl_user_find(username);
+    if slot < 0 {
+        return false;
+    }
+    const slot_index: usize = slot as usize;
+    if slot_index >= CONNECTION_ACL_USER_MAX {
+        return false;
+    }
+    connection_acl_users[slot_index].active = false;
+    connection_acl_users[slot_index].enabled = false;
+    connection_acl_users[slot_index].nopass = true;
+    connection_acl_users[slot_index].name_len = 0;
+    return true;
+}
+
 export fn connection_acl_reset_for_test() void {
     connection_acl_default_denied_clear_all();
     connection_acl_default_categories_clear_all();
+    connection_acl_users_clear_all();
     connection_acl_log_clear_all();
 }
 
@@ -1701,6 +1818,87 @@ fn connection_acl_setuser_command_modifier(router: &CommandRouter, modifier: &[b
     return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
 }
 
+fn connection_acl_setuser_named_allows_modifier(router: &CommandRouter, modifier: &[byte]) bool {
+    if connection_acl_setuser_noop_modifier(modifier) ||
+        connection_keyword_eq(modifier, &"ALLCOMMANDS"[0: 11]) ||
+        connection_keyword_eq(modifier, &"+@all"[0: 5]) ||
+        connection_keyword_eq(modifier, &"RESETCOMMANDS"[0: 13]) {
+        return true;
+    }
+    if modifier.len > 1 && modifier.ptr[0] == 43 as byte {
+        const command_name: &[byte] = modifier[1: modifier.len - 1];
+        if command_name.len == 0 {
+            return false;
+        }
+        if command_name.ptr[0] == 64 as byte {
+            const category: &[byte] = command_name[1: command_name.len - 1];
+            return connection_acl_category_known(category);
+        }
+        _ = command_router_lookup(router, command_name) catch {
+            return false;
+        };
+        return true;
+    }
+    return false;
+}
+
+fn connection_acl_setuser_named(router: &CommandRouter, username: &[byte], command: &Command) CommandReply {
+    var validate_index: usize = 3;
+    while validate_index < command.argc {
+        const validate_modifier: &[byte] = command_arg_data(command, validate_index) catch {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        };
+        if connection_keyword_eq(validate_modifier, &"ON"[0: 2]) ||
+            connection_keyword_eq(validate_modifier, &"OFF"[0: 3]) ||
+            connection_keyword_eq(validate_modifier, &"NOPASS"[0: 6]) ||
+            connection_keyword_eq(validate_modifier, &"RESETPASS"[0: 9]) ||
+            connection_acl_setuser_named_allows_modifier(router, validate_modifier) {
+            validate_index = validate_index + 1;
+            continue;
+        }
+        if connection_acl_setuser_mutating_modifier(validate_modifier) {
+            return connection_error_reply(&"ERR ACL SETUSER redis-uya partial only supports named user metadata modifiers"[0: 77]);
+        }
+        return connection_acl_setuser_modifier_error(validate_modifier, &"': Syntax error"[0: 15]);
+    }
+
+    const slot: usize = connection_acl_user_create_or_get(username) catch {
+        return connection_error_reply(&"ERR ACL SETUSER redis-uya partial named user table is full or username is too long"[0: 82]);
+    };
+    if slot >= CONNECTION_ACL_USER_MAX {
+        return connection_error_reply(&"ERR ACL SETUSER redis-uya partial named user table is full or username is too long"[0: 82]);
+    }
+
+    var index: usize = 3;
+    while index < command.argc {
+        const modifier: &[byte] = command_arg_data(command, index) catch {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        };
+        if connection_keyword_eq(modifier, &"ON"[0: 2]) {
+            connection_acl_users[slot].enabled = true;
+            index = index + 1;
+            continue;
+        }
+        if connection_keyword_eq(modifier, &"OFF"[0: 3]) {
+            connection_acl_users[slot].enabled = false;
+            index = index + 1;
+            continue;
+        }
+        if connection_keyword_eq(modifier, &"NOPASS"[0: 6]) ||
+            connection_keyword_eq(modifier, &"RESETPASS"[0: 9]) {
+            connection_acl_users[slot].nopass = true;
+            index = index + 1;
+            continue;
+        }
+        if connection_acl_setuser_named_allows_modifier(router, modifier) {
+            index = index + 1;
+            continue;
+        }
+        index = index + 1;
+    }
+    return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+}
+
 fn connection_acl_handle_setuser(router: &CommandRouter, command: &Command) CommandReply {
     if command.argc < 3 {
         return connection_error_reply(&"ERR wrong number of arguments for 'acl|setuser' command"[0: 55]);
@@ -1709,7 +1907,7 @@ fn connection_acl_handle_setuser(router: &CommandRouter, command: &Command) Comm
         return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
     };
     if !connection_keyword_eq(username, &"default"[0: 7]) {
-        return connection_error_reply(&"ERR ACL SETUSER redis-uya partial only supports the default user"[0: 64]);
+        return connection_acl_setuser_named(router, username, command);
     }
 
     var index: usize = 3;
@@ -1815,7 +2013,8 @@ fn connection_acl_handle_dryrun(router: &CommandRouter, command: &Command, now_m
     const username: &[byte] = command_arg_data(command, 2) catch {
         return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
     };
-    if !connection_keyword_eq(username, &"default"[0: 7]) {
+    const is_default_user: bool = connection_keyword_eq(username, &"default"[0: 7]);
+    if !is_default_user && connection_acl_user_find(username) < 0 {
         return connection_acl_dryrun_user_missing(username);
     }
     const dry_command_name: &[byte] = command_arg_data(command, 3) catch {
@@ -1827,10 +2026,24 @@ fn connection_acl_handle_dryrun(router: &CommandRouter, command: &Command, now_m
     _ = command_validate_arity(&dry_info, command.argc - 3) catch {
         return connection_acl_dryrun_arity_error(dry_info.name);
     };
-    if connection_acl_default_command_denied(dry_info.name) {
+    if is_default_user && connection_acl_default_command_denied(dry_info.name) {
         return connection_acl_permission_denied_reply(dry_info.name, &"dryrun"[0: 6], now_ms, client_id);
     }
     return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+}
+
+fn connection_acl_append_named_config_line(raw: &Sds, user: &ConnectionAclUser) !void {
+    try sds_cat(raw, &"user "[0: 5]);
+    try sds_cat(raw, user.name[0: user.name_len]);
+    if user.enabled {
+        try sds_cat(raw, &" on "[0: 4]);
+    } else {
+        try sds_cat(raw, &" off "[0: 5]);
+    }
+    if user.nopass {
+        try sds_cat(raw, &"nopass"[0: 6]);
+    }
+    try sds_cat(raw, &" ~* &* +@all"[0: 12]);
 }
 
 fn connection_acl_handle_list(runtime: &CommandRuntimeInfo) CommandReply {
@@ -1867,7 +2080,99 @@ fn connection_acl_handle_list(runtime: &CommandRuntimeInfo) CommandReply {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
-    return connection_array_reply_owned(reply_list, 1);
+    var count: usize = 1;
+    var index: usize = 0;
+    while index < CONNECTION_ACL_USER_MAX {
+        if connection_acl_users[index].active {
+            var named_line: Sds = sds_empty() catch {
+                object_free(reply_list);
+                return connection_error_reply(&"ERR out of memory"[0: 17]);
+            };
+            _ = connection_acl_append_named_config_line(&named_line, &connection_acl_users[index]) catch {
+                sds_free(&named_line);
+                object_free(reply_list);
+                return connection_error_reply(&"ERR out of memory"[0: 17]);
+            };
+            _ = list_object_push_tail(reply_list, named_line.buf[0: named_line.len]) catch {
+                sds_free(&named_line);
+                object_free(reply_list);
+                return connection_error_reply(&"ERR out of memory"[0: 17]);
+            };
+            sds_free(&named_line);
+            count = count + 1;
+        }
+        index = index + 1;
+    }
+    return connection_array_reply_owned(reply_list, count);
+}
+
+fn connection_acl_getuser_named(user: &ConnectionAclUser) CommandReply {
+    var raw: Sds = sds_empty() catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    defer {
+        sds_free(&raw);
+    }
+    _ = connection_sds_append_resp_array_header(&raw, 12) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = connection_sds_append_resp_bulk(&raw, &"flags"[0: 5]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    if user.nopass {
+        _ = connection_sds_append_resp_array_header(&raw, 2) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+    } else {
+        _ = connection_sds_append_resp_array_header(&raw, 1) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+    }
+    if user.enabled {
+        _ = connection_sds_append_resp_bulk(&raw, &"on"[0: 2]) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+    } else {
+        _ = connection_sds_append_resp_bulk(&raw, &"off"[0: 3]) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+    }
+    if user.nopass {
+        _ = connection_sds_append_resp_bulk(&raw, &"nopass"[0: 6]) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+    }
+    _ = connection_sds_append_resp_bulk(&raw, &"passwords"[0: 9]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = connection_sds_append_resp_array_header(&raw, 0) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = connection_sds_append_resp_bulk(&raw, &"commands"[0: 8]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = connection_sds_append_resp_bulk(&raw, &"+@all"[0: 5]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = connection_sds_append_resp_bulk(&raw, &"keys"[0: 4]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = connection_sds_append_resp_bulk(&raw, &"~*"[0: 2]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = connection_sds_append_resp_bulk(&raw, &"channels"[0: 8]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = connection_sds_append_resp_bulk(&raw, &"&*"[0: 2]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = connection_sds_append_resp_bulk(&raw, &"selectors"[0: 9]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = connection_sds_append_resp_array_header(&raw, 0) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    return connection_raw_reply_owned(raw.buf[0: raw.len]);
 }
 
 fn connection_acl_handle_getuser(runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
@@ -1878,6 +2183,10 @@ fn connection_acl_handle_getuser(runtime: &CommandRuntimeInfo, command: &Command
         return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
     };
     if !connection_keyword_eq(username, &"default"[0: 7]) {
+        const slot: i32 = connection_acl_user_find(username);
+        if slot >= 0 {
+            return connection_acl_getuser_named(&connection_acl_users[slot as usize]);
+        }
         return connection_make_reply(CommandReplyType.reply_null_bulk, connection_reply_empty_slice(), 0);
     }
 
@@ -1958,6 +2267,61 @@ fn connection_acl_handle_getuser(runtime: &CommandRuntimeInfo, command: &Command
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
     return connection_raw_reply_owned(raw.buf[0: raw.len]);
+}
+
+fn connection_acl_handle_users(command: &Command) CommandReply {
+    if command.argc != 2 {
+        return connection_error_reply(&"ERR wrong number of arguments for 'acl|users' command"[0: 53]);
+    }
+    var reply_list: &RedisObject = create_list_object() catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = list_object_push_tail(reply_list, &"default"[0: 7]) catch {
+        object_free(reply_list);
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    var count: usize = 1;
+    var index: usize = 0;
+    while index < CONNECTION_ACL_USER_MAX {
+        if connection_acl_users[index].active {
+            _ = list_object_push_tail(reply_list, connection_acl_users[index].name[0: connection_acl_users[index].name_len]) catch {
+                object_free(reply_list);
+                return connection_error_reply(&"ERR out of memory"[0: 17]);
+            };
+            count = count + 1;
+        }
+        index = index + 1;
+    }
+    return connection_array_reply_owned(reply_list, count);
+}
+
+fn connection_acl_handle_deluser(command: &Command) CommandReply {
+    if command.argc < 3 {
+        return connection_error_reply(&"ERR wrong number of arguments for 'acl|deluser' command"[0: 55]);
+    }
+    var scan_index: usize = 2;
+    while scan_index < command.argc {
+        const username_scan: &[byte] = command_arg_data(command, scan_index) catch {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        };
+        if connection_keyword_eq(username_scan, &"default"[0: 7]) {
+            return connection_error_reply(&"ERR The 'default' user cannot be removed"[0: 40]);
+        }
+        scan_index = scan_index + 1;
+    }
+
+    var deleted: i64 = 0;
+    var index: usize = 2;
+    while index < command.argc {
+        const username: &[byte] = command_arg_data(command, index) catch {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        };
+        if connection_acl_user_delete(username) {
+            deleted = deleted + 1;
+        }
+        index = index + 1;
+    }
+    return connection_make_reply(CommandReplyType.reply_integer, connection_reply_empty_slice(), deleted);
 }
 
 fn connection_acl_log_requested_count(command: &Command) !usize {
@@ -2113,6 +2477,12 @@ fn connection_handle_acl(
     }
     if connection_keyword_eq(subcommand, &"GETUSER"[0: 7]) {
         return connection_acl_handle_getuser(runtime, command);
+    }
+    if connection_keyword_eq(subcommand, &"USERS"[0: 5]) {
+        return connection_acl_handle_users(command);
+    }
+    if connection_keyword_eq(subcommand, &"DELUSER"[0: 7]) {
+        return connection_acl_handle_deluser(command);
     }
     if connection_keyword_eq(subcommand, &"LOG"[0: 3]) {
         return connection_acl_handle_log(command, now_ms);

@@ -986,6 +986,60 @@ if [[ "$ACL_SETUSER_INVALID_RESULT" != "ERR Error in ACL SETUSER modifier 'inval
     exit 1
 fi
 
+ACL_SETUSER_ALICE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser alice on nopass '~*' '&*' '+@all')"
+if [[ "$ACL_SETUSER_ALICE_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL SETUSER alice OK, got '$ACL_SETUSER_ALICE_RESULT'" >&2
+    exit 1
+fi
+
+ACL_USERS_WITH_ALICE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl users)"
+if [[ "$ACL_USERS_WITH_ALICE_RESULT" != *"default"* || "$ACL_USERS_WITH_ALICE_RESULT" != *"alice"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL USERS to include alice, got '$ACL_USERS_WITH_ALICE_RESULT'" >&2
+    exit 1
+fi
+
+ACL_GETUSER_ALICE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl getuser alice)"
+if [[ "$ACL_GETUSER_ALICE_RESULT" != *"flags"* || "$ACL_GETUSER_ALICE_RESULT" != *"on"* || "$ACL_GETUSER_ALICE_RESULT" != *"nopass"* || "$ACL_GETUSER_ALICE_RESULT" != *"+@all"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL GETUSER alice details, got '$ACL_GETUSER_ALICE_RESULT'" >&2
+    exit 1
+fi
+
+ACL_LIST_WITH_ALICE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl list)"
+if [[ "$ACL_LIST_WITH_ALICE_RESULT" != *"user alice on nopass ~* &* +@all"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL LIST to include alice, got '$ACL_LIST_WITH_ALICE_RESULT'" >&2
+    exit 1
+fi
+
+ACL_DRYRUN_ALICE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl dryrun alice get k)"
+if [[ "$ACL_DRYRUN_ALICE_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL DRYRUN alice OK, got '$ACL_DRYRUN_ALICE_RESULT'" >&2
+    exit 1
+fi
+
+ACL_SETUSER_ALICE_OFF_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser alice off)"
+if [[ "$ACL_SETUSER_ALICE_OFF_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL SETUSER alice off OK, got '$ACL_SETUSER_ALICE_OFF_RESULT'" >&2
+    exit 1
+fi
+
+ACL_LIST_ALICE_OFF_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl list)"
+if [[ "$ACL_LIST_ALICE_OFF_RESULT" != *"user alice off nopass ~* &* +@all"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL LIST to show alice off, got '$ACL_LIST_ALICE_OFF_RESULT'" >&2
+    exit 1
+fi
+
+ACL_DELUSER_ALICE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl deluser alice)"
+if [[ "$ACL_DELUSER_ALICE_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL DELUSER alice 1, got '$ACL_DELUSER_ALICE_RESULT'" >&2
+    exit 1
+fi
+
+ACL_DELUSER_ALICE_AGAIN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl deluser alice)"
+if [[ "$ACL_DELUSER_ALICE_AGAIN_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL DELUSER alice after delete 0, got '$ACL_DELUSER_ALICE_AGAIN_RESULT'" >&2
+    exit 1
+fi
+
 ACL_USERS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl users)"
 if [[ "$ACL_USERS_RESULT" != "default" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ACL USERS default, got '$ACL_USERS_RESULT'" >&2

@@ -1823,6 +1823,35 @@ def run_smoke() -> None:
                     raise AssertionError(f"unexpected ACL SETUSER invalid modifier error: {exc}") from exc
             if client.acl_whoami() != b"default":
                 raise AssertionError("expected ACL WHOAMI default user")
+            if client.acl_setuser(b"alice", b"on", b"nopass", b"~*", b"&*", b"+@all") != "OK":
+                raise AssertionError("expected ACL SETUSER alice metadata to return OK")
+            named_acl_users = client.acl_users()
+            if named_acl_users != [b"default", b"alice"]:
+                raise AssertionError(f"expected ACL USERS to include alice, got {named_acl_users!r}")
+            named_acl_getuser = client.acl_getuser(b"alice")
+            if (
+                not isinstance(named_acl_getuser, list)
+                or named_acl_getuser[0] != b"flags"
+                or named_acl_getuser[1] != [b"on", b"nopass"]
+                or b"+@all" not in named_acl_getuser
+            ):
+                raise AssertionError(f"unexpected ACL GETUSER alice result: {named_acl_getuser!r}")
+            named_acl_list = client.acl_list()
+            if b"user alice on nopass ~* &* +@all" not in named_acl_list:
+                raise AssertionError(f"expected ACL LIST to include alice, got {named_acl_list!r}")
+            if client.acl_dryrun(b"alice", b"GET", b"k") != "OK":
+                raise AssertionError("expected ACL DRYRUN alice GET to return OK")
+            if client.acl_setuser(b"alice", b"off") != "OK":
+                raise AssertionError("expected ACL SETUSER alice off to return OK")
+            named_acl_list_off = client.acl_list()
+            if b"user alice off nopass ~* &* +@all" not in named_acl_list_off:
+                raise AssertionError(f"expected ACL LIST to show alice off, got {named_acl_list_off!r}")
+            if client.acl_deluser(b"alice") != 1:
+                raise AssertionError("expected ACL DELUSER alice to return 1")
+            if client.acl_deluser(b"alice") != 0:
+                raise AssertionError("expected ACL DELUSER alice after delete to return 0")
+            if client.acl_getuser(b"alice") is not None:
+                raise AssertionError("expected ACL GETUSER alice after delete to return null")
             if client.acl_users() != [b"default"]:
                 raise AssertionError("expected ACL USERS default user list")
             if client.acl_list() != [b"user default on nopass ~* &* +@all"]:

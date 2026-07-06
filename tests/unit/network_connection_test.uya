@@ -1784,6 +1784,65 @@ export fn test_connection_process_acl_permission_denial() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_connection_process_acl_named_user_metadata() !void {
+    reset_memory_stats_for_test();
+    connection_acl_reset_for_test();
+    defer {
+        connection_acl_reset_for_test();
+    }
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var tx: ConnectionTransaction = connection_transaction_new();
+    defer {
+        connection_transaction_reset(&tx);
+    }
+    var out: [byte: 4096] = [];
+
+    const set_alice: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*8\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$5\r\nalice\r\n$2\r\non\r\n$6\r\nnopass\r\n$2\r\n~*\r\n$2\r\n&*\r\n$5\r\n+@all\r\n"[0: 84], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: set_alice.response_len], &"+OK\r\n"[0: 5]));
+
+    const users_after_create: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$3\r\nACL\r\n$5\r\nUSERS\r\n"[0: 24], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_contains(out[0: users_after_create.response_len], &"$7\r\ndefault\r\n"[0: 13]));
+    try assert_true(network_connection_contains(out[0: users_after_create.response_len], &"$5\r\nalice\r\n"[0: 11]));
+
+    const getuser_alice: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$7\r\nGETUSER\r\n$5\r\nalice\r\n"[0: 37], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_contains(out[0: getuser_alice.response_len], &"$5\r\nflags\r\n"[0: 11]));
+    try assert_true(network_connection_contains(out[0: getuser_alice.response_len], &"$2\r\non\r\n"[0: 8]));
+    try assert_true(network_connection_contains(out[0: getuser_alice.response_len], &"$6\r\nnopass\r\n"[0: 12]));
+    try assert_true(network_connection_contains(out[0: getuser_alice.response_len], &"$5\r\n+@all\r\n"[0: 11]));
+
+    const list_after_create: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$3\r\nACL\r\n$4\r\nLIST\r\n"[0: 23], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_contains(out[0: list_after_create.response_len], &"user default on nopass ~* &* +@all"[0: 34]));
+    try assert_true(network_connection_contains(out[0: list_after_create.response_len], &"user alice on nopass ~* &* +@all"[0: 32]));
+
+    const dryrun_alice: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*5\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$5\r\nalice\r\n$3\r\nGET\r\n$1\r\nk\r\n"[0: 52], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: dryrun_alice.response_len], &"+OK\r\n"[0: 5]));
+
+    const set_alice_off: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$5\r\nalice\r\n$3\r\noff\r\n"[0: 46], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: set_alice_off.response_len], &"+OK\r\n"[0: 5]));
+
+    const list_after_off: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$3\r\nACL\r\n$4\r\nLIST\r\n"[0: 23], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_contains(out[0: list_after_off.response_len], &"user alice off nopass ~* &* +@all"[0: 33]));
+
+    const del_alice: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$7\r\nDELUSER\r\n$5\r\nalice\r\n"[0: 37], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: del_alice.response_len], &":1\r\n"[0: 4]));
+
+    const getuser_after_del: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$7\r\nGETUSER\r\n$5\r\nalice\r\n"[0: 37], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: getuser_after_del.response_len], &"$-1\r\n"[0: 5]));
+
+    const users_after_del: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$3\r\nACL\r\n$5\r\nUSERS\r\n"[0: 24], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: users_after_del.response_len], &"*1\r\n$7\r\ndefault\r\n"[0: 17]));
+
+    const invalid_bob: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$3\r\nbob\r\n$7\r\n>secret\r\n"[0: 48], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: invalid_bob.response_len], &"-ERR ACL SETUSER redis-uya partial only supports named user metadata modifiers\r\n"[0: 80]));
+
+    const getuser_bob: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$7\r\nGETUSER\r\n$3\r\nbob\r\n"[0: 35], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: getuser_bob.response_len], &"$-1\r\n"[0: 5]));
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_connection_process_command_docs_all_large_reply() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();

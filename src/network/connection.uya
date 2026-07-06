@@ -4815,6 +4815,18 @@ fn connection_should_append_aof(command: &Command, reply: &CommandReply) bool {
     if command.info.cmd_type == CommandType.command_getex {
         return command.argc > 2;
     }
+    if command.info.cmd_type == CommandType.command_hgetex {
+        if command.argc <= 2 {
+            return false;
+        }
+        const option: &[byte] = command_arg_data(command, 2) catch {
+            return false;
+        };
+        return !connection_keyword_eq(option, &"FIELDS"[0: 6]);
+    }
+    if command.info.cmd_type == CommandType.command_hsetex {
+        return reply.typ == CommandReplyType.reply_integer && reply.integer == 1;
+    }
     if command.info.cmd_type == CommandType.command_msetex {
         return reply.typ == CommandReplyType.reply_integer && reply.integer == 1;
     }

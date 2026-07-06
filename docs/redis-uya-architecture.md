@@ -106,7 +106,7 @@ server open
 - 输出全部发完后恢复到 `EPOLLIN`
 - `BLPOP` / `BRPOP` / `BRPOPLPUSH` / `BLMOVE` / `BLMPOP` / `BZPOPMIN` / `BZPOPMAX` / `BZMPOP` 在 source 未就绪时不会消费后续 pipeline 命令；当前连接会先进入 blocked 状态，等待 server 主循环在 key 就绪或 timeout 后重放同一条原始请求
 - `HRANDFIELD` 当前复用 hash field 字典序视图提供 deterministic random-field partial，支持 `count`、负数重复与 `WITHVALUES`，真实随机采样保留为后续完整语义
-- Hash field TTL 当前在 hash 对象上保存 field 级绝对毫秒过期字典：`HGETEX` 可读取并设置/清理 field TTL，`HSETEX` 支持 `FNX/FXX` 与 `EX/PX/EXAT/PXAT/KEEPTTL`，`HEXPIRE/HPEXPIRE/HEXPIREAT/HPEXPIREAT` 按 `NX/XX/GT/LT` 写入或删除 field，`HTTL/HPTTL/HEXPIRETIME/HPEXPIRETIME/HPERSIST` 返回真实 TTL/过期时间/清理结果；普通 hash 访问路径会 lazy expire 到期 field，普通写入会清理目标 field TTL；项目内 RDB 子集保存 field TTL，AOF rewrite 通过 `HPEXPIREAT` 重建 field TTL，复制传播 field TTL 仍待后续补齐
+- Hash field TTL 当前在 hash 对象上保存 field 级绝对毫秒过期字典：`HGETEX` 可读取并设置/清理 field TTL，`HSETEX` 支持 `FNX/FXX` 与 `EX/PX/EXAT/PXAT/KEEPTTL`，`HEXPIRE/HPEXPIRE/HEXPIREAT/HPEXPIREAT` 按 `NX/XX/GT/LT` 写入或删除 field，`HTTL/HPTTL/HEXPIRETIME/HPEXPIRETIME/HPERSIST` 返回真实 TTL/过期时间/清理结果；普通 hash 访问路径会 lazy expire 到期 field，普通写入会清理目标 field TTL；项目内 RDB 子集保存 field TTL，AOF append、AOF rewrite 与复制 backlog 通过绝对 `HPEXPIREAT` / `PXAT` 语义重建 field TTL
 - `ZMPOP` 是非阻塞 sorted-set multi-pop，执行层复用 zset pop 编码与删除路径；连接层只在成功返回数组时追加 AOF，空结果不落盘
 - `ZRANGE` / `ZREVRANGE` 当前复用 rank-based zset 视图，支持正负索引、`REV` 和 `WITHSCORES`；`ZRANGE ... BYSCORE`、`ZREVRANGE ... BYSCORE`、`ZRANGEBYSCORE` / `ZREVRANGEBYSCORE` 支持整数 score 闭区间、`WITHSCORES` 和 `LIMIT`；`ZRANGE ... BYLEX` / `ZREVRANGE ... BYLEX` 复用 lex 边界扫描，支持 `REV` 和 `LIMIT`，不支持 `WITHSCORES`
 - `ZRANGESTORE` 当前复用 rank-based、score-range 或 lex-range 视图写回项目内 zset，支持 `BYSCORE`、`BYLEX`、`REV` 和 `LIMIT` 并保留源 member 的整数 score
@@ -198,6 +198,7 @@ server open
 - 写命令直接追加 RESP2 原始请求
 - `EXPIRE`、`EXPIREAT`、`PEXPIRE`、`SETEX`、`PSETEX` 会在 AOF 里规范化为绝对时间 `PEXPIREAT`
 - `GETEX` 在带 TTL / `PERSIST` 选项时只把状态变更写入 AOF；相对 TTL 选项同样折算成绝对 `PEXPIREAT`
+- `HGETEX` 在带 TTL / `PERSIST` 选项时只写入 field TTL 状态变更；`HSETEX` 只在条件成功时写入；hash field 相对 TTL 会折算成绝对 `HPEXPIREAT` / `PXAT`，复制 backlog 复用同一编码
 - `WAITAOF` 当前只读取本地兼容状态并返回确认数组，不触发 AOF flush/fsync，也不追加到 AOF 或 replication backlog
 - 回放按流式解析逐条执行
 - `BGREWRITEAOF` 使用子进程写出规范化 AOF 快照，父进程继续追加旧 AOF 并记录 rewrite 增量缓冲，子进程结束后合并并原子替换

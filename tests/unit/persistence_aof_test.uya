@@ -21,6 +21,7 @@ use src.storage.object.RedisObject;
 use src.storage.object.ObjectType;
 use src.storage.object.create_string_object;
 use src.storage.object.hash_object_get_field;
+use src.storage.object.hash_object_get_field_expire_at;
 use src.storage.object.list_object_index_value;
 use src.storage.object.set_object_len;
 use src.storage.object.set_object_members_reply;
@@ -1051,5 +1052,63 @@ export fn test_aof_expire_replays_absolute_deadline() !void {
     try assert_true(aof_key_missing_at(&replay_getex_engine, &"pxkey"[0: 5], 2300u64));
     engine_free(&replay_getex_engine);
     _ = unlink(getex_path);
+    try assert_eq_i32(used_memory() as i32, 0);
+
+    const hash_ttl_path: &const byte = "build/test-aof-hash-field-ttl.aof";
+    _ = unlink(hash_ttl_path);
+
+    var hash_ttl_writer: AofWriter = try aof_open_truncate(hash_ttl_path);
+    var hash_ttl_engine: Engine = engine_new();
+    _ = try connection_process_input_with_aof_at(
+        &hash_ttl_engine,
+        &router,
+        &hash_ttl_writer,
+        &"*4\r\n$4\r\nHSET\r\n$4\r\nhash\r\n$5\r\nfield\r\n$5\r\nvalue\r\n"[0: 46],
+        &out[0],
+        256,
+        1000u64,
+    );
+    _ = try connection_process_input_with_aof_at(
+        &hash_ttl_engine,
+        &router,
+        &hash_ttl_writer,
+        &"*6\r\n$8\r\nHPEXPIRE\r\n$4\r\nhash\r\n$4\r\n1500\r\n$6\r\nFIELDS\r\n$1\r\n1\r\n$5\r\nfield\r\n"[0: 68],
+        &out[0],
+        256,
+        1000u64,
+    );
+    _ = try connection_process_input_with_aof_at(
+        &hash_ttl_engine,
+        &router,
+        &hash_ttl_writer,
+        &"*7\r\n$6\r\nHGETEX\r\n$4\r\nhash\r\n$2\r\nEX\r\n$1\r\n1\r\n$6\r\nFIELDS\r\n$1\r\n1\r\n$5\r\nfield\r\n"[0: 71],
+        &out[0],
+        256,
+        1000u64,
+    );
+    _ = try connection_process_input_with_aof_at(
+        &hash_ttl_engine,
+        &router,
+        &hash_ttl_writer,
+        &"*8\r\n$6\r\nHSETEX\r\n$5\r\nhash2\r\n$2\r\nPX\r\n$4\r\n1200\r\n$6\r\nFIELDS\r\n$1\r\n1\r\n$5\r\nfield\r\n$5\r\nvalue\r\n"[0: 86],
+        &out[0],
+        256,
+        1000u64,
+    );
+    aof_close(&hash_ttl_writer);
+    engine_free(&hash_ttl_engine);
+
+    var replay_hash_ttl_engine: Engine = engine_new();
+    try aof_replay_file_at(hash_ttl_path, &replay_hash_ttl_engine, &router, 1500u64);
+    const hash_found: &RedisObject = try lookup_key_at(&replay_hash_ttl_engine, &"hash"[0: 4], 1500u64);
+    const field_found: &RedisObject = try hash_object_get_field(hash_found, &"field"[0: 5]);
+    try assert_true(aof_test_slice_eq(field_found.value.buf[0: field_found.value.len], &"value"[0: 5]));
+    try assert_eq_i32((try hash_object_get_field_expire_at(hash_found, &"field"[0: 5])) as i32, 2000);
+    const hash2_found: &RedisObject = try lookup_key_at(&replay_hash_ttl_engine, &"hash2"[0: 5], 1500u64);
+    const field2_found: &RedisObject = try hash_object_get_field(hash2_found, &"field"[0: 5]);
+    try assert_true(aof_test_slice_eq(field2_found.value.buf[0: field2_found.value.len], &"value"[0: 5]));
+    try assert_eq_i32((try hash_object_get_field_expire_at(hash2_found, &"field"[0: 5])) as i32, 2200);
+    engine_free(&replay_hash_ttl_engine);
+    _ = unlink(hash_ttl_path);
     try assert_eq_i32(used_memory() as i32, 0);
 }

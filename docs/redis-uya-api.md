@@ -621,7 +621,7 @@ HGETEX key [EX seconds|PX milliseconds|EXAT unix-time-seconds|PXAT unix-time-mil
 
 - `EX` / `PX` / `EXAT` / `PXAT` 会为命中 field 写入绝对毫秒级过期时间；`PERSIST` 会移除命中 field 的 field TTL
 - 访问 hash field 时会惰性清理已到期 field；删除最后一个 field 后，当前实现会删除整个 hash key
-- field TTL 会写入项目内 RDB 子集，并由 AOF rewrite 通过 `HPEXPIREAT` 重建；复制传播的 field TTL 边界仍待后续补齐
+- field TTL 会写入项目内 RDB 子集，并由 AOF append、AOF rewrite 与复制 backlog 通过绝对 `HPEXPIREAT` / `PXAT` 语义重建，避免相对 TTL 在回放或副本执行时产生时钟漂移
 - `numfields` 必须为正整数，并且必须与后续 field 数量一致
 - key 存在但不是 hash 时返回 `WRONGTYPE`
 

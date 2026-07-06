@@ -106,7 +106,7 @@ server open
 - 输出全部发完后恢复到 `EPOLLIN`
 - `BLPOP` / `BRPOP` / `BRPOPLPUSH` / `BLMOVE` / `BLMPOP` / `BZPOPMIN` / `BZPOPMAX` / `BZMPOP` 在 source 未就绪时不会消费后续 pipeline 命令；当前连接会先进入 blocked 状态，等待 server 主循环在 key 就绪或 timeout 后重放同一条原始请求
 - `HRANDFIELD` 当前复用 hash field 字典序视图提供 deterministic random-field partial，支持 `count`、负数重复与 `WITHVALUES`，真实随机采样保留为后续完整语义
-- Hash field TTL 当前在 hash 对象上保存 field 级绝对毫秒过期字典：`HGETEX` 可读取并设置/清理 field TTL，`HSETEX` 支持 `FNX/FXX` 与 `EX/PX/EXAT/PXAT/KEEPTTL`，`HEXPIRE/HPEXPIRE/HEXPIREAT/HPEXPIREAT` 按 `NX/XX/GT/LT` 写入或删除 field，`HTTL/HPTTL/HEXPIRETIME/HPEXPIRETIME/HPERSIST` 返回真实 TTL/过期时间/清理结果；普通 hash 访问路径会 lazy expire 到期 field，普通写入会清理目标 field TTL，当前 RDB、AOF rewrite 与复制传播尚未保存 field TTL 元数据
+- Hash field TTL 当前在 hash 对象上保存 field 级绝对毫秒过期字典：`HGETEX` 可读取并设置/清理 field TTL，`HSETEX` 支持 `FNX/FXX` 与 `EX/PX/EXAT/PXAT/KEEPTTL`，`HEXPIRE/HPEXPIRE/HEXPIREAT/HPEXPIREAT` 按 `NX/XX/GT/LT` 写入或删除 field，`HTTL/HPTTL/HEXPIRETIME/HPEXPIRETIME/HPERSIST` 返回真实 TTL/过期时间/清理结果；普通 hash 访问路径会 lazy expire 到期 field，普通写入会清理目标 field TTL；项目内 RDB 子集保存 field TTL，AOF rewrite 通过 `HPEXPIREAT` 重建 field TTL，复制传播 field TTL 仍待后续补齐
 - `ZMPOP` 是非阻塞 sorted-set multi-pop，执行层复用 zset pop 编码与删除路径；连接层只在成功返回数组时追加 AOF，空结果不落盘
 - `ZRANGE` / `ZREVRANGE` 当前复用 rank-based zset 视图，支持正负索引、`REV` 和 `WITHSCORES`；`ZRANGE ... BYSCORE`、`ZREVRANGE ... BYSCORE`、`ZRANGEBYSCORE` / `ZREVRANGEBYSCORE` 支持整数 score 闭区间、`WITHSCORES` 和 `LIMIT`；`ZRANGE ... BYLEX` / `ZREVRANGE ... BYLEX` 复用 lex 边界扫描，支持 `REV` 和 `LIMIT`，不支持 `WITHSCORES`
 - `ZRANGESTORE` 当前复用 rank-based、score-range 或 lex-range 视图写回项目内 zset，支持 `BYSCORE`、`BYLEX`、`REV` 和 `LIMIT` 并保留源 member 的整数 score
@@ -221,7 +221,7 @@ server open
 
 - 单线程
 - `BGSAVE` / `BGREWRITEAOF` 已有最小子进程后台路径，但仍未做更细粒度的后台资源隔离与吞吐优化
-- RDB 已覆盖当前五类对象和绝对过期时间，但仍不是 Redis 完整二进制兼容
+- RDB 已覆盖当前五类对象、key 绝对过期时间和 hash field TTL，但仍不是 Redis 完整二进制兼容
 - 复制当前已覆盖角色与状态机、`PSYNC / backlog`、`REPLCONF` no-op 握手 partial、replica 侧全量同步、定时拉取式增量同步与心跳；`FAILOVER` 当前为无副本/未支持 controlled failover 的 `standalone-error`；仍不是 Redis 那种长连接流式推送复制
 - 集群当前已有槽位模型、节点元数据、最小拓扑模型、`CLUSTER` 最小命令接口和 `MOVED/ASK` 基础重定向；`v1.0.0` 前不继续扩展完整多节点握手、gossip、故障检测、failover 和 resharding
 - 事务当前已覆盖连接级最小 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`，但仍没有更完整的 Redis 事务中止传播、脚本联动和控制面扩展

@@ -23,6 +23,8 @@ use src.storage.object.list_object_len;
 use src.storage.object.zset_object_range_reply;
 use src.storage.object.zset_object_get_score;
 use src.storage.object.hash_object_get_field;
+use src.storage.object.hash_object_field_has_expire;
+use src.storage.object.hash_object_get_field_expire_at;
 use src.storage.object.stream_object_len;
 use src.storage.object.object_free;
 
@@ -137,6 +139,16 @@ fn rewrite_append_expire(aof: &AofWriter, key: &[byte], expire_at_ms: u64) !void
     try rewrite_append_bulk_u64(aof, expire_at_ms);
 }
 
+fn rewrite_append_hash_field_expire(aof: &AofWriter, key: &[byte], field: &[byte], expire_at_ms: u64) !void {
+    try rewrite_append_array_header(aof, 6u64);
+    try rewrite_append_bulk(aof, &"HPEXPIREAT"[0: 10]);
+    try rewrite_append_bulk(aof, key);
+    try rewrite_append_bulk_u64(aof, expire_at_ms);
+    try rewrite_append_bulk(aof, &"FIELDS"[0: 6]);
+    try rewrite_append_bulk(aof, &"1"[0: 1]);
+    try rewrite_append_bulk(aof, field);
+}
+
 fn rewrite_get_expire_at_or_zero(engine: &Engine, key: &[byte]) u64 {
     const expire_result: !u64 = get_key_expire_at(engine, key);
     const expire_at: u64 = expire_result catch {
@@ -184,6 +196,11 @@ fn rewrite_emit_hash(aof: &AofWriter, key: &[byte], obj: &RedisObject) !void {
         try rewrite_append_bulk(aof, key);
         try rewrite_append_bulk(aof, field);
         try rewrite_append_bulk(aof, value_obj.value.buf[0: value_obj.value.len]);
+        const has_expire: bool = try hash_object_field_has_expire(obj, field);
+        if has_expire {
+            const expire_at_ms: u64 = try hash_object_get_field_expire_at(obj, field);
+            try rewrite_append_hash_field_expire(aof, key, field, expire_at_ms);
+        }
         node = node.next;
     }
 }

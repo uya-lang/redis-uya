@@ -34,6 +34,9 @@ use src.storage.object.create_zset_object;
 use src.storage.object.create_stream_object;
 use src.storage.object.hash_object_set_field;
 use src.storage.object.hash_object_get_field;
+use src.storage.object.hash_object_set_field_expire_at;
+use src.storage.object.hash_object_field_has_expire;
+use src.storage.object.hash_object_get_field_expire_at;
 use src.storage.object.list_object_push_tail;
 use src.storage.object.list_object_insert_sorted_lex;
 use src.storage.object.list_object_len;
@@ -79,6 +82,8 @@ const RDB_ENTRY_TYPE_ZSET: byte = 8 as byte;
 const RDB_ENTRY_TYPE_ZSET_EXPIRE_MS: byte = 9 as byte;
 const RDB_ENTRY_TYPE_STREAM: byte = 10 as byte;
 const RDB_ENTRY_TYPE_STREAM_EXPIRE_MS: byte = 11 as byte;
+const RDB_ENTRY_TYPE_HASH_FIELD_EXPIRE_MS: byte = 12 as byte;
+const RDB_ENTRY_TYPE_HASH_EXPIRE_MS_FIELD_EXPIRE_MS: byte = 13 as byte;
 const RDB_ENTRY_TYPE_EOF: byte = 255 as byte;
 const RDB_ENTRY_MAX_BYTES: usize = 1024 * 1024;
 
@@ -284,13 +289,23 @@ fn rdb_read_blob_from_bytes(data: &[byte], pos: &usize) !RdbBlob {
     return RdbBlob{ ptr: ptr, len: len };
 }
 
-fn rdb_entry_type_for_object(obj_type: ObjectType, has_expire: bool) !byte {
-    match obj_type {
+fn rdb_hash_has_field_expire(obj: &RedisObject) bool {
+    if obj == null || obj.obj_type != ObjectType.object_hash {
+        return false;
+    }
+    return dict_len(&obj.hash_expire_dict) > 0;
+}
+
+fn rdb_entry_type_for_object(obj: &RedisObject, has_expire: bool) !byte {
+    match obj.obj_type {
         ObjectType.object_string => {
             if has_expire { return RDB_ENTRY_TYPE_STRING_EXPIRE_MS; }
             return RDB_ENTRY_TYPE_STRING;
         },
         ObjectType.object_hash => {
+            const has_field_expire: bool = rdb_hash_has_field_expire(obj);
+            if has_expire && has_field_expire { return RDB_ENTRY_TYPE_HASH_EXPIRE_MS_FIELD_EXPIRE_MS; }
+            if has_field_expire { return RDB_ENTRY_TYPE_HASH_FIELD_EXPIRE_MS; }
             if has_expire { return RDB_ENTRY_TYPE_HASH_EXPIRE_MS; }
             return RDB_ENTRY_TYPE_HASH;
         },
@@ -319,10 +334,16 @@ fn rdb_entry_type_for_object(obj_type: ObjectType, has_expire: bool) !byte {
 fn rdb_entry_type_has_expire(typ: byte) bool {
     return typ == RDB_ENTRY_TYPE_STRING_EXPIRE_MS ||
         typ == RDB_ENTRY_TYPE_HASH_EXPIRE_MS ||
+        typ == RDB_ENTRY_TYPE_HASH_EXPIRE_MS_FIELD_EXPIRE_MS ||
         typ == RDB_ENTRY_TYPE_LIST_EXPIRE_MS ||
         typ == RDB_ENTRY_TYPE_SET_EXPIRE_MS ||
         typ == RDB_ENTRY_TYPE_ZSET_EXPIRE_MS ||
         typ == RDB_ENTRY_TYPE_STREAM_EXPIRE_MS;
+}
+
+fn rdb_entry_type_has_hash_field_expire(typ: byte) bool {
+    return typ == RDB_ENTRY_TYPE_HASH_FIELD_EXPIRE_MS ||
+        typ == RDB_ENTRY_TYPE_HASH_EXPIRE_MS_FIELD_EXPIRE_MS;
 }
 
 fn rdb_entry_type_is_supported(typ: byte) bool {
@@ -330,6 +351,8 @@ fn rdb_entry_type_is_supported(typ: byte) bool {
         typ == RDB_ENTRY_TYPE_STRING_EXPIRE_MS ||
         typ == RDB_ENTRY_TYPE_HASH ||
         typ == RDB_ENTRY_TYPE_HASH_EXPIRE_MS ||
+        typ == RDB_ENTRY_TYPE_HASH_FIELD_EXPIRE_MS ||
+        typ == RDB_ENTRY_TYPE_HASH_EXPIRE_MS_FIELD_EXPIRE_MS ||
         typ == RDB_ENTRY_TYPE_LIST ||
         typ == RDB_ENTRY_TYPE_LIST_EXPIRE_MS ||
         typ == RDB_ENTRY_TYPE_SET ||
@@ -354,7 +377,33 @@ fn rdb_sorted_dict_keys(dict_obj: &RedisObject) !&RedisObject {
     return keys;
 }
 
-fn rdb_write_hash_payload(file: &File, obj: &RedisObject) !void {
+fn rdb_write_hash_field_expire_payload(file: &File, fields: &RedisObject, obj: &RedisObject) !void {
+    var count: usize = 0;
+    var node: &ListNode = fields.list_head;
+    while node != null {
+        const field: &[byte] = node.value.value.buf[0: node.value.value.len];
+        const has_expire: bool = try hash_object_field_has_expire(obj, field);
+        if has_expire {
+            count = count + 1;
+        }
+        node = node.next;
+    }
+    try rdb_write_u32(file, count as u32);
+
+    node = fields.list_head;
+    while node != null {
+        const field: &[byte] = node.value.value.buf[0: node.value.value.len];
+        const has_expire: bool = try hash_object_field_has_expire(obj, field);
+        if has_expire {
+            const expire_at_ms: u64 = try hash_object_get_field_expire_at(obj, field);
+            try rdb_write_blob(file, field);
+            try rdb_write_u64(file, expire_at_ms);
+        }
+        node = node.next;
+    }
+}
+
+fn rdb_write_hash_payload(file: &File, obj: &RedisObject, include_field_expire: bool) !void {
     const fields: &RedisObject = try rdb_sorted_dict_keys(obj);
     defer {
         object_free(fields);
@@ -376,9 +425,38 @@ fn rdb_write_hash_payload(file: &File, obj: &RedisObject) !void {
         try rdb_write_blob(file, value_obj.value.buf[0: value_obj.value.len]);
         node = node.next;
     }
+    if include_field_expire {
+        try rdb_write_hash_field_expire_payload(file, fields, obj);
+    }
 }
 
-fn rdb_sds_write_hash_payload(buf: &Sds, obj: &RedisObject) !void {
+fn rdb_sds_write_hash_field_expire_payload(buf: &Sds, fields: &RedisObject, obj: &RedisObject) !void {
+    var count: usize = 0;
+    var node: &ListNode = fields.list_head;
+    while node != null {
+        const field: &[byte] = node.value.value.buf[0: node.value.value.len];
+        const has_expire: bool = try hash_object_field_has_expire(obj, field);
+        if has_expire {
+            count = count + 1;
+        }
+        node = node.next;
+    }
+    try rdb_sds_write_u32(buf, count as u32);
+
+    node = fields.list_head;
+    while node != null {
+        const field: &[byte] = node.value.value.buf[0: node.value.value.len];
+        const has_expire: bool = try hash_object_field_has_expire(obj, field);
+        if has_expire {
+            const expire_at_ms: u64 = try hash_object_get_field_expire_at(obj, field);
+            try rdb_sds_write_blob(buf, field);
+            try rdb_sds_write_u64(buf, expire_at_ms);
+        }
+        node = node.next;
+    }
+}
+
+fn rdb_sds_write_hash_payload(buf: &Sds, obj: &RedisObject, include_field_expire: bool) !void {
     const fields: &RedisObject = try rdb_sorted_dict_keys(obj);
     defer {
         object_free(fields);
@@ -399,6 +477,9 @@ fn rdb_sds_write_hash_payload(buf: &Sds, obj: &RedisObject) !void {
         try rdb_sds_write_blob(buf, field);
         try rdb_sds_write_blob(buf, value_obj.value.buf[0: value_obj.value.len]);
         node = node.next;
+    }
+    if include_field_expire {
+        try rdb_sds_write_hash_field_expire_payload(buf, fields, obj);
     }
 }
 
@@ -542,13 +623,13 @@ fn rdb_sds_write_stream_payload(buf: &Sds, obj: &RedisObject) !void {
     }
 }
 
-fn rdb_write_payload(file: &File, obj: &RedisObject) !void {
+fn rdb_write_payload(file: &File, obj: &RedisObject, typ: byte) !void {
     match obj.obj_type {
         ObjectType.object_string => {
             try rdb_write_blob(file, obj.value.buf[0: obj.value.len]);
         },
         ObjectType.object_hash => {
-            try rdb_write_hash_payload(file, obj);
+            try rdb_write_hash_payload(file, obj, rdb_entry_type_has_hash_field_expire(typ));
         },
         ObjectType.object_list => {
             try rdb_write_list_payload(file, obj);
@@ -568,13 +649,13 @@ fn rdb_write_payload(file: &File, obj: &RedisObject) !void {
     }
 }
 
-fn rdb_sds_write_payload(buf: &Sds, obj: &RedisObject) !void {
+fn rdb_sds_write_payload(buf: &Sds, obj: &RedisObject, typ: byte) !void {
     match obj.obj_type {
         ObjectType.object_string => {
             try rdb_sds_write_blob(buf, obj.value.buf[0: obj.value.len]);
         },
         ObjectType.object_hash => {
-            try rdb_sds_write_hash_payload(buf, obj);
+            try rdb_sds_write_hash_payload(buf, obj, rdb_entry_type_has_hash_field_expire(typ));
         },
         ObjectType.object_list => {
             try rdb_sds_write_list_payload(buf, obj);
@@ -594,7 +675,7 @@ fn rdb_sds_write_payload(buf: &Sds, obj: &RedisObject) !void {
     }
 }
 
-fn rdb_load_hash_payload(file: &File) !&RedisObject {
+fn rdb_load_hash_payload(file: &File, include_field_expire: bool) !&RedisObject {
     const obj: &RedisObject = try create_hash_object();
     errdefer object_free(obj);
 
@@ -607,6 +688,17 @@ fn rdb_load_hash_payload(file: &File) !&RedisObject {
         defer rdb_free_blob(&value_blob);
         _ = try hash_object_set_field(obj, rdb_blob_slice(&field_blob), rdb_blob_slice(&value_blob));
         i = i + 1;
+    }
+    if include_field_expire {
+        const expire_count: usize = (try rdb_read_u32(file)) as usize;
+        var expire_index: usize = 0;
+        while expire_index < expire_count {
+            var field_blob_expire: RdbBlob = try rdb_read_blob(file);
+            defer rdb_free_blob(&field_blob_expire);
+            const expire_at_ms: u64 = try rdb_read_u64(file);
+            _ = try hash_object_set_field_expire_at(obj, rdb_blob_slice(&field_blob_expire), expire_at_ms);
+            expire_index = expire_index + 1;
+        }
     }
     return obj;
 }
@@ -689,8 +781,11 @@ fn rdb_load_payload(file: &File, typ: byte) !&RedisObject {
         defer rdb_free_blob(&value_blob);
         return create_string_object(rdb_blob_slice(&value_blob));
     }
-    if typ == RDB_ENTRY_TYPE_HASH || typ == RDB_ENTRY_TYPE_HASH_EXPIRE_MS {
-        return rdb_load_hash_payload(file);
+    if typ == RDB_ENTRY_TYPE_HASH ||
+        typ == RDB_ENTRY_TYPE_HASH_EXPIRE_MS ||
+        typ == RDB_ENTRY_TYPE_HASH_FIELD_EXPIRE_MS ||
+        typ == RDB_ENTRY_TYPE_HASH_EXPIRE_MS_FIELD_EXPIRE_MS {
+        return rdb_load_hash_payload(file, rdb_entry_type_has_hash_field_expire(typ));
     }
     if typ == RDB_ENTRY_TYPE_LIST || typ == RDB_ENTRY_TYPE_LIST_EXPIRE_MS {
         return rdb_load_list_payload(file);
@@ -707,7 +802,7 @@ fn rdb_load_payload(file: &File, typ: byte) !&RedisObject {
     return error.RdbUnsupportedType;
 }
 
-fn rdb_load_hash_payload_from_bytes(data: &[byte], pos: &usize) !&RedisObject {
+fn rdb_load_hash_payload_from_bytes(data: &[byte], pos: &usize, include_field_expire: bool) !&RedisObject {
     const obj: &RedisObject = try create_hash_object();
     errdefer object_free(obj);
 
@@ -720,6 +815,17 @@ fn rdb_load_hash_payload_from_bytes(data: &[byte], pos: &usize) !&RedisObject {
         defer rdb_free_blob(&value_blob);
         _ = try hash_object_set_field(obj, rdb_blob_slice(&field_blob), rdb_blob_slice(&value_blob));
         i = i + 1;
+    }
+    if include_field_expire {
+        const expire_count: usize = (try rdb_read_u32_from_bytes(data, pos)) as usize;
+        var expire_index: usize = 0;
+        while expire_index < expire_count {
+            var field_blob_expire: RdbBlob = try rdb_read_blob_from_bytes(data, pos);
+            defer rdb_free_blob(&field_blob_expire);
+            const expire_at_ms: u64 = try rdb_read_u64_from_bytes(data, pos);
+            _ = try hash_object_set_field_expire_at(obj, rdb_blob_slice(&field_blob_expire), expire_at_ms);
+            expire_index = expire_index + 1;
+        }
     }
     return obj;
 }
@@ -802,8 +908,11 @@ fn rdb_load_payload_from_bytes(data: &[byte], pos: &usize, typ: byte) !&RedisObj
         defer rdb_free_blob(&value_blob);
         return create_string_object(rdb_blob_slice(&value_blob));
     }
-    if typ == RDB_ENTRY_TYPE_HASH || typ == RDB_ENTRY_TYPE_HASH_EXPIRE_MS {
-        return rdb_load_hash_payload_from_bytes(data, pos);
+    if typ == RDB_ENTRY_TYPE_HASH ||
+        typ == RDB_ENTRY_TYPE_HASH_EXPIRE_MS ||
+        typ == RDB_ENTRY_TYPE_HASH_FIELD_EXPIRE_MS ||
+        typ == RDB_ENTRY_TYPE_HASH_EXPIRE_MS_FIELD_EXPIRE_MS {
+        return rdb_load_hash_payload_from_bytes(data, pos, rdb_entry_type_has_hash_field_expire(typ));
     }
     if typ == RDB_ENTRY_TYPE_LIST || typ == RDB_ENTRY_TYPE_LIST_EXPIRE_MS {
         return rdb_load_list_payload_from_bytes(data, pos);
@@ -935,14 +1044,14 @@ export fn rdb_save_file_at(path: &const byte, engine: &Engine, now_ms: u64) !voi
         }
 
         const expire_at: u64 = rdb_get_expire_at_or_zero(engine, key);
-        const entry_type: byte = try rdb_entry_type_for_object(obj.obj_type, expire_at > now_ms);
+        const entry_type: byte = try rdb_entry_type_for_object(obj, expire_at > now_ms);
         var entry_type_buf: [byte: 1] = [entry_type];
         try rdb_write_all(&file, entry_type_buf[0: 1]);
         if rdb_entry_type_has_expire(entry_type) {
             try rdb_write_u64(&file, expire_at);
         }
         try rdb_write_blob(&file, key);
-        try rdb_write_payload(&file, obj);
+        try rdb_write_payload(&file, obj, entry_type);
         node = node.next;
     }
 
@@ -1087,14 +1196,14 @@ export fn rdb_dump_object_at(engine: &Engine, now_ms: u64) !&RedisObject {
             continue;
         }
         const expire_at: u64 = rdb_get_expire_at_or_zero(engine, key);
-        const entry_type: byte = try rdb_entry_type_for_object(obj.obj_type, expire_at > now_ms);
+        const entry_type: byte = try rdb_entry_type_for_object(obj, expire_at > now_ms);
         var entry_type_buf: [byte: 1] = [entry_type];
         try rdb_sds_write_all(&buf, entry_type_buf[0: 1]);
         if rdb_entry_type_has_expire(entry_type) {
             try rdb_sds_write_u64(&buf, expire_at);
         }
         try rdb_sds_write_blob(&buf, key);
-        try rdb_sds_write_payload(&buf, obj);
+        try rdb_sds_write_payload(&buf, obj, entry_type);
         node = node.next;
     }
 

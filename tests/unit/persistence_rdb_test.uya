@@ -26,6 +26,8 @@ use src.storage.object.create_zset_object;
 use src.storage.object.create_stream_object;
 use src.storage.object.hash_object_set_field;
 use src.storage.object.hash_object_get_field;
+use src.storage.object.hash_object_set_field_expire_at;
+use src.storage.object.hash_object_get_field_expire_at;
 use src.storage.object.list_object_push_tail;
 use src.storage.object.list_object_range;
 use src.storage.object.list_object_len;
@@ -159,6 +161,7 @@ export fn test_rdb_save_and_load_current_types() !void {
     const hash_obj: &RedisObject = try create_hash_object();
     _ = try hash_object_set_field(hash_obj, &"field1"[0: 6], &"one"[0: 3]);
     _ = try hash_object_set_field(hash_obj, &"field2"[0: 6], &"two"[0: 3]);
+    _ = try hash_object_set_field_expire_at(hash_obj, &"field2"[0: 6], 7000u64);
     try set_key(&engine, &"hash"[0: 4], hash_obj);
 
     const list_obj: &RedisObject = try create_list_object();
@@ -197,6 +200,7 @@ export fn test_rdb_save_and_load_current_types() !void {
     const field2: &RedisObject = try hash_object_get_field(hash_found, &"field2"[0: 6]);
     try assert_true(rdb_test_slice_eq(field1.value.buf[0: field1.value.len], &"one"[0: 3]));
     try assert_true(rdb_test_slice_eq(field2.value.buf[0: field2.value.len], &"two"[0: 3]));
+    try assert_eq_i32((try hash_object_get_field_expire_at(hash_found, &"field2"[0: 6])) as i32, 7000);
 
     const list_found: &RedisObject = try lookup_key_at(&replay_engine, &"list"[0: 4], 2000u64);
     try assert_eq_i32((try list_object_len(list_found)) as i32, 3);
@@ -260,6 +264,7 @@ export fn test_rdb_dump_and_load_bytes_current_types() !void {
 
     const hash_obj: &RedisObject = try create_hash_object();
     _ = try hash_object_set_field(hash_obj, &"field"[0: 5], &"value"[0: 5]);
+    _ = try hash_object_set_field_expire_at(hash_obj, &"field"[0: 5], 9000u64);
     try set_key(&engine, &"hash"[0: 4], hash_obj);
 
     const dump_obj: &RedisObject = try rdb_dump_object_at(&engine, 1000u64);
@@ -271,6 +276,7 @@ export fn test_rdb_dump_and_load_bytes_current_types() !void {
     const hash_found: &RedisObject = try lookup_key_at(&replay_engine, &"hash"[0: 4], 1000u64);
     const field_found: &RedisObject = try hash_object_get_field(hash_found, &"field"[0: 5]);
     try assert_true(rdb_test_slice_eq(field_found.value.buf[0: field_found.value.len], &"value"[0: 5]));
+    try assert_eq_i32((try hash_object_get_field_expire_at(hash_found, &"field"[0: 5])) as i32, 9000);
 
     object_free(dump_obj);
     engine_free(&engine);

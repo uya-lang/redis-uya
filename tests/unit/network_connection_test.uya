@@ -1921,6 +1921,10 @@ export fn test_connection_process_command_docs_all_large_reply() !void {
 
 export fn test_connection_process_auth_requirepass_shutdown() !void {
     reset_memory_stats_for_test();
+    connection_acl_reset_for_test();
+    defer {
+        connection_acl_reset_for_test();
+    }
     const router: CommandRouter = command_router_new();
     var engine: Engine = engine_new();
     var runtime: CommandRuntimeInfo = command_runtime_default();
@@ -2002,6 +2006,26 @@ export fn test_connection_process_auth_requirepass_shutdown() !void {
     try assert_true(network_connection_contains(out[0: acl_auth_list.response_len], &"#"[0: 1]));
     try assert_true(!network_connection_contains(out[0: acl_auth_list.response_len], &"nopass"[0: 6]));
     try assert_true(!network_connection_contains(out[0: acl_auth_list.response_len], &"secret"[0: 6]));
+
+    const requirepass_set_bob: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*5\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$3\r\nbob\r\n$2\r\non\r\n$7\r\n>secret\r\n"[0: 56], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: requirepass_set_bob.response_len], &"+OK\r\n"[0: 5]));
+
+    var requirepass_bob_tx: ConnectionTransaction = connection_transaction_new();
+    defer {
+        connection_transaction_reset(&requirepass_bob_tx);
+    }
+    const requirepass_auth_bob: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &requirepass_bob_tx, &"*3\r\n$4\r\nAUTH\r\n$3\r\nbob\r\n$6\r\nsecret\r\n"[0: 35], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: requirepass_auth_bob.response_len], &"+OK\r\n"[0: 5]));
+    try assert_eq_i32(requirepass_bob_tx.authenticated as i32, 1);
+
+    const requirepass_bob_whoami: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &requirepass_bob_tx, &"*2\r\n$3\r\nACL\r\n$6\r\nWHOAMI\r\n"[0: 25], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: requirepass_bob_whoami.response_len], &"$3\r\nbob\r\n"[0: 9]));
+
+    const requirepass_bob_off: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$3\r\nbob\r\n$3\r\noff\r\n"[0: 44], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: requirepass_bob_off.response_len], &"+OK\r\n"[0: 5]));
+
+    const requirepass_bob_after_off: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &requirepass_bob_tx, &"*1\r\n$4\r\nPING\r\n"[0: 14], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: requirepass_bob_after_off.response_len], &"-NOAUTH Authentication required.\r\n"[0: 34]));
 
     const multi_auth: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*1\r\n$5\r\nMULTI\r\n"[0: 15], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: multi_auth.response_len], &"+OK\r\n"[0: 5]));

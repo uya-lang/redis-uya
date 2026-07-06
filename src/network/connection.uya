@@ -3411,11 +3411,29 @@ fn connection_auth_required(runtime: &CommandRuntimeInfo) bool {
     return connection_requirepass(runtime).len > 0;
 }
 
+fn connection_authenticated_named_user_valid(tx: &ConnectionTransaction) bool {
+    if tx == null || tx.username_len == 0 {
+        return true;
+    }
+    if connection_keyword_eq(tx.username[0: tx.username_len], &"default"[0: 7]) {
+        return true;
+    }
+    const slot: i32 = connection_acl_user_find(tx.username[0: tx.username_len]);
+    if slot < 0 || slot >= CONNECTION_ACL_USER_MAX as i32 {
+        return false;
+    }
+    const slot_index: usize = slot as usize;
+    if slot_index >= CONNECTION_ACL_USER_MAX {
+        return false;
+    }
+    return connection_acl_users[slot_index].active && connection_acl_users[slot_index].enabled;
+}
+
 fn connection_auth_ok(tx: &ConnectionTransaction, runtime: &CommandRuntimeInfo) bool {
     if !connection_auth_required(runtime) {
         return true;
     }
-    return tx != null && tx.authenticated;
+    return tx != null && tx.authenticated && connection_authenticated_named_user_valid(tx);
 }
 
 fn connection_noauth_reply() CommandReply {

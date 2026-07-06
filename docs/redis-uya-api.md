@@ -2564,6 +2564,7 @@ FCALL_RO function numkeys [key ...] [arg ...]
 
 - 当前实现为 partial，仅提供空 function 库下的错误兼容面和 `COMMAND GETKEYS/GETKEYSANDFLAGS` 动态 key 解析
 - `FCALL_RO` 的 `COMMAND GETKEYSANDFLAGS` key 标记为只读访问；`FCALL` 标记为读写访问/更新
+- `numkeys` 必须是非负整数，并且声明的 key 数不能超过后续实参数量；参数形状错误会先于空 function 库的 `ERR Function not found` 返回
 - 当前不执行 Redis Functions，不支持 function library 存储或 Lua engine 调用
 
 ### `SCRIPT`

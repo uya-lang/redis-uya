@@ -10956,6 +10956,19 @@ fn command_executor_fcall(command: &Command) CommandReply {
         }
         return command_executor_owned_error(&"ERR wrong number of arguments for 'fcall' command"[0: 49]);
     }
+    const numkeys_data: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    const numkeys_i64: i64 = command_executor_parse_i64(numkeys_data) catch {
+        return command_executor_invalid_integer();
+    };
+    if numkeys_i64 < 0 {
+        return command_executor_owned_error(&"ERR Number of keys can't be negative"[0: 36]);
+    }
+    const numkeys: usize = numkeys_i64 as usize;
+    if command.argc < 3 + numkeys {
+        return command_executor_owned_error(&"ERR Number of keys can't be greater than number of args"[0: 55]);
+    }
     return command_executor_owned_error(&"ERR Function not found"[0: 22]);
 }
 

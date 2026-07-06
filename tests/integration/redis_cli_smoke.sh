@@ -766,6 +766,24 @@ if [[ "$FCALL_RO_RESULT" != "ERR Function not found" ]]; then
     exit 1
 fi
 
+FCALL_BAD_NUMKEYS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" fcall missing x 2>&1 || true)"
+if [[ "$FCALL_BAD_NUMKEYS_RESULT" != "ERR value is not an integer or out of range" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected FCALL bad numkeys integer error, got '$FCALL_BAD_NUMKEYS_RESULT'" >&2
+    exit 1
+fi
+
+FCALL_NEGATIVE_NUMKEYS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" fcall missing -1 2>&1 || true)"
+if [[ "$FCALL_NEGATIVE_NUMKEYS_RESULT" != "ERR Number of keys can't be negative" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected FCALL negative numkeys error, got '$FCALL_NEGATIVE_NUMKEYS_RESULT'" >&2
+    exit 1
+fi
+
+FCALL_RO_TOO_FEW_KEYS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" fcall_ro missing 2 k1 2>&1 || true)"
+if [[ "$FCALL_RO_TOO_FEW_KEYS_RESULT" != "ERR Number of keys can't be greater than number of args" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected FCALL_RO key count error, got '$FCALL_RO_TOO_FEW_KEYS_RESULT'" >&2
+    exit 1
+fi
+
 ACL_HELP_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl help)"
 if [[ "$ACL_HELP_RESULT" != *"ACL <subcommand> [<arg> [value] [opt] ...]. Subcommands are:"* || "$ACL_HELP_RESULT" != *"WHOAMI"* ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ACL HELP output, got '$ACL_HELP_RESULT'" >&2

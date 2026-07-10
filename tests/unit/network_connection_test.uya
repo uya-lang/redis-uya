@@ -1868,6 +1868,24 @@ export fn test_connection_process_acl_named_user_metadata() !void {
     const bob_get_allowed: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &bob_auth_tx, &"*2\r\n$3\r\nGET\r\n$7\r\nmissing\r\n"[0: 26], &out[0], 4096, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: bob_get_allowed.response_len], &"$-1\r\n"[0: 5]));
 
+    const deny_bob_get_and_string: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*5\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$3\r\nbob\r\n$4\r\n-get\r\n$8\r\n-@string\r\n"[0: 59], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: deny_bob_get_and_string.response_len], &"+OK\r\n"[0: 5]));
+
+    const getuser_bob_denied: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$7\r\nGETUSER\r\n$3\r\nbob\r\n"[0: 35], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_contains(out[0: getuser_bob_denied.response_len], &"$8\r\ncommands\r\n$19\r\n+@all -get -@string\r\n"[0: 40]));
+
+    const dryrun_bob_denied: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*5\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$3\r\nbob\r\n$3\r\nGET\r\n$1\r\nk\r\n"[0: 50], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: dryrun_bob_denied.response_len], &"-NOPERM User bob has no permissions to run the 'get' command\r\n"[0: 62]));
+
+    const bob_get_denied: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &bob_auth_tx, &"*2\r\n$3\r\nGET\r\n$7\r\nmissing\r\n"[0: 26], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: bob_get_denied.response_len], &"-NOPERM User bob has no permissions to run the 'get' command\r\n"[0: 62]));
+
+    const reset_bob_rules: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$3\r\nbob\r\n$13\r\nresetcommands\r\n"[0: 55], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: reset_bob_rules.response_len], &"+OK\r\n"[0: 5]));
+
+    const bob_get_after_reset: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &bob_auth_tx, &"*2\r\n$3\r\nGET\r\n$7\r\nmissing\r\n"[0: 26], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: bob_get_after_reset.response_len], &"$-1\r\n"[0: 5]));
+
     const reset_default_rules_after_bob: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$7\r\ndefault\r\n$13\r\nresetcommands\r\n"[0: 59], &out[0], 4096, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: reset_default_rules_after_bob.response_len], &"+OK\r\n"[0: 5]));
 

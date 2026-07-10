@@ -1,7 +1,7 @@
 # redis-uya 文档
 
 > 版本: v0.9.1-dev
-> 日期: 2026-05-19
+> 日期: 2026-07-11
 
 ## 文档索引
 
@@ -34,6 +34,7 @@
 - [test-report-v0.8.0](./redis-uya-test-report-v0.8.0.md)
 - [test-report-v0.8.1](./redis-uya-test-report-v0.8.1.md)
 - [test-report-v0.9.0](./redis-uya-test-report-v0.9.0.md)
+- [performance-v0.9.3](../benchmarks/v0.9.3-performance.md)
 
 ## 文档关系
 
@@ -55,10 +56,10 @@
 
 ## 当前阶段
 
-截至 2026-05-16 审计、2026-05-17 最新复跑与 2026-05-19 当前复核，项目当前口径应为：
+截至 2026-05-16 审计、2026-05-17 复跑、2026-05-19 复核与 2026-07-11 当前性能复测，项目当前口径应为：
 
 - `v0.9.0` 的历史收口文档仍然保留，但不能直接代表当前 `HEAD`。
-- 当前 `HEAD` 的 `make test`、`make test-integration`、`make benchmark-v0.8.1` 与 `bash scripts/verify_definition_of_done.sh` 已恢复为通过状态。
+- 当前 `HEAD` 的 `make test` 与 `make test-integration` 已通过；`make benchmark-v0.8.1` 已生成 `benchmarks/v0.9.3-performance.md`，但当前 guard miss，不能标记为性能绿态。
 - 当前主线的第一优先级已从 `v0.9.1` 的真实性修复转入 `v0.9.3` 的 Redis Open Source 单机核心缺口补齐，并持续保持控制面真值、版本口径与统计分层不回退。
 - `v1.0.0` 的命令封版门槛先收敛 Redis Open Source 单机核心；JSON/Search/Time Series/概率结构/Vector 等模块命令继续追踪，但不再作为当前阶段完成度的包装材料。
 
@@ -75,4 +76,4 @@
 
 仍待继续收口的问题：
 
-- 当前 `v0.9.1` 的控制面真值、版本口径、benchmark guard 和命令完成度统计分层已收口完成。
+- 当前 `v0.9.3` 功能回归为绿态；性能 guard 在 `benchmarks/v0.9.3-performance.md` 中记录为 miss，后续需要在 `v0.9.4` 性能与稳定性收敛阶段处理。

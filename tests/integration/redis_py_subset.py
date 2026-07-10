@@ -1735,8 +1735,31 @@ def run_smoke() -> None:
                 raise AssertionError("expected ACL SETUSER default no-op modifiers to return OK")
             if client.acl_setuser(b"default", b"resetkeys", b"resetchannels") != "OK":
                 raise AssertionError("expected ACL SETUSER default resetkeys/resetchannels to return OK")
+            if client.acl_list() != [b"user default on nopass resetkeys &* +@all"]:
+                raise AssertionError("expected ACL SETUSER resetkeys to update default user key view")
+            resetkeys_getuser = client.acl_getuser(b"default")
+            if not isinstance(resetkeys_getuser, list) or b"resetkeys" not in resetkeys_getuser:
+                raise AssertionError(f"expected ACL GETUSER to include resetkeys, got {resetkeys_getuser!r}")
+            try:
+                client.get("missing")
+                raise AssertionError("expected ACL resetkeys to deny GET")
+            except RespError as exc:
+                if str(exc) != "NOPERM User default has no permissions to access one of the keys used as arguments":
+                    raise AssertionError(f"unexpected ACL resetkeys GET error: {exc}") from exc
+            if client.acl_setuser(b"default", b"~safe*") != "OK":
+                raise AssertionError("expected ACL SETUSER default ~safe* to return OK")
+            if client.get("safe1") is not None:
+                raise AssertionError("expected GET safe1 to be allowed by ACL ~safe*")
+            try:
+                client.get("other")
+                raise AssertionError("expected ACL ~safe* to deny non-matching key")
+            except RespError as exc:
+                if str(exc) != "NOPERM User default has no permissions to access one of the keys used as arguments":
+                    raise AssertionError(f"unexpected ACL key pattern GET error: {exc}") from exc
+            if client.acl_setuser(b"default", b"allkeys") != "OK":
+                raise AssertionError("expected ACL SETUSER default allkeys to return OK")
             if client.acl_list() != [b"user default on nopass ~* &* +@all"]:
-                raise AssertionError("expected ACL SETUSER resetkeys/resetchannels no-op to keep default user view")
+                raise AssertionError("expected ACL SETUSER allkeys to restore default user key view")
             if client.acl_setuser(b"default", b"clearselectors", b"resetselectors") != "OK":
                 raise AssertionError("expected ACL SETUSER default clearselectors/resetselectors to return OK")
             if client.acl_setuser(b"default", b"-get") != "OK":

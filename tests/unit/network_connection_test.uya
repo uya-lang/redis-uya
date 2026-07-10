@@ -1710,7 +1710,7 @@ export fn test_connection_process_acl_permission_denial() !void {
     const acl_getuser: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$7\r\nGETUSER\r\n$7\r\ndefault\r\n"[0: 39], &out[0], 2048, 1000u64);
     try assert_true(network_connection_contains(out[0: acl_getuser.response_len], &"+@all -get"[0: 10]));
 
-    const reset_patterns_noop: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*5\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$7\r\ndefault\r\n$9\r\nresetkeys\r\n$13\r\nresetchannels\r\n"[0: 74], &out[0], 2048, 1000u64);
+    const reset_patterns_noop: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$7\r\ndefault\r\n$13\r\nresetchannels\r\n"[0: 59], &out[0], 2048, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: reset_patterns_noop.response_len], &"+OK\r\n"[0: 5]));
 
     const reset_selectors_noop: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*5\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$7\r\ndefault\r\n$14\r\nclearselectors\r\n$14\r\nresetselectors\r\n"[0: 81], &out[0], 2048, 1000u64);
@@ -1779,6 +1779,27 @@ export fn test_connection_process_acl_permission_denial() !void {
 
     const get_category_after: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$3\r\nGET\r\n$7\r\nmissing\r\n"[0: 26], &out[0], 2048, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: get_category_after.response_len], &"$-1\r\n"[0: 5]));
+
+    const reset_default_keys: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$7\r\ndefault\r\n$9\r\nresetkeys\r\n"[0: 54], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: reset_default_keys.response_len], &"+OK\r\n"[0: 5]));
+
+    const get_after_resetkeys: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$3\r\nGET\r\n$5\r\nother\r\n"[0: 24], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: get_after_resetkeys.response_len], &"-NOPERM User default has no permissions to access one of the keys used as arguments\r\n"[0: 85]));
+
+    const allow_default_safe_keys: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$7\r\ndefault\r\n$6\r\n~safe*\r\n"[0: 51], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: allow_default_safe_keys.response_len], &"+OK\r\n"[0: 5]));
+
+    const getuser_default_safe_keys: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$7\r\nGETUSER\r\n$7\r\ndefault\r\n"[0: 39], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_contains(out[0: getuser_default_safe_keys.response_len], &"$6\r\n~safe*\r\n"[0: 12]));
+
+    const get_safe_key_allowed: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$3\r\nGET\r\n$5\r\nsafe1\r\n"[0: 24], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: get_safe_key_allowed.response_len], &"$-1\r\n"[0: 5]));
+
+    const dryrun_other_key_denied: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*5\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$7\r\ndefault\r\n$3\r\nGET\r\n$5\r\nother\r\n"[0: 58], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: dryrun_other_key_denied.response_len], &"-NOPERM User default has no permissions to access one of the keys used as arguments\r\n"[0: 85]));
+
+    const restore_default_allkeys: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$7\r\ndefault\r\n$7\r\nallkeys\r\n"[0: 52], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: restore_default_allkeys.response_len], &"+OK\r\n"[0: 5]));
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);
@@ -1867,6 +1888,27 @@ export fn test_connection_process_acl_named_user_metadata() !void {
 
     const bob_get_allowed: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &bob_auth_tx, &"*2\r\n$3\r\nGET\r\n$7\r\nmissing\r\n"[0: 26], &out[0], 4096, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: bob_get_allowed.response_len], &"$-1\r\n"[0: 5]));
+
+    const bob_safe_keys_only: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$3\r\nbob\r\n$6\r\n~safe*\r\n"[0: 47], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: bob_safe_keys_only.response_len], &"+OK\r\n"[0: 5]));
+
+    const getuser_bob_safe_keys: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$7\r\nGETUSER\r\n$3\r\nbob\r\n"[0: 35], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_contains(out[0: getuser_bob_safe_keys.response_len], &"$6\r\n~safe*\r\n"[0: 12]));
+
+    const bob_safe_key_allowed: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &bob_auth_tx, &"*2\r\n$3\r\nGET\r\n$5\r\nsafe1\r\n"[0: 24], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: bob_safe_key_allowed.response_len], &"$-1\r\n"[0: 5]));
+
+    const bob_other_key_denied: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &bob_auth_tx, &"*2\r\n$3\r\nGET\r\n$5\r\nother\r\n"[0: 24], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: bob_other_key_denied.response_len], &"-NOPERM User bob has no permissions to access one of the keys used as arguments\r\n"[0: 81]));
+
+    const bob_resetkeys: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$3\r\nbob\r\n$9\r\nresetkeys\r\n"[0: 50], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: bob_resetkeys.response_len], &"+OK\r\n"[0: 5]));
+
+    const bob_after_resetkeys_denied: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &bob_auth_tx, &"*2\r\n$3\r\nGET\r\n$5\r\nsafe1\r\n"[0: 24], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: bob_after_resetkeys_denied.response_len], &"-NOPERM User bob has no permissions to access one of the keys used as arguments\r\n"[0: 81]));
+
+    const bob_restore_allkeys: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$3\r\nbob\r\n$7\r\nallkeys\r\n"[0: 48], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: bob_restore_allkeys.response_len], &"+OK\r\n"[0: 5]));
 
     const deny_bob_get_and_string: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*5\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$3\r\nbob\r\n$4\r\n-get\r\n$8\r\n-@string\r\n"[0: 59], &out[0], 4096, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: deny_bob_get_and_string.response_len], &"+OK\r\n"[0: 5]));

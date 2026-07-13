@@ -499,7 +499,7 @@ export fn test_connection_process_ping_set_get_quit() !void {
     try assert_true(network_connection_contains(out[0: swapdb_range_result.response_len], &"DB index is out of range"[0: 24]));
 
     const lolwut_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*1\r\n$6\r\nLOLWUT\r\n"[0: 16], &out[0], 512, 1000u64);
-    try assert_true(network_connection_contains(out[0: lolwut_result.response_len], &"Redis ver. v0.9.1-dev"[0: 21]));
+    try assert_true(network_connection_contains(out[0: lolwut_result.response_len], &"Redis ver. v0.9.3-dev"[0: 21]));
 
     const lolwut_bad_version_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$6\r\nLOLWUT\r\n$7\r\nVERSION\r\n$3\r\nbad\r\n"[0: 38], &out[0], 512, 1000u64);
     try assert_true(network_connection_contains(out[0: lolwut_bad_version_result.response_len], &"value is not an integer"[0: 23]));

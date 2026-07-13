@@ -70,7 +70,7 @@ def roundtrip(sock: socket.socket, request: bytes, expected: bytes) -> None:
         raise AssertionError(f"expected {expected!r}, got {actual!r}")
 
 
-REDIS_UYA_VERSION = b"v0.9.1-dev"
+REDIS_UYA_VERSION = b"v0.9.3-dev"
 
 HELLO3_REPLY = (
     b"%7\r\n"
@@ -220,7 +220,7 @@ def run_smoke() -> None:
                 raise AssertionError(f"unexpected SWAPDB bad integer reply: {swapdb_bad_reply!r}")
             sock.sendall(b"*1\r\n$6\r\nLOLWUT\r\n")
             lolwut_reply = recv_bulk(sock)
-            if lolwut_reply is None or b"Redis ver. v0.9.1-dev" not in lolwut_reply:
+            if lolwut_reply is None or b"Redis ver. v0.9.3-dev" not in lolwut_reply:
                 raise AssertionError(f"unexpected LOLWUT reply: {lolwut_reply!r}")
             sock.sendall(b"*3\r\n$6\r\nLOLWUT\r\n$7\r\nVERSION\r\n$1\r\n5\r\n")
             lolwut_version_reply = recv_bulk(sock)

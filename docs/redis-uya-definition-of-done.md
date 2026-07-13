@@ -1,6 +1,6 @@
 # redis-uya Definition of Done
 
-> 版本: v0.9.1-dev
+> 版本: v0.9.3-dev
 > 日期: 2026-07-11
 > 状态: 下列条目保留历史里程碑证据；截至 2026-07-11 当前复核，`make test` 与 `make test-integration` 通过，`benchmarks/v0.9.3-performance.md` 已生成但 `make benchmark-v0.8.1` guard miss；主线处于 `v0.9.3` 核心缺口补齐与运维第一批
 
@@ -43,7 +43,7 @@ bash scripts/verify_definition_of_done.sh
 | `make benchmark-v0.8.1` | `PASS` | guard 已升级为“绝对基线 + 同机 Redis 归一化兜底”，2026-05-19 当前复跑已恢复通过 |
 | `bash scripts/verify_definition_of_done.sh` | `PASS` | 依赖链已恢复为通过状态，当前一键验证再次可用 |
 | `COMMAND*` 真实性 | `PASS` | 运行时 `COMMAND*` 已按真实执行面隐藏未实现命令，并补齐当前 `CLIENT/CONFIG` 已实现子命令的矩阵状态 |
-| 版本号一致性 | `PASS` | banner、`HELLO`、`INFO server`、README、DoD 和相关测试断言已统一到 `v0.9.1-dev` |
+| 版本号一致性 | `PASS` | banner、`HELLO`、`INFO server`、README、DoD 和相关测试断言已统一到 `v0.9.3-dev` |
 
 后续历史章节从这里开始顺延，保留原编号不代表当前 `HEAD` 已重新验收。
 

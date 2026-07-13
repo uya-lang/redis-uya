@@ -10247,7 +10247,7 @@ export fn test_command_lolwut() !void {
     var default_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &default_command, 1000u64);
     try assert_eq_i32(default_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
     try assert_true(command_executor_test_contains(default_reply.data, &"redis-uya LOLWUT partial"[0: 24]));
-    try assert_true(command_executor_test_contains(default_reply.data, &"Redis ver. v0.9.1-dev"[0: 21]));
+    try assert_true(command_executor_test_contains(default_reply.data, &"Redis ver. v0.9.3-dev"[0: 21]));
     command_reply_cleanup(&default_reply);
     resp_value_free(&default_parsed.value);
 

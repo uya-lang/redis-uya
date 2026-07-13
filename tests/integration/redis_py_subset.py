@@ -9,7 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 BIN = ROOT / "build" / "redis-uya"
-REDIS_UYA_VERSION = "v0.9.1-dev"
+REDIS_UYA_VERSION = "v0.9.3-dev"
 
 
 class RespError(RuntimeError):
@@ -2227,7 +2227,7 @@ def run_smoke() -> None:
             except RespError as exc:
                 if str(exc) != "ERR value is not an integer or out of range":
                     raise AssertionError(f"unexpected SWAPDB integer error: {exc}") from exc
-            if b"Redis ver. v0.9.1-dev" not in client.lolwut():
+            if b"Redis ver. v0.9.3-dev" not in client.lolwut():
                 raise AssertionError("expected LOLWUT to include redis-uya version")
             if b"Redis-compatible" not in client.lolwut(b"VERSION", b"5"):
                 raise AssertionError("expected LOLWUT VERSION 5 to return compatibility text")

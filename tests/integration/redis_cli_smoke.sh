@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 BIN="$ROOT/build/redis-uya"
-REDIS_UYA_VERSION="v0.9.1-dev"
+REDIS_UYA_VERSION="v0.9.3-dev"
 
 if ! command -v redis-cli >/dev/null 2>&1; then
     echo "[FAIL] integration/redis_cli_smoke: redis-cli is not installed" >&2
@@ -3215,7 +3215,7 @@ if [[ "$SWAPDB_BAD_RESULT" != "ERR value is not an integer or out of range" ]]; 
 fi
 
 LOLWUT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lolwut)"
-if [[ "$LOLWUT_RESULT" != *"Redis ver. v0.9.1-dev"* ]]; then
+if [[ "$LOLWUT_RESULT" != *"Redis ver. v0.9.3-dev"* ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected LOLWUT version text, got '$LOLWUT_RESULT'" >&2
     exit 1
 fi

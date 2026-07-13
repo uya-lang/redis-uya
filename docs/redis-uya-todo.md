@@ -1,7 +1,7 @@
 程序的真正成本不在于编写，而在于维护。
 # redis-uya 开发 TODO 文档
 
-> 版本: v0.9.1-dev
+> 版本: v0.9.3-dev
 > 日期: 2026-05-19
 > 配套设计文档: `redis-uya-design.md`
 > 配套评审文档: `redis-uya-review.md`
@@ -479,7 +479,7 @@
 
 - [x] `COMMAND` 真值修复：`COMMAND` / `INFO` / `DOCS` / `LIST` 已按真实执行面隐藏未实现命令，并补齐当前 `CLIENT/CONFIG` 已实现子命令的矩阵状态
 - [x] 目录统计分层：已把 Redis Open Source 单机核心、模式命令、模块命令分开统计，不再用总条目数代表当前单机完成度
-- [x] 版本统一：banner、`HELLO`、`INFO server`、README、DoD、测试断言已统一到 `v0.9.1-dev`
+- [x] 版本统一：banner、`HELLO`、`INFO server`、README、DoD、测试断言已统一到 `v0.9.3-dev`
 - [x] `make test-integration` 恢复：修正 `maxmemory` 相关测试口径，使其与 Redis startup memory 语义对齐
 - [x] `make benchmark-v0.8.1` 稳定：性能 guard 已升级为“绝对基线 + 同机 Redis 归一化兜底”，当前复跑已恢复稳定通过
 - [x] `verify_definition_of_done.sh` 重新转绿，确保一键验证再次可用

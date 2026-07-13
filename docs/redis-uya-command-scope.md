@@ -1,6 +1,6 @@
 # redis-uya Command Scope
 
-> 版本: v0.9.1-dev
+> 版本: v0.9.3-dev
 > 日期: 2026-05-16
 > 基线: Redis 8.6 Commands Reference
 

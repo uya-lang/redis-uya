@@ -1346,7 +1346,7 @@ def render_docs(entries: list[CommandEntry]) -> str:
         raise RuntimeError(f"unclassified command group for scope tier: {entry.group}")
     lines: list[str] = []
     lines.append("# redis-uya command matrix\n\n")
-    lines.append("> version: v0.9.1-dev\n")
+    lines.append("> version: v0.9.3-dev\n")
     lines.append(f"> date: {today}\n")
     lines.append("> source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`\n")
     lines.append("> runtime source: `src/command/catalog_generated.uya`\n\n")

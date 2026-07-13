@@ -3821,7 +3821,7 @@ CLIENT HELP
 - `CLIENT TRACKING`：当前支持连接级 `ON/OFF`、`REDIRECT`、`BCAST`、`PREFIX`、`OPTIN`、`OPTOUT`、`NOLOOP` 状态存储，返回 `+OK`；`PREFIX` 仅在 `BCAST` 模式下接受
 - `CLIENT TRACKINGINFO`：RESP2 下返回 flatten array，RESP3 下返回 map，暴露当前连接的 tracking flags、redirect 和 prefixes
 - `CLIENT SETINFO`：保存客户端库名/版本元数据，成功返回 `+OK`
-- `CLIENT HELP`：返回当前支持的 CLIENT 子命令列表
+- `CLIENT HELP`：返回当前支持的 CLIENT 子命令列表，包含精确的 `CLIENT REPLY <ON|OFF|SKIP>` 条目
 
 说明：
 

@@ -1340,6 +1340,12 @@ if [[ "$CLIENT_CACHING_RESULT" != "OK" ]]; then
     exit 1
 fi
 
+CLIENT_HELP_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" client help)"
+if [[ "$CLIENT_HELP_RESULT" != *"CLIENT REPLY <ON|OFF|SKIP>"* || "$CLIENT_HELP_RESULT" != *"CLIENT TRACKINGINFO"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected CLIENT HELP output, got '$CLIENT_HELP_RESULT'" >&2
+    exit 1
+fi
+
 CLIENT_REPLY_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" client reply on)"
 if [[ "$CLIENT_REPLY_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected CLIENT REPLY ON OK, got '$CLIENT_REPLY_RESULT'" >&2

@@ -207,6 +207,14 @@ def run_smoke() -> None:
                 if not isinstance(listed, bytes) or b"name=smoke-client" not in listed or b"name=peer-client" not in listed:
                     raise AssertionError(f"unexpected CLIENT LIST: {listed!r}")
 
+                client_help = send_command(sock, b"CLIENT", b"HELP")
+                if (
+                    not isinstance(client_help, list)
+                    or b"CLIENT REPLY <ON|OFF|SKIP>" not in client_help
+                    or b"CLIENT TRACKINGINFO" not in client_help
+                ):
+                    raise AssertionError(f"unexpected CLIENT HELP: {client_help!r}")
+
                 hello = send_command(sock, b"HELLO", b"3", b"SETNAME", b"resp3-client")
                 if not isinstance(hello, dict) or hello.get(b"proto") != 3:
                     raise AssertionError(f"unexpected HELLO 3 response: {hello!r}")

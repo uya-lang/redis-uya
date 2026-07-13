@@ -1373,6 +1373,11 @@ export fn test_connection_process_client_commands() !void {
     const get_name: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$7\r\nGETNAME\r\n"[0: 29], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: get_name.response_len], &"$6\r\nworker\r\n"[0: 12]));
 
+    var client_help_out: [byte: 2048] = [];
+    const client_help: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$4\r\nHELP\r\n"[0: 26], &client_help_out[0], 2048, 1000u64);
+    try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT REPLY <ON|OFF|SKIP>"[0: 26]));
+    try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT TRACKINGINFO"[0: 19]));
+
     const caching_yes: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$6\r\nCLIENT\r\n$7\r\nCACHING\r\n$3\r\nYES\r\n"[0: 38], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: caching_yes.response_len], &"+OK\r\n"[0: 5]));
     try assert_eq_i32(tx.caching_enabled as i32, 1);

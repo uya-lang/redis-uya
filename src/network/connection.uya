@@ -4757,7 +4757,7 @@ fn connection_client_help_reply() CommandReply {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
-    _ = list_object_push_tail(reply_list, &"CLIENT REPLY <ON|OFF|SKIP>"[0: 28]) catch {
+    _ = list_object_push_tail(reply_list, &"CLIENT REPLY <ON|OFF|SKIP>"[0: 26]) catch {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };

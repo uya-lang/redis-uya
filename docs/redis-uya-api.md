@@ -2585,7 +2585,7 @@ SCRIPT KILL
 
 返回：
 
-- `HELP`：返回当前支持的子命令说明
+- `HELP`：返回当前支持的子命令说明，当前为 13 项数组并包含结尾的 `Prints this help.` 说明
 - `DEBUG`：接受 `YES` / `SYNC` / `NO` 并返回 `+OK`
 - `LOAD`：返回脚本 SHA1
 - `EXISTS`：按输入顺序返回 `0/1`

@@ -328,6 +328,11 @@ class RedisPySubsetClient:
     def script_debug(self, mode: bytes):
         return self._request(b"SCRIPT", b"DEBUG", mode)
 
+    def script_help(self):
+        result = self._request(b"SCRIPT", b"HELP")
+        assert isinstance(result, list)
+        return result
+
     def script_kill(self):
         return self._request(b"SCRIPT", b"KILL")
 
@@ -1641,6 +1646,15 @@ def run_smoke() -> None:
             assert client.script_debug(b"YES") == "OK"
             assert client.script_debug(b"SYNC") == "OK"
             assert client.script_debug(b"NO") == "OK"
+            script_help = client.script_help()
+            if (
+                b"SCRIPT <subcommand> [<arg> [value] [opt] ...]. Subcommands are:" not in script_help
+                or b"    Set Lua debugger mode. Currently a compatibility no-op." not in script_help
+                or b"    Return information about the existence of the scripts in the script cache." not in script_help
+                or b"    Load a supported script into the script cache without executing it." not in script_help
+                or b"    Prints this help." not in script_help
+            ):
+                raise AssertionError(f"unexpected SCRIPT HELP result: {script_help!r}")
             assert client.script_load("return redis.call('GET', KEYS[1])") == b"d3c21d0c2b9ca22f82737626a27bcaf5d288f99f"
             assert client.evalsha("D3C21D0C2B9CA22F82737626A27BCAF5D288F99F", 1, "lua-key") == b"value"
             assert client.eval_ro("return redis.call('GET', KEYS[1])", 1, "lua-key") == b"value"

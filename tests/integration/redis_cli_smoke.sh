@@ -700,6 +700,12 @@ if [[ "$SCRIPT_DEBUG_RESULT" != "OK" ]]; then
     exit 1
 fi
 
+SCRIPT_HELP_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" script help)"
+if [[ "$SCRIPT_HELP_RESULT" != *"SCRIPT <subcommand> [<arg> [value] [opt] ...]. Subcommands are:"* || "$SCRIPT_HELP_RESULT" != *"    Prints this help."* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SCRIPT HELP output, got '$SCRIPT_HELP_RESULT'" >&2
+    exit 1
+fi
+
 SCRIPT_LOAD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" script load "return redis.call('GET', KEYS[1])")"
 if [[ "$SCRIPT_LOAD_RESULT" != "d3c21d0c2b9ca22f82737626a27bcaf5d288f99f" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected SCRIPT LOAD sha, got '$SCRIPT_LOAD_RESULT'" >&2
@@ -887,14 +893,20 @@ if [[ "$ACL_RESET_PATTERNS_RESULT" != "OK" ]]; then
 fi
 
 ACL_RESET_PATTERNS_LIST_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl list)"
-if [[ "$ACL_RESET_PATTERNS_LIST_RESULT" != "user default on nopass ~* &* +@all" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected ACL SETUSER resetkeys/resetchannels to keep default view, got '$ACL_RESET_PATTERNS_LIST_RESULT'" >&2
+if [[ "$ACL_RESET_PATTERNS_LIST_RESULT" != "user default on nopass resetkeys resetchannels +@all" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL SETUSER resetkeys/resetchannels to update default view, got '$ACL_RESET_PATTERNS_LIST_RESULT'" >&2
     exit 1
 fi
 
 ACL_RESET_SELECTORS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser default clearselectors resetselectors)"
 if [[ "$ACL_RESET_SELECTORS_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ACL SETUSER default clearselectors/resetselectors OK, got '$ACL_RESET_SELECTORS_RESULT'" >&2
+    exit 1
+fi
+
+ACL_RESTORE_PATTERNS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser default allkeys allchannels)"
+if [[ "$ACL_RESTORE_PATTERNS_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL SETUSER default allkeys/allchannels OK, got '$ACL_RESTORE_PATTERNS_RESULT'" >&2
     exit 1
 fi
 

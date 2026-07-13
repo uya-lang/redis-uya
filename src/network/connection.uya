@@ -6393,18 +6393,18 @@ fn connection_script_help() CommandReply {
     };
     _ = list_object_push_tail(reply_list, &"SCRIPT <subcommand> [<arg> [value] [opt] ...]. Subcommands are:"[0: 63]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
     _ = list_object_push_tail(reply_list, &"DEBUG YES|SYNC|NO"[0: 17]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
-    _ = list_object_push_tail(reply_list, &"    Set Lua debugger mode. Currently a compatibility no-op."[0: 61]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = list_object_push_tail(reply_list, &"    Set Lua debugger mode. Currently a compatibility no-op."[0: 59]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
     _ = list_object_push_tail(reply_list, &"EXISTS <sha1> [<sha1> ...]"[0: 26]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
-    _ = list_object_push_tail(reply_list, &"    Return information about the existence of the scripts in the script cache."[0: 76]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
-    _ = list_object_push_tail(reply_list, &"FLUSH [ASYNC|SYNC]"[0: 19]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = list_object_push_tail(reply_list, &"    Return information about the existence of the scripts in the script cache."[0: 78]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = list_object_push_tail(reply_list, &"FLUSH [ASYNC|SYNC]"[0: 18]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
     _ = list_object_push_tail(reply_list, &"    Flush the supported script cache." [0: 37]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
     _ = list_object_push_tail(reply_list, &"KILL"[0: 4]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
-    _ = list_object_push_tail(reply_list, &"    Kill the currently executing Lua script."[0: 43]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = list_object_push_tail(reply_list, &"    Kill the currently executing Lua script."[0: 44]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
     _ = list_object_push_tail(reply_list, &"LOAD <script>"[0: 13]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
-    _ = list_object_push_tail(reply_list, &"    Load a supported script into the script cache without executing it."[0: 69]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = list_object_push_tail(reply_list, &"    Load a supported script into the script cache without executing it."[0: 71]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
     _ = list_object_push_tail(reply_list, &"HELP"[0: 4]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
-    _ = list_object_push_tail(reply_list, &"    Prints this help." [0: 22]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
-    return connection_array_reply_owned(reply_list, 12usize);
+    _ = list_object_push_tail(reply_list, &"    Prints this help." [0: 21]) catch { object_free(reply_list); return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    return connection_array_reply_owned(reply_list, 13usize);
 }
 
 fn connection_script_unknown_subcommand(subcommand: &[byte]) CommandReply {

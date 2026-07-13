@@ -113,6 +113,9 @@ class RedisPySubsetClient:
     def get(self, key: str) -> bytes | None:
         return self._request(b"GET", key.encode())
 
+    def publish(self, channel: bytes, message: bytes) -> int:
+        return int(self._request(b"PUBLISH", channel, message))
+
     def copy(self, source: str, destination: str, *parts: str) -> int:
         return int(self._request(b"COPY", source.encode(), destination.encode(), *(part.encode() for part in parts)))
 
@@ -1735,17 +1738,35 @@ def run_smoke() -> None:
                 raise AssertionError("expected ACL SETUSER default no-op modifiers to return OK")
             if client.acl_setuser(b"default", b"resetkeys", b"resetchannels") != "OK":
                 raise AssertionError("expected ACL SETUSER default resetkeys/resetchannels to return OK")
-            if client.acl_list() != [b"user default on nopass resetkeys &* +@all"]:
-                raise AssertionError("expected ACL SETUSER resetkeys to update default user key view")
+            if client.acl_list() != [b"user default on nopass resetkeys resetchannels +@all"]:
+                raise AssertionError("expected ACL SETUSER resetkeys/resetchannels to update default user key/channel view")
             resetkeys_getuser = client.acl_getuser(b"default")
-            if not isinstance(resetkeys_getuser, list) or b"resetkeys" not in resetkeys_getuser:
-                raise AssertionError(f"expected ACL GETUSER to include resetkeys, got {resetkeys_getuser!r}")
+            if not isinstance(resetkeys_getuser, list) or b"resetkeys" not in resetkeys_getuser or b"resetchannels" not in resetkeys_getuser:
+                raise AssertionError(f"expected ACL GETUSER to include resetkeys/resetchannels, got {resetkeys_getuser!r}")
             try:
                 client.get("missing")
                 raise AssertionError("expected ACL resetkeys to deny GET")
             except RespError as exc:
                 if str(exc) != "NOPERM User default has no permissions to access one of the keys used as arguments":
                     raise AssertionError(f"unexpected ACL resetkeys GET error: {exc}") from exc
+            try:
+                client.publish(b"other", b"hello")
+                raise AssertionError("expected ACL resetchannels to deny PUBLISH")
+            except RespError as exc:
+                if str(exc) != "NOPERM User default has no permissions to access one of the channels used as arguments":
+                    raise AssertionError(f"unexpected ACL resetchannels PUBLISH error: {exc}") from exc
+            if client.acl_setuser(b"default", b"&safe*") != "OK":
+                raise AssertionError("expected ACL SETUSER default &safe* to return OK")
+            if client.publish(b"safe1", b"hello") != 0:
+                raise AssertionError("expected PUBLISH safe1 to be allowed by ACL &safe*")
+            try:
+                client.acl_dryrun(b"default", b"PUBLISH", b"other", b"hello")
+                raise AssertionError("expected ACL DRYRUN denied PUBLISH channel to fail")
+            except RespError as exc:
+                if str(exc) != "NOPERM User default has no permissions to access one of the channels used as arguments":
+                    raise AssertionError(f"unexpected ACL DRYRUN channel error: {exc}") from exc
+            if client.acl_setuser(b"default", b"allchannels") != "OK":
+                raise AssertionError("expected ACL SETUSER default allchannels to return OK")
             if client.acl_setuser(b"default", b"~safe*") != "OK":
                 raise AssertionError("expected ACL SETUSER default ~safe* to return OK")
             if client.get("safe1") is not None:

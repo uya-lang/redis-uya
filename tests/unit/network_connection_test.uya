@@ -1710,8 +1710,26 @@ export fn test_connection_process_acl_permission_denial() !void {
     const acl_getuser: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$7\r\nGETUSER\r\n$7\r\ndefault\r\n"[0: 39], &out[0], 2048, 1000u64);
     try assert_true(network_connection_contains(out[0: acl_getuser.response_len], &"+@all -get"[0: 10]));
 
-    const reset_patterns_noop: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$7\r\ndefault\r\n$13\r\nresetchannels\r\n"[0: 59], &out[0], 2048, 1000u64);
-    try assert_true(network_connection_slice_eq(out[0: reset_patterns_noop.response_len], &"+OK\r\n"[0: 5]));
+    const reset_channels: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$7\r\ndefault\r\n$13\r\nresetchannels\r\n"[0: 59], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: reset_channels.response_len], &"+OK\r\n"[0: 5]));
+
+    const getuser_reset_channels: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$7\r\nGETUSER\r\n$7\r\ndefault\r\n"[0: 39], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_contains(out[0: getuser_reset_channels.response_len], &"$13\r\nresetchannels\r\n"[0: 20]));
+
+    const publish_other_channel_denied: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$7\r\nPUBLISH\r\n$5\r\nother\r\n$5\r\nhello\r\n"[0: 39], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: publish_other_channel_denied.response_len], &"-NOPERM User default has no permissions to access one of the channels used as arguments\r\n"[0: 89]));
+
+    const allow_default_safe_channels: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$7\r\ndefault\r\n$6\r\n&safe*\r\n"[0: 51], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: allow_default_safe_channels.response_len], &"+OK\r\n"[0: 5]));
+
+    const publish_safe_channel_allowed: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$7\r\nPUBLISH\r\n$5\r\nsafe1\r\n$5\r\nhello\r\n"[0: 39], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: publish_safe_channel_allowed.response_len], &":0\r\n"[0: 4]));
+
+    const dryrun_other_channel_denied: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*6\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$7\r\ndefault\r\n$7\r\nPUBLISH\r\n$5\r\nother\r\n$5\r\nhello\r\n"[0: 73], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: dryrun_other_channel_denied.response_len], &"-NOPERM User default has no permissions to access one of the channels used as arguments\r\n"[0: 89]));
+
+    const restore_default_allchannels: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$7\r\ndefault\r\n$11\r\nallchannels\r\n"[0: 57], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: restore_default_allchannels.response_len], &"+OK\r\n"[0: 5]));
 
     const reset_selectors_noop: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*5\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$7\r\ndefault\r\n$14\r\nclearselectors\r\n$14\r\nresetselectors\r\n"[0: 81], &out[0], 2048, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: reset_selectors_noop.response_len], &"+OK\r\n"[0: 5]));
@@ -1909,6 +1927,27 @@ export fn test_connection_process_acl_named_user_metadata() !void {
 
     const bob_restore_allkeys: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$3\r\nbob\r\n$7\r\nallkeys\r\n"[0: 48], &out[0], 4096, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: bob_restore_allkeys.response_len], &"+OK\r\n"[0: 5]));
+
+    const bob_reset_channels: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$3\r\nbob\r\n$13\r\nresetchannels\r\n"[0: 55], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: bob_reset_channels.response_len], &"+OK\r\n"[0: 5]));
+
+    const bob_publish_reset_channels_denied: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &bob_auth_tx, &"*3\r\n$7\r\nPUBLISH\r\n$5\r\nother\r\n$5\r\nhello\r\n"[0: 39], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: bob_publish_reset_channels_denied.response_len], &"-NOPERM User bob has no permissions to access one of the channels used as arguments\r\n"[0: 85]));
+
+    const bob_safe_channels_only: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$3\r\nbob\r\n$6\r\n&safe*\r\n"[0: 47], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: bob_safe_channels_only.response_len], &"+OK\r\n"[0: 5]));
+
+    const getuser_bob_safe_channels: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$7\r\nGETUSER\r\n$3\r\nbob\r\n"[0: 35], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_contains(out[0: getuser_bob_safe_channels.response_len], &"$6\r\n&safe*\r\n"[0: 12]));
+
+    const bob_safe_channel_allowed: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &bob_auth_tx, &"*3\r\n$7\r\nPUBLISH\r\n$5\r\nsafe1\r\n$5\r\nhello\r\n"[0: 39], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: bob_safe_channel_allowed.response_len], &":0\r\n"[0: 4]));
+
+    const bob_other_channel_denied: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &bob_auth_tx, &"*3\r\n$7\r\nPUBLISH\r\n$5\r\nother\r\n$5\r\nhello\r\n"[0: 39], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: bob_other_channel_denied.response_len], &"-NOPERM User bob has no permissions to access one of the channels used as arguments\r\n"[0: 85]));
+
+    const bob_restore_allchannels: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$3\r\nbob\r\n$11\r\nallchannels\r\n"[0: 53], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: bob_restore_allchannels.response_len], &"+OK\r\n"[0: 5]));
 
     const deny_bob_get_and_string: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*5\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$3\r\nbob\r\n$4\r\n-get\r\n$8\r\n-@string\r\n"[0: 59], &out[0], 4096, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: deny_bob_get_and_string.response_len], &"+OK\r\n"[0: 5]));

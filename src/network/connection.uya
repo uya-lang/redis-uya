@@ -182,6 +182,8 @@ const CONNECTION_ACL_DENIED_CATEGORY_MAX: usize = 32;
 const CONNECTION_ACL_COMMAND_NAME_MAX: usize = 64;
 const CONNECTION_ACL_KEY_PATTERN_MAX: usize = 32;
 const CONNECTION_ACL_KEY_PATTERN_BYTES_MAX: usize = 128;
+const CONNECTION_ACL_CHANNEL_PATTERN_MAX: usize = 32;
+const CONNECTION_ACL_CHANNEL_PATTERN_BYTES_MAX: usize = 128;
 const CONNECTION_ACL_USER_MAX: usize = 32;
 const CONNECTION_ACL_USER_NAME_MAX: usize = 64;
 const CONNECTION_ACL_USER_PASSWORD_MAX: usize = 128;
@@ -268,9 +270,21 @@ struct ConnectionAclKeyRules {
     patterns: [ConnectionAclKeyPattern: CONNECTION_ACL_KEY_PATTERN_MAX],
 }
 
+struct ConnectionAclChannelPattern {
+    active: bool,
+    pattern_len: usize,
+    pattern: [byte: CONNECTION_ACL_CHANNEL_PATTERN_BYTES_MAX],
+}
+
+struct ConnectionAclChannelRules {
+    allchannels: bool,
+    patterns: [ConnectionAclChannelPattern: CONNECTION_ACL_CHANNEL_PATTERN_MAX],
+}
+
 var connection_acl_default_denied_commands: [ConnectionAclDeniedCommand: CONNECTION_ACL_DENIED_COMMAND_MAX] = [];
 var connection_acl_default_denied_categories: [ConnectionAclDeniedCommand: CONNECTION_ACL_DENIED_CATEGORY_MAX] = [];
 var connection_acl_default_key_rules: ConnectionAclKeyRules = ConnectionAclKeyRules{ allkeys: true, patterns: [] };
+var connection_acl_default_channel_rules: ConnectionAclChannelRules = ConnectionAclChannelRules{ allchannels: true, patterns: [] };
 
 struct ConnectionAclUser {
     active: bool,
@@ -284,6 +298,8 @@ struct ConnectionAclUser {
     denied_categories: [ConnectionAclDeniedCommand: CONNECTION_ACL_DENIED_CATEGORY_MAX],
     allkeys: bool,
     key_patterns: [ConnectionAclKeyPattern: CONNECTION_ACL_KEY_PATTERN_MAX],
+    allchannels: bool,
+    channel_patterns: [ConnectionAclChannelPattern: CONNECTION_ACL_CHANNEL_PATTERN_MAX],
 }
 
 var connection_acl_users: [ConnectionAclUser: CONNECTION_ACL_USER_MAX] = [];
@@ -1414,6 +1430,70 @@ fn connection_acl_default_key_patterns_resetkeys() void {
     connection_acl_key_patterns_clear(connection_acl_default_key_rules.patterns[0: CONNECTION_ACL_KEY_PATTERN_MAX]);
 }
 
+fn connection_acl_channel_patterns_clear(patterns: &[ConnectionAclChannelPattern]) void {
+    var index: usize = 0;
+    while index < patterns.len {
+        patterns.ptr[index].active = false;
+        patterns.ptr[index].pattern_len = 0;
+        index = index + 1;
+    }
+}
+
+fn connection_acl_default_channel_patterns_reset_allchannels() void {
+    connection_acl_default_channel_rules.allchannels = true;
+    connection_acl_channel_patterns_clear(connection_acl_default_channel_rules.patterns[0: CONNECTION_ACL_CHANNEL_PATTERN_MAX]);
+}
+
+fn connection_acl_channel_pattern_find(patterns: &[ConnectionAclChannelPattern], pattern: &[byte]) i32 {
+    var index: usize = 0;
+    while index < patterns.len {
+        if patterns.ptr[index].active && connection_slice_eq(patterns.ptr[index].pattern[0: patterns.ptr[index].pattern_len], pattern) {
+            return index as i32;
+        }
+        index = index + 1;
+    }
+    return -1;
+}
+
+fn connection_acl_channel_pattern_find_free(patterns: &[ConnectionAclChannelPattern]) i32 {
+    var index: usize = 0;
+    while index < patterns.len {
+        if patterns.ptr[index].active == false {
+            return index as i32;
+        }
+        index = index + 1;
+    }
+    return -1;
+}
+
+fn connection_acl_channel_pattern_add(patterns: &[ConnectionAclChannelPattern], pattern: &[byte]) !void {
+    if pattern.len == 0 || pattern.len > CONNECTION_ACL_CHANNEL_PATTERN_BYTES_MAX {
+        return error.ConnectionInputTooLarge;
+    }
+    if connection_acl_channel_pattern_find(patterns, pattern) >= 0 {
+        return;
+    }
+    const slot: i32 = connection_acl_channel_pattern_find_free(patterns);
+    if slot < 0 {
+        return error.ConnectionInputTooLarge;
+    }
+    const slot_index: usize = slot as usize;
+    if slot_index >= patterns.len {
+        return error.ConnectionInputTooLarge;
+    }
+    patterns.ptr[slot_index].active = true;
+    patterns.ptr[slot_index].pattern_len = pattern.len;
+    var i: usize = 0;
+    while i < pattern.len {
+        patterns.ptr[slot_index].pattern[i] = pattern.ptr[i];
+        i = i + 1;
+    }
+    while i < CONNECTION_ACL_CHANNEL_PATTERN_BYTES_MAX {
+        patterns.ptr[slot_index].pattern[i] = 0 as byte;
+        i = i + 1;
+    }
+}
+
 fn connection_acl_key_pattern_find(patterns: &[ConnectionAclKeyPattern], pattern: &[byte]) i32 {
     var index: usize = 0;
     while index < patterns.len {
@@ -1512,6 +1592,20 @@ fn connection_acl_key_allowed_by_patterns(allkeys: bool, patterns: &[ConnectionA
     return false;
 }
 
+fn connection_acl_channel_allowed_by_patterns(allchannels: bool, patterns: &[ConnectionAclChannelPattern], channel: &[byte]) bool {
+    if allchannels {
+        return true;
+    }
+    var index: usize = 0;
+    while index < patterns.len {
+        if patterns.ptr[index].active && connection_acl_glob_match(patterns.ptr[index].pattern[0: patterns.ptr[index].pattern_len], 0, channel, 0) {
+            return true;
+        }
+        index = index + 1;
+    }
+    return false;
+}
+
 fn connection_acl_log_clear_all() void {
     var index: usize = 0;
     while index < CONNECTION_ACL_LOG_MAX {
@@ -1541,6 +1635,7 @@ fn connection_acl_users_clear_all() void {
         connection_acl_users[index].enabled = false;
         connection_acl_users[index].nopass = true;
         connection_acl_users[index].allkeys = true;
+        connection_acl_users[index].allchannels = true;
         connection_acl_users[index].name_len = 0;
         connection_acl_users[index].password_len = 0;
         var i: usize = 0;
@@ -1555,6 +1650,7 @@ fn connection_acl_users_clear_all() void {
         }
         connection_acl_user_clear_rules(&connection_acl_users[index]);
         connection_acl_key_patterns_clear(connection_acl_users[index].key_patterns[0: CONNECTION_ACL_KEY_PATTERN_MAX]);
+        connection_acl_channel_patterns_clear(connection_acl_users[index].channel_patterns[0: CONNECTION_ACL_CHANNEL_PATTERN_MAX]);
         index = index + 1;
     }
 }
@@ -1600,6 +1696,7 @@ fn connection_acl_user_create_or_get(username: &[byte]) !usize {
         connection_acl_users[slot_index_new].enabled = false;
         connection_acl_users[slot_index_new].nopass = true;
         connection_acl_users[slot_index_new].allkeys = true;
+        connection_acl_users[slot_index_new].allchannels = true;
         connection_acl_users[slot_index_new].name_len = username.len;
         connection_acl_users[slot_index_new].password_len = 0;
         var i: usize = 0;
@@ -1613,6 +1710,7 @@ fn connection_acl_user_create_or_get(username: &[byte]) !usize {
         }
         connection_acl_user_clear_rules(&connection_acl_users[slot_index_new]);
         connection_acl_key_patterns_clear(connection_acl_users[slot_index_new].key_patterns[0: CONNECTION_ACL_KEY_PATTERN_MAX]);
+        connection_acl_channel_patterns_clear(connection_acl_users[slot_index_new].channel_patterns[0: CONNECTION_ACL_CHANNEL_PATTERN_MAX]);
     }
     const slot_index: usize = slot as usize;
     if slot_index >= CONNECTION_ACL_USER_MAX {
@@ -1634,10 +1732,12 @@ fn connection_acl_user_delete(username: &[byte]) bool {
     connection_acl_users[slot_index].enabled = false;
     connection_acl_users[slot_index].nopass = true;
     connection_acl_users[slot_index].allkeys = true;
+    connection_acl_users[slot_index].allchannels = true;
     connection_acl_users[slot_index].name_len = 0;
     connection_acl_users[slot_index].password_len = 0;
     connection_acl_user_clear_rules(&connection_acl_users[slot_index]);
     connection_acl_key_patterns_clear(connection_acl_users[slot_index].key_patterns[0: CONNECTION_ACL_KEY_PATTERN_MAX]);
+    connection_acl_channel_patterns_clear(connection_acl_users[slot_index].channel_patterns[0: CONNECTION_ACL_CHANNEL_PATTERN_MAX]);
     return true;
 }
 
@@ -1645,6 +1745,7 @@ export fn connection_acl_reset_for_test() void {
     connection_acl_default_denied_clear_all();
     connection_acl_default_categories_clear_all();
     connection_acl_default_key_patterns_reset_allkeys();
+    connection_acl_default_channel_patterns_reset_allchannels();
     connection_acl_users_clear_all();
     connection_acl_log_clear_all();
 }
@@ -1982,6 +2083,78 @@ fn connection_acl_user_allkeys(username: &[byte]) bool {
     return connection_acl_users[slot_index].allkeys;
 }
 
+fn connection_acl_user_channel_allowed(username: &[byte], channel: &[byte]) bool {
+    if connection_keyword_eq(username, &"default"[0: 7]) {
+        return connection_acl_channel_allowed_by_patterns(connection_acl_default_channel_rules.allchannels, connection_acl_default_channel_rules.patterns[0: CONNECTION_ACL_CHANNEL_PATTERN_MAX], channel);
+    }
+    const slot: i32 = connection_acl_user_find(username);
+    if slot < 0 || slot >= CONNECTION_ACL_USER_MAX as i32 {
+        return true;
+    }
+    const slot_index: usize = slot as usize;
+    if slot_index >= CONNECTION_ACL_USER_MAX || !connection_acl_users[slot_index].active {
+        return true;
+    }
+    return connection_acl_channel_allowed_by_patterns(connection_acl_users[slot_index].allchannels, connection_acl_users[slot_index].channel_patterns[0: CONNECTION_ACL_CHANNEL_PATTERN_MAX], channel);
+}
+
+fn connection_acl_user_allchannels(username: &[byte]) bool {
+    if connection_keyword_eq(username, &"default"[0: 7]) {
+        return connection_acl_default_channel_rules.allchannels;
+    }
+    const slot: i32 = connection_acl_user_find(username);
+    if slot < 0 || slot >= CONNECTION_ACL_USER_MAX as i32 {
+        return true;
+    }
+    const slot_index: usize = slot as usize;
+    if slot_index >= CONNECTION_ACL_USER_MAX {
+        return true;
+    }
+    if connection_acl_users[slot_index].active == false {
+        return true;
+    }
+    return connection_acl_users[slot_index].allchannels;
+}
+
+fn connection_acl_command_uses_channels(cmd_type: CommandType) bool {
+    return cmd_type == CommandType.command_publish ||
+        cmd_type == CommandType.command_spublish ||
+        cmd_type == CommandType.command_subscribe ||
+        cmd_type == CommandType.command_psubscribe ||
+        cmd_type == CommandType.command_ssubscribe ||
+        cmd_type == CommandType.command_unsubscribe ||
+        cmd_type == CommandType.command_punsubscribe ||
+        cmd_type == CommandType.command_sunsubscribe;
+}
+
+fn connection_acl_user_command_channel_denied(username: &[byte], info: &CommandInfo, command: &Command, arg_offset: usize, full_argc: usize) bool {
+    if connection_acl_user_allchannels(username) {
+        return false;
+    }
+    if !connection_acl_command_uses_channels(info.cmd_type) {
+        return false;
+    }
+    if full_argc <= 1 {
+        return false;
+    }
+    var start_index: usize = 1;
+    var end_index: usize = full_argc;
+    if info.cmd_type == CommandType.command_publish || info.cmd_type == CommandType.command_spublish {
+        end_index = 2;
+    }
+    var index: usize = start_index;
+    while index < end_index {
+        const channel: &[byte] = command_arg_data(command, arg_offset + index) catch {
+            return false;
+        };
+        if !connection_acl_user_channel_allowed(username, channel) {
+            return true;
+        }
+        index = index + 1;
+    }
+    return false;
+}
+
 fn connection_acl_count_range_keys(info: &CommandInfo, full_argc: usize) usize {
     if info.first_key <= 0 || info.key_step <= 0 {
         return 0;
@@ -2133,6 +2306,30 @@ fn connection_acl_key_permission_denied_reply_for_user(name: &[byte], context: &
     return connection_acl_key_permission_error_for_user(username);
 }
 
+fn connection_acl_channel_permission_error_for_user(username: &[byte]) CommandReply {
+    var raw: Sds = sds_empty() catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    defer {
+        sds_free(&raw);
+    }
+    _ = sds_cat(&raw, &"NOPERM User "[0: 12]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = sds_cat(&raw, username) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = sds_cat(&raw, &" has no permissions to access one of the channels used as arguments"[0: 67]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    return connection_owned_error(raw.buf[0: raw.len]);
+}
+
+fn connection_acl_channel_permission_denied_reply_for_user(name: &[byte], context: &[byte], username: &[byte], now_ms: u64, client_id: i64) CommandReply {
+    connection_acl_log_append_command_denied(name, context, username, now_ms, client_id);
+    return connection_acl_channel_permission_error_for_user(username);
+}
+
 fn connection_acl_permission_denied_reply(name: &[byte], context: &[byte], now_ms: u64, client_id: i64) CommandReply {
     return connection_acl_permission_denied_reply_for_user(name, context, &"default"[0: 7], now_ms, client_id);
 }
@@ -2216,6 +2413,40 @@ fn connection_acl_key_rules_sds(allkeys: bool, patterns: &[ConnectionAclKeyPatte
         return error.AllocOutOfMemory;
     };
     _ = connection_acl_append_key_rules(&rules, allkeys, patterns) catch {
+        sds_free(&rules);
+        return error.AllocOutOfMemory;
+    };
+    return rules;
+}
+
+fn connection_acl_append_channel_rules(raw: &Sds, allchannels: bool, patterns: &[ConnectionAclChannelPattern]) !void {
+    if allchannels {
+        try sds_cat(raw, &"&*"[0: 2]);
+        return;
+    }
+    var first: bool = true;
+    var index: usize = 0;
+    while index < patterns.len {
+        if patterns.ptr[index].active {
+            if first == false {
+                try sds_cat(raw, &" "[0: 1]);
+            }
+            try sds_cat(raw, &"&"[0: 1]);
+            try sds_cat(raw, patterns.ptr[index].pattern[0: patterns.ptr[index].pattern_len]);
+            first = false;
+        }
+        index = index + 1;
+    }
+    if first {
+        try sds_cat(raw, &"resetchannels"[0: 13]);
+    }
+}
+
+fn connection_acl_channel_rules_sds(allchannels: bool, patterns: &[ConnectionAclChannelPattern]) !Sds {
+    var rules: Sds = sds_empty() catch {
+        return error.AllocOutOfMemory;
+    };
+    _ = connection_acl_append_channel_rules(&rules, allchannels, patterns) catch {
         sds_free(&rules);
         return error.AllocOutOfMemory;
     };
@@ -2337,11 +2568,8 @@ fn connection_acl_setuser_modifier_error(modifier: &[byte], suffix: &[byte]) Com
 fn connection_acl_setuser_noop_modifier(modifier: &[byte]) bool {
     return connection_keyword_eq(modifier, &"ON"[0: 2]) ||
         connection_keyword_eq(modifier, &"NOPASS"[0: 6]) ||
-        connection_keyword_eq(modifier, &"ALLCHANNELS"[0: 11]) ||
-        connection_keyword_eq(modifier, &"RESETCHANNELS"[0: 13]) ||
         connection_keyword_eq(modifier, &"CLEARSELECTORS"[0: 14]) ||
-        connection_keyword_eq(modifier, &"RESETSELECTORS"[0: 14]) ||
-        connection_keyword_eq(modifier, &"&*"[0: 2]);
+        connection_keyword_eq(modifier, &"RESETSELECTORS"[0: 14]);
 }
 
 fn connection_acl_setuser_key_modifier_known(modifier: &[byte]) bool {
@@ -2350,6 +2578,14 @@ fn connection_acl_setuser_key_modifier_known(modifier: &[byte]) bool {
         return true;
     }
     return modifier.len > 1 && modifier.ptr[0] == 126 as byte;
+}
+
+fn connection_acl_setuser_channel_modifier_known(modifier: &[byte]) bool {
+    if connection_keyword_eq(modifier, &"ALLCHANNELS"[0: 11]) ||
+        connection_keyword_eq(modifier, &"RESETCHANNELS"[0: 13]) {
+        return true;
+    }
+    return modifier.len > 1 && modifier.ptr[0] == 38 as byte;
 }
 
 fn connection_acl_key_patterns_apply_modifier(allkeys: &bool, patterns: &[ConnectionAclKeyPattern], modifier: &[byte]) CommandReply {
@@ -2378,6 +2614,36 @@ fn connection_acl_key_patterns_apply_modifier(allkeys: &bool, patterns: &[Connec
     *allkeys = false;
     _ = connection_acl_key_pattern_add(patterns, pattern) catch {
         return connection_error_reply(&"ERR ACL SETUSER redis-uya partial key pattern list is full"[0: 58]);
+    };
+    return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+}
+
+fn connection_acl_channel_patterns_apply_modifier(allchannels: &bool, patterns: &[ConnectionAclChannelPattern], modifier: &[byte]) CommandReply {
+    if connection_keyword_eq(modifier, &"ALLCHANNELS"[0: 11]) || connection_keyword_eq(modifier, &"&*"[0: 2]) {
+        *allchannels = true;
+        connection_acl_channel_patterns_clear(patterns);
+        return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+    }
+    if connection_keyword_eq(modifier, &"RESETCHANNELS"[0: 13]) {
+        *allchannels = false;
+        connection_acl_channel_patterns_clear(patterns);
+        return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+    }
+    if modifier.len <= 1 || modifier.ptr[0] != 38 as byte {
+        return connection_acl_setuser_modifier_error(modifier, &"': Syntax error"[0: 15]);
+    }
+    const pattern: &[byte] = modifier[1: modifier.len - 1];
+    if pattern.len == 0 {
+        return connection_acl_setuser_modifier_error(modifier, &"': Syntax error"[0: 15]);
+    }
+    if connection_slice_eq(pattern, &"*"[0: 1]) {
+        *allchannels = true;
+        connection_acl_channel_patterns_clear(patterns);
+        return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+    }
+    *allchannels = false;
+    _ = connection_acl_channel_pattern_add(patterns, pattern) catch {
+        return connection_error_reply(&"ERR ACL SETUSER redis-uya partial channel pattern list is full"[0: 62]);
     };
     return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
 }
@@ -2444,6 +2710,7 @@ fn connection_acl_setuser_command_modifier(router: &CommandRouter, modifier: &[b
 fn connection_acl_setuser_named_allows_modifier(router: &CommandRouter, modifier: &[byte]) bool {
     if connection_acl_setuser_noop_modifier(modifier) ||
         connection_acl_setuser_key_modifier_known(modifier) ||
+        connection_acl_setuser_channel_modifier_known(modifier) ||
         connection_keyword_eq(modifier, &"ALLCOMMANDS"[0: 11]) ||
         connection_keyword_eq(modifier, &"+@all"[0: 5]) ||
         connection_keyword_eq(modifier, &"RESETCOMMANDS"[0: 13]) {
@@ -2573,6 +2840,15 @@ fn connection_acl_setuser_named(router: &CommandRouter, username: &[byte], comma
             index = index + 1;
             continue;
         }
+        if connection_acl_setuser_channel_modifier_known(modifier) {
+            const reply: CommandReply = connection_acl_channel_patterns_apply_modifier(&connection_acl_users[slot].allchannels, connection_acl_users[slot].channel_patterns[0: CONNECTION_ACL_CHANNEL_PATTERN_MAX], modifier);
+            if reply.typ == CommandReplyType.reply_error {
+                return reply;
+            }
+            command_reply_cleanup(&reply);
+            index = index + 1;
+            continue;
+        }
         if connection_keyword_eq(modifier, &"ALLCOMMANDS"[0: 11]) ||
             connection_keyword_eq(modifier, &"+@all"[0: 5]) ||
             connection_keyword_eq(modifier, &"RESETCOMMANDS"[0: 13]) {
@@ -2634,6 +2910,15 @@ fn connection_acl_handle_setuser(router: &CommandRouter, command: &Command) Comm
         }
         if connection_acl_setuser_key_modifier_known(modifier) {
             const reply: CommandReply = connection_acl_key_patterns_apply_modifier(&connection_acl_default_key_rules.allkeys, connection_acl_default_key_rules.patterns[0: CONNECTION_ACL_KEY_PATTERN_MAX], modifier);
+            if reply.typ == CommandReplyType.reply_error {
+                return reply;
+            }
+            command_reply_cleanup(&reply);
+            index = index + 1;
+            continue;
+        }
+        if connection_acl_setuser_channel_modifier_known(modifier) {
+            const reply: CommandReply = connection_acl_channel_patterns_apply_modifier(&connection_acl_default_channel_rules.allchannels, connection_acl_default_channel_rules.patterns[0: CONNECTION_ACL_CHANNEL_PATTERN_MAX], modifier);
             if reply.typ == CommandReplyType.reply_error {
                 return reply;
             }
@@ -2756,6 +3041,10 @@ fn connection_acl_handle_dryrun(router: &CommandRouter, command: &Command, now_m
         connection_acl_user_command_key_denied(username, &dry_info, command, 3, command.argc - 3) {
         return connection_acl_key_permission_denied_reply_for_user(dry_info.name, &"dryrun"[0: 6], username, now_ms, client_id);
     }
+    if connection_acl_user_allchannels(username) == false &&
+        connection_acl_user_command_channel_denied(username, &dry_info, command, 3, command.argc - 3) {
+        return connection_acl_channel_permission_denied_reply_for_user(dry_info.name, &"dryrun"[0: 6], username, now_ms, client_id);
+    }
     return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
 }
 
@@ -2778,7 +3067,9 @@ fn connection_acl_append_named_config_line(raw: &Sds, user: &ConnectionAclUser) 
     }
     try sds_cat(raw, &" "[0: 1]);
     try connection_acl_append_key_rules(raw, user.allkeys, user.key_patterns[0: CONNECTION_ACL_KEY_PATTERN_MAX]);
-    try sds_cat(raw, &" &* "[0: 4]);
+    try sds_cat(raw, &" "[0: 1]);
+    try connection_acl_append_channel_rules(raw, user.allchannels, user.channel_patterns[0: CONNECTION_ACL_CHANNEL_PATTERN_MAX]);
+    try sds_cat(raw, &" "[0: 1]);
     try connection_acl_append_named_command_rules(raw, user);
 }
 
@@ -2809,7 +3100,13 @@ fn connection_acl_handle_list(runtime: &CommandRuntimeInfo) CommandReply {
     _ = connection_acl_append_key_rules(&line, connection_acl_default_key_rules.allkeys, connection_acl_default_key_rules.patterns[0: CONNECTION_ACL_KEY_PATTERN_MAX]) catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
-    _ = sds_cat(&line, &" &* "[0: 4]) catch {
+    _ = sds_cat(&line, &" "[0: 1]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = connection_acl_append_channel_rules(&line, connection_acl_default_channel_rules.allchannels, connection_acl_default_channel_rules.patterns[0: CONNECTION_ACL_CHANNEL_PATTERN_MAX]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = sds_cat(&line, &" "[0: 1]) catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
     _ = connection_acl_append_default_command_rules(&line) catch {
@@ -2860,6 +3157,12 @@ fn connection_acl_getuser_named(user: &ConnectionAclUser) CommandReply {
     };
     defer {
         sds_free(&key_rules);
+    }
+    var channel_rules: Sds = connection_acl_channel_rules_sds(user.allchannels, user.channel_patterns[0: CONNECTION_ACL_CHANNEL_PATTERN_MAX]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    defer {
+        sds_free(&channel_rules);
     }
     var raw: Sds = sds_empty() catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
@@ -2928,7 +3231,7 @@ fn connection_acl_getuser_named(user: &ConnectionAclUser) CommandReply {
     _ = connection_sds_append_resp_bulk(&raw, &"channels"[0: 8]) catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
-    _ = connection_sds_append_resp_bulk(&raw, &"&*"[0: 2]) catch {
+    _ = connection_sds_append_resp_bulk(&raw, channel_rules.buf[0: channel_rules.len]) catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
     _ = connection_sds_append_resp_bulk(&raw, &"selectors"[0: 9]) catch {
@@ -2966,6 +3269,12 @@ fn connection_acl_handle_getuser(runtime: &CommandRuntimeInfo, command: &Command
     };
     defer {
         sds_free(&key_rules);
+    }
+    var channel_rules: Sds = connection_acl_channel_rules_sds(connection_acl_default_channel_rules.allchannels, connection_acl_default_channel_rules.patterns[0: CONNECTION_ACL_CHANNEL_PATTERN_MAX]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    defer {
+        sds_free(&channel_rules);
     }
     var raw: Sds = sds_empty() catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
@@ -3028,7 +3337,7 @@ fn connection_acl_handle_getuser(runtime: &CommandRuntimeInfo, command: &Command
     _ = connection_sds_append_resp_bulk(&raw, &"channels"[0: 8]) catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
-    _ = connection_sds_append_resp_bulk(&raw, &"&*"[0: 2]) catch {
+    _ = connection_sds_append_resp_bulk(&raw, channel_rules.buf[0: channel_rules.len]) catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
     _ = connection_sds_append_resp_bulk(&raw, &"selectors"[0: 9]) catch {
@@ -6252,6 +6561,12 @@ fn connection_execute_script_effect_at(
         object_free(raw_obj);
         return connection_acl_key_permission_denied_reply_for_user(inner_command.info.name, &"script"[0: 6], username, now_ms, client_id);
     }
+    if connection_acl_user_allchannels(username) == false &&
+        connection_acl_user_command_channel_denied(username, &inner_command.info, &inner_command, 0, inner_command.argc) {
+        resp_value_free(&parsed.value);
+        object_free(raw_obj);
+        return connection_acl_channel_permission_denied_reply_for_user(inner_command.info.name, &"script"[0: 6], username, now_ms, client_id);
+    }
 
     var reply: CommandReply = command_execute_with_runtime_at(engine, runtime, &inner_command, now_ms);
     if aof != null && connection_should_append_aof(&inner_command, &reply) {
@@ -6506,6 +6821,9 @@ fn connection_transaction_execute_at(
             connection_acl_user_allkeys(connection_current_username(tx)) == false &&
             connection_acl_user_command_key_denied(connection_current_username(tx), &command.info, &command, 0, command.argc) {
             reply = connection_acl_key_permission_denied_reply_for_user(command.info.name, &"transaction"[0: 11], connection_current_username(tx), now_ms, connection_acl_log_client_id(tx));
+        } else if connection_acl_user_allchannels(connection_current_username(tx)) == false &&
+            connection_acl_user_command_channel_denied(connection_current_username(tx), &command.info, &command, 0, command.argc) {
+            reply = connection_acl_channel_permission_denied_reply_for_user(command.info.name, &"transaction"[0: 11], connection_current_username(tx), now_ms, connection_acl_log_client_id(tx));
         } else if command.info.cmd_type == CommandType.command_acl {
             reply = connection_handle_acl(engine, runtime, router, tx, &command, now_ms, connection_acl_log_client_id(tx));
         } else {
@@ -6650,6 +6968,9 @@ fn connection_execute_standard_command_at(
         connection_acl_user_allkeys(connection_current_username(tx)) == false &&
         connection_acl_user_command_key_denied(connection_current_username(tx), &command.info, command, 0, command.argc) {
         reply = connection_acl_key_permission_denied_reply_for_user(command.info.name, &"command"[0: 7], connection_current_username(tx), now_ms, connection_acl_log_client_id(tx));
+    } else if connection_acl_user_allchannels(connection_current_username(tx)) == false &&
+        connection_acl_user_command_channel_denied(connection_current_username(tx), &command.info, command, 0, command.argc) {
+        reply = connection_acl_channel_permission_denied_reply_for_user(command.info.name, &"command"[0: 7], connection_current_username(tx), now_ms, connection_acl_log_client_id(tx));
     } else if command.info.cmd_type == CommandType.command_acl {
         reply = connection_handle_acl(engine, runtime, router, tx, command, now_ms, connection_acl_log_client_id(tx));
     } else {
@@ -7862,6 +8183,14 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
             resp_value_free(&parsed.value);
             return ConnectionProcessResult{ response_len: acl_key_tx_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
         }
+        if connection_acl_user_allchannels(connection_current_username(tx)) == false &&
+            connection_acl_user_command_channel_denied(connection_current_username(tx), &command.info, &command, 0, command.argc) {
+            const acl_channel_tx_reply: CommandReply = connection_acl_channel_permission_denied_reply_for_user(command.info.name, &"transaction"[0: 11], connection_current_username(tx), now_ms, connection_acl_log_client_id(tx));
+            const acl_channel_tx_n: usize = try connection_encode_reply_for_command(tx, &command, &acl_channel_tx_reply, out, out_cap, reply_off_before, reply_skip_before);
+            command_reply_cleanup(&acl_channel_tx_reply);
+            resp_value_free(&parsed.value);
+            return ConnectionProcessResult{ response_len: acl_channel_tx_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
+        }
         if command.info.cmd_type == CommandType.command_exec {
             if !connection_transaction_watches_match(tx, engine) {
                 var aborted_reply: CommandReply = connection_raw_reply_owned(&"*-1\r\n"[0: 5]);
@@ -7969,6 +8298,14 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
         command_reply_cleanup(&acl_key_reply);
         resp_value_free(&parsed.value);
         return ConnectionProcessResult{ response_len: acl_key_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
+    }
+    if connection_acl_user_allchannels(connection_current_username(tx)) == false &&
+        connection_acl_user_command_channel_denied(connection_current_username(tx), &command.info, &command, 0, command.argc) {
+        const acl_channel_reply: CommandReply = connection_acl_channel_permission_denied_reply_for_user(command.info.name, &"command"[0: 7], connection_current_username(tx), now_ms, connection_acl_log_client_id(tx));
+        const acl_channel_n: usize = try connection_encode_reply_for_command(tx, &command, &acl_channel_reply, out, out_cap, reply_off_before, reply_skip_before);
+        command_reply_cleanup(&acl_channel_reply);
+        resp_value_free(&parsed.value);
+        return ConnectionProcessResult{ response_len: acl_channel_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
     }
     if command.info.cmd_type == CommandType.command_monitor {
         if !connection_monitor_register(tx.client_fd) {

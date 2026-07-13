@@ -10259,6 +10259,8 @@ fn command_executor_function_help() CommandReply {
     _ = list_object_push_tail(reply_list, &"    Return function runtime stats. Currently empty until Redis Functions execution lands."[0: 89]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"FUNCTION FLUSH [ASYNC|SYNC]"[0: 27]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"    Flush loaded functions. Currently a no-op because function storage is not implemented."[0: 90]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"FUNCTION DELETE <library-name>"[0: 30]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Delete a function library. Currently returns Library not found because function storage is not implemented."[0: 111]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"FUNCTION LOAD [REPLACE] <function-code>"[0: 39]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"    Load a function library. Currently unsupported."[0: 51]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"FUNCTION DUMP"[0: 13]) catch { object_free(reply_list); return command_executor_oom(); };

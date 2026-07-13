@@ -1916,6 +1916,7 @@ def run_smoke() -> None:
             if (
                 b"FUNCTION HELP" not in function_help
                 or b"FUNCTION LIST [LIBRARYNAME <pattern>] [WITHCODE]" not in function_help
+                or b"FUNCTION DELETE <library-name>" not in function_help
                 or b"FUNCTION LOAD [REPLACE] <function-code>" not in function_help
                 or b"FUNCTION DUMP" not in function_help
                 or not any(item.startswith(b"FUNCTION RESTORE") for item in function_help)

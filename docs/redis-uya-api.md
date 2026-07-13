@@ -2617,7 +2617,7 @@ FUNCTION KILL
 
 返回：
 
-- 返回当前 `FUNCTION` 命令帮助数组
+- 返回当前 `FUNCTION` 命令帮助数组；HELP 中列出 `FUNCTION DELETE <library-name>` 等当前已暴露的控制面子命令
 - `FUNCTION LIST` 当前返回空数组，表示尚无已加载 function library
 - `FUNCTION STATS` 当前返回空库统计：`running_script = nil`、`LUA` 引擎 `libraries_count = 0`、`functions_count = 0`
 - `FUNCTION FLUSH` 当前返回 `OK`，空库状态下为 no-op

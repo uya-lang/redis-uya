@@ -1113,7 +1113,7 @@ if [[ "$ACL_LIST_RESULT" != "user default on nopass ~* &* +@all" ]]; then
 fi
 
 FUNCTION_HELP_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function help)"
-if [[ "$FUNCTION_HELP_RESULT" != *"FUNCTION HELP"* || "$FUNCTION_HELP_RESULT" != *"FUNCTION LIST [LIBRARYNAME <pattern>] [WITHCODE]"* || "$FUNCTION_HELP_RESULT" != *"FUNCTION LOAD [REPLACE] <function-code>"* ]]; then
+if [[ "$FUNCTION_HELP_RESULT" != *"FUNCTION HELP"* || "$FUNCTION_HELP_RESULT" != *"FUNCTION LIST [LIBRARYNAME <pattern>] [WITHCODE]"* || "$FUNCTION_HELP_RESULT" != *"FUNCTION DELETE <library-name>"* || "$FUNCTION_HELP_RESULT" != *"FUNCTION LOAD [REPLACE] <function-code>"* ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected FUNCTION HELP output, got '$FUNCTION_HELP_RESULT'" >&2
     exit 1
 fi

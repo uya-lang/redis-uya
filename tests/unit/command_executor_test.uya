@@ -1313,6 +1313,7 @@ export fn test_command_function_help() !void {
     const help_len: usize = try connection_encode_reply(&help_reply, &out[0], 2048);
     try assert_true(command_executor_test_contains(out[0: help_len], &"FUNCTION HELP"[0: 13]));
     try assert_true(command_executor_test_contains(out[0: help_len], &"FUNCTION LIST"[0: 13]));
+    try assert_true(command_executor_test_contains(out[0: help_len], &"FUNCTION DELETE <library-name>"[0: 30]));
     try assert_true(command_executor_test_contains(out[0: help_len], &"FUNCTION LOAD"[0: 13]));
     try assert_true(command_executor_test_contains(out[0: help_len], &"FUNCTION DUMP"[0: 13]));
     try assert_true(command_executor_test_contains(out[0: help_len], &"FUNCTION RESTORE"[0: 16]));

@@ -2511,7 +2511,7 @@ EVAL_RO script numkeys [key ...] [arg ...]
 说明：
 
 - 当前实现为 partial，脚本子集、脚本缓存和参数替换语义与 `EVAL` 相同
-- 如果脚本内部命令带写标记，返回 `ERR Write commands are not allowed from read-only scripts`
+- 如果脚本内部命令带写标记，或内部命令通过参数触发写路径，例如 `SORT ... STORE`，返回 `ERR Write commands are not allowed from read-only scripts`
 - AOF / 复制只传播脚本内部成功执行的实际命令效果；被拒绝的写脚本不产生传播副作用
 
 ### `EVALSHA`

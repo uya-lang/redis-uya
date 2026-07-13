@@ -1650,6 +1650,18 @@ def run_smoke() -> None:
             except RespError as exc:
                 if str(exc) != "ERR Write commands are not allowed from read-only scripts":
                     raise AssertionError(f"unexpected EVAL_RO write error: {exc}") from exc
+            script_sort_len = client.rpush("script-sort", "3", "1", "2")
+            if script_sort_len != 3:
+                raise AssertionError(f"expected script-sort seed length 3, got {script_sort_len}")
+            try:
+                client.eval_ro("return redis.call('SORT', KEYS[1], 'STORE', ARGV[1])", 1, "script-sort", "script-out")
+                raise AssertionError("expected EVAL_RO SORT STORE script to fail")
+            except RespError as exc:
+                if str(exc) != "ERR Write commands are not allowed from read-only scripts":
+                    raise AssertionError(f"unexpected EVAL_RO SORT STORE error: {exc}") from exc
+            script_out_len = client.llen("script-out")
+            if script_out_len != 0:
+                raise AssertionError(f"expected EVAL_RO SORT STORE to leave script-out absent, got length {script_out_len}")
             assert client.evalsha_ro("D3C21D0C2B9CA22F82737626A27BCAF5D288F99F", 1, "lua-key") == b"value"
             assert client.script_flush()
             try:
@@ -2151,7 +2163,7 @@ def run_smoke() -> None:
             assert client.delex("delex-digest", "IFDNE", delex_digest.decode("ascii")) == 0
             assert client.delex("delex-digest", "IFDNE", "0000000000000000") == 1
             assert client.delete("counter") == 1
-            assert client.delete("excounter", "fxcounter", "fcounter", "nx-key", "gs-key", "sx-key", "mk1", "mk2", "mn1", "mn2", "me1", "me2", "lcs-a", "lcs-b", "allones", "srca", "srcb", "dstbit", "bf", "hll", "dsthll", "emptyhll", "geo", "geodst", "distdst", "georout", "geobmdist", "lua-key", "slow-k", "latency-k") == 30
+            assert client.delete("excounter", "fxcounter", "fcounter", "nx-key", "gs-key", "sx-key", "mk1", "mk2", "mn1", "mn2", "me1", "me2", "lcs-a", "lcs-b", "allones", "srca", "srcb", "dstbit", "bf", "hll", "dsthll", "emptyhll", "geo", "geodst", "distdst", "georout", "geobmdist", "lua-key", "script-sort", "slow-k", "latency-k") == 31
             assert client.echo("hi") == b"hi"
             assert client.key_type("key") == "string"
             assert client.dbsize() == 1

@@ -3873,8 +3873,8 @@ fn connection_script_command_allowed(cmd_type: CommandType) bool {
     return true;
 }
 
-fn connection_script_command_readonly(info: &CommandInfo) bool {
-    return (info.flags & COMMAND_FLAG_WRITE) == 0u64;
+fn connection_script_command_readonly(command: &Command) bool {
+    return !connection_command_requests_write(command);
 }
 
 fn connection_resp2_pubsub_mode_active(tx: &ConnectionTransaction) bool {
@@ -6658,7 +6658,7 @@ fn connection_handle_eval_like_at(
             object_free(raw_obj);
             return connection_error_reply(&"ERR unknown command in script"[0: 27]);
         };
-        if !connection_script_command_readonly(&inner_command.info) {
+        if !connection_script_command_readonly(&inner_command) {
             resp_value_free(&parsed_inner.value);
             object_free(raw_obj);
             return connection_error_reply(&"ERR Write commands are not allowed from read-only scripts"[0: 57]);

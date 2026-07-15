@@ -5649,7 +5649,7 @@ fn command_executor_xadd(engine: &Engine, command: &Command, now_ms: u64) Comman
             };
             if is_minid {
                 minid_threshold = command_executor_parse_stream_id(threshold_data, 0u64, false, false) catch {
-                    return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 57]);
+                    return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 58]);
                 };
                 trim_strategy = 2;
             } else {
@@ -5727,20 +5727,20 @@ fn command_executor_xadd(engine: &Engine, command: &Command, now_ms: u64) Comman
             if created {
                 _ = delete_key(engine, key);
             }
-            return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 57]);
+            return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 58]);
         };
         if parsed.ms == 0u64 && parsed.seq == 0u64 {
             if created {
                 _ = delete_key(engine, key);
             }
-            return command_executor_error(&"ERR The ID specified in XADD is equal or smaller than the target stream top item"[0: 78]);
+            return command_executor_error(&"ERR The ID specified in XADD is equal or smaller than the target stream top item"[0: 80]);
         }
         const last: StreamId = StreamId{ ms: stream_obj.stream_last_ms, seq: stream_obj.stream_last_seq, is_min: false, is_max: false, is_dollar: false };
         if stream_obj.list_len > 0 && command_executor_stream_id_cmp(&parsed, &last) <= 0 {
             if created {
                 _ = delete_key(engine, key);
             }
-            return command_executor_error(&"ERR The ID specified in XADD is equal or smaller than the target stream top item"[0: 78]);
+            return command_executor_error(&"ERR The ID specified in XADD is equal or smaller than the target stream top item"[0: 80]);
         }
         id_ms = parsed.ms;
         id_seq = parsed.seq;
@@ -5833,7 +5833,7 @@ fn command_executor_xdel(engine: &Engine, command: &Command, now_ms: u64) Comman
             return command_executor_wrong_arity();
         };
         _ = command_executor_parse_stream_id(id_data, 0u64, false, false) catch {
-            return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 57]);
+            return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 58]);
         };
         index = index + 1;
     }
@@ -5978,7 +5978,7 @@ fn command_executor_xdelex(engine: &Engine, command: &Command, now_ms: u64) Comm
             return command_executor_wrong_arity();
         };
         _ = command_executor_parse_stream_id(id_data, 0u64, false, false) catch {
-            return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 57]);
+            return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 58]);
         };
         index = index + 1;
     }
@@ -6049,7 +6049,7 @@ fn command_executor_xack(engine: &Engine, command: &Command, now_ms: u64) Comman
         return command_executor_wrong_arity();
     };
     const obj: &RedisObject = command_executor_lookup_key_at(engine, key, now_ms) catch {
-        return command_executor_error(&"ERR no such key"[0: 14]);
+        return command_executor_error(&"ERR no such key"[0: 15]);
     };
     if obj.obj_type != ObjectType.object_stream {
         return command_executor_wrongtype();
@@ -6107,12 +6107,12 @@ fn command_executor_xackdel(engine: &Engine, command: &Command, now_ms: u64) Com
             return command_executor_wrong_arity();
         };
         _ = command_executor_parse_stream_id(id_data, 0u64, false, false) catch {
-            return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 57]);
+            return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 58]);
         };
         index = index + 1;
     }
     const obj: &RedisObject = command_executor_lookup_key_at(engine, key, now_ms) catch {
-        return command_executor_error(&"ERR no such key"[0: 14]);
+        return command_executor_error(&"ERR no such key"[0: 15]);
     };
     if obj.obj_type != ObjectType.object_stream {
         return command_executor_wrongtype();
@@ -6164,7 +6164,7 @@ fn command_executor_xnack(engine: &Engine, command: &Command, now_ms: u64) Comma
             return command_executor_wrong_arity();
         };
         _ = command_executor_parse_stream_id(id_data, 0u64, false, false) catch {
-            return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 57]);
+            return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 58]);
         };
         index = index + 1;
     }
@@ -6190,7 +6190,7 @@ fn command_executor_xnack(engine: &Engine, command: &Command, now_ms: u64) Comma
         }
     }
     const obj: &RedisObject = command_executor_lookup_key_at(engine, key, now_ms) catch {
-        return command_executor_error(&"ERR no such key"[0: 14]);
+        return command_executor_error(&"ERR no such key"[0: 15]);
     };
     if obj.obj_type != ObjectType.object_stream {
         return command_executor_wrongtype();
@@ -6239,7 +6239,7 @@ fn command_executor_xcfgset(engine: &Engine, command: &Command, now_ms: u64) Com
         index = index + 2;
     }
     const obj: &RedisObject = command_executor_lookup_key_at(engine, key, now_ms) catch {
-        return command_executor_error(&"ERR no such key"[0: 14]);
+        return command_executor_error(&"ERR no such key"[0: 15]);
     };
     if obj.obj_type != ObjectType.object_stream {
         return command_executor_wrongtype();
@@ -6267,10 +6267,10 @@ fn command_executor_xidmprecord(engine: &Engine, command: &Command, now_ms: u64)
         return command_executor_wrong_arity();
     };
     const parsed_id: StreamId = command_executor_parse_stream_id(id_data, 0u64, false, false) catch {
-        return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 57]);
+        return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 58]);
     };
     const obj: &RedisObject = command_executor_lookup_key_at(engine, key, now_ms) catch {
-        return command_executor_error(&"ERR no such key"[0: 14]);
+        return command_executor_error(&"ERR no such key"[0: 15]);
     };
     if obj.obj_type != ObjectType.object_stream {
         return command_executor_wrongtype();
@@ -6304,7 +6304,7 @@ fn command_executor_xclaim(engine: &Engine, command: &Command, now_ms: u64) Comm
         return command_executor_wrong_arity();
     };
     const obj: &RedisObject = command_executor_lookup_key_at(engine, key, now_ms) catch {
-        return command_executor_error(&"ERR no such key"[0: 14]);
+        return command_executor_error(&"ERR no such key"[0: 15]);
     };
     if obj.obj_type != ObjectType.object_stream {
         return command_executor_wrongtype();
@@ -6335,10 +6335,10 @@ fn command_executor_xautoclaim(engine: &Engine, command: &Command, now_ms: u64) 
         return command_executor_wrong_arity();
     };
     _ = command_executor_parse_stream_id(start_id_data, 0u64, false, false) catch {
-        return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 57]);
+        return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 58]);
     };
     const obj: &RedisObject = command_executor_lookup_key_at(engine, key, now_ms) catch {
-        return command_executor_error(&"ERR no such key"[0: 14]);
+        return command_executor_error(&"ERR no such key"[0: 15]);
     };
     if obj.obj_type != ObjectType.object_stream {
         return command_executor_wrongtype();
@@ -6357,7 +6357,7 @@ fn command_executor_xpending(engine: &Engine, command: &Command, now_ms: u64) Co
         return command_executor_wrong_arity();
     };
     const obj: &RedisObject = command_executor_lookup_key_at(engine, key, now_ms) catch {
-        return command_executor_error(&"ERR no such key"[0: 14]);
+        return command_executor_error(&"ERR no such key"[0: 15]);
     };
     if obj.obj_type != ObjectType.object_stream {
         return command_executor_wrongtype();
@@ -6395,27 +6395,27 @@ fn command_executor_xgroup(engine: &Engine, command: &Command, now_ms: u64) Comm
     }
     if command_executor_keyword_eq(subcommand, &"CREATE"[0: 6]) {
         if command.argc != 5 && command.argc != 6 {
-            return command_executor_owned_error(&"ERR wrong number of arguments for 'xgroup|create' command"[0: 56]);
+            return command_executor_owned_error(&"ERR wrong number of arguments for 'xgroup|create' command"[0: 57]);
         }
         const key: &[byte] = command_executor_arg(command, 2) catch {
-            return command_executor_owned_error(&"ERR wrong number of arguments for 'xgroup|create' command"[0: 56]);
+            return command_executor_owned_error(&"ERR wrong number of arguments for 'xgroup|create' command"[0: 57]);
         };
         _ = command_executor_arg(command, 3) catch {
-            return command_executor_owned_error(&"ERR wrong number of arguments for 'xgroup|create' command"[0: 56]);
+            return command_executor_owned_error(&"ERR wrong number of arguments for 'xgroup|create' command"[0: 57]);
         };
         _ = command_executor_arg(command, 4) catch {
-            return command_executor_owned_error(&"ERR wrong number of arguments for 'xgroup|create' command"[0: 56]);
+            return command_executor_owned_error(&"ERR wrong number of arguments for 'xgroup|create' command"[0: 57]);
         };
         if command.argc == 6 {
             const option: &[byte] = command_executor_arg(command, 5) catch {
-                return command_executor_owned_error(&"ERR wrong number of arguments for 'xgroup|create' command"[0: 56]);
+                return command_executor_owned_error(&"ERR wrong number of arguments for 'xgroup|create' command"[0: 57]);
             };
             if !command_executor_keyword_eq(option, &"MKSTREAM"[0: 8]) {
                 return command_executor_syntax_error();
             }
         }
         const obj: &RedisObject = command_executor_lookup_key_at(engine, key, now_ms) catch {
-            return command_executor_error(&"ERR no such key"[0: 14]);
+            return command_executor_error(&"ERR no such key"[0: 15]);
         };
         if obj.obj_type != ObjectType.object_stream {
             return command_executor_wrongtype();
@@ -6439,7 +6439,7 @@ fn command_executor_xgroup(engine: &Engine, command: &Command, now_ms: u64) Comm
             return command_executor_wrong_arity();
         };
         const obj: &RedisObject = command_executor_lookup_key_at(engine, key, now_ms) catch {
-            return command_executor_error(&"ERR no such key"[0: 14]);
+            return command_executor_error(&"ERR no such key"[0: 15]);
         };
         if obj.obj_type != ObjectType.object_stream {
             return command_executor_wrongtype();
@@ -6489,7 +6489,7 @@ fn command_executor_xgroup(engine: &Engine, command: &Command, now_ms: u64) Comm
             }
         }
         const obj: &RedisObject = command_executor_lookup_key_at(engine, key, now_ms) catch {
-            return command_executor_error(&"ERR no such key"[0: 14]);
+            return command_executor_error(&"ERR no such key"[0: 15]);
         };
         if obj.obj_type != ObjectType.object_stream {
             return command_executor_wrongtype();
@@ -6667,7 +6667,7 @@ fn command_executor_xinfo(engine: &Engine, command: &Command, now_ms: u64) Comma
             }
         }
         const obj: &RedisObject = command_executor_lookup_key_at(engine, key, now_ms) catch {
-            return command_executor_error(&"ERR no such key"[0: 14]);
+            return command_executor_error(&"ERR no such key"[0: 15]);
         };
         if obj.obj_type != ObjectType.object_stream {
             return command_executor_wrongtype();
@@ -6706,7 +6706,7 @@ fn command_executor_xinfo(engine: &Engine, command: &Command, now_ms: u64) Comma
             return command_executor_owned_error(&"ERR wrong number of arguments for 'xinfo|groups' command"[0: 56]);
         };
         const obj: &RedisObject = command_executor_lookup_key_at(engine, key, now_ms) catch {
-            return command_executor_error(&"ERR no such key"[0: 14]);
+            return command_executor_error(&"ERR no such key"[0: 15]);
         };
         if obj.obj_type != ObjectType.object_stream {
             return command_executor_wrongtype();
@@ -6724,7 +6724,7 @@ fn command_executor_xinfo(engine: &Engine, command: &Command, now_ms: u64) Comma
             return command_executor_owned_error(&"ERR wrong number of arguments for 'xinfo|consumers' command"[0: 59]);
         };
         const obj: &RedisObject = command_executor_lookup_key_at(engine, key, now_ms) catch {
-            return command_executor_error(&"ERR no such key"[0: 14]);
+            return command_executor_error(&"ERR no such key"[0: 15]);
         };
         if obj.obj_type != ObjectType.object_stream {
             return command_executor_wrongtype();
@@ -6812,10 +6812,10 @@ fn command_executor_xrange_common(engine: &Engine, command: &Command, now_ms: u6
         end_default_seq = STREAM_ID_MAX_SEQ;
     }
     const start_id: StreamId = command_executor_parse_stream_id(start_token, start_default_seq, true, false) catch {
-        return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 57]);
+        return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 58]);
     };
     const end_id: StreamId = command_executor_parse_stream_id(end_token, end_default_seq, true, false) catch {
-        return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 57]);
+        return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 58]);
     };
 
     const obj: &RedisObject = command_executor_lookup_key_at(engine, key, now_ms) catch {
@@ -6937,7 +6937,7 @@ fn command_executor_xread(engine: &Engine, command: &Command, now_ms: u64) Comma
             return command_executor_wrong_arity();
         };
         const start_id: StreamId = command_executor_parse_stream_id(id_data, 0u64, false, true) catch {
-            return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 57]);
+            return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 58]);
         };
         if !start_id.is_dollar {
             const obj_result: !&RedisObject = command_executor_lookup_key_at(engine, key, now_ms);
@@ -7075,11 +7075,11 @@ fn command_executor_xreadgroup(engine: &Engine, command: &Command, now_ms: u64) 
         };
         if !(id_data.len == 1 && id_data.ptr[0] == 62 as byte) {
             _ = command_executor_parse_stream_id(id_data, 0u64, false, false) catch {
-                return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 57]);
+                return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 58]);
             };
         }
         const obj: &RedisObject = command_executor_lookup_key_at(engine, key, now_ms) catch {
-            return command_executor_error(&"ERR no such key"[0: 14]);
+            return command_executor_error(&"ERR no such key"[0: 15]);
         };
         if obj.obj_type != ObjectType.object_stream {
             return command_executor_wrongtype();
@@ -7100,7 +7100,7 @@ fn command_executor_xsetid(engine: &Engine, command: &Command, now_ms: u64) Comm
         return command_executor_wrong_arity();
     };
     const parsed_id: StreamId = command_executor_parse_stream_id(id_data, 0u64, false, false) catch {
-        return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 57]);
+        return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 58]);
     };
 
     var index: usize = 3;
@@ -7120,7 +7120,7 @@ fn command_executor_xsetid(engine: &Engine, command: &Command, now_ms: u64) Comm
             };
         } else if command_executor_keyword_eq(option, &"MAXDELETEDID"[0: 12]) {
             _ = command_executor_parse_stream_id(value, 0u64, false, false) catch {
-                return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 57]);
+                return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 58]);
             };
         } else {
             return command_executor_syntax_error();
@@ -7129,7 +7129,7 @@ fn command_executor_xsetid(engine: &Engine, command: &Command, now_ms: u64) Comm
     }
 
     const obj: &RedisObject = command_executor_lookup_key_at(engine, key, now_ms) catch {
-        return command_executor_error(&"ERR no such key"[0: 14]);
+        return command_executor_error(&"ERR no such key"[0: 15]);
     };
     if obj.obj_type != ObjectType.object_stream {
         return command_executor_wrongtype();
@@ -7371,7 +7371,7 @@ fn command_executor_lset(engine: &Engine, command: &Command, now_ms: u64) Comman
         return command_executor_invalid_integer();
     };
     const obj: &RedisObject = command_executor_lookup_key_at(engine, key, now_ms) catch {
-        return command_executor_error(&"ERR no such key"[0: 14]);
+        return command_executor_error(&"ERR no such key"[0: 15]);
     };
     if obj.obj_type != ObjectType.object_list {
         return command_executor_wrongtype();
@@ -9155,7 +9155,7 @@ fn command_executor_rename_common(engine: &Engine, command: &Command, now_ms: u6
             return command_executor_integer(1);
         },
         EngineRenameResult.rename_source_missing => {
-            return command_executor_error(&"ERR no such key"[0: 14]);
+            return command_executor_error(&"ERR no such key"[0: 15]);
         },
         EngineRenameResult.rename_target_exists => {
             return command_executor_integer(0);
@@ -21457,7 +21457,7 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
         var minid: StreamId = StreamId{ ms: 0u64, seq: 0u64, is_min: false, is_max: false, is_dollar: false };
         if is_minid {
             minid = command_executor_parse_stream_id(threshold_data, 0u64, false, false) catch {
-                return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 57]);
+                return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 58]);
             };
         } else {
             threshold = command_executor_parse_i64(threshold_data) catch {

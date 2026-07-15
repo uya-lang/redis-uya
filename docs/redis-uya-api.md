@@ -2913,6 +2913,14 @@ XTRIM key MAXLEN|MINID [=|~] threshold [LIMIT count]
 - `XSETID`：对现有 stream key 更新 `last-generated-id` 并返回 `OK`；当 stream 已有 entry 时，`last-id` 不能小于当前最后 entry id
 - `XTRIM`：返回被删除的 entry 数量；key 不存在返回 `0`
 
+错误兼容面：
+
+- 非法 stream ID 返回完整 `ERR Invalid stream ID specified as stream command argument`
+- `XADD` 使用不大于当前 stream top item 的 ID 时，返回完整 `ERR The ID specified in XADD is equal or smaller than the target stream top item`
+- `XSETID` 使用小于当前 stream top item 的 ID 时，返回完整 `ERR The ID specified in XSETID is smaller than the target stream top item`
+- 要求已有 key 的 Streams 子命令在 key 不存在时返回完整 `ERR no such key`
+- `XGROUP CREATE` 参数数量错误时返回完整 `ERR wrong number of arguments for 'xgroup|create' command`
+
 说明：
 
 - 当前实现为 partial：stream 内部暂用项目内 list-backed entry 存储，不是 Redis 原生 radix-tree/listpack 编码

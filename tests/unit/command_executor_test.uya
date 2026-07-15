@@ -4870,6 +4870,13 @@ export fn test_command_streams_first_batch() !void {
     command_reply_cleanup(&xadd_second_reply);
     resp_value_free(&xadd_second_parsed.value);
 
+    var xadd_duplicate_parsed: RespParseResult = try parse_resp2(&"*5\r\n$4\r\nXADD\r\n$6\r\nstream\r\n$6\r\n1000-1\r\n$1\r\nf\r\n$1\r\nv\r\n"[0: 52]);
+    const xadd_duplicate_command: Command = try command_executor_test_command(&router, &xadd_duplicate_parsed);
+    const xadd_duplicate_reply: CommandReply = command_execute_at(&engine, &xadd_duplicate_command, 1000u64);
+    try assert_eq_i32(xadd_duplicate_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(xadd_duplicate_reply.data, &"ERR The ID specified in XADD is equal or smaller than the target stream top item"[0: 80]));
+    resp_value_free(&xadd_duplicate_parsed.value);
+
     var xadd_trim_seed_parsed: RespParseResult = try parse_resp2(&"*5\r\n$4\r\nXADD\r\n$10\r\ntrimstream\r\n$3\r\n1-0\r\n$1\r\nf\r\n$1\r\na\r\n"[0: 54]);
     const xadd_trim_seed_command: Command = try command_executor_test_command(&router, &xadd_trim_seed_parsed);
     const xadd_trim_seed_reply: CommandReply = command_execute_at(&engine, &xadd_trim_seed_command, 1000u64);
@@ -5033,14 +5040,14 @@ export fn test_command_streams_first_batch() !void {
     const xreadgroup_missing_command: Command = try command_executor_test_command(&router, &xreadgroup_missing_parsed);
     const xreadgroup_missing_reply: CommandReply = command_execute_at(&engine, &xreadgroup_missing_command, 1000u64);
     try assert_eq_i32(xreadgroup_missing_reply.typ as i32, CommandReplyType.reply_error as i32);
-    try assert_true(command_executor_test_slice_eq(xreadgroup_missing_reply.data, &"ERR no such key"[0: 14]));
+    try assert_true(command_executor_test_slice_eq(xreadgroup_missing_reply.data, &"ERR no such key"[0: 15]));
     resp_value_free(&xreadgroup_missing_parsed.value);
 
     var xreadgroup_badid_parsed: RespParseResult = try parse_resp2(&"*7\r\n$10\r\nXREADGROUP\r\n$5\r\nGROUP\r\n$1\r\ng\r\n$1\r\nc\r\n$7\r\nSTREAMS\r\n$6\r\nstream\r\n$3\r\nbad\r\n"[0: 80]);
     const xreadgroup_badid_command: Command = try command_executor_test_command(&router, &xreadgroup_badid_parsed);
     const xreadgroup_badid_reply: CommandReply = command_execute_at(&engine, &xreadgroup_badid_command, 1000u64);
     try assert_eq_i32(xreadgroup_badid_reply.typ as i32, CommandReplyType.reply_error as i32);
-    try assert_true(command_executor_test_contains(xreadgroup_badid_reply.data, &"Invalid stream ID"[0: 17]));
+    try assert_true(command_executor_test_slice_eq(xreadgroup_badid_reply.data, &"ERR Invalid stream ID specified as stream command argument"[0: 58]));
     resp_value_free(&xreadgroup_badid_parsed.value);
 
     var xreadgroup_count_parsed: RespParseResult = try parse_resp2(&"*9\r\n$10\r\nXREADGROUP\r\n$5\r\nGROUP\r\n$1\r\ng\r\n$1\r\nc\r\n$5\r\nCOUNT\r\n$1\r\n1\r\n$7\r\nSTREAMS\r\n$6\r\nstream\r\n$1\r\n>\r\n"[0: 96]);
@@ -5088,14 +5095,14 @@ export fn test_command_streams_first_batch() !void {
     const xsetid_backward_command: Command = try command_executor_test_command(&router, &xsetid_backward_parsed);
     const xsetid_backward_reply: CommandReply = command_execute_at(&engine, &xsetid_backward_command, 1000u64);
     try assert_eq_i32(xsetid_backward_reply.typ as i32, CommandReplyType.reply_error as i32);
-    try assert_true(command_executor_test_contains(xsetid_backward_reply.data, &"smaller than the target stream top item"[0: 39]));
+    try assert_true(command_executor_test_slice_eq(xsetid_backward_reply.data, &"ERR The ID specified in XSETID is smaller than the target stream top item"[0: 73]));
     resp_value_free(&xsetid_backward_parsed.value);
 
     var xsetid_missing_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nXSETID\r\n$7\r\nmissing\r\n$6\r\n1000-1\r\n"[0: 41]);
     const xsetid_missing_command: Command = try command_executor_test_command(&router, &xsetid_missing_parsed);
     const xsetid_missing_reply: CommandReply = command_execute_at(&engine, &xsetid_missing_command, 1000u64);
     try assert_eq_i32(xsetid_missing_reply.typ as i32, CommandReplyType.reply_error as i32);
-    try assert_true(command_executor_test_slice_eq(xsetid_missing_reply.data, &"ERR no such key"[0: 14]));
+    try assert_true(command_executor_test_slice_eq(xsetid_missing_reply.data, &"ERR no such key"[0: 15]));
     resp_value_free(&xsetid_missing_parsed.value);
 
     var xsetid_badid_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nXSETID\r\n$6\r\nstream\r\n$3\r\nbad\r\n"[0: 37]);
@@ -5148,7 +5155,7 @@ export fn test_command_streams_first_batch() !void {
     const xack_missing_command: Command = try command_executor_test_command(&router, &xack_missing_parsed);
     const xack_missing_reply: CommandReply = command_execute_at(&engine, &xack_missing_command, 1000u64);
     try assert_eq_i32(xack_missing_reply.typ as i32, CommandReplyType.reply_error as i32);
-    try assert_true(command_executor_test_slice_eq(xack_missing_reply.data, &"ERR no such key"[0: 14]));
+    try assert_true(command_executor_test_slice_eq(xack_missing_reply.data, &"ERR no such key"[0: 15]));
     resp_value_free(&xack_missing_parsed.value);
 
     var xack_arity_parsed: RespParseResult = try parse_resp2(&"*3\r\n$4\r\nXACK\r\n$6\r\nstream\r\n$1\r\ng\r\n"[0: 33]);
@@ -5180,7 +5187,7 @@ export fn test_command_streams_first_batch() !void {
     const xackdel_missing_command: Command = try command_executor_test_command(&router, &xackdel_missing_parsed);
     const xackdel_missing_reply: CommandReply = command_execute_at(&engine, &xackdel_missing_command, 1000u64);
     try assert_eq_i32(xackdel_missing_reply.typ as i32, CommandReplyType.reply_error as i32);
-    try assert_true(command_executor_test_slice_eq(xackdel_missing_reply.data, &"ERR no such key"[0: 14]));
+    try assert_true(command_executor_test_slice_eq(xackdel_missing_reply.data, &"ERR no such key"[0: 15]));
     resp_value_free(&xackdel_missing_parsed.value);
 
     var xackdel_badid_parsed: RespParseResult = try parse_resp2(&"*6\r\n$7\r\nXACKDEL\r\n$6\r\nstream\r\n$1\r\ng\r\n$3\r\nIDS\r\n$1\r\n1\r\n$3\r\nbad\r\n"[0: 61]);
@@ -5226,7 +5233,7 @@ export fn test_command_streams_first_batch() !void {
     const xnack_missing_command: Command = try command_executor_test_command(&router, &xnack_missing_parsed);
     const xnack_missing_reply: CommandReply = command_execute_at(&engine, &xnack_missing_command, 1000u64);
     try assert_eq_i32(xnack_missing_reply.typ as i32, CommandReplyType.reply_error as i32);
-    try assert_true(command_executor_test_slice_eq(xnack_missing_reply.data, &"ERR no such key"[0: 14]));
+    try assert_true(command_executor_test_slice_eq(xnack_missing_reply.data, &"ERR no such key"[0: 15]));
     resp_value_free(&xnack_missing_parsed.value);
 
     var xnack_badmode_parsed: RespParseResult = try parse_resp2(&"*7\r\n$5\r\nXNACK\r\n$6\r\nstream\r\n$1\r\ng\r\n$3\r\nBAD\r\n$3\r\nIDS\r\n$1\r\n1\r\n$6\r\n1000-0\r\n"[0: 71]);
@@ -5279,7 +5286,7 @@ export fn test_command_streams_first_batch() !void {
     const xcfgset_missing_command: Command = try command_executor_test_command(&router, &xcfgset_missing_parsed);
     const xcfgset_missing_reply: CommandReply = command_execute_at(&engine, &xcfgset_missing_command, 1000u64);
     try assert_eq_i32(xcfgset_missing_reply.typ as i32, CommandReplyType.reply_error as i32);
-    try assert_true(command_executor_test_slice_eq(xcfgset_missing_reply.data, &"ERR no such key"[0: 14]));
+    try assert_true(command_executor_test_slice_eq(xcfgset_missing_reply.data, &"ERR no such key"[0: 15]));
     resp_value_free(&xcfgset_missing_parsed.value);
 
     var xcfgset_badopt_parsed: RespParseResult = try parse_resp2(&"*4\r\n$7\r\nXCFGSET\r\n$6\r\nstream\r\n$3\r\nBAD\r\n$1\r\n1\r\n"[0: 45]);
@@ -5321,7 +5328,7 @@ export fn test_command_streams_first_batch() !void {
     const xidmprecord_missing_command: Command = try command_executor_test_command(&router, &xidmprecord_missing_parsed);
     const xidmprecord_missing_reply: CommandReply = command_execute_at(&engine, &xidmprecord_missing_command, 1000u64);
     try assert_eq_i32(xidmprecord_missing_reply.typ as i32, CommandReplyType.reply_error as i32);
-    try assert_true(command_executor_test_slice_eq(xidmprecord_missing_reply.data, &"ERR no such key"[0: 14]));
+    try assert_true(command_executor_test_slice_eq(xidmprecord_missing_reply.data, &"ERR no such key"[0: 15]));
     resp_value_free(&xidmprecord_missing_parsed.value);
 
     var xidmprecord_empty_pid_parsed: RespParseResult = try parse_resp2(&"*5\r\n$11\r\nXIDMPRECORD\r\n$6\r\nstream\r\n$0\r\n\r\n$3\r\niid\r\n$6\r\n1000-0\r\n"[0: 61]);
@@ -5367,7 +5374,7 @@ export fn test_command_streams_first_batch() !void {
     const xclaim_missing_command: Command = try command_executor_test_command(&router, &xclaim_missing_parsed);
     const xclaim_missing_reply: CommandReply = command_execute_at(&engine, &xclaim_missing_command, 1000u64);
     try assert_eq_i32(xclaim_missing_reply.typ as i32, CommandReplyType.reply_error as i32);
-    try assert_true(command_executor_test_slice_eq(xclaim_missing_reply.data, &"ERR no such key"[0: 14]));
+    try assert_true(command_executor_test_slice_eq(xclaim_missing_reply.data, &"ERR no such key"[0: 15]));
     resp_value_free(&xclaim_missing_parsed.value);
 
     var xclaim_arity_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nXCLAIM\r\n$6\r\nstream\r\n$1\r\ng\r\n$1\r\nc\r\n$1\r\n0\r\n"[0: 49]);
@@ -5392,7 +5399,7 @@ export fn test_command_streams_first_batch() !void {
     const xautoclaim_missing_command: Command = try command_executor_test_command(&router, &xautoclaim_missing_parsed);
     const xautoclaim_missing_reply: CommandReply = command_execute_at(&engine, &xautoclaim_missing_command, 1000u64);
     try assert_eq_i32(xautoclaim_missing_reply.typ as i32, CommandReplyType.reply_error as i32);
-    try assert_true(command_executor_test_slice_eq(xautoclaim_missing_reply.data, &"ERR no such key"[0: 14]));
+    try assert_true(command_executor_test_slice_eq(xautoclaim_missing_reply.data, &"ERR no such key"[0: 15]));
     resp_value_free(&xautoclaim_missing_parsed.value);
 
     var xautoclaim_badid_parsed: RespParseResult = try parse_resp2(&"*6\r\n$10\r\nXAUTOCLAIM\r\n$6\r\nstream\r\n$1\r\ng\r\n$1\r\nc\r\n$1\r\n0\r\n$3\r\nbad\r\n"[0: 63]);
@@ -5424,7 +5431,7 @@ export fn test_command_streams_first_batch() !void {
     const xpending_missing_command: Command = try command_executor_test_command(&router, &xpending_missing_parsed);
     const xpending_missing_reply: CommandReply = command_execute_at(&engine, &xpending_missing_command, 1000u64);
     try assert_eq_i32(xpending_missing_reply.typ as i32, CommandReplyType.reply_error as i32);
-    try assert_true(command_executor_test_slice_eq(xpending_missing_reply.data, &"ERR no such key"[0: 14]));
+    try assert_true(command_executor_test_slice_eq(xpending_missing_reply.data, &"ERR no such key"[0: 15]));
     resp_value_free(&xpending_missing_parsed.value);
 
     var xpending_arity_parsed: RespParseResult = try parse_resp2(&"*2\r\n$8\r\nXPENDING\r\n$6\r\nstream\r\n"[0: 30]);
@@ -5472,7 +5479,7 @@ export fn test_command_streams_first_batch() !void {
     const xgroup_create_command: Command = try command_executor_test_command(&router, &xgroup_create_parsed);
     const xgroup_create_reply: CommandReply = command_execute_at(&engine, &xgroup_create_command, 1000u64);
     try assert_eq_i32(xgroup_create_reply.typ as i32, CommandReplyType.reply_error as i32);
-    try assert_true(command_executor_test_slice_eq(xgroup_create_reply.data, &"ERR wrong number of arguments for 'xgroup|create' command"[0: 56]));
+    try assert_true(command_executor_test_slice_eq(xgroup_create_reply.data, &"ERR wrong number of arguments for 'xgroup|create' command"[0: 57]));
     command_reply_cleanup(&xgroup_create_reply);
     resp_value_free(&xgroup_create_parsed.value);
 
@@ -5487,7 +5494,7 @@ export fn test_command_streams_first_batch() !void {
     const xgroup_create_missing_command: Command = try command_executor_test_command(&router, &xgroup_create_missing_parsed);
     const xgroup_create_missing_reply: CommandReply = command_execute_at(&engine, &xgroup_create_missing_command, 1000u64);
     try assert_eq_i32(xgroup_create_missing_reply.typ as i32, CommandReplyType.reply_error as i32);
-    try assert_true(command_executor_test_slice_eq(xgroup_create_missing_reply.data, &"ERR no such key"[0: 14]));
+    try assert_true(command_executor_test_slice_eq(xgroup_create_missing_reply.data, &"ERR no such key"[0: 15]));
     resp_value_free(&xgroup_create_missing_parsed.value);
 
     var xgroup_create_bad_option_parsed: RespParseResult = try parse_resp2(&"*6\r\n$6\r\nXGROUP\r\n$6\r\nCREATE\r\n$6\r\nstream\r\n$1\r\ng\r\n$3\r\n0-0\r\n$5\r\nMKBAD\r\n"[0: 67]);
@@ -5508,7 +5515,7 @@ export fn test_command_streams_first_batch() !void {
     const xgroup_createconsumer_missing_command: Command = try command_executor_test_command(&router, &xgroup_createconsumer_missing_parsed);
     const xgroup_createconsumer_missing_reply: CommandReply = command_execute_at(&engine, &xgroup_createconsumer_missing_command, 1000u64);
     try assert_eq_i32(xgroup_createconsumer_missing_reply.typ as i32, CommandReplyType.reply_error as i32);
-    try assert_true(command_executor_test_slice_eq(xgroup_createconsumer_missing_reply.data, &"ERR no such key"[0: 14]));
+    try assert_true(command_executor_test_slice_eq(xgroup_createconsumer_missing_reply.data, &"ERR no such key"[0: 15]));
     resp_value_free(&xgroup_createconsumer_missing_parsed.value);
 
     var xgroup_createconsumer_arity_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nXGROUP\r\n$14\r\nCREATECONSUMER\r\n$6\r\nstream\r\n$1\r\ng\r\n"[0: 56]);
@@ -5530,7 +5537,7 @@ export fn test_command_streams_first_batch() !void {
     const xgroup_delconsumer_missing_command: Command = try command_executor_test_command(&router, &xgroup_delconsumer_missing_parsed);
     const xgroup_delconsumer_missing_reply: CommandReply = command_execute_at(&engine, &xgroup_delconsumer_missing_command, 1000u64);
     try assert_eq_i32(xgroup_delconsumer_missing_reply.typ as i32, CommandReplyType.reply_error as i32);
-    try assert_true(command_executor_test_slice_eq(xgroup_delconsumer_missing_reply.data, &"ERR no such key"[0: 14]));
+    try assert_true(command_executor_test_slice_eq(xgroup_delconsumer_missing_reply.data, &"ERR no such key"[0: 15]));
     resp_value_free(&xgroup_delconsumer_missing_parsed.value);
 
     var xgroup_delconsumer_arity_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nXGROUP\r\n$11\r\nDELCONSUMER\r\n$6\r\nstream\r\n$1\r\ng\r\n"[0: 53]);
@@ -5574,7 +5581,7 @@ export fn test_command_streams_first_batch() !void {
     const xgroup_setid_missing_command: Command = try command_executor_test_command(&router, &xgroup_setid_missing_parsed);
     const xgroup_setid_missing_reply: CommandReply = command_execute_at(&engine, &xgroup_setid_missing_command, 1000u64);
     try assert_eq_i32(xgroup_setid_missing_reply.typ as i32, CommandReplyType.reply_error as i32);
-    try assert_true(command_executor_test_slice_eq(xgroup_setid_missing_reply.data, &"ERR no such key"[0: 14]));
+    try assert_true(command_executor_test_slice_eq(xgroup_setid_missing_reply.data, &"ERR no such key"[0: 15]));
     resp_value_free(&xgroup_setid_missing_parsed.value);
 
     var xgroup_setid_bad_option_parsed: RespParseResult = try parse_resp2(&"*7\r\n$6\r\nXGROUP\r\n$5\r\nSETID\r\n$6\r\nstream\r\n$1\r\ng\r\n$1\r\n$\r\n$3\r\nBAD\r\n$1\r\n1\r\n"[0: 69]);
@@ -5647,7 +5654,7 @@ export fn test_command_streams_first_batch() !void {
     const xinfo_stream_missing_key_command: Command = try command_executor_test_command(&router, &xinfo_stream_missing_key_parsed);
     const xinfo_stream_missing_key_reply: CommandReply = command_execute_at(&engine, &xinfo_stream_missing_key_command, 1000u64);
     try assert_eq_i32(xinfo_stream_missing_key_reply.typ as i32, CommandReplyType.reply_error as i32);
-    try assert_true(command_executor_test_slice_eq(xinfo_stream_missing_key_reply.data, &"ERR no such key"[0: 14]));
+    try assert_true(command_executor_test_slice_eq(xinfo_stream_missing_key_reply.data, &"ERR no such key"[0: 15]));
     command_reply_cleanup(&xinfo_stream_missing_key_reply);
     resp_value_free(&xinfo_stream_missing_key_parsed.value);
 
@@ -5756,7 +5763,7 @@ export fn test_command_streams_first_batch() !void {
     const xinfo_groups_missing_key_command: Command = try command_executor_test_command(&router, &xinfo_groups_missing_key_parsed);
     const xinfo_groups_missing_key_reply: CommandReply = command_execute_at(&engine, &xinfo_groups_missing_key_command, 1000u64);
     try assert_eq_i32(xinfo_groups_missing_key_reply.typ as i32, CommandReplyType.reply_error as i32);
-    try assert_true(command_executor_test_slice_eq(xinfo_groups_missing_key_reply.data, &"ERR no such key"[0: 14]));
+    try assert_true(command_executor_test_slice_eq(xinfo_groups_missing_key_reply.data, &"ERR no such key"[0: 15]));
     command_reply_cleanup(&xinfo_groups_missing_key_reply);
     resp_value_free(&xinfo_groups_missing_key_parsed.value);
 
@@ -5786,7 +5793,7 @@ export fn test_command_streams_first_batch() !void {
     const xinfo_consumers_missing_key_command: Command = try command_executor_test_command(&router, &xinfo_consumers_missing_key_parsed);
     const xinfo_consumers_missing_key_reply: CommandReply = command_execute_at(&engine, &xinfo_consumers_missing_key_command, 1000u64);
     try assert_eq_i32(xinfo_consumers_missing_key_reply.typ as i32, CommandReplyType.reply_error as i32);
-    try assert_true(command_executor_test_slice_eq(xinfo_consumers_missing_key_reply.data, &"ERR no such key"[0: 14]));
+    try assert_true(command_executor_test_slice_eq(xinfo_consumers_missing_key_reply.data, &"ERR no such key"[0: 15]));
     resp_value_free(&xinfo_consumers_missing_key_parsed.value);
 
     var xinfo_consumers_wrongtype_parsed: RespParseResult = try parse_resp2(&"*4\r\n$5\r\nXINFO\r\n$9\r\nCONSUMERS\r\n$6\r\nstring\r\n$1\r\ng\r\n"[0: 49]);
@@ -6077,6 +6084,13 @@ export fn test_command_rpush_rpop_lindex_lset_llen() !void {
     try assert_eq_i32(lset_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
     try assert_true(command_executor_test_slice_eq(lset_reply.data, &"OK"[0: 2]));
     resp_value_free(&lset_parsed.value);
+
+    var lset_missing_parsed: RespParseResult = try parse_resp2(&"*4\r\n$4\r\nLSET\r\n$7\r\nmissing\r\n$1\r\n0\r\n$1\r\nv\r\n"[0: 41]);
+    const lset_missing_command: Command = try command_executor_test_command(&router, &lset_missing_parsed);
+    const lset_missing_reply: CommandReply = command_execute_at(&engine, &lset_missing_command, 1000u64);
+    try assert_eq_i32(lset_missing_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(lset_missing_reply.data, &"ERR no such key"[0: 15]));
+    resp_value_free(&lset_missing_parsed.value);
 
     var lrange_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nLRANGE\r\n$5\r\nrlist\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 42]);
     const lrange_command: Command = try command_executor_test_command(&router, &lrange_parsed);
@@ -9125,6 +9139,13 @@ export fn test_command_rename_renamenx_lastsave() !void {
     try assert_eq_i32(renamenx_reply.typ as i32, CommandReplyType.reply_integer as i32);
     try assert_eq_i32(renamenx_reply.integer as i32, 1);
     resp_value_free(&renamenx_parsed.value);
+
+    var rename_missing_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nRENAME\r\n$7\r\nmissing\r\n$4\r\nnone\r\n"[0: 39]);
+    const rename_missing_command: Command = try command_executor_test_command(&router, &rename_missing_parsed);
+    const rename_missing_reply: CommandReply = command_execute_at(&engine, &rename_missing_command, 1000u64);
+    try assert_eq_i32(rename_missing_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(rename_missing_reply.data, &"ERR no such key"[0: 15]));
+    resp_value_free(&rename_missing_parsed.value);
 
     var copy_parsed: RespParseResult = try parse_resp2(&"*3\r\n$4\r\nCOPY\r\n$4\r\nnext\r\n$4\r\ncopy\r\n"[0: 34]);
     const copy_command: Command = try command_executor_test_command(&router, &copy_parsed);

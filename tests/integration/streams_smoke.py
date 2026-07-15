@@ -145,6 +145,18 @@ def run_smoke() -> None:
             if client.command(b"XINFO", b"GROUPS", b"mystream") != []:
                 raise AssertionError("XINFO GROUPS did not return an empty group list")
             try:
+                client.command(b"XINFO", b"STREAM", b"missing")
+                raise AssertionError("XINFO STREAM did not fail for a missing key")
+            except RuntimeError as exc:
+                if str(exc) != "ERR no such key":
+                    raise AssertionError(f"unexpected XINFO STREAM missing-key error: {exc}") from exc
+            try:
+                client.command(b"XGROUP", b"CREATE", b"mystream", b"group")
+                raise AssertionError("XGROUP CREATE accepted too few arguments")
+            except RuntimeError as exc:
+                if str(exc) != "ERR wrong number of arguments for 'xgroup|create' command":
+                    raise AssertionError(f"unexpected XGROUP CREATE arity error: {exc}") from exc
+            try:
                 client.command(b"XGROUP", b"CREATE", b"mystream", b"group", b"$")
                 raise AssertionError("XGROUP CREATE did not report deferred consumer groups")
             except RuntimeError as exc:
@@ -181,8 +193,14 @@ def run_smoke() -> None:
                 client.command(b"XSETID", b"mystream", first)
                 raise AssertionError("XSETID accepted an id below the current stream top item")
             except RuntimeError as exc:
-                if "smaller than the target stream top item" not in str(exc):
+                if str(exc) != "ERR The ID specified in XSETID is smaller than the target stream top item":
                     raise AssertionError(f"unexpected XSETID backward error: {exc}") from exc
+            try:
+                client.command(b"XSETID", b"mystream", b"bad")
+                raise AssertionError("XSETID accepted an invalid stream id")
+            except RuntimeError as exc:
+                if str(exc) != "ERR Invalid stream ID specified as stream command argument":
+                    raise AssertionError(f"unexpected XSETID invalid-id error: {exc}") from exc
             try:
                 client.command(b"XGROUP", b"CREATECONSUMER", b"mystream", b"group", b"consumer")
                 raise AssertionError("XGROUP CREATECONSUMER did not fail without consumer groups")

@@ -211,6 +211,24 @@ if [[ "$INCRBYFLOAT_AGAIN_RESULT" != "3.5" ]]; then
     exit 1
 fi
 
+FLOAT_OVERFLOW_SEED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" set float-overflow 1e308)"
+if [[ "$FLOAT_OVERFLOW_SEED_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected float overflow seed OK, got '$FLOAT_OVERFLOW_SEED_RESULT'" >&2
+    exit 1
+fi
+
+INCRBYFLOAT_OVERFLOW_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" incrbyfloat float-overflow 1e308 2>&1 || true)"
+if [[ "$INCRBYFLOAT_OVERFLOW_RESULT" != "ERR increment would produce NaN or Infinity" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected complete float overflow error, got '$INCRBYFLOAT_OVERFLOW_RESULT'" >&2
+    exit 1
+fi
+
+FLOAT_OVERFLOW_CLEANUP_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" del float-overflow)"
+if [[ "$FLOAT_OVERFLOW_CLEANUP_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected float overflow cleanup 1, got '$FLOAT_OVERFLOW_CLEANUP_RESULT'" >&2
+    exit 1
+fi
+
 INCREX_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" increx excounter byint 4)"
 if [[ "$INCREX_RESULT" != $'4\n4' ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected INCREX 4/4, got '$INCREX_RESULT'" >&2

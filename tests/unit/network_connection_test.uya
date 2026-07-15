@@ -175,6 +175,15 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const incrbyfloat_existing_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$11\r\nINCRBYFLOAT\r\n$8\r\nfcounter\r\n$1\r\n2\r\n"[0: 43], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: incrbyfloat_existing_result.response_len], &"$3\r\n3.5\r\n"[0: 9]));
 
+    const set_float_overflow_seed_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$3\r\nSET\r\n$8\r\nfcounter\r\n$5\r\n1e308\r\n"[0: 38], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: set_float_overflow_seed_result.response_len], &"+OK\r\n"[0: 5]));
+
+    const incrbyfloat_overflow_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$11\r\nINCRBYFLOAT\r\n$8\r\nfcounter\r\n$5\r\n1e308\r\n"[0: 47], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: incrbyfloat_overflow_result.response_len], &"-ERR increment would produce NaN or Infinity\r\n"[0: 46]));
+
+    const increx_float_overflow_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$6\r\nINCREX\r\n$8\r\nfcounter\r\n$7\r\nBYFLOAT\r\n$5\r\n1e308\r\n"[0: 54], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: increx_float_overflow_result.response_len], &"-ERR increment would produce NaN or Infinity\r\n"[0: 46]));
+
     const mset_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$4\r\nMSET\r\n$2\r\nk1\r\n$2\r\nv1\r\n$2\r\nk2\r\n$2\r\nv2\r\n"[0: 46], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: mset_result.response_len], &"+OK\r\n"[0: 5]));
 
@@ -617,6 +626,12 @@ export fn test_connection_process_ping_set_get_quit() !void {
 
     const hincrbyfloat_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$12\r\nHINCRBYFLOAT\r\n$4\r\nhash\r\n$5\r\nratio\r\n$3\r\n1.5\r\n"[0: 53], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: hincrbyfloat_result.response_len], &"$3\r\n1.5\r\n"[0: 9]));
+
+    const hset_float_overflow_seed_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$4\r\nHSET\r\n$4\r\nhash\r\n$5\r\nratio\r\n$5\r\n1e308\r\n"[0: 46], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: hset_float_overflow_seed_result.response_len], &":0\r\n"[0: 4]));
+
+    const hincrbyfloat_overflow_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$12\r\nHINCRBYFLOAT\r\n$4\r\nhash\r\n$5\r\nratio\r\n$5\r\n1e308\r\n"[0: 55], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: hincrbyfloat_overflow_result.response_len], &"-ERR increment would produce NaN or Infinity\r\n"[0: 46]));
 
     const hexists_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$7\r\nHEXISTS\r\n$4\r\nhash\r\n$5\r\nfield\r\n"[0: 38], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: hexists_result.response_len], &":1\r\n"[0: 4]));

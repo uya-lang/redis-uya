@@ -344,6 +344,7 @@ INCRBYFLOAT key increment
 - key 不存在时按 `0` 处理
 - key 和 increment 都必须是合法十进制浮点文本
 - 结果会归一化为最短常见十进制形态，例如 `1.5`、`3.5`
+- 结果为 NaN 或 Infinity 时返回完整的 `ERR increment would produce NaN or Infinity`，并保留原值
 
 ### `INCREX`
 
@@ -364,6 +365,7 @@ INCREX key [BYINT increment | BYFLOAT increment] [LBOUND lower-bound] [UBOUND up
 - 当前实现为 partial；key 不存在时按 `0` 处理，默认增量为 `1`
 - 默认和 `BYINT` mode 下，`BYINT`、`LBOUND`、`UBOUND` 参数必须为合法十进制整数
 - `BYFLOAT` mode 下，`BYFLOAT`、`LBOUND`、`UBOUND` 参数必须为合法十进制浮点数，结果使用与 `INCRBYFLOAT` 相同的归一化口径
+- `BYFLOAT` 结果为 NaN 或 Infinity 且无法按上下界饱和时，返回完整的 `ERR increment would produce NaN or Infinity`
 - 越界且未指定 `SATURATE` 时返回 `[current-value, 0]`，不写入 key，也不改变 TTL
 - 指定 `SATURATE` 时会把结果钳制到上下界，第二个元素返回实际应用的增量
 - 未提供过期选项时保留原 TTL；`EX/PX/EXAT/PXAT` 设置新 TTL；`PERSIST` 清理 TTL
@@ -508,6 +510,7 @@ HINCRBYFLOAT key field increment
 - key 不存在时会创建 hash，并把 field 从 `0` 加到目标值
 - field 和 increment 都必须是合法十进制浮点文本
 - 返回值会归一化为最短常见十进制形态
+- 结果为 NaN 或 Infinity 时返回完整的 `ERR increment would produce NaN or Infinity`，并保留原 field 值
 
 ### `HKEYS`
 

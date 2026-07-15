@@ -626,7 +626,7 @@ fn command_executor_format_float(out: &[byte], value: f64) !usize {
 fn command_executor_set_float_string(engine: &Engine, key: &[byte], value: f64, now_ms: u64) CommandReply {
     var buf: [byte: 128] = [];
     const text_len: usize = command_executor_format_float(buf[0: 128], value) catch {
-        return command_executor_error(&"ERR increment would produce NaN or Infinity"[0: 42]);
+        return command_executor_error(&"ERR increment would produce NaN or Infinity"[0: 43]);
     };
     const text: &[byte] = buf[0: text_len];
     const obj: &RedisObject = create_string_object(text) catch {
@@ -714,7 +714,7 @@ fn command_executor_hash_set_integer_field(obj: &RedisObject, field: &[byte], va
 fn command_executor_hash_set_float_field(obj: &RedisObject, field: &[byte], value: f64) CommandReply {
     var buf: [byte: 128] = [];
     const text_len: usize = command_executor_format_float(buf[0: 128], value) catch {
-        return command_executor_error(&"ERR increment would produce NaN or Infinity"[0: 42]);
+        return command_executor_error(&"ERR increment would produce NaN or Infinity"[0: 43]);
     };
     _ = hash_object_set_field(obj, field, buf[0: text_len]) catch |err| {
         if err == error.AllocOutOfMemory {
@@ -2280,10 +2280,10 @@ fn command_executor_increx_float_reply(new_value: f64, actual_increment: f64) Co
     var new_buf: [byte: 128] = [];
     var increment_buf: [byte: 128] = [];
     const new_len: usize = command_executor_format_float(new_buf[0: 128], new_value) catch {
-        return command_executor_error(&"ERR increment would produce NaN or Infinity"[0: 42]);
+        return command_executor_error(&"ERR increment would produce NaN or Infinity"[0: 43]);
     };
     const increment_len: usize = command_executor_format_float(increment_buf[0: 128], actual_increment) catch {
-        return command_executor_error(&"ERR increment would produce NaN or Infinity"[0: 42]);
+        return command_executor_error(&"ERR increment would produce NaN or Infinity"[0: 43]);
     };
     var raw: Sds = sds_empty() catch {
         return command_executor_oom();
@@ -2529,14 +2529,14 @@ fn command_executor_increx_float(engine: &Engine, key: &[byte], options: &Comman
     var next: f64 = current + options.float_delta;
     if isnan(next) != 0 || isinf(next) != 0 {
         if !options.saturate {
-            return command_executor_error(&"ERR increment would produce NaN or Infinity"[0: 42]);
+            return command_executor_error(&"ERR increment would produce NaN or Infinity"[0: 43]);
         }
         if options.float_delta > 0.0 && options.has_upper {
             next = options.float_upper;
         } else if options.float_delta < 0.0 && options.has_lower {
             next = options.float_lower;
         } else {
-            return command_executor_error(&"ERR increment would produce NaN or Infinity"[0: 42]);
+            return command_executor_error(&"ERR increment would produce NaN or Infinity"[0: 43]);
         }
     }
 
@@ -2554,7 +2554,7 @@ fn command_executor_increx_float(engine: &Engine, key: &[byte], options: &Comman
 
     const actual_increment: f64 = next - current;
     if isnan(actual_increment) != 0 || isinf(actual_increment) != 0 {
-        return command_executor_error(&"ERR increment would produce NaN or Infinity"[0: 42]);
+        return command_executor_error(&"ERR increment would produce NaN or Infinity"[0: 43]);
     }
     const set_reply: CommandReply = command_executor_set_float_string(engine, key, next, now_ms);
     if set_reply.typ == CommandReplyType.reply_error {

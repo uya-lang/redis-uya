@@ -1602,6 +1602,9 @@ export fn test_connection_process_client_commands() !void {
     try assert_eq_i32(client_pause.client_pause_timeout_ms as i32, 250);
     try assert_eq_i32(client_pause.client_pause_owner_id as i32, 1);
 
+    const client_pause_bad_timeout: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$6\r\nCLIENT\r\n$5\r\nPAUSE\r\n$3\r\nbad\r\n"[0: 36], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_pause_bad_timeout.response_len], &"-ERR timeout is not an integer or out of range\r\n"[0: 48]));
+
     const client_pause_write: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$5\r\nPAUSE\r\n$3\r\n250\r\n$5\r\nWRITE\r\n"[0: 47], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: client_pause_write.response_len], &"+OK\r\n"[0: 5]));
     try assert_eq_i32(client_pause_write.request_client_pause as i32, 1);

@@ -328,6 +328,13 @@ def run_smoke() -> None:
                     if "syntax" not in str(exc).lower():
                         raise
 
+                try:
+                    send_command(sock, b"CLIENT", b"PAUSE", b"bad")
+                    raise AssertionError("CLIENT PAUSE accepted a non-integer timeout")
+                except RespError as exc:
+                    if str(exc) != "ERR timeout is not an integer or out of range":
+                        raise AssertionError(f"unexpected CLIENT PAUSE timeout error: {exc}") from exc
+
                 if send_command(sock, b"CLIENT", b"PAUSE", b"1000", b"WRITE") != "OK":
                     raise AssertionError("CLIENT PAUSE WRITE failed")
                 peer_sock.settimeout(1.0)

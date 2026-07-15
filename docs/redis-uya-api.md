@@ -3830,6 +3830,7 @@ CLIENT HELP
 - `CLIENT KILL ID id [SKIPME yes|no]`：按连接 ID 关闭活跃连接；默认 `SKIPME yes` 不关闭当前连接，显式 `SKIPME no` 可关闭当前连接，返回整数 `0/1`
 - `CLIENT UNBLOCK id [TIMEOUT|ERROR]`：解除处于阻塞 pop 等待中的其他连接；默认 `TIMEOUT` 向目标连接返回对应阻塞命令的空结果，`ERROR` 向目标连接返回 `UNBLOCKED` 错误，当前命令返回整数 `0/1`
 - `CLIENT PAUSE timeout-ms [WRITE|ALL]`：暂停其他连接的命令处理；`ALL` 阻塞后续命令，`WRITE` 只阻塞写命令并允许读命令继续执行，返回 `+OK`
+- `CLIENT PAUSE` 的 timeout 不是非负整数或超出范围时，返回完整 `ERR timeout is not an integer or out of range`
 - `CLIENT UNPAUSE`：提前解除当前 pause 状态，返回 `+OK`
 - `CLIENT TRACKING`：当前支持连接级 `ON/OFF`、`REDIRECT`、`BCAST`、`PREFIX`、`OPTIN`、`OPTOUT`、`NOLOOP` 状态存储，返回 `+OK`；`PREFIX` 仅在 `BCAST` 模式下接受
 - `CLIENT TRACKINGINFO`：RESP2 下返回 flatten array，RESP3 下返回 map，暴露当前连接的 tracking flags、redirect 和 prefixes

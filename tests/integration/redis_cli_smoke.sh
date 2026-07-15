@@ -1382,6 +1382,12 @@ if [[ "$CLIENT_HELP_RESULT" != *"CLIENT REPLY <ON|OFF|SKIP>"* || "$CLIENT_HELP_R
     exit 1
 fi
 
+CLIENT_PAUSE_BAD_TIMEOUT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" client pause bad 2>&1 || true)"
+if [[ "$CLIENT_PAUSE_BAD_TIMEOUT_RESULT" != "ERR timeout is not an integer or out of range" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected complete CLIENT PAUSE timeout error, got '$CLIENT_PAUSE_BAD_TIMEOUT_RESULT'" >&2
+    exit 1
+fi
+
 CLIENT_REPLY_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" client reply on)"
 if [[ "$CLIENT_REPLY_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected CLIENT REPLY ON OK, got '$CLIENT_REPLY_RESULT'" >&2

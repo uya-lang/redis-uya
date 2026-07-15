@@ -5236,7 +5236,7 @@ fn connection_handle_client(tx: &ConnectionTransaction, command: &Command, now_m
             return connection_error_reply(&"ERR invalid request"[0: 19]);
         };
         const timeout_ms: u64 = connection_parse_u64(timeout_arg) catch {
-            return connection_error_reply(&"ERR timeout is not an integer or out of range"[0: 43]);
+            return connection_error_reply(&"ERR timeout is not an integer or out of range"[0: 45]);
         };
         var write_only: bool = false;
         if command.argc == 4 {

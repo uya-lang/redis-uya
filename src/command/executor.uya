@@ -9594,11 +9594,11 @@ fn command_executor_memory_usage(engine: &Engine, command: &Command, now_ms: u64
 fn command_executor_memory(runtime: &CommandRuntimeInfo, engine: &Engine, command: &Command, now_ms: u64) CommandReply {
     _ = runtime;
     if command.argc < 2 {
-        return command_executor_owned_error(&"ERR wrong number of arguments for 'memory' command"[0: 48]);
+        return command_executor_owned_error(&"ERR wrong number of arguments for 'memory' command"[0: 50]);
     }
 
     const subcommand: &[byte] = command_executor_arg(command, 1) catch {
-        return command_executor_owned_error(&"ERR wrong number of arguments for 'memory' command"[0: 48]);
+        return command_executor_owned_error(&"ERR wrong number of arguments for 'memory' command"[0: 50]);
     };
     if command_executor_keyword_eq(subcommand, &"HELP"[0: 4]) {
         if command.argc != 2 {

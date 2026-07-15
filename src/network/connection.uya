@@ -32,6 +32,7 @@ use src.network.protocol.parse_resp3_batch;
 use src.network.protocol.resp_batch_free;
 use src.network.protocol.resp_batch_value;
 use src.network.protocol.resp_batch_value_consumed;
+use src.network.protocol.resp_array_element;
 use src.network.protocol.resp_value_free;
 use src.persistence.aof.AofWriter;
 use src.persistence.aof.aof_append_command_result_at;
@@ -8083,6 +8084,12 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
         }
         if err == error.CommandWrongArity {
             reply = connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+            if parsed.value.typ == RespType.resp_array && parsed.value.element_count > 0 {
+                const command_name: &RespValue = resp_array_element(&parsed.value, 0);
+                if connection_keyword_eq(command_name.data, &"MEMORY"[0: 6]) {
+                    reply = connection_error_reply(&"ERR wrong number of arguments for 'memory' command"[0: 50]);
+                }
+            }
         }
         const n: usize = try connection_encode_reply_with_protocol(&reply, out, out_cap, tx.protocol_version);
         resp_value_free(&parsed.value);

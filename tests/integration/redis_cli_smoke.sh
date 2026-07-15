@@ -1232,6 +1232,12 @@ if [[ "$FUNCTION_KILL_RESULT" != "NOTBUSY No scripts in execution right now." ]]
     exit 1
 fi
 
+MEMORY_NO_SUBCOMMAND_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" memory 2>&1 || true)"
+if [[ "$MEMORY_NO_SUBCOMMAND_RESULT" != "ERR wrong number of arguments for 'memory' command" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected complete MEMORY arity error, got '$MEMORY_NO_SUBCOMMAND_RESULT'" >&2
+    exit 1
+fi
+
 MEMORY_USAGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" memory usage key)"
 if ! [[ "$MEMORY_USAGE_RESULT" =~ ^[0-9]+$ ]] || [[ "$MEMORY_USAGE_RESULT" == "0" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected MEMORY USAGE key to be a positive integer, got '$MEMORY_USAGE_RESULT'" >&2

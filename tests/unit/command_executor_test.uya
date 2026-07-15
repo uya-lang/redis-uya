@@ -11239,6 +11239,15 @@ export fn test_command_error_paths() !void {
     try assert_eq_i32(touch_wrongtype_reply.integer as i32, 1);
     resp_value_free(&touch_wrongtype_parsed.value);
 
+    var memory_no_subcommand_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nMEMORY\r\n$4\r\nHELP\r\n"[0: 26]);
+    var memory_no_subcommand_command: Command = try command_executor_test_command(&router, &memory_no_subcommand_parsed);
+    memory_no_subcommand_command.argc = 1;
+    var memory_no_subcommand_reply: CommandReply = command_execute_at(&engine, &memory_no_subcommand_command, 1000u64);
+    try assert_eq_i32(memory_no_subcommand_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(memory_no_subcommand_reply.data, &"ERR wrong number of arguments for 'memory' command"[0: 50]));
+    command_reply_cleanup(&memory_no_subcommand_reply);
+    resp_value_free(&memory_no_subcommand_parsed.value);
+
     var memory_usage_short_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nMEMORY\r\n$5\r\nUSAGE\r\n"[0: 27]);
     const memory_usage_short_command: Command = try command_executor_test_command(&router, &memory_usage_short_parsed);
     var memory_usage_short_reply: CommandReply = command_execute_at(&engine, &memory_usage_short_command, 1000u64);

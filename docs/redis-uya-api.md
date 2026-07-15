@@ -3280,6 +3280,7 @@ MEMORY USAGE key [SAMPLES count]
 说明：
 
 - 当前实现为 partial：仅支持 `HELP`、`DOCTOR`、`MALLOC-STATS`、`PURGE`、`STATS`、`USAGE`
+- 未提供子命令时返回完整 `ERR wrong number of arguments for 'memory' command`
 - `COMMAND INFO/LIST/DOCS` 会暴露 `MEMORY`、`MEMORY|DOCTOR`、`MEMORY|HELP`、`MEMORY|MALLOC-STATS`、`MEMORY|PURGE`、`MEMORY|STATS` 与 `MEMORY|USAGE`
 - `USAGE` 基于 redis-uya 当前对象布局、dict entry/bucket、list node 和 SDS 容量返回近似运行时占用，不是 Redis 原生 jemalloc 口径
 - `USAGE ... SAMPLES count` 当前只做参数兼容校验，不影响近似值计算

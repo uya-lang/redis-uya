@@ -2093,7 +2093,7 @@ def run_smoke() -> None:
                 client._request(b"MEMORY")
                 raise AssertionError("expected MEMORY without subcommand to fail")
             except RespError as exc:
-                if str(exc) != "ERR wrong number of arguments":
+                if str(exc) != "ERR wrong number of arguments for 'memory' command":
                     raise AssertionError(f"unexpected MEMORY arity error: {exc}") from exc
             if not client.config_set("slowlog-log-slower-than", "0"):
                 raise AssertionError("CONFIG SET slowlog-log-slower-than 0 failed")

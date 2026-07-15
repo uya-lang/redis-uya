@@ -736,6 +736,24 @@ if [[ "$EVALSHA_RO_GET_RESULT" != "value" ]]; then
     exit 1
 fi
 
+SCRIPT_FLUSH_BAD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" script flush bad 2>&1 || true)"
+if [[ "$SCRIPT_FLUSH_BAD_RESULT" != "ERR SCRIPT FLUSH only support SYNC|ASYNC option" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected complete SCRIPT FLUSH option error, got '$SCRIPT_FLUSH_BAD_RESULT'" >&2
+    exit 1
+fi
+
+EVAL_NEGATIVE_NUMKEYS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" eval "return 1" -1 2>&1 || true)"
+if [[ "$EVAL_NEGATIVE_NUMKEYS_RESULT" != "ERR Number of keys can't be negative" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected complete EVAL negative numkeys error, got '$EVAL_NEGATIVE_NUMKEYS_RESULT'" >&2
+    exit 1
+fi
+
+EVAL_UNKNOWN_INNER_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" eval "return redis.call('MISSING')" 0 2>&1 || true)"
+if [[ "$EVAL_UNKNOWN_INNER_RESULT" != "ERR unknown command in script" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected complete script inner command error, got '$EVAL_UNKNOWN_INNER_RESULT'" >&2
+    exit 1
+fi
+
 SCRIPT_FLUSH_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" script flush)"
 if [[ "$SCRIPT_FLUSH_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected SCRIPT FLUSH OK, got '$SCRIPT_FLUSH_RESULT'" >&2

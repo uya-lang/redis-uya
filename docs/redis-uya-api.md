@@ -2591,11 +2591,13 @@ SCRIPT KILL
 - `EXISTS`：按输入顺序返回 `0/1`
 - `FLUSH`：成功返回 `+OK`
 - `KILL`：当前无长时间运行脚本，返回 `NOTBUSY No scripts in execution right now.`
+- `FLUSH` 模式不是 `ASYNC|SYNC` 时返回完整的 `ERR SCRIPT FLUSH only support SYNC|ASYNC option`
 
 说明：
 
 - 当前实现为 partial：`LOAD` 只接受可由当前 `EVAL/EVALSHA` 执行的单条 `return redis.call(...)` 子集
 - `FLUSH ASYNC|SYNC` 当前都走同步清空路径，只保留参数兼容
+- `EVAL/EVALSHA` 的负 `numkeys`、超出后续参数数量、脚本内部未知命令和内部命令参数数量错误均返回完整错误文本
 - `SCRIPT DEBUG` 当前是 no-op 兼容面，不提供 Redis Lua debugger
 - `SCRIPT KILL` 当前只覆盖无运行脚本错误面
 

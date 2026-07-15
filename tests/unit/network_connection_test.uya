@@ -308,6 +308,9 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const script_debug_bad_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$6\r\nSCRIPT\r\n$5\r\nDEBUG\r\n$5\r\nMAYBE\r\n"[0: 38], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: script_debug_bad_result.response_len], &"-ERR syntax error\r\n"[0: 19]));
 
+    const script_no_subcommand_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*1\r\n$6\r\nSCRIPT\r\n"[0: 16], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: script_no_subcommand_result.response_len], &"-ERR wrong number of arguments\r\n"[0: 32]));
+
     var script_out: [byte: 2048] = [];
     const script_help_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$6\r\nSCRIPT\r\n$4\r\nHELP\r\n"[0: 26], &script_out[0], 2048, 1000u64);
     try assert_true(network_connection_contains(script_out[0: script_help_result.response_len], &"SCRIPT <subcommand>"[0: 19]));
@@ -340,8 +343,26 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const script_flush_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$6\r\nSCRIPT\r\n$5\r\nFLUSH\r\n"[0: 27], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: script_flush_result.response_len], &"+OK\r\n"[0: 5]));
 
+    const script_flush_bad_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$6\r\nSCRIPT\r\n$5\r\nFLUSH\r\n$3\r\nBAD\r\n"[0: 36], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: script_flush_bad_result.response_len], &"-ERR SCRIPT FLUSH only support SYNC|ASYNC option\r\n"[0: 50]));
+
     const script_kill_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$6\r\nSCRIPT\r\n$4\r\nKILL\r\n"[0: 26], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: script_kill_result.response_len], &"-NOTBUSY No scripts in execution right now.\r\n"[0: 45]));
+
+    const eval_negative_numkeys_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$4\r\nEVAL\r\n$8\r\nreturn 1\r\n$2\r\n-1\r\n"[0: 36], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: eval_negative_numkeys_result.response_len], &"-ERR Number of keys can't be negative\r\n"[0: 39]));
+
+    const eval_too_many_keys_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$4\r\nEVAL\r\n$8\r\nreturn 1\r\n$1\r\n1\r\n"[0: 35], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: eval_too_many_keys_result.response_len], &"-ERR Number of keys can't be greater than number of args\r\n"[0: 58]));
+
+    const eval_unknown_inner_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$4\r\nEVAL\r\n$28\r\nreturn redis.call('MISSING')\r\n$1\r\n0\r\n"[0: 56], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: eval_unknown_inner_result.response_len], &"-ERR unknown command in script\r\n"[0: 32]));
+
+    const eval_wrong_inner_arity_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$4\r\nEVAL\r\n$24\r\nreturn redis.call('GET')\r\n$1\r\n0\r\n"[0: 52], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: eval_wrong_inner_arity_result.response_len], &"-ERR wrong number of arguments for script command\r\n"[0: 51]));
+
+    const script_flush_errors_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$6\r\nSCRIPT\r\n$5\r\nFLUSH\r\n"[0: 27], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: script_flush_errors_result.response_len], &"+OK\r\n"[0: 5]));
 
     var function_out: [byte: 2048] = [];
     const function_help_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$8\r\nFUNCTION\r\n$4\r\nHELP\r\n"[0: 28], &function_out[0], 2048, 1000u64);

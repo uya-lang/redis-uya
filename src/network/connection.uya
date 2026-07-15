@@ -6426,10 +6426,10 @@ fn connection_script_eval_error(err: any) CommandReply {
 
 fn connection_handle_script(command: &Command) CommandReply {
     if command.argc < 2 {
-        return connection_error_reply(&"ERR wrong number of arguments for 'script' command"[0: 48]);
+        return connection_error_reply(&"ERR wrong number of arguments for 'script' command"[0: 50]);
     }
     const subcommand: &[byte] = command_arg_data(command, 1) catch {
-        return connection_error_reply(&"ERR wrong number of arguments for 'script' command"[0: 48]);
+        return connection_error_reply(&"ERR wrong number of arguments for 'script' command"[0: 50]);
     };
     if connection_keyword_eq(subcommand, &"HELP"[0: 4]) {
         if command.argc != 2 {
@@ -6503,7 +6503,7 @@ fn connection_handle_script(command: &Command) CommandReply {
                 return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
             };
             if !connection_keyword_eq(mode, &"SYNC"[0: 4]) && !connection_keyword_eq(mode, &"ASYNC"[0: 5]) {
-                return connection_error_reply(&"ERR SCRIPT FLUSH only support SYNC|ASYNC option"[0: 49]);
+                return connection_error_reply(&"ERR SCRIPT FLUSH only support SYNC|ASYNC option"[0: 47]);
             }
         }
         connection_script_cache_flush_all();
@@ -6540,9 +6540,9 @@ fn connection_execute_script_effect_at(
         resp_value_free(&parsed.value);
         object_free(raw_obj);
         if err == error.CommandWrongArity {
-            return connection_error_reply(&"ERR wrong number of arguments for script command"[0: 46]);
+            return connection_error_reply(&"ERR wrong number of arguments for script command"[0: 48]);
         }
-        return connection_error_reply(&"ERR unknown command in script"[0: 27]);
+        return connection_error_reply(&"ERR unknown command in script"[0: 29]);
     };
     if !connection_script_command_allowed(inner_command.info.cmd_type) {
         resp_value_free(&parsed.value);
@@ -6612,9 +6612,9 @@ fn connection_handle_eval_like_at(
             return connection_error_reply(&"ERR value is not an integer or out of range"[0: 43]);
         }
         if err == error.ConnectionScriptNegativeNumkeys {
-            return connection_error_reply(&"ERR Number of keys can't be negative"[0: 37]);
+            return connection_error_reply(&"ERR Number of keys can't be negative"[0: 36]);
         }
-        return connection_error_reply(&"ERR Number of keys can't be greater than number of args"[0: 54]);
+        return connection_error_reply(&"ERR Number of keys can't be greater than number of args"[0: 55]);
     };
 
     var script: &[byte] = [];
@@ -6656,7 +6656,7 @@ fn connection_handle_eval_like_at(
         const inner_command: Command = command_from_resp(router, &parsed_inner.value) catch {
             resp_value_free(&parsed_inner.value);
             object_free(raw_obj);
-            return connection_error_reply(&"ERR unknown command in script"[0: 27]);
+            return connection_error_reply(&"ERR unknown command in script"[0: 29]);
         };
         if !connection_script_command_readonly(&inner_command) {
             resp_value_free(&parsed_inner.value);

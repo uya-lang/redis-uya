@@ -4285,7 +4285,7 @@ fn command_executor_bitop(engine: &Engine, command: &Command, now_ms: u64) Comma
     } else if command_executor_keyword_eq(operation, &"NOT"[0: 3]) {
         op_code = 4;
         if command.argc != 4 {
-            return command_executor_error(&"ERR BITOP NOT must be called with a single source key."[0: 52]);
+            return command_executor_error(&"ERR BITOP NOT must be called with a single source key."[0: 54]);
         }
     } else {
         return command_executor_syntax_error();

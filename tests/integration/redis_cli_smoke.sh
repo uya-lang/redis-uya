@@ -472,6 +472,12 @@ if [[ "$BITOP_NOT_RESULT" != "3" ]]; then
     exit 1
 fi
 
+BITOP_NOT_MULTI_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" bitop NOT dstbit srca srcb 2>&1 || true)"
+if [[ "$BITOP_NOT_MULTI_RESULT" != "ERR BITOP NOT must be called with a single source key." ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected complete BITOP NOT source-count error, got '$BITOP_NOT_MULTI_RESULT'" >&2
+    exit 1
+fi
+
 BITOP_NOT_BITCOUNT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" bitcount dstbit)"
 if [[ "$BITOP_NOT_BITCOUNT_RESULT" != "8" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected BITOP NOT bitcount 8, got '$BITOP_NOT_BITCOUNT_RESULT'" >&2

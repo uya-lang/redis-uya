@@ -2348,7 +2348,7 @@ BITOP NOT destkey key
 说明：
 
 - `AND` / `OR` / `XOR` 会把较短 source 按 `\\0` 右侧补齐到最长 source 长度
-- `NOT` 当前只接受单个 source key；多 source 时返回兼容错误
+- `NOT` 当前只接受单个 source key；多 source 时返回完整 `ERR BITOP NOT must be called with a single source key.`
 - 目标 key 总是按普通字符串重写，原 TTL 会被清除
 - 当前已覆盖 AOF replay、`COMMAND GETKEYS` / `GETKEYSANDFLAGS` 与客户端 smoke
 

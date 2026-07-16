@@ -11115,7 +11115,7 @@ export fn test_command_error_paths() !void {
     const geosearch_missing_member_command: Command = try command_executor_test_command(&router, &geosearch_missing_member_parsed);
     const geosearch_missing_member_reply: CommandReply = command_execute_at(&engine, &geosearch_missing_member_command, 1000u64);
     try assert_eq_i32(geosearch_missing_member_reply.typ as i32, CommandReplyType.reply_error as i32);
-    try assert_true(command_executor_test_slice_eq(geosearch_missing_member_reply.data, &"ERR could not decode requested zset member"[0: 41]));
+    try assert_true(command_executor_test_slice_eq(geosearch_missing_member_reply.data, &"ERR could not decode requested zset member"[0: 42]));
     resp_value_free(&geosearch_missing_member_parsed.value);
 
     var geo_invalid_pair_parsed: RespParseResult = try parse_resp2(&"*5\r\n$6\r\nGEOADD\r\n$3\r\ngeo\r\n$3\r\n500\r\n$2\r\n38\r\n$1\r\nx\r\n"[0: 49]);

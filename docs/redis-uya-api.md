@@ -2763,7 +2763,7 @@ GEOSEARCHSTORE destination source FROMLONLAT longitude latitude BYBOX width heig
 - `STOREDIST` 会按请求单位写入截断后的整数距离 score；由于 redis-uya 当前 zset score 是 `i64`，暂不保存 Redis 原生浮点距离
 - 当前接受 `COUNT ... ANY` 语法，但不会像 Redis 原生实现那样做提早截断优化
 - 当前不支持 `WITHDIST`、`WITHCOORD` 或 `WITHHASH`，这些只读返回修饰符会返回语法错误
-- source key 不存在且使用 `FROMLONLAT` 时删除 `destination` 并返回 `0`；使用 `FROMMEMBER` 且 source/member 不存在时返回 `ERR could not decode requested zset member`
+- source key 不存在且使用 `FROMLONLAT` 时删除 `destination` 并返回 `0`；使用 `FROMMEMBER` 且 source/member 不存在时返回完整 `ERR could not decode requested zset member`
 
 ### `GEORADIUS`
 
@@ -2824,7 +2824,7 @@ GEORADIUSBYMEMBER key member radius M|KM|FT|MI [WITHCOORD] [WITHDIST] [WITHHASH]
 
 - 当前实现为 partial，复用 `GEOSEARCH key FROMMEMBER member BYRADIUS radius unit ...` 的执行路径
 - `STORE` 写入的 zset score 为当前 packed coordinate score；`STOREDIST` 按请求单位写入截断后的整数距离 score；两者当前不支持与 `WITHDIST` / `WITHCOORD` / `WITHHASH` 组合
-- center member 不存在时返回 `ERR could not decode requested zset member`
+- center member 不存在时返回完整 `ERR could not decode requested zset member`
 - 当前 `WITHHASH` 返回当前 packed score 整数，不是 Redis 原生 geohash 整数
 - 当前 `WITHCOORD` 返回量化到 `1e-6` 的经纬度字符串
 
@@ -2845,7 +2845,7 @@ GEORADIUSBYMEMBER_RO key member radius M|KM|FT|MI [WITHCOORD] [WITHDIST] [WITHHA
 
 - 当前实现为 partial，复用 `GEOSEARCH key FROMMEMBER member BYRADIUS radius unit ...` 的执行路径
 - 当前为只读兼容面，不支持 `STORE` 或 `STOREDIST`
-- center member 不存在时返回 `ERR could not decode requested zset member`
+- center member 不存在时返回完整 `ERR could not decode requested zset member`
 - 当前 `WITHHASH` 返回当前 packed score 整数，不是 Redis 原生 geohash 整数
 - 当前 `WITHCOORD` 返回量化到 `1e-6` 的经纬度字符串
 

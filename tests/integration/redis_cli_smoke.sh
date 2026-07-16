@@ -652,6 +652,12 @@ if [[ "$GEOSEARCHSTORE_DIST_RESULT" != "2" ]]; then
     exit 1
 fi
 
+GEOSEARCH_MISSING_MEMBER_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" geosearch geo FROMMEMBER Missing BYRADIUS 200 km 2>&1 || true)"
+if [[ "$GEOSEARCH_MISSING_MEMBER_RESULT" != "ERR could not decode requested zset member" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected complete GEOSEARCH missing-member error, got '$GEOSEARCH_MISSING_MEMBER_RESULT'" >&2
+    exit 1
+fi
+
 GEOSEARCHSTORE_DIST_SCORE="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" zscore distdst Catania)"
 if [[ "$GEOSEARCHSTORE_DIST_SCORE" != "166" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected GEOSEARCHSTORE STOREDIST score 166, got '$GEOSEARCHSTORE_DIST_SCORE'" >&2

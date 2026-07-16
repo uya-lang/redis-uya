@@ -14728,7 +14728,7 @@ fn command_executor_geo_search_run(engine: &Engine, key: &[byte], options: &Comm
     const obj_result: !&RedisObject = command_executor_lookup_key_at(engine, key, now_ms);
     const obj: &RedisObject = obj_result catch {
         if options.from_member {
-            return command_executor_error(&"ERR could not decode requested zset member"[0: 41]);
+            return command_executor_error(&"ERR could not decode requested zset member"[0: 42]);
         }
         return command_executor_array_bulk(null as &ListNode, 0);
     };
@@ -14739,7 +14739,7 @@ fn command_executor_geo_search_run(engine: &Engine, key: &[byte], options: &Comm
     var center: CommandExecutorGeoPoint = CommandExecutorGeoPoint{ lon: options.center_lon, lat: options.center_lat, packed: 0 };
     if options.from_member {
         center = command_executor_geo_decode_member(obj, options.center_member) catch {
-            return command_executor_error(&"ERR could not decode requested zset member"[0: 41]);
+            return command_executor_error(&"ERR could not decode requested zset member"[0: 42]);
         };
     }
 
@@ -14876,7 +14876,7 @@ fn command_executor_geo_search_store_run(engine: &Engine, destination: &[byte], 
     const obj_result: !&RedisObject = command_executor_lookup_key_at(engine, source, now_ms);
     const obj: &RedisObject = obj_result catch {
         if options.from_member {
-            return command_executor_error(&"ERR could not decode requested zset member"[0: 41]);
+            return command_executor_error(&"ERR could not decode requested zset member"[0: 42]);
         }
         _ = delete_key(engine, destination);
         return command_executor_integer(0);
@@ -14888,7 +14888,7 @@ fn command_executor_geo_search_store_run(engine: &Engine, destination: &[byte], 
     var center: CommandExecutorGeoPoint = CommandExecutorGeoPoint{ lon: options.center_lon, lat: options.center_lat, packed: 0 };
     if options.from_member {
         center = command_executor_geo_decode_member(obj, options.center_member) catch {
-            return command_executor_error(&"ERR could not decode requested zset member"[0: 41]);
+            return command_executor_error(&"ERR could not decode requested zset member"[0: 42]);
         };
     }
 

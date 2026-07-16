@@ -9705,11 +9705,11 @@ fn command_executor_module_help() CommandReply {
 
 fn command_executor_module(command: &Command) CommandReply {
     if command.argc < 2 {
-        return command_executor_owned_error(&"ERR wrong number of arguments for 'module' command"[0: 48]);
+        return command_executor_owned_error(&"ERR wrong number of arguments for 'module' command"[0: 50]);
     }
 
     const subcommand: &[byte] = command_executor_arg(command, 1) catch {
-        return command_executor_owned_error(&"ERR wrong number of arguments for 'module' command"[0: 48]);
+        return command_executor_owned_error(&"ERR wrong number of arguments for 'module' command"[0: 50]);
     };
     if command_executor_keyword_eq(subcommand, &"HELP"[0: 4]) {
         if command.argc != 2 {

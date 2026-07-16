@@ -3308,6 +3308,7 @@ MODULE UNLOAD name
 说明：
 
 - 当前实现为 partial / standalone-error 组合：`HELP`、`LIST` 为 partial；`LOAD`、`LOADEX` 与 `UNLOAD` 为单机安全 profile 下的 standalone-error
+- 未提供子命令时返回完整 `ERR wrong number of arguments for 'module' command`
 - `COMMAND INFO/LIST/DOCS` 会暴露 `MODULE`、`MODULE|HELP`、`MODULE|LIST`、`MODULE|LOAD`、`MODULE|LOADEX` 与 `MODULE|UNLOAD`
 - 当前不支持 module 加载、卸载或模块 API；禁用子命令不加载动态库、不修改模块列表、不写 AOF 或复制 backlog
 

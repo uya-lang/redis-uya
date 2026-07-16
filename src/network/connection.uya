@@ -8088,6 +8088,8 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
                 const command_name: &RespValue = resp_array_element(&parsed.value, 0);
                 if connection_keyword_eq(command_name.data, &"MEMORY"[0: 6]) {
                     reply = connection_error_reply(&"ERR wrong number of arguments for 'memory' command"[0: 50]);
+                } else if connection_keyword_eq(command_name.data, &"MODULE"[0: 6]) {
+                    reply = connection_error_reply(&"ERR wrong number of arguments for 'module' command"[0: 50]);
                 }
             }
         }

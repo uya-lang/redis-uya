@@ -1268,6 +1268,12 @@ if [[ "$MEMORY_PURGE_RESULT" != "OK" ]]; then
     exit 1
 fi
 
+MODULE_NO_SUBCOMMAND_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" module 2>&1 || true)"
+if [[ "$MODULE_NO_SUBCOMMAND_RESULT" != "ERR wrong number of arguments for 'module' command" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected complete MODULE arity error, got '$MODULE_NO_SUBCOMMAND_RESULT'" >&2
+    exit 1
+fi
+
 MODULE_LIST_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" module list)"
 if [[ -n "$MODULE_LIST_RESULT" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected empty MODULE LIST, got '$MODULE_LIST_RESULT'" >&2

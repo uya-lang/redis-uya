@@ -1131,6 +1131,9 @@ export fn test_connection_process_error_paths() !void {
     const memory_wrong_arity: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*1\r\n$6\r\nMEMORY\r\n"[0: 16], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: memory_wrong_arity.response_len], &"-ERR wrong number of arguments for 'memory' command\r\n"[0: 53]));
 
+    const module_wrong_arity: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*1\r\n$6\r\nMODULE\r\n"[0: 16], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: module_wrong_arity.response_len], &"-ERR wrong number of arguments for 'module' command\r\n"[0: 53]));
+
     const bad_proto: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"?bad\r\n"[0: 6], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: bad_proto.response_len], &"-ERR protocol error\r\n"[0: 21]));
     try assert_eq_i32(bad_proto.close_after as i32, 1);

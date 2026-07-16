@@ -9867,11 +9867,11 @@ fn command_executor_hotkeys(command: &Command) CommandReply {
 
 fn command_executor_slowlog(command: &Command) CommandReply {
     if command.argc < 2 {
-        return command_executor_owned_error(&"ERR wrong number of arguments for 'slowlog' command"[0: 49]);
+        return command_executor_owned_error(&"ERR wrong number of arguments for 'slowlog' command"[0: 51]);
     }
 
     const subcommand: &[byte] = command_executor_arg(command, 1) catch {
-        return command_executor_owned_error(&"ERR wrong number of arguments for 'slowlog' command"[0: 49]);
+        return command_executor_owned_error(&"ERR wrong number of arguments for 'slowlog' command"[0: 51]);
     };
     if command_executor_keyword_eq(subcommand, &"HELP"[0: 4]) {
         if command.argc != 2 {

@@ -9934,6 +9934,15 @@ export fn test_command_slowlog() !void {
     var runtime: CommandRuntimeInfo = command_runtime_default();
     runtime.config.slowlog_log_slower_than = 0;
 
+    var slowlog_no_subcommand_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nSLOWLOG\r\n$4\r\nHELP\r\n"[0: 27]);
+    var slowlog_no_subcommand_command: Command = try command_executor_test_command(&router, &slowlog_no_subcommand_parsed);
+    slowlog_no_subcommand_command.argc = 1;
+    var slowlog_no_subcommand_reply: CommandReply = command_execute_at(&engine, &slowlog_no_subcommand_command, 1000u64);
+    try assert_eq_i32(slowlog_no_subcommand_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(slowlog_no_subcommand_reply.data, &"ERR wrong number of arguments for 'slowlog' command"[0: 51]));
+    command_reply_cleanup(&slowlog_no_subcommand_reply);
+    resp_value_free(&slowlog_no_subcommand_parsed.value);
+
     var slowlog_help_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nSLOWLOG\r\n$4\r\nHELP\r\n"[0: 27]);
     const slowlog_help_command: Command = try command_executor_test_command(&router, &slowlog_help_parsed);
     var slowlog_help_reply: CommandReply = command_execute_at(&engine, &slowlog_help_command, 1000u64);

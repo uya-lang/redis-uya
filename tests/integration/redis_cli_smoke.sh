@@ -1436,6 +1436,12 @@ if [[ "$CLIENT_NO_EVICT_RESULT" != "OK" ]]; then
     exit 1
 fi
 
+SLOWLOG_NO_SUBCOMMAND_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" slowlog 2>&1 || true)"
+if [[ "$SLOWLOG_NO_SUBCOMMAND_RESULT" != "ERR wrong number of arguments for 'slowlog' command" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected complete SLOWLOG arity error, got '$SLOWLOG_NO_SUBCOMMAND_RESULT'" >&2
+    exit 1
+fi
+
 SLOWLOG_THRESHOLD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" config set slowlog-log-slower-than 0)"
 if [[ "$SLOWLOG_THRESHOLD_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected CONFIG SET slowlog-log-slower-than OK, got '$SLOWLOG_THRESHOLD_RESULT'" >&2

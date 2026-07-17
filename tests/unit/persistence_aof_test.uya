@@ -746,9 +746,9 @@ export fn test_aof_flush_persists_buffer_without_close() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
-export fn test_aof_large_append_bypasses_buffer() !void {
+export fn test_aof_large_append_uses_buffer() !void {
     reset_memory_stats_for_test();
-    const path: &const byte = "build/test-aof-large-direct.aof";
+    const path: &const byte = "build/test-aof-large-buffered.aof";
     _ = unlink(path);
 
     var raw: [byte: 640] = [];
@@ -761,11 +761,44 @@ export fn test_aof_large_append_bypasses_buffer() !void {
     try aof_append_raw(&writer, raw[0: raw_len]);
 
     const router: CommandRouter = command_router_new();
+    var before_flush_engine: Engine = engine_new();
+    try aof_replay_file_at(path, &before_flush_engine, &router, 1000u64);
+    try assert_true(aof_key_missing_at(&before_flush_engine, &"large"[0: 5], 1000u64));
+    engine_free(&before_flush_engine);
+
+    try aof_flush(&writer);
     var engine: Engine = engine_new();
     try aof_replay_file_at(path, &engine, &router, 1000u64);
     const found: &RedisObject = try lookup_key_at(&engine, &"large"[0: 5], 1000u64);
     try assert_eq_i32(found.value.len as i32, 520);
     try assert_eq_i32(found.value.buf.ptr[0] as i32, 'x' as i32);
+    engine_free(&engine);
+    aof_close(&writer);
+    _ = unlink(path);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_aof_oversized_append_bypasses_buffer() !void {
+    reset_memory_stats_for_test();
+    const path: &const byte = "build/test-aof-oversized-direct.aof";
+    _ = unlink(path);
+
+    var raw: [byte: 66000] = [];
+    var raw_len: usize = 0;
+    var command_count: usize = 0;
+    while command_count < 2000 {
+        raw_len = aof_test_copy(&raw[0], raw_len, &"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 33]);
+        command_count = command_count + 1;
+    }
+
+    var writer: AofWriter = try aof_open_truncate(path);
+    try aof_append_raw(&writer, raw[0: raw_len]);
+
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    try aof_replay_file_at(path, &engine, &router, 1000u64);
+    const found: &RedisObject = try lookup_key_at(&engine, &"key"[0: 3], 1000u64);
+    try assert_true(aof_test_slice_eq(found.value.buf[0: found.value.len], &"value"[0: 5]));
     engine_free(&engine);
     aof_close(&writer);
     _ = unlink(path);

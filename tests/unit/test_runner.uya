@@ -197,7 +197,8 @@ use tests.unit.persistence_aof_test.test_aof_connection_append_and_replay_set;
 use tests.unit.persistence_aof_test.test_aof_replay_set_then_del;
 use tests.unit.persistence_aof_test.test_aof_replay_hash_commands;
 use tests.unit.persistence_aof_test.test_aof_flush_persists_buffer_without_close;
-use tests.unit.persistence_aof_test.test_aof_large_append_bypasses_buffer;
+use tests.unit.persistence_aof_test.test_aof_large_append_uses_buffer;
+use tests.unit.persistence_aof_test.test_aof_oversized_append_bypasses_buffer;
 use tests.unit.persistence_aof_test.test_aof_replay_truncated_file_fails;
 use tests.unit.persistence_aof_test.test_aof_replay_invalid_format_fails;
 use tests.unit.persistence_aof_test.test_aof_expire_replays_absolute_deadline;
@@ -1040,9 +1041,12 @@ export fn main() i32 {
     _ = test_aof_flush_persists_buffer_without_close() catch { printf("[FAIL] persistence_aof/flush\n" as *byte); failed = failed + 1; };
     if failed == before_aof_flush { printf("[PASS] persistence_aof/flush\n" as *byte); }
 
-    const before_aof_large_direct: i32 = failed;
-    _ = test_aof_large_append_bypasses_buffer() catch { printf("[FAIL] persistence_aof/large_direct\n" as *byte); failed = failed + 1; };
-    if failed == before_aof_large_direct { printf("[PASS] persistence_aof/large_direct\n" as *byte); }
+    const before_aof_large_buffered: i32 = failed;
+    _ = test_aof_large_append_uses_buffer() catch { printf("[FAIL] persistence_aof/large_buffered\n" as *byte); failed = failed + 1; };
+    if failed == before_aof_large_buffered { printf("[PASS] persistence_aof/large_buffered\n" as *byte); }
+    const before_aof_oversized_direct: i32 = failed;
+    _ = test_aof_oversized_append_bypasses_buffer() catch { printf("[FAIL] persistence_aof/oversized_direct\n" as *byte); failed = failed + 1; };
+    if failed == before_aof_oversized_direct { printf("[PASS] persistence_aof/oversized_direct\n" as *byte); }
 
     const before_aof_bad: i32 = failed;
     _ = test_aof_replay_truncated_file_fails() catch { printf("[FAIL] persistence_aof/truncated\n" as *byte); failed = failed + 1; };

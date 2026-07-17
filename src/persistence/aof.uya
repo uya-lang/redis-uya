@@ -42,7 +42,6 @@ export error AofEntryTooLarge;
 
 const AOF_REPLAY_BUFFER_BYTES: usize = 16384;
 const AOF_WRITE_BUFFER_BYTES: usize = 65536;
-const AOF_WRITE_BUFFER_MAX_COPY_BYTES: usize = 512;
 
 export struct AofWriter {
     file: File,
@@ -124,7 +123,7 @@ export fn aof_append_raw(aof: &AofWriter, data: &[byte]) !void {
     if aof == null || !aof.enabled || data.len == 0 {
         return;
     }
-    if data.len > AOF_WRITE_BUFFER_MAX_COPY_BYTES {
+    if data.len > AOF_WRITE_BUFFER_BYTES {
         try aof_flush(aof);
         try aof_write_direct(aof, data);
         return;

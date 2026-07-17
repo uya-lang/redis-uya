@@ -195,7 +195,7 @@ server open
 
 ## 8. AOF 语义
 
-- 写命令直接追加 RESP2 原始请求
+- 写命令追加 RESP2 原始请求；不超过 64KiB 的追加批次统一进入 AOF 写缓冲，由缓冲容量、100ms server cron、连接关闭或显式 flush 落盘，超过 64KiB 的聚合批次先 flush 既有缓冲再直接写
 - `EXPIRE`、`EXPIREAT`、`PEXPIRE`、`SETEX`、`PSETEX` 会在 AOF 里规范化为绝对时间 `PEXPIREAT`
 - `GETEX` 在带 TTL / `PERSIST` 选项时只把状态变更写入 AOF；相对 TTL 选项同样折算成绝对 `PEXPIREAT`
 - `HGETEX` 在带 TTL / `PERSIST` 选项时只写入 field TTL 状态变更；`HSETEX` 只在条件成功时写入；hash field 相对 TTL 会折算成绝对 `HPEXPIREAT` / `PXAT`，复制 backlog 复用同一编码

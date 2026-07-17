@@ -368,7 +368,7 @@
 
 - [x] WATCH 版本表懒维护：没有活跃 WATCH 客户端时，普通写命令不维护 `watch_versions`
 - [x] Dict 覆盖写单次探测：`dict_insert_with_old()` 同时完成插入/覆盖和旧值返回，减少 `SET` 覆盖路径重复 lookup
-- [x] AOF 分层写入：512B 以下命令进入 64KiB buffer，较大命令 flush 小缓冲后直接写，避免 1KiB SET 在 debug 构建中逐字节复制
+- [x] AOF 分层写入：不超过 64KiB 的追加批次统一进入写缓冲，由容量或 server cron 触发 flush；超过 64KiB 的聚合批次先 flush 再直接写，避免 1KiB SET 每条触发 `write(2)`
 - [x] AOF flush 边界：server cron、客户端关闭、server close 和 BGREWRITEAOF fork 前都会 flush 当前 AOF buffer
 - [x] 进程级测试适配 AOF 周期 flush 语义，仍断言成功写入可落盘、失败重定向写不进入 AOF
 

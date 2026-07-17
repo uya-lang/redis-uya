@@ -2,6 +2,7 @@
 
 use src.memory.allocator.redis_malloc;
 use src.memory.allocator.redis_free;
+use src.memory.allocator.redis_realloc;
 
 export error RespIncomplete;
 export error RespInvalidType;
@@ -426,12 +427,17 @@ fn resp_parse_batch(input: &[byte], max_count: usize, allow_resp3: bool) !RespBa
         return error.RespIncomplete;
     }
 
-    const values_result: !&RespValue = resp_alloc_elements(max_count);
-    const values: &RespValue = values_result catch {
+    var capacity: usize = max_count;
+    if capacity > 4 {
+        capacity = 4;
+    }
+
+    const values_result: !&RespValue = resp_alloc_elements(capacity);
+    var values: &RespValue = values_result catch {
         return error.RespOutOfMemory;
     };
-    const consumed_result: !&usize = resp_alloc_usizes(max_count);
-    const consumed_values: &usize = consumed_result catch {
+    const consumed_result: !&usize = resp_alloc_usizes(capacity);
+    var consumed_values: &usize = consumed_result catch {
         resp_free_array_prefix(values, 0);
         return error.RespOutOfMemory;
     };
@@ -439,6 +445,30 @@ fn resp_parse_batch(input: &[byte], max_count: usize, allow_resp3: bool) !RespBa
     var offset: usize = 0;
     var count: usize = 0;
     while count < max_count && offset < input.len {
+        if count == capacity {
+            var next_capacity: usize = capacity * 2;
+            if next_capacity < capacity || next_capacity > max_count {
+                next_capacity = max_count;
+            }
+
+            const grown_values_result: !&byte = redis_realloc(values as &byte, next_capacity * resp_value_stride());
+            const grown_values: &byte = grown_values_result catch {
+                resp_free_array_prefix(values, count);
+                redis_free(consumed_values as &byte);
+                return error.RespOutOfMemory;
+            };
+            values = grown_values as &RespValue;
+
+            const grown_consumed_result: !&byte = redis_realloc(consumed_values as &byte, next_capacity * resp_usize_stride());
+            const grown_consumed: &byte = grown_consumed_result catch {
+                resp_free_array_prefix(values, count);
+                redis_free(consumed_values as &byte);
+                return error.RespOutOfMemory;
+            };
+            consumed_values = grown_consumed as &usize;
+            capacity = next_capacity;
+        }
+
         const item_result: !RespParseResult = resp_parse_value(input[offset: input.len - offset], allow_resp3);
         const item: RespParseResult = item_result catch |err| {
             if err == error.RespIncomplete && count > 0 {

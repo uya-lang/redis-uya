@@ -204,6 +204,18 @@ export fn test_resp2_batch_multiple_values() !void {
     try assert_eq_i32(limited.count as i32, 1);
     try assert_eq_i32(limited.consumed as i32, 5);
     resp_batch_free(&limited);
+
+    var grown: RespBatchParseResult = try parse_resp2_batch(&":1\r\n:2\r\n:3\r\n:4\r\n:5\r\n:6\r\n"[0: 24], 8);
+    try assert_eq_i32(grown.count as i32, 6);
+    try assert_eq_i32(grown.consumed as i32, 24);
+    try assert_eq_i32(resp_batch_value_consumed(&grown, 4) as i32, 4);
+    const grown_first: &RespValue = resp_batch_value(&grown, 0);
+    const grown_last: &RespValue = resp_batch_value(&grown, 5);
+    try assert_true(grown_first != null);
+    try assert_true(grown_last != null);
+    try assert_eq_i32(grown_first.integer as i32, 1);
+    try assert_eq_i32(grown_last.integer as i32, 6);
+    resp_batch_free(&grown);
     try assert_eq_i32(used_memory() as i32, 0);
 }
 

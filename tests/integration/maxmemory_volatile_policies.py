@@ -171,7 +171,7 @@ def check_volatile_lru() -> None:
             if send_command(sock, b"GET", b"hot") != value:
                 raise AssertionError("GET hot failed before volatile-lru eviction")
             time.sleep(0.05)
-            _ = configure_maxmemory(sock, 4000)
+            _ = configure_maxmemory(sock, 800)
             if send_command(sock, b"SET", b"new", new_value) != "OK":
                 raise AssertionError("SET new should evict an expiring LRU key")
             old_value = send_command(sock, b"GET", b"old")
@@ -207,7 +207,7 @@ def check_volatile_lfu() -> None:
                 raise AssertionError("GET hot failed before volatile-lfu eviction")
             if send_command(sock, b"GET", b"hot") != value:
                 raise AssertionError("second GET hot failed before volatile-lfu eviction")
-            _ = configure_maxmemory(sock, 4000)
+            _ = configure_maxmemory(sock, 800)
             if send_command(sock, b"SET", b"new", new_value) != "OK":
                 raise AssertionError("SET new should evict a low-frequency volatile key")
             if send_command(sock, b"GET", b"cold") is not None:
@@ -236,7 +236,7 @@ def check_volatile_ttl() -> None:
                 raise AssertionError("SET later failed")
             if send_command(sock, b"EXPIRE", b"later", b"120") != 1:
                 raise AssertionError("EXPIRE later failed")
-            _ = configure_maxmemory(sock, 4000)
+            _ = configure_maxmemory(sock, 800)
             if send_command(sock, b"SET", b"new", new_value) != "OK":
                 raise AssertionError("SET new should evict the nearest-expiry volatile key")
             if send_command(sock, b"GET", b"soon") is not None:

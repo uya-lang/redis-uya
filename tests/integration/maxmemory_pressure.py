@@ -260,7 +260,7 @@ def check_allkeys_lfu_pressure() -> None:
 
 
 def check_volatile_ttl_pressure() -> None:
-    maxmemory_headroom = 28000
+    maxmemory_headroom = 18000
     port, aof_path, rdb_paths, proc = run_server("volatile-ttl", maxmemory_headroom)
     try:
         with connect_with_retry(port, time.monotonic() + 5.0) as sock:

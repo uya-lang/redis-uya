@@ -170,7 +170,7 @@ def run_smoke() -> None:
                 raise AssertionError("GET hot failed before eviction")
             if send_command(sock, b"GET", b"hot") != hot_value:
                 raise AssertionError("second GET hot failed before eviction")
-            _ = configure_maxmemory(sock, 5000)
+            _ = configure_maxmemory(sock, 1200)
             if send_command(sock, b"SET", b"new", new_value) != "OK":
                 raise AssertionError("SET new should evict the least frequently used key")
 

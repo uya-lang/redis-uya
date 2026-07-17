@@ -35,6 +35,7 @@
 - [test-report-v0.8.1](./redis-uya-test-report-v0.8.1.md)
 - [test-report-v0.9.0](./redis-uya-test-report-v0.9.0.md)
 - [performance-v0.9.3](../benchmarks/v0.9.3-performance.md)
+- [performance-analysis-v0.9.3](../benchmarks/v0.9.3-performance-analysis.md)
 
 ## 文档关系
 

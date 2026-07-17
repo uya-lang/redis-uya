@@ -11,9 +11,12 @@ use src.storage.sds.sds_range;
 use src.storage.sds.sds_len;
 use src.util.crc64.crc64;
 
+const REPLICATION_BACKLOG_COMPACT_MIN_BYTES: usize = 65536;
+
 export struct ReplicationBacklog {
     replid: [byte: 41],
     history: Sds,
+    history_start: usize,
     size_limit: usize,
     master_offset: u64,
     active: bool,
@@ -63,6 +66,7 @@ export fn replication_backlog_disabled() ReplicationBacklog {
     return ReplicationBacklog{
         replid: [],
         history: Sds{ buf: (null as &byte)[0: 0], len: 0, alloc: 0 },
+        history_start: 0,
         size_limit: 0,
         master_offset: 0u64,
         active: false,
@@ -74,6 +78,7 @@ export fn replication_backlog_new(size_limit: usize, seed: u64) !ReplicationBack
     backlog.history = sds_empty() catch {
         return error.AllocOutOfMemory;
     };
+    backlog.history_start = 0;
     backlog.size_limit = size_limit;
     backlog.master_offset = 0u64;
     backlog.active = true;
@@ -86,6 +91,7 @@ export fn replication_backlog_free(backlog: &ReplicationBacklog) void {
         sds_free(&backlog.history);
     }
     backlog.replid[0] = 0 as byte;
+    backlog.history_start = 0;
     backlog.size_limit = 0;
     backlog.master_offset = 0u64;
     backlog.active = false;
@@ -96,23 +102,43 @@ export fn replication_backlog_reset(backlog: &ReplicationBacklog, size_limit: us
     const next: ReplicationBacklog = try replication_backlog_new(size_limit, seed);
     backlog_build_replid(backlog.replid[0: 41], seed);
     backlog.history = next.history;
+    backlog.history_start = next.history_start;
     backlog.size_limit = next.size_limit;
     backlog.master_offset = next.master_offset;
     backlog.active = next.active;
+}
+
+fn replication_backlog_logical_len(backlog: &ReplicationBacklog) usize {
+    const physical_len: usize = sds_len(&backlog.history);
+    if backlog.history_start >= physical_len {
+        return 0;
+    }
+    return physical_len - backlog.history_start;
 }
 
 fn replication_backlog_trim(backlog: &ReplicationBacklog) !void {
     if !backlog.active || backlog.size_limit == 0 {
         return;
     }
-    const hist_len: usize = sds_len(&backlog.history);
+    const hist_len: usize = replication_backlog_logical_len(backlog);
     if hist_len <= backlog.size_limit {
         return;
     }
     const trim_bytes: usize = hist_len - backlog.size_limit;
-    const trimmed: Sds = try sds_range(&backlog.history, trim_bytes, hist_len - trim_bytes);
+    backlog.history_start = backlog.history_start + trim_bytes;
+
+    var compact_threshold: usize = backlog.size_limit;
+    if compact_threshold < REPLICATION_BACKLOG_COMPACT_MIN_BYTES {
+        compact_threshold = REPLICATION_BACKLOG_COMPACT_MIN_BYTES;
+    }
+    if backlog.history_start < compact_threshold {
+        return;
+    }
+
+    const trimmed: Sds = try sds_range(&backlog.history, backlog.history_start, backlog.size_limit);
     sds_free(&backlog.history);
     backlog.history = trimmed;
+    backlog.history_start = 0;
 }
 
 export fn replication_backlog_append_command_at(backlog: &ReplicationBacklog, command: &Command, raw: &[byte], now_ms: u64) !void {
@@ -141,14 +167,14 @@ export fn replication_backlog_history_len(backlog: &ReplicationBacklog) usize {
     if !backlog.active {
         return 0;
     }
-    return sds_len(&backlog.history);
+    return replication_backlog_logical_len(backlog);
 }
 
 export fn replication_backlog_first_offset(backlog: &ReplicationBacklog) u64 {
     if !backlog.active {
         return 0u64;
     }
-    const hist_len: usize = sds_len(&backlog.history);
+    const hist_len: usize = replication_backlog_logical_len(backlog);
     if hist_len == 0 {
         return backlog.master_offset;
     }
@@ -188,9 +214,10 @@ export fn replication_backlog_slice_from(backlog: &ReplicationBacklog, offset: u
         return (null as &byte)[0: 0];
     }
     const start: usize = (offset - first_offset) as usize;
-    const total: usize = sds_len(&backlog.history);
+    const total: usize = replication_backlog_logical_len(backlog);
     if start >= total {
         return (null as &byte)[0: 0];
     }
-    return backlog.history.buf[start: total - start];
+    const physical_start: usize = backlog.history_start + start;
+    return backlog.history.buf[physical_start: total - start];
 }

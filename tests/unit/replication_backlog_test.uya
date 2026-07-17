@@ -54,11 +54,15 @@ export fn test_replication_backlog_append_and_trim() !void {
     var set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 33]);
     const set_command: Command = try replication_backlog_test_command(&router, &set_parsed);
     try replication_backlog_append_command_at(&backlog, &set_command, &"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 33], 1000u64);
-    resp_value_free(&set_parsed.value);
 
     try assert_eq_i32(backlog.master_offset as i32, 33);
     try assert_eq_i32(replication_backlog_history_len(&backlog) as i32, 32);
     try assert_eq_i32(replication_backlog_first_offset(&backlog) as i32, 1);
+    try assert_eq_i32(backlog.history_start as i32, 1);
+    try assert_true(replication_backlog_test_slice_eq(
+        replication_backlog_slice_from(&backlog, 1u64),
+        &"3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 32],
+    ));
     try assert_true(replication_backlog_can_continue(&backlog, backlog.replid[0: 40], 1u64));
     try assert_true(replication_backlog_can_continue(&backlog, backlog.replid[0: 40], 33u64));
 
@@ -80,6 +84,19 @@ export fn test_replication_backlog_append_and_trim() !void {
 
     try assert_eq_i32((backlog.master_offset - before_zremrangebylex_offset) as i32, 62);
     try assert_true(replication_backlog_history_len(&backlog) <= 32);
+
+    var append_count: usize = 0;
+    while append_count < 2100 {
+        try replication_backlog_append_command_at(&backlog, &set_command, &"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 33], 1000u64);
+        append_count = append_count + 1;
+    }
+    try assert_eq_i32(replication_backlog_history_len(&backlog) as i32, 32);
+    try assert_true(backlog.history.len < 65536 + 64);
+    try assert_true(replication_backlog_test_slice_eq(
+        replication_backlog_slice_from(&backlog, replication_backlog_first_offset(&backlog)),
+        &"3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 32],
+    ));
+    resp_value_free(&set_parsed.value);
 
     replication_backlog_free(&backlog);
     try assert_eq_i32(used_memory() as i32, 0);

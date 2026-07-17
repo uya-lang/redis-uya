@@ -223,7 +223,7 @@ server open
 - 单线程
 - `BGSAVE` / `BGREWRITEAOF` 已有最小子进程后台路径，但仍未做更细粒度的后台资源隔离与吞吐优化
 - RDB 已覆盖当前五类对象、key 绝对过期时间和 hash field TTL，但仍不是 Redis 完整二进制兼容
-- 复制当前已覆盖角色与状态机、`PSYNC / backlog`、`REPLCONF` no-op 握手 partial、replica 侧全量同步、定时拉取式增量同步与心跳；`FAILOVER` 当前为无副本/未支持 controlled failover 的 `standalone-error`；仍不是 Redis 那种长连接流式推送复制
+- 复制当前已覆盖角色与状态机、`PSYNC / backlog`、`REPLCONF` no-op 握手 partial、replica 侧全量同步、定时拉取式增量同步与心跳；backlog 使用逻辑起点丢弃过期前缀，累计废弃前缀达到阈值后再做一次物理压缩，避免固定容量满后每条写命令复制整个 backlog；`FAILOVER` 当前为无副本/未支持 controlled failover 的 `standalone-error`；仍不是 Redis 那种长连接流式推送复制
 - 集群当前已有槽位模型、节点元数据、最小拓扑模型、`CLUSTER` 最小命令接口和 `MOVED/ASK` 基础重定向；`v1.0.0` 前不继续扩展完整多节点握手、gossip、故障检测、failover 和 resharding
 - 事务当前已覆盖连接级最小 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`，但仍没有更完整的 Redis 事务中止传播、脚本联动和控制面扩展
 - `RESET` 当前由 `connection.uya` 直接处理，重置连接级协议版本、事务/观察键、Pub/Sub、tracking 和认证状态，作为连接重连语义的最小闭环

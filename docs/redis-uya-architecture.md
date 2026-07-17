@@ -97,7 +97,7 @@ server open
 - 连接层当前会在一次读入中批量消费多个完整 RESP 顶层帧；这条路径用于 `redis-cli` stdin/pipeline、事务管线和后续多命令批处理
 - `close_after_write`：`QUIT` 等命令的延迟关闭标志
 - `transaction`：连接级事务队列、WATCH 集合、RESP 协议版本、CLIENT 名称/库信息、Pub/Sub 订阅计数与 blocking deadline 状态
-- `blocked_request` / `blocked_request_len`：当前被挂起的 blocking list / zset 原始 RESP 请求；server 在 key 就绪或超时后把它前插回 `input` 并复用既有执行链恢复
+- `blocked_request` / `blocked_request_len`：当前被挂起的 blocking list / zset 原始 RESP 请求；server 在成功保存请求后增加 `blocked_clients`，在唤醒、`CLIENT UNBLOCK` 或连接关闭时递减，计数为零时主循环跳过阻塞客户端全表扫描；key 就绪或超时后仍把请求前插回 `input` 并复用既有执行链恢复
 
 调度规则：
 

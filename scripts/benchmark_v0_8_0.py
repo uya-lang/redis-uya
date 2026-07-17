@@ -12,6 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BIN = ROOT / "build" / "redis-uya"
+BUILD_MODE_FILE = ROOT / "build" / "redis-uya.build-mode"
 DEFAULT_OUT = ROOT / "benchmarks" / "v0.8.0-performance.md"
 REPORT_VERSION = os.environ.get("REDIS_UYA_BENCH_REPORT_VERSION", "v0.8.0") or "v0.8.0"
 
@@ -29,6 +30,20 @@ def benchmark_output_path() -> Path:
 
 
 OUT = benchmark_output_path()
+
+
+def benchmark_build_mode() -> str:
+    configured = os.environ.get("REDIS_UYA_BENCH_BUILD_MODE", "").strip()
+    if configured:
+        return configured
+    if BUILD_MODE_FILE.exists():
+        recorded = BUILD_MODE_FILE.read_text().strip()
+        if recorded:
+            return recorded
+    return "unknown"
+
+
+BUILD_MODE = benchmark_build_mode()
 
 
 def report_version_slug() -> str:
@@ -304,7 +319,7 @@ def format_env_line(case_name: str, value_bytes: int, iterations: int, warmup: i
         f"host_arch={platform.machine()} "
         f"cpu_model={quote_env_value(cpu_model())} "
         f"cpu_count={os.cpu_count() or 1} "
-        "build_mode=debug "
+        f"build_mode={BUILD_MODE} "
         "durability=aof-no-fsync "
         "dataset_kind=string-kv "
         "benchmark_mode=single-thread "
@@ -520,6 +535,9 @@ def main() -> int:
     if not BIN.exists():
         print("[FAIL] benchmark_v0_8_0: build/redis-uya is missing; run `make build` first", file=sys.stderr)
         return 1
+    if not BUILD_MODE.replace("-", "").replace("_", "").isalnum():
+        print(f"[FAIL] benchmark_v0_8_0: invalid build mode: {BUILD_MODE!r}", file=sys.stderr)
+        return 1
 
     iterations = int(os.environ.get("REDIS_UYA_BENCH_ITERS", "5000"))
     warmup = int(os.environ.get("REDIS_UYA_BENCH_WARMUP", "200"))
@@ -564,6 +582,7 @@ def main() -> int:
             "## Notes",
             "",
             "- Matrix: `PING`, `SET`/`GET` with 16B values, and `SET`/`GET` with 1KiB values.",
+            f"- `redis-uya` build mode: `{BUILD_MODE}`.",
             "- `redis-uya` is benchmarked with AOF enabled and no explicit fsync.",
             "- Redis same-machine baseline uses `appendonly yes`, `appendfsync no`, and `save \"\"`.",
             f"- Regression guard defaults: throughput passes if it stays >= {min_rps_ratio:.2f}x baseline with {rps_jitter_ratio:.2f} host-jitter slack, or if same-run Redis-normalized throughput stays >= {min_relative_rps_ratio:.2f}x of the baseline redis-uya/Redis ratio; p99 must stay <= max({max_p99_ratio:.2f}x baseline, baseline + {p99_abs_slack_us}us).",

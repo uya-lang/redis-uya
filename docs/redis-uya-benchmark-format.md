@@ -106,6 +106,8 @@ min_vs_redis_ratio=... normalized_throughput_status=pass
 
 基线报告通过 `REDIS_UYA_BENCH_BASELINE` 指定。未指定基线时，guard 状态记录为 `skip`，用于生成首次基线报告。报告标题版本可通过 `REDIS_UYA_BENCH_REPORT_VERSION` 覆盖，`make benchmark-v0.8.1` 使用同一脚本输出 `v0.8.1` 标题并默认以 `benchmarks/v0.8.0-performance.md` 为 guard 基线。
 
+`make build` 会把 `debug` 写入 `build/redis-uya.build-mode`；`make build-release` 使用 Uya `-O1` 与宿主 C `-O3 -DNDEBUG` 构建，并写入 `release`。benchmark 默认读取该文件生成 `BENCH_ENV build_mode=...`，也可用 `REDIS_UYA_BENCH_BUILD_MODE` 显式覆盖。`make benchmark-v0.9.3-release` 固定先执行 release 构建，并默认输出 `benchmarks/v0.9.3-release-performance.md`。
+
 ## 9. v0.8.0 io_uring 评估输出
 
 `v0.8.0` 的 `io_uring` 项只做能力评估，不绑定生产路径。评估脚本输出 `IO_URING_EVAL_RESULT`：

@@ -5,11 +5,14 @@ SRC ?= src/main.uya
 BUILD_DIR ?= build
 BIN ?= $(BUILD_DIR)/redis-uya
 C_OUT ?= $(BUILD_DIR)/redis-uya.c
+BUILD_MODE_FILE ?= $(BUILD_DIR)/redis-uya.build-mode
 TEST_DIR ?= tests/unit
 APP_WORKSPACE ?= $(BUILD_DIR)/app_workspace
 TEST_WORKSPACE ?= $(BUILD_DIR)/test_workspace
+RELEASE_UYA_OPT ?= -O1
+RELEASE_CFLAGS ?= -std=c99 -O3 -DNDEBUG -fno-builtin -fomit-frame-pointer
 
-.PHONY: all build run test test-integration test-redis-cli test-long-run benchmark-v0.1.0 benchmark-persistence-v0.3.0 benchmark-replication-v0.4.0 benchmark-v0.8.0 benchmark-v0.8.1 report-v0.8.0-gaps evaluate-io-uring-v0.8.0 test-all clean version dirs
+.PHONY: all prepare-app-workspace build build-release run test test-integration test-redis-cli test-long-run benchmark-v0.1.0 benchmark-persistence-v0.3.0 benchmark-replication-v0.4.0 benchmark-v0.8.0 benchmark-v0.8.1 benchmark-v0.9.3-release report-v0.8.0-gaps evaluate-io-uring-v0.8.0 test-all clean version dirs
 
 all: build
 
@@ -19,12 +22,19 @@ dirs:
 version:
 	$(UYA) --version
 
-build: dirs
+prepare-app-workspace: dirs
 	@mkdir -p $(APP_WORKSPACE)
 	@rm -rf $(APP_WORKSPACE)/src $(APP_WORKSPACE)/main.uya
 	@ln -s ../../src $(APP_WORKSPACE)/src
 	@cp $(SRC) $(APP_WORKSPACE)/main.uya
+
+build: prepare-app-workspace
 	$(UYA) build $(APP_WORKSPACE)/main.uya -o $(BIN) --c99 -e
+	@printf 'debug\n' > $(BUILD_MODE_FILE)
+
+build-release: prepare-app-workspace
+	CFLAGS='$(RELEASE_CFLAGS)' $(UYA) build $(APP_WORKSPACE)/main.uya -o $(BIN) --c99 -e $(RELEASE_UYA_OPT)
+	@printf 'release\n' > $(BUILD_MODE_FILE)
 
 run: build
 	$(BUILD_DIR)/redis-uya
@@ -94,6 +104,9 @@ benchmark-v0.8.0: build
 
 benchmark-v0.8.1: build
 	REDIS_UYA_BENCH_REPORT_VERSION=$${REDIS_UYA_BENCH_REPORT_VERSION:-v0.8.1} REDIS_UYA_BENCH_BASELINE=$${REDIS_UYA_BENCH_BASELINE:-benchmarks/v0.8.0-performance.md} REDIS_UYA_BENCH_OUT=$${REDIS_UYA_BENCH_OUT:-benchmarks/v0.8.1-performance.md} python3 scripts/benchmark_v0_8_0.py
+
+benchmark-v0.9.3-release: build-release
+	REDIS_UYA_BENCH_REPORT_VERSION=$${REDIS_UYA_BENCH_REPORT_VERSION:-v0.9.3-release} REDIS_UYA_BENCH_OUT=$${REDIS_UYA_BENCH_OUT:-benchmarks/v0.9.3-release-performance.md} python3 scripts/benchmark_v0_8_0.py
 
 report-v0.8.0-gaps:
 	python3 scripts/report_v0_8_0_gaps.py

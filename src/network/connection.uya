@@ -232,6 +232,7 @@ struct ConnectionMonitorClient {
 }
 
 var connection_monitor_clients: [ConnectionMonitorClient: CONNECTION_MONITOR_MAX_CLIENTS] = [];
+var connection_monitor_active_count: usize = 0;
 
 enum ConnectionScriptArgKind {
     script_arg_literal,
@@ -385,6 +386,9 @@ export fn connection_transaction_new() ConnectionTransaction {
 export fn connection_transaction_reset(tx: &ConnectionTransaction) void {
     if tx == null {
         return;
+    }
+    if tx.monitoring && tx.client_fd >= 0 {
+        connection_monitor_unregister_fd(tx.client_fd);
     }
     if tx.queue != null {
         object_free(tx.queue);
@@ -4264,6 +4268,21 @@ export fn connection_monitor_reset_for_test() void {
         connection_monitor_clients[i].fd = -1;
         i = i + 1;
     }
+    connection_monitor_active_count = 0;
+}
+
+fn connection_monitor_clear_slot(index: usize) void {
+    if index >= CONNECTION_MONITOR_MAX_CLIENTS {
+        return;
+    }
+    if !connection_monitor_clients[index].active {
+        return;
+    }
+    connection_monitor_clients[index].active = false;
+    connection_monitor_clients[index].fd = -1;
+    if connection_monitor_active_count > 0 {
+        connection_monitor_active_count = connection_monitor_active_count - 1;
+    }
 }
 
 fn connection_monitor_register(fd: i32) bool {
@@ -4291,6 +4310,7 @@ fn connection_monitor_register(fd: i32) bool {
     }
     connection_monitor_clients[slot].active = true;
     connection_monitor_clients[slot].fd = fd;
+    connection_monitor_active_count = connection_monitor_active_count + 1;
     return true;
 }
 
@@ -4298,8 +4318,7 @@ export fn connection_monitor_unregister_fd(fd: i32) void {
     var i: usize = 0;
     while i < CONNECTION_MONITOR_MAX_CLIENTS {
         if connection_monitor_clients[i].active && connection_monitor_clients[i].fd == fd {
-            connection_monitor_clients[i].active = false;
-            connection_monitor_clients[i].fd = -1;
+            connection_monitor_clear_slot(i);
         }
         i = i + 1;
     }
@@ -4352,6 +4371,9 @@ fn connection_monitor_build_line(command: &Command, now_ms: u64) CommandReply {
 }
 
 fn connection_monitor_broadcast(command: &Command, source_fd: i32, now_ms: u64) void {
+    if connection_monitor_active_count == 0 {
+        return;
+    }
     var line: CommandReply = connection_monitor_build_line(command, now_ms);
     defer {
         command_reply_cleanup(&line);
@@ -4365,8 +4387,7 @@ fn connection_monitor_broadcast(command: &Command, source_fd: i32, now_ms: u64) 
             const fd: i32 = connection_monitor_clients[i].fd;
             if fd >= 0 && fd != source_fd {
                 _ = connection_send_all_nonblocking(fd, line.data.ptr, line.data.len) catch {
-                    connection_monitor_clients[i].active = false;
-                    connection_monitor_clients[i].fd = -1;
+                    connection_monitor_clear_slot(i);
                 };
             }
         }

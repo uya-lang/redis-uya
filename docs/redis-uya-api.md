@@ -3765,7 +3765,7 @@ INFO keyspace
 
 - 支持 `server`、`clients`、`memory`、`stats`、`replication`、`keyspace`
 - 未带 section 时返回上述 section 组合段
-- `memory` section 当前包含 `used_memory`、`used_memory_peak`、`total_allocated`、`total_freed`、`allocator_total_allocations`、`allocator_active_allocations`、`allocator_slab_cached_blocks`、`allocator_slab_cached_bytes`、`allocator_slab_reuse_count`、`object_pool_cached_objects`、`object_pool_cached_list_nodes`、`object_pool_reuse_count`、`object_layout_size`、`list_node_layout_size`、`maxmemory`、`maxmemory_policy`
+- `memory` section 当前包含 `used_memory`、`used_memory_peak`、`mem_not_counted_for_evict`、`total_allocated`、`total_freed`、`allocator_total_allocations`、`allocator_active_allocations`、`allocator_slab_cached_blocks`、`allocator_slab_cached_bytes`、`allocator_slab_reuse_count`、`object_pool_cached_objects`、`object_pool_cached_list_nodes`、`object_pool_reuse_count`、`object_layout_size`、`list_node_layout_size`、`maxmemory`、`maxmemory_policy`；其中 `mem_not_counted_for_evict` 当前统计复制 backlog 与进行中的 AOF rewrite buffer 已分配容量
 
 ### `CONFIG`
 

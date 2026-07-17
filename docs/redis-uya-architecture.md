@@ -187,6 +187,7 @@ server open
 - `INFO memory` 暴露 `object_pool_cached_objects`、`object_pool_cached_list_nodes`、`object_pool_reuse_count`、`object_layout_size` 与 `list_node_layout_size`，用于验证对象池复用和结构体布局变化
 - `RedisObject.lru_at_ms` 记录 top-level key 最近访问时间，`RedisObject.lfu_counter` 记录访问计数，`set_key_at()` 写入时初始化，`lookup_key_at()` 读取时刷新
 - `command/executor.uya` 在可能增量分配的写命令执行前做预算检查；`noeviction` 直接 OOM，`allkeys-*` 与 `volatile-*` 分别调用对应 `engine_evict_*()` 后重试预算判断
+- 复制 backlog 与进行中的 AOF rewrite buffer 属于复制/持久化传输缓冲，不参与 keyspace 淘汰预算；`server_runtime_info()` 将其已分配容量作为 `maxmemory_excluded_bytes` 传入执行器，对外 `maxmemory` 配置值和 `used_memory` 观测值保持不变，`INFO memory` / `MEMORY STATS` 通过 `mem_not_counted_for_evict` 暴露该口径
 - `volatile-lru` / `volatile-lfu` / `volatile-ttl` 扫描主 keyspace 并用 TTL 字典过滤候选，只淘汰带过期时间的 key
 - 超出预算且策略无法腾挪时返回 `OOM command not allowed when used memory > 'maxmemory'`，失败命令不落 Engine、AOF 或 replication backlog
 - `tests/integration/maxmemory_pressure.py` 用真实 TCP 循环写入覆盖 noeviction、allkeys-lru、allkeys-lfu 与 volatile-ttl 的压力路径

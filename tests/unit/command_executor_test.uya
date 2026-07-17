@@ -234,6 +234,7 @@ export fn test_command_info_and_config() !void {
     try assert_eq_i32(info_memory_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
     try assert_true(command_executor_test_contains(info_memory_reply.data, &"# Memory\r\n"[0: 10]));
     try assert_true(command_executor_test_contains(info_memory_reply.data, &"used_memory_peak:"[0: 17]));
+    try assert_true(command_executor_test_contains(info_memory_reply.data, &"mem_not_counted_for_evict:"[0: 26]));
     try assert_true(command_executor_test_contains(info_memory_reply.data, &"total_allocated:"[0: 16]));
     try assert_true(command_executor_test_contains(info_memory_reply.data, &"total_freed:"[0: 12]));
     try assert_true(command_executor_test_contains(info_memory_reply.data, &"allocator_total_allocations:"[0: 28]));
@@ -9490,6 +9491,7 @@ export fn test_command_memory() !void {
     var memory_stats_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &memory_stats_command, 1000u64);
     try assert_eq_i32(memory_stats_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
     try assert_true(command_executor_test_contains(memory_stats_reply.data, &"$11\r\nused_memory\r\n"[0: 18]));
+    try assert_true(command_executor_test_contains(memory_stats_reply.data, &"$25\r\nmem_not_counted_for_evict\r\n"[0: 32]));
     try assert_true(command_executor_test_contains(memory_stats_reply.data, &"$16\r\nmaxmemory_policy\r\n"[0: 23]));
     try assert_true(command_executor_test_contains(memory_stats_reply.data, &"$10\r\nkeys.count\r\n"[0: 17]));
     command_reply_cleanup(&memory_stats_reply);

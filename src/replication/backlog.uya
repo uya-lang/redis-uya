@@ -97,6 +97,13 @@ export fn replication_backlog_free(backlog: &ReplicationBacklog) void {
     backlog.active = false;
 }
 
+export fn replication_backlog_allocated_bytes(backlog: &ReplicationBacklog) usize {
+    if backlog == null || backlog.history.buf.ptr == null {
+        return 0;
+    }
+    return backlog.history.alloc + 1;
+}
+
 export fn replication_backlog_reset(backlog: &ReplicationBacklog, size_limit: usize, seed: u64) !void {
     replication_backlog_free(backlog);
     const next: ReplicationBacklog = try replication_backlog_new(size_limit, seed);

@@ -122,7 +122,7 @@ def used_memory(sock: socket.socket) -> int:
     if not isinstance(info, bytes):
         raise AssertionError(f"unexpected INFO memory: {info!r}")
     parsed = parse_info_memory(info)
-    return int(parsed["used_memory"])
+    return int(parsed["used_memory"]) - int(parsed.get("mem_not_counted_for_evict", 0))
 
 
 def configure_maxmemory(sock: socket.socket, headroom: int) -> int:

@@ -53,6 +53,7 @@ use src.replication.backlog.replication_backlog_free;
 use src.replication.backlog.replication_backlog_reset;
 use src.replication.backlog.replication_backlog_first_offset;
 use src.replication.backlog.replication_backlog_history_len;
+use src.replication.backlog.replication_backlog_allocated_bytes;
 use src.replication.state.ReplicationRole;
 use src.replication.state.ReplicationState;
 use src.storage.engine.Engine;
@@ -338,6 +339,10 @@ fn server_send_progress_nonblocking(fd: i32, data: &const byte, len: usize, star
 }
 
 fn server_runtime_info(server: &RedisServer) CommandRuntimeInfo {
+    var maxmemory_excluded_bytes: usize = replication_backlog_allocated_bytes(&server.repl_backlog);
+    if server.aof_rewrite_in_progress && server.aof_rewrite_buf.buf.ptr != null {
+        maxmemory_excluded_bytes = maxmemory_excluded_bytes + server.aof_rewrite_buf.alloc + 1;
+    }
     var info: CommandRuntimeInfo = CommandRuntimeInfo{
         config: server.config,
         active_clients: server.active_clients,
@@ -352,6 +357,7 @@ fn server_runtime_info(server: &RedisServer) CommandRuntimeInfo {
         replication_backlog_first_offset: replication_backlog_first_offset(&server.repl_backlog),
         replication_backlog_histlen: replication_backlog_history_len(&server.repl_backlog),
         replication_backlog_active: server.repl_backlog.active,
+        maxmemory_excluded_bytes: maxmemory_excluded_bytes,
         bgsave_requested: server.bgsave_requested,
         bgsave_in_progress: server.bgsave_in_progress,
         aof_rewrite_requested: server.aof_rewrite_requested,

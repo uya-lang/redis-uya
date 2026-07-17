@@ -120,6 +120,7 @@ def memory_info(sock: socket.socket) -> dict[str, int | str]:
     required = (
         "used_memory",
         "used_memory_peak",
+        "mem_not_counted_for_evict",
         "total_allocated",
         "total_freed",
         "allocator_active_allocations",
@@ -143,7 +144,8 @@ def memory_info(sock: socket.socket) -> dict[str, int | str]:
 
 def configure_maxmemory(sock: socket.socket, headroom: int) -> int:
     info = memory_info(sock)
-    effective = int(info["used_memory"]) + headroom
+    evictable = int(info["used_memory"]) - int(info["mem_not_counted_for_evict"])
+    effective = evictable + headroom
     if send_command(sock, b"CONFIG", b"SET", b"maxmemory", str(effective).encode()) != "OK":
         raise AssertionError("CONFIG SET maxmemory failed")
     return effective
@@ -258,7 +260,7 @@ def check_allkeys_lfu_pressure() -> None:
 
 
 def check_volatile_ttl_pressure() -> None:
-    maxmemory_headroom = 40000
+    maxmemory_headroom = 28000
     port, aof_path, rdb_paths, proc = run_server("volatile-ttl", maxmemory_headroom)
     try:
         with connect_with_retry(port, time.monotonic() + 5.0) as sock:

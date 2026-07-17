@@ -284,6 +284,7 @@ struct ConnectionAclChannelRules {
 
 var connection_acl_default_denied_commands: [ConnectionAclDeniedCommand: CONNECTION_ACL_DENIED_COMMAND_MAX] = [];
 var connection_acl_default_denied_categories: [ConnectionAclDeniedCommand: CONNECTION_ACL_DENIED_CATEGORY_MAX] = [];
+var connection_acl_default_denied_category_count: usize = 0;
 var connection_acl_default_key_rules: ConnectionAclKeyRules = ConnectionAclKeyRules{ allkeys: true, patterns: [] };
 var connection_acl_default_channel_rules: ConnectionAclChannelRules = ConnectionAclChannelRules{ allchannels: true, patterns: [] };
 
@@ -297,6 +298,7 @@ struct ConnectionAclUser {
     password: [byte: CONNECTION_ACL_USER_PASSWORD_MAX],
     denied_commands: [ConnectionAclDeniedCommand: CONNECTION_ACL_DENIED_COMMAND_MAX],
     denied_categories: [ConnectionAclDeniedCommand: CONNECTION_ACL_DENIED_CATEGORY_MAX],
+    denied_category_count: usize,
     allkeys: bool,
     key_patterns: [ConnectionAclKeyPattern: CONNECTION_ACL_KEY_PATTERN_MAX],
     allchannels: bool,
@@ -1410,6 +1412,7 @@ fn connection_acl_default_categories_clear_all() void {
         connection_acl_default_denied_categories[index].name_len = 0;
         index = index + 1;
     }
+    connection_acl_default_denied_category_count = 0;
 }
 
 fn connection_acl_key_patterns_clear(patterns: &[ConnectionAclKeyPattern]) void {
@@ -1809,6 +1812,7 @@ fn connection_acl_default_category_add(name: &[byte]) !void {
     }
     connection_acl_default_denied_categories[slot_index].active = true;
     connection_acl_default_denied_categories[slot_index].name_len = name.len;
+    connection_acl_default_denied_category_count = connection_acl_default_denied_category_count + 1;
     var i: usize = 0;
     while i < name.len {
         connection_acl_default_denied_categories[slot_index].name[i] = connection_ascii_lower(name.ptr[i]);
@@ -1831,6 +1835,9 @@ fn connection_acl_default_category_remove(name: &[byte]) void {
     }
     connection_acl_default_denied_categories[slot_index].active = false;
     connection_acl_default_denied_categories[slot_index].name_len = 0;
+    if connection_acl_default_denied_category_count > 0 {
+        connection_acl_default_denied_category_count = connection_acl_default_denied_category_count - 1;
+    }
 }
 
 fn connection_acl_category_known(category: &[byte]) bool {
@@ -1861,6 +1868,9 @@ fn connection_acl_default_command_denied(name: &[byte]) bool {
     if connection_acl_default_denied_find(name) >= 0 {
         return true;
     }
+    if connection_acl_default_denied_category_count == 0 {
+        return false;
+    }
     const entry: CommandCatalogEntry = command_catalog_lookup(name) catch {
         return false;
     };
@@ -1888,6 +1898,7 @@ fn connection_acl_user_clear_rules(user: &ConnectionAclUser) void {
         user.denied_categories[index].name_len = 0;
         index = index + 1;
     }
+    user.denied_category_count = 0;
 }
 
 fn connection_acl_user_denied_command_find(user: &ConnectionAclUser, name: &[byte]) i32 {
@@ -1994,6 +2005,7 @@ fn connection_acl_user_denied_category_add(user: &ConnectionAclUser, name: &[byt
     }
     user.denied_categories[slot_index].active = true;
     user.denied_categories[slot_index].name_len = name.len;
+    user.denied_category_count = user.denied_category_count + 1;
     var index: usize = 0;
     while index < name.len {
         user.denied_categories[slot_index].name[index] = connection_ascii_lower(name.ptr[index]);
@@ -2016,11 +2028,17 @@ fn connection_acl_user_denied_category_remove(user: &ConnectionAclUser, name: &[
     }
     user.denied_categories[slot_index].active = false;
     user.denied_categories[slot_index].name_len = 0;
+    if user.denied_category_count > 0 {
+        user.denied_category_count = user.denied_category_count - 1;
+    }
 }
 
 fn connection_acl_named_user_command_denied(user: &ConnectionAclUser, name: &[byte]) bool {
     if connection_acl_user_denied_command_find(user, name) >= 0 {
         return true;
+    }
+    if user.denied_category_count == 0 {
+        return false;
     }
     const entry: CommandCatalogEntry = command_catalog_lookup(name) catch {
         return false;
@@ -6963,16 +6981,8 @@ fn connection_execute_standard_command_at(
     const reply_off_before: bool = tx.reply_off_enabled;
     const reply_skip_before: bool = tx.reply_skip_next;
     var reply: CommandReply = connection_empty_reply();
-    if connection_acl_user_command_denied(connection_current_username(tx), command.info.name) {
-        reply = connection_acl_permission_denied_reply_for_user(command.info.name, &"command"[0: 7], connection_current_username(tx), now_ms, connection_acl_log_client_id(tx));
-    } else if command.info.first_key > 0 && command.info.key_step > 0 &&
-        connection_acl_user_allkeys(connection_current_username(tx)) == false &&
-        connection_acl_user_command_key_denied(connection_current_username(tx), &command.info, command, 0, command.argc) {
-        reply = connection_acl_key_permission_denied_reply_for_user(command.info.name, &"command"[0: 7], connection_current_username(tx), now_ms, connection_acl_log_client_id(tx));
-    } else if connection_acl_user_allchannels(connection_current_username(tx)) == false &&
-        connection_acl_user_command_channel_denied(connection_current_username(tx), &command.info, command, 0, command.argc) {
-        reply = connection_acl_channel_permission_denied_reply_for_user(command.info.name, &"command"[0: 7], connection_current_username(tx), now_ms, connection_acl_log_client_id(tx));
-    } else if command.info.cmd_type == CommandType.command_acl {
+    // All call sites pass through the shared command, key, and channel ACL gate first.
+    if command.info.cmd_type == CommandType.command_acl {
         reply = connection_handle_acl(engine, runtime, router, tx, command, now_ms, connection_acl_log_client_id(tx));
     } else {
         reply = command_execute_with_runtime_at(engine, runtime, command, now_ms);

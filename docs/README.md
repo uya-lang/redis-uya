@@ -61,7 +61,7 @@
 截至 2026-05-16 审计、2026-05-17 复跑、2026-05-19 复核与 2026-07-11 当前性能复测，项目当前口径应为：
 
 - `v0.9.0` 的历史收口文档仍然保留，但不能直接代表当前 `HEAD`。
-- 当前 `HEAD` 的 `make test` 与 `make test-integration` 已通过；`make benchmark-v0.8.1` 已生成 `benchmarks/v0.9.3-performance.md`，但当前 guard miss，不能标记为性能绿态。
+- 当前 `HEAD` 的完整单测已通过，ACL redis-py/redis-cli/命令 introspection 集成已复核；release 矩阵见 `benchmarks/v0.9.3-release-performance.md`，小 `SET` 已接近或局部超过同机 Redis，但 1KiB `SET` 仍是性能 P0，不能标记为全矩阵性能绿态。
 - 当前主线的第一优先级已从 `v0.9.1` 的真实性修复转入 `v0.9.3` 的 Redis Open Source 单机核心缺口补齐，并持续保持控制面真值、版本口径与统计分层不回退。
 - `v1.0.0` 的命令封版门槛先收敛 Redis Open Source 单机核心；JSON/Search/Time Series/概率结构/Vector 等模块命令继续追踪，但不再作为当前阶段完成度的包装材料。
 
@@ -78,4 +78,4 @@
 
 仍待继续收口的问题：
 
-- 当前 `v0.9.3` 功能回归为绿态；性能 guard 在 `benchmarks/v0.9.3-performance.md` 中记录为 miss，后续需要在 `v0.9.4` 性能与稳定性收敛阶段处理。
+- 当前 `v0.9.3` 功能回归为绿态；release `PING` 已提升到同机 Redis 的 `0.80x`，`SET 16B` 正式样本为 `1.01x`，独立确认轮为 `1.18x/1.10x`。完整超越目标尚未达成，后续继续收敛 1KiB 写入、事件循环和内存占用。

@@ -98,6 +98,7 @@ server open
 - `close_after_write`：`QUIT` 等命令的延迟关闭标志
 - `transaction`：连接级事务队列、WATCH 集合、RESP 协议版本、CLIENT 名称/库信息、Pub/Sub 订阅计数与 blocking deadline 状态
 - `blocked_request` / `blocked_request_len`：当前被挂起的 blocking list / zset 原始 RESP 请求；server 在成功保存请求后增加 `blocked_clients`，在唤醒、`CLIENT UNBLOCK` 或连接关闭时递减，计数为零时主循环跳过阻塞客户端全表扫描；key 就绪或超时后仍把请求前插回 `input` 并复用既有执行链恢复
+- server 维护当前 `input_len > 0` 的客户端计数：网络读入只在零到非零转换时增加，完整消费和连接关闭时递减，阻塞请求回填保持同步；计数为零时主循环跳过 buffered-client 全表扫描，半包、流水线和暂停请求仍沿用原调度规则
 
 调度规则：
 

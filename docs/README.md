@@ -58,10 +58,10 @@
 
 ## 当前阶段
 
-截至 2026-05-16 审计、2026-05-17 复跑、2026-05-19 复核与 2026-07-11 当前性能复测，项目当前口径应为：
+截至 2026-05-16 审计、2026-05-17 复跑、2026-05-19 复核、2026-07-11 性能复测与 2026-07-18 当前验证，项目当前口径应为：
 
 - `v0.9.0` 的历史收口文档仍然保留，但不能直接代表当前 `HEAD`。
-- 当前 `HEAD` 的完整单测已通过，MONITOR、阻塞命令、redis-py 与 redis-cli 集成已复核；release 矩阵见 `benchmarks/v0.9.3-release-performance.md`。动态 RESP batch、空闲 MONITOR 和阻塞扫描快速路径把 `SET 1KiB` 从 `2811` 提升到 `15463` req/s；最近三轮吞吐均达到或超过同机 Redis，但严格 p99 和读路径门槛仍未全绿。
+- 当前 `HEAD` 的完整单测和完整集成已通过；release 矩阵见 `benchmarks/v0.9.3-release-performance.md`。动态 RESP batch、空闲 MONITOR、阻塞扫描和 buffered-input 扫描快速路径把最新正式 `SET 1KiB` 从 `2811` 提升到 `13874` req/s，本轮为同机 Redis 的 `1.02x` 且 p99 更低；相邻确认轮达到 `15926` req/s 和 Redis 的 `1.27x`，读路径门槛仍未全绿。
 - 当前主线的第一优先级已从 `v0.9.1` 的真实性修复转入 `v0.9.3` 的 Redis Open Source 单机核心缺口补齐，并持续保持控制面真值、版本口径与统计分层不回退。
 - `v1.0.0` 的命令封版门槛先收敛 Redis Open Source 单机核心；JSON/Search/Time Series/概率结构/Vector 等模块命令继续追踪，但不再作为当前阶段完成度的包装材料。
 
@@ -78,4 +78,4 @@
 
 仍待继续收口的问题：
 
-- 当前 `v0.9.3` 功能回归为绿态；最新正式 release 比例为 `PING 0.93x`、`SET 16B 1.05x`、`GET 16B 0.84x`、`SET 1KiB 1.14x`、`GET 1KiB 0.86x`。完整超越目标尚未达成，后续优先收敛 buffered-client 扫描、事件循环尾延迟、读路径、backlog 物理存储和内存占用。
+- 当前 `v0.9.3` 功能回归为绿态；最新正式 release 比例为 `PING 0.72x`、`SET 16B 1.12x`、`GET 16B 0.85x`、`SET 1KiB 1.02x`、`GET 1KiB 0.80x`。完整超越目标尚未达成，后续优先收敛重复时钟读取、async allocator TLS、读路径、backlog 物理存储和内存占用。

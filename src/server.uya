@@ -158,6 +158,7 @@ export struct RedisServer {
     clients: [RedisClient: SERVER_MAX_CLIENTS],
     active_clients: i32,
     blocked_clients: usize,
+    buffered_clients: usize,
     maxclients: i32,
     served_clients: i32,
     config: ServerConfig,
@@ -224,6 +225,7 @@ fn server_init_clients(server: &RedisServer) void {
     }
     server.active_clients = 0;
     server.blocked_clients = 0;
+    server.buffered_clients = 0;
 }
 
 fn server_cstring_len(data: &const byte) usize {
@@ -278,6 +280,24 @@ fn server_client_prepend_blocked_request(client: &RedisClient) bool {
     client.input_len = client.input_len + client.blocked_request_len;
     client.blocked_request_len = 0;
     return true;
+}
+
+fn server_buffered_client_added(server: &RedisServer) void {
+    server.buffered_clients = server.buffered_clients + 1;
+}
+
+fn server_buffered_client_removed(server: &RedisServer) void {
+    if server.buffered_clients > 0 {
+        server.buffered_clients = server.buffered_clients - 1;
+    }
+}
+
+fn server_client_shift_input(server: &RedisServer, client: &RedisClient, consumed: usize) void {
+    const had_input: bool = client.input_len > 0;
+    connection_shift_buffer(&client.input[0], &client.input_len, consumed);
+    if had_input && client.input_len == 0 {
+        server_buffered_client_removed(server);
+    }
 }
 
 fn server_send_all_immediate(fd: i32, data: &const byte, len: usize) bool {
@@ -929,6 +949,9 @@ fn server_close_client_slot(server: &RedisServer, slot: usize) void {
     if server.clients[slot].transaction.blocking_active && server.clients[slot].blocked_request_len > 0 {
         server_blocked_client_removed(server);
     }
+    if server.clients[slot].input_len > 0 {
+        server_buffered_client_removed(server);
+    }
     _ = sys_epoll_ctl(server.listener.poll_fd, EPOLL_CTL_DEL, fd, null as &EpollEvent) catch {};
     connection_pubsub_unregister_fd(fd);
     connection_monitor_unregister_fd(fd);
@@ -1477,10 +1500,10 @@ fn server_async_writev_all_future(fd: i32, head: &const byte, head_len: usize, b
                     return error.ConnectionInputTooLarge;
                 }
                 server.blocked_clients = server.blocked_clients + 1;
-                connection_shift_buffer(&client.input[0], &client.input_len, result.consumed);
+                server_client_shift_input(server, client, result.consumed);
                 return true;
             }
-            connection_shift_buffer(&client.input[0], &client.input_len, result.consumed);
+            server_client_shift_input(server, client, result.consumed);
 
             if result.request_replicaof || replicaof_requested {
                 if replicaof_promote {
@@ -1603,6 +1626,9 @@ fn server_async_writev_all_future(fd: i32, head: &const byte, head_len: usize, b
         const rn: usize = try @await server_async_read_future(fd, read_ptr, SERVER_INPUT_CAP - client.input_len);
         if rn == 0 {
             return false;
+        }
+        if client.input_len == 0 {
+            server_buffered_client_added(server);
         }
         client.input_len = client.input_len + rn;
         client.last_interaction_ms = now_ms_safe();
@@ -1750,6 +1776,7 @@ export fn server_open_with_aof_and_memory_policy(
         clients: [],
         active_clients: 0,
         blocked_clients: 0,
+        buffered_clients: 0,
         maxclients: maxclients,
         served_clients: 0,
         config: config,
@@ -2082,10 +2109,14 @@ fn server_run_blocked_clients_at(server: &RedisServer, now_ms: u64) void {
             slot = slot + 1;
             continue;
         }
+        const had_input: bool = client.input_len > 0;
         if !server_client_prepend_blocked_request(client) {
             server_close_client_slot(server, slot);
             slot = slot + 1;
             continue;
+        }
+        if !had_input {
+            server_buffered_client_added(server);
         }
         server_blocked_client_removed(server);
         client.transaction.blocking_active = false;
@@ -2104,6 +2135,9 @@ fn server_run_blocked_clients_at(server: &RedisServer, now_ms: u64) void {
 }
 
 fn server_run_buffered_clients_at(server: &RedisServer, now_ms: u64) void {
+    if server.buffered_clients == 0 {
+        return;
+    }
     var slot: usize = 0;
     while slot < SERVER_MAX_CLIENTS {
         const client: &RedisClient = &server.clients[slot];

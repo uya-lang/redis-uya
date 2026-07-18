@@ -163,6 +163,7 @@ export struct RedisServer {
     served_clients: i32,
     config: ServerConfig,
     start_ms: u64,
+    event_time_ms: u64,
     last_cron_ms: u64,
     cron_ticks: u64,
     replication_role: ReplicationRole,
@@ -1432,7 +1433,7 @@ fn server_async_writev_all_future(fd: i32, head: &const byte, head_len: usize, b
         if client.transaction.blocking_active {
             return true;
         }
-        if server_client_pause_blocks_input(server, slot, client.input[0: client.input_len], now_ms_safe()) {
+        if server_client_pause_blocks_input(server, slot, client.input[0: client.input_len], server.event_time_ms) {
             return true;
         }
         const fd: i32 = client.fd;
@@ -1464,7 +1465,7 @@ fn server_async_writev_all_future(fd: i32, head: &const byte, head_len: usize, b
                 client.input[0: client.input_len],
                 client.output,
                 SERVER_OUTPUT_CAP,
-                now_ms_safe(),
+                server.event_time_ms,
                 &replicaof_requested,
                 &replicaof_promote,
                 client.async_replicaof_host[0: 64],
@@ -1528,7 +1529,7 @@ fn server_async_writev_all_future(fd: i32, head: &const byte, head_len: usize, b
                 server.maxclients = result.maxclients_after;
             }
             if result.request_client_pause {
-                server.client_pause_until_ms = now_ms_safe() + result.client_pause_timeout_ms;
+                server.client_pause_until_ms = server.event_time_ms + result.client_pause_timeout_ms;
                 server.client_pause_write_only = result.client_pause_write_only;
                 server.client_pause_owner_id = result.client_pause_owner_id;
             }
@@ -1631,7 +1632,7 @@ fn server_async_writev_all_future(fd: i32, head: &const byte, head_len: usize, b
             server_buffered_client_added(server);
         }
         client.input_len = client.input_len + rn;
-        client.last_interaction_ms = now_ms_safe();
+        client.last_interaction_ms = server.event_time_ms;
     }
 }
 
@@ -1768,6 +1769,7 @@ export fn server_open_with_aof_and_memory_policy(
         engine_free(&engine);
         return error.ServerAofOpenFailed;
     };
+    const start_ms: u64 = now_ms_safe();
     var server: RedisServer = RedisServer{
         engine: engine,
         router: router,
@@ -1780,7 +1782,8 @@ export fn server_open_with_aof_and_memory_policy(
         maxclients: maxclients,
         served_clients: 0,
         config: config,
-        start_ms: now_ms_safe(),
+        start_ms: start_ms,
+        event_time_ms: start_ms,
         last_cron_ms: 0u64,
         cron_ticks: 0u64,
         replication_role: ReplicationRole.role_master,
@@ -2046,7 +2049,7 @@ export fn server_accept_once(server: &RedisServer) !void {
     server.clients[slot].output_len = 0;
     server.clients[slot].output_sent = 0;
     server.clients[slot].close_after_write = false;
-    server.clients[slot].last_interaction_ms = now_ms_safe();
+    server.clients[slot].last_interaction_ms = server.event_time_ms;
     server.clients[slot].transaction = connection_transaction_new();
     server.clients[slot].transaction.client_fd = fd;
     connection_transaction_set_client_addresses(
@@ -2080,7 +2083,7 @@ fn server_handle_client_fd(server: &RedisServer, fd: i32) void {
     if server.clients[slot].transaction.blocking_active {
         return;
     }
-    if server_client_pause_blocks_input(server, slot, server.clients[slot].input[0: server.clients[slot].input_len], now_ms_safe()) && !server_client_pending_write(server, slot) {
+    if server_client_pause_blocks_input(server, slot, server.clients[slot].input[0: server.clients[slot].input_len], server.event_time_ms) && !server_client_pending_write(server, slot) {
         return;
     }
     const keep_result: !bool = server_poll_client_async_slot(server, slot);
@@ -2183,6 +2186,7 @@ export fn server_run(server: &RedisServer) !void {
             return;
         }
         const now_ms: u64 = now_ms_safe();
+        server.event_time_ms = now_ms;
         server_run_cron_due_at(server, now_ms);
         _ = server_replication_try_full_sync_at(server, now_ms) catch {};
         _ = server_replication_try_incremental_sync_at(server, now_ms) catch {};
@@ -2192,7 +2196,9 @@ export fn server_run(server: &RedisServer) !void {
         server_run_blocked_clients_at(server, now_ms);
         server_run_buffered_clients_at(server, now_ms);
 
-        const timeout_ms: i32 = server_ms_until_next_cron(server, now_ms_safe());
+        const wait_now_ms: u64 = now_ms_safe();
+        server.event_time_ms = wait_now_ms;
+        const timeout_ms: i32 = server_ms_until_next_cron(server, wait_now_ms);
         const wait_result: !i32 = sys_epoll_wait(server.listener.poll_fd, &events[0], SERVER_EVENT_CAP as i32, timeout_ms);
         const n: i32 = wait_result catch |err| {
             const eid: i32 = @error_id(err) as i32;
@@ -2201,6 +2207,7 @@ export fn server_run(server: &RedisServer) !void {
             }
             return err;
         };
+        server.event_time_ms = now_ms_safe();
 
         var i: usize = 0;
         while i < n as usize {

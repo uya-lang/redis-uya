@@ -68,6 +68,7 @@
 - [x] 空闲 buffered-client 扫描快速路径：维护持有输入字节的客户端数，计数为零时不扫描 64 个槽；半包、流水线、暂停与阻塞恢复回归通过，profile 中原 2.20% 扫描已低于 0.5%
 - [x] 无效回复配置占位优化：仅 `CONFIG SET` 传播完整 `config_after`，普通回复和批处理结果改用零占位；profile 中原 3.25% `default_config` 构造已低于 0.5%
 - [x] 单线程 async allocator 快速模式：保留默认 pthread TSD 语义，server loop 显式使用直达 allocator 指针；profile 中原 2.24% pthread registry/TSD 查找已低于 0.5%
+- [x] 事件批次时间缓存：server loop 统一刷新 `event_time_ms`，同一批次的命令、暂停和客户端交互时间复用缓存；完整单测/集成/redis-cli 通过，正式 `PING` 达 Redis 0.97x，20K `SET 1KiB` profile 中时钟调用栈样本占比从 5.66% 降到 4.80%
 - [ ] `v0.9.3` 起：在真实性问题收敛后，继续补 Redis Open Source 单机核心缺口，而不是先扩模块命令
 
 ## 3. 全版本路线图

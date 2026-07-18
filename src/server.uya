@@ -2175,7 +2175,7 @@ export fn server_run(server: &RedisServer) !void {
         1,
         SERVER_ASYNC_FRAME_STACK_LIMIT,
     );
-    set_async_frame_allocator(&frame_pool);
+    set_async_frame_allocator_single_thread(&frame_pool);
 
     var events: [EpollEvent: SERVER_EVENT_CAP] = [];
     while true {

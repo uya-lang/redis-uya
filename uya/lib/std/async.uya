@@ -16,6 +16,7 @@ use std.string.strlen;
 var _uya_async_frame_allocator_once: pthread_once_t = pthread_once_t{ state: 0 };
 var _uya_async_frame_allocator_key: pthread_key_t = pthread_key_t{ seq: 0, destructor: null };
 var _uya_async_frame_allocator_fallback: &IAllocator = null;
+var _uya_async_frame_allocator_single_thread: i32 = 0;
 
 /// 初始化当前进程的 async frame allocator 线程本地 key。
 /// 参数：_unused - pthread_once 兼容占位参数，当前实现忽略。
@@ -28,6 +29,7 @@ fn _uya_init_async_frame_allocator_key(_unused: &void) &void {
 
 /// 设置当前线程的 async frame 分配器
 export fn set_async_frame_allocator(alloc: &IAllocator) void {
+    _uya_async_frame_allocator_single_thread = 0;
     _uya_async_frame_allocator_fallback = alloc;
     pthread_once(&_uya_async_frame_allocator_once, &_uya_init_async_frame_allocator_key as &void);
     if _uya_async_frame_allocator_key.seq <= 0 {
@@ -36,8 +38,18 @@ export fn set_async_frame_allocator(alloc: &IAllocator) void {
     _ = pthread_setspecific(_uya_async_frame_allocator_key, alloc as &void);
 }
 
+/// 为单线程事件循环设置 async frame allocator。
+/// 调用方必须保证启用期间 Future 装箱只发生在同一线程；多线程运行时应使用 set_async_frame_allocator。
+export fn set_async_frame_allocator_single_thread(alloc: &IAllocator) void {
+    _uya_async_frame_allocator_fallback = alloc;
+    _uya_async_frame_allocator_single_thread = 1;
+}
+
 /// 获取当前线程的 async frame 分配器；未设置或初始化失败时返回 null。
 export fn get_async_frame_allocator() &IAllocator {
+    if _uya_async_frame_allocator_single_thread != 0 {
+        return _uya_async_frame_allocator_fallback;
+    }
     pthread_once(&_uya_async_frame_allocator_once, &_uya_init_async_frame_allocator_key as &void);
     if _uya_async_frame_allocator_key.seq <= 0 {
         return _uya_async_frame_allocator_fallback;

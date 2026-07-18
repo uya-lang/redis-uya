@@ -8,6 +8,12 @@
 
 **发布日期：** 待定
 
+### 标准库 async：单线程 frame allocator 快速模式（2026-07-18）
+
+- **`std.async`**：新增 `set_async_frame_allocator_single_thread`，供调用方明确保证 Future 装箱只发生在同一线程时直接复用进程内 allocator 指针，避免每次装箱执行 pthread TSD 查找。
+- **兼容边界**：既有 `set_async_frame_allocator` 仍使用 pthread TSD，并会关闭单线程快速模式；多线程 scheduler、HTTP worker 和其它并发运行时不应调用单线程 setter。
+- **redis-uya 接入**：单线程 epoll server loop 使用该模式，Future ABI、装箱头、释放路径和 `AsyncFramePool` 分配语义保持不变。
+
 ### Hosted Web / unknown target：libc/syscall bridge smoke（2026-05-20）
 
 - **运行时桥接**：`lib/libc/syscall.uya` 在 `std.target_os == .tos_unknown` 下补入一组受限 `libc.sys_*` 实现，通过宿主 bridge 覆盖 `read/write/open/close/mmap/gettimeofday/clock_gettime/nanosleep` 等 bring-up 所需路径，避免与仓库内同名 wrapper 递归。

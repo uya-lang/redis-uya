@@ -5247,6 +5247,15 @@ MyFuture {
 }
 ```
 
+#### 18.3.5 async frame allocator 绑定
+
+`std.async` 提供两种 allocator 绑定方式：
+
+- `set_async_frame_allocator(alloc)`：默认多线程安全路径，通过 pthread TSD 绑定当前线程 allocator，适用于 scheduler、HTTP worker 和其它并发运行时。
+- `set_async_frame_allocator_single_thread(alloc)`：单线程事件循环快速路径，Future 装箱直接读取进程内 allocator 指针，避免每次执行 pthread TSD 查找。
+
+单线程 setter 只允许在调用方能保证启用期间所有 Future 装箱都发生在同一线程时使用。再次调用普通 `set_async_frame_allocator` 会关闭快速模式并恢复 TSD 语义。两种模式使用相同的装箱头、`release` 释放路径和 `AsyncFramePool` 接口，不改变 `Future<T>` ABI。
+
 ### 18.4 函数签名约束
 
 **必须返回 `Future<!T>` 或 `!Future<T>`**：

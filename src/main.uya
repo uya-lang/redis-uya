@@ -5,8 +5,8 @@ use src.server.server_open_with_aof_and_memory_policy;
 use src.server.server_default_aof_path;
 use src.server.server_run;
 use src.server.server_close;
+use src.server.server_set_requirepass;
 use src.config.MaxmemoryPolicy;
-use src.config.config_copy_bytes;
 use std.runtime.get_argc;
 use std.runtime.get_argv;
 use libc.atoi;
@@ -134,7 +134,7 @@ export fn main() i32 {
         server_close(&server);
     }
     if requirepass.len > 0 {
-        config_copy_bytes(server.config.requirepass[0: 128], requirepass);
+        server_set_requirepass(&server, requirepass);
     }
 
     @println("redis-uya v0.9.3-dev listening on 127.0.0.1:${server.listener.port}");

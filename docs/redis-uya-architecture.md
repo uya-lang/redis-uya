@@ -103,6 +103,7 @@ server open
 - server loop 在维护批次、计算 epoll timeout 前和 epoll 返回后刷新 `event_time_ms`；同一事件批次内的命令执行时间、`CLIENT PAUSE` 判断/截止时间、accept/read 交互时间复用该缓存，cron 与维护等待仍使用显式刷新时间，避免逐命令读取系统时钟
 - `RedisServer.runtime_info` 持久缓存命令执行元数据，普通请求只刷新客户端计数、复制 offset/backlog、maxmemory 排除量、后台任务、lastsave 与拓扑指针等动态字段，不再逐命令复制完整 `ServerConfig`；连接层仍按请求覆盖 RESP 版本与 `CLIENT NO-TOUCH` 状态
 - 稳定配置缓存必须在配置变更点同步：启动参数 `requirepass` 通过 `server_set_requirepass()` 写入，成功 `CONFIG SET` 和 `REPLICAOF` 主从切换在更新 `server.config` 后同步 runtime config；直接绕过这些入口修改配置会破坏后续命令可见性
+- AOF rewrite 状态机包含打开 writer、复制缓冲和临时路径等大对象，release 代码会为该慢路径生成约 321KiB 栈帧；server loop 仅在 `aof_rewrite_requested` 或 `aof_rewrite_in_progress` 为真时进入该函数，活动 `BGREWRITEAOF` 的启动、轮询、合并与替换流程保持不变
 
 调度规则：
 

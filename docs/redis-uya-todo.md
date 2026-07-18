@@ -71,6 +71,7 @@
 - [x] 事件批次时间缓存：server loop 统一刷新 `event_time_ms`，同一批次的命令、暂停和客户端交互时间复用缓存；完整单测/集成/redis-cli 通过，正式 `PING` 达 Redis 0.97x，20K `SET 1KiB` profile 中时钟调用栈样本占比从 5.66% 降到 4.80%
 - [x] 1KiB 字符串值 arena：1025B SDS payload 由 1032B 专用 class 按 62 块页批量分配；完整单测/集成/redis-cli 通过，20K `SET 1KiB` profile 中 `find_chunk` 从 6.69% 降到 2.50%、`owns_ptr` 从 3.03% 降到 0.5% 报告阈值以下，采样吞吐从 11287 提升到 11621 req/s
 - [x] 命令 runtime 元数据缓存：`RedisServer` 持久保存 `CommandRuntimeInfo`，动态字段逐请求刷新，完整配置仅在启动参数、`CONFIG SET` 和复制角色切换时同步；完整单测/集成/redis-cli 通过，20K `SET 1KiB` 从 11621 提升到 12853 req/s，原 0.61% `server_runtime_info` 低于 0.5% 报告阈值
+- [x] 空闲 AOF rewrite 大栈门控：server loop 仅在 rewrite 已请求或进行中时进入约 321KiB 栈帧的状态机；完整单测/集成/redis-cli 通过，GET 16B/1KiB profile 中原 2.15%/2.62% 热点低于 0.4%，1KiB 采样周期下降 5.6%，正式五项吞吐均超过同机 Redis
 - [ ] `v0.9.3` 起：在真实性问题收敛后，继续补 Redis Open Source 单机核心缺口，而不是先扩模块命令
 
 ## 3. 全版本路线图

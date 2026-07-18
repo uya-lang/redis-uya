@@ -494,7 +494,7 @@ fn connection_zero_copy_process_result(
         request_aof_rewrite: request_aof_rewrite,
         request_shutdown: false,
         request_config_set: false,
-        config_after: default_config(),
+        config_after: ServerConfig{},
         request_client_kill: false,
         client_kill_id: 0,
         request_client_pause: false,
@@ -523,7 +523,7 @@ fn connection_make_reply(typ: CommandReplyType, data: &[byte], integer: i64) Com
         request_bgsave: false,
         request_aof_rewrite: false,
         request_config_set: false,
-        config_after: default_config(),
+        config_after: ServerConfig{},
         request_client_kill: false,
         client_kill_id: 0,
         request_client_pause: false,
@@ -7962,7 +7962,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_in
     var close_after: bool = false;
     var request_shutdown: bool = false;
     var request_config_set: bool = false;
-    var config_after: ServerConfig = default_config();
+    var config_after: ServerConfig = ServerConfig{};
     var request_client_kill: bool = false;
     var client_kill_id: i64 = 0;
     var request_client_pause: bool = false;

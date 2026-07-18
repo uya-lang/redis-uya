@@ -23,7 +23,7 @@
 - 最小迭代默认递增版本号最后一位：`v0.9.0`、`v0.9.1`、`v0.9.2` 依次推进；不为普通小阶段抬高第二位版本号。
 - `v0.9.0` 起后续主线只迭代单机版：补齐 Redis Open Source 单机功能、兼容性、性能和稳定性。
 - 当前 `HEAD` 的真实性高于历史报告：`README`、`DoD`、`COMMAND*`、测试结果和 benchmark 结果必须互相一致。
-- 2026-07-18 当前 `HEAD`：`make test`、`make test-integration` 与 release benchmark guard 通过；正式矩阵中 `SET 16B` 达到 Redis 的 1.12x，`SET 1KiB` 为 1.02x 且 p99 更低，相邻确认轮达到 1.27x，PING/GET 路径仍待收敛。
+- 2026-07-18 当前 `HEAD`：`make test`、`make test-integration` 与 release benchmark guard 通过；正式矩阵中 `SET 16B/1KiB` 分别达到 Redis 的 1.18x/1.12x 且 p99 更低，`GET 1KiB` 收敛到 0.99x，PING/GET 路径仍待继续优化。
 - `v0.9.4` 用于性能与稳定性收敛；`v0.9.5` 是首个单机封版候选，如未达到 `v1.0.0` 封版条件，继续使用 `v0.9.6` 等 patch 版本顺序迭代。
 - 单机版必须先覆盖 Redis Open Source 单机核心命令面；模块命令可以继续追踪，但不能与 `v1.0.0` 单机封版门槛混算。命令全集、状态定义和封版标准见 `redis-uya-command-scope.md`。
 - `v1.0.0` 是单机版封版发布点；只有单机版功能和性能达标后才发布。
@@ -66,6 +66,7 @@
 - [x] 空闲 MONITOR 快速路径：活动订阅计数为零时跳过监控行构造，正式 `SET 1KiB` 从 6545 提升到 14386 req/s，独立确认轮达到 15848 req/s 和 Redis 的 1.29x
 - [x] 空闲阻塞客户端扫描快速路径：仅在存在已保存的 blocking 请求时扫描客户端槽；正式 `SET 1KiB` 达到 15463 req/s 和 Redis 的 1.14x，profile 中空闲扫描已消失
 - [x] 空闲 buffered-client 扫描快速路径：维护持有输入字节的客户端数，计数为零时不扫描 64 个槽；半包、流水线、暂停与阻塞恢复回归通过，profile 中原 2.20% 扫描已低于 0.5%
+- [x] 无效回复配置占位优化：仅 `CONFIG SET` 传播完整 `config_after`，普通回复和批处理结果改用零占位；profile 中原 3.25% `default_config` 构造已低于 0.5%
 - [ ] `v0.9.3` 起：在真实性问题收敛后，继续补 Redis Open Source 单机核心缺口，而不是先扩模块命令
 
 ## 3. 全版本路线图

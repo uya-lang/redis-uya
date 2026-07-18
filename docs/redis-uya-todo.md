@@ -69,6 +69,7 @@
 - [x] 无效回复配置占位优化：仅 `CONFIG SET` 传播完整 `config_after`，普通回复和批处理结果改用零占位；profile 中原 3.25% `default_config` 构造已低于 0.5%
 - [x] 单线程 async allocator 快速模式：保留默认 pthread TSD 语义，server loop 显式使用直达 allocator 指针；profile 中原 2.24% pthread registry/TSD 查找已低于 0.5%
 - [x] 事件批次时间缓存：server loop 统一刷新 `event_time_ms`，同一批次的命令、暂停和客户端交互时间复用缓存；完整单测/集成/redis-cli 通过，正式 `PING` 达 Redis 0.97x，20K `SET 1KiB` profile 中时钟调用栈样本占比从 5.66% 降到 4.80%
+- [x] 1KiB 字符串值 arena：1025B SDS payload 由 1032B 专用 class 按 62 块页批量分配；完整单测/集成/redis-cli 通过，20K `SET 1KiB` profile 中 `find_chunk` 从 6.69% 降到 2.50%、`owns_ptr` 从 3.03% 降到 0.5% 报告阈值以下，采样吞吐从 11287 提升到 11621 req/s
 - [ ] `v0.9.3` 起：在真实性问题收敛后，继续补 Redis Open Source 单机核心缺口，而不是先扩模块命令
 
 ## 3. 全版本路线图

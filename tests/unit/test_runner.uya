@@ -24,6 +24,7 @@ use tests.unit.memory_allocator_test.test_allocator_alloc_free;
 use tests.unit.memory_allocator_test.test_allocator_realloc;
 use tests.unit.memory_allocator_test.test_allocator_many_allocations;
 use tests.unit.memory_allocator_test.test_allocator_slab_reuse;
+use tests.unit.memory_allocator_test.test_allocator_value_arena;
 use tests.unit.config_test.test_config_defaults;
 use tests.unit.config_test.test_config_parse_core_fields;
 use tests.unit.config_test.test_config_parse_memory_units;
@@ -324,6 +325,10 @@ export fn main() i32 {
     const before_slab_reuse: i32 = failed;
     _ = test_allocator_slab_reuse() catch { printf("[FAIL] memory_allocator/slab_reuse\n" as *byte); failed = failed + 1; };
     if failed == before_slab_reuse { printf("[PASS] memory_allocator/slab_reuse\n" as *byte); }
+
+    const before_value_arena: i32 = failed;
+    _ = test_allocator_value_arena() catch { printf("[FAIL] memory_allocator/value_arena\n" as *byte); failed = failed + 1; };
+    if failed == before_value_arena { printf("[PASS] memory_allocator/value_arena\n" as *byte); }
 
     const before_config_defaults: i32 = failed;
     _ = test_config_defaults() catch { printf("[FAIL] config/defaults\n" as *byte); failed = failed + 1; };

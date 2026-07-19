@@ -224,7 +224,6 @@ export struct CommandReply {
     request_bgsave: bool,
     request_aof_rewrite: bool,
     request_config_set: bool,
-    config_after: ServerConfig,
     request_client_kill: bool,
     client_kill_id: i64,
     request_client_pause: bool,
@@ -238,6 +237,7 @@ export struct CommandReply {
 
 export struct CommandRuntimeInfo {
     config: ServerConfig,
+    pending_config: ServerConfig,
     active_clients: i32,
     maxclients: i32,
     served_clients: i32,
@@ -315,6 +315,7 @@ struct CommandExecutorZAggregateOptions {
 export fn command_runtime_default() CommandRuntimeInfo {
     return CommandRuntimeInfo{
         config: default_config(),
+        pending_config: default_config(),
         active_clients: 0,
         maxclients: 0,
         served_clients: 0,
@@ -369,7 +370,6 @@ fn command_executor_reply(typ: CommandReplyType, data: &[byte], integer: i64) Co
         request_bgsave: false,
         request_aof_rewrite: false,
         request_config_set: false,
-        config_after: ServerConfig{},
         request_client_kill: false,
         client_kill_id: 0,
         request_client_pause: false,
@@ -18923,7 +18923,7 @@ fn command_executor_config(runtime: &CommandRuntimeInfo, command: &Command) Comm
         }
         var reply: CommandReply = command_executor_simple(&"OK"[0: 2]);
         reply.request_config_set = true;
-        reply.config_after = next_config;
+        runtime.pending_config = next_config;
         reply.request_replicaof = request_replicaof;
         reply.replicaof_promote = replicaof_promote;
         reply.replicaof_port = replicaof_port;

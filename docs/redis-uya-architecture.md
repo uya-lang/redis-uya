@@ -102,7 +102,8 @@ server open
 - server loop 为单线程 `AsyncFramePool` 启用 `set_async_frame_allocator_single_thread`，Future 装箱直接读取该 pool；Uya 默认多线程 setter 仍使用 pthread TSD，快速模式不改变装箱头、释放路径或 Future ABI
 - server loop 在维护批次、计算 epoll timeout 前和 epoll 返回后刷新 `event_time_ms`；同一事件批次内的命令执行时间、`CLIENT PAUSE` 判断/截止时间、accept/read 交互时间复用该缓存，cron 与维护等待仍使用显式刷新时间，避免逐命令读取系统时钟
 - `RedisServer.runtime_info` 持久缓存命令执行元数据，普通请求只刷新客户端计数、复制 offset/backlog、maxmemory 排除量、后台任务、lastsave 与拓扑指针等动态字段，不再逐命令复制完整 `ServerConfig`；连接层仍按请求覆盖 RESP 版本与 `CLIENT NO-TOUCH` 状态
-- 稳定配置缓存必须在配置变更点同步：启动参数 `requirepass` 通过 `server_set_requirepass()` 写入，成功 `CONFIG SET` 和 `REPLICAOF` 主从切换在更新 `server.config` 后同步 runtime config；直接绕过这些入口修改配置会破坏后续命令可见性
+- runtime 同时持有 `config` 与 `pending_config`：执行器只在成功解析 `CONFIG SET` 后把候选配置写入 pending 槽，连接层在响应成功编码后原子提交到 `runtime.config`，因此输出缓冲不足不会产生无响应的配置变更，同一 pipeline 中的后续 `CONFIG GET` 仍能立即看到新值
+- 稳定配置缓存必须在配置变更点同步：启动参数 `requirepass` 通过 `server_set_requirepass()` 写入，成功 `CONFIG SET` 先提交 runtime 配置再同步 `server.config`，`REPLICAOF` 主从切换随后同步角色字段；直接绕过这些入口修改配置会破坏后续命令可见性
 - AOF rewrite 状态机包含打开 writer、复制缓冲和临时路径等大对象，release 代码会为该慢路径生成约 321KiB 栈帧；server loop 仅在 `aof_rewrite_requested` 或 `aof_rewrite_in_progress` 为真时进入该函数，活动 `BGREWRITEAOF` 的启动、轮询、合并与替换流程保持不变
 
 调度规则：
@@ -157,7 +158,7 @@ server open
 - `CLIENT KILL` / `UNBLOCK` / `PAUSE` / `UNPAUSE` 通过 `ConnectionProcessResult` 把控制请求传回 `server.uya`，由 server 侧关闭目标连接、解除阻塞等待或更新全局 pause 状态；`PAUSE WRITE` 使用连接层 RESP 探针和命令目录写标志只阻塞写命令
 - `CLIENT TRACKING` 当前维护连接级 flags/redirect/prefix 状态，并通过 `CLIENT GETREDIR` / `CLIENT TRACKINGINFO` 暴露，不包含 invalidation push 通道
 - `CLIENT REPLY` 当前在连接层维护 `OFF` / `SKIP` 回复抑制状态，覆盖命令回复编码路径；不改变 Pub/Sub push 或 `MONITOR` 推送
-- `CommandReply.config_after` 与连接处理结果中的同名字段仅在 `request_config_set=true` 时有效；普通回复、零拷贝和批处理占位使用零初始化，`CONFIG SET` 才从当前运行时配置复制、更新并向 server 传播完整配置
+- `CommandReply` 与 `ConnectionProcessResult` 不携带完整 `ServerConfig`；稀有的 `CONFIG SET` 通过持久 `CommandRuntimeInfo.pending_config` 传递候选状态，普通回复、零拷贝和批处理返回结构不再为配置更新承担宽字段复制成本
 - `CLIENT UNBLOCK` 当前在 server 侧定位目标连接并解除阻塞 pop 等待，`TIMEOUT` 复用连接层回复编码生成空阻塞结果，`ERROR` 返回 `UNBLOCKED` 错误
 - `CLIENT CACHING` 当前只维护连接级兼容标志；server-assisted client-side caching invalidation 还未实现
 - `CLIENT NO-EVICT` 当前只维护连接级兼容标志；`maxmemory` 淘汰候选保护还未接入存储层

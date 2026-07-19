@@ -1111,6 +1111,22 @@ export fn test_connection_process_maxmemory() !void {
     try assert_true(network_connection_contains(out[0: set_result.response_len], &"OOM command not allowed"[0: 23]));
 
     runtime.config.maxmemory = 0;
+    const config_set_result: ConnectionProcessResult = try connection_process_input_with_runtime_at(&engine, &runtime, &router, &"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$9\r\nmaxmemory\r\n$3\r\n1mb\r\n"[0: 49], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: config_set_result.response_len], &"+OK\r\n"[0: 5]));
+    try assert_eq_i32(config_set_result.request_config_set as i32, 1);
+    try assert_eq_i32(runtime.config.maxmemory as i32, 1048576);
+
+    var saw_output_too_small: bool = false;
+    _ = connection_process_input_with_runtime_at(&engine, &runtime, &router, &"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$9\r\nmaxmemory\r\n$3\r\n2mb\r\n"[0: 49], &out[0], 1, 1000u64) catch |err| {
+        if err == error.ConnectionOutputTooSmall {
+            saw_output_too_small = true;
+        }
+        return;
+    };
+    try assert_true(saw_output_too_small);
+    try assert_eq_i32(runtime.config.maxmemory as i32, 1048576);
+
+    runtime.config.maxmemory = 0;
     const get_result: ConnectionProcessResult = try connection_process_input_with_runtime_at(&engine, &runtime, &router, &"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n"[0: 22], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: get_result.response_len], &"$-1\r\n"[0: 5]));
 
@@ -1239,6 +1255,13 @@ export fn test_connection_process_pipeline_batch() !void {
 
     const get_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$3\r\nGET\r\n$4\r\nmkey\r\n"[0: 23], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: get_result.response_len], &"$4\r\nmval\r\n"[0: 10]));
+
+    var config_runtime: CommandRuntimeInfo = command_runtime_default();
+    const config_pipeline: &[byte] = &"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$9\r\nmaxmemory\r\n$3\r\n1mb\r\n*3\r\n$6\r\nCONFIG\r\n$3\r\nGET\r\n$9\r\nmaxmemory\r\n"[0: 89];
+    const config_result: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &config_runtime, &router, &tx, config_pipeline, &out[0], 512, 1000u64);
+    try assert_eq_i32(config_result.consumed as i32, config_pipeline.len as i32);
+    try assert_true(network_connection_slice_eq(out[0: config_result.response_len], &"+OK\r\n*2\r\n$9\r\nmaxmemory\r\n$7\r\n1048576\r\n"[0: 37]));
+    try assert_eq_i32(config_runtime.config.maxmemory as i32, 1048576);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

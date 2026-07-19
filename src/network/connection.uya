@@ -7,8 +7,6 @@ use src.command.executor.command_runtime_default;
 use src.command.executor.command_execute_at;
 use src.command.executor.command_execute_with_runtime_at;
 use src.command.executor.command_reply_cleanup;
-use src.config.ServerConfig;
-use src.config.default_config;
 use src.command.catalog_generated_base.CommandCatalogEntry;
 use src.command.catalog.command_catalog_has_acl_category;
 use src.command.catalog.command_catalog_lookup;
@@ -106,7 +104,6 @@ export struct ConnectionProcessResult {
     request_aof_rewrite: bool,
     request_shutdown: bool,
     request_config_set: bool,
-    config_after: ServerConfig,
     request_client_kill: bool,
     client_kill_id: i64,
     request_client_pause: bool,
@@ -494,7 +491,6 @@ fn connection_zero_copy_process_result(
         request_aof_rewrite: request_aof_rewrite,
         request_shutdown: false,
         request_config_set: false,
-        config_after: ServerConfig{},
         request_client_kill: false,
         client_kill_id: 0,
         request_client_pause: false,
@@ -523,7 +519,6 @@ fn connection_make_reply(typ: CommandReplyType, data: &[byte], integer: i64) Com
         request_bgsave: false,
         request_aof_rewrite: false,
         request_config_set: false,
-        config_after: ServerConfig{},
         request_client_kill: false,
         client_kill_id: 0,
         request_client_pause: false,
@@ -7063,9 +7058,6 @@ fn connection_execute_standard_command_at(
     if request_aof_rewrite && rewrite_requested != null {
         *rewrite_requested = true;
     }
-    if request_config_set && connection_cstring_slice(reply.config_after.requirepass[0: 128]).len > 0 {
-        tx.authenticated = true;
-    }
     var n: usize = 0;
     var psync_reply: CommandReply = connection_make_reply(CommandReplyType.reply_simple_string, connection_reply_empty_slice(), 0);
     var use_psync_reply: bool = false;
@@ -7108,6 +7100,12 @@ fn connection_execute_standard_command_at(
         n = try connection_encode_reply_with_protocol(&reply, out, out_cap, tx.protocol_version);
     }
     n = connection_apply_client_reply_policy(tx, command, reply_off_before, reply_skip_before, n);
+    if request_config_set {
+        runtime.config = runtime.pending_config;
+        if connection_cstring_slice(runtime.config.requirepass[0: 128]).len > 0 {
+            tx.authenticated = true;
+        }
+    }
     command_reply_cleanup(&reply);
     if use_psync_reply {
         command_reply_cleanup(&psync_reply);
@@ -7124,7 +7122,6 @@ fn connection_execute_standard_command_at(
         request_aof_rewrite: request_aof_rewrite,
         request_shutdown: false,
         request_config_set: request_config_set,
-        config_after: reply.config_after,
         request_client_kill: request_client_kill,
         client_kill_id: client_kill_id,
         request_client_pause: request_client_pause,
@@ -7823,7 +7820,6 @@ export fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transac
         request_aof_rewrite: result.request_aof_rewrite,
         request_shutdown: result.request_shutdown,
         request_config_set: result.request_config_set,
-        config_after: result.config_after,
         request_client_kill: result.request_client_kill,
         client_kill_id: result.client_kill_id,
         request_client_pause: result.request_client_pause,
@@ -7962,7 +7958,6 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_in
     var close_after: bool = false;
     var request_shutdown: bool = false;
     var request_config_set: bool = false;
-    var config_after: ServerConfig = ServerConfig{};
     var request_client_kill: bool = false;
     var client_kill_id: i64 = 0;
     var request_client_pause: bool = false;
@@ -8019,7 +8014,6 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_in
         request_shutdown = result.request_shutdown;
         if result.request_config_set {
             request_config_set = true;
-            config_after = result.config_after;
         }
         if result.request_client_kill {
             request_client_kill = true;
@@ -8061,7 +8055,6 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_in
         request_aof_rewrite: *rewrite_requested,
         request_shutdown: request_shutdown,
         request_config_set: request_config_set,
-        config_after: config_after,
         request_client_kill: request_client_kill,
         client_kill_id: client_kill_id,
         request_client_pause: request_client_pause,

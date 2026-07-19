@@ -174,7 +174,6 @@ export fn test_command_ping_and_info() !void {
     try assert_eq_i32(ping_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
     try assert_true(command_executor_test_slice_eq(ping_reply.data, &"PONG"[0: 4]));
     try assert_eq_i32(ping_reply.request_config_set as i32, 0);
-    try assert_eq_i32(ping_reply.config_after.port, 0);
     resp_value_free(&ping_parsed.value);
 
     var ping_msg_parsed: RespParseResult = try parse_resp2(&"*2\r\n$4\r\nPING\r\n$2\r\nhi\r\n"[0: 22]);
@@ -368,7 +367,7 @@ export fn test_command_info_and_config() !void {
     try assert_eq_i32(config_set_max_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
     try assert_true(command_executor_test_slice_eq(config_set_max_reply.data, &"OK"[0: 2]));
     try assert_eq_i32(config_set_max_reply.request_config_set as i32, 1);
-    try assert_eq_i32(config_set_max_reply.config_after.maxmemory as i32, 1048576);
+    try assert_eq_i32(runtime.pending_config.maxmemory as i32, 1048576);
     resp_value_free(&config_set_max_parsed.value);
 
     var config_set_policy_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$16\r\nmaxmemory-policy\r\n$11\r\nallkeys-lru\r\n"[0: 73]);
@@ -376,7 +375,7 @@ export fn test_command_info_and_config() !void {
     const config_set_policy_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_set_policy_command, 5000u64);
     try assert_eq_i32(config_set_policy_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
     try assert_eq_i32(config_set_policy_reply.request_config_set as i32, 1);
-    try assert_eq_i32(config_set_policy_reply.config_after.maxmemory_policy as i32, MaxmemoryPolicy.maxmemory_allkeys_lru as i32);
+    try assert_eq_i32(runtime.pending_config.maxmemory_policy as i32, MaxmemoryPolicy.maxmemory_allkeys_lru as i32);
     resp_value_free(&config_set_policy_parsed.value);
 
     var config_set_latency_tracking_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$16\r\nlatency-tracking\r\n$2\r\nno\r\n"[0: 56]);
@@ -384,7 +383,7 @@ export fn test_command_info_and_config() !void {
     const config_set_latency_tracking_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_set_latency_tracking_command, 5000u64);
     try assert_eq_i32(config_set_latency_tracking_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
     try assert_eq_i32(config_set_latency_tracking_reply.request_config_set as i32, 1);
-    try assert_eq_i32(config_set_latency_tracking_reply.config_after.latency_tracking as i32, 0);
+    try assert_eq_i32(runtime.pending_config.latency_tracking as i32, 0);
     resp_value_free(&config_set_latency_tracking_parsed.value);
 
     var config_set_latency_threshold_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$25\r\nlatency-monitor-threshold\r\n$1\r\n1\r\n"[0: 64]);
@@ -392,7 +391,7 @@ export fn test_command_info_and_config() !void {
     const config_set_latency_threshold_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_set_latency_threshold_command, 5000u64);
     try assert_eq_i32(config_set_latency_threshold_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
     try assert_eq_i32(config_set_latency_threshold_reply.request_config_set as i32, 1);
-    try assert_eq_i32(config_set_latency_threshold_reply.config_after.latency_monitor_threshold as i32, 1);
+    try assert_eq_i32(runtime.pending_config.latency_monitor_threshold as i32, 1);
     resp_value_free(&config_set_latency_threshold_parsed.value);
 
     var config_set_timeout_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$7\r\ntimeout\r\n$2\r\n30\r\n"[0: 46]);
@@ -400,7 +399,7 @@ export fn test_command_info_and_config() !void {
     const config_set_timeout_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_set_timeout_command, 5000u64);
     try assert_eq_i32(config_set_timeout_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
     try assert_eq_i32(config_set_timeout_reply.request_config_set as i32, 1);
-    try assert_eq_i32(config_set_timeout_reply.config_after.timeout_seconds, 30);
+    try assert_eq_i32(runtime.pending_config.timeout_seconds, 30);
     resp_value_free(&config_set_timeout_parsed.value);
 
     var config_set_save_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$4\r\nsave\r\n$5\r\n60 10\r\n"[0: 46]);
@@ -408,8 +407,8 @@ export fn test_command_info_and_config() !void {
     const config_set_save_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_set_save_command, 5000u64);
     try assert_eq_i32(config_set_save_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
     try assert_eq_i32(config_set_save_reply.request_config_set as i32, 1);
-    try assert_eq_i32(config_set_save_reply.config_after.save_seconds, 60);
-    try assert_eq_i32(config_set_save_reply.config_after.save_changes, 10);
+    try assert_eq_i32(runtime.pending_config.save_seconds, 60);
+    try assert_eq_i32(runtime.pending_config.save_changes, 10);
     resp_value_free(&config_set_save_parsed.value);
 
     var config_set_requirepass_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$11\r\nrequirepass\r\n$4\r\nnext\r\n"[0: 56]);
@@ -417,7 +416,7 @@ export fn test_command_info_and_config() !void {
     const config_set_requirepass_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_set_requirepass_command, 5000u64);
     try assert_eq_i32(config_set_requirepass_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
     try assert_eq_i32(config_set_requirepass_reply.request_config_set as i32, 1);
-    try assert_true(command_executor_test_slice_eq(config_set_requirepass_reply.config_after.requirepass[0: 4], &"next"[0: 4]));
+    try assert_true(command_executor_test_slice_eq(runtime.pending_config.requirepass[0: 4], &"next"[0: 4]));
     resp_value_free(&config_set_requirepass_parsed.value);
 
     var config_set_multi_parsed: RespParseResult = try parse_resp2(&"*6\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$9\r\nmaxmemory\r\n$3\r\n2mb\r\n$16\r\nlatency-tracking\r\n$2\r\nno\r\n"[0: 80]);
@@ -425,8 +424,8 @@ export fn test_command_info_and_config() !void {
     const config_set_multi_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_set_multi_command, 5000u64);
     try assert_eq_i32(config_set_multi_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
     try assert_eq_i32(config_set_multi_reply.request_config_set as i32, 1);
-    try assert_eq_i32(config_set_multi_reply.config_after.maxmemory as i32, 2097152);
-    try assert_eq_i32(config_set_multi_reply.config_after.latency_tracking as i32, 0);
+    try assert_eq_i32(runtime.pending_config.maxmemory as i32, 2097152);
+    try assert_eq_i32(runtime.pending_config.latency_tracking as i32, 0);
     resp_value_free(&config_set_multi_parsed.value);
 
     var config_set_bad_value_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$9\r\nmaxmemory\r\n$5\r\nbogus\r\n"[0: 51]);
@@ -462,42 +461,42 @@ export fn test_command_info_and_config() !void {
     const config_set_port_command: Command = try command_executor_test_command(&router, &config_set_port_parsed);
     const config_set_port_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_set_port_command, 5000u64);
     try assert_eq_i32(config_set_port_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
-    try assert_eq_i32(config_set_port_reply.config_after.port, 6391);
+    try assert_eq_i32(runtime.pending_config.port, 6391);
     resp_value_free(&config_set_port_parsed.value);
 
     var config_set_bind_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$4\r\nbind\r\n$7\r\n0.0.0.0\r\n"[0: 48]);
     const config_set_bind_command: Command = try command_executor_test_command(&router, &config_set_bind_parsed);
     const config_set_bind_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_set_bind_command, 5000u64);
     try assert_eq_i32(config_set_bind_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
-    try assert_true(command_executor_test_slice_eq(config_set_bind_reply.config_after.bind[0: 7], &"0.0.0.0"[0: 7]));
+    try assert_true(command_executor_test_slice_eq(runtime.pending_config.bind[0: 7], &"0.0.0.0"[0: 7]));
     resp_value_free(&config_set_bind_parsed.value);
 
     var config_set_dir_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$3\r\ndir\r\n$11\r\nbuild/cache\r\n"[0: 52]);
     const config_set_dir_command: Command = try command_executor_test_command(&router, &config_set_dir_parsed);
     const config_set_dir_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_set_dir_command, 5000u64);
     try assert_eq_i32(config_set_dir_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
-    try assert_true(command_executor_test_slice_eq(config_set_dir_reply.config_after.dir[0: 11], &"build/cache"[0: 11]));
+    try assert_true(command_executor_test_slice_eq(runtime.pending_config.dir[0: 11], &"build/cache"[0: 11]));
     resp_value_free(&config_set_dir_parsed.value);
 
     var config_set_dbfilename_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$10\r\ndbfilename\r\n$11\r\nruntime.rdb\r\n"[0: 60]);
     const config_set_dbfilename_command: Command = try command_executor_test_command(&router, &config_set_dbfilename_parsed);
     const config_set_dbfilename_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_set_dbfilename_command, 5000u64);
     try assert_eq_i32(config_set_dbfilename_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
-    try assert_true(command_executor_test_slice_eq(config_set_dbfilename_reply.config_after.dbfilename[0: 11], &"runtime.rdb"[0: 11]));
+    try assert_true(command_executor_test_slice_eq(runtime.pending_config.dbfilename[0: 11], &"runtime.rdb"[0: 11]));
     resp_value_free(&config_set_dbfilename_parsed.value);
 
     var config_set_appendfilename_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$14\r\nappendfilename\r\n$11\r\nnextlog.aof\r\n"[0: 64]);
     const config_set_appendfilename_command: Command = try command_executor_test_command(&router, &config_set_appendfilename_parsed);
     const config_set_appendfilename_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_set_appendfilename_command, 5000u64);
     try assert_eq_i32(config_set_appendfilename_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
-    try assert_true(command_executor_test_slice_eq(config_set_appendfilename_reply.config_after.appendfilename[0: 11], &"nextlog.aof"[0: 11]));
+    try assert_true(command_executor_test_slice_eq(runtime.pending_config.appendfilename[0: 11], &"nextlog.aof"[0: 11]));
     resp_value_free(&config_set_appendfilename_parsed.value);
 
     var config_set_masterauth_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$10\r\nmasterauth\r\n$13\r\nupstream-pass\r\n"[0: 62]);
     const config_set_masterauth_command: Command = try command_executor_test_command(&router, &config_set_masterauth_parsed);
     const config_set_masterauth_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_set_masterauth_command, 5000u64);
     try assert_eq_i32(config_set_masterauth_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
-    try assert_true(command_executor_test_slice_eq(config_set_masterauth_reply.config_after.masterauth[0: 13], &"upstream-pass"[0: 13]));
+    try assert_true(command_executor_test_slice_eq(runtime.pending_config.masterauth[0: 13], &"upstream-pass"[0: 13]));
     resp_value_free(&config_set_masterauth_parsed.value);
 
     var config_set_maxclients_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$10\r\nmaxclients\r\n$2\r\n16\r\n"[0: 50]);
@@ -506,14 +505,14 @@ export fn test_command_info_and_config() !void {
     try assert_eq_i32(config_set_maxclients_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
     try assert_eq_i32(config_set_maxclients_reply.request_maxclients_set as i32, 1);
     try assert_eq_i32(config_set_maxclients_reply.maxclients_after, 16);
-    try assert_eq_i32(config_set_maxclients_reply.config_after.maxclients, 16);
+    try assert_eq_i32(runtime.pending_config.maxclients, 16);
     resp_value_free(&config_set_maxclients_parsed.value);
 
     var config_set_databases_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$9\r\ndatabases\r\n$1\r\n1\r\n"[0: 47]);
     const config_set_databases_command: Command = try command_executor_test_command(&router, &config_set_databases_parsed);
     const config_set_databases_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_set_databases_command, 5000u64);
     try assert_eq_i32(config_set_databases_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
-    try assert_eq_i32(config_set_databases_reply.config_after.databases, 1);
+    try assert_eq_i32(runtime.pending_config.databases, 1);
     resp_value_free(&config_set_databases_parsed.value);
 
     var config_set_replicaof_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$9\r\nreplicaof\r\n$14\r\n127.0.0.1 6381\r\n"[0: 61]);
@@ -523,7 +522,7 @@ export fn test_command_info_and_config() !void {
     try assert_eq_i32(config_set_replicaof_reply.request_replicaof as i32, 1);
     try assert_eq_i32(config_set_replicaof_reply.replicaof_promote as i32, 0);
     try assert_eq_i32(config_set_replicaof_reply.replicaof_port, 6381);
-    try assert_true(command_executor_test_slice_eq(config_set_replicaof_reply.config_after.replicaof_host[0: 9], &"127.0.0.1"[0: 9]));
+    try assert_true(command_executor_test_slice_eq(runtime.pending_config.replicaof_host[0: 9], &"127.0.0.1"[0: 9]));
     resp_value_free(&config_set_replicaof_parsed.value);
 
     var config_set_replicaof_none_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$9\r\nreplicaof\r\n$6\r\nNO ONE\r\n"[0: 52]);
@@ -532,7 +531,7 @@ export fn test_command_info_and_config() !void {
     try assert_eq_i32(config_set_replicaof_none_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
     try assert_eq_i32(config_set_replicaof_none_reply.request_replicaof as i32, 1);
     try assert_eq_i32(config_set_replicaof_none_reply.replicaof_promote as i32, 1);
-    try assert_eq_i32(config_set_replicaof_none_reply.config_after.replicaof_port, 0);
+    try assert_eq_i32(runtime.pending_config.replicaof_port, 0);
     resp_value_free(&config_set_replicaof_none_parsed.value);
 
     config_copy_bytes(runtime.config.dir[0: 256], &"build/"[0: 6]);

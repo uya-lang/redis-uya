@@ -5,6 +5,7 @@ use src.memory.allocator.redis_free;
 use src.memory.allocator.redis_realloc;
 use src.util.bytes.bytes_ascii_casecmp;
 use src.util.bytes.bytes_cmp;
+use libc.memmove;
 
 export error SdsInvalidSize;
 export error SdsInvalidFormat;
@@ -282,6 +283,23 @@ export fn sds_range(s: &Sds, start: usize, len: usize) !Sds {
         actual_len = s.len - start;
     }
     return sds_new(s.buf[start: actual_len]);
+}
+
+export fn sds_discard_prefix(s: &Sds, len: usize) void {
+    if len == 0 || s.len == 0 {
+        return;
+    }
+    if len >= s.len {
+        s.len = 0;
+        s.buf.ptr[0] = 0 as byte;
+        return;
+    }
+
+    const remaining: usize = s.len - len;
+    const src: *const byte = @ptr_from_usize(@usize_from_ptr(s.buf.ptr as &void) + len) as *const byte;
+    _ = memmove(s.buf.ptr as *byte, src, remaining);
+    s.len = remaining;
+    s.buf.ptr[s.len] = 0 as byte;
 }
 
 export fn sds_shrink(s: &Sds) void {

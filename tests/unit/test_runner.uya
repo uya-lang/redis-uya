@@ -39,6 +39,7 @@ use tests.unit.storage_sds_test.test_sds_grow_and_shrink;
 use tests.unit.storage_sds_test.test_sds_binary_safe;
 use tests.unit.storage_sds_test.test_sds_dup_independent_copy;
 use tests.unit.storage_sds_test.test_sds_range_substring;
+use tests.unit.storage_sds_test.test_sds_discard_prefix_in_place;
 use tests.unit.storage_sds_test.test_sds_cat_fmt_minimal;
 use tests.unit.storage_sds_test.test_sds_cat_fmt_error_paths;
 use tests.unit.storage_sds_test.test_sds_1mb_append_stress;
@@ -385,6 +386,10 @@ export fn main() i32 {
     const before_sds_range: i32 = failed;
     _ = test_sds_range_substring() catch { printf("[FAIL] storage_sds/range\n" as *byte); failed = failed + 1; };
     if failed == before_sds_range { printf("[PASS] storage_sds/range\n" as *byte); }
+
+    const before_sds_discard_prefix: i32 = failed;
+    _ = test_sds_discard_prefix_in_place() catch { printf("[FAIL] storage_sds/discard_prefix\n" as *byte); failed = failed + 1; };
+    if failed == before_sds_discard_prefix { printf("[PASS] storage_sds/discard_prefix\n" as *byte); }
 
     const before_sds_fmt: i32 = failed;
     _ = test_sds_cat_fmt_minimal() catch { printf("[FAIL] storage_sds/cat_fmt\n" as *byte); failed = failed + 1; };

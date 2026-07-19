@@ -16,6 +16,7 @@ use src.storage.sds.sds_grow;
 use src.storage.sds.sds_shrink;
 use src.storage.sds.sds_dup;
 use src.storage.sds.sds_range;
+use src.storage.sds.sds_discard_prefix;
 use src.storage.sds.sds_cat_fmt;
 use src.storage.sds.sds_fmt_bytes;
 use src.storage.sds.sds_fmt_i64;
@@ -125,6 +126,27 @@ export fn test_sds_range_substring() !void {
     sds_free(&source);
     sds_free(&middle);
     sds_free(&tail);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_sds_discard_prefix_in_place() !void {
+    reset_memory_stats_for_test();
+    var source: Sds = try sds_new(&"abcdef"[0: 6]);
+    try sds_grow(&source, 128);
+    const alloc_before: usize = source.alloc;
+
+    sds_discard_prefix(&source, 2);
+    try assert_eq_i32(sds_len(&source) as i32, 4);
+    try assert_true(slice_eq(source.buf[0: source.len], &"cdef"[0: 4]));
+    try assert_eq_i32(source.buf.ptr[source.len] as i32, 0);
+    try assert_eq_i32(source.alloc as i32, alloc_before as i32);
+
+    sds_discard_prefix(&source, 16);
+    try assert_eq_i32(sds_len(&source) as i32, 0);
+    try assert_eq_i32(source.buf.ptr[0] as i32, 0);
+    try assert_eq_i32(source.alloc as i32, alloc_before as i32);
+
+    sds_free(&source);
     try assert_eq_i32(used_memory() as i32, 0);
 }
 

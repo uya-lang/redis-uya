@@ -23,7 +23,7 @@
 - 最小迭代默认递增版本号最后一位：`v0.9.0`、`v0.9.1`、`v0.9.2` 依次推进；不为普通小阶段抬高第二位版本号。
 - `v0.9.0` 起后续主线只迭代单机版：补齐 Redis Open Source 单机功能、兼容性、性能和稳定性。
 - 当前 `HEAD` 的真实性高于历史报告：`README`、`DoD`、`COMMAND*`、测试结果和 benchmark 结果必须互相一致。
-- 2026-07-19 当前 `HEAD`：`make test`、`make test-integration`、`make test-redis-cli` 与 release benchmark 绝对吞吐/p99 guard 通过；正式矩阵为 Redis 的 `0.97x/1.18x/1.05x/1.14x/1.00x`，短矩阵受同机 Redis 波动影响，完整超越仍待继续优化。
+- 2026-07-19 当前 `HEAD`：`make test`、`make test-integration`、`make test-redis-cli` 与 release benchmark 绝对吞吐/p99 guard 通过；正式矩阵为 Redis 的 `0.98x/1.18x/0.93x/1.13x/1.01x`，短矩阵受同机 Redis 波动影响，完整超越仍待继续优化。
 - `v0.9.4` 用于性能与稳定性收敛；`v0.9.5` 是首个单机封版候选，如未达到 `v1.0.0` 封版条件，继续使用 `v0.9.6` 等 patch 版本顺序迭代。
 - 单机版必须先覆盖 Redis Open Source 单机核心命令面；模块命令可以继续追踪，但不能与 `v1.0.0` 单机封版门槛混算。命令全集、状态定义和封版标准见 `redis-uya-command-scope.md`。
 - `v1.0.0` 是单机版封版发布点；只有单机版功能和性能达标后才发布。
@@ -73,6 +73,7 @@
 - [x] 命令 runtime 元数据缓存：`RedisServer` 持久保存 `CommandRuntimeInfo`，动态字段逐请求刷新，完整配置仅在启动参数、`CONFIG SET` 和复制角色切换时同步；完整单测/集成/redis-cli 通过，20K `SET 1KiB` 从 11621 提升到 12853 req/s，原 0.61% `server_runtime_info` 低于 0.5% 报告阈值
 - [x] 空闲 AOF rewrite 大栈门控：server loop 仅在 rewrite 已请求或进行中时进入约 321KiB 栈帧的状态机；完整单测/集成/redis-cli 通过，GET 16B/1KiB profile 中原 2.15%/2.62% 热点低于 0.4%，1KiB 采样周期下降 5.6%，正式五项吞吐均超过同机 Redis
 - [x] 命令回复配置状态缩窄：`CommandReply` 从 1176B 降到 192B，执行器栈帧从 `0x4a8` 降到 `0xd8`；`CONFIG SET` 候选值改由 persistent runtime 暂存并在响应编码成功后提交，同批 `CONFIG GET` 可见且输出缓冲失败不提交；GET 16B 匹配 profile 周期下降 3.4%，GET 1KiB 相关回复 helper 均低于 0.4%
+- [x] backlog 物理压缩原地复用：SDS 新增保留容量的前缀丢弃操作，backlog 达阈值后原地前移有效窗口，不再 `sds_range` 分配新缓冲；长周期单测确认跨压缩阈值零新增 allocator 分配，PSYNC/full/incremental/consistency 集成通过；固定 key 100K `SET 1KiB` 对父提交吞吐提升 10.0%、server cycles 下降 12.8%，`find_chunk` 从 8.44% 降到 0.10%
 - [ ] `v0.9.3` 起：在真实性问题收敛后，继续补 Redis Open Source 单机核心缺口，而不是先扩模块命令
 
 ## 3. 全版本路线图

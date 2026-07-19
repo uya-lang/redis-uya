@@ -17,6 +17,7 @@ use src.replication.backlog.replication_backlog_first_offset;
 use src.replication.backlog.replication_backlog_can_continue;
 use src.replication.backlog.replication_backlog_slice_from;
 use src.memory.allocator.used_memory;
+use src.memory.allocator.allocator_total_allocations;
 use src.memory.allocator.reset_memory_stats_for_test;
 
 fn replication_backlog_test_command(router: &CommandRouter, parsed: &RespParseResult) !Command {
@@ -85,13 +86,16 @@ export fn test_replication_backlog_append_and_trim() !void {
     try assert_eq_i32((backlog.master_offset - before_zremrangebylex_offset) as i32, 62);
     try assert_true(replication_backlog_history_len(&backlog) <= 32);
 
+    const allocations_before_compaction: usize = allocator_total_allocations();
     var append_count: usize = 0;
     while append_count < 2100 {
         try replication_backlog_append_command_at(&backlog, &set_command, &"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 33], 1000u64);
         append_count = append_count + 1;
     }
+    try assert_eq_i32(allocator_total_allocations() as i32, allocations_before_compaction as i32);
     try assert_eq_i32(replication_backlog_history_len(&backlog) as i32, 32);
     try assert_true(backlog.history.len < 65536 + 64);
+    try assert_true(backlog.history.alloc >= 65536);
     try assert_true(replication_backlog_test_slice_eq(
         replication_backlog_slice_from(&backlog, replication_backlog_first_offset(&backlog)),
         &"3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 32],

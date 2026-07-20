@@ -10,6 +10,8 @@ export error RespInvalidInteger;
 export error RespInvalidLength;
 export error RespInvalidCrlf;
 export error RespOutOfMemory;
+export error RespCommandCapacity;
+export error RespCommandUnsupported;
 
 export enum RespType {
     resp_simple_string,
@@ -41,6 +43,7 @@ export struct RespValue {
 export struct RespParseResult {
     value: RespValue,
     consumed: usize,
+    elements_owned: bool,
 }
 
 export struct RespBatchParseResult {
@@ -177,7 +180,7 @@ fn resp_parse_line_value(input: &[byte], typ: RespType) !RespParseResult {
     const line_end: usize = try resp_find_crlf(input, 1);
     var value: RespValue = resp_make_value(typ);
     value.data = input[1: line_end - 1];
-    return RespParseResult{ value: value, consumed: line_end + 2 };
+    return RespParseResult{ value: value, consumed: line_end + 2, elements_owned: false };
 }
 
 fn resp_parse_integer_value(input: &[byte]) !RespParseResult {
@@ -185,7 +188,7 @@ fn resp_parse_integer_value(input: &[byte]) !RespParseResult {
     const integer: i64 = try resp_parse_i64(input[1: line_end - 1]);
     var value: RespValue = resp_make_value(RespType.resp_integer);
     value.integer = integer;
-    return RespParseResult{ value: value, consumed: line_end + 2 };
+    return RespParseResult{ value: value, consumed: line_end + 2, elements_owned: false };
 }
 
 fn resp_parse_blob_value(input: &[byte], typ: RespType, allow_null: bool) !RespParseResult {
@@ -195,7 +198,7 @@ fn resp_parse_blob_value(input: &[byte], typ: RespType, allow_null: bool) !RespP
         if !allow_null {
             return error.RespInvalidLength;
         }
-        return RespParseResult{ value: resp_make_value(RespType.resp_null_bulk), consumed: line_end + 2 };
+        return RespParseResult{ value: resp_make_value(RespType.resp_null_bulk), consumed: line_end + 2, elements_owned: false };
     }
     if len < 0 {
         return error.RespInvalidLength;
@@ -213,7 +216,7 @@ fn resp_parse_blob_value(input: &[byte], typ: RespType, allow_null: bool) !RespP
 
     var value: RespValue = resp_make_value(typ);
     value.data = input[data_start: data_len];
-    return RespParseResult{ value: value, consumed: tail_start + 2 };
+    return RespParseResult{ value: value, consumed: tail_start + 2, elements_owned: false };
 }
 
 fn resp_parse_null_value(input: &[byte]) !RespParseResult {
@@ -221,7 +224,7 @@ fn resp_parse_null_value(input: &[byte]) !RespParseResult {
     if line_end != 1 {
         return error.RespInvalidLength;
     }
-    return RespParseResult{ value: resp_make_value(RespType.resp_null), consumed: line_end + 2 };
+    return RespParseResult{ value: resp_make_value(RespType.resp_null), consumed: line_end + 2, elements_owned: false };
 }
 
 fn resp_parse_boolean_value(input: &[byte]) !RespParseResult {
@@ -232,11 +235,11 @@ fn resp_parse_boolean_value(input: &[byte]) !RespParseResult {
     var value: RespValue = resp_make_value(RespType.resp_boolean);
     if input.ptr[1] == 116 as byte {
         value.integer = 1;
-        return RespParseResult{ value: value, consumed: line_end + 2 };
+        return RespParseResult{ value: value, consumed: line_end + 2, elements_owned: false };
     }
     if input.ptr[1] == 102 as byte {
         value.integer = 0;
-        return RespParseResult{ value: value, consumed: line_end + 2 };
+        return RespParseResult{ value: value, consumed: line_end + 2, elements_owned: false };
     }
     return error.RespInvalidInteger;
 }
@@ -259,7 +262,7 @@ fn resp_parse_collection(input: &[byte], typ: RespType, allow_resp3: bool) !Resp
     const count_i64: i64 = try resp_parse_i64(input[1: line_end - 1]);
     if count_i64 == -1 {
         if typ == RespType.resp_array {
-            return RespParseResult{ value: resp_make_value(RespType.resp_null_array), consumed: line_end + 2 };
+            return RespParseResult{ value: resp_make_value(RespType.resp_null_array), consumed: line_end + 2, elements_owned: false };
         }
         return error.RespInvalidLength;
     }
@@ -302,7 +305,7 @@ fn resp_parse_collection(input: &[byte], typ: RespType, allow_resp3: bool) !Resp
     var value: RespValue = resp_make_value(typ);
     value.elements = elements;
     value.element_count = count;
-    return RespParseResult{ value: value, consumed: offset };
+    return RespParseResult{ value: value, consumed: offset, elements_owned: true };
 }
 
 fn resp_parse_array(input: &[byte], allow_resp3: bool) !RespParseResult {
@@ -338,6 +341,21 @@ export fn resp_value_free(value: &RespValue) void {
     value.elements = null as &RespValue;
     value.element_count = 0;
     value.data = resp_empty_slice();
+}
+
+export fn resp_parse_result_free(result: &RespParseResult) void {
+    resp_parse_value_free(&result.value, result.elements_owned);
+    result.elements_owned = false;
+}
+
+export fn resp_parse_value_free(value: &RespValue, elements_owned: bool) void {
+    if elements_owned {
+        resp_value_free(value);
+    } else {
+        value.elements = null as &RespValue;
+        value.element_count = 0;
+        value.data = resp_empty_slice();
+    }
 }
 
 export fn resp_batch_free(batch: &RespBatchParseResult) void {
@@ -412,6 +430,59 @@ export fn parse_resp2(input: &[byte]) !RespParseResult {
 
 export fn parse_resp3(input: &[byte]) !RespParseResult {
     return resp_parse_value(input, true);
+}
+
+export fn parse_resp_command_into(input: &[byte], elements: &RespValue, capacity: usize) !RespParseResult {
+    if input.len == 0 {
+        return error.RespIncomplete;
+    }
+    if input.ptr[0] != 42 as byte {
+        return error.RespCommandUnsupported;
+    }
+
+    const line_end: usize = try resp_find_crlf(input, 1);
+    const count_i64: i64 = try resp_parse_i64(input[1: line_end - 1]);
+    if count_i64 == -1 {
+        return RespParseResult{
+            value: resp_make_value(RespType.resp_null_array),
+            consumed: line_end + 2,
+            elements_owned: false,
+        };
+    }
+    if count_i64 < 0 {
+        return error.RespInvalidLength;
+    }
+
+    const count: usize = count_i64 as usize;
+    if count > capacity || (count > 0 && elements == null) {
+        return error.RespCommandCapacity;
+    }
+
+    var offset: usize = line_end + 2;
+    var index: usize = 0;
+    while index < count {
+        if offset >= input.len {
+            return error.RespIncomplete;
+        }
+        const child_input: &[byte] = input[offset: input.len - offset];
+        if child_input.ptr[0] == 36 as byte {
+            const child_bulk: RespParseResult = try resp_parse_blob_value(child_input, RespType.resp_bulk_string, true);
+            resp_value_copy(resp_value_at(elements, index), &child_bulk.value);
+            offset = offset + child_bulk.consumed;
+        } else if child_input.ptr[0] == 43 as byte {
+            const child_line: RespParseResult = try resp_parse_line_value(child_input, RespType.resp_simple_string);
+            resp_value_copy(resp_value_at(elements, index), &child_line.value);
+            offset = offset + child_line.consumed;
+        } else {
+            return error.RespCommandUnsupported;
+        }
+        index = index + 1;
+    }
+
+    var value: RespValue = resp_make_value(RespType.resp_array);
+    value.elements = elements;
+    value.element_count = count;
+    return RespParseResult{ value: value, consumed: offset, elements_owned: false };
 }
 
 fn resp_parse_batch(input: &[byte], max_count: usize, allow_resp3: bool) !RespBatchParseResult {

@@ -7,13 +7,16 @@ use src.network.protocol.RespParseResult;
 use src.network.protocol.RespValue;
 use src.network.protocol.parse_resp2;
 use src.network.protocol.parse_resp2_batch;
+use src.network.protocol.parse_resp_command_into;
 use src.network.protocol.parse_resp3;
 use src.network.protocol.parse_resp3_batch;
 use src.network.protocol.resp_array_element;
 use src.network.protocol.resp_batch_free;
 use src.network.protocol.resp_batch_value;
 use src.network.protocol.resp_batch_value_consumed;
+use src.network.protocol.resp_parse_result_free;
 use src.network.protocol.resp_value_free;
+use src.memory.allocator.allocator_total_allocations;
 use src.memory.allocator.used_memory;
 use src.memory.allocator.reset_memory_stats_for_test;
 
@@ -93,6 +96,44 @@ export fn test_resp2_array_of_bulk_strings() !void {
 
     resp_value_free(&result.value);
     try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_resp2_command_borrows_caller_storage() !void {
+    reset_memory_stats_for_test();
+    var elements: [RespValue: 3] = [];
+    const allocations_before: usize = allocator_total_allocations();
+    var result: RespParseResult = try parse_resp_command_into(
+        &"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 33],
+        &elements[0],
+        3,
+    );
+
+    try assert_eq_i32(result.value.typ as i32, RespType.resp_array as i32);
+    try assert_eq_i32(result.value.element_count as i32, 3);
+    try assert_eq_i32(result.consumed as i32, 33);
+    try assert_true(resp_array_element(&result.value, 0) == &elements[0]);
+    try assert_true(protocol_slice_eq(resp_array_element(&result.value, 0).data, &"SET"[0: 3]));
+    try assert_true(protocol_slice_eq(resp_array_element(&result.value, 1).data, &"key"[0: 3]));
+    try assert_true(protocol_slice_eq(resp_array_element(&result.value, 2).data, &"value"[0: 5]));
+    try assert_eq_i32(allocator_total_allocations() as i32, allocations_before as i32);
+
+    resp_parse_result_free(&result);
+    try assert_eq_i32(used_memory() as i32, 0);
+
+    var too_small: [RespValue: 2] = [];
+    var saw_capacity: bool = false;
+    _ = parse_resp_command_into(
+        &"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 33],
+        &too_small[0],
+        2,
+    ) catch |err| {
+        if err == error.RespCommandCapacity {
+            saw_capacity = true;
+        }
+        return;
+    };
+    try assert_true(saw_capacity);
+    try assert_eq_i32(allocator_total_allocations() as i32, allocations_before as i32);
 }
 
 export fn test_resp2_incomplete_inputs() !void {

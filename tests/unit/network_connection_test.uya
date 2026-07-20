@@ -28,6 +28,7 @@ use src.storage.engine.Engine;
 use src.storage.engine.engine_new;
 use src.storage.engine.engine_free;
 use src.storage.engine.engine_watch_client_count;
+use src.memory.allocator.allocator_total_allocations;
 use src.memory.allocator.used_memory;
 use src.memory.allocator.reset_memory_stats_for_test;
 use src.version.redis_uya_version;
@@ -121,6 +122,28 @@ export fn test_connection_encode_resp_replies() !void {
     const null_array: CommandReply = network_connection_reply(CommandReplyType.reply_null_array, (null as &byte)[0: 0], 0);
     const null_array_len: usize = try connection_encode_reply(&null_array, &out[0], 128);
     try assert_true(network_connection_slice_eq(out[0: null_array_len], &"*-1\r\n"[0: 5]));
+}
+
+export fn test_connection_ping_parse_uses_borrowed_storage() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var out: [byte: 32] = [];
+    const allocations_before: usize = allocator_total_allocations();
+
+    const result: ConnectionProcessResult = try connection_process_input_at(
+        &engine,
+        &router,
+        &"*1\r\n$4\r\nPING\r\n"[0: 14],
+        &out[0],
+        32,
+        1000u64,
+    );
+    try assert_true(network_connection_slice_eq(out[0: result.response_len], &"+PONG\r\n"[0: 7]));
+    try assert_eq_i32(allocator_total_allocations() as i32, allocations_before as i32);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
 }
 
 export fn test_connection_process_ping_set_get_quit() !void {

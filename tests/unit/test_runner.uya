@@ -77,6 +77,7 @@ use tests.unit.storage_engine_test.test_engine_volatile_ttl_evicts_nearest_deadl
 use tests.unit.network_protocol_test.test_resp2_simple_string_error_integer;
 use tests.unit.network_protocol_test.test_resp2_bulk_string_and_nulls;
 use tests.unit.network_protocol_test.test_resp2_array_of_bulk_strings;
+use tests.unit.network_protocol_test.test_resp2_command_borrows_caller_storage;
 use tests.unit.network_protocol_test.test_resp2_incomplete_inputs;
 use tests.unit.network_protocol_test.test_resp2_invalid_inputs;
 use tests.unit.network_protocol_test.test_resp3_null_boolean_and_map;
@@ -172,6 +173,7 @@ use tests.unit.command_executor_test.test_command_wait;
 use tests.unit.command_executor_test.test_command_sort;
 use tests.unit.command_executor_test.test_command_error_paths;
 use tests.unit.network_connection_test.test_connection_encode_resp_replies;
+use tests.unit.network_connection_test.test_connection_ping_parse_uses_borrowed_storage;
 use tests.unit.network_connection_test.test_connection_process_ping_set_get_quit;
 use tests.unit.network_connection_test.test_connection_process_slowlog;
 use tests.unit.network_connection_test.test_connection_process_latency;
@@ -538,6 +540,10 @@ export fn main() i32 {
     const before_resp_array: i32 = failed;
     _ = test_resp2_array_of_bulk_strings() catch { printf("[FAIL] network_protocol/array_bulk\n" as *byte); failed = failed + 1; };
     if failed == before_resp_array { printf("[PASS] network_protocol/array_bulk\n" as *byte); }
+
+    const before_resp_command_borrow: i32 = failed;
+    _ = test_resp2_command_borrows_caller_storage() catch { printf("[FAIL] network_protocol/command_borrow\n" as *byte); failed = failed + 1; };
+    if failed == before_resp_command_borrow { printf("[PASS] network_protocol/command_borrow\n" as *byte); }
 
     const before_resp_incomplete: i32 = failed;
     _ = test_resp2_incomplete_inputs() catch { printf("[FAIL] network_protocol/incomplete\n" as *byte); failed = failed + 1; };
@@ -918,6 +924,10 @@ export fn main() i32 {
     const before_conn_encode: i32 = failed;
     _ = test_connection_encode_resp_replies() catch { printf("[FAIL] network_connection/encode\n" as *byte); failed = failed + 1; };
     if failed == before_conn_encode { printf("[PASS] network_connection/encode\n" as *byte); }
+
+    const before_conn_borrowed_parse: i32 = failed;
+    _ = test_connection_ping_parse_uses_borrowed_storage() catch { printf("[FAIL] network_connection/borrowed_parse\n" as *byte); failed = failed + 1; };
+    if failed == before_conn_borrowed_parse { printf("[PASS] network_connection/borrowed_parse\n" as *byte); }
 
     const before_conn_process: i32 = failed;
     _ = test_connection_process_ping_set_get_quit() catch { printf("[FAIL] network_connection/process\n" as *byte); failed = failed + 1; };

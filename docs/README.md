@@ -61,7 +61,7 @@
 截至 2026-05-16 审计、2026-05-17 复跑、2026-05-19 复核、2026-07-11 性能复测与 2026-07-20 当前验证，项目当前口径应为：
 
 - `v0.9.0` 的历史收口文档仍然保留，但不能直接代表当前 `HEAD`。
-- 当前 `HEAD` 的完整单测、完整集成和 redis-cli smoke 已通过；release 矩阵见 `benchmarks/v0.9.3-release-performance.md`。常见三参数内扁平命令数组现借用连接栈上的 `RespValue` 描述符，不再逐请求分配/释放解析树；固定 CPU 200K `PING` 对父提交吞吐提升 `3.1%`、server cycles 下降 `3.4%`，当前五项绝对吞吐与 p99 回归 guard 通过。
+- 当前 `HEAD` 的完整单测、完整集成和 redis-cli smoke 已通过；release 矩阵见 `benchmarks/v0.9.3-release-performance.md`。常见三参数内扁平命令数组借用连接栈 `RespValue` 描述符，默认用户和 named user 还分别维护活跃命令拒绝规则计数，空 deny list 不再逐命令扫描固定表；固定 CPU 200K `PING` 对父提交吞吐提升 `2.4%`、server cycles 下降 `1.35%`、instructions 下降 `1.46%`，当前五项绝对吞吐与 p99 回归 guard 通过。
 - 当前主线的第一优先级已从 `v0.9.1` 的真实性修复转入 `v0.9.3` 的 Redis Open Source 单机核心缺口补齐，并持续保持控制面真值、版本口径与统计分层不回退。
 - `v1.0.0` 的命令封版门槛先收敛 Redis Open Source 单机核心；JSON/Search/Time Series/概率结构/Vector 等模块命令继续追踪，但不再作为当前阶段完成度的包装材料。
 
@@ -78,4 +78,4 @@
 
 仍待继续收口的问题：
 
-- 当前 `v0.9.3` 功能回归为绿态；最新正式 release 比例为 `PING 1.02x`、`SET 16B 1.25x`、`GET 16B 0.94x`、`SET 1KiB 1.20x`、`GET 1KiB 0.92x`。短矩阵中的同机 Redis 波动明显，完整超越目标尚未达成，后续优先收敛 PING/小值 GET 的小读事件循环与命令分发、pipeline/并发矩阵和内存占用。
+- 当前 `v0.9.3` 功能回归为绿态；最新正式 release 比例为 `PING 1.02x`、`SET 16B 1.25x`、`GET 16B 1.08x`、`SET 1KiB 1.33x`、`GET 1KiB 1.00x`。短矩阵中的同机 Redis 波动明显，严格的 1.10x 全场景超越目标尚未达成，后续优先收敛 PING/GET 的小读事件循环与命令分发、pipeline/并发矩阵和内存占用。

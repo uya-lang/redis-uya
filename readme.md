@@ -3,8 +3,8 @@
 > 使用 Uya 从零实现 Redis 兼容内存数据库
 > 零 GC 路线 · 显式错误处理 · 可测试演进 · 长期性能目标超过 Redis
 
-> 版本: v0.9.1-dev
-> 日期: 2026-05-19
+> 版本: v0.9.3-dev
+> 日期: 2026-07-20
 
 ## 简介
 
@@ -12,7 +12,7 @@
 
 `v1.0.0` 的版本目标不是提前兑现“全面超过 Redis”，而是先把单机核心做真、做稳、做快：功能边界真实、兼容语义真实、测试和 benchmark 结果真实，并在这一前提下持续缩小与 Redis 的性能差距。长期性能目标仍然是超过 Redis，但那是 `v1.0.0` 之后继续迭代的方向，不是拿来包装当前完成度的口号。
 
-历史上，项目已经完成 `v0.9.0` 单机核心命令补齐，并在 `v0.9.1` 主线落地共享命令目录、`COMMAND*` 第一批和若干连接/管理面扩展。当前 `HEAD` 已恢复 `make test`、`make test-integration`、`make benchmark-v0.8.1` 与 `bash scripts/verify_definition_of_done.sh` 的绿态；`COMMAND*` 真值与版本号口径也已收口。当前第一优先级已转回命令完成度统计分层和剩余单机核心缺口，而不是继续修 benchmark 红灯。
+历史上，项目已经完成 `v0.9.0` 单机核心命令补齐和 `v0.9.1` 审计真实性收口，当前主线推进 `v0.9.3` 的 Redis Open Source 单机核心缺口与性能优化。当前 `HEAD` 的完整单测、完整集成、redis-cli smoke、release benchmark guard 与 `bash scripts/verify_definition_of_done.sh` 均保持绿态；`COMMAND*` 真值、版本号口径和命令完成度统计分层已收口。
 
 ## 核心目标
 
@@ -27,14 +27,15 @@
 
 ## 当前状态
 
-2026-05-16 审计后的当前状态，经 2026-05-19 当前复核后应理解为：
+截至 2026-07-20，当前状态应理解为：
 
-- `make test`、`make test-integration`、`make benchmark-v0.8.1` 与 `bash scripts/verify_definition_of_done.sh` 当前已恢复为通过状态。
-- `maxmemory` 集成测试口径已按当前实现重新校准；`benchmark-v0.8.1` guard 现已改为“绝对基线 + 同机 Redis 归一化兜底”并恢复转绿。
+- `make test`、`make test-integration`、`make test-redis-cli`、`make benchmark-v0.9.3-release` 与 `bash scripts/verify_definition_of_done.sh` 当前均通过。
+- release benchmark guard 使用“绝对基线 + 同机 Redis 归一化兜底”；最新五项矩阵相对 Redis 为 `1.02x/1.25x/1.08x/1.33x/1.00x`，严格 1.10x 全场景超越仍待继续优化。
 - `COMMAND*` 真值、版本号一致性与命令完成度统计分层已收口；`v0.9.1` 审计整改主线现已完成，当前主线推进 `v0.9.3` 的 Redis Open Source 单机核心缺口补齐。
 - `v1.0.0` 的封版门槛先收敛 Redis Open Source 单机核心，不再把模块命令数量当作当前完成度包装。
+- 常见三参数内 RESP 命令数组已借用连接栈描述符；默认用户和 named user 的空命令 deny list 通过活跃规则计数跳过固定表扫描。固定 CPU 200K `PING` 对父提交吞吐提升 2.4%、server cycles 下降 1.35%。
 
-下方列表主要记录历史里程碑沉淀与当前代码库已落地模块，不等价于“当前 `HEAD` 已重新全量复核通过”。
+下方列表记录历史里程碑沉淀与当前代码库已落地模块；具体边界仍以命令矩阵、TODO、DoD 和当前测试证据为准。
 
 历史沉淀与已落地模块：
 
@@ -157,7 +158,7 @@ v0.8.1 写路径性能回归验证：
 make benchmark-v0.8.1
 ```
 
-当前 `HEAD` 的 `make benchmark-v0.8.1` 已恢复通过：throughput guard 现在同时参考绝对历史基线与同机 Redis 归一化比例，避免把主机波动误判成产品回退。`benchmarks/v0.8.1-performance.md` 仍需结合生成日期解读，因为它同时承担历史回归证据和当前机器输出两种角色。
+`make benchmark-v0.8.1` 与 `benchmarks/v0.8.1-performance.md` 保留为历史写路径回归入口。当前 HEAD 的 DoD 使用 `make benchmark-v0.9.3-release`、release 构建和不可变基线，throughput guard 同时参考绝对历史基线与同机 Redis 归一化比例，避免用旧 debug 短样本判定当前版本。
 
 v0.8.0 Redis 对照差距报告：
 

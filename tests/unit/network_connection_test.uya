@@ -17,6 +17,7 @@ use src.network.connection.connection_process_input_with_runtime_at;
 use src.network.connection.connection_process_input_with_runtime_with_transaction_at;
 use src.network.connection.connection_process_input_with_transaction_at;
 use src.network.connection.connection_acl_reset_for_test;
+use src.network.connection.connection_acl_denied_command_count_for_test;
 use src.network.connection.connection_client_registry_reset_for_test;
 use src.network.connection.connection_transaction_new;
 use src.network.connection.connection_transaction_reset;
@@ -1797,6 +1798,7 @@ export fn test_connection_process_reset() !void {
 export fn test_connection_process_acl_permission_denial() !void {
     reset_memory_stats_for_test();
     connection_acl_reset_for_test();
+    try assert_eq_i32(connection_acl_denied_command_count_for_test(&"default"[0: 7]) as i32, 0);
     connection_client_registry_reset_for_test();
     defer {
         connection_acl_reset_for_test();
@@ -1816,6 +1818,7 @@ export fn test_connection_process_acl_permission_denial() !void {
 
     const deny_get: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$7\r\ndefault\r\n$4\r\n-get\r\n"[0: 49], &out[0], 2048, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: deny_get.response_len], &"+OK\r\n"[0: 5]));
+    try assert_eq_i32(connection_acl_denied_command_count_for_test(&"default"[0: 7]) as i32, 1);
 
     const acl_list: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$3\r\nACL\r\n$4\r\nLIST\r\n"[0: 23], &out[0], 2048, 1000u64);
     try assert_true(network_connection_contains(out[0: acl_list.response_len], &"+@all -get"[0: 10]));
@@ -1883,6 +1886,7 @@ export fn test_connection_process_acl_permission_denial() !void {
 
     const allow_get: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$7\r\ndefault\r\n$4\r\n+get\r\n"[0: 49], &out[0], 2048, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: allow_get.response_len], &"+OK\r\n"[0: 5]));
+    try assert_eq_i32(connection_acl_denied_command_count_for_test(&"default"[0: 7]) as i32, 0);
 
     const dryrun_after: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*5\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$7\r\ndefault\r\n$3\r\nGET\r\n$7\r\nmissing\r\n"[0: 60], &out[0], 2048, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: dryrun_after.response_len], &"+OK\r\n"[0: 5]));
@@ -1901,9 +1905,11 @@ export fn test_connection_process_acl_permission_denial() !void {
 
     const deny_get_again: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$7\r\ndefault\r\n$4\r\n-get\r\n"[0: 49], &out[0], 2048, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: deny_get_again.response_len], &"+OK\r\n"[0: 5]));
+    try assert_eq_i32(connection_acl_denied_command_count_for_test(&"default"[0: 7]) as i32, 1);
 
     const resetcommands: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$7\r\ndefault\r\n$13\r\nresetcommands\r\n"[0: 59], &out[0], 2048, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: resetcommands.response_len], &"+OK\r\n"[0: 5]));
+    try assert_eq_i32(connection_acl_denied_command_count_for_test(&"default"[0: 7]) as i32, 0);
 
     const acl_reset_list: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$3\r\nACL\r\n$4\r\nLIST\r\n"[0: 23], &out[0], 2048, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: acl_reset_list.response_len], &"*1\r\n$34\r\nuser default on nopass ~* &* +@all\r\n"[0: 45]));
@@ -1987,6 +1993,7 @@ export fn test_connection_process_acl_named_user_metadata() !void {
 
     const set_bob_password: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*5\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$3\r\nbob\r\n$2\r\non\r\n$7\r\n>secret\r\n"[0: 56], &out[0], 4096, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: set_bob_password.response_len], &"+OK\r\n"[0: 5]));
+    try assert_eq_i32(connection_acl_denied_command_count_for_test(&"bob"[0: 3]) as i32, 0);
 
     const getuser_bob: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$7\r\nGETUSER\r\n$3\r\nbob\r\n"[0: 35], &out[0], 4096, 1000u64);
     try assert_true(network_connection_contains(out[0: getuser_bob.response_len], &"$9\r\npasswords\r\n*1\r\n$41\r\n#"[0: 25]));
@@ -2064,6 +2071,7 @@ export fn test_connection_process_acl_named_user_metadata() !void {
 
     const deny_bob_get_and_string: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*5\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$3\r\nbob\r\n$4\r\n-get\r\n$8\r\n-@string\r\n"[0: 59], &out[0], 4096, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: deny_bob_get_and_string.response_len], &"+OK\r\n"[0: 5]));
+    try assert_eq_i32(connection_acl_denied_command_count_for_test(&"bob"[0: 3]) as i32, 1);
 
     const getuser_bob_denied: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$7\r\nGETUSER\r\n$3\r\nbob\r\n"[0: 35], &out[0], 4096, 1000u64);
     try assert_true(network_connection_contains(out[0: getuser_bob_denied.response_len], &"$8\r\ncommands\r\n$19\r\n+@all -get -@string\r\n"[0: 40]));
@@ -2076,6 +2084,7 @@ export fn test_connection_process_acl_named_user_metadata() !void {
 
     const reset_bob_rules: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$3\r\nbob\r\n$13\r\nresetcommands\r\n"[0: 55], &out[0], 4096, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: reset_bob_rules.response_len], &"+OK\r\n"[0: 5]));
+    try assert_eq_i32(connection_acl_denied_command_count_for_test(&"bob"[0: 3]) as i32, 0);
 
     const bob_get_after_reset: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &bob_auth_tx, &"*2\r\n$3\r\nGET\r\n$7\r\nmissing\r\n"[0: 26], &out[0], 4096, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: bob_get_after_reset.response_len], &"$-1\r\n"[0: 5]));

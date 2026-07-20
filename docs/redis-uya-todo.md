@@ -23,7 +23,7 @@
 - 最小迭代默认递增版本号最后一位：`v0.9.0`、`v0.9.1`、`v0.9.2` 依次推进；不为普通小阶段抬高第二位版本号。
 - `v0.9.0` 起后续主线只迭代单机版：补齐 Redis Open Source 单机功能、兼容性、性能和稳定性。
 - 当前 `HEAD` 的真实性高于历史报告：`README`、`DoD`、`COMMAND*`、测试结果和 benchmark 结果必须互相一致。
-- 2026-07-20 当前 `HEAD`：`make test`、`make test-integration`、`make test-redis-cli` 与 release benchmark 绝对吞吐/p99 guard 通过；正式矩阵为 Redis 的 `1.02x/1.25x/0.94x/1.20x/0.92x`，短矩阵受同机 Redis 波动影响，完整超越仍待继续优化。
+- 2026-07-20 当前 `HEAD`：`make test`、`make test-integration`、`make test-redis-cli` 与 release benchmark 绝对吞吐、归一化吞吐和 p99 guard 通过；正式矩阵为 Redis 的 `1.02x/1.25x/1.08x/1.33x/1.00x`，短矩阵受同机 Redis 波动影响，严格 1.10x 全场景超越仍待继续优化。
 - `v0.9.4` 用于性能与稳定性收敛；`v0.9.5` 是首个单机封版候选，如未达到 `v1.0.0` 封版条件，继续使用 `v0.9.6` 等 patch 版本顺序迭代。
 - 单机版必须先覆盖 Redis Open Source 单机核心命令面；模块命令可以继续追踪，但不能与 `v1.0.0` 单机封版门槛混算。命令全集、状态定义和封版标准见 `redis-uya-command-scope.md`。
 - `v1.0.0` 是单机版封版发布点；只有单机版功能和性能达标后才发布。
@@ -75,6 +75,7 @@
 - [x] 命令回复配置状态缩窄：`CommandReply` 从 1176B 降到 192B，执行器栈帧从 `0x4a8` 降到 `0xd8`；`CONFIG SET` 候选值改由 persistent runtime 暂存并在响应编码成功后提交，同批 `CONFIG GET` 可见且输出缓冲失败不提交；GET 16B 匹配 profile 周期下降 3.4%，GET 1KiB 相关回复 helper 均低于 0.4%
 - [x] backlog 物理压缩原地复用：SDS 新增保留容量的前缀丢弃操作，backlog 达阈值后原地前移有效窗口，不再 `sds_range` 分配新缓冲；长周期单测确认跨压缩阈值零新增 allocator 分配，PSYNC/full/incremental/consistency 集成通过；固定 key 100K `SET 1KiB` 对父提交吞吐提升 10.0%、server cycles 下降 12.8%，`find_chunk` 从 8.44% 降到 0.10%
 - [x] 常见 RESP 命令数组借用解析：三参数内的扁平 Bulk/Simple String 数组直接写入连接栈 `RespValue` 槽，解析结果显式记录 elements 所有权，复杂类型和更大 argc 回退通用 parser；`PING` 连接单测确认零 parser allocator 分配，固定 CPU 200K 父提交对比吞吐提升 3.1%、cycles 下降 3.4%、instructions 下降 2.3%
+- [x] ACL 命令拒绝空表快速路径：默认用户和 named user 维护活跃 `-command` 规则计数，新增、`+command` 删除、`resetcommands` 与用户重置保持同步，计数为零时跳过固定 deny 表扫描；默认/命名用户计数单测、完整集成和 redis-cli 通过，固定 CPU 200K `PING` 对父提交吞吐提升 2.4%、cycles 下降 1.35%、instructions 下降 1.46%
 - [ ] `v0.9.3` 起：在真实性问题收敛后，继续补 Redis Open Source 单机核心缺口，而不是先扩模块命令
 
 ## 3. 全版本路线图

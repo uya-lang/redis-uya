@@ -411,11 +411,17 @@ export extern "libc" fn print_i64(value: i64) usize {
 // 全局 FILE 存储（用于 fopen/fclose，split mirror 自举时会并发打开大量输出文件）
 var fopen_fd_storage: [FILE: 128] = [];
 std.cfg(std.target_os == .tos_macos, {
+    const _FOPEN_R_FLAGS: i64 = 0x00000000;
+    const _FOPEN_RDWR_FLAGS: i64 = 0x00000002;
+    const _FOPEN_CREATE_MODE: i64 = 0x000001C0;
     const _FOPEN_W_FLAGS: i64 = 0x00000001 | 0x00000200 | 0x00000400;
     const _FOPEN_A_FLAGS: i64 = 0x00000001 | 0x00000200 | 0x00000008;
     const _FOPEN_W_PLUS_FLAGS: i64 = 0x00000002 | 0x00000200 | 0x00000400;
     const _FOPEN_A_PLUS_FLAGS: i64 = 0x00000002 | 0x00000200 | 0x00000008;
 }, {
+    const _FOPEN_R_FLAGS: i64 = 0x00000000;
+    const _FOPEN_RDWR_FLAGS: i64 = 0x00000002;
+    const _FOPEN_CREATE_MODE: i64 = 0x000001C0;
     const _FOPEN_W_FLAGS: i64 = 0x00000001 | 0x00000040 | 0x00000200;
     const _FOPEN_A_FLAGS: i64 = 0x00000001 | 0x00000040 | 0x00000400;
     const _FOPEN_W_PLUS_FLAGS: i64 = 0x00000002 | 0x00000040 | 0x00000200;
@@ -438,23 +444,23 @@ export extern "libc" fn fopen(filename: &const byte, mode: &const byte) &FILE {
     while i < mode_len {
         const c: byte = mode[i];
         if c == 114 {  // 'r'
-            flags = O_RDONLY;
+            flags = _FOPEN_R_FLAGS;
         } else if c == 119 {  // 'w'
             flags = _FOPEN_W_FLAGS;
-            create_mode = S_IRWXU;
+            create_mode = _FOPEN_CREATE_MODE;
         } else if c == 97 {  // 'a'
             flags = _FOPEN_A_FLAGS;
-            create_mode = S_IRWXU;
+            create_mode = _FOPEN_CREATE_MODE;
         } else if c == 43 {  // '+'
             // 读写模式
-            if flags == O_RDONLY {
-                flags = O_RDWR;
+            if flags == _FOPEN_R_FLAGS {
+                flags = _FOPEN_RDWR_FLAGS;
             } else if flags == _FOPEN_W_FLAGS {
                 flags = _FOPEN_W_PLUS_FLAGS;
             } else if flags == _FOPEN_A_FLAGS {
                 flags = _FOPEN_A_PLUS_FLAGS;
             } else {
-                flags = O_RDWR;
+                flags = _FOPEN_RDWR_FLAGS;
             }
         } else if c == 98 {  // 'b' (binary mode, ignored on Linux)
             // 忽略
@@ -2229,16 +2235,14 @@ export extern "libc" fn puts(s: &const byte) i32 {
     
     // 输出字符串
     if len > 0 {
-        const result1: !isize = sys_write(STDOUT as i32, s as *const byte, len);
-        result1 catch {
+        _ = sys_write(STDOUT as i32, s as *const byte, len) catch {
             return 0 - 1;
         };
     }
     
     // 输出换行符
     var nl: byte = 10;
-    const result2: !isize = sys_write(STDOUT as i32, &nl as *const byte, 1);
-    result2 catch {
+    _ = sys_write(STDOUT as i32, &nl as *const byte, 1) catch {
         return 0 - 1;
     };
     
@@ -2250,19 +2254,29 @@ export extern "libc" fn fgets(buf: &byte, n: i32, stream: &FILE) &byte {
     if buf == null || n <= 0 || stream == null {
         return null as &byte;
     }
+    const fd: i64 = stream.fd;
+    if fd < 0 {
+        return null as &byte;
+    }
     
     var i: i32 = 0;
     while i < n - 1 {
-        const c: i32 = fgetc(stream);
-        if c == 0 - 1 {  // EOF
+        var ch: byte = 0 as byte;
+        const read_result: !isize = sys_read(fd as i32, &ch, 1);
+        var read_failed: i32 = 0;
+        const bytes_read: isize = read_result catch {
+            read_failed = 1;
+            0 as isize;
+        };
+        if read_failed != 0 || bytes_read != 1 as isize {
             if i == 0 {
                 return null as &byte;
             }
             break;
         }
-        buf[i] = c as byte;
+        buf[i] = ch;
         i = i + 1;
-        if c == 10 {  // '\n'
+        if ch == 10 {  // '\n'
             break;
         }
     }

@@ -11,6 +11,7 @@ export enum TokenType {
     TOKEN_NUMBER,
     TOKEN_FN,
     TOKEN_RETURN,
+    TOKEN_USE,
     TOKEN_LPAREN,
     TOKEN_RPAREN,
     TOKEN_LBRACE,
@@ -54,6 +55,10 @@ fn is_alnum(c: byte) bool {
     return is_alpha(c) || is_digit(c);
 }
 
+fn is_ident_continue(c: byte) bool {
+    return is_alnum(c) || c == '.' as byte;
+}
+
 fn skip_whitespace(s: &TokenizerState) void {
     while s.pos < s.len {
         const c: byte = s.ptr[s.pos];
@@ -77,6 +82,9 @@ fn token_type_for_ident_bytes(ptr: &byte, start: usize, end: usize) TokenType {
     }
     if len == 6 && ptr[start + 0] == 'r' as byte && ptr[start + 1] == 'e' as byte && ptr[start + 2] == 't' as byte && ptr[start + 3] == 'u' as byte && ptr[start + 4] == 'r' as byte && ptr[start + 5] == 'n' as byte {
         return TokenType.TOKEN_RETURN;
+    }
+    if len == 3 && ptr[start + 0] == 'u' as byte && ptr[start + 1] == 's' as byte && ptr[start + 2] == 'e' as byte {
+        return TokenType.TOKEN_USE;
     }
     return TokenType.TOKEN_IDENT;
 }
@@ -129,7 +137,7 @@ export fn tokenize_ptr_len(arena: &Arena, ptr: &byte, len: usize) !&[Token] {
         if is_alpha(c) {
             s.pos = s.pos + 1;
             s.column = s.column + 1;
-            while s.pos < s.len && is_alnum(s.ptr[s.pos]) {
+            while s.pos < s.len && is_ident_continue(s.ptr[s.pos]) {
                 s.pos = s.pos + 1;
                 s.column = s.column + 1;
             }

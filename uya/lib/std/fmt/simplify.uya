@@ -1,5 +1,47 @@
 use std.mem.arena.Arena;
 use std.mem.arena.arena_alloc;
+use std.fmt.ast.FmtFile;
+use std.fmt.ast.Expr;
+use std.fmt.ast.ExprKind;
+use std.fmt.ast.Stmt;
+use std.fmt.ast.StmtKind;
+
+fn simplify_expr_ast(expr: &Expr) &Expr {
+    if expr.kind == ExprKind.EXPR_UNARY {
+        expr.unary.value = simplify_expr_ast(expr.unary.value);
+        return expr;
+    }
+    if expr.kind == ExprKind.EXPR_BINARY {
+        expr.binary.left = simplify_expr_ast(expr.binary.left);
+        expr.binary.right = simplify_expr_ast(expr.binary.right);
+        return expr;
+    }
+    if expr.kind == ExprKind.EXPR_CALL {
+        expr.call.callee = simplify_expr_ast(expr.call.callee);
+        return expr;
+    }
+    return expr;
+}
+
+export fn simplify_file(file: &FmtFile) void {
+    var di: usize = 0;
+    while di < file.decl_count {
+        var si: usize = 0;
+        while si < file.decls[di].fn_decl.body.stmt_count {
+            const stmt: &Stmt = &file.decls[di].fn_decl.body.stmts[si];
+            if stmt.kind == StmtKind.STMT_RETURN {
+                stmt.return_stmt.value = simplify_expr_ast(stmt.return_stmt.value);
+            } else if stmt.kind == StmtKind.STMT_ASSIGN {
+                stmt.assign.target = simplify_expr_ast(stmt.assign.target);
+                stmt.assign.value = simplify_expr_ast(stmt.assign.value);
+            } else if stmt.kind == StmtKind.STMT_EXPR {
+                stmt.expr_stmt.expr = simplify_expr_ast(stmt.expr_stmt.expr);
+            }
+            si = si + 1;
+        }
+        di = di + 1;
+    }
+}
 
 fn is_ident_char(c: byte) bool {
     return (c >= 'a' as byte && c <= 'z' as byte) ||
@@ -8,68 +50,86 @@ fn is_ident_char(c: byte) bool {
         c == '_' as byte;
 }
 
+fn is_paren_atom_char(c: byte) bool {
+    return is_ident_char(c);
+}
+
 fn match_return_paren(source: &[byte], pos: usize, inner_start: &usize, inner_end: &usize, end_pos: &usize) bool {
-    if pos + 9 >= source.len {
+    const prefix: &[byte] = "return (" as &[byte];
+    if pos + prefix.len >= source.len {
         return false;
     }
-    if !(source.ptr[pos + 0] == 'r' as byte && source.ptr[pos + 1] == 'e' as byte && source.ptr[pos + 2] == 't' as byte && source.ptr[pos + 3] == 'u' as byte && source.ptr[pos + 4] == 'r' as byte && source.ptr[pos + 5] == 'n' as byte && source.ptr[pos + 6] == ' ' as byte && source.ptr[pos + 7] == '(' as byte) {
-        return false;
-    }
-    var i: usize = pos + 8;
-    if i >= source.len {
-        return false;
-    }
-    if !is_ident_char(source.ptr[i]) {
-        return false;
-    }
-    *inner_start = i;
-    while i < source.len && is_ident_char(source.ptr[i]) {
+    var i: usize = 0;
+    while i < prefix.len {
+        if source.ptr[pos + i] != prefix.ptr[i] {
+            return false;
+        }
         i = i + 1;
     }
-    *inner_end = i;
-    if i + 1 >= source.len {
+    const start: usize = pos + prefix.len;
+    var end: usize = start;
+    while end < source.len && is_paren_atom_char(source.ptr[end]) {
+        end = end + 1;
+    }
+    if end == start || end >= source.len || source.ptr[end] != ')' as byte {
         return false;
     }
-    if source.ptr[i] != ')' as byte || source.ptr[i + 1] != ';' as byte {
+    *inner_start = start;
+    *inner_end = end;
+    *end_pos = end + 1;
+    return true;
+}
+
+fn match_redundant_paren(source: &[byte], pos: usize, inner_start: &usize, inner_end: &usize, end_pos: &usize) bool {
+    if pos >= source.len || source.ptr[pos] != '(' as byte {
         return false;
     }
-    *end_pos = i + 2;
+    if pos > 0 && is_ident_char(source.ptr[pos - 1]) {
+        return false;
+    }
+    const start: usize = pos + 1;
+    var end: usize = start;
+    while end < source.len && is_paren_atom_char(source.ptr[end]) {
+        end = end + 1;
+    }
+    if end == start || end >= source.len || source.ptr[end] != ')' as byte {
+        return false;
+    }
+    *inner_start = start;
+    *inner_end = end;
+    *end_pos = end + 1;
     return true;
 }
 
 export fn simplify_text(arena: &Arena, source: &[byte]) !&[byte] {
     const out: &byte = arena_alloc(arena, source.len);
-    var in_pos: usize = 0;
-    var out_pos: usize = 0;
-
-    while in_pos < source.len {
+    if out == null {
+        return error.AllocOutOfMemory;
+    }
+    var pos: usize = 0;
+    var i: usize = 0;
+    var changed: bool = false;
+    while i < source.len {
         var inner_start: usize = 0;
         var inner_end: usize = 0;
         var end_pos: usize = 0;
-        if match_return_paren(source, in_pos, &inner_start, &inner_end, &end_pos) {
-            out[out_pos + 0] = 'r' as byte;
-            out[out_pos + 1] = 'e' as byte;
-            out[out_pos + 2] = 't' as byte;
-            out[out_pos + 3] = 'u' as byte;
-            out[out_pos + 4] = 'r' as byte;
-            out[out_pos + 5] = 'n' as byte;
-            out[out_pos + 6] = ' ' as byte;
-            out_pos = out_pos + 7;
+        if match_redundant_paren(source, i, &inner_start, &inner_end, &end_pos) {
             var j: usize = inner_start;
             while j < inner_end {
-                out[out_pos] = source.ptr[j];
-                out_pos = out_pos + 1;
+                out[pos] = source.ptr[j];
+                pos = pos + 1;
                 j = j + 1;
             }
-            out[out_pos] = ';' as byte;
-            out_pos = out_pos + 1;
-            in_pos = end_pos;
+            i = end_pos;
+            changed = true;
         } else {
-            out[out_pos] = source.ptr[in_pos];
-            out_pos = out_pos + 1;
-            in_pos = in_pos + 1;
+            out[pos] = source.ptr[i];
+            pos = pos + 1;
+            i = i + 1;
         }
     }
-
-    return out[0:out_pos];
+    if !changed {
+        return source;
+    }
+    return out[0:pos];
 }

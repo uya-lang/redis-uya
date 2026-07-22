@@ -8,7 +8,7 @@
 
 **发布日期：** 待定
 
-### 标准库 async：单线程 frame allocator 快速模式（2026-07-18）
+### 标准库 async：单线程 frame allocator 快速模式（redis-uya 扩展，2026-07-18）
 
 - **`std.async`**：新增 `set_async_frame_allocator_single_thread`，供调用方明确保证 Future 装箱只发生在同一线程时直接复用进程内 allocator 指针，避免每次装箱执行 pthread TSD 查找。
 - **兼容边界**：既有 `set_async_frame_allocator` 仍使用 pthread TSD，并会关闭单线程快速模式；多线程 scheduler、HTTP worker 和其它并发运行时不应调用单线程 setter。

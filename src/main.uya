@@ -11,6 +11,8 @@ use std.runtime.get_argc;
 use std.runtime.get_argv;
 use libc.atoi;
 
+extern "libc" fn printf(fmt: *byte, ...) i32;
+
 fn main_arg_i32(index: i32, fallback: i32) i32 {
     if get_argc() <= index {
         return fallback;
@@ -127,7 +129,7 @@ export fn main() i32 {
     const maxmemory_policy: MaxmemoryPolicy = main_maxmemory_policy_arg();
     const requirepass: &[byte] = main_requirepass_arg();
     var server: RedisServer = server_open_with_aof_and_memory_policy(port, maxclients, aof_path, maxmemory, maxmemory_policy) catch |err| {
-        @println("redis-uya failed to listen: ${@error_id(err)}");
+        printf("redis-uya failed to listen: %u\n" as *byte, @error_id(err));
         return 1;
     };
     defer {
@@ -137,9 +139,9 @@ export fn main() i32 {
         server_set_requirepass(&server, requirepass);
     }
 
-    @println("redis-uya v0.9.3-dev listening on 127.0.0.1:${server.listener.port}");
+    printf("redis-uya v0.9.3-dev listening on 127.0.0.1:%u\n" as *byte, server.listener.port as u32);
     _ = server_run(&server) catch |err| {
-        @println("redis-uya server error: ${@error_id(err)}");
+        printf("redis-uya server error: %u\n" as *byte, @error_id(err));
         return 1;
     };
     return 0;

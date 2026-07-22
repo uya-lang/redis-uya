@@ -12,6 +12,7 @@ export enum StmtKind {
     STMT_ASSIGN,
     STMT_RETURN,
     STMT_EXPR,
+    STMT_USE,
 }
 
 export enum DeclKind {
@@ -58,12 +59,17 @@ export struct ExprStmt {
     expr: &Expr,
 }
 
+export struct UseStmt {
+    path: &[byte],
+}
+
 export struct Stmt {
     kind: StmtKind,
     span: Span,
     assign: AssignStmt,
     return_stmt: ReturnStmt,
     expr_stmt: ExprStmt,
+    use_stmt: UseStmt,
 }
 
 export struct BlockStmt {
@@ -95,6 +101,8 @@ export struct Decl {
 export struct FmtFile {
     decls: &Decl,
     decl_count: usize,
+    use_stmts: &Stmt,
+    use_count: usize,
     span: Span,
 }
 

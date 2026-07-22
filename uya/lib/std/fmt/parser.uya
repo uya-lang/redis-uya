@@ -11,6 +11,7 @@ use std.fmt.ast.StmtKind;
 use std.fmt.ast.AssignStmt;
 use std.fmt.ast.ReturnStmt;
 use std.fmt.ast.ExprStmt;
+use std.fmt.ast.UseStmt;
 use std.fmt.ast.Expr;
 use std.fmt.ast.ExprKind;
 use std.fmt.ast.ExprUnary;
@@ -190,8 +191,27 @@ fn parse_expr(p: &Parser) !&Expr {
     return parse_expr_bp(p, 0);
 }
 
+fn parse_use_stmt(p: &Parser) !Stmt {
+    const use_tok: &Token = try expect_token(p, TokenType.TOKEN_USE);
+    const path_tok: &Token = try expect_token(p, TokenType.TOKEN_IDENT);
+    const semi: &Token = try expect_token(p, TokenType.TOKEN_SEMICOLON);
+    return Stmt {
+        kind: StmtKind.STMT_USE,
+        span: span_init(use_tok.span.start, semi.span.end),
+        use_stmt: UseStmt { path: path_tok.lexeme },
+    };
+}
+
 fn parse_stmt(p: &Parser) !&Stmt {
     skip_comments(p);
+    if current(p).type == TokenType.TOKEN_USE {
+        const use_stmt: Stmt = try parse_use_stmt(p);
+        const use_ptr: &Stmt = new_stmt(p.arena);
+        use_ptr.kind = use_stmt.kind;
+        use_ptr.span = use_stmt.span;
+        use_ptr.use_stmt = use_stmt.use_stmt;
+        return use_ptr;
+    }
     if current(p).type == TokenType.TOKEN_RETURN {
         const ret_tok: &Token = advance(p);
         const value: &Expr = try parse_expr(p);
@@ -292,11 +312,18 @@ export fn parse_file(arena: &Arena, tokens: &[Token]) !&FmtFile {
         pos: 0,
     };
     var decls: &Decl = arena_alloc(arena, @size_of(Decl) as usize * (tokens.len + 1)) as &Decl;
-    if decls == null {
+    var use_stmts: &Stmt = arena_alloc(arena, @size_of(Stmt) as usize * (tokens.len + 1)) as &Stmt;
+    if decls == null || use_stmts == null {
         return error.AllocOutOfMemory;
     }
     var decl_count: usize = 0;
+    var use_count: usize = 0;
     skip_comments(&p);
+    while !is_at_end(&p) && current(&p).type == TokenType.TOKEN_USE {
+        use_stmts[use_count] = try parse_use_stmt(&p);
+        use_count = use_count + 1;
+        skip_comments(&p);
+    }
     while !is_at_end(&p) {
         decls[decl_count] = try parse_fn_decl_impl(&p);
         decl_count = decl_count + 1;
@@ -308,8 +335,14 @@ export fn parse_file(arena: &Arena, tokens: &[Token]) !&FmtFile {
     }
     file.decls = decls;
     file.decl_count = decl_count;
+    file.use_stmts = use_stmts;
+    file.use_count = use_count;
     if decl_count > 0 {
-        file.span = span_init(decls[0].span.start, decls[decl_count - 1].span.end);
+        if use_count > 0 {
+            file.span = span_init(use_stmts[0].span.start, decls[decl_count - 1].span.end);
+        } else {
+            file.span = span_init(decls[0].span.start, decls[decl_count - 1].span.end);
+        }
     }
     return file;
 }

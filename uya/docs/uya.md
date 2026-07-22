@@ -1,6 +1,6 @@
 # Uya 语言规范 0.49.50（完整版 · 2026-05-19）
 
-> 零GC · 默认高级安全 · 单页纸可读完  
+> 零GC · 默认高级安全 · 单页纸可读完
 > 无lifetime符号 · 无隐式控制 · 编译期证明（本函数内）
 
 ---
@@ -389,7 +389,7 @@
     ```uya
     // 链接到 C 标准库
     extern "libc" fn strlen(s: *const byte) usize;
-    
+
     // 用 Uya 实现 C 标准库函数
     export extern "libc" fn my_strlen(s: *const byte) usize {
         if s == null { return 0; }
@@ -412,7 +412,7 @@
     // 导入 C 标准库变量
     extern const errno: i32;
     extern const stdout: *void;
-    
+
     // 导出给 C 使用
     export const VERSION: &byte = "1.0.0";
     export var debug_mode: i32 = 0;
@@ -668,7 +668,10 @@ Uya的"坚如磐石"设计哲学带来以下不可动摇的收益：
 
 - 文件编码 UTF-8，Unix 换行 `\n`。
 - **模块系统**：每个目录自动成为一个模块，详见[第 1.5 章](#15-模块系统)。
-  - 项目根目录（包含 `main` 函数的目录）是 `main` 模块
+  - legacy mode：编译器自动推导 `module root`，该目录是 `main` 模块
+  - package mode：`package root` 由当前 Uya 源文件目录向上找到的第一个 `uya.toml` 所在目录决定
+  - `source root = package root + source-dir`
+  - `module root = source root`
   - 子目录路径映射到模块路径（如 `std/io/` → `std.io`）
   - 目录下的所有 `.uya` 文件都属于同一个模块
 - 关键字保留：
@@ -766,24 +769,34 @@ Uya的"坚如磐石"设计哲学带来以下不可动摇的收益：
 - **路径式导入**：使用 `use` 关键字和路径语法导入模块
 - **编译期解析**：所有模块解析在编译期完成
 
+### 1.5.1.1 Root 术语
+
+- **package root**：从当前 Uya 源文件所在目录向上找到的第一个 `uya.toml` 所在目录
+- **source root**：`package root + [package].source-dir`，默认 `source-dir = "."`
+- **module root**：编译器真正用于 `use ...;` 模块查找的根目录
+  - package mode 下等于 `source root`
+  - legacy mode 下由编译器自动推导
+- **project root**：旧文档/兼容 CLI 名称；若无额外说明，应理解为 `module root`，不要与 `package root` 混用
+
 ### 1.5.2 模块定义
 
 - 每个目录自动成为一个模块
 - 每个 `.uya` 文件也自动拥有一个包含文件名的模块别名
 - 模块名默认为目录名；文件模块名为目录模块名加文件名（去掉 `.uya`）
-- **模块路径基准**：模块路径相对于 **项目根目录**（包含 `main` 函数的目录）计算
-- 项目根目录是模块系统的根
-- 所有模块路径都相对于项目根目录解析
-- **根目录模块**：项目根目录本身是一个特殊模块，模块名为 `main`
-  - 项目根目录是包含 `main` 函数的目录
-  - 项目根目录下的所有 `.uya` 文件都属于 `main` 模块
+- **模块路径基准**：
+  - legacy mode 下，模块路径相对于编译器自动推导出的模块根计算
+  - package mode 下，模块路径相对于 package 的 `source root` 计算
+- **根目录模块**：当前 module root 本身是一个特殊模块，模块名为 `main`
+  - legacy mode 下，module root 通常等于输入文件所在目录，或输入目录本身
+  - package mode 下，module root 等于 `package root + source-dir`
+  - module root 下的所有 `.uya` 文件都属于 `main` 模块
   - 使用：`use main.some_function;` 或 `use main;`
-- **子目录模块**：目录路径（相对于项目根目录）直接映射到模块路径
-  - 项目根目录下的 `std/io/` → 模块路径 `std.io`
-  - 项目根目录下的 `math/utils/` → 模块路径 `math.utils`
+- **子目录模块**：目录路径（相对于当前 module root）直接映射到模块路径
+  - module root 下的 `std/io/` → 模块路径 `std.io`
+  - module root 下的 `math/utils/` → 模块路径 `math.utils`
   - 目录下的所有 `.uya` 文件都属于同一个模块
 - **单文件模块别名**：文件路径也可映射为模块路径
-  - 项目根目录下的 `std/io/file.uya` → 兼容模块路径 `std.io.file`
+  - module root 下的 `std/io/file.uya` → 兼容模块路径 `std.io.file`
   - `use std.io.read_file;` 与 `use std.io.file.read_file;` 都可导入 `file.uya` 中导出的 `read_file`
   - 目录模块和文件模块同时存在时，整体模块导入优先按目录模块解析；避免同时创建同名目录和同名 `.uya` 文件
 - **限制**：不支持 `mod` 关键字（块级模块），模块由目录与 `.uya` 文件路径自动推导，符合零新关键字哲学
@@ -847,14 +860,15 @@ Uya的"坚如磐石"设计哲学带来以下不可动摇的收益：
 
 ### 1.5.5 模块路径
 
-- **路径基准**：所有模块路径相对于 **项目根目录**（包含 `main` 函数的目录）计算
+- **路径基准**：
+  - legacy mode：所有模块路径相对于编译器自动推导出的 module root 计算
+  - package mode：所有模块路径相对于 package 的 `source root` 计算
 - **根目录**：特殊模块名 `main`
-  - 项目根目录是包含 `main` 函数的目录
-  - 项目根目录下的文件 → `main` 模块
+  - 当前 module root 下的文件 → `main` 模块
   - 示例：`use main.helper;` 或 `use main;`
-- **子目录**：目录路径（相对于项目根目录）直接映射到模块路径（目录分隔符 `/` 转换为 `.`）
-  - 项目根目录下的 `std/io/` → 模块路径 `std.io`
-  - 项目根目录下的 `math/utils/` → 模块路径 `math.utils`
+- **子目录**：目录路径（相对于当前 module root）直接映射到模块路径（目录分隔符 `/` 转换为 `.`）
+  - module root 下的 `std/io/` → 模块路径 `std.io`
+  - module root 下的 `math/utils/` → 模块路径 `math.utils`
   - 使用：`use std.io;` 或 `use std.io.read_file;`
 - **同目录文件合并规则**：
   - **同一目录下的所有 `.uya` 文件都属于同一个目录模块**
@@ -869,31 +883,37 @@ Uya的"坚如磐石"设计哲学带来以下不可动摇的收益：
   - 推荐新代码按实际文件边界使用文件模块路径；旧代码可继续使用目录模块路径
 - 使用 `.` 分隔路径段
 - **路径解析规则**：
-  - 编译器在项目根目录中查找模块
-  - 模块路径 `std.io` 对应项目根目录下的 `std/io/` 目录，也可对应 `std/io.uya` 文件
+  - 编译器先在当前 module root 中查找模块
+  - package mode 下，依赖 alias 由包管理器映射到已解析依赖的 source root
+  - 模块路径 `std.io` 对应 module root 下的 `std/io/` 目录，也可对应 `std/io.uya` 文件
   - 当查找模块时，编译器会：
     1. 对整体模块导入优先检查是否存在同名目录（策略1：目录模块）
     2. 若目录不存在，再检查是否存在同名 `.uya` 文件（策略2：单文件模块）
     3. 对 `use a.b.c.item;`，若 `a/b/c.uya` 或 `a/b/c/` 存在，则 `a.b.c` 是模块；否则退回为从模块 `a.b` 导入导出项 `c`
-  - 所有模块引用都相对于项目根目录解析
+  - 所有模块引用都相对于当前 module root 解析
 
-### 1.5.6 项目根目录说明
+### 1.5.6 根目录术语说明
 
-- **项目根目录识别**：模块系统的根目录是包含 `fn main() i32` 函数的目录
-- **自动识别逻辑**：
-  - 编译器扫描所有源文件，找到包含 `fn main() i32` 的文件
-  - 该文件所在的最顶层目录即为项目根目录
-  - 示例：如果 `project/src/main.uya` 包含 `fn main() i32`，则 `project/src/` 是项目根目录
-- **限制**：不支持显式指定项目根目录（如通过 `-root` 编译选项），未来可能支持
-- 所有模块路径都相对于项目根目录计算
-- 编译器在项目根目录中查找和解析模块
-- 项目根目录本身是 `main` 模块
+- **legacy mode**：
+  - 当编译器没有发现 `uya.toml` 时，继续沿用当前自动推导模块根的方式
+  - 对单文件输入，通常使用该文件所在目录
+  - 对目录输入，通常使用该目录本身
+- **package mode**：
+  - 当编译器发现 `uya.toml` 时，包管理规则接管根语义
+  - `package root`：从当前 Uya 源文件所在目录向上找到的第一个 `uya.toml` 所在目录
+  - `source root`：`[package].source-dir` 指向的源码根，默认 `"."`
+  - `module root`：真正参与模块查找的目录，等于 `package root + source-dir`
+- **兼容术语说明**：
+  - 旧文档里的“项目根目录”若讨论模块解析，默认应读作 `module root`
+  - `--project-root` 这个兼容 CLI 名称覆盖的也是 `module root`
+  - `package root` 只用于 manifest 发现与依赖安装语义，不等同于 `module root`
+- 项目结构与包管理的完整规则见 [package_management.md](./package_management.md)
 - **路径解析**：
-  - `use std.io;` 在项目根目录下查找 `std/io/` 目录
-  - `use main.helper;` 在项目根目录下查找 `helper.uya` 文件
-  - 所有模块引用都相对于项目根目录解析（绝对相对于项目根目录）
+  - `use std.io;` 在当前 module root 下查找 `std/io/` 目录
+  - `use main.helper;` 在当前 module root 下查找 `helper.uya` 文件
+  - 所有模块引用都相对于当前 module root 解析
 - **多入口项目说明**：
-  - 如果项目中有多个 `fn main() i32`，编译器会报错，要求明确项目根目录
+  - legacy mode 下，如果目录输入中有多个 `main`，编译器会报错
   - 测试/工具等应作为独立的子目录模块，不包含 `main` 函数
 - **项目结构示例**：
 [examples/example_008.txt](./examples/example_008.txt)
@@ -920,7 +940,7 @@ Uya的"坚如磐石"设计哲学带来以下不可动摇的收益：
   - 所有模块路径在编译期解析
   - 模块依赖关系在编译期构建，用于循环依赖检测
 - 与现有特性的兼容性
-- 模块路径必须相对于项目根目录（包含 main 函数的目录）
+- 模块路径必须相对于当前 `module root`
 
 ### 1.5.8 完整示例
 
@@ -1026,7 +1046,7 @@ Uya的"坚如磐石"设计哲学带来以下不可动摇的收益：
     ```uya
     // 只读字符串参数
     export fn strcmp(s1: &const byte, s2: &const byte) i32 { ... }
-    
+
     // 可变指针可以隐式转换为只读指针
     var s: &byte = ...;
     const result = strcmp(s, "hello");  // &byte 隐式转换为 &const byte
@@ -1481,14 +1501,14 @@ struct File : IReadable {
 fn example() !void {
     extern open(path: *byte, flags: i32) i32;
     const file: File = File{ fd: open("test.txt", 0) };
-    
+
     // 使用结构体方法
     const bytes: i32 = try file.read(&buffer[0], 100);
-    
+
     // 实现接口，支持动态派发
     const reader: IReadable = file;
     const bytes2: i32 = try reader.read(&buffer[0], 100);
-    
+
     // 离开作用域时自动调用 drop，关闭文件（RAII）
 }
 ```
@@ -1761,7 +1781,7 @@ const DEFAULT_PORT: i32 = 8080;
 struct Server {
     port: i32 = DEFAULT_PORT,      // ✅ 常量变量
     host: [i8: 64] = "localhost",   // ✅ 字符串字面量（编译期常量）
-    
+
     // ❌ 错误：默认值必须是编译期常量
     // socket: i32 = get_socket(),  // 函数调用不允许
     // timestamp: i64 = current_time()  // 运行时值不允许
@@ -1838,7 +1858,7 @@ interface Drawable {
 struct Circle : Drawable {
     center: Point = Point{},
     radius: f32 = 1.0,
-    
+
     fn draw(self: &Self) void {
         // 实现...
     }
@@ -1887,12 +1907,12 @@ struct NetworkConfig {
     // 基础配置
     host: [i8: 64] = "0.0.0.0",
     port: i32 = 8080,
-    
+
     // 高级配置
     backlog: i32 = 128,
     keep_alive: bool = true,
     timeout_sec: f64 = 30.0,
-    
+
     // 嵌套结构体
     ssl: SslConfig = SslConfig{
         enabled: false,
@@ -1909,16 +1929,16 @@ fn create_server(config: NetworkConfig) !void {
 fn main() !i32 {
     // 1. 使用全部默认值
     const default_server = create_server(NetworkConfig{});
-    
+
     // 2. 修改端口，其余默认
     const custom_port = create_server(NetworkConfig{ port: 3000 });
-    
+
     // 3. 修改嵌套字段（部分使用默认值）
     const with_ssl = create_server(NetworkConfig{
         port: 443,
         ssl: SslConfig{ enabled: true, cert_path: "cert.pem", key_path: "key.pem" }
     });
-    
+
     return 0;
 }
 ```
@@ -2084,19 +2104,19 @@ fn process_packet(packet: NetworkPacket) !void {
 ```uya
 fn direct_access() void {
     var value: IntOrFloat = IntOrFloat.i(42);
-    
+
     // ✅ 编译器知道当前标签是 .i
     const x: i32 = value.i;
-    
+
     // ❌ 编译错误：编译器知道当前标签不是 .f
     // const y: f64 = value.f;
-    
+
     // 重新赋值后标签状态更新
     value = IntOrFloat.f(3.14);
-    
+
     // ✅ 编译器知道当前标签是 .f
     const z: f64 = value.f;
-    
+
     // ❌ 编译错误：编译器知道当前标签不是 .i
     // const w: i32 = value.i;
 }
@@ -2133,13 +2153,13 @@ v = IntOrFloat.f(3.14);
 ```uya
 fn branch_example(cond: bool) void {
     var v: IntOrFloat;
-    
+
     if cond {
         v = IntOrFloat.i(10);
     } else {
         v = IntOrFloat.f(3.14);
     }
-    
+
     // 编译器无法确定标签 → 必须使用模式匹配
     match v {
         .i(x) => printf("%d\n", x),
@@ -2152,11 +2172,11 @@ fn branch_example(cond: bool) void {
 ```uya
 fn loop_example() void {
     var v: IntOrFloat = IntOrFloat.i(0);
-    
+
     while some_condition() {
         // 循环可能修改标签 → 标签状态为 Unknown
         v = get_next_value();
-        
+
         // 必须使用模式匹配
         match v {
             .i(x) => process_int(x),
@@ -2184,7 +2204,7 @@ extern union CValue {
 fn use_c_union() void {
     extern get_c_value() union CValue;
     const cv: union CValue = get_c_value();
-    
+
     // 访问外部联合体需要模式匹配
     match cv {
         .i(val) => printf("C 整数: %d\n", val),
@@ -2204,7 +2224,7 @@ extern process_c_union(u: union CValue) void;
 
 fn pass_to_c() void {
     const u: IntOrFloat = IntOrFloat.i(42);
-    
+
     // 安全转换：内存布局相同
     process_c_union(u as union CValue);
 }
@@ -2236,7 +2256,7 @@ union NetworkPacket {
 union IntOrFloat {
     i: i32,
     f: f64,
-    
+
     // 联合体方法
     fn as_f64(self: &Self) f64 {
         match *self {
@@ -2244,7 +2264,7 @@ union IntOrFloat {
             .f(x) => x
         }
     }
-    
+
     fn is_int(self: &Self) bool {
         match *self {
             .i(_) => true,
@@ -2271,7 +2291,7 @@ interface Printable {
 union IntOrFloat : Printable {
     i: i32,
     f: f64,
-    
+
     fn print(self: &Self) void {
         match *self {
             .i(x) => printf("整数: %d\n", x),
@@ -2297,13 +2317,13 @@ union BufferOrString {
 
 fn move_example() void {
     var u1: BufferOrString = BufferOrString.buffer([]);
-    
+
     // 移动联合体
     const u2: BufferOrString = u1;  // u1 被移动
-    
+
     // ❌ 编译错误：u1 已移动，不能再次使用
     // const x = u1.buffer;
-    
+
     // ✅ u2 可以使用
     match u2 {
         .buffer(buf) => printf("缓冲区大小: %d\n", @len(buf)),
@@ -2361,17 +2381,17 @@ const PI_VALUE: f64 = match PI_UNION {
 ```uya
 fn error_examples() void {
     var u: IntOrFloat = IntOrFloat.i(10);
-    
+
     // 错误：访问错误的变体
     // const x: f64 = u.f;
     // 错误信息：联合体 'u' 当前标签是 '.i'，不能访问变体 '.f'
-    
+
     // 错误：未处理所有变体
     // match u {
     //     .i(x) => printf("%d\n", x)
     // }
     // 错误信息：模式匹配必须处理所有变体，缺少: .f
-    
+
     // 错误：未知标签时直接访问
     // fn get_union() IntOrFloat { ... }
     // const v = get_union();
@@ -2457,12 +2477,12 @@ Uya 联合体设计完全符合「坚如磐石」哲学：
       - `lib/std/mem/mem.uya`、`lib/std/mem/allocator.uya`、`lib/std/mem/arena.uya` 等同目录文件均属于 **`std.mem`** 模块 → 模块前缀 **`std_mem`**
       - `lib/std/mem/mem.uya` 中的 `export fn mem_copy(...)` → `std_mem_mem_copy(...)`
       - `lib/std/mem/allocator.uya` 中的 `export fn get_allocator(...)` → `std_mem_get_allocator(...)`（示例）
-      - 主模块（项目根目录）→ 模块前缀 `main`
+      - 主模块（当前 module root）→ 模块前缀 `main`
       - 主模块 `main.uya` 中的 `export fn my_func(...)` → `main_my_func(...)`
       - **模块前缀提取规则**：
         - 标准库路径 `lib/std/xxx/yyy.uya` → 模块 `std.xxx` → 模块前缀 `std_xxx`
         - 标准库路径 `lib/libc/xxx/yyy.uya` → 模块 `libc.xxx` → 模块前缀 `libc_xxx`
-        - 主模块（项目根目录）→ 模块 `main` → 模块前缀 `main`
+        - 主模块（当前 module root）→ 模块 `main` → 模块前缀 `main`
         - 模块路径中的 `.` 替换为 `_` 作为 C 函数名前缀
         - **注意**：函数名包含模块名（如 `mem_copy`）会导致生成的 C 函数名重复（如 `std_mem_mem_copy`），建议避免这种命名方式
   - **`extern fn`**：外部 C 函数声明，生成的 C 代码为 `extern void foo(void);`
@@ -2863,19 +2883,19 @@ bin/uya --c99 app.uya …   # 推荐：由驱动自动加入 entry.uya
     - `catch` 块必须返回与 `expr` 成功值类型相同的值
     - **重要限制**：`catch` 块**不能返回错误联合类型**，只能返回值类型或使用 `return` 提前返回函数
   - **catch 块的返回方式**（两种方式，语义不同）：
-    
+
     **方式 1：表达式返回值**（catch 块返回一个值给 catch 表达式）
     - catch 块的最后一条表达式作为返回值（不需要 `return` 关键字）
     - 这个值会成为整个 `catch` 表达式的值
     - 示例：
 [examples/example_018.uya](./examples/example_018.uya)
-    
+
     **方式 2：使用 `return` 提前返回函数**（catch 块直接退出函数）
     - catch 块中使用 `return` 会**立即返回函数**（不是返回 catch 块的值）
     - 跳过后续所有 defer 和 drop
     - 示例：
 [examples/main.uya](./examples/main.uya)
-    
+
     **重要区别**：
     - 表达式返回值：catch 块返回一个值，程序继续执行
     - `return` 语句：catch 块直接退出函数，程序不继续执行
@@ -2895,7 +2915,7 @@ bin/uya --c99 app.uya …   # 推荐：由驱动自动加入 entry.uya
   - 也可显式比较错误 ID：`if @error_id(err) == @error_id(error.PredefinedError) || @error_id(err) == @error_id(error.RuntimeError) { ... }`
   - 可通过 `@error_id(err)` 读取错误值的数值 ID；对 `@syscall` 失败路径，该 ID 等于底层 errno 值
   - `@error_name(err)` 仅保证语言级命名错误返回稳定名称；未知或 `@syscall` 错误统一回退为 `"UnknownError"`
-  
+
 **错误处理设计哲学**：
 - **编译期检查**：错误处理是编译期检查，编译器在当前函数内验证错误处理
 - **显式错误**：错误是类型系统的一部分，必须显式处理
@@ -2912,10 +2932,10 @@ bin/uya --c99 app.uya …   # 推荐：由驱动自动加入 entry.uya
 
 ### 5.2 外部 C 函数（FFI）
 
-**步骤 1：顶层声明**  
+**步骤 1：顶层声明**
 [examples/extern_c_function.uya](./examples/extern_c_function.uya)
 
-**步骤 2：正常调用**  
+**步骤 2：正常调用**
 [examples/extern_c_function_1.uya](./examples/extern_c_function_1.uya)
 
 #### 5.2.1 导入 C 函数（声明外部函数）
@@ -2985,10 +3005,10 @@ extern qsort(base: *void, nmemb: usize, size: usize, compar: ComparFunc) void;
 
 fn main() i32 {
     const arr: [i32: 5] = [5, 2, 8, 1, 9];
-    
+
     // 使用 &compare 获取函数指针并传递给 C 函数
     qsort(&arr[0], 5, 4, &compare);
-    
+
     return 0;
 }
 ```
@@ -3020,10 +3040,10 @@ extern const stderr: *void;        // C: extern FILE *stderr;
 fn main() i32 {
     // 读取外部变量
     const err: i32 = errno;
-    
+
     // 写入外部变量（仅 var 声明）
     optind = 1;
-    
+
     return 0;
 }
 ```
@@ -3170,7 +3190,7 @@ fn main() i32 {
 
 **一句话总结**：
 
-> **统一标准：所有 struct 使用 C 内存布局，支持所有类型，可以直接与 C 互操作。**  
+> **统一标准：所有 struct 使用 C 内存布局，支持所有类型，可以直接与 C 互操作。**
 > **编译器自动处理布局转换，确保 100% C 兼容性。**
 
 ### 5.4 可变参数函数
@@ -3227,10 +3247,10 @@ fn sum_all(...) i32 {
 // 示例 3：混合参数函数
 fn print_with_prefix(prefix: *byte, ...) void {
     const all_args = @params;  // 类型: (prefix: *byte, ...可变参数)
-    
+
     // 访问固定参数
     printf("Prefix: %s\n", all_args.0);
-    
+
     // 跳过固定参数，处理可变参数部分
     for var i: i32 = 1; i < @len(all_args); i += 1 {
         printf("%d ", all_args[i]);
@@ -3377,14 +3397,14 @@ fn conditional_usage(flag: bool, ...) void {
 fn checked_printf(fmt: *byte, ...) i32 {
     // 编译器可根据格式串 fmt 推断 @params 的类型
     // 并检查参数类型是否匹配
-    
+
     const args = @params;  // 类型由格式串推断
-    
+
     // 可以添加额外验证逻辑
     if !validate_printf_args(fmt, args) {
         return -1;
     }
-    
+
     return printf(fmt, ...);
 }
 ```
@@ -3410,11 +3430,11 @@ fn checked_printf(fmt: *byte, ...) i32 {
 fn sum(...) i32 {
     const args = @params;
     var total: i32 = 0;
-    
+
     for args |val| {
         total += val;
     }
-    
+
     return total;
 }
 
@@ -3433,10 +3453,10 @@ extern fn get_timestamp() u64;
 fn log_printf(fmt: *byte, ...) i32 {
     const timestamp = get_timestamp();
     const args = @params;  // 包含 fmt 和所有可变参数
-    
+
     // 记录日志（示例）
     printf("[%llu] ", timestamp);
-    
+
     // 转发给 printf，跳过第一个参数（fmt）
     // 注意：实际实现需要处理参数转发
     return printf(fmt, ...);
@@ -3445,7 +3465,7 @@ fn log_printf(fmt: *byte, ...) i32 {
 
 #### 5.4.9 一句话总结
 
-> **Uya 可变参数 = C 的 `...` 语法 + `@params` 统一元组访问 + `@va_start`/`@va_end`/`@va_arg` va_list 支持 + 编译器智能优化**；  
+> **Uya 可变参数 = C 的 `...` 语法 + `@params` 统一元组访问 + `@va_start`/`@va_end`/`@va_arg` va_list 支持 + 编译器智能优化**；
 > **保持 C 兼容性，提供类型安全选项，未使用时零开销。**
 
 ---
@@ -3454,9 +3474,9 @@ fn log_printf(fmt: *byte, ...) i32 {
 
 ### 6.1 设计目标
 
-- **鸭子类型 + 动态派发**体验；  
-- **零注册表 + 编译期生成**；  
-- **标准内存布局 + 单条 call 指令**；  
+- **鸭子类型 + 动态派发**体验；
+- **零注册表 + 编译期生成**；
+- **标准内存布局 + 单条 call 指令**；
 - **无 lifetime 符号、无 new 关键字、无运行时锁**。
 
 ### 6.2 语法
@@ -3492,8 +3512,8 @@ fn log_printf(fmt: *byte, ...) i32 {
 
 ### 6.5 生命周期（零语法版）
 
-- **无 `'static`、无 `'a`**；  
-- 编译器只在「赋值/返回/传参」路径检查：  
+- **无 `'static`、无 `'a`**；
+- 编译器只在「赋值/返回/传参」路径检查：
 [examples/example_028.txt](./examples/example_028.txt)
 - 检查失败**仅一行报错**；通过者**无额外运行时成本**。
 
@@ -3564,19 +3584,19 @@ fn log_printf(fmt: *byte, ...) i32 {
 
 ### 6.9 与 C 互操作
 
-- 接口值首地址 = `&vtable`，可直接当 `void*` 塞给 C；  
+- 接口值首地址 = `&vtable`，可直接当 `void*` 塞给 C；
 - C 侧回调：
 [examples/example_036.c](./examples/example_036.c)
 
 ### 6.10 后端实现要点
 
-1. **语法树收集** → 扫描所有在结构体定义中声明接口的结构体（`struct T : I { ... }`），生成唯一 vtable 常量。  
-2. **类型检查** → 确保结构体方法实现了所有声明接口的全部方法签名。  
-3. **装箱点** →  
-   - 局部：`const iface: I = concrete;`  
-   - 传参 / 返回：按值复制 16 B。  
-4. **调用点** →  
-   - 加载 `vptr` → 计算方法偏移 → `call [reg+offset]`。  
+1. **语法树收集** → 扫描所有在结构体定义中声明接口的结构体（`struct T : I { ... }`），生成唯一 vtable 常量。
+2. **类型检查** → 确保结构体方法实现了所有声明接口的全部方法签名。
+3. **装箱点** →
+   - 局部：`const iface: I = concrete;`
+   - 传参 / 返回：按值复制 16 B。
+4. **调用点** →
+   - 加载 `vptr` → 计算方法偏移 → `call [reg+offset]`。
 5. **逃逸检查** → 6.4 节生命周期规则；失败即报错。
 
 ### 6.11 迁移指南
@@ -3617,8 +3637,8 @@ fn log_printf(fmt: *byte, ...) i32 {
 
 ### 6.13 一句话总结
 
-> **Uya 接口 = 鸭子派发 + 零注册 + 标准内存布局**；  
-> **语法零新增、生命周期零符号、编译期证明**；  
+> **Uya 接口 = 鸭子派发 + 零注册 + 标准内存布局**；
+> **语法零新增、生命周期零符号、编译期证明**；
 > **今天就能用，明天可放开字段限制**。
 
 ---
@@ -3954,7 +3974,7 @@ fn log_printf(fmt: *byte, ...) i32 {
     - 常量除零 → **编译错误**
     - 变量 → 必须证明 `y != 0`，证明失败 → **编译错误并给出修改建议**
     - 编译期证明安全（在当前函数内），证明失败则报编译错误并给出修改建议
-  
+
   **溢出检查示例**：
 [examples/add_safe.uya](./examples/add_safe.uya)
 
@@ -4109,8 +4129,8 @@ Uya 提供两种类型转换语法：
 
 ## 12 内存模型 & RAII
 
-1. 编译期为每个类型 `T` 生成 `drop(T)`（空函数或用户自定义）。  
-2. 离开作用域时按字段逆序插入 `drop` 调用。  
+1. 编译期为每个类型 `T` 生成 `drop(T)`（空函数或用户自定义）。
+2. 离开作用域时按字段逆序插入 `drop` 调用。
 3. **递归 drop 规则**：先 drop 字段，再 drop 外层结构体；字段按声明逆序 drop。
 4. **数组 drop 规则**：
    - 数组元素按索引逆序 drop（`arr[N-1]`, `arr[N-2]`, ..., `arr[0]`）
@@ -4309,8 +4329,8 @@ Uya 提供两种类型转换语法：
 
 ### 12.5.12 一句话总结
 
-> **Uya 移动语义 = 结构体自动移动 + 指针严格检查 + 编译期验证**；  
-> **防止 double free 和悬垂指针，与 RAII 完美配合**；  
+> **Uya 移动语义 = 结构体自动移动 + 指针严格检查 + 编译期验证**；
+> **防止 double free 和悬垂指针，与 RAII 完美配合**；
 > **只移动结构体，基本类型值语义，数组值语义但元素可移动**。
 
 ---
@@ -4366,7 +4386,7 @@ Uya 提供两种类型转换语法：
 
 ### 13.6 一句话总结
 
-> **Uya 原子操作 = `atomic T` 关键字 + 自动原子指令**；  
+> **Uya 原子操作 = `atomic T` 关键字 + 自动原子指令**；
 > **读/写/复合赋值自动原子化，零运行时锁。**
 
 ---
@@ -4629,7 +4649,7 @@ fn caller() void {
 
 ### 15.5 一句话总结
 
-> **Uya 并发安全 = 原子类型 + 自动原子指令**；  
+> **Uya 并发安全 = 原子类型 + 自动原子指令**；
 > **零数据竞争，零运行时锁。**
 
 ---
@@ -4755,15 +4775,15 @@ fn caller() void {
      | `try` 关键字 | 返回错误 | `!T` | 需要明确处理溢出错误（输入验证、关键计算） |
      | 饱和运算符（`+|`, `-|`, `*|`） | 返回极值 | `T` | 需要限制结果范围（信号处理、图形处理） |
      | 包装运算符（`+%`, `-%`, `*%`） | 返回包装值 | `T` | 需要明确的溢出行为（加密算法、循环计数器） |
-     
+
      **选择建议**：
      - 需要错误处理时 → 使用 `try` 关键字（如 `try a + b`）
      - 需要限制范围时 → 使用饱和运算符（如 `a +| b`）
      - 需要包装行为时 → 使用包装运算符（如 `a +% b`）
-   
+
    - **编译期展开示例**：
 [examples/example_104.uya](./examples/example_104.uya)
-   
+
    - **优势**：
      - 代码简洁：一行代码替代多行溢出检查
      - 编译期展开，与手写代码性能相同
@@ -4800,7 +4820,7 @@ fn caller() void {
      - 不支持表达式级 `@size_of(expr)`——仅对 **类型** 求值
      - 返回类型固定为 `i32`；超大结构体大小若超过 `i32` 上限 → 编译错误
    - **一句话总结**：
-     > `@size_of` 是**编译器内置函数**（以 `@` 开头），编译期折叠成常数；  
+     > `@size_of` 是**编译器内置函数**（以 `@` 开头），编译期折叠成常数；
      > 零关键字、编译期证明，单页纸用完。
 
 4. **`@align_of(T) i32`**
@@ -4835,7 +4855,7 @@ fn caller() void {
      - 显式向量化：程序员显式选择 `@vector(T, N)`，编译器不承诺自动向量化
      - 类型安全：向量与掩码都是第一类值类型，参与正常的类型检查
      - 先保证语义正确：第一阶段允许标量回退 lowering，不要求立刻映射真实硬件寄存器
-     - 继续复用现有平台裁枝体系：平台选择仍使用 `std.cfg(...)` / `@asm_target()`
+     - 继续复用现有平台裁枝体系：平台选择仍使用 `std.cfg(...)` / `@asm_target()`；当前 `std.cfg(cond, then[, else])` 支持省略 `else`，从而可用多条并列 `std.cfg(...)` 取代 `else -> std.cfg(...)` 嵌套链
    - **基本语法**：
    ```uya
    type Vec4f32 = @vector(f32, 4);
@@ -4911,9 +4931,9 @@ fn caller() void {
 ## 17 字符串与格式化
 
 ### 17.1 设计目标
-- 支持 `"hex=${x:#06x}"`、`"pi=${pi:.2f}"` 等常用格式；  
-- 仍保持「编译期展开 + 定长栈数组」；  
-- 无运行时解析开销，无堆分配；  
+- 支持 `"hex=${x:#06x}"`、`"pi=${pi:.2f}"` 等常用格式；
+- 仍保持「编译期展开 + 定长栈数组」；
+- 无运行时解析开销，无堆分配；
 - 语法一眼看完。
 
 ### 17.2 语法
@@ -4925,8 +4945,8 @@ fn caller() void {
 - 格式化形式：`"text${expr:format}text"`
 - 格式说明符与 C printf 保持一致
 
-- 整体格式 **与 C printf 保持一致**，减少学习成本。  
-- `width` / `precision` 必须为**编译期数字**（`*` 暂不支持）。  
+- 整体格式 **与 C printf 保持一致**，减少学习成本。
+- `width` / `precision` 必须为**编译期数字**（`*` 暂不支持）。
 - 结果类型仍为 `[i8: N]`，宽度由「格式字符串最大可能长度」常量求值得出。
 
 ### 17.3 宽度常量表
@@ -4975,11 +4995,11 @@ fn main() i32 {
   // 定点格式
   const msg1: [i8: 64] = "hex=${x:#06x}, pi=${pi:.2f}\n";
   printf(&msg1[0]);
-  
+
   // 科学计数法格式
   const msg2: [i8: 64] = "pi=${pi:.2e}, large=${large:.3E}\n";
   printf(&msg2[0]);
-  
+
   return 0;
 }
 [examples/example_114.txt](./examples/example_114.txt)
@@ -5029,12 +5049,12 @@ call memcpy(ptr %buf+43, ptr @str.2, i64 2)            ; "\n"
 
 ### 17.5 后端实现要点
 
-1. **词法** → 识别 `':' spec` 并解析为 `(flag, width, precision, type)` 四元组。  
-2. **常量求值** → 根据「类型 + 格式」查表得最大字节数。  
-3. **代码生成** →  
-   - 文本段 = `memcpy`；  
-   - 插值段 = `sprintf(buf+offset, "格式化串", 值)`；  
-   - 格式串本身 = 编译期常量。  
+1. **词法** → 识别 `':' spec` 并解析为 `(flag, width, precision, type)` 四元组。
+2. **常量求值** → 根据「类型 + 格式」查表得最大字节数。
+3. **代码生成** →
+   - 文本段 = `memcpy`；
+   - 插值段 = `sprintf(buf+offset, "格式化串", 值)`；
+   - 格式串本身 = 编译期常量。
 
 ### 17.6 限制（保持简单）
 
@@ -5138,7 +5158,7 @@ for hello |byte| {
 **示例**：
 ```uya
 @async_fn
-fn fetch() !Future<&[i8]> { 
+fn fetch() !Future<&[i8]> {
     // 异步操作
     try @await some_async_operation();
     return result;
@@ -5247,7 +5267,7 @@ MyFuture {
 }
 ```
 
-#### 18.3.5 async frame allocator 绑定
+#### 18.3.5 async frame allocator 绑定（redis-uya 扩展）
 
 `std.async` 提供两种 allocator 绑定方式：
 
@@ -5285,13 +5305,13 @@ MyFuture {
   ```uya
   // 源代码：return 42; 或 return User{ id: 1, name: "Alice" };
   // 编译器生成的状态机（伪代码）：
-  
+
   // 基本类型示例
   struct AsyncStateMachine_i32 {
       state: i32,
       result: i32
   }
-  
+
   AsyncStateMachine_i32 {
       fn poll(self: &Self, waker: &Waker) union Poll<i32> {
           if self.state == COMPLETED {
@@ -5302,13 +5322,13 @@ MyFuture {
           return union Poll<i32> { Ready: self.result };
       }
   }
-  
+
   // 结构体示例
   struct AsyncStateMachine_User {
       state: i32,
       result: User  // 状态机中保存完整的结构体值
   }
-  
+
   AsyncStateMachine_User {
       fn poll(self: &Self, waker: &Waker) union Poll<User> {
           if self.state == COMPLETED {
@@ -5331,20 +5351,20 @@ MyFuture {
       }
       return 42;  // 成功分支：自动包装为 Future<i32>
   }
-  
+
   // 结构体
   struct User {
       id: i32,
       name: &[i8]
   }
-  
+
   @async_fn
   fn get_user() !Future<User> {
       // 异步操作后返回结构体
       // const data = try @await fetch_user_data();
       return User{ id: 1, name: "Alice" };  // 自动包装为 Future<User>
   }
-  
+
   // 切片
   @async_fn
   fn get_data() !Future<&[i8]> {
@@ -5402,7 +5422,7 @@ fn fetch() !Future<&[i8]> { ... }  // 正确
       data: i32,
       waker: Option<&Waker>  // 保存 waker 以便后续唤醒
   }
-  
+
   MyAsyncIO {
       fn poll(self: &Self, waker: &Waker) union Poll<i32> {
           if self.data_ready() {
@@ -5443,9 +5463,9 @@ fn fetch() !Future<&[i8]> { ... }  // 正确
 
 **`ThreadPool`**：
 - 线程池，用于 CPU 密集型异步任务
-- 当前最小实现提供 `thread_pool_new()` / `thread_pool_shutdown()`，在 Linux 上以可复用 worker 进程池承载计算
+- 当前最小实现提供 `thread_pool_new()` / `thread_pool_shutdown()`，在 Linux 上以可复用 worker 线程池承载计算
 - 共享状态中已包含固定任务槽位、共享 FIFO 队列与 `worker_idx` 绑定；worker 通过 slot 索引取任务并写回结果
-- 当共享槽位任务需要执行时，当前统一先进入共享 FIFO 队列；父进程负责唤醒空闲 worker 进入 drain 路径，而具体取队首 slot 与后续连续取活都由 worker 在共享队列中完成；父进程会按共享状态回刷本地 worker `busy/active_slot`；共享槽位参数/结果按 **raw bits** 传输，并由 **`task_kind`** 区分多种标量 **`T`**（含整数、`bool`、`f32`/`f64` 等）的调用路径；future 侧对 shared-slot 的提交与推进仍经池级 helper（如 **`thread_pool_submit_slot_*()`**、**`thread_pool_try_progress_slot()`**、**`thread_pool_try_kick_drain()`**），one-shot / shared-slot / bind / read-result 的大部分状态机在共享 **`ThreadAsyncComputeCore`** 中实现，再由泛型 **`AsyncComputeFuture<T>`**（及 **`AsyncComputeI32Future`** 等 typedef）把内部轮询映射为 **`Poll<!T>`**；slot 已到 **`DONE`** 后 future 仍可迟绑定 worker 结果 fd（late-poll 回归已覆盖）。队列满时回退 one-shot 子进程
+- 当共享槽位任务需要执行时，当前统一先进入共享 FIFO 队列；调用线程负责唤醒空闲 worker 进入 drain 路径，而具体取队首 slot 与后续连续取活都由 worker 在线程池共享队列中完成；调用线程会按共享状态回刷本地 worker `busy/active_slot`；共享槽位参数/结果按 **raw bits** 传输，并由 **`task_kind`** 区分多种标量 **`T`**（含整数、`bool`、`f32`/`f64` 等）的调用路径；future 侧对 shared-slot 的提交与推进仍经池级 helper（如 **`thread_pool_submit_slot_*()`**、**`thread_pool_try_progress_slot()`**、**`thread_pool_try_kick_drain()`**），shared-slot / bind / read-result 的大部分状态机在共享 **`ThreadAsyncComputeCore`** 中实现，再由泛型 **`AsyncComputeFuture<T>`**（及 **`AsyncComputeI32Future`** 等 typedef）把内部轮询映射为 **`Poll<!T>`**；slot 已到 **`DONE`** 后 future 仍可迟绑定 worker 结果 fd（late-poll 回归已覆盖）。队列满时当前仍回退 one-shot 子进程
 - 与异步运行时集成
 
 **`async_compute<T>`**：
@@ -5536,7 +5556,7 @@ fn main() !Future<i32> {
     // 单条指令
     "instruction template" (input1, input2, ..., -> output1, output2, ...)
         clobbers = [reg1, reg2, ..., "memory"];
-    
+
     // 多条指令块
     "mov rax, {a}" (a, -> rax);
     "add rax, {b}" (rax, b, -> rax);
@@ -5721,11 +5741,11 @@ fn syscall_write(fd: i32, buf: &const byte, count: i32) !i32 {
 fn add_with_overflow(a: i32, b: i32) !(i32, bool) {
     var result: i32;
     var overflow: bool;
-    
+
     @asm {
         "add {a}, {b}" (a, b, -> result, @asm_flag("overflow" -> overflow));
     }
-    
+
     return (result, overflow);
 }
 ```
@@ -5735,7 +5755,7 @@ fn add_with_overflow(a: i32, b: i32) !(i32, bool) {
 ```uya
 fn syscall_exit(code: i32) noreturn {
     const SYS_exit: i64 = 60;
-    
+
     @asm {
         "mov rax, {nr}" (SYS_exit, -> rax);
         "mov rdi, {code}" (code, -> rdi);
@@ -5756,19 +5776,19 @@ struct CPUFeatures {
 
 fn detect_cpu_features() CPUFeatures {
     var features: CPUFeatures = {};
-    
+
     @asm {
         // CPUID 指令
         "mov eax, 1" (-> eax);
         "cpuid" (eax, -> eax, ebx, ecx, edx);
-        
+
         // 提取特性位
         "test edx, 1<<25" (edx, -> features.has_sse);
         "test edx, 1<<26" (edx, -> features.has_sse2);
         "test ecx, 1<<28" (ecx, -> features.has_avx);
         "test ebx, 1<<5" (ebx, -> features.has_avx2);
     }
-    
+
     return features;
 }
 ```
@@ -5933,7 +5953,7 @@ struct TypeInfo {
     kind: TypeKind
     size: usize
     align: usize
-    
+
     // 类型特征标志
     is_integer: bool
     is_signed: bool
@@ -5959,7 +5979,7 @@ struct TypeInfo {
     is_func_ptr: bool
     is_generic_param: bool
     is_opaque: bool
-    
+
     // 扩展元数据
     fields: [FieldInfo]
     variants: [VariantInfo]
@@ -5978,22 +5998,22 @@ struct TypeInfo {
 enum TypeKind {
     // 基础标量类型
     Integer, Float, Bool, Byte, Void
-    
+
     // 指针与引用类型
     Ref, Ptr, AtomicPtr, VoidPtr
-    
+
     // 复合数据类型
     Struct, Union, Enum, Interface, Tuple
-    
+
     // 集合类型
     Array, Slice, FixedSlice
-    
+
     // 特殊类型
     Atomic, ErrorUnion, FuncPtr
-    
+
     // 泛型与元类型
     GenericParam, TypeInfo
-    
+
     // 外部类型
     Extern, Opaque
 }
@@ -6154,14 +6174,14 @@ mc to_string(e: expr) expr {
 mc complex_macro(param) struct {
     // 步骤1：处理参数，转换为 AST
     const param_ast = @mc_ast(param);
-    
+
     // 步骤2：构建代码模板（使用 @mc_ast）
     const template_ast = @mc_ast({
         fn process_${param_ast}(self: &Self) void {
             // 复杂逻辑...
         }
     });
-    
+
     // 步骤3：输出最终代码（使用 @mc_code）
     @mc_code(template_ast);
 }
@@ -6174,7 +6194,7 @@ mc complex_macro(param) struct {
   mc simple() expr {
       42;  // 语法糖：自动转换为 @mc_code(@mc_ast( 42 ))
   }
-  
+
   // 或显式写法（等价）
   mc simple_explicit() expr {
       @mc_code(@mc_ast( 42 ));  // 显式写法
@@ -6254,7 +6274,7 @@ mc debug_mode_simple() expr {
 mc config_value(key: expr, default: expr) expr {
     const key_str = @mc_eval(key);
     const env_value = @mc_get_env(key_str);
-    
+
     if env_value != "" {
         // 根据默认值类型解析环境变量
         const default_type = @mc_type(default);
@@ -6452,7 +6472,7 @@ cached_assert(@align_of(f64) == 8);  // 相同检查会被缓存
 // 自动生成结构体序列化代码
 mc generate_serializer(T: type) struct {
     const info = @mc_type(T);
-    
+
     // 缓存键包含类型信息，相同类型T会复用生成的代码
     match info.kind {
         .Struct => {
@@ -6464,7 +6484,7 @@ mc generate_serializer(T: type) struct {
                 );
                 fields_code.push(field_serializer);
             }
-            
+
             const method_ast = @mc_ast({
                 fn serialize(self: &Self, buffer: &mut Serializer) void {
                     ${fields_code[0]};
@@ -6474,7 +6494,7 @@ mc generate_serializer(T: type) struct {
             });
             @mc_code(method_ast);
         }
-        
+
         .Integer => {
             const method_ast = @mc_ast({
                 fn serialize(self: &Self, buffer: &mut Serializer) void {
@@ -6483,7 +6503,7 @@ mc generate_serializer(T: type) struct {
             });
             @mc_code(method_ast);
         }
-        
+
         else => @mc_error("类型 ${info.name} 不支持序列化");
     }
 }
@@ -6492,7 +6512,7 @@ mc generate_serializer(T: type) struct {
 struct Point {
     x: i32,
     y: i32,
-    
+
     // 在结构体内部调用宏
     generate_serializer(Point);  // 生成serialize方法
 }
@@ -6506,19 +6526,19 @@ struct Point {
 // 编译时生成类型安全的向量容器
 mc vector_type(T: type, name: ident) type {
     const info = @mc_type(T);
-    
+
     // 验证类型约束
     if !info.is_copy && !info.has_drop {
         @mc_error("类型 ${T} 必须实现 Copy 或 Drop");
     }
-    
+
     // 生成向量结构体定义
     @mc_code(@mc_ast(
         struct ${name} {
             data: &${T},
             len: usize,
             cap: usize,
-            
+
             fn new() Self {
                 return ${name} {
                     data: null,
@@ -6526,7 +6546,7 @@ mc vector_type(T: type, name: ident) type {
                     cap: 0,
                 };
             }
-            
+
             fn push(self: &mut Self, value: ${T}) void {
                 // 自动生成增长逻辑
                 if self.len >= self.cap {
@@ -6542,7 +6562,7 @@ mc vector_type(T: type, name: ident) type {
                 self.data[self.len] = value;
                 self.len += 1;
             }
-            
+
             fn pop(self: &mut Self) union Option<${T}> {
                 if self.len == 0 {
                     return .None;
@@ -6550,7 +6570,7 @@ mc vector_type(T: type, name: ident) type {
                 self.len -= 1;
                 return .Some(self.data[self.len]);
             }
-            
+
             fn drop(self: Self) void {
                 if self.data != null {
                     // 如果T有drop，需要调用每个元素的drop
@@ -6583,7 +6603,7 @@ const vec2: IntVec = IntVec.new();  // 复用缓存的 IntVec 类型定义
 // 生成编译时查询表，利用缓存避免重复计算
 mc lookup_table(name: ident, size: expr, generator: expr) struct {
     const table_size = @mc_eval(size);
-    
+
     // 生成静态查找表
     const table_ast = @mc_ast(
         const ${name}: [i32: ${table_size}] = [
@@ -6593,14 +6613,14 @@ mc lookup_table(name: ident, size: expr, generator: expr) struct {
             // ... 更多元素
         ]
     );
-    
+
     @mc_code(table_ast);
 }
 
 // 辅助宏：生成特定函数的查找表
 mc sin_table(name: ident, size: expr) struct {
     const n = @mc_eval(size);
-    
+
     // 生成sin函数查找表
     @mc_code(@mc_ast(
         const ${name}: [f32: ${n}] = [
@@ -6628,13 +6648,13 @@ fn use_table() void {
 // 自动错误传播宏，带缓存
 mc try_or_default(expr: expr, default: expr) expr {
     const result_type = @mc_type(expr);
-    
+
     if !result_type.is_error_union {
         @mc_error("try_or_default 仅适用于返回错误联合类型的表达式");
     }
-    
+
     const default_ast = @mc_ast(default);
-    
+
     // 生成带错误处理的表达式
     @mc_code(@mc_ast(
         ${expr} catch {
@@ -6646,7 +6666,7 @@ mc try_or_default(expr: expr, default: expr) expr {
 // 带错误上下文的宏
 mc try_with_context(expr: expr, context: expr) expr {
     const context_str = @mc_eval(context);
-    
+
     @mc_code(@mc_ast(
         ${expr} catch |err| {
             log_error("${context_str}: ", err);
@@ -6669,14 +6689,14 @@ fn parse_config() !Config {
 // 编译时配置读取宏
 mc config_value(key: expr, default: expr) expr {
     const key_str = @mc_eval(key);
-    
+
     // 尝试从编译时环境读取
     const env_value = @mc_get_env(key_str);
-    
+
     if env_value != "" {
         // 根据default的类型解析环境变量值
         const default_type = @mc_type(default);
-        
+
         match default_type.kind {
             .Integer => {
                 const int_val = @mc_parse_int(env_value);
@@ -6699,7 +6719,7 @@ mc config_value(key: expr, default: expr) expr {
 // 平台检测宏
 mc target_platform() expr {
     const platform = @mc_get_env("TARGET_PLATFORM");
-    
+
     match platform {
         "windows" => @mc_code(@mc_ast( .WINDOWS ));
         "linux" => @mc_code(@mc_ast( .LINUX ));
@@ -6732,7 +6752,7 @@ if PLATFORM == .LINUX {
 mc feature_enabled(feature: expr) expr {
     const feature_name = @mc_eval(feature);
     const env_var = @mc_get_env("FEATURE_" + feature_name);
-    
+
     if env_var == "1" or env_var == "true" or env_var == "on" {
         @mc_code(@mc_ast( true ));
     } else {
@@ -6744,7 +6764,7 @@ mc feature_enabled(feature: expr) expr {
 mc version_check(min_version: expr) expr {
     const min_ver = @mc_eval(min_version);
     const current_ver = @mc_get_env("COMPILER_VERSION");
-    
+
     if current_ver >= min_ver {
         @mc_code(@mc_ast( true ));
     } else {
@@ -6828,17 +6848,30 @@ mc hash_string(s) expr {
 
 ### 25.13 一句话总结
 
-> **Uya 宏系统 = 编译时元编程 + 类型反射 + 智能缓存 + 环境集成**；  
+> **Uya 宏系统 = 编译时元编程 + 类型反射 + 智能缓存 + 环境集成**；
 > **零运行时开销，编译期确定性，坚如磐石。**
 
 ---
 
 ## 29 扩展特性
 
-### 29.1 核心特性（计划中）
-- **官方包管理器**：`uyapm`
-  - 依赖管理和包分发系统
-  - 支持版本管理和依赖解析
+### 29.1 包管理（v1 draft / MVP in progress）
+- **canonical public UX**：`uya upm <subcommand>`
+- **仓库内真实入口**：`cmd/upm` / `bin/cmd/upm`
+- **repo-local 验证入口**：`bin/uya-upm-stage2`（在主编译器入口完全并入前，用于验证 `build` / `upm` 工作流）
+- **v1 目标**：
+  - `uya.toml`
+  - `uya.lock`
+  - `path` / `git` 依赖
+  - 包感知的模块查找
+- **当前兼容要求**：
+  - 无 manifest 的 `uya build file.uya` / `uya build dir/` 工作流继续可用
+- **非目标**：
+  - registry
+  - semver range 求解
+  - 多版本并存
+  - workspace
+- 完整规范见 [package_management.md](./package_management.md)
 
 ### 29.2 drop 机制增强
 - **drop 标记**：`#[no_drop]` 用于无需清理的类型
@@ -6982,17 +7015,17 @@ fn basic_union_example() void {
     // 创建联合体
     const int_val = IntOrFloat.i(42);
     const float_val = IntOrFloat.f(3.14159);
-    
+
     // 模式匹配访问
     match int_val {
         .i(x) => printf("整数: %d\n", x),
         .f(x) => printf("浮点: %f\n", x)
     }
-    
+
     // 直接访问（已知标签）
     var v: IntOrFloat = IntOrFloat.i(10);
     const x: i32 = v.i;  // ✅
-    
+
     v = IntOrFloat.f(3.14);
     const y: f64 = v.f;  // ✅
 }
@@ -7041,14 +7074,14 @@ extern process_c_data(data: union CData) void;
 fn ffi_example() void {
     // 创建 Uya 联合体
     const uya_data: union CData = union CData.integer(100);
-    
+
     // 直接传递给 C 函数
     process_c_data(uya_data);
-    
+
     // 接收 C 联合体
     extern get_c_data() union CData;
     const c_data: union CData = get_c_data();
-    
+
     // 模式匹配处理
     match c_data {
         .integer(val) => printf("C 整数: %d\n", val),
@@ -7074,7 +7107,7 @@ ConfigValue {
             .str_val(s) => "str=${s}"
         }
     }
-    
+
     fn is_truthy(self: &Self) bool {
         match *self {
             .int_val(x) => x != 0,
@@ -7088,23 +7121,23 @@ ConfigValue {
 // 主函数
 fn main() !i32 {
     basic_union_example();
-    
+
     const packet1 = NetworkPacket.ipv4([192, 168, 1, 1]);
     try process_packet(packet1);
-    
+
     const packet2 = NetworkPacket.ipv6([
         0x20, 0x01, 0x0d, 0xb8, 0x85, 0xa3, 0x00, 0x00,
         0x00, 0x00, 0x8a, 0x2e, 0x03, 0x70, 0x73, 0x34
     ]);
     try process_packet(packet2);
-    
+
     ffi_example();
-    
+
     const config = ConfigValue.int_val(42);
     const str = config.to_string();
     printf("配置值: %s\n", &str[0]);
     printf("是否为真: %s\n", config.is_truthy() ? "是" : "否");
-    
+
     return 0;
 }
 ```
@@ -7168,17 +7201,17 @@ interface Iterator<T> {
 // 泛型结构体 + 泛型方法
 struct Container<T> {
     value: T,
-    
+
     // 泛型方法：将 T 转换为 U
     fn as_type<U>(self: &Self) U {
         return self.value as U;
     }
-    
+
     // 非泛型方法
     fn get(self: &Self) T {
         return self.value;
     }
-    
+
     // 多类型参数方法
     fn wrap<U>(self: &Self, other: U) Pair<T, U> {
         return Pair<T, U>{ first: self.value, second: other };

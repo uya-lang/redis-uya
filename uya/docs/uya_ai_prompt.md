@@ -1,7 +1,7 @@
 # Uya · AI 代码生成技能（Skill）
 
-> **用途**：指导模型编写可编译的 Uya，减少与其它语言混淆与臆造语法。  
-> **自包含**：下文已写入常用规则；**不**再依赖任何外部说明文件。  
+> **用途**：指导模型编写可编译的 Uya，减少与其它语言混淆与臆造语法。
+> **自包含**：下文已写入常用规则；**不**再依赖任何外部说明文件。
 > **语言版本**：**0.49.50** · 更新 **2026-05-14**（与 [uya.md](./uya.md) 主规范同步；新增 `@error_name(err)` 返回语言级错误名字符串，未知或 `@syscall` 错误回退 `UnknownError`）
 
 ---
@@ -37,6 +37,13 @@
 **类型名**（非上表关键字，出现在类型位置）：`bool` `byte` `void` `i8`…`i64` `u8`…`u64` `usize` `f32` `f64`；以及自定义 `struct`/`enum`/`union`/`interface` 名、泛型实参等。勿把「类型名」误记成可当作普通变量名的关键字。
 
 **模块**：目录和单文件都可作为模块；同目录下所有 `.uya` 仍同属一个目录模块名（由目录路径决定，不含文件名），每个 `.uya` 文件也有包含文件名的文件模块别名。导入：`use std.io;`、`use std.io.read_file;`、`use std.io.file.read_file;`、`use std.io as io;`。调用可用完整模块前缀（如 **`std.io.printf(...)`**），或依赖已导入的单项简名（**`read_file(...)`**）。**`use std.async;` 之后**应写 **`block_on(...)`** 等**已导入的简单名**，**不要**臆造 **`async.block_on`**（没有名为 `async` 的默认模块值）。
+
+**root 术语**：
+
+- **`package root`**：从当前 Uya 源文件所在目录向上找到的第一个 **`uya.toml`** 所在目录
+- **`source root`**：**`package root + [package].source-dir`**，默认 **`"."`**
+- **`module root`**：编译器真正用于 **`use`** 查找的根目录；package mode 下等于 **`source root`**，legacy mode 下由编译器自动推导
+- **`project root`**：旧文档/兼容 CLI 名；如无额外说明，按 **`module root`** 理解，不要把它当 **`package root`**
 
 ---
 
@@ -299,7 +306,11 @@ export mc twice(x: expr) expr { ${x} + ${x}; }
 make check   # 构建自举编译器并跑测试（常用）
 ```
 
-**工程根目录**：`uya` 按**输入文件所在目录**定模块根（如 `tests/foo.uya` → 根为 `tests/`）。在仓库**顶层目录**单独放只含 **`use std.*`** 的 `.uya` 再编译，可能出现 **`use` 无法解析标准库导出**等报错；示例与单文件验证宜放在 **`tests/`** 或你的应用源码目录，与仓库惯例一致。
+**工程根目录 / root 语义**：
+
+- legacy mode：`uya` 按**输入文件所在目录**或输入目录本身定 **`module root`**（如 `tests/foo.uya` → `module root = tests/`）
+- package mode：先从**当前 Uya 源文件所在目录**向上找第一个 **`uya.toml`**，该目录是 **`package root`**；再由 **`source-dir`** 计算 **`source root`**；真正参与模块查找的是 **`module root = source root`**
+- 在仓库**顶层目录**单独放只含 **`use std.*`** 的 `.uya` 再编译，可能出现 **`use` 无法解析标准库导出**等报错；示例与单文件验证宜放在 **`tests/`** 或你的应用源码目录，与仓库惯例一致。
 
 若生成代码与编译器报错不一致，**以报错为准**修正，不要坚持臆测语法。
 

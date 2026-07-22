@@ -9,7 +9,6 @@ use std.fmt.ast.StmtKind;
 use std.fmt.ast.Expr;
 use std.fmt.ast.ExprKind;
 use std.fmt.comments.CommentGroup;
-use std.fmt.positions.span_after;
 use std.fmt.formatter.Formatter;
 use std.fmt.formatter.formatter_init;
 use std.fmt.formatter.formatter_write;
@@ -21,6 +20,9 @@ use std.fmt.formatter.formatter_newline;
 struct Printer {
     f: &Formatter,
     comment_groups: &[CommentGroup],
+    next_stmt_index: usize,
+    total_decl_count: usize,
+    decl_lines: &usize,
 }
 
 fn write_space(p: &Printer) !void {
@@ -41,6 +43,21 @@ fn write_keyword_fn(p: &Printer) !void {
     try formatter_write_byte(p.f, 'n' as byte);
 }
 
+fn ensure_blank_line(p: &Printer) !void {
+    if p.f.pos == 0 {
+        return;
+    }
+    if p.f.pos >= 2 && p.f.buf[p.f.pos - 1] == '\n' as byte && p.f.buf[p.f.pos - 2] == '\n' as byte {
+        return;
+    }
+    if p.f.pos >= 1 && p.f.buf[p.f.pos - 1] == '\n' as byte {
+        try formatter_write_byte(p.f, '\n' as byte);
+        return;
+    }
+    try formatter_write_byte(p.f, '\n' as byte);
+    try formatter_write_byte(p.f, '\n' as byte);
+}
+
 fn print_comment_group(p: &Printer, group: &CommentGroup) !void {
     var i: usize = 0;
     while i < group.count {
@@ -48,15 +65,40 @@ fn print_comment_group(p: &Printer, group: &CommentGroup) !void {
         try formatter_newline(p.f);
         i = i + 1;
     }
+    group.printed = true;
 }
 
-fn find_trailing_comment_group(p: &Printer, stmt: &Stmt) i32 {
+fn print_unattached_comment_groups_before_decl(p: &Printer, decl_index: usize) !bool {
+    var printed_any: bool = false;
     var i: usize = 0;
     while i < p.comment_groups.len {
         const group: &CommentGroup = &p.comment_groups[i];
-        if group.count > 0 &&
-            group.comments[0].span.start.line == stmt.span.end.line &&
-            span_after(group.comments[0].span, stmt.span) {
+        if !group.printed && group.attached_decl_index < 0 && group.attached_stmt_index < 0 {
+            const first_comment_line: usize = group.comments[0].span.start.line;
+            var should_print: bool = true;
+            if decl_index < p.total_decl_count {
+                const decl_line: usize = p.decl_lines[decl_index];
+                should_print = first_comment_line < decl_line;
+            }
+            if should_print {
+                try ensure_blank_line(p);
+                try print_comment_group(p, group);
+                printed_any = true;
+                if decl_index < p.total_decl_count {
+                    try ensure_blank_line(p);
+                }
+            }
+        }
+        i = i + 1;
+    }
+    return printed_any;
+}
+
+fn find_trailing_comment_group(p: &Printer, stmt_index: usize) i32 {
+    var i: usize = 0;
+    while i < p.comment_groups.len {
+        const group: &CommentGroup = &p.comment_groups[i];
+        if group.attached_stmt_index == stmt_index as i32 && group.is_trailing {
             return i as i32;
         }
         i = i + 1;
@@ -64,16 +106,46 @@ fn find_trailing_comment_group(p: &Printer, stmt: &Stmt) i32 {
     return -1;
 }
 
-fn print_stmt_with_trailing_comment(p: &Printer, stmt: &Stmt) !void {
+fn find_leading_comment_group(p: &Printer, stmt_index: usize) i32 {
+    var i: usize = 0;
+    while i < p.comment_groups.len {
+        const group: &CommentGroup = &p.comment_groups[i];
+        if group.attached_stmt_index == stmt_index as i32 && !group.is_trailing {
+            return i as i32;
+        }
+        i = i + 1;
+    }
+    return -1;
+}
+
+fn print_leading_comment_groups(p: &Printer, stmt_index: usize) !void {
+    var i: usize = 0;
+    while i < p.comment_groups.len {
+        const group: &CommentGroup = &p.comment_groups[i];
+        if group.attached_stmt_index == stmt_index as i32 && !group.is_trailing {
+            try print_comment_group(p, group);
+        }
+        i = i + 1;
+    }
+}
+
+fn print_stmt_with_comments(p: &Printer, stmt: &Stmt, stmt_index: usize) !void {
+    try print_leading_comment_groups(p, stmt_index);
     try print_stmt(p, stmt);
-    const group_index: i32 = find_trailing_comment_group(p, stmt);
-    if group_index >= 0 {
+    const trailing_group_index: i32 = find_trailing_comment_group(p, stmt_index);
+    if trailing_group_index >= 0 {
         try write_space(p);
-        try print_comment_group(p, &p.comment_groups[group_index as usize]);
+        try print_comment_group(p, &p.comment_groups[trailing_group_index as usize]);
         if p.f.pos > 0 && p.f.buf[p.f.pos - 1] == '\n' as byte {
             p.f.pos = p.f.pos - 1;
         }
     }
+}
+
+fn print_use_stmt(p: &Printer, stmt: &Stmt) !void {
+    try formatter_write(p.f, "use " as &[byte]);
+    try formatter_write(p.f, stmt.use_stmt.path);
+    try formatter_write_byte(p.f, ';' as byte);
 }
 
 fn print_expr(p: &Printer, expr: &Expr) !void {
@@ -116,6 +188,10 @@ fn print_expr(p: &Printer, expr: &Expr) !void {
 }
 
 fn print_stmt(p: &Printer, stmt: &Stmt) !void {
+    if stmt.kind == StmtKind.STMT_USE {
+        try print_use_stmt(p, stmt);
+        return;
+    }
     if stmt.kind == StmtKind.STMT_RETURN {
         try write_keyword_return(p);
         try write_space(p);
@@ -146,8 +222,10 @@ fn print_block(p: &Printer, block: &BlockStmt) !void {
 
     var i: usize = 0;
     while i < block.stmt_count {
-        try print_stmt_with_trailing_comment(p, &block.stmts[i]);
+        const stmt_index: usize = p.next_stmt_index;
+        try print_stmt_with_comments(p, &block.stmts[i], stmt_index);
         try formatter_newline(p.f);
+        p.next_stmt_index = p.next_stmt_index + 1;
         i = i + 1;
     }
 
@@ -162,9 +240,10 @@ fn print_block(p: &Printer, block: &BlockStmt) !void {
     try formatter_write_byte(p.f, '}' as byte);
 }
 
-fn print_decl(p: &Printer, decl: &Decl) !void {
+fn print_decl(p: &Printer, decl: &Decl, decl_index: usize) !void {
     if decl.doc_comment_count > 0 {
         try print_comment_group(p, &p.comment_groups[decl.doc_comment_start]);
+        try ensure_blank_line(p);
     }
     if decl.kind == DeclKind.DECL_FN {
         try write_keyword_fn(p);
@@ -200,16 +279,44 @@ export fn print_file_to_buffer(arena: &Arena, file: &FmtFile, comment_groups: &[
         at_line_start: false,
     };
     formatter_init(&f, buf, 4096);
-    var p: Printer = Printer { f: &f, comment_groups: comment_groups };
-
+    var decl_lines: &usize = arena_alloc(arena, @size_of(usize) as usize * (file.decl_count + 1)) as &usize;
     var i: usize = 0;
     while i < file.decl_count {
-        if i > 0 {
-            try formatter_write_byte(&f, '\n' as byte);
-            try formatter_write_byte(&f, '\n' as byte);
-        }
-        try print_decl(&p, &file.decls[i]);
+        decl_lines[i] = file.decls[i].span.start.line;
         i = i + 1;
+    }
+    var p: Printer = Printer { f: &f, comment_groups: comment_groups, next_stmt_index: 0, total_decl_count: file.decl_count, decl_lines: decl_lines };
+
+    i = 0;
+    while i < file.use_count {
+        try print_use_stmt(&p, &file.use_stmts[i]);
+        try formatter_write_byte(&f, '\n' as byte);
+        i = i + 1;
+    }
+    if file.use_count > 0 && file.decl_count > 0 {
+        try formatter_write_byte(&f, '\n' as byte);
+    }
+
+    if file.decl_count > 0 {
+        _ = try print_unattached_comment_groups_before_decl(&p, 0);
+    }
+
+    i = 0;
+    while i < file.decl_count {
+        if i > 0 {
+            const printed_unattached_between: bool = try print_unattached_comment_groups_before_decl(&p, i);
+            if !printed_unattached_between {
+                try ensure_blank_line(&p);
+            }
+        }
+        try print_decl(&p, &file.decls[i], i);
+        i = i + 1;
+    }
+
+    if file.decl_count == 0 {
+        _ = try print_unattached_comment_groups_before_decl(&p, 0);
+    } else {
+        _ = try print_unattached_comment_groups_before_decl(&p, file.decl_count);
     }
 
     return buf[0:f.pos];

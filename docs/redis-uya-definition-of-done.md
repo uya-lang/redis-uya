@@ -1,12 +1,21 @@
 # redis-uya Definition of Done
 
 > 版本: v0.9.3-dev
-> 日期: 2026-07-18
-> 状态: 下列条目保留历史里程碑证据；当前 `make test`、`make test-integration` 与 release benchmark guard 通过，主线处于 `v0.9.3` 核心缺口补齐、性能收敛与运维第一批
+> 日期: 2026-07-22
+> 状态: 下列条目保留历史里程碑证据；当前 Uya 1.0 同步后的构建、完整单测、完整集成、redis-cli 和 release 构建通过，主线处于 `v0.9.3` 核心缺口补齐、性能收敛与运维第一批
 
 ## 1. 目标
 
 本页用于把 `redis-uya` 的阶段能力映射到明确测试、验证脚本或 benchmark 证据。
+
+## Uya 1.0 工具链同步（2026-07-22）
+
+| DoD 项 | 证据 |
+|--------|------|
+| 上游 `1.0` 分支工具链按源码重新构建并成套同步：`bin/uya` 静态启动器与 `bin/cmd/build` 实际编译器均返回 `v0.9.9`，哈希和尺寸已固化 | `uya/bin/uya`、`uya/bin/cmd/build`、`docs/redis-uya-uya-sync-2026-07-22.md` |
+| split-C 跨模块导出全局符号定义、引用和镜像 extern 声明一致；上游回归测试已提交 | `../uya` 提交 `13d7c784`、`337a0edd`，`../uya/tests/verify_c99_exported_global_split.sh` |
+| redis-uya 兼容调整遵循 Uya 命名和 FFI 规则：延迟状态变量不再与导出函数同名，入口日志使用显式 libc 声明 | `src/command/latency.uya`、`src/main.uya` |
+| 当前项目在新工具链下完成无警告 debug 构建、完整单测、完整集成、redis-cli smoke 和 release 构建 | `make build`、`make test`、`make test-integration`、`make test-redis-cli`、`make build-release` |
 
 重要说明：
 

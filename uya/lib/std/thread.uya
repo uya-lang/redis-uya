@@ -6,6 +6,9 @@
 use std.async;
 use std.macro_typeinfo.TypeInfo;
 use libc.errno;
+use libc.free;
+use libc.malloc;
+use libc.pthread;
 use libc.stdlib;
 use libc.signal;
 use libc.syscall;
@@ -294,7 +297,7 @@ fn thread_call_f64(fn_ptr: &void, arg: u64) u64 {
 }
 
 struct ThreadWorker {
-    pid: i32,
+    thread: pthread_t,
     cmd_write_fd: i32,
     result_read_fd: i32,
     busy: i32,
@@ -322,6 +325,13 @@ struct ThreadPoolSharedState {
     pending_count: atomic i32,
     slots: [ThreadTaskSlotRaw: 16] = [],
     pending_slots: [i32: 32] = [],
+}
+
+struct ThreadWorkerStart {
+    worker_idx: i32,
+    cmd_read_fd: i32,
+    result_write_fd: i32,
+    shared_state: &ThreadPoolSharedState,
 }
 
 export struct ThreadPool {
@@ -494,10 +504,18 @@ fn thread_worker_loop(worker_idx: i32, cmd_read_fd: i32, result_write_fd: i32, s
             }
         }
     }
+}
 
-    _ = sys_close(cmd_read_fd);
-    _ = sys_close(result_write_fd);
-    sys_exit(0);
+fn thread_worker_main(arg: &void) &void {
+    const start: &ThreadWorkerStart = arg as &ThreadWorkerStart;
+    if start == null {
+        return null;
+    }
+    thread_worker_loop(start.worker_idx, start.cmd_read_fd, start.result_write_fd, start.shared_state);
+    _ = sys_close(start.cmd_read_fd);
+    _ = sys_close(start.result_write_fd);
+    free(start as &void);
+    return null;
 }
 
 fn thread_pool_spawn_worker(pool: &ThreadPool, worker_idx: i32) !i32 {
@@ -528,33 +546,65 @@ fn thread_pool_spawn_worker(pool: &ThreadPool, worker_idx: i32) !i32 {
         return nonblock_result as! i32;
     };
 
-    const fork_result: !i64 = sys_fork();
-    const child_pid: i64 = fork_result catch {
+    const start: &ThreadWorkerStart = malloc(@size_of(ThreadWorkerStart) as usize) as &ThreadWorkerStart;
+    if start == null {
         _ = sys_close(cmd_fds[0]);
         _ = sys_close(cmd_fds[1]);
         _ = sys_close(result_fds[0]);
         _ = sys_close(result_fds[1]);
-        return fork_result as! i32;
-    };
-
-    if child_pid == 0 {
-        _ = sys_close(cmd_fds[1]);
-        _ = sys_close(result_fds[0]);
-        thread_worker_loop(worker_idx, cmd_fds[0], result_fds[1], pool._shared_state);
+        return thread_generic_error_i32();
     }
 
-    _ = sys_close(cmd_fds[0]);
-    _ = sys_close(result_fds[1]);
+    start.worker_idx = worker_idx;
+    start.cmd_read_fd = cmd_fds[0];
+    start.result_write_fd = result_fds[1];
+    start.shared_state = pool._shared_state;
+
+    if worker_idx < 0 || worker_idx >= THREAD_POOL_MAX_WORKERS {
+        free(start as &void);
+        _ = sys_close(cmd_fds[0]);
+        _ = sys_close(cmd_fds[1]);
+        _ = sys_close(result_fds[0]);
+        _ = sys_close(result_fds[1]);
+        return thread_generic_error_i32();
+    }
+
     pool._workers[worker_idx as usize] = ThreadWorker{
-        pid: child_pid as i32,
+        thread: pthread_t{},
         cmd_write_fd: cmd_fds[1],
         result_read_fd: result_fds[0],
         busy: 0,
-        active: 1,
+        active: 0,
         active_slot: 0 - 1,
     };
-    pool._started_workers = pool._started_workers + 1;
-    return 0;
+
+    if worker_idx >= 0 && worker_idx < THREAD_POOL_MAX_WORKERS {
+        const create_result: i32 = pthread_create(&pool._workers[worker_idx as usize].thread,
+                                                  null as &const pthread_attr_t,
+                                                  &thread_worker_main as &void,
+                                                  start as &void);
+        if create_result != 0 {
+            free(start as &void);
+            _ = sys_close(cmd_fds[0]);
+            _ = sys_close(cmd_fds[1]);
+            _ = sys_close(result_fds[0]);
+            _ = sys_close(result_fds[1]);
+            pool._workers[worker_idx as usize] = ThreadWorker{
+                thread: pthread_t{},
+                cmd_write_fd: 0 - 1,
+                result_read_fd: 0 - 1,
+                busy: 0,
+                active: 0,
+                active_slot: 0 - 1,
+            };
+            return thread_generic_error_i32();
+        }
+
+        pool._workers[worker_idx as usize].active = 1;
+        pool._started_workers = pool._started_workers + 1;
+        return 0;
+    }
+    return thread_generic_error_i32();
 }
 
 fn thread_pool_try_acquire_idle_worker(pool: &ThreadPool) i32 {
@@ -1232,18 +1282,15 @@ export fn thread_pool_shutdown(pool: &ThreadPool) void {
             if pool._workers[i as usize].active != 0 {
                 var cmd: ThreadWorkerCommand = ThreadWorkerCommand{ slot_idx: THREAD_WORKER_STOP_SLOT, reserved: 0 };
                 _ = sys_write(pool._workers[i as usize].cmd_write_fd, (&cmd) as *const byte, @size_of(ThreadWorkerCommand)) catch {};
+                _ = pthread_join(&pool._workers[i as usize].thread, null as & &void);
                 if pool._workers[i as usize].cmd_write_fd > 0 {
                     _ = sys_close(pool._workers[i as usize].cmd_write_fd);
                 }
                 if pool._workers[i as usize].result_read_fd > 0 {
                     _ = sys_close(pool._workers[i as usize].result_read_fd);
                 }
-                if pool._workers[i as usize].pid > 0 {
-                    var status: i32 = 0;
-                    _ = sys_waitpid(pool._workers[i as usize].pid, &status, 0);
-                }
                 pool._workers[i as usize] = ThreadWorker{
-                    pid: 0,
+                    thread: pthread_t{},
                     cmd_write_fd: 0 - 1,
                     result_read_fd: 0 - 1,
                     busy: 0,
@@ -1296,7 +1343,7 @@ fn thread_f64_arg_bits(arg: f64) usize {
 }
 
 // 执行 T -> T 计算，并返回 Future<!T>（装箱后的接口对象）。
-// 说明：优先复用 ThreadPool 的 worker 进程；池满载时先进入共享槽位 FIFO，再回退 one-shot 子进程。
+// 说明：优先复用 ThreadPool 的 worker 线程；池满载时先进入共享槽位 FIFO，再回退 one-shot 子进程。
 // 通用 async_compute<T> 顶层入口。
 // 依赖单态化后的常量条件裁剪，仅保留与 T 对应的 concrete future 分支。
 export fn async_compute<T>(pool: &ThreadPool, compute_fn: &void, arg: T) Future<!T> {

@@ -2,7 +2,7 @@
 # redis-uya 开发 TODO 文档
 
 > 版本: v0.9.3-dev
-> 日期: 2026-07-17
+> 日期: 2026-07-22
 > 配套设计文档: `redis-uya-design.md`
 > 配套评审文档: `redis-uya-review.md`
 > 审计基线: `redis-uya-audit-2026-05-16.md`
@@ -24,6 +24,7 @@
 - `v0.9.0` 起后续主线只迭代单机版：补齐 Redis Open Source 单机功能、兼容性、性能和稳定性。
 - 当前 `HEAD` 的真实性高于历史报告：`README`、`DoD`、`COMMAND*`、测试结果和 benchmark 结果必须互相一致。
 - 2026-07-20 当前 `HEAD`：`make test`、`make test-integration`、`make test-redis-cli` 与 release benchmark 绝对吞吐、归一化吞吐和 p99 guard 通过；正式矩阵为 Redis 的 `1.02x/1.25x/1.08x/1.33x/1.00x`，短矩阵受同机 Redis 波动影响，严格 1.10x 全场景超越仍待继续优化。
+- 2026-07-22 已同步 `../uya` `1.0` 分支 `337a0edd`：重新构建并同步 `bin/uya` 与 `bin/cmd/build`，修复 split-C 跨模块导出全局符号，redis-uya 构建、完整单测、完整集成、redis-cli 和 release 构建均通过。
 - `v0.9.4` 用于性能与稳定性收敛；`v0.9.5` 是首个单机封版候选，如未达到 `v1.0.0` 封版条件，继续使用 `v0.9.6` 等 patch 版本顺序迭代。
 - 单机版必须先覆盖 Redis Open Source 单机核心命令面；模块命令可以继续追踪，但不能与 `v1.0.0` 单机封版门槛混算。命令全集、状态定义和封版标准见 `redis-uya-command-scope.md`。
 - `v1.0.0` 是单机版封版发布点；只有单机版功能和性能达标后才发布。
@@ -35,6 +36,7 @@
 
 - [x] 工程骨架、`Makefile`、文档入口
 - [x] 内置 Uya 工具链同步
+- [x] Uya `1.0` / `v0.9.9` 工具链同步：标准库、文档、静态启动器与 `cmd/build` 成套更新，并完成 split-C 兼容验证
 - [x] 工具模块：`log/time/endian/crc64`
 - [x] 最小单元测试框架与 `make test`
 - [x] 内存分配器封装

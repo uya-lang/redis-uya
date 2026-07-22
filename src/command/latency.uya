@@ -20,9 +20,9 @@ export struct LatencyHistogramEntry {
 }
 
 var latency_command_active: bool = false;
-var latency_command_latest_timestamp_sec: u64 = 0u64;
-var latency_command_latest_latency_ms: u64 = 0u64;
-var latency_command_max_latency_ms: u64 = 0u64;
+var latency_command_latest_timestamp_sec_value: u64 = 0u64;
+var latency_command_latest_latency_ms_value: u64 = 0u64;
+var latency_command_max_latency_ms_value: u64 = 0u64;
 var latency_command_entries: [LatencyHistoryEntry: LATENCY_HISTORY_MAX_ENTRIES] = [];
 var latency_command_start: usize = 0;
 var latency_command_count: usize = 0;
@@ -177,10 +177,10 @@ export fn latency_record_command(timestamp_sec: u64, duration_us: u64, command_n
 
     if monitor_threshold_ms > 0 && latency_ms >= monitor_threshold_ms as u64 {
         latency_command_active = true;
-        latency_command_latest_timestamp_sec = timestamp_sec;
-        latency_command_latest_latency_ms = latency_ms;
-        if latency_ms > latency_command_max_latency_ms {
-            latency_command_max_latency_ms = latency_ms;
+        latency_command_latest_timestamp_sec_value = timestamp_sec;
+        latency_command_latest_latency_ms_value = latency_ms;
+        if latency_ms > latency_command_max_latency_ms_value {
+            latency_command_max_latency_ms_value = latency_ms;
         }
 
         var slot: usize = 0;
@@ -205,15 +205,15 @@ export fn latency_command_is_active() bool {
 }
 
 export fn latency_command_latest_timestamp_sec() u64 {
-    return latency_command_latest_timestamp_sec;
+    return latency_command_latest_timestamp_sec_value;
 }
 
 export fn latency_command_latest_latency_ms() u64 {
-    return latency_command_latest_latency_ms;
+    return latency_command_latest_latency_ms_value;
 }
 
 export fn latency_command_max_latency_ms() u64 {
-    return latency_command_max_latency_ms;
+    return latency_command_max_latency_ms_value;
 }
 
 export fn latency_history_count(event: &[byte]) usize {
@@ -300,9 +300,9 @@ fn latency_reset_command() bool {
         index = index + 1;
     }
     latency_command_active = false;
-    latency_command_latest_timestamp_sec = 0u64;
-    latency_command_latest_latency_ms = 0u64;
-    latency_command_max_latency_ms = 0u64;
+    latency_command_latest_timestamp_sec_value = 0u64;
+    latency_command_latest_latency_ms_value = 0u64;
+    latency_command_max_latency_ms_value = 0u64;
     latency_command_start = 0;
     latency_command_count = 0;
     return true;

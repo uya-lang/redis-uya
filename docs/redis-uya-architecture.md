@@ -1,7 +1,7 @@
 # redis-uya ARCHITECTURE
 
 > 版本: v0.9.3-dev
-> 日期: 2026-05-09
+> 日期: 2026-07-23
 
 ## 1. 总体结构
 
@@ -190,9 +190,9 @@ server open
 - `main.uya` 支持第五个可选启动参数 `maxmemory-policy`，当前可选 `noeviction`、`allkeys-lru`、`allkeys-lfu`、`volatile-lru`、`volatile-lfu` 与 `volatile-ttl`
 - `server_runtime_info()` 将 `ServerConfig.maxmemory` / `maxmemory_policy` 暴露给命令执行器、`INFO memory` 与 `CONFIG GET`
 - `memory/allocator.uya` 记录 `used_memory`、峰值、累计分配/释放和分配块计数，`INFO memory` 暴露这些字段作为内存治理观测面
-- `redis_malloc/free/realloc` 内部对 16B、32B、64B、128B、256B、512B、1024B 小对象做 Slab freelist 缓存；这些常规 class 每类最多缓存 64 个空闲块，超出后回退系统 `free`
-- 1KiB 字符串值的 SDS payload 需要 1025B（内容加结尾零字节），会越过 1024B class；allocator 为 1025B 到 1032B 请求增加专用 arena class，每次向底层 allocator 申请一个包含 62 个块、总尺寸低于 64KiB 的页，再通过 freelist 分发，避免逐值进入底层 `malloc` 所有权查找
-- 专用 arena 页按进程高水位保留并整页管理，单块释放只返回该 class freelist；测试专用 `reset_memory_stats_for_test()` 会在没有活跃块的前提下整页释放，生产请求路径不执行该 reset
+- `redis_malloc/free/realloc` 内部对 16B、32B、64B、128B、256B、512B、1024B、1032B 请求做 Slab freelist 缓存；任一 class 为空时按该 class 的 block stride 动态切分一个接近且不超过 64KiB 的 arena 页，不再为持续增长的小对象逐块调用底层 `malloc`
+- 1KiB 字符串值的 SDS payload 需要 1025B（内容加结尾零字节），继续命中 1032B class；该 class 每页仍可切分 62 个块，较小 class 则在同一页目标内获得更多块
+- arena 页按进程高水位保留并整页管理，单块释放只返回对应 class freelist；`reset_memory_stats_for_test()` 只清逻辑统计，避免释放仍可能被对象池引用的页，allocator 单元测试在确认无外部缓存指针时使用 `reset_allocator_for_test()` 完整释放页
 - Slab 复用不改变上层释放契约：调用方仍只通过 `redis_free()` 释放 payload 指针，allocator header 负责记录请求大小、可用 class 大小与 class index
 - `storage/object.uya` 在 Slab 之上增加 `RedisObject` 与 `ListNode` 专用对象池：释放对象时从 allocator 活跃统计扣除但保留 payload 供后续同类型对象复用，池满后再回退 `redis_free`
 - `INFO memory` 暴露 `object_pool_cached_objects`、`object_pool_cached_list_nodes`、`object_pool_reuse_count`、`object_layout_size` 与 `list_node_layout_size`，用于验证对象池复用和结构体布局变化

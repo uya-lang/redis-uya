@@ -9,11 +9,9 @@ export error AllocInvalidSize;
 
 const SLAB_CLASS_COUNT: usize = 8;
 const SLAB_CLASS_NONE: usize = SLAB_CLASS_COUNT;
-const SLAB_MAX_CACHED_PER_CLASS: usize = 64;
 const SLAB_ARENA_CLASS_INDEX: usize = 7;
 const SLAB_ARENA_CLASS_SIZE: usize = 1032;
-// Keep one arena allocation below the 64KiB allocator boundary.
-const SLAB_ARENA_BLOCKS_PER_PAGE: usize = 62;
+const SLAB_ARENA_PAGE_TARGET_BYTES: usize = 65536;
 
 struct AllocationHeader {
     requested_size: usize,
@@ -80,7 +78,6 @@ export fn allocator_slab_reuse_count() usize {
 }
 
 export fn reset_memory_stats_for_test() void {
-    allocator_slab_flush_cache();
     used_memory_bytes = 0;
     used_memory_peak_bytes = 0;
     total_allocated_bytes = 0;
@@ -90,15 +87,9 @@ export fn reset_memory_stats_for_test() void {
     slab_reuse_counter = 0;
 }
 
-fn allocator_slab_class_size(index: usize) usize {
-    if index == 0 { return 16; }
-    if index == 1 { return 32; }
-    if index == 2 { return 64; }
-    if index == 3 { return 128; }
-    if index == 4 { return 256; }
-    if index == 5 { return 512; }
-    if index == 6 { return 1024; }
-    return SLAB_ARENA_CLASS_SIZE;
+export fn reset_allocator_for_test() void {
+    allocator_slab_flush_cache();
+    reset_memory_stats_for_test();
 }
 
 fn allocator_slab_class_for_size(size: usize, class_size: &usize) usize {
@@ -167,9 +158,6 @@ fn allocator_slab_push(class_index: usize, class_size: usize, payload: &byte) bo
     if class_index >= SLAB_CLASS_COUNT {
         return false;
     }
-    if class_index != SLAB_ARENA_CLASS_INDEX && slab_free_counts[class_index] >= SLAB_MAX_CACHED_PER_CLASS {
-        return false;
-    }
     const next_slot: &&byte = payload as &&byte;
     *next_slot = slab_free_lists[class_index];
     slab_free_lists[class_index] = payload;
@@ -179,9 +167,11 @@ fn allocator_slab_push(class_index: usize, class_size: usize, payload: &byte) bo
     return true;
 }
 
-fn allocator_slab_refill_arena(class_size: usize) !void {
+fn allocator_slab_refill_arena(class_index: usize, class_size: usize) !void {
     const block_stride: usize = @size_of(AllocationHeader) + class_size;
-    const page_size: usize = @size_of(SlabArenaPage) + (block_stride * SLAB_ARENA_BLOCKS_PER_PAGE);
+    const page_header_size: usize = @size_of(SlabArenaPage);
+    const block_count: usize = (SLAB_ARENA_PAGE_TARGET_BYTES - page_header_size) / block_stride;
+    const page_size: usize = page_header_size + (block_stride * block_count);
     const page_void: &void = malloc(page_size);
     if page_void == null {
         return error.AllocOutOfMemory;
@@ -190,15 +180,15 @@ fn allocator_slab_refill_arena(class_size: usize) !void {
     page.next = slab_arena_pages;
     slab_arena_pages = page;
 
-    var raw: &byte = (page as &byte) + @size_of(SlabArenaPage);
+    var raw: &byte = (page as &byte) + page_header_size;
     var i: usize = 0;
-    while i < SLAB_ARENA_BLOCKS_PER_PAGE {
+    while i < block_count {
         const header: &AllocationHeader = raw as &AllocationHeader;
         header.requested_size = 0;
         header.usable_size = class_size;
-        header.class_index = SLAB_ARENA_CLASS_INDEX;
+        header.class_index = class_index;
         const payload: &byte = allocator_payload_from_raw(raw);
-        _ = allocator_slab_push(SLAB_ARENA_CLASS_INDEX, class_size, payload);
+        _ = allocator_slab_push(class_index, class_size, payload);
         raw = raw + block_stride;
         i = i + 1;
     }
@@ -207,16 +197,6 @@ fn allocator_slab_refill_arena(class_size: usize) !void {
 fn allocator_slab_flush_cache() void {
     var class_index: usize = 0;
     while class_index < SLAB_CLASS_COUNT {
-        if class_index != SLAB_ARENA_CLASS_INDEX {
-            var payload: &byte = slab_free_lists[class_index];
-            while payload != null {
-                const next_slot: &&byte = payload as &&byte;
-                const next: &byte = *next_slot;
-                const raw: &byte = allocator_raw_from_payload(payload);
-                free(raw as &void);
-                payload = next;
-            }
-        }
         slab_free_lists[class_index] = null;
         slab_free_counts[class_index] = 0;
         class_index = class_index + 1;
@@ -238,8 +218,8 @@ fn allocator_payload_alloc_no_stats(size: usize) !&byte {
     var payload: &byte = null;
     if class_index != SLAB_CLASS_NONE {
         payload = allocator_slab_pop(class_index, usable_size);
-        if payload == null && class_index == SLAB_ARENA_CLASS_INDEX {
-            try allocator_slab_refill_arena(usable_size);
+        if payload == null {
+            try allocator_slab_refill_arena(class_index, usable_size);
             payload = allocator_slab_pop(class_index, usable_size);
         }
     }

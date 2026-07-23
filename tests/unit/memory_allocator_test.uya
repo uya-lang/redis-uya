@@ -13,10 +13,10 @@ use src.memory.allocator.allocator_active_allocations;
 use src.memory.allocator.allocator_slab_cached_blocks;
 use src.memory.allocator.allocator_slab_cached_bytes;
 use src.memory.allocator.allocator_slab_reuse_count;
-use src.memory.allocator.reset_memory_stats_for_test;
+use src.memory.allocator.reset_allocator_for_test;
 
 export fn test_allocator_alloc_free() !void {
-    reset_memory_stats_for_test();
+    reset_allocator_for_test();
     const ptr: &byte = try redis_malloc(64);
     try assert_true(ptr != null);
     ptr[0] = 42;
@@ -38,7 +38,7 @@ export fn test_allocator_alloc_free() !void {
 }
 
 export fn test_allocator_realloc() !void {
-    reset_memory_stats_for_test();
+    reset_allocator_for_test();
     var ptr: &byte = try redis_malloc(16);
     ptr[0] = 7;
     ptr = try redis_realloc(ptr, 128);
@@ -61,7 +61,7 @@ export fn test_allocator_realloc() !void {
 }
 
 export fn test_allocator_many_allocations() !void {
-    reset_memory_stats_for_test();
+    reset_allocator_for_test();
     var ptrs: [&byte: 32] = [];
     var i: usize = 0;
     while i < 32 {
@@ -87,27 +87,30 @@ export fn test_allocator_many_allocations() !void {
 }
 
 export fn test_allocator_slab_reuse() !void {
-    reset_memory_stats_for_test();
+    reset_allocator_for_test();
     var ptr: &byte = try redis_malloc(24);
+    const cached_after_alloc: i32 = allocator_slab_cached_blocks() as i32;
+    try assert_true(cached_after_alloc > 64);
+    try assert_eq_i32(allocator_slab_cached_bytes() as i32, cached_after_alloc * 32);
+    try assert_eq_i32(allocator_slab_reuse_count() as i32, 1);
     ptr[0] = 55;
     redis_free(ptr);
     try assert_eq_i32(used_memory() as i32, 0);
     try assert_eq_i32(allocator_active_allocations() as i32, 0);
-    try assert_eq_i32(allocator_slab_cached_blocks() as i32, 1);
-    try assert_eq_i32(allocator_slab_cached_bytes() as i32, 32);
-    try assert_eq_i32(allocator_slab_reuse_count() as i32, 0);
+    try assert_eq_i32(allocator_slab_cached_blocks() as i32, cached_after_alloc + 1);
+    try assert_eq_i32(allocator_slab_cached_bytes() as i32, (cached_after_alloc + 1) * 32);
 
     var reused: &byte = try redis_malloc(24);
     try assert_true(reused != null);
     reused[0] = 77;
     try assert_eq_i32(reused[0] as i32, 77);
-    try assert_eq_i32(allocator_slab_reuse_count() as i32, 1);
-    try assert_eq_i32(allocator_slab_cached_blocks() as i32, 0);
-    try assert_eq_i32(allocator_slab_cached_bytes() as i32, 0);
+    try assert_eq_i32(allocator_slab_reuse_count() as i32, 2);
+    try assert_eq_i32(allocator_slab_cached_blocks() as i32, cached_after_alloc);
+    try assert_eq_i32(allocator_slab_cached_bytes() as i32, cached_after_alloc * 32);
     redis_free(reused);
     try assert_eq_i32(used_memory() as i32, 0);
 
-    reset_memory_stats_for_test();
+    reset_allocator_for_test();
     const large: &byte = try redis_malloc(2048);
     redis_free(large);
     try assert_eq_i32(allocator_slab_cached_blocks() as i32, 0);
@@ -117,7 +120,7 @@ export fn test_allocator_slab_reuse() !void {
 }
 
 export fn test_allocator_value_arena() !void {
-    reset_memory_stats_for_test();
+    reset_allocator_for_test();
     var ptrs: [&byte: 65] = [];
     var i: usize = 0;
     while i < 65 {
@@ -146,7 +149,7 @@ export fn test_allocator_value_arena() !void {
     const reused: &byte = try redis_malloc(1025);
     try assert_eq_i32(allocator_slab_reuse_count() as i32, reused_before + 1);
     redis_free(reused);
-    reset_memory_stats_for_test();
+    reset_allocator_for_test();
     try assert_eq_i32(allocator_slab_cached_blocks() as i32, 0);
     try assert_eq_i32(allocator_slab_cached_bytes() as i32, 0);
 }

@@ -4,7 +4,7 @@
 > 零 GC 路线 · 显式错误处理 · 可测试演进 · 长期性能目标超过 Redis
 
 > 版本: v0.9.3-dev
-> 日期: 2026-07-20
+> 日期: 2026-07-23
 
 ## 简介
 
@@ -27,13 +27,13 @@
 
 ## 当前状态
 
-截至 2026-07-20，当前状态应理解为：
+截至 2026-07-23，当前状态应理解为：
 
 - `make test`、`make test-integration`、`make test-redis-cli`、`make benchmark-v0.9.3-release` 与 `bash scripts/verify_definition_of_done.sh` 当前均通过。
-- release benchmark guard 使用“绝对基线 + 同机 Redis 归一化兜底”；最新五项矩阵相对 Redis 为 `1.02x/1.25x/1.08x/1.33x/1.00x`，严格 1.10x 全场景超越仍待继续优化。
+- release benchmark guard 使用“绝对基线 + 同机 Redis 归一化兜底”；小对象 arena 优化后的同条件 20K 五项矩阵相对 Redis 为 `1.08x/1.29x/1.00x/1.34x/1.09x`，严格 1.10x 全场景超越仍待继续优化。
 - `COMMAND*` 真值、版本号一致性与命令完成度统计分层已收口；`v0.9.1` 审计整改主线现已完成，当前主线推进 `v0.9.3` 的 Redis Open Source 单机核心缺口补齐。
 - `v1.0.0` 的封版门槛先收敛 Redis Open Source 单机核心，不再把模块命令数量当作当前完成度包装。
-- 常见三参数内 RESP 命令数组已借用连接栈描述符；默认用户和 named user 的空命令 deny list 通过活跃规则计数跳过固定表扫描。固定 CPU 200K `PING` 对父提交吞吐提升 2.4%、server cycles 下降 1.35%。
+- 16B 到 1032B Slab class 已统一按接近 64KiB 的 arena 页批量补充；同条件 20K 父提交对比中 `SET 16B` 吞吐提升 33.0%、p99 降低 55.5%、RSS 降低 17.1%。
 
 下方列表记录历史里程碑沉淀与当前代码库已落地模块；具体边界仍以命令矩阵、TODO、DoD 和当前测试证据为准。
 

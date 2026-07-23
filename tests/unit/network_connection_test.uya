@@ -1835,6 +1835,9 @@ export fn test_connection_process_acl_permission_denial() !void {
     const publish_other_channel_denied: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$7\r\nPUBLISH\r\n$5\r\nother\r\n$5\r\nhello\r\n"[0: 39], &out[0], 2048, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: publish_other_channel_denied.response_len], &"-NOPERM User default has no permissions to access one of the channels used as arguments\r\n"[0: 89]));
 
+    const ping_with_channels_restricted: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$4\r\nPING\r\n"[0: 14], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: ping_with_channels_restricted.response_len], &"+PONG\r\n"[0: 7]));
+
     const allow_default_safe_channels: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$7\r\ndefault\r\n$6\r\n&safe*\r\n"[0: 51], &out[0], 2048, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: allow_default_safe_channels.response_len], &"+OK\r\n"[0: 5]));
 

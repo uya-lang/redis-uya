@@ -2166,6 +2166,30 @@ fn connection_acl_user_allchannels(username: &[byte]) bool {
     return connection_acl_users[slot_index].allchannels;
 }
 
+fn connection_acl_user_unrestricted(username: &[byte]) bool {
+    if connection_keyword_eq(username, &"default"[0: 7]) {
+        return connection_acl_default_denied_command_count == 0 &&
+            connection_acl_default_denied_category_count == 0 &&
+            connection_acl_default_key_rules.allkeys &&
+            connection_acl_default_channel_rules.allchannels;
+    }
+    const slot: i32 = connection_acl_user_find(username);
+    if slot < 0 || slot >= CONNECTION_ACL_USER_MAX as i32 {
+        return true;
+    }
+    const slot_index: usize = slot as usize;
+    if slot_index >= CONNECTION_ACL_USER_MAX {
+        return true;
+    }
+    if !connection_acl_users[slot_index].active {
+        return true;
+    }
+    return connection_acl_users[slot_index].denied_command_count == 0 &&
+        connection_acl_users[slot_index].denied_category_count == 0 &&
+        connection_acl_users[slot_index].allkeys &&
+        connection_acl_users[slot_index].allchannels;
+}
+
 fn connection_acl_command_uses_channels(cmd_type: CommandType) bool {
     return cmd_type == CommandType.command_publish ||
         cmd_type == CommandType.command_spublish ||
@@ -8376,29 +8400,32 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
         resp_parse_value_free(&parsed.value, parsed.elements_owned);
         return ConnectionProcessResult{ response_len: restricted_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
     }
-    if connection_acl_user_command_denied(connection_current_username(tx), command.info.name) {
-        const acl_reply: CommandReply = connection_acl_permission_denied_reply_for_user(command.info.name, &"command"[0: 7], connection_current_username(tx), now_ms, connection_acl_log_client_id(tx));
-        const acl_n: usize = try connection_encode_reply_for_command(tx, &command, &acl_reply, out, out_cap, reply_off_before, reply_skip_before);
-        command_reply_cleanup(&acl_reply);
-        resp_parse_value_free(&parsed.value, parsed.elements_owned);
-        return ConnectionProcessResult{ response_len: acl_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
-    }
-    if command.info.first_key > 0 && command.info.key_step > 0 &&
-        connection_acl_user_allkeys(connection_current_username(tx)) == false &&
-        connection_acl_user_command_key_denied(connection_current_username(tx), &command.info, &command, 0, command.argc) {
-        const acl_key_reply: CommandReply = connection_acl_key_permission_denied_reply_for_user(command.info.name, &"command"[0: 7], connection_current_username(tx), now_ms, connection_acl_log_client_id(tx));
-        const acl_key_n: usize = try connection_encode_reply_for_command(tx, &command, &acl_key_reply, out, out_cap, reply_off_before, reply_skip_before);
-        command_reply_cleanup(&acl_key_reply);
-        resp_parse_value_free(&parsed.value, parsed.elements_owned);
-        return ConnectionProcessResult{ response_len: acl_key_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
-    }
-    if connection_acl_user_allchannels(connection_current_username(tx)) == false &&
-        connection_acl_user_command_channel_denied(connection_current_username(tx), &command.info, &command, 0, command.argc) {
-        const acl_channel_reply: CommandReply = connection_acl_channel_permission_denied_reply_for_user(command.info.name, &"command"[0: 7], connection_current_username(tx), now_ms, connection_acl_log_client_id(tx));
-        const acl_channel_n: usize = try connection_encode_reply_for_command(tx, &command, &acl_channel_reply, out, out_cap, reply_off_before, reply_skip_before);
-        command_reply_cleanup(&acl_channel_reply);
-        resp_parse_value_free(&parsed.value, parsed.elements_owned);
-        return ConnectionProcessResult{ response_len: acl_channel_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
+    const username: &[byte] = connection_current_username(tx);
+    if !connection_acl_user_unrestricted(username) {
+        if connection_acl_user_command_denied(username, command.info.name) {
+            const acl_reply: CommandReply = connection_acl_permission_denied_reply_for_user(command.info.name, &"command"[0: 7], username, now_ms, connection_acl_log_client_id(tx));
+            const acl_n: usize = try connection_encode_reply_for_command(tx, &command, &acl_reply, out, out_cap, reply_off_before, reply_skip_before);
+            command_reply_cleanup(&acl_reply);
+            resp_parse_value_free(&parsed.value, parsed.elements_owned);
+            return ConnectionProcessResult{ response_len: acl_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
+        }
+        if command.info.first_key > 0 && command.info.key_step > 0 &&
+            connection_acl_user_allkeys(username) == false &&
+            connection_acl_user_command_key_denied(username, &command.info, &command, 0, command.argc) {
+            const acl_key_reply: CommandReply = connection_acl_key_permission_denied_reply_for_user(command.info.name, &"command"[0: 7], username, now_ms, connection_acl_log_client_id(tx));
+            const acl_key_n: usize = try connection_encode_reply_for_command(tx, &command, &acl_key_reply, out, out_cap, reply_off_before, reply_skip_before);
+            command_reply_cleanup(&acl_key_reply);
+            resp_parse_value_free(&parsed.value, parsed.elements_owned);
+            return ConnectionProcessResult{ response_len: acl_key_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
+        }
+        if connection_acl_user_allchannels(username) == false &&
+            connection_acl_user_command_channel_denied(username, &command.info, &command, 0, command.argc) {
+            const acl_channel_reply: CommandReply = connection_acl_channel_permission_denied_reply_for_user(command.info.name, &"command"[0: 7], username, now_ms, connection_acl_log_client_id(tx));
+            const acl_channel_n: usize = try connection_encode_reply_for_command(tx, &command, &acl_channel_reply, out, out_cap, reply_off_before, reply_skip_before);
+            command_reply_cleanup(&acl_channel_reply);
+            resp_parse_value_free(&parsed.value, parsed.elements_owned);
+            return ConnectionProcessResult{ response_len: acl_channel_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
+        }
     }
     if command.info.cmd_type == CommandType.command_monitor {
         if !connection_monitor_register(tx.client_fd) {

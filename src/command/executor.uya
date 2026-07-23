@@ -8,7 +8,7 @@ use src.config.config_bool_name;
 use src.config.config_copy_bytes;
 use src.config.config_rewrite_file;
 use src.config.maxmemory_policy_name;
-use src.cluster.node.CLUSTER_NODE_FLAG_MASTER;
+use src.cluster.node.cluster_node_flag_master;
 use src.cluster.node.ClusterNode;
 use src.cluster.node.ClusterNodeRole;
 use src.cluster.node.cluster_node_host;
@@ -41,7 +41,7 @@ use src.command.slowlog.slowlog_count;
 use src.command.slowlog.slowlog_entry_newest;
 use src.command.slowlog.slowlog_reset;
 use src.command.slowlog.slowlog_trim;
-use src.command.latency.LATENCY_HISTOGRAM_BUCKET_COUNT;
+use src.command.latency.latency_histogram_bucket_count;
 use src.command.latency.LatencyHistoryEntry;
 use src.command.latency.LatencyHistogramEntry;
 use src.command.latency.latency_command_is_active;
@@ -10074,7 +10074,8 @@ fn command_executor_latency_history(event: &[byte]) CommandReply {
 fn command_executor_latency_histogram_bucket_pair_count(entry: &LatencyHistogramEntry) usize {
     var count: usize = 0;
     var index: usize = 0;
-    while index < LATENCY_HISTOGRAM_BUCKET_COUNT {
+    const bucket_limit: usize = latency_histogram_bucket_count();
+    while index < bucket_limit {
         if latency_histogram_entry_bucket_count(entry, index) > 0u64 {
             count = count + 1;
         }
@@ -10094,7 +10095,8 @@ fn command_executor_latency_histogram_append_entry(raw: &Sds, entry: &LatencyHis
     try command_executor_resp_collection_prefix(raw, &"*"[0: 1], pair_count * 2);
     var cumulative: u64 = 0u64;
     var index: usize = 0;
-    while index < LATENCY_HISTOGRAM_BUCKET_COUNT {
+    const bucket_limit: usize = latency_histogram_bucket_count();
+    while index < bucket_limit {
         const bucket_count: u64 = latency_histogram_entry_bucket_count(entry, index);
         cumulative = cumulative + bucket_count;
         if bucket_count > 0u64 {
@@ -21021,7 +21023,7 @@ fn command_executor_cluster_meet(topology: &ClusterTopology, command: &Command) 
         host,
         port as i32,
         ClusterNodeRole.cluster_node_master,
-        CLUSTER_NODE_FLAG_MASTER,
+        cluster_node_flag_master(),
         topology.node_count as u64,
         true,
     );

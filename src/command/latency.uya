@@ -2,8 +2,12 @@
 
 const LATENCY_HISTORY_MAX_ENTRIES: usize = 160;
 const LATENCY_HISTOGRAM_MAX_COMMANDS: usize = 128;
-export const LATENCY_HISTOGRAM_BUCKET_COUNT: usize = 30;
+const LATENCY_HISTOGRAM_BUCKET_COUNT: usize = 30;
 const LATENCY_HISTOGRAM_COMMAND_NAME_MAX: usize = 64;
+
+export fn latency_histogram_bucket_count() usize {
+    return LATENCY_HISTOGRAM_BUCKET_COUNT;
+}
 
 export struct LatencyHistoryEntry {
     active: bool,

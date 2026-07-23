@@ -25,23 +25,23 @@ struct SlabArenaPage {
     next: &SlabArenaPage,
 }
 
-export var used_memory_bytes: usize = 0;
-export var used_memory_peak_bytes: usize = 0;
-export var total_allocated_bytes: usize = 0;
-export var total_freed_bytes: usize = 0;
-export var total_allocation_count: usize = 0;
-export var active_allocation_count: usize = 0;
+var used_memory_bytes: usize = 0;
+var used_memory_peak_bytes: usize = 0;
+var total_allocated_bytes: usize = 0;
+var total_freed_bytes: usize = 0;
+var total_allocation_count: usize = 0;
+var active_allocation_count: usize = 0;
 var slab_free_lists: [&byte: SLAB_CLASS_COUNT] = [];
 var slab_free_counts: [usize: SLAB_CLASS_COUNT] = [];
 var slab_arena_pages: &SlabArenaPage = null as &SlabArenaPage;
-export var slab_cached_block_count: usize = 0;
-export var slab_cached_byte_count: usize = 0;
-export var slab_reuse_counter: usize = 0;
+var slab_cached_block_count: usize = 0;
+var slab_cached_byte_count: usize = 0;
+var slab_reuse_counter: usize = 0;
 
 export struct RedisAllocator {
 }
 
-export var global_allocator: RedisAllocator = RedisAllocator{};
+var global_allocator: RedisAllocator = RedisAllocator{};
 
 export fn used_memory() usize {
     return used_memory_bytes;

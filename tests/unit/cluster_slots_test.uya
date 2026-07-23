@@ -1,10 +1,10 @@
 use tests.unit.assert.assert_eq_i32;
 use tests.unit.assert.assert_true;
 
-use src.cluster.slots.CLUSTER_SLOT_COUNT;
 use src.cluster.slots.cluster_crc16;
 use src.cluster.slots.cluster_hash_key;
 use src.cluster.slots.cluster_key_slot;
+use src.cluster.slots.cluster_slot_count;
 
 fn cluster_test_slice_eq(a: &[byte], b: &[byte]) bool {
     if a.len != b.len {
@@ -63,5 +63,5 @@ export fn test_cluster_slot_range() !void {
     const slot: i32 = cluster_key_slot(key[0: 3]);
     try assert_eq_i32(slot, 12182);
     try assert_true(slot >= 0);
-    try assert_true(slot < CLUSTER_SLOT_COUNT);
+    try assert_true(slot < cluster_slot_count());
 }

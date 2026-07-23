@@ -9,7 +9,11 @@ export enum LogLevel {
     log_error,
 }
 
-export var current_level: i32 = LogLevel.log_info as i32;
+var current_level: i32 = LogLevel.log_info as i32;
+
+export fn log_level() i32 {
+    return current_level;
+}
 
 export fn set_level(level: LogLevel) void {
     current_level = level as i32;

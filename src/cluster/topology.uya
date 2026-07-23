@@ -4,7 +4,7 @@ use src.cluster.node.ClusterNode;
 use src.cluster.node.cluster_node_id;
 use src.cluster.node.cluster_node_is_local;
 use src.cluster.node.cluster_node_new_self;
-use src.cluster.slots.CLUSTER_SLOT_COUNT;
+use src.cluster.slots.cluster_slot_count;
 use src.cluster.slots.cluster_key_slot;
 
 export error ClusterTopologyFull;
@@ -12,7 +12,11 @@ export error ClusterTopologyInvalidSlot;
 export error ClusterTopologyInvalidNode;
 export error ClusterTopologyNodeNotFound;
 
-export const CLUSTER_TOPOLOGY_MAX_NODES: usize = 8;
+const CLUSTER_TOPOLOGY_MAX_NODES: usize = 8;
+
+export fn cluster_topology_max_nodes() usize {
+    return CLUSTER_TOPOLOGY_MAX_NODES;
+}
 
 export struct ClusterTopology {
     nodes: [ClusterNode: CLUSTER_TOPOLOGY_MAX_NODES],
@@ -23,7 +27,7 @@ export struct ClusterTopology {
 }
 
 fn cluster_topology_slot_valid(slot: i32) bool {
-    return slot >= 0 && slot < CLUSTER_SLOT_COUNT;
+    return slot >= 0 && slot < cluster_slot_count();
 }
 
 fn cluster_topology_node_valid(topology: &ClusterTopology, node_index: i32) bool {

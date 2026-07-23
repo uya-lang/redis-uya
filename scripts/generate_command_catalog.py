@@ -1305,8 +1305,14 @@ def render_uya_wrapper(entries: list[CommandEntry]) -> str:
             f"use src.command.catalog_generated_part_{label}.command_catalog_generated_part_{label};\n"
         )
     lines.append("\n")
-    lines.append(f"export const COMMAND_CATALOG_TOTAL_COUNT: usize = {total_count};\n")
-    lines.append(f"export const COMMAND_CATALOG_TOP_LEVEL_COUNT: usize = {top_level_count};\n\n")
+    lines.append(f"const COMMAND_CATALOG_TOTAL_COUNT: usize = {total_count};\n")
+    lines.append(f"const COMMAND_CATALOG_TOP_LEVEL_COUNT: usize = {top_level_count};\n\n")
+    lines.append("export fn command_catalog_generated_total_count() usize {\n")
+    lines.append("    return COMMAND_CATALOG_TOTAL_COUNT;\n")
+    lines.append("}\n\n")
+    lines.append("export fn command_catalog_generated_top_level_count() usize {\n")
+    lines.append("    return COMMAND_CATALOG_TOP_LEVEL_COUNT;\n")
+    lines.append("}\n\n")
     lines.append("export fn command_catalog_generated_entry(index: usize) !CommandCatalogEntry {\n")
     for part_index in range(part_count):
         start = part_index * PART_SIZE

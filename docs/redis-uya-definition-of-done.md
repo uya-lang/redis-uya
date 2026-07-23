@@ -1,8 +1,8 @@
 # redis-uya Definition of Done
 
 > 版本: v0.9.3-dev
-> 日期: 2026-07-22
-> 状态: 下列条目保留历史里程碑证据；当前 Uya 1.0 同步后的构建、完整单测、完整集成、redis-cli 和 release 构建通过，主线处于 `v0.9.3` 核心缺口补齐、性能收敛与运维第一批
+> 日期: 2026-07-23
+> 状态: 下列条目保留历史里程碑证据；当前 Uya 1.0 规范回退后的构建、完整单测、完整集成、redis-cli、release 构建和性能 guard 通过，主线处于 `v0.9.3` 核心缺口补齐、性能收敛与运维第一批
 
 ## 1. 目标
 
@@ -13,9 +13,9 @@
 | DoD 项 | 证据 |
 |--------|------|
 | 上游 `1.0` 分支工具链按源码重新构建并成套同步：`bin/uya` 静态启动器与 `bin/cmd/build` 实际编译器均返回 `v0.9.9`，哈希和尺寸已固化 | `uya/bin/uya`、`uya/bin/cmd/build`、`docs/redis-uya-uya-sync-2026-07-22.md` |
-| split-C 跨模块导出全局符号定义、引用和镜像 extern 声明一致；上游回归测试已提交 | `../uya` 提交 `13d7c784`、`337a0edd`，`../uya/tests/verify_c99_exported_global_split.sh` |
-| redis-uya 兼容调整遵循 Uya 命名和 FFI 规则：延迟状态变量不再与导出函数同名，入口日志使用显式 libc 声明 | `src/command/latency.uya`、`src/main.uya` |
-| 当前项目在新工具链下完成无警告 debug 构建、完整单测、完整集成、redis-cli smoke 和 release 构建 | `make build`、`make test`、`make test-integration`、`make test-redis-cli`、`make build-release` |
+| 上游 `1.0` 分支已直接回退到 `f54bd7bf`，与 `origin/1.0` 一致；违反导出全局裸 C ABI 规范的两个未推送提交已从分支历史移除 | `git -C ../uya rev-parse HEAD`、`git -C ../uya rev-list --count origin/1.0..HEAD` |
+| redis-uya 不再用 `export const/var` 表达项目内部模块 API；内部全局量保持私有，跨模块访问统一通过导出函数，并由源码契约检查防止回归 | `make verify-uya-source-contract`、`src/cluster/`、`src/command/`、`src/memory/allocator.uya`、`src/util/log.uya` |
+| 当前项目完成无警告 debug 构建、完整单测、完整集成、redis-cli smoke、release 构建与性能回归 guard | `make build`、`make test`、`make test-integration`、`make test-redis-cli`、`make benchmark-v0.9.3-release` |
 
 重要说明：
 

@@ -2,16 +2,16 @@ use tests.unit.assert.assert_eq_i32;
 use tests.unit.assert.assert_eq_u64;
 use tests.unit.assert.assert_true;
 
-use src.cluster.node.CLUSTER_NODE_FLAG_FAIL;
-use src.cluster.node.CLUSTER_NODE_FLAG_MASTER;
-use src.cluster.node.CLUSTER_NODE_FLAG_MYSELF;
-use src.cluster.node.CLUSTER_NODE_FLAG_REPLICA;
-use src.cluster.node.CLUSTER_NODE_ID_LEN;
 use src.cluster.node.ClusterNode;
 use src.cluster.node.ClusterNodeRole;
+use src.cluster.node.cluster_node_flag_fail;
+use src.cluster.node.cluster_node_flag_master;
+use src.cluster.node.cluster_node_flag_myself;
+use src.cluster.node.cluster_node_flag_replica;
 use src.cluster.node.cluster_node_has_flag;
 use src.cluster.node.cluster_node_host;
 use src.cluster.node.cluster_node_id;
+use src.cluster.node.cluster_node_id_len;
 use src.cluster.node.cluster_node_is_local;
 use src.cluster.node.cluster_node_is_master;
 use src.cluster.node.cluster_node_new;
@@ -49,7 +49,7 @@ fn cluster_node_test_is_hex(data: &[byte]) bool {
 export fn test_cluster_node_self_defaults() !void {
     var host: [byte: 9] = [49, 50, 55, 46, 48, 46, 48, 46, 49];
     const node: ClusterNode = cluster_node_new_self(host[0: 9], 6380);
-    try assert_eq_i32(cluster_node_id(&node).len as i32, CLUSTER_NODE_ID_LEN as i32);
+    try assert_eq_i32(cluster_node_id(&node).len as i32, cluster_node_id_len() as i32);
     try assert_true(cluster_node_test_is_hex(cluster_node_id(&node)));
     try assert_true(cluster_node_test_slice_eq(cluster_node_host(&node), host[0: 9]));
     try assert_eq_i32(node.port, 6380);
@@ -57,8 +57,8 @@ export fn test_cluster_node_self_defaults() !void {
     try assert_true(node.connected);
     try assert_true(cluster_node_is_local(&node));
     try assert_true(cluster_node_is_master(&node));
-    try assert_true(cluster_node_has_flag(&node, CLUSTER_NODE_FLAG_MYSELF));
-    try assert_true(cluster_node_has_flag(&node, CLUSTER_NODE_FLAG_MASTER));
+    try assert_true(cluster_node_has_flag(&node, cluster_node_flag_myself()));
+    try assert_true(cluster_node_has_flag(&node, cluster_node_flag_master()));
 }
 
 export fn test_cluster_node_explicit_metadata() !void {
@@ -75,7 +75,7 @@ export fn test_cluster_node_explicit_metadata() !void {
         host[0: 9],
         7000,
         ClusterNodeRole.cluster_node_replica,
-        CLUSTER_NODE_FLAG_REPLICA | CLUSTER_NODE_FLAG_FAIL,
+        cluster_node_flag_replica() | cluster_node_flag_fail(),
         42u64,
         false,
     );
@@ -86,9 +86,9 @@ export fn test_cluster_node_explicit_metadata() !void {
     try assert_eq_i32(node.bus_port, 17000);
     try assert_eq_u64(node.config_epoch, 42u64);
     try assert_true(!node.connected);
-    try assert_true(cluster_node_has_flag(&node, CLUSTER_NODE_FLAG_REPLICA));
-    try assert_true(cluster_node_has_flag(&node, CLUSTER_NODE_FLAG_FAIL));
-    try assert_true(!cluster_node_has_flag(&node, CLUSTER_NODE_FLAG_MASTER));
+    try assert_true(cluster_node_has_flag(&node, cluster_node_flag_replica()));
+    try assert_true(cluster_node_has_flag(&node, cluster_node_flag_fail()));
+    try assert_true(!cluster_node_has_flag(&node, cluster_node_flag_master()));
     try assert_true(!cluster_node_is_local(&node));
     try assert_true(!cluster_node_is_master(&node));
 }

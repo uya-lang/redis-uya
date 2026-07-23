@@ -14,7 +14,7 @@ use src.command.router.Command;
 use src.command.router.CommandInfo;
 use src.command.router.CommandRouter;
 use src.command.router.CommandType;
-use src.command.router.COMMAND_FLAG_WRITE;
+use src.command.router.command_flag_write;
 use src.command.router.command_arg_data;
 use src.command.router.command_from_resp;
 use src.command.router.command_router_lookup;
@@ -6085,7 +6085,7 @@ fn connection_should_append_aof(command: &Command, reply: &CommandReply) bool {
         }
         return false;
     }
-    return (command.info.flags & COMMAND_FLAG_WRITE) != 0u64;
+    return (command.info.flags & command_flag_write()) != 0u64;
 }
 
 fn connection_command_requests_write(command: &Command) bool {
@@ -6114,7 +6114,7 @@ fn connection_command_requests_write(command: &Command) bool {
         }
         return false;
     }
-    return (command.info.flags & COMMAND_FLAG_WRITE) != 0u64;
+    return (command.info.flags & command_flag_write()) != 0u64;
 }
 
 fn connection_execute_blocking_pop_command_at(

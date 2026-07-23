@@ -1,7 +1,7 @@
 # redis-uya command matrix
 
 > version: v0.9.3-dev
-> date: 2026-07-03
+> date: 2026-07-23
 > source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`
 > runtime source: `src/command/catalog_generated.uya`
 

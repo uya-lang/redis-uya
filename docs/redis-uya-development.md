@@ -1,7 +1,7 @@
 # redis-uya 开发规范
 
 > 版本: v0.9.3-dev
-> 日期: 2026-05-19
+> 日期: 2026-07-23
 > 适用阶段: Phase 0+
 
 > 后续实现 `redis-uya` 时，默认遵循本文，除非任务文档明确覆盖。
@@ -109,9 +109,11 @@
 - 后续开发默认可以使用已经通过 redis-uya 构建、单测和集成验证的 `v0.9.9` 特性。
 - 每次同步 `uya/` 后，至少执行 `make build`、`make test`、`make test-integration`、`make test-redis-cli` 和 `make build-release`。
 - 当前记录口径需要额外注意：
-  - 当前同步参考的 `../uya` HEAD 为 `337a0edd`
+  - 当前同步参考的 `../uya` HEAD 为 `f54bd7bf`，与 `origin/1.0` 一致
   - `bin/uya` SHA256 为 `8ad1e481e45a65907b4ff02cac48646799d804e90ce794e9445680fc5e6359cf`
-  - `bin/cmd/build` SHA256 为 `e59d009b256a1067c16d09c03b2c696144efa4e202d930071afcf835daab8706`
+  - `bin/cmd/build` SHA256 为 `883f369402b0f6a2eed5fbad08b5d5d4221108c355a42f54b2657513f6a8332d`
+  - 项目内部状态和常量保持为私有全局量，跨模块访问使用 `export fn`；不使用 `export const/var` 规避语言规范定义的裸 C ABI
+  - `make verify-uya-source-contract` 扫描 `src/**/*.uya` 并拒绝项目源码重新引入导出全局量；该检查已接入 `make test`
   - 上游全量测试状态与 redis-uya 项目验证状态必须分别记录，不能用项目测试通过掩盖上游 nostdlib 失败
 
 ## 7. Redis 实现策略

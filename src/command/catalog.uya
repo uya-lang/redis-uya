@@ -1,7 +1,7 @@
 use src.command.catalog_generated_base.CommandCatalogEntry;
-use src.command.catalog_generated.COMMAND_CATALOG_TOTAL_COUNT;
-use src.command.catalog_generated.COMMAND_CATALOG_TOP_LEVEL_COUNT;
 use src.command.catalog_generated.command_catalog_generated_entry;
+use src.command.catalog_generated.command_catalog_generated_top_level_count;
+use src.command.catalog_generated.command_catalog_generated_total_count;
 use src.util.bytes.bytes_ascii_case_eq;
 
 export error CommandUnknown;
@@ -60,11 +60,11 @@ fn command_catalog_glob_match(pattern: &[byte], pattern_index: usize, value: &[b
 }
 
 export fn command_catalog_total_count() usize {
-    return COMMAND_CATALOG_TOTAL_COUNT;
+    return command_catalog_generated_total_count();
 }
 
 export fn command_catalog_top_level_count() usize {
-    return COMMAND_CATALOG_TOP_LEVEL_COUNT;
+    return command_catalog_generated_top_level_count();
 }
 
 export fn command_catalog_entry(index: usize) !CommandCatalogEntry {

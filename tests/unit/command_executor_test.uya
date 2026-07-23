@@ -19,9 +19,9 @@ use src.command.executor.command_execute_at;
 use src.command.executor.command_execute_with_runtime_at;
 use src.command.executor.command_runtime_default;
 use src.command.executor.command_reply_cleanup;
-use src.cluster.node.CLUSTER_NODE_FLAG_MASTER;
 use src.cluster.node.ClusterNode;
 use src.cluster.node.ClusterNodeRole;
+use src.cluster.node.cluster_node_flag_master;
 use src.cluster.node.cluster_node_new;
 use src.cluster.topology.ClusterTopology;
 use src.cluster.topology.cluster_topology_add_node;
@@ -2107,7 +2107,7 @@ export fn test_command_cluster_redirects() !void {
         &"127.0.0.2"[0: 9],
         7000,
         ClusterNodeRole.cluster_node_master,
-        CLUSTER_NODE_FLAG_MASTER,
+        cluster_node_flag_master(),
         1u64,
         true,
     );

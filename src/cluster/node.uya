@@ -2,14 +2,34 @@
 
 use src.util.crc64.crc64;
 
-export const CLUSTER_NODE_ID_LEN: usize = 40;
-export const CLUSTER_NODE_ID_CAP: usize = 41;
-export const CLUSTER_NODE_HOST_CAP: usize = 64;
+const CLUSTER_NODE_ID_LEN: usize = 40;
+const CLUSTER_NODE_ID_CAP: usize = 41;
+const CLUSTER_NODE_HOST_CAP: usize = 64;
 
-export const CLUSTER_NODE_FLAG_MYSELF: u64 = 1u64;
-export const CLUSTER_NODE_FLAG_MASTER: u64 = 2u64;
-export const CLUSTER_NODE_FLAG_REPLICA: u64 = 4u64;
-export const CLUSTER_NODE_FLAG_FAIL: u64 = 8u64;
+const CLUSTER_NODE_FLAG_MYSELF: u64 = 1u64;
+const CLUSTER_NODE_FLAG_MASTER: u64 = 2u64;
+const CLUSTER_NODE_FLAG_REPLICA: u64 = 4u64;
+const CLUSTER_NODE_FLAG_FAIL: u64 = 8u64;
+
+export fn cluster_node_id_len() usize {
+    return CLUSTER_NODE_ID_LEN;
+}
+
+export fn cluster_node_flag_myself() u64 {
+    return CLUSTER_NODE_FLAG_MYSELF;
+}
+
+export fn cluster_node_flag_master() u64 {
+    return CLUSTER_NODE_FLAG_MASTER;
+}
+
+export fn cluster_node_flag_replica() u64 {
+    return CLUSTER_NODE_FLAG_REPLICA;
+}
+
+export fn cluster_node_flag_fail() u64 {
+    return CLUSTER_NODE_FLAG_FAIL;
+}
 
 export enum ClusterNodeRole {
     cluster_node_master,

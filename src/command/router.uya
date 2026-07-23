@@ -295,9 +295,13 @@ export struct Command {
     request: &RespValue,
 }
 
-export const COMMAND_FLAG_READONLY: u64 = 1u64;
-export const COMMAND_FLAG_WRITE: u64 = 2u64;
-export const COMMAND_FLAG_FAST: u64 = 4u64;
+const COMMAND_FLAG_READONLY: u64 = 1u64;
+const COMMAND_FLAG_WRITE: u64 = 2u64;
+const COMMAND_FLAG_FAST: u64 = 4u64;
+
+export fn command_flag_write() u64 {
+    return COMMAND_FLAG_WRITE;
+}
 
 const MIN_COMMAND_COUNT: usize = 411;
 

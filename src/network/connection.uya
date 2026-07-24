@@ -4462,7 +4462,7 @@ fn connection_requirepass(runtime: &CommandRuntimeInfo) &[byte] {
 }
 
 fn connection_auth_required(runtime: &CommandRuntimeInfo) bool {
-    return connection_requirepass(runtime).len > 0;
+    return runtime.config.requirepass[0] != 0 as byte;
 }
 
 fn connection_authenticated_named_user_valid(tx: &ConnectionTransaction) bool {

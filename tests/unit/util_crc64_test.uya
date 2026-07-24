@@ -34,4 +34,12 @@ export fn test_crc64_table_matches_scalar() !void {
     const scalar_tail: u64 = crc64_update_scalar_for_test(scalar_head, data[127: 385]);
     try assert_eq_u64(table_tail, scalar_tail);
     try assert_eq_u64(table_tail, table_all);
+
+    var len: usize = 0;
+    while len <= 16usize {
+        const table_prefix: u64 = crc64_update(0u64, data[0: len]);
+        const scalar_prefix: u64 = crc64_update_scalar_for_test(0u64, data[0: len]);
+        try assert_eq_u64(table_prefix, scalar_prefix);
+        len = len + 1usize;
+    }
 }

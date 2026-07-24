@@ -49,7 +49,7 @@ bash scripts/verify_definition_of_done.sh
 |------|----------|------|
 | `make test` | `PASS` | 单元层仍可作为基础回归入口 |
 | `make test-integration` | `PASS` | `maxmemory` / 压力 / 淘汰策略相关回归已按当前实现重新校准 |
-| `make benchmark-v0.9.3-release` | `PASS` | 使用 release 构建和延迟直方图命令槽缓存不可变 50K 基线，五项绝对吞吐、归一化吞吐与 p99 guard 全部通过；当前 Redis 比值为 `1.10x/1.31x/1.14x/1.36x/0.92x` |
+| `make benchmark-v0.9.3-release` | `PASS` | 使用 release 构建和 CRC64 四字节展开不可变 50K 基线，五项绝对吞吐、归一化吞吐与 p99 guard 全部通过；当前 Redis 比值为 `1.04x/1.40x/1.00x/1.27x/0.98x` |
 | `bash scripts/verify_definition_of_done.sh` | `PASS` | 当前一键验证执行 release benchmark，不再用历史 debug 基线判定当前 HEAD |
 | `COMMAND*` 真实性 | `PASS` | 运行时 `COMMAND*` 已按真实执行面隐藏未实现命令，并补齐当前 `CLIENT/CONFIG` 已实现子命令的矩阵状态 |
 | 版本号一致性 | `PASS` | banner、`HELLO`、`INFO server`、README、DoD 和相关测试断言已统一到 `v0.9.3-dev` |

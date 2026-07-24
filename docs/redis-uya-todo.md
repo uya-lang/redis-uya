@@ -80,6 +80,7 @@
 - [x] ACL 命令拒绝空表快速路径：默认用户和 named user 维护活跃 `-command` 规则计数，新增、`+command` 删除、`resetcommands` 与用户重置保持同步，计数为零时跳过固定 deny 表扫描；默认/命名用户计数单测、完整集成和 redis-cli 通过，固定 CPU 200K `PING` 对父提交吞吐提升 2.4%、cycles 下降 1.35%、instructions 下降 1.46%
 - [x] 全小对象 class arena：16B 到 1032B 的 Slab class 在 freelist 为空时按接近 64KiB 的页批量补充，持续唯一 key 的 `SET 16B` 不再为 key/value/dict entry 逐块进入底层 allocator；同条件 20K 父提交对比吞吐从 14703 提升到 19558 req/s（+33.0%），p99 从 238us 降到 106us（-55.5%），RSS 从 144452KiB 降到 119784KiB（-17.1%），完整单测/集成/redis-cli 与正式 guard 通过
 - [x] ACL 完全开放用户快速路径：主命令入口只解析一次当前用户名；当 deny command/category 计数均为零且 `allkeys/allchannels` 开启时，直接跳过命令、key、channel 三组详细 ACL 检查，有任一限制时保持原拒绝语义；两轮 50K 父提交 A/B 均值中 SET16/GET16/SET1K/GET1K 吞吐分别提升 6.7%/4.0%/6.1%/4.0%，PING 的 Redis 归一化比值提升 0.3%，完整单测、33 项集成、redis-cli 和 50K 正式 guard 通过
+- [x] 隐式默认用户 ACL 选择快速路径：事务为空或用户名长度为零时直接读取默认用户 deny 计数及 `allkeys/allchannels` 状态，不再构造用户名切片并比较 `default`；两轮固定 CPU 200K `PING` 中 instructions/branches/cycles 均值分别下降 4.0%/5.6%/3.1%，完整单测、33 项集成、redis-cli 和两轮 50K 正式 guard 通过
 - [ ] `v0.9.3` 起：在真实性问题收敛后，继续补 Redis Open Source 单机核心缺口，而不是先扩模块命令
 
 ## 3. 全版本路线图

@@ -4,6 +4,7 @@ const LATENCY_HISTORY_MAX_ENTRIES: usize = 160;
 const LATENCY_HISTOGRAM_MAX_COMMANDS: usize = 128;
 const LATENCY_HISTOGRAM_BUCKET_COUNT: usize = 30;
 const LATENCY_HISTOGRAM_COMMAND_NAME_MAX: usize = 64;
+const LATENCY_HISTOGRAM_CACHE_KEY_COUNT: usize = 320;
 
 export fn latency_histogram_bucket_count() usize {
     return LATENCY_HISTOGRAM_BUCKET_COUNT;
@@ -32,6 +33,7 @@ var latency_command_start: usize = 0;
 var latency_command_count: usize = 0;
 var latency_histogram_entries: [LatencyHistogramEntry: LATENCY_HISTOGRAM_MAX_COMMANDS] = [];
 var latency_histogram_count_value: usize = 0;
+var latency_histogram_cached_slots: [usize: LATENCY_HISTOGRAM_CACHE_KEY_COUNT] = [];
 
 fn latency_ascii_lower(ch: byte) byte {
     if ch >= 65 as byte && ch <= 90 as byte {
@@ -148,17 +150,29 @@ fn latency_histogram_bucket_index(duration_us: u64) usize {
     return LATENCY_HISTOGRAM_BUCKET_COUNT - 1;
 }
 
-fn latency_histogram_record(command_name: &[byte], duration_us: u64) void {
+fn latency_histogram_record(command_name: &[byte], cache_key: usize, duration_us: u64) void {
     if command_name.len == 0 {
         return;
     }
-    var slot: usize = latency_histogram_find_slot(command_name);
+    var slot: usize = LATENCY_HISTOGRAM_MAX_COMMANDS;
+    if cache_key > 0usize && cache_key < LATENCY_HISTOGRAM_CACHE_KEY_COUNT {
+        const cached_slot: usize = latency_histogram_cached_slots[cache_key];
+        if cached_slot > 0usize {
+            slot = cached_slot - 1usize;
+        }
+    }
+    if slot >= LATENCY_HISTOGRAM_MAX_COMMANDS {
+        slot = latency_histogram_find_slot(command_name);
+    }
     if slot >= LATENCY_HISTOGRAM_MAX_COMMANDS {
         slot = latency_histogram_first_free_slot();
         if slot >= LATENCY_HISTOGRAM_MAX_COMMANDS {
             return;
         }
         latency_histogram_init_entry(slot, command_name);
+    }
+    if cache_key > 0usize && cache_key < LATENCY_HISTOGRAM_CACHE_KEY_COUNT {
+        latency_histogram_cached_slots[cache_key] = slot + 1usize;
     }
     if slot >= LATENCY_HISTOGRAM_MAX_COMMANDS {
         return;
@@ -170,7 +184,7 @@ fn latency_histogram_record(command_name: &[byte], duration_us: u64) void {
     }
 }
 
-export fn latency_record_command(timestamp_sec: u64, duration_us: u64, command_name: &[byte], track_histogram: bool, monitor_threshold_ms: i64) void {
+export fn latency_record_command(timestamp_sec: u64, duration_us: u64, command_name: &[byte], histogram_cache_key: usize, track_histogram: bool, monitor_threshold_ms: i64) void {
     var latency_ms: u64 = duration_us / 1000u64;
     if duration_us > 0u64 && latency_ms == 0u64 {
         latency_ms = 1u64;
@@ -200,7 +214,7 @@ export fn latency_record_command(timestamp_sec: u64, duration_us: u64, command_n
         latency_command_entries[slot].latency_ms = latency_ms;
     }
     if track_histogram {
-        latency_histogram_record(command_name, duration_us);
+        latency_histogram_record(command_name, histogram_cache_key, duration_us);
     }
 }
 
@@ -290,6 +304,11 @@ export fn latency_reset_histogram_all() void {
         index = index + 1;
     }
     latency_histogram_count_value = 0;
+    index = 0;
+    while index < LATENCY_HISTOGRAM_CACHE_KEY_COUNT {
+        latency_histogram_cached_slots[index] = 0usize;
+        index = index + 1;
+    }
 }
 
 fn latency_reset_command() bool {

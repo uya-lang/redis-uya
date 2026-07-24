@@ -5,6 +5,9 @@ use tests.unit.assert.assert_true;
 use src.command.catalog.command_catalog_lookup;
 use src.command.catalog_generated_base.CommandCatalogEntry;
 use src.command.catalog_generated_base.CommandCatalogStatus;
+use src.command.latency.LatencyHistogramEntry;
+use src.command.latency.latency_histogram_find_entry;
+use src.command.latency.latency_reset_histogram_all;
 use src.command.slowlog.SlowlogEntry;
 use src.command.slowlog.slowlog_reset;
 use src.command.slowlog.slowlog_entry_newest;
@@ -10151,6 +10154,39 @@ export fn test_command_latency() !void {
     try assert_true(command_executor_test_slice_eq(histogram_reset_reply.data, &"*0\r\n"[0: 4]));
     command_reply_cleanup(&histogram_reset_reply);
     resp_value_free(&histogram_reset_parsed.value);
+
+    var cached_ping_parsed: RespParseResult = try parse_resp2(&"*1\r\n$4\r\nPING\r\n"[0: 14]);
+    const cached_ping_command: Command = try command_executor_test_command(&router, &cached_ping_parsed);
+    var cached_ping_first_reply: CommandReply = command_execute_at(&engine, &cached_ping_command, 1000u64);
+    var cached_ping_second_reply: CommandReply = command_execute_at(&engine, &cached_ping_command, 1000u64);
+    command_reply_cleanup(&cached_ping_first_reply);
+    command_reply_cleanup(&cached_ping_second_reply);
+    const cached_ping_entry: &LatencyHistogramEntry = latency_histogram_find_entry(&"PING"[0: 4]);
+    try assert_true(cached_ping_entry != null as &LatencyHistogramEntry);
+    try assert_eq_u64(cached_ping_entry.calls, 2u64);
+    resp_value_free(&cached_ping_parsed.value);
+
+    var bloom_add_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nBF.ADD\r\n$2\r\nbf\r\n$1\r\nx\r\n"[0: 31]);
+    const bloom_add_command: Command = try command_executor_test_command(&router, &bloom_add_parsed);
+    var bloom_add_reply: CommandReply = command_execute_at(&engine, &bloom_add_command, 1000u64);
+    try assert_eq_i32(bloom_add_reply.typ as i32, CommandReplyType.reply_error as i32);
+    command_reply_cleanup(&bloom_add_reply);
+    resp_value_free(&bloom_add_parsed.value);
+
+    var cuckoo_add_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nCF.ADD\r\n$2\r\ncf\r\n$1\r\nx\r\n"[0: 31]);
+    const cuckoo_add_command: Command = try command_executor_test_command(&router, &cuckoo_add_parsed);
+    var cuckoo_add_reply: CommandReply = command_execute_at(&engine, &cuckoo_add_command, 1000u64);
+    try assert_eq_i32(cuckoo_add_reply.typ as i32, CommandReplyType.reply_error as i32);
+    command_reply_cleanup(&cuckoo_add_reply);
+    resp_value_free(&cuckoo_add_parsed.value);
+
+    const bloom_add_entry: &LatencyHistogramEntry = latency_histogram_find_entry(&"BF.ADD"[0: 6]);
+    const cuckoo_add_entry: &LatencyHistogramEntry = latency_histogram_find_entry(&"CF.ADD"[0: 6]);
+    try assert_true(bloom_add_entry != null as &LatencyHistogramEntry);
+    try assert_true(cuckoo_add_entry != null as &LatencyHistogramEntry);
+    try assert_eq_u64(bloom_add_entry.calls, 1u64);
+    try assert_eq_u64(cuckoo_add_entry.calls, 1u64);
+    latency_reset_histogram_all();
 
     var disabled_runtime: CommandRuntimeInfo = command_runtime_default();
     disabled_runtime.config.latency_tracking = false;

@@ -21177,8 +21177,11 @@ fn command_executor_latency_uses_subcommand_name(cmd_type: CommandType) bool {
         cmd_type == CommandType.command_xinfo;
 }
 
-fn command_executor_latency_histogram_name(command: &Command, out: &[byte]) &[byte] {
-    if !command_executor_latency_uses_subcommand_name(command.info.cmd_type) || command.argc < 2 || out.len == 0usize {
+fn command_executor_latency_histogram_name(command: &Command, out: &[byte], uses_subcommand_name: bool) &[byte] {
+    if !uses_subcommand_name {
+        return command.info.name;
+    }
+    if command.argc < 2 || out.len == 0usize {
         return command.info.name;
     }
     const subcommand: &[byte] = command_executor_arg(command, 1) catch {
@@ -22038,8 +22041,13 @@ export fn command_execute_with_runtime_at(engine: &Engine, runtime: &CommandRunt
     }
     if command.info.cmd_type != CommandType.command_latency {
         var latency_name_buf: [byte: 129] = [];
-        const latency_name: &[byte] = command_executor_latency_histogram_name(command, latency_name_buf[0: 129]);
-        latency_record_command(now_ms / 1000u64, duration_us, latency_name, runtime.config.latency_tracking, runtime.config.latency_monitor_threshold);
+        const latency_uses_subcommand_name: bool = command_executor_latency_uses_subcommand_name(command.info.cmd_type);
+        const latency_name: &[byte] = command_executor_latency_histogram_name(command, latency_name_buf[0: 129], latency_uses_subcommand_name);
+        var latency_cache_key: usize = 0usize;
+        if !latency_uses_subcommand_name && command.info.cmd_type != CommandType.command_module_unsupported {
+            latency_cache_key = command.info.cmd_type as usize + 1usize;
+        }
+        latency_record_command(now_ms / 1000u64, duration_us, latency_name, latency_cache_key, runtime.config.latency_tracking, runtime.config.latency_monitor_threshold);
     }
     return reply;
 }

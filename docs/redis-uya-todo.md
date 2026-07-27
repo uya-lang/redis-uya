@@ -23,7 +23,7 @@
 - 最小迭代默认递增版本号最后一位：`v0.9.0`、`v0.9.1`、`v0.9.2` 依次推进；不为普通小阶段抬高第二位版本号。
 - `v0.9.0` 起后续主线只迭代单机版：补齐 Redis Open Source 单机功能、兼容性、性能和稳定性。
 - 当前 `HEAD` 的真实性高于历史报告：`README`、`DoD`、`COMMAND*`、测试结果和 benchmark 结果必须互相一致。
-- 2026-07-27 当前 `HEAD`：`make test`、完整 33 项集成、redis-cli、DoD 与 release benchmark 全部通过；事件循环以维护前已获取的 `now_ms` 计算 epoll 超时，删除紧邻维护阶段的重复 `gettimeofday` 路径，epoll 返回后的命令/TTL/pause/交互时间刷新保持不变。release 中 `server_run` 的取时调用从 3 个降到 2 个、函数缩小 16 字节；两组反向顺序固定 CPU 200K `GET 1KiB` 的 `perf stat` 吞吐提升 0.71%，cycles/instructions/branches 分别下降 3.07%/2.39%/2.53%。不可变与 current 50K 的五项绝对吞吐、p99 和总体 guard 均通过；current Redis 比值为 `0.94x/1.22x/1.02x/1.22x/1.03x`，两个 GET 场景仍未稳定达到严格 1.10x 全场景超越要求。
+- 2026-07-27 当前 `HEAD`：`make test`、完整 33 项集成、redis-cli、DoD 与 release benchmark 全部通过；固定空回复直接构造完整 `CommandReply`，不再经通用构造器生成第二个临时对象，release 删除嵌套调用并缩小文本段 208 字节。四组反向顺序固定 CPU 200K `GET 1KiB` 的 `perf stat` 吞吐提升 0.56%，cycles/instructions/branches 分别下降 0.71%/0.20%/0.11%。不可变与 current 50K 的五项绝对吞吐、p99 和总体 guard 均通过；current Redis 比值为 `0.90x/1.28x/1.00x/1.27x/0.99x`，两个 GET 场景仍未稳定达到严格 1.10x 全场景超越要求。
 - 2026-07-23 已将 `../uya` `1.0` 分支直接回退到与远端一致的 `f54bd7bf`，删除未推送且违反 `export const/var` 裸 C ABI 规范的两个本地提交；redis-uya 将内部全局量改为私有并通过 `export fn` 跨模块访问，构建、完整单测、完整集成、redis-cli、release 和性能 guard 均通过。
 - `v0.9.4` 用于性能与稳定性收敛；`v0.9.5` 是首个单机封版候选，如未达到 `v1.0.0` 封版条件，继续使用 `v0.9.6` 等 patch 版本顺序迭代。
 - 单机版必须先覆盖 Redis Open Source 单机核心命令面；模块命令可以继续追踪，但不能与 `v1.0.0` 单机封版门槛混算。命令全集、状态定义和封版标准见 `redis-uya-command-scope.md`。
@@ -85,6 +85,7 @@
 - [x] 默认 master 复制维护角色门控：server loop 仅在 `role_replica` 时调用 full sync、incremental sync 和 heartbeat 三个状态机，各函数内部防御性角色检查与副本时序保持不变；固定 CPU 200K `GET 1KiB` 父提交 A/B 吞吐提升 2.17%、p99 从 81.5us 降到 77.0us，cycles/instructions/branches 分别下降 0.25%/0.36%/0.29%，复采样中三个目标函数均无样本，源码契约、单元、复制心跳和正式 50K 总体 guard 通过
 - [x] RESP2 Pub/Sub 模式判断调用点内联：唯一调用点直接短路检查事务、订阅计数和 RESP 版本，普通未订阅命令不再进入 29 字节 helper；RESP2 已订阅命令限制、允许 PING/退订和 RESP3 已订阅普通 GET 的单元与 TCP Pub/Sub smoke 通过。两组相反顺序固定 CPU 200K `GET 1KiB` A/B 合并吞吐提升 2.34%，`perf stat` instructions/branches 下降 0.17%/0.20%，不可变与 current 50K 总体 guard 通过
 - [x] Dict key 等值包装层删除：桶查找和删除在 hash 命中后直接把 entry SDS slice 交给 `bytes_eq`，不再调用 28 字节尾跳 helper；碰撞链和渐进 rehash 语义由完整单元覆盖。固定 CPU 200K `GET 1KiB` 的 8 轮墙钟合并仅提升 0.67%，`perf stat` cycles/instructions/branches 下降 2.48%/0.09%/0.09%，不可变与 current 50K 总体 guard 通过
+- [x] 固定空回复嵌套构造删除：`connection_empty_reply` 直接写出与通用构造器相同的全部字段，不再额外调用 `connection_make_reply` 构造并复制 200 字节临时对象；release 文本段缩小 208 字节，四组反向固定 CPU 200K `GET 1KiB` 的 instrumented throughput 提升 0.56%，cycles/instructions/branches 下降 0.71%/0.20%/0.11%，完整单测、33 项集成和正式 50K 总体 guard 通过
 - [x] 事件循环等待前时间复用：维护阶段前已刷新的 `now_ms` 直接用于 cron/epoll timeout 计算，epoll 返回后仍刷新事件时间；完整单元、33 项集成和时间敏感 smoke 通过。两组反向顺序固定 CPU 200K `GET 1KiB` 中吞吐提升 0.71%，cycles/instructions/branches 下降 3.07%/2.39%/2.53%，不可变与 current 50K 总体 guard 通过
 - [ ] `v0.9.3` 起：在真实性问题收敛后，继续补 Redis Open Source 单机核心缺口，而不是先扩模块命令
 

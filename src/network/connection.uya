@@ -8724,7 +8724,31 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
 }
 
 export fn connection_empty_reply() CommandReply {
-    return connection_make_reply(CommandReplyType.reply_bulk_string, connection_reply_empty_slice(), 0);
+    return CommandReply{
+        typ: CommandReplyType.reply_bulk_string,
+        data: connection_reply_empty_slice(),
+        integer: 0,
+        scan_cursor: 0u64,
+        array_head: null,
+        array_count: 0,
+        owned_object: null,
+        request_replicaof: false,
+        replicaof_promote: false,
+        replicaof_host: [],
+        replicaof_port: 0,
+        request_bgsave: false,
+        request_aof_rewrite: false,
+        request_config_set: false,
+        request_client_kill: false,
+        client_kill_id: 0,
+        request_client_pause: false,
+        client_pause_timeout_ms: 0u64,
+        client_pause_write_only: false,
+        client_pause_owner_id: 0,
+        request_client_unpause: false,
+        request_maxclients_set: false,
+        maxclients_after: 0,
+    };
 }
 
 export fn connection_shift_buffer(base: &byte, filled: &usize, consumed: usize) void {

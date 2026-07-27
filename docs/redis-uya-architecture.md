@@ -102,7 +102,7 @@ server open
 - server 维护当前 `input_len > 0` 的客户端计数：网络读入只在零到非零转换时增加，完整消费和连接关闭时递减，阻塞请求回填保持同步；计数为零时主循环跳过 buffered-client 全表扫描，半包、流水线和暂停请求仍沿用原调度规则
 - server loop 为单线程 `AsyncFramePool` 启用 `set_async_frame_allocator_single_thread`，Future 装箱直接读取该 pool；Uya 默认多线程 setter 仍使用 pthread TSD，快速模式不改变装箱头、释放路径或 Future ABI
 - server loop 在维护批次、计算 epoll timeout 前和 epoll 返回后刷新 `event_time_ms`；同一事件批次内的命令执行时间、`CLIENT PAUSE` 判断/截止时间、accept/read 交互时间复用该缓存，cron 与维护等待仍使用显式刷新时间，避免逐命令读取系统时钟
-- `RedisServer.runtime_info` 持久缓存命令执行元数据，普通请求只刷新客户端计数、复制 offset/backlog、maxmemory 排除量、后台任务、lastsave 与拓扑指针等动态字段，不再逐命令复制完整 `ServerConfig`；复制 backlog 的逻辑长度、first offset 和已分配字节从同一次结构快照计算，避免重复 helper 调用和逻辑长度读取；连接层仍按请求覆盖 RESP 版本与 `CLIENT NO-TOUCH` 状态
+- `RedisServer.runtime_info` 持久缓存命令执行元数据，普通请求只刷新客户端计数、复制 offset/backlog、maxmemory 排除量、后台任务、lastsave 与拓扑指针等动态字段，不再逐命令复制完整 `ServerConfig`；复制 backlog 的逻辑长度、first offset 和已分配字节从同一次结构快照计算，replid 仅在服务初始化和 `REPLICAOF` 角色切换时同步，避免普通请求重复复制稳定的 40 字节标识；连接层仍按请求覆盖 RESP 版本与 `CLIENT NO-TOUCH` 状态
 - runtime 同时持有 `config` 与 `pending_config`：执行器只在成功解析 `CONFIG SET` 后把候选配置写入 pending 槽，连接层在响应成功编码后原子提交到 `runtime.config`，因此输出缓冲不足不会产生无响应的配置变更，同一 pipeline 中的后续 `CONFIG GET` 仍能立即看到新值
 - 稳定配置缓存必须在配置变更点同步：启动参数 `requirepass` 通过 `server_set_requirepass()` 写入，成功 `CONFIG SET` 先提交 runtime 配置再同步 `server.config`，`REPLICAOF` 主从切换随后同步角色字段；直接绕过这些入口修改配置会破坏后续命令可见性
 - AOF rewrite 状态机包含打开 writer、复制缓冲和临时路径等大对象，release 代码会为该慢路径生成约 321KiB 栈帧；server loop 仅在 `aof_rewrite_requested` 或 `aof_rewrite_in_progress` 为真时进入该函数，活动 `BGREWRITEAOF` 的启动、轮询、合并与替换流程保持不变

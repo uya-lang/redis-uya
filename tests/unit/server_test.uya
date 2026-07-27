@@ -115,15 +115,19 @@ export fn test_server_replication_role_state_switch() !void {
         repl_backlog: replication_backlog_disabled(),
     };
 
+    server.runtime_info.replication_replid[0] = 120 as byte;
     server_replication_set_replica(&server, &"127.0.0.1"[0: 9], 6381);
     try assert_eq_i32(server.replication_role as i32, ReplicationRole.role_replica as i32);
     try assert_eq_i32(server.replication_state as i32, ReplicationState.repl_state_configured as i32);
     try assert_eq_i32(server.config.replicaof_port, 6381);
+    try assert_eq_i32(server.runtime_info.replication_replid[0] as i32, 0);
 
     server_replication_reset_to_master(&server);
     try assert_eq_i32(server.replication_role as i32, ReplicationRole.role_master as i32);
     try assert_eq_i32(server.replication_state as i32, ReplicationState.repl_state_none as i32);
     try assert_eq_i32(server.config.replicaof_port, 0);
+    try assert_true(server.repl_backlog.replid[0] != 0 as byte);
+    try assert_true(server_test_slice_eq(server.runtime_info.replication_replid[0: 41], server.repl_backlog.replid[0: 41]));
 
     replication_backlog_free(&server.repl_backlog);
     engine_free(&server.engine);

@@ -164,6 +164,7 @@ server open
 - `CLIENT REPLY` 当前在连接层维护 `OFF` / `SKIP` 回复抑制状态，覆盖命令回复编码路径；不改变 Pub/Sub push 或 `MONITOR` 推送
 - `CommandReply` 与 `ConnectionProcessResult` 不携带完整 `ServerConfig`；稀有的 `CONFIG SET` 通过持久 `CommandRuntimeInfo.pending_config` 传递候选状态，普通回复、零拷贝和批处理返回结构不再为配置更新承担宽字段复制成本
 - 连接层固定空回复占位由 `connection_empty_reply` 直接构造完整 `CommandReply`，不再经通用 `connection_make_reply` 生成第二个临时对象；标准命令、脚本和事务路径保持同一字段初值与清理契约
+- RESP 回复编码的连续字节、CRLF 和十进制无符号整数写入先按剩余容量做一次整体预检，成功后直接写入目标缓冲并一次更新位置；`ConnectionOutputTooSmall` 错误类型和成功编码字节保持不变，零拷贝 GET 的 bulk header 不再为每个数字和 CRLF 字节重复进入单字节追加函数
 - `CLIENT UNBLOCK` 当前在 server 侧定位目标连接并解除阻塞 pop 等待，`TIMEOUT` 复用连接层回复编码生成空阻塞结果，`ERROR` 返回 `UNBLOCKED` 错误
 - `CLIENT CACHING` 当前只维护连接级兼容标志；server-assisted client-side caching invalidation 还未实现
 - `CLIENT NO-EVICT` 当前只维护连接级兼容标志；`maxmemory` 淘汰候选保护还未接入存储层

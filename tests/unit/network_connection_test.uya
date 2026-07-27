@@ -112,6 +112,21 @@ export fn test_connection_encode_resp_replies() !void {
     const integer_len: usize = try connection_encode_reply(&integer, &out[0], 128);
     try assert_true(network_connection_slice_eq(out[0: integer_len], &":-2\r\n"[0: 5]));
 
+    const max_integer: CommandReply = network_connection_reply(CommandReplyType.reply_integer, (null as &byte)[0: 0], 9223372036854775807);
+    var exact_integer_out: [byte: 22] = [];
+    const max_integer_len: usize = try connection_encode_reply(&max_integer, &exact_integer_out[0], 22);
+    try assert_true(network_connection_slice_eq(exact_integer_out[0: max_integer_len], &":9223372036854775807\r\n"[0: 22]));
+
+    var small_integer_out: [byte: 21] = [];
+    var saw_output_too_small: bool = false;
+    _ = connection_encode_reply(&max_integer, &small_integer_out[0], 21) catch |err| {
+        if err == error.ConnectionOutputTooSmall {
+            saw_output_too_small = true;
+        }
+        return;
+    };
+    try assert_true(saw_output_too_small);
+
     const bulk: CommandReply = network_connection_reply(CommandReplyType.reply_bulk_string, &"value"[0: 5], 0);
     const bulk_len: usize = try connection_encode_reply(&bulk, &out[0], 128);
     try assert_true(network_connection_slice_eq(out[0: bulk_len], &"$5\r\nvalue\r\n"[0: 11]));

@@ -6250,16 +6250,36 @@ fn connection_append_byte(out: &byte, out_cap: usize, pos: &usize, ch: byte) !vo
 }
 
 fn connection_append_bytes(out: &byte, out_cap: usize, pos: &usize, data: &[byte]) !void {
+    if *pos > out_cap {
+        return error.ConnectionOutputTooSmall;
+    }
+    const available: usize = out_cap - *pos;
+    if data.len > available {
+        return error.ConnectionOutputTooSmall;
+    }
+
+    const start: usize = *pos;
     var i: usize = 0;
     while i < data.len {
-        try connection_append_byte(out, out_cap, pos, data.ptr[i]);
+        out[start + i] = data.ptr[i];
         i = i + 1;
     }
+    *pos = start + data.len;
 }
 
 fn connection_append_crlf(out: &byte, out_cap: usize, pos: &usize) !void {
-    try connection_append_byte(out, out_cap, pos, 13 as byte);
-    try connection_append_byte(out, out_cap, pos, 10 as byte);
+    if *pos > out_cap {
+        return error.ConnectionOutputTooSmall;
+    }
+    const available: usize = out_cap - *pos;
+    if available < 2 {
+        return error.ConnectionOutputTooSmall;
+    }
+
+    const start: usize = *pos;
+    out[start] = 13 as byte;
+    out[start + 1] = 10 as byte;
+    *pos = start + 2;
 }
 
 fn connection_append_u64(out: &byte, out_cap: usize, pos: &usize, value: u64) !void {
@@ -6278,10 +6298,21 @@ fn connection_append_u64(out: &byte, out_cap: usize, pos: &usize, value: u64) !v
         v = v / 10u64;
     }
 
-    while count > 0 {
-        count = count - 1;
-        try connection_append_byte(out, out_cap, pos, tmp[count]);
+    if *pos > out_cap {
+        return error.ConnectionOutputTooSmall;
     }
+    const available: usize = out_cap - *pos;
+    if count > available {
+        return error.ConnectionOutputTooSmall;
+    }
+
+    const start: usize = *pos;
+    var written: usize = 0;
+    while written < count {
+        out[start + written] = tmp[count - written - 1];
+        written = written + 1;
+    }
+    *pos = start + count;
 }
 
 fn connection_append_i64(out: &byte, out_cap: usize, pos: &usize, value: i64) !void {

@@ -2,6 +2,8 @@
 
 type ByteVec16 = @vector(u8, 16);
 type ByteMask16 = @mask(16);
+type ByteWords2 = @vector(u64, 2);
+type ByteWordsMask2 = @mask(2);
 
 fn bytes_min(a: usize, b: usize) usize {
     if a < b { return a; }
@@ -46,9 +48,9 @@ export fn bytes_eq(a: &[byte], b: &[byte]) bool {
 
     var i: usize = 0;
     while i + 16 <= a.len {
-        const av: ByteVec16 = @vector.load((&a.ptr[i]) as &u8);
-        const bv: ByteVec16 = @vector.load((&b.ptr[i]) as &u8);
-        const same: ByteMask16 = av == bv;
+        const av: ByteWords2 = @vector.load((&a.ptr[i]) as &u64);
+        const bv: ByteWords2 = @vector.load((&b.ptr[i]) as &u64);
+        const same: ByteWordsMask2 = av == bv;
         if !@vector.all(same) {
             return false;
         }

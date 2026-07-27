@@ -20,6 +20,24 @@ export fn test_bytes_vector_eq_and_cmp() !void {
     try assert_true(bytes_cmp(diff_mid, same_a) > 0);
     try assert_true(bytes_cmp(&"abc"[0: 3], &"abcd"[0: 4]) < 0);
     try assert_true(bytes_cmp(&"abcd"[0: 4], &"abc"[0: 3]) > 0);
+
+    const boundary_a: &[byte] = &"x0123456789abcdef0123456789abcdefQy"[1: 34];
+    const boundary_b: &[byte] = &"z0123456789abcdef0123456789abcdefQw"[1: 34];
+    const boundary_mid: &[byte] = &"z0123456789abcdeg0123456789abcdefQw"[1: 34];
+    const boundary_tail: &[byte] = &"z0123456789abcdef0123456789abcdeeQw"[1: 34];
+    const lengths: [usize: 6] = [15, 16, 17, 31, 32, 33];
+    var i: usize = 0;
+    while i < @len(lengths) {
+        const len: usize = lengths[i];
+        try assert_true(bytes_eq(boundary_a[0: len], boundary_b[0: len]));
+        if len >= 16 {
+            try assert_true(!bytes_eq(boundary_a[0: len], boundary_mid[0: len]));
+        }
+        if len >= 32 {
+            try assert_true(!bytes_eq(boundary_a[0: len], boundary_tail[0: len]));
+        }
+        i = i + 1;
+    }
 }
 
 export fn test_bytes_vector_ascii_casecmp() !void {

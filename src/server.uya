@@ -2258,9 +2258,7 @@ export fn server_run(server: &RedisServer) !void {
         server_run_blocked_clients_at(server, now_ms);
         server_run_buffered_clients_at(server, now_ms);
 
-        const wait_now_ms: u64 = now_ms_safe();
-        server.event_time_ms = wait_now_ms;
-        const timeout_ms: i32 = server_ms_until_next_cron(server, wait_now_ms);
+        const timeout_ms: i32 = server_ms_until_next_cron(server, now_ms);
         const wait_result: !i32 = sys_epoll_wait(server.listener.poll_fd, &events[0], SERVER_EVENT_CAP as i32, timeout_ms);
         const n: i32 = wait_result catch |err| {
             const eid: i32 = @error_id(err) as i32;

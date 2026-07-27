@@ -21,6 +21,8 @@ TCP listener
 -> nonblocking socket write
 ```
 
+事件循环每轮在维护工作前刷新一次毫秒时间，并复用该值计算下一次 cron 的 epoll 等待超时；epoll 返回后再次刷新，供命令执行、TTL、CLIENT PAUSE 和客户端交互时间使用。这样保持等待后的时间语义，同时避免紧邻维护阶段的重复系统调用。
+
 写命令旁路：
 
 ```text

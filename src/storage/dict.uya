@@ -84,10 +84,6 @@ fn dict_hash_key(key: &[byte]) u64 {
     return crc64(key);
 }
 
-fn dict_key_eq(entry: &DictEntry, key: &[byte]) bool {
-    return bytes_eq(entry.key.buf[0: entry.key.len], key);
-}
-
 fn dict_init_buckets(base: &byte, size: usize) void {
     var i: usize = 0;
     while i < size {
@@ -148,7 +144,7 @@ fn dict_table_find_entry(table: &DictTable, key: &[byte], hash: u64) &DictEntry 
     const bucket: &DictBucket = dict_bucket_at(table.buckets, index);
     var entry: &DictEntry = bucket.head;
     while entry != null {
-        if entry.hash == hash && dict_key_eq(entry, key) {
+        if entry.hash == hash && bytes_eq(entry.key.buf[0: entry.key.len], key) {
             return entry;
         }
         entry = entry.next;
@@ -194,7 +190,7 @@ fn dict_table_delete(table: &DictTable, key: &[byte], hash: u64) bool {
     var entry: &DictEntry = bucket.head;
 
     while entry != null {
-        if entry.hash == hash && dict_key_eq(entry, key) {
+        if entry.hash == hash && bytes_eq(entry.key.buf[0: entry.key.len], key) {
             const next: &DictEntry = entry.next;
             if prev == null {
                 bucket.head = next;

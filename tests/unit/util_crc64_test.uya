@@ -36,10 +36,18 @@ export fn test_crc64_table_matches_scalar() !void {
     try assert_eq_u64(table_tail, table_all);
 
     var len: usize = 0;
-    while len <= 16usize {
+    while len <= 512usize {
         const table_prefix: u64 = crc64_update(0u64, data[0: len]);
         const scalar_prefix: u64 = crc64_update_scalar_for_test(0u64, data[0: len]);
         try assert_eq_u64(table_prefix, scalar_prefix);
         len = len + 1usize;
+    }
+
+    var split: usize = 0;
+    while split <= 512usize {
+        const segmented_head: u64 = crc64_update(0u64, data[0: split]);
+        const segmented_all: u64 = crc64_update(segmented_head, data[split: 512usize - split]);
+        try assert_eq_u64(segmented_all, scalar_all);
+        split = split + 1usize;
     }
 }

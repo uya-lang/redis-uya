@@ -62,14 +62,14 @@ server open
 ### `src/storage/`
 
 - `sds.uya`：动态字符串
-- `dict.uya`：项目内专用字典，支持渐进 rehash；key 比较复用 `util/bytes.uya` 的 16 字节块比较，key hash 使用表驱动 CRC64
+- `dict.uya`：项目内专用字典，支持渐进 rehash；key 比较复用 `util/bytes.uya` 的 16 字节块比较，key hash 使用 slicing-by-4 表驱动 CRC64
 - `object.uya`：最小 `RedisObject`，Set/ZSet 当前都基于项目内 `Dict` 容器；Stream 第一批使用 list-backed entry 存储并记录 last-generated id；`SINTERCARD` 这类读命令直接扫描当前 set 成员视图，`SMOVE` 这类成员搬移命令在现有对象上原地修改成员集，空源集合由执行器负责删 key
 - `engine.uya`：键空间、TTL、主动/惰性过期
 
 ### `src/util/`
 
 - `bytes.uya`：基于 `@vector` 的 16 字节块 byte-slice 比较与 ASCII 大小写比较，当前用于命令路由、配置解析、SDS 和 Dict key 热路径
-- `crc64.uya`：Redis CRC64；默认使用 256 项表驱动更新，保留标量更新路径作为测试对照
+- `crc64.uya`：Redis CRC64；默认使用四组 256 项 slicing-by-4 表并行折叠四字节输入，保留标量更新路径作为测试对照
 
 ### `src/persistence/`
 

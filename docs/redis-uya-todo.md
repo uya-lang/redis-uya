@@ -23,7 +23,7 @@
 - 最小迭代默认递增版本号最后一位：`v0.9.0`、`v0.9.1`、`v0.9.2` 依次推进；不为普通小阶段抬高第二位版本号。
 - `v0.9.0` 起后续主线只迭代单机版：补齐 Redis Open Source 单机功能、兼容性、性能和稳定性。
 - 当前 `HEAD` 的真实性高于历史报告：`README`、`DoD`、`COMMAND*`、测试结果和 benchmark 结果必须互相一致。
-- 2026-07-27 当前 `HEAD`：`make test`、完整 33 项集成、redis-cli、DoD 与 release benchmark 全部通过；默认 master 事件循环已在调用复制 full sync、incremental sync 和 heartbeat 状态机前按 replica 角色门控。固定 CPU `GET 1KiB` 父提交 A/B 吞吐提升 2.17%、p99 从 81.5us 降到 77.0us，`perf stat` 的 cycles/instructions/branches 分别下降 0.25%/0.36%/0.29%，复采样中三个复制维护函数均无样本。不可变与 current 50K 的五项绝对吞吐、p99 和总体 guard 均通过；current Redis 比值为 `1.04x/1.29x/1.23x/1.29x/0.95x`，两个 1KiB normalized 子项受同机波动未过，PING 和 GET 1KiB 仍未稳定达到严格 1.10x 全场景超越要求。
+- 2026-07-27 当前 `HEAD`：`make test`、完整 33 项集成、redis-cli、DoD 与 release benchmark 全部通过；普通命令的 RESP2 Pub/Sub 模式判断已并入唯一调用点，删除 release 中独立 helper 的 `call/ret`，RESP2 限制与 RESP3 订阅态普通命令语义保持不变。两组相反顺序、共 8 次固定 CPU `GET 1KiB` 父提交 A/B 合并吞吐提升 2.34%、p99 基本持平；`perf stat` 的 instructions/branches 分别下降 0.17%/0.20%，cycles 受主机抖动上升 2.55%。不可变与 current 50K 的五项绝对吞吐、p99 和总体 guard 均通过；current Redis 比值为 `1.16x/1.49x/0.95x/1.31x/0.91x`，GET16 normalized 子项受同机 Redis 波动未过，两个 GET 场景仍未稳定达到严格 1.10x 全场景超越要求。
 - 2026-07-23 已将 `../uya` `1.0` 分支直接回退到与远端一致的 `f54bd7bf`，删除未推送且违反 `export const/var` 裸 C ABI 规范的两个本地提交；redis-uya 将内部全局量改为私有并通过 `export fn` 跨模块访问，构建、完整单测、完整集成、redis-cli、release 和性能 guard 均通过。
 - `v0.9.4` 用于性能与稳定性收敛；`v0.9.5` 是首个单机封版候选，如未达到 `v1.0.0` 封版条件，继续使用 `v0.9.6` 等 patch 版本顺序迭代。
 - 单机版必须先覆盖 Redis Open Source 单机核心命令面；模块命令可以继续追踪，但不能与 `v1.0.0` 单机封版门槛混算。命令全集、状态定义和封版标准见 `redis-uya-command-scope.md`。
@@ -83,6 +83,7 @@
 - [x] 隐式默认用户 ACL 选择快速路径：事务为空或用户名长度为零时直接读取默认用户 deny 计数及 `allkeys/allchannels` 状态，不再构造用户名切片并比较 `default`；两轮固定 CPU 200K `PING` 中 instructions/branches/cycles 均值分别下降 4.0%/5.6%/3.1%，完整单测、33 项集成、redis-cli 和两轮 50K 正式 guard 通过
 - [x] 空 `requirepass` 认证门禁快速路径：普通命令用 NUL 终止密码缓冲首字节判断是否启用认证，不再构造并扫描完整 128B C 字符串切片；AUTH/HELLO AUTH 保持完整密码比较，两轮固定 CPU 200K `PING` 中 instructions/branches/cycles 均值分别下降 0.69%/0.74%/3.73%，完整单测、33 项集成、redis-cli 和正式 guard 通过
 - [x] 默认 master 复制维护角色门控：server loop 仅在 `role_replica` 时调用 full sync、incremental sync 和 heartbeat 三个状态机，各函数内部防御性角色检查与副本时序保持不变；固定 CPU 200K `GET 1KiB` 父提交 A/B 吞吐提升 2.17%、p99 从 81.5us 降到 77.0us，cycles/instructions/branches 分别下降 0.25%/0.36%/0.29%，复采样中三个目标函数均无样本，源码契约、单元、复制心跳和正式 50K 总体 guard 通过
+- [x] RESP2 Pub/Sub 模式判断调用点内联：唯一调用点直接短路检查事务、订阅计数和 RESP 版本，普通未订阅命令不再进入 29 字节 helper；RESP2 已订阅命令限制、允许 PING/退订和 RESP3 已订阅普通 GET 的单元与 TCP Pub/Sub smoke 通过。两组相反顺序固定 CPU 200K `GET 1KiB` A/B 合并吞吐提升 2.34%，`perf stat` instructions/branches 下降 0.17%/0.20%，不可变与 current 50K 总体 guard 通过
 - [ ] `v0.9.3` 起：在真实性问题收敛后，继续补 Redis Open Source 单机核心缺口，而不是先扩模块命令
 
 ## 3. 全版本路线图

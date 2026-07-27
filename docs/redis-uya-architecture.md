@@ -174,6 +174,7 @@ server open
 - `PUBLISH` 在连接层按频道和 pattern 扫描订阅表，向匹配 fd 推送 `message` / `pmessage` 事件，并向发布者返回接收者数量；`SPUBLISH` 只扫描 shard 订阅项并推送 `smessage`
 - `PUBSUB HELP/CHANNELS/NUMPAT/NUMSUB` 直接复用同一份订阅注册表；`SHARDCHANNELS/SHARDNUMSUB` 统计 `SSUBSCRIBE` 注册的 shard 订阅项
 - RESP2 订阅态在连接层限制为 `SUBSCRIBE` / `PSUBSCRIBE` / `SSUBSCRIBE` / `UNSUBSCRIBE` / `PUNSUBSCRIBE` / `SUNSUBSCRIBE` / `PING` / `QUIT` / `RESET`；RESP3 订阅态保持普通命令可继续执行
+- 普通命令入口直接短路检查当前事务的订阅计数和协议版本，不再调用独立的 RESP2 Pub/Sub 模式 helper；只有 RESP2 且订阅计数非零时才进入允许命令集合判断，RESP3 订阅态仍绕过该限制
 - 客户端关闭时，`server.uya` 会清理该 fd 的订阅项
 
 当前 Pub/Sub 已覆盖直连订阅、pattern 订阅、`PUBSUB` 管理面第一批与 RESP2/RESP3 订阅态限制，但仍不包含高水位背压队列。

@@ -2245,9 +2245,11 @@ export fn server_run(server: &RedisServer) !void {
         const now_ms: u64 = now_ms_safe();
         server.event_time_ms = now_ms;
         server_run_cron_due_at(server, now_ms);
-        _ = server_replication_try_full_sync_at(server, now_ms) catch {};
-        _ = server_replication_try_incremental_sync_at(server, now_ms) catch {};
-        _ = server_replication_try_heartbeat_at(server, now_ms) catch {};
+        if server.replication_role == ReplicationRole.role_replica {
+            _ = server_replication_try_full_sync_at(server, now_ms) catch {};
+            _ = server_replication_try_incremental_sync_at(server, now_ms) catch {};
+            _ = server_replication_try_heartbeat_at(server, now_ms) catch {};
+        }
         _ = server_run_pending_bgsave_at(server, now_ms) catch {};
         // The rewrite routine carries a large slow-path stack frame. Keep idle loops out of it.
         if server.aof_rewrite_requested || server.aof_rewrite_in_progress {

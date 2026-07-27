@@ -23,7 +23,7 @@
 - 最小迭代默认递增版本号最后一位：`v0.9.0`、`v0.9.1`、`v0.9.2` 依次推进；不为普通小阶段抬高第二位版本号。
 - `v0.9.0` 起后续主线只迭代单机版：补齐 Redis Open Source 单机功能、兼容性、性能和稳定性。
 - 当前 `HEAD` 的真实性高于历史报告：`README`、`DoD`、`COMMAND*`、测试结果和 benchmark 结果必须互相一致。
-- 2026-07-27 当前 `HEAD`：`make test`、完整 33 项集成、redis-cli、DoD 与 release benchmark 绝对吞吐、归一化吞吐和 p99 guard 通过；CRC64 slicing-by-4 后的不可变 50K 矩阵为 Redis 的 `1.05x/1.28x/0.97x/1.25x/0.99x`，重复当前报告为 `1.08x/1.49x/0.99x/1.38x/1.01x`。两轮固定 CPU `GET 1KiB` 父提交 A/B 吞吐提升 5.53%，但 PING 和两个 GET 场景仍未稳定达到严格 1.10x 全场景超越要求。
+- 2026-07-27 当前 `HEAD`：`make test`、完整 33 项集成、redis-cli、DoD 与 release benchmark 绝对吞吐、归一化吞吐和 p99 guard 通过；runtime backlog 单次快照后的不可变 50K 矩阵为 Redis 的 `1.04x/1.24x/0.98x/1.18x/0.97x`，重复当前报告为 `0.99x/1.22x/1.05x/1.28x/1.13x`。两轮固定 CPU `GET 1KiB` 父提交 A/B 吞吐提升 4.74%，但 PING 和 GET 场景仍未稳定达到严格 1.10x 全场景超越要求。
 - 2026-07-23 已将 `../uya` `1.0` 分支直接回退到与远端一致的 `f54bd7bf`，删除未推送且违反 `export const/var` 裸 C ABI 规范的两个本地提交；redis-uya 将内部全局量改为私有并通过 `export fn` 跨模块访问，构建、完整单测、完整集成、redis-cli、release 和性能 guard 均通过。
 - `v0.9.4` 用于性能与稳定性收敛；`v0.9.5` 是首个单机封版候选，如未达到 `v1.0.0` 封版条件，继续使用 `v0.9.6` 等 patch 版本顺序迭代。
 - 单机版必须先覆盖 Redis Open Source 单机核心命令面；模块命令可以继续追踪，但不能与 `v1.0.0` 单机封版门槛混算。命令全集、状态定义和封版标准见 `redis-uya-command-scope.md`。

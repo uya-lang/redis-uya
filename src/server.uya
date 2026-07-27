@@ -51,9 +51,6 @@ use src.replication.backlog.replication_backlog_disabled;
 use src.replication.backlog.replication_backlog_new;
 use src.replication.backlog.replication_backlog_free;
 use src.replication.backlog.replication_backlog_reset;
-use src.replication.backlog.replication_backlog_first_offset;
-use src.replication.backlog.replication_backlog_history_len;
-use src.replication.backlog.replication_backlog_allocated_bytes;
 use src.replication.state.ReplicationRole;
 use src.replication.state.ReplicationState;
 use src.storage.engine.Engine;
@@ -401,7 +398,21 @@ fn server_runtime_info_initialize(server: &RedisServer) void {
 }
 
 fn server_runtime_info(server: &RedisServer) &CommandRuntimeInfo {
-    var maxmemory_excluded_bytes: usize = replication_backlog_allocated_bytes(&server.repl_backlog);
+    var backlog_histlen: usize = 0;
+    if server.repl_backlog.active && server.repl_backlog.history_start < server.repl_backlog.history.len {
+        backlog_histlen = server.repl_backlog.history.len - server.repl_backlog.history_start;
+    }
+    var backlog_first_offset: u64 = 0u64;
+    if server.repl_backlog.active {
+        backlog_first_offset = server.repl_backlog.master_offset;
+        if backlog_histlen != 0 {
+            backlog_first_offset = backlog_first_offset - (backlog_histlen as u64);
+        }
+    }
+    var maxmemory_excluded_bytes: usize = 0;
+    if server.repl_backlog.history.buf.ptr != null {
+        maxmemory_excluded_bytes = server.repl_backlog.history.alloc + 1;
+    }
     if server.aof_rewrite_in_progress && server.aof_rewrite_buf.buf.ptr != null {
         maxmemory_excluded_bytes = maxmemory_excluded_bytes + server.aof_rewrite_buf.alloc + 1;
     }
@@ -414,8 +425,8 @@ fn server_runtime_info(server: &RedisServer) &CommandRuntimeInfo {
     info.replication_role = server.replication_role;
     info.replication_state = server.replication_state;
     info.replication_master_offset = server.repl_backlog.master_offset;
-    info.replication_backlog_first_offset = replication_backlog_first_offset(&server.repl_backlog);
-    info.replication_backlog_histlen = replication_backlog_history_len(&server.repl_backlog);
+    info.replication_backlog_first_offset = backlog_first_offset;
+    info.replication_backlog_histlen = backlog_histlen;
     info.replication_backlog_active = server.repl_backlog.active;
     info.maxmemory_excluded_bytes = maxmemory_excluded_bytes;
     info.bgsave_requested = server.bgsave_requested;

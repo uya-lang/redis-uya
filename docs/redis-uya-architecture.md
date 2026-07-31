@@ -66,7 +66,7 @@ server open
 - `sds.uya`：动态字符串
 - `dict.uya`：项目内专用字典，支持渐进 rehash；key 比较复用 `util/bytes.uya` 的 16 字节块比较，等值判断把每块作为两个 memcpy 装载的 u64 lane 比较以避免 16-lane mask 归约，桶查找和删除在 hash 命中后直接调用该比较，不再经过只做 SDS slice 转换的独立 helper；key hash 使用 slicing-by-4 表驱动 CRC64
 - `object.uya`：最小 `RedisObject`，Set/ZSet 当前都基于项目内 `Dict` 容器；Stream 第一批使用 list-backed entry 存储并记录 last-generated id；`SINTERCARD` 这类读命令直接扫描当前 set 成员视图，`SMOVE` 这类成员搬移命令在现有对象上原地修改成员集，空源集合由执行器负责删 key
-- `engine.uya`：键空间、TTL、主动/惰性过期
+- `engine.uya`：键空间、TTL、主动/惰性过期；惰性检查在 expires 主表与 rehash 表的 `used` 均为零时直接判定未过期，避免无 TTL 工作负载先对空 expires 字典执行一次完整 key CRC64
 
 ### `src/util/`
 
@@ -190,6 +190,7 @@ server open
 
 - 惰性过期：访问键时检查 TTL
 - 主动过期：100ms `cron` 内做受限扫描
+- 空 TTL 快速路径：expires 主表与 rehash 表均无元素时，惰性检查不做 key hash；已分配后清空的 expires 表和从未分配的空表使用同一判断，存在 TTL 或 rehash 中仍有元素时继续走完整字典查找
 
 ## 7. 内存限制与淘汰基线
 

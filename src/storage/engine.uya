@@ -262,6 +262,9 @@ export fn engine_watch_version(engine: &Engine, key: &[byte]) u64 {
 }
 
 export fn key_is_expired(engine: &Engine, key: &[byte], now_ms: u64) bool {
+    if engine.db.expires.table.used == 0 && engine.db.expires.rehash_table.used == 0 {
+        return false;
+    }
     const expire_result: !usize = dict_lookup(&engine.db.expires, key);
     const expire_at: usize = expire_result catch {
         return false;

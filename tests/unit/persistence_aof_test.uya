@@ -124,6 +124,18 @@ export fn test_aof_connection_append_and_replay_set() !void {
         1000u64,
     );
     try assert_true(aof_test_slice_eq(out[0: result.response_len], &"+OK\r\n"[0: 5]));
+    const buffered_before_get: usize = writer.buffer_len;
+    const get_result: ConnectionProcessResult = try connection_process_input_with_aof_at(
+        &engine,
+        &router,
+        &writer,
+        &"*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n"[0: 22],
+        &out[0],
+        256,
+        1000u64,
+    );
+    try assert_true(aof_test_slice_eq(out[0: get_result.response_len], &"$5\r\nvalue\r\n"[0: 11]));
+    try assert_eq_i32(writer.buffer_len as i32, buffered_before_get as i32);
     const append_result: ConnectionProcessResult = try connection_process_input_with_aof_at(
         &engine,
         &router,
@@ -680,11 +692,32 @@ export fn test_aof_replay_sort_store_command() !void {
     _ = unlink(path);
 
     var writer: AofWriter = try aof_open_truncate(path);
-    try aof_append_raw(&writer, &"*5\r\n$5\r\nRPUSH\r\n$7\r\nsortsrc\r\n$1\r\n3\r\n$1\r\n1\r\n$1\r\n2\r\n"[0: 49]);
-    try aof_append_raw(&writer, &"*4\r\n$4\r\nSORT\r\n$7\r\nsortsrc\r\n$5\r\nSTORE\r\n$7\r\nsortout\r\n"[0: 51]);
-    aof_close(&writer);
-
     const router: CommandRouter = command_router_new();
+    var source_engine: Engine = engine_new();
+    var out: [byte: 256] = [];
+    const push_result: ConnectionProcessResult = try connection_process_input_with_aof_at(
+        &source_engine,
+        &router,
+        &writer,
+        &"*5\r\n$5\r\nRPUSH\r\n$7\r\nsortsrc\r\n$1\r\n3\r\n$1\r\n1\r\n$1\r\n2\r\n"[0: 49],
+        &out[0],
+        256,
+        1000u64,
+    );
+    try assert_true(aof_test_slice_eq(out[0: push_result.response_len], &":3\r\n"[0: 4]));
+    const sort_result: ConnectionProcessResult = try connection_process_input_with_aof_at(
+        &source_engine,
+        &router,
+        &writer,
+        &"*4\r\n$4\r\nSORT\r\n$7\r\nsortsrc\r\n$5\r\nSTORE\r\n$7\r\nsortout\r\n"[0: 51],
+        &out[0],
+        256,
+        1000u64,
+    );
+    try assert_true(aof_test_slice_eq(out[0: sort_result.response_len], &":3\r\n"[0: 4]));
+    aof_close(&writer);
+    engine_free(&source_engine);
+
     var engine: Engine = engine_new();
     try aof_replay_file_at(path, &engine, &router, 1000u64);
     const found: &RedisObject = try lookup_key_at(&engine, &"sortout"[0: 7], 1000u64);

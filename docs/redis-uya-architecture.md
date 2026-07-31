@@ -45,7 +45,7 @@ server open
 ### `src/network/`
 
 - `listener.uya`：loopback TCP 监听、accept、listener 级 epoll fd
-- `connection.uya`：RESP 请求处理、连接级 RESP2/RESP3 模式、CLIENT 元数据、回复编码、非阻塞读写、待发送缓冲、`GET` bulk string 零拷贝发送路径，以及 blocking list / zset pop 命令的挂起/恢复判定
+- `connection.uya`：RESP 请求处理、连接级 RESP2/RESP3 模式、CLIENT 元数据、回复编码、非阻塞读写、待发送缓冲、`GET` bulk string 零拷贝发送路径，以及 blocking list / zset pop 命令的挂起/恢复判定；普通顶层 `GET` 在 AOF writer 存在时按命令类型直接跳过完整 AOF 判定，脚本、事务、写命令和参数驱动写入的 `SORT ... STORE` 仍走原判定路径
 - `protocol.uya`：RESP2 与 RESP3 最小解析；支持一次扫描多个顶层 RESP 帧并返回每帧消费长度，供 pipeline 和后续连接层批处理复用
 
 ### `src/command/`

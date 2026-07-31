@@ -91,6 +91,7 @@
 - [x] 零拷贝结果包装层删除：server 直接调用 `connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_zero_copy_at`，成功解包后同步关闭标志，删除唯一调用且逐字段重建结果的 wrapper；release 文本段净减 72 字节，两组相反顺序固定 CPU 200K 合并 instructions/branches 下降 0.251%/0.231%，完整单元、33 项集成和两轮正式 50K 总体 guard 通过
 - [x] 空 expires 惰性检查快速路径：expires 主表和 rehash 表均无元素时，`key_is_expired` 在 CRC64 与字典查找前直接返回；保留真实 TTL、rehash 与清空后空表语义。两组反向固定 CPU 100K `GET 1KiB` 墙钟吞吐提升 7.80%，两组反向 200K `perf stat` 的 cycles/instructions/branches 分别下降 9.47%/4.63%/2.26%，完整单元、33 项集成和不可变/current 50K 总体 guard 通过
 - [x] GET 字符串结果直达：命中对象后在 GET 调用点直接校验 `object_string` 并构造 value slice，保留 missing Null Bulk 和非字符串 WRONGTYPE，不再调用通用错误联合 helper；release 的 GET 函数从 702 字节降到 691 字节。两组相反顺序固定 CPU 200K `perf stat` 共 8 次测量中吞吐提升 1.04%，cycles/instructions/branches 下降 0.66%/1.02%/1.02%，完整单元、33 项集成、零丢样 profile 和不可变/current 50K 全部 guard 通过
+- [x] GET AOF 判定门控：普通顶层 GET 在 AOF writer 存在时直接按 `command_get` 跳过完整 AOF 决策 helper，脚本、事务、写命令与 `SORT ... STORE` 保持原路径；单测断言 GET 不增长 AOF buffer，并验证连接层 RPUSH + SORT STORE 可回放。8 轮反向固定 CPU 200K 墙钟吞吐提升 2.48%、p99 下降 7.63%，`perf stat` instructions/branches 下降 0.64%/0.68%，零丢样 11K profile 中目标 helper 消失，不可变/current 50K 三类 guard 全部通过
 - [ ] `v0.9.3` 起：在真实性问题收敛后，继续补 Redis Open Source 单机核心缺口，而不是先扩模块命令
 
 ## 3. 全版本路线图

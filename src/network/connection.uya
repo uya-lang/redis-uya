@@ -7107,7 +7107,9 @@ fn connection_execute_standard_command_at(
         reply.data.ptr[1] == 75 as byte {
         runtime.lastsave_ms = now_ms;
     }
-    if aof != null && connection_should_append_aof(command, &reply) {
+    if aof != null &&
+        command.info.cmd_type != CommandType.command_get &&
+        connection_should_append_aof(command, &reply) {
         _ = aof_append_command_result_at(aof, command, input[0: parsed.consumed], now_ms, &reply) catch {
             const aof_reply: CommandReply = connection_error_reply(&"ERR AOF append failed"[0: 21]);
             const aof_n: usize = try connection_encode_reply_for_command(tx, command, &aof_reply, out, out_cap, reply_off_before, reply_skip_before);

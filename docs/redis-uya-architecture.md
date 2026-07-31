@@ -1,7 +1,7 @@
 # redis-uya ARCHITECTURE
 
 > 版本: v0.9.3-dev
-> 日期: 2026-07-23
+> 日期: 2026-07-31
 
 ## 1. 总体结构
 
@@ -99,6 +99,7 @@ server open
 - 单命令执行先尝试扁平命令数组借用解析：argc 不超过 3 且元素为 Bulk/Simple String 时，数据切片和 `RespValue` 描述符均由当前输入/连接栈承载，`RespParseResult.elements_owned=false`；容量不足、整数/嵌套集合或其他复杂 RESP 类型回退协议对应的通用 RESP2/RESP3 parser，统一清理入口只释放 owned elements
 - 连接层当前会在一次读入中批量消费多个完整 RESP 顶层帧；这条路径用于 `redis-cli` stdin/pipeline、事务管线和后续多命令批处理
 - `close_after_write`：`QUIT` 等命令的延迟关闭标志
+- server 直接调用连接层零拷贝处理入口，成功解包 `ConnectionProcessResult` 后把 `close_after` 同步到 `close_after_write`；不再经过额外包装函数搬运完整结果结构，错误和半包路径仍保持关闭标志为 false
 - `transaction`：连接级事务队列、WATCH 集合、RESP 协议版本、CLIENT 名称/库信息、Pub/Sub 订阅计数与 blocking deadline 状态
 - `blocked_request` / `blocked_request_len`：当前被挂起的 blocking list / zset 原始 RESP 请求；server 在成功保存请求后增加 `blocked_clients`，在唤醒、`CLIENT UNBLOCK` 或连接关闭时递减，计数为零时主循环跳过阻塞客户端全表扫描；key 就绪或超时后仍把请求前插回 `input` 并复用既有执行链恢复
 - server 维护当前 `input_len > 0` 的客户端计数：网络读入只在零到非零转换时增加，完整消费和连接关闭时递减，阻塞请求回填保持同步；计数为零时主循环跳过 buffered-client 全表扫描，半包、流水线和暂停请求仍沿用原调度规则

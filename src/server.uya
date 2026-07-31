@@ -19,7 +19,7 @@ use src.network.connection.ConnectionProcessResult;
 use src.network.connection.ConnectionTransaction;
 use src.network.connection.connection_client_registry_client_id;
 use src.network.connection.connection_transaction_set_client_addresses;
-use src.network.connection.connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_zero_copy_close_at;
+use src.network.connection.connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_zero_copy_at;
 use src.network.connection.connection_encode_client_unblock_error_reply;
 use src.network.connection.connection_encode_client_unblock_timeout_reply;
 use src.network.connection.connection_client_registry_unregister_tx;
@@ -1508,7 +1508,7 @@ fn server_async_writev_all_future(fd: i32, head: &const byte, head_len: usize, b
             var incomplete: bool = false;
             client.close_after_write = false;
 
-            const result_value: !ConnectionProcessResult = connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_zero_copy_close_at(
+            const result_value: !ConnectionProcessResult = connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_zero_copy_at(
                 &server.engine,
                 runtime,
                 &server.router,
@@ -1527,7 +1527,6 @@ fn server_async_writev_all_future(fd: i32, head: &const byte, head_len: usize, b
                 &bgsave_requested,
                 &rewrite_requested,
                 &rewrite_failed,
-                &client.close_after_write,
             );
             const result: ConnectionProcessResult = result_value catch |err| {
                 if err == error.ConnectionIncomplete {
@@ -1538,6 +1537,7 @@ fn server_async_writev_all_future(fd: i32, head: &const byte, head_len: usize, b
                 }
                 ConnectionProcessResult{ response_len: 0, response_head_len: 0, zero_copy_body: (null as &byte)[0: 0], zero_copy_tail_len: 0, consumed: 0, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false };
             };
+            client.close_after_write = result.close_after;
             if runtime.lastsave_ms > server.lastsave_ms {
                 server.lastsave_ms = runtime.lastsave_ms;
             }

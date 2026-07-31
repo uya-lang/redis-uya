@@ -51,7 +51,7 @@ server open
 ### `src/command/`
 
 - `router.uya`：命令表、命令名匹配、参数数量校验
-- `executor.uya`：命令执行与控制面拼装
+- `executor.uya`：命令执行与控制面拼装；普通 `GET` 在命中对象后直接校验字符串类型并把对象 value slice 交给 bulk reply，不再通过通用错误联合 helper 重建同一切片，missing 与 WRONGTYPE 语义保持不变
 - `catalog.uya`：共享命令目录查询、过滤和 pattern 匹配
 - `catalog_generated_base.uya`、`catalog_generated.uya`、`catalog_generated_part_*.uya`：由 `scripts/generate_command_catalog.py` 生成的官方命令目录分片
 

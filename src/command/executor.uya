@@ -3269,10 +3269,10 @@ fn command_executor_get(engine: &Engine, command: &Command, now_ms: u64) Command
     const obj: &RedisObject = command_executor_lookup_key_at(engine, key, now_ms) catch {
         return command_executor_reply(CommandReplyType.reply_null_bulk, command_executor_empty_slice(), 0);
     };
-    const data: &[byte] = command_executor_string_value(obj) catch {
+    if obj.obj_type != ObjectType.object_string {
         return command_executor_wrongtype();
-    };
-    return command_executor_bulk(data);
+    }
+    return command_executor_bulk(obj.value.buf[0: obj.value.len]);
 }
 
 fn command_executor_incr(engine: &Engine, command: &Command, now_ms: u64) CommandReply {

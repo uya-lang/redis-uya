@@ -2623,7 +2623,7 @@ FUNCTION KILL
 返回：
 
 - 返回当前 `FUNCTION` 命令帮助数组；HELP 中列出 `FUNCTION DELETE <library-name>` 等当前已暴露的控制面子命令
-- `FUNCTION LIST` 返回当前最小 function library 列表；支持 `LIBRARYNAME <exact-name|*>` 与 `WITHCODE`
+- `FUNCTION LIST` 返回当前最小 function library 列表；支持 `LIBRARYNAME <pattern>` 的 `*` / `?` glob 筛选与 `WITHCODE`
 - `FUNCTION STATS` 返回当前库/函数数量；`running_script = nil`
 - `FUNCTION FLUSH` 清空当前最小 function library，成功返回 `OK`
 - `FUNCTION DELETE` 删除指定 library 并返回 `OK`；缺失 library 返回 `ERR Library not found`
@@ -2635,7 +2635,7 @@ FUNCTION KILL
 说明：
 
 - 当前实现为 partial：每个 library 最多支持 8 个 `redis.register_function('name', function(keys, args) return redis.call(...) end)` 注册项；每个函数体仅支持现有单条 `return redis.call(...)` 子集；`keys[n]` / `args[n]` 会映射为 `FCALL` 的 key/arg 参数
-- `FUNCTION LIST` 支持 `LIBRARYNAME <exact-name|*>` 和 `WITHCODE`；`FUNCTION STATS` 反映当前最小库平面的 library/function 数量；`FUNCTION FLUSH` 支持 `ASYNC|SYNC` 参数校验并同步清空
+- `FUNCTION LIST` 支持 `LIBRARYNAME <pattern>` 的 `*` / `?` glob 筛选和 `WITHCODE`；`FUNCTION STATS` 反映当前最小库平面的 library/function 数量；`FUNCTION FLUSH` 支持 `ASYNC|SYNC` 参数校验并同步清空
 - `FCALL` 执行已加载的最小函数子集，`FCALL_RO` 对内部写命令返回 `ERR Write commands are not allowed from read-only scripts`
 - library/function 名仅接受 ASCII 字母、数字、`_` 和 `-`；每个函数名在当前进程中必须唯一，library 同名加载必须使用 `REPLACE`
 - function library 当前为进程内状态：不进入 RDB、AOF 或复制 library 元数据；函数执行后的实际数据命令仍遵循既有 AOF/复制传播路径

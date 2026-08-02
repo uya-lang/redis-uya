@@ -456,6 +456,10 @@ export fn test_connection_process_ping_set_get_quit() !void {
     try assert_true(network_connection_contains(function_out[0: multi_function_list_result.response_len], &"writevalue"[0: 10]));
     try assert_true(network_connection_contains(function_out[0: multi_function_list_result.response_len], &"#!lua name=multilib"[0: 19]));
 
+    const multi_function_pattern_list_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$8\r\nFUNCTION\r\n$4\r\nLIST\r\n$11\r\nLIBRARYNAME\r\n$6\r\nmulti*\r\n"[0: 58], &function_out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(function_out[0: 4], &"*1\r\n"[0: 4]));
+    try assert_true(network_connection_contains(function_out[0: multi_function_pattern_list_result.response_len], &"multilib"[0: 8]));
+
     const multi_function_stats_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$8\r\nFUNCTION\r\n$5\r\nSTATS\r\n"[0: 29], &function_out[0], 2048, 1000u64);
     try assert_true(network_connection_contains(function_out[0: multi_function_stats_result.response_len], &"functions_count\r\n:3\r\n"[0: 21]));
 

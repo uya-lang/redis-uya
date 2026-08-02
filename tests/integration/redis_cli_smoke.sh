@@ -1250,6 +1250,12 @@ if [[ "$MULTI_FUNCTION_LIST_RESULT" != *"multi"* || "$MULTI_FUNCTION_LIST_RESULT
     exit 1
 fi
 
+MULTI_FUNCTION_PATTERN_LIST_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function list libraryname 'mul*')"
+if [[ "$MULTI_FUNCTION_PATTERN_LIST_RESULT" != *"multi"* || "$MULTI_FUNCTION_PATTERN_LIST_RESULT" == *"mylib"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected FUNCTION LIST LIBRARYNAME pattern result, got '$MULTI_FUNCTION_PATTERN_LIST_RESULT'" >&2
+    exit 1
+fi
+
 MULTI_FCALL_FIRST_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" fcall first 1 lua-key)"
 if [[ "$MULTI_FCALL_FIRST_RESULT" != "value" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected first multi-function FCALL result, got '$MULTI_FCALL_FIRST_RESULT'" >&2

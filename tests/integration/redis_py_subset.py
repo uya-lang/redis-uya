@@ -1993,6 +1993,9 @@ def run_smoke() -> None:
                 or multi_function_list[0][7] != multi_function_code
             ):
                 raise AssertionError(f"unexpected multi-function FUNCTION LIST result: {multi_function_list!r}")
+            multi_function_pattern_list = client._request(b"FUNCTION", b"LIST", b"LIBRARYNAME", b"mul*")
+            if len(multi_function_pattern_list) != 1 or multi_function_pattern_list[0][1] != b"multi":
+                raise AssertionError(f"unexpected FUNCTION LIST pattern result: {multi_function_pattern_list!r}")
             if client.fcall(b"first", 1, b"lua-key") != b"value":
                 raise AssertionError("expected first multi-function FCALL result")
             if client.fcall(b"second", 1, b"lua-key", b"multi-updated") != "OK":

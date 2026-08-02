@@ -7204,7 +7204,7 @@ fn connection_function_list(command: &Command) CommandReply {
     index = 0;
     while index < CONNECTION_FUNCTION_LIBRARY_MAX {
         if connection_function_libraries[index].active &&
-            (library_filter.len == 0 || connection_slice_eq(library_filter, &"*"[0: 1]) || connection_slice_eq(connection_function_libraries[index].library_name[0: connection_function_libraries[index].library_name_len], library_filter)) {
+            (library_filter.len == 0 || connection_acl_glob_match(library_filter, 0, connection_function_libraries[index].library_name[0: connection_function_libraries[index].library_name_len], 0)) {
             count = count + 1;
         }
         index = index + 1;
@@ -7220,7 +7220,7 @@ fn connection_function_list(command: &Command) CommandReply {
     while index < CONNECTION_FUNCTION_LIBRARY_MAX {
         const entry: &ConnectionFunctionLibraryEntry = &connection_function_libraries[index];
         if entry.active &&
-            (library_filter.len == 0 || connection_slice_eq(library_filter, &"*"[0: 1]) || connection_slice_eq(entry.library_name[0: entry.library_name_len], library_filter)) {
+            (library_filter.len == 0 || connection_acl_glob_match(library_filter, 0, entry.library_name[0: entry.library_name_len], 0)) {
             if withcode {
                 _ = connection_sds_append_resp_array_header(&raw, 8) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
             } else {

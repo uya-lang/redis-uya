@@ -94,7 +94,7 @@ server open
 - `input_len`：当前已读字节数
 - `output`：待发送响应
 - `output_len` / `output_sent`：发送进度
-- `GET` 命中且 bulk body 不小于 64B 时，连接层会把 RESP header 写入 `output`，再用 `writev` 直接发送对象 value body 与 CRLF；若非阻塞写发生部分发送，剩余字节会退回到 `pending` 缓冲
+- `GET` 命中且 bulk body 不小于 64B 时，连接层会把 RESP header 写入 `output`，server 用共享进度 helper 首次直接 `writev` 对象 value body 与 CRLF；完整写入不再构造 Future，只有部分写或 EAGAIN 才携带精确 head/body/tail offset 进入 async writable continuation
 - RESP 批量解析 API 会对读缓冲中的顶层帧做完整前缀扫描，半包尾部保留在输入缓冲，错误尾包释放已解析前缀后返回协议错误
 - 单命令执行先尝试扁平命令数组借用解析：argc 不超过 3 且元素为 Bulk/Simple String 时，数据切片和 `RespValue` 描述符均由当前输入/连接栈承载，`RespParseResult.elements_owned=false`；容量不足、整数/嵌套集合或其他复杂 RESP 类型回退协议对应的通用 RESP2/RESP3 parser，统一清理入口只释放 owned elements
 - 连接层当前会在一次读入中批量消费多个完整 RESP 顶层帧；这条路径用于 `redis-cli` stdin/pipeline、事务管线和后续多命令批处理

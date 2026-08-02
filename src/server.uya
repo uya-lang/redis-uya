@@ -1373,6 +1373,88 @@ fn server_async_send_all_from_future(fd: i32, data: &const byte, count: usize, s
     return ServerAsyncSendAllFuture{ fd: fd, data: data, count: count, sent: sent };
 }
 
+fn server_writev_progress_nonblocking(
+    fd: i32,
+    head: &const byte,
+    head_len: usize,
+    body: &[byte],
+    tail_len: usize,
+    head_sent: &usize,
+    body_sent: &usize,
+    tail_sent: &usize,
+) !i32 {
+    const tail: &[byte] = &"\r\n"[0: 2];
+    while *head_sent < head_len || *body_sent < body.len || *tail_sent < tail_len {
+        var iov: [IOVec: 3] = [];
+        var iovcnt: i32 = 0;
+        if *head_sent < head_len {
+            iov[iovcnt as usize] = IOVec{
+                iov_base: @ptr_from_usize(@usize_from_ptr(head as &void) + *head_sent) as *const byte,
+                iov_len: head_len - *head_sent,
+            };
+            iovcnt = iovcnt + 1;
+        }
+        if *body_sent < body.len {
+            iov[iovcnt as usize] = IOVec{
+                iov_base: @ptr_from_usize(@usize_from_ptr(body.ptr as &void) + *body_sent) as *const byte,
+                iov_len: body.len - *body_sent,
+            };
+            iovcnt = iovcnt + 1;
+        }
+        if *tail_sent < tail_len {
+            iov[iovcnt as usize] = IOVec{
+                iov_base: @ptr_from_usize(@usize_from_ptr(tail.ptr as &void) + *tail_sent) as *const byte,
+                iov_len: tail_len - *tail_sent,
+            };
+            iovcnt = iovcnt + 1;
+        }
+
+        const result: !isize = sys_writev(fd, &iov[0], iovcnt);
+        const n: isize = result catch |err| {
+            const eid: i32 = @error_id(err) as i32;
+            if eid == EINTR {
+                continue;
+            }
+            if eid == EAGAIN || eid == EWOULDBLOCK {
+                return 1;
+            }
+            return err;
+        };
+        if n <= 0 {
+            return -1;
+        }
+
+        var advanced: usize = n as usize;
+        if *head_sent < head_len {
+            const head_remaining: usize = head_len - *head_sent;
+            if advanced >= head_remaining {
+                *head_sent = head_len;
+                advanced = advanced - head_remaining;
+            } else {
+                *head_sent = *head_sent + advanced;
+                advanced = 0;
+            }
+        }
+        if advanced > 0 && *body_sent < body.len {
+            const body_remaining: usize = body.len - *body_sent;
+            if advanced >= body_remaining {
+                *body_sent = body.len;
+                advanced = advanced - body_remaining;
+            } else {
+                *body_sent = *body_sent + advanced;
+                advanced = 0;
+            }
+        }
+        if advanced > 0 && *tail_sent < tail_len {
+            *tail_sent = *tail_sent + advanced;
+            if *tail_sent > tail_len {
+                *tail_sent = tail_len;
+            }
+        }
+    }
+    return 0;
+}
+
 struct ServerAsyncWritevAllFuture : Future<!usize> {
     fd: i32,
     head: &const byte,
@@ -1384,76 +1466,26 @@ struct ServerAsyncWritevAllFuture : Future<!usize> {
     tail_sent: usize,
 
     fn poll(self: &Self, waker: &Waker) Poll<!usize> {
-        const tail: &[byte] = &"\r\n"[0: 2];
         const total: usize = self.head_len + self.body.len + self.tail_len;
-        while self.head_sent < self.head_len || self.body_sent < self.body.len || self.tail_sent < self.tail_len {
-            var iov: [IOVec: 3] = [];
-            var iovcnt: i32 = 0;
-            if self.head_sent < self.head_len {
-                iov[iovcnt as usize] = IOVec{
-                    iov_base: @ptr_from_usize(@usize_from_ptr(self.head as &void) + self.head_sent) as *const byte,
-                    iov_len: self.head_len - self.head_sent,
-                };
-                iovcnt = iovcnt + 1;
-            }
-            if self.body_sent < self.body.len {
-                iov[iovcnt as usize] = IOVec{
-                    iov_base: @ptr_from_usize(@usize_from_ptr(self.body.ptr as &void) + self.body_sent) as *const byte,
-                    iov_len: self.body.len - self.body_sent,
-                };
-                iovcnt = iovcnt + 1;
-            }
-            if self.tail_sent < self.tail_len {
-                iov[iovcnt as usize] = IOVec{
-                    iov_base: @ptr_from_usize(@usize_from_ptr(tail.ptr as &void) + self.tail_sent) as *const byte,
-                    iov_len: self.tail_len - self.tail_sent,
-                };
-                iovcnt = iovcnt + 1;
-            }
-
-            const result: !isize = sys_writev(self.fd, &iov[0], iovcnt);
-            const n: isize = result catch |err| {
-                const eid: i32 = @error_id(err) as i32;
-                if eid == EINTR {
-                    continue;
-                }
-                if eid == EAGAIN || eid == EWOULDBLOCK {
-                    waker.wait_writable(self.fd);
-                    return Poll<!usize>.Pending({});
-                }
-                return Poll<!usize>.Ready(result as! usize);
-            };
-            if n <= 0 {
-                return poll_ready_ok<usize>(self.head_sent + self.body_sent + self.tail_sent);
-            }
-
-            var advanced: usize = n as usize;
-            if self.head_sent < self.head_len {
-                const head_remaining: usize = self.head_len - self.head_sent;
-                if advanced >= head_remaining {
-                    self.head_sent = self.head_len;
-                    advanced = advanced - head_remaining;
-                } else {
-                    self.head_sent = self.head_sent + advanced;
-                    advanced = 0;
-                }
-            }
-            if advanced > 0 && self.body_sent < self.body.len {
-                const body_remaining: usize = self.body.len - self.body_sent;
-                if advanced >= body_remaining {
-                    self.body_sent = self.body.len;
-                    advanced = advanced - body_remaining;
-                } else {
-                    self.body_sent = self.body_sent + advanced;
-                    advanced = 0;
-                }
-            }
-            if advanced > 0 && self.tail_sent < self.tail_len {
-                self.tail_sent = self.tail_sent + advanced;
-                if self.tail_sent > self.tail_len {
-                    self.tail_sent = self.tail_len;
-                }
-            }
+        const status_result: !i32 = server_writev_progress_nonblocking(
+            self.fd,
+            self.head,
+            self.head_len,
+            self.body,
+            self.tail_len,
+            &self.head_sent,
+            &self.body_sent,
+            &self.tail_sent,
+        );
+        const status: i32 = status_result catch {
+            return Poll<!usize>.Ready(status_result as! usize);
+        };
+        if status > 0 {
+            waker.wait_writable(self.fd);
+            return Poll<!usize>.Pending({});
+        }
+        if status < 0 {
+            return poll_ready_ok<usize>(self.head_sent + self.body_sent + self.tail_sent);
         }
         return poll_ready_ok<usize>(total);
     }
@@ -1463,16 +1495,25 @@ struct ServerAsyncWritevAllFuture : Future<!usize> {
     }
 }
 
-fn server_async_writev_all_future(fd: i32, head: &const byte, head_len: usize, body: &[byte], tail_len: usize) Future<!usize> {
+fn server_async_writev_all_future(
+    fd: i32,
+    head: &const byte,
+    head_len: usize,
+    body: &[byte],
+    tail_len: usize,
+    head_sent: usize,
+    body_sent: usize,
+    tail_sent: usize,
+) Future<!usize> {
     return ServerAsyncWritevAllFuture{
         fd: fd,
         head: head,
         head_len: head_len,
         body: body,
         tail_len: tail_len,
-        head_sent: 0,
-        body_sent: 0,
-        tail_sent: 0,
+        head_sent: head_sent,
+        body_sent: body_sent,
+        tail_sent: tail_sent,
     };
 }
 
@@ -1639,13 +1680,35 @@ fn server_async_writev_all_future(fd: i32, head: &const byte, head_len: usize, b
                 client.output_len = response_head_len + zero_copy_body.len + zero_copy_tail_len;
                 client.output_sent = 0;
 
-                const zc_written: usize = try @await server_async_writev_all_future(
+                var head_sent: usize = 0;
+                var body_sent: usize = 0;
+                var tail_sent: usize = 0;
+                const zc_status: i32 = try server_writev_progress_nonblocking(
                     fd,
                     client.output as &const byte,
                     response_head_len,
                     zero_copy_body,
                     zero_copy_tail_len,
+                    &head_sent,
+                    &body_sent,
+                    &tail_sent,
                 );
+                if zc_status < 0 {
+                    return false;
+                }
+                var zc_written: usize = client.output_len;
+                if zc_status > 0 {
+                    zc_written = try @await server_async_writev_all_future(
+                        fd,
+                        client.output as &const byte,
+                        response_head_len,
+                        zero_copy_body,
+                        zero_copy_tail_len,
+                        head_sent,
+                        body_sent,
+                        tail_sent,
+                    );
+                }
                 if zc_written < client.output_len {
                     return false;
                 }

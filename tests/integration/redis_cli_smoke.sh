@@ -1238,6 +1238,42 @@ if [[ "$FUNCTION_LOAD_REPLACE_RESULT" != "ERR unsupported function library subse
     exit 1
 fi
 
+MULTI_FUNCTION_LOAD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function load $'#!lua name=multi\nredis.register_function(\047first\047, function(keys, args) return redis.call(\047GET\047, keys[1]) end)\nredis.register_function(\047second\047, function(keys, args) return redis.call(\047SET\047, keys[1], args[1]) end)')"
+if [[ "$MULTI_FUNCTION_LOAD_RESULT" != "multi" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected multi-function FUNCTION LOAD library name, got '$MULTI_FUNCTION_LOAD_RESULT'" >&2
+    exit 1
+fi
+
+MULTI_FUNCTION_LIST_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function list withcode)"
+if [[ "$MULTI_FUNCTION_LIST_RESULT" != *"multi"* || "$MULTI_FUNCTION_LIST_RESULT" != *"first"* || "$MULTI_FUNCTION_LIST_RESULT" != *"second"* || "$MULTI_FUNCTION_LIST_RESULT" != *"#!lua name=multi"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected multi-function FUNCTION LIST WITHCODE, got '$MULTI_FUNCTION_LIST_RESULT'" >&2
+    exit 1
+fi
+
+MULTI_FCALL_FIRST_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" fcall first 1 lua-key)"
+if [[ "$MULTI_FCALL_FIRST_RESULT" != "value" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected first multi-function FCALL result, got '$MULTI_FCALL_FIRST_RESULT'" >&2
+    exit 1
+fi
+
+MULTI_FCALL_SECOND_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" fcall second 1 lua-key multi-updated)"
+if [[ "$MULTI_FCALL_SECOND_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected second multi-function FCALL result, got '$MULTI_FCALL_SECOND_RESULT'" >&2
+    exit 1
+fi
+
+MULTI_FUNCTION_STATS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function stats)"
+if [[ "$MULTI_FUNCTION_STATS_RESULT" != *$'functions_count\n2'* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected multi-function FUNCTION STATS count, got '$MULTI_FUNCTION_STATS_RESULT'" >&2
+    exit 1
+fi
+
+MULTI_FUNCTION_DELETE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function delete multi)"
+if [[ "$MULTI_FUNCTION_DELETE_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected multi-function FUNCTION DELETE OK, got '$MULTI_FUNCTION_DELETE_RESULT'" >&2
+    exit 1
+fi
+
 FUNCTION_DUMP_HEX="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function dump | xxd -p -c 256)"
 if [[ "$FUNCTION_DUMP_HEX" != "0a005d9b5c400f7fa2da0a" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected FUNCTION DUMP empty-library payload, got '$FUNCTION_DUMP_HEX'" >&2

@@ -441,6 +441,30 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const fcall_ro_loaded_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$8\r\nFCALL_RO\r\n$8\r\ngetvalue\r\n$1\r\n1\r\n$7\r\nlua-key\r\n"[0: 52], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: fcall_ro_loaded_result.response_len], &"$5\r\nvalue\r\n"[0: 11]));
 
+    const multi_function_load_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$8\r\nFUNCTION\r\n$4\r\nLOAD\r\n$223\r\n#!lua name=multilib\nredis.register_function('readvalue', function(keys, args) return redis.call('GET', keys[1]) end)\nredis.register_function('writevalue', function(keys, args) return redis.call('SET', keys[1], args[1]) end)\r\n"[0: 259], &function_out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(function_out[0: multi_function_load_result.response_len], &"$8\r\nmultilib\r\n"[0: 14]));
+
+    const multi_function_read_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$5\r\nFCALL\r\n$9\r\nreadvalue\r\n$1\r\n1\r\n$7\r\nlua-key\r\n"[0: 50], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: multi_function_read_result.response_len], &"$5\r\nvalue\r\n"[0: 11]));
+
+    const multi_function_write_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$5\r\nFCALL\r\n$10\r\nwritevalue\r\n$1\r\n1\r\n$7\r\nlua-key\r\n$8\r\nupdated2\r\n"[0: 66], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: multi_function_write_result.response_len], &"+OK\r\n"[0: 5]));
+
+    const multi_function_list_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$8\r\nFUNCTION\r\n$4\r\nLIST\r\n$8\r\nWITHCODE\r\n"[0: 42], &function_out[0], 2048, 1000u64);
+    try assert_true(network_connection_contains(function_out[0: multi_function_list_result.response_len], &"multilib"[0: 8]));
+    try assert_true(network_connection_contains(function_out[0: multi_function_list_result.response_len], &"readvalue"[0: 9]));
+    try assert_true(network_connection_contains(function_out[0: multi_function_list_result.response_len], &"writevalue"[0: 10]));
+    try assert_true(network_connection_contains(function_out[0: multi_function_list_result.response_len], &"#!lua name=multilib"[0: 19]));
+
+    const multi_function_stats_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$8\r\nFUNCTION\r\n$5\r\nSTATS\r\n"[0: 29], &function_out[0], 2048, 1000u64);
+    try assert_true(network_connection_contains(function_out[0: multi_function_stats_result.response_len], &"functions_count\r\n:3\r\n"[0: 21]));
+
+    const multi_function_delete_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$8\r\nFUNCTION\r\n$6\r\nDELETE\r\n$8\r\nmultilib\r\n"[0: 44], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: multi_function_delete_result.response_len], &"+OK\r\n"[0: 5]));
+
+    const multi_function_missing_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$5\r\nFCALL\r\n$9\r\nreadvalue\r\n$1\r\n0\r\n"[0: 37], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: multi_function_missing_result.response_len], &"-ERR Function not found\r\n"[0: 25]));
+
     const function_load_write_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$8\r\nFUNCTION\r\n$4\r\nLOAD\r\n$122\r\n#!lua name=setlib\nredis.register_function('setvalue', function(keys, args) return redis.call('SET', keys[1], args[1]) end)\r\n"[0: 158], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: function_load_write_result.response_len], &"$6\r\nsetlib\r\n"[0: 12]));
 

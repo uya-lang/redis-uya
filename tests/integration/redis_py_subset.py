@@ -1981,14 +1981,33 @@ def run_smoke() -> None:
             multi_function_code = (
                 b"#!lua name=multi\n"
                 b"redis.register_function('first', function(keys, args) return redis.call('GET', keys[1]) end)\n"
-                b"redis.register_function('second', function(keys, args) return redis.call('GET', keys[1]) end)"
+                b"redis.register_function('second', function(keys, args) return redis.call('SET', keys[1], args[1]) end)"
             )
+            if client.function_load(multi_function_code) != b"multi":
+                raise AssertionError("expected multi-function FUNCTION LOAD to return library name")
+            multi_function_list = client._request(b"FUNCTION", b"LIST", b"WITHCODE")
+            if (
+                len(multi_function_list) != 1
+                or multi_function_list[0][1] != b"multi"
+                or multi_function_list[0][5] != [[b"name", b"first"], [b"name", b"second"]]
+                or multi_function_list[0][7] != multi_function_code
+            ):
+                raise AssertionError(f"unexpected multi-function FUNCTION LIST result: {multi_function_list!r}")
+            if client.fcall(b"first", 1, b"lua-key") != b"value":
+                raise AssertionError("expected first multi-function FCALL result")
+            if client.fcall(b"second", 1, b"lua-key", b"multi-updated") != "OK":
+                raise AssertionError("expected second multi-function FCALL write result")
+            multi_function_stats = client.function_stats()
+            if multi_function_stats[3][1][3] != 2:
+                raise AssertionError(f"unexpected multi-function FUNCTION STATS result: {multi_function_stats!r}")
+            if client.function_delete(b"multi") != "OK":
+                raise AssertionError("expected multi-function FUNCTION DELETE to return OK")
             try:
-                client.function_load(multi_function_code)
-                raise AssertionError("expected multi-function FUNCTION LOAD subset to fail")
+                client.fcall(b"first", 0)
+                raise AssertionError("expected deleted multi-function FCALL to fail")
             except RespError as exc:
-                if str(exc) != "ERR unsupported function library subset":
-                    raise AssertionError(f"unexpected multi-function FUNCTION LOAD error: {exc}") from exc
+                if str(exc) != "ERR Function not found":
+                    raise AssertionError(f"unexpected deleted multi-function FCALL error: {exc}") from exc
             empty_function_dump = client.function_dump()
             if empty_function_dump != bytes.fromhex("0a005d9b5c400f7fa2da"):
                 raise AssertionError("expected FUNCTION DUMP empty-library payload")

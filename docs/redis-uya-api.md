@@ -2564,14 +2564,14 @@ FCALL_RO function numkeys [key ...] [arg ...]
 
 返回：
 
-- 当前返回 `ERR Function not found`，表示尚无已加载 function library
+- 执行已加载最小 function 子集的内部命令并返回其结果；未知函数返回 `ERR Function not found`
 
 说明：
 
-- 当前实现为 partial，仅提供空 function 库下的错误兼容面和 `COMMAND GETKEYS/GETKEYSANDFLAGS` 动态 key 解析
+- 当前实现为 partial，支持已加载最小 function 子集的调用，以及 `COMMAND GETKEYS/GETKEYSANDFLAGS` 动态 key 解析
 - `FCALL_RO` 的 `COMMAND GETKEYSANDFLAGS` key 标记为只读访问；`FCALL` 标记为读写访问/更新
 - `numkeys` 必须是非负整数，并且声明的 key 数不能超过后续实参数量；参数形状错误会先于空 function 库的 `ERR Function not found` 返回
-- 当前不执行 Redis Functions，不支持 function library 存储或 Lua engine 调用
+- 不支持完整 Redis Functions 语义、function library 持久化或通用 Lua engine 调用
 
 ### `SCRIPT`
 
@@ -2634,14 +2634,14 @@ FUNCTION KILL
 
 说明：
 
-- 当前实现为 partial：每个 library 仅支持一个 `redis.register_function('name', function(keys, args) return redis.call(...) end)` 注册项，函数体仅支持现有单条 `return redis.call(...)` 子集；`keys[n]` / `args[n]` 会映射为 `FCALL` 的 key/arg 参数
+- 当前实现为 partial：每个 library 最多支持 8 个 `redis.register_function('name', function(keys, args) return redis.call(...) end)` 注册项；每个函数体仅支持现有单条 `return redis.call(...)` 子集；`keys[n]` / `args[n]` 会映射为 `FCALL` 的 key/arg 参数
 - `FUNCTION LIST` 支持 `LIBRARYNAME <exact-name|*>` 和 `WITHCODE`；`FUNCTION STATS` 反映当前最小库平面的 library/function 数量；`FUNCTION FLUSH` 支持 `ASYNC|SYNC` 参数校验并同步清空
 - `FCALL` 执行已加载的最小函数子集，`FCALL_RO` 对内部写命令返回 `ERR Write commands are not allowed from read-only scripts`
 - library/function 名仅接受 ASCII 字母、数字、`_` 和 `-`；每个函数名在当前进程中必须唯一，library 同名加载必须使用 `REPLACE`
 - function library 当前为进程内状态：不进入 RDB、AOF 或复制 library 元数据；函数执行后的实际数据命令仍遵循既有 AOF/复制传播路径
 - `FUNCTION RESTORE` 支持 `FLUSH|APPEND|REPLACE` 参数校验，但当前只接受空库 dump；非空或非法 payload 返回 `ERR DUMP payload version or checksum are wrong`
 - `COMMAND INFO/LIST/DOCS` 会暴露 `FUNCTION`、`FUNCTION|HELP`、`FUNCTION|LIST`、`FUNCTION|STATS`、`FUNCTION|FLUSH`、`FUNCTION|DELETE`、`FUNCTION|LOAD`、`FUNCTION|DUMP`、`FUNCTION|RESTORE` 和 `FUNCTION|KILL`
-- 当前不支持多函数 library、完整 Lua 语法/flags、非空 `FUNCTION DUMP/RESTORE`、RDB/AOF/复制 library 元数据持久化或长时间运行函数取消
+- 当前不支持超过 8 个函数的 library、完整 Lua 语法/flags、非空 `FUNCTION DUMP/RESTORE`、RDB/AOF/复制 library 元数据持久化或长时间运行函数取消
 
 ### `GEOADD`
 

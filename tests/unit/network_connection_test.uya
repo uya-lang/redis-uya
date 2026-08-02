@@ -428,8 +428,33 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const function_delete_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$8\r\nFUNCTION\r\n$6\r\nDELETE\r\n$7\r\nmissing\r\n"[0: 43], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: function_delete_result.response_len], &"-ERR Library not found\r\n"[0: 24]));
 
-    const function_load_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$8\r\nFUNCTION\r\n$4\r\nLOAD\r\n$8\r\nreturn 1\r\n"[0: 42], &out[0], 512, 1000u64);
-    try assert_true(network_connection_slice_eq(out[0: function_load_result.response_len], &"-ERR FUNCTION LOAD is not supported by redis-uya partial\r\n"[0: 58]));
+    const function_load_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$8\r\nFUNCTION\r\n$4\r\nLOAD\r\n$112\r\n#!lua name=mylib\nredis.register_function('getvalue', function(keys, args) return redis.call('GET', keys[1]) end)\r\n"[0: 148], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: function_load_result.response_len], &"$5\r\nmylib\r\n"[0: 11]));
+
+    const function_list_loaded_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$8\r\nFUNCTION\r\n$4\r\nLIST\r\n"[0: 28], &out[0], 512, 1000u64);
+    try assert_true(network_connection_contains(out[0: function_list_loaded_result.response_len], &"mylib"[0: 5]));
+    try assert_true(network_connection_contains(out[0: function_list_loaded_result.response_len], &"getvalue"[0: 8]));
+
+    const fcall_loaded_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$5\r\nFCALL\r\n$8\r\ngetvalue\r\n$1\r\n1\r\n$7\r\nlua-key\r\n"[0: 49], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: fcall_loaded_result.response_len], &"$5\r\nvalue\r\n"[0: 11]));
+
+    const fcall_ro_loaded_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$8\r\nFCALL_RO\r\n$8\r\ngetvalue\r\n$1\r\n1\r\n$7\r\nlua-key\r\n"[0: 52], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: fcall_ro_loaded_result.response_len], &"$5\r\nvalue\r\n"[0: 11]));
+
+    const function_load_write_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$8\r\nFUNCTION\r\n$4\r\nLOAD\r\n$122\r\n#!lua name=setlib\nredis.register_function('setvalue', function(keys, args) return redis.call('SET', keys[1], args[1]) end)\r\n"[0: 158], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: function_load_write_result.response_len], &"$6\r\nsetlib\r\n"[0: 12]));
+
+    const fcall_ro_write_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$8\r\nFCALL_RO\r\n$8\r\nsetvalue\r\n$1\r\n1\r\n$7\r\nlua-key\r\n$7\r\nblocked\r\n"[0: 65], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: fcall_ro_write_result.response_len], &"-ERR Write commands are not allowed from read-only scripts\r\n"[0: 60]));
+
+    const fcall_write_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$5\r\nFCALL\r\n$8\r\nsetvalue\r\n$1\r\n1\r\n$7\r\nlua-key\r\n$7\r\nupdated\r\n"[0: 62], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: fcall_write_result.response_len], &"+OK\r\n"[0: 5]));
+
+    const function_delete_write_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$8\r\nFUNCTION\r\n$6\r\nDELETE\r\n$6\r\nsetlib\r\n"[0: 42], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: function_delete_write_result.response_len], &"+OK\r\n"[0: 5]));
+
+    const function_delete_loaded_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$8\r\nFUNCTION\r\n$6\r\nDELETE\r\n$5\r\nmylib\r\n"[0: 41], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: function_delete_loaded_result.response_len], &"+OK\r\n"[0: 5]));
 
     var function_dump_expected: [byte: 17] = [
         0x24 as byte, 0x31 as byte, 0x30 as byte, 0x0d as byte, 0x0a as byte,

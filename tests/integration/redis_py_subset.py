@@ -1955,18 +1955,40 @@ def run_smoke() -> None:
             except RespError as exc:
                 if str(exc) != "ERR Library not found":
                     raise AssertionError(f"unexpected FUNCTION DELETE error: {exc}") from exc
-            try:
-                client.function_load(b"return 1")
-                raise AssertionError("expected FUNCTION LOAD to return partial unsupported error")
-            except RespError as exc:
-                if str(exc) != "ERR FUNCTION LOAD is not supported by redis-uya partial":
-                    raise AssertionError(f"unexpected FUNCTION LOAD error: {exc}") from exc
+            function_code = b"#!lua name=mylib\nredis.register_function('getvalue', function(keys, args) return redis.call('GET', keys[1]) end)"
+            if client.function_load(function_code) != b"mylib":
+                raise AssertionError("expected FUNCTION LOAD to return library name")
+            function_list = client.function_list()
+            if (
+                len(function_list) != 1
+                or b"mylib" not in function_list[0]
+                or len(function_list[0]) < 6
+                or function_list[0][5] != [[b"name", b"getvalue"]]
+            ):
+                raise AssertionError(f"unexpected loaded FUNCTION LIST result: {function_list!r}")
+            if client.fcall(b"getvalue", 1, b"lua-key") != b"value":
+                raise AssertionError("expected FCALL loaded getvalue result")
+            if client.fcall_ro(b"getvalue", 1, b"lua-key") != b"value":
+                raise AssertionError("expected FCALL_RO loaded getvalue result")
+            if client.function_delete(b"mylib") != "OK":
+                raise AssertionError("expected FUNCTION DELETE loaded library to return OK")
             try:
                 client.function_load(b"return 1", replace=True)
-                raise AssertionError("expected FUNCTION LOAD REPLACE to return partial unsupported error")
+                raise AssertionError("expected unsupported FUNCTION LOAD subset to fail")
             except RespError as exc:
-                if str(exc) != "ERR FUNCTION LOAD is not supported by redis-uya partial":
-                    raise AssertionError(f"unexpected FUNCTION LOAD REPLACE error: {exc}") from exc
+                if str(exc) != "ERR unsupported function library subset":
+                    raise AssertionError(f"unexpected FUNCTION LOAD subset error: {exc}") from exc
+            multi_function_code = (
+                b"#!lua name=multi\n"
+                b"redis.register_function('first', function(keys, args) return redis.call('GET', keys[1]) end)\n"
+                b"redis.register_function('second', function(keys, args) return redis.call('GET', keys[1]) end)"
+            )
+            try:
+                client.function_load(multi_function_code)
+                raise AssertionError("expected multi-function FUNCTION LOAD subset to fail")
+            except RespError as exc:
+                if str(exc) != "ERR unsupported function library subset":
+                    raise AssertionError(f"unexpected multi-function FUNCTION LOAD error: {exc}") from exc
             empty_function_dump = client.function_dump()
             if empty_function_dump != bytes.fromhex("0a005d9b5c400f7fa2da"):
                 raise AssertionError("expected FUNCTION DUMP empty-library payload")

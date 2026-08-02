@@ -1202,15 +1202,39 @@ if [[ "$FUNCTION_DELETE_RESULT" != "ERR Library not found" ]]; then
     exit 1
 fi
 
-FUNCTION_LOAD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function load "return 1" 2>&1 || true)"
-if [[ "$FUNCTION_LOAD_RESULT" != "ERR FUNCTION LOAD is not supported by redis-uya partial" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected FUNCTION LOAD partial error, got '$FUNCTION_LOAD_RESULT'" >&2
+FUNCTION_LOAD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function load $'#!lua name=mylib\nredis.register_function(\047getvalue\047, function(keys, args) return redis.call(\047GET\047, keys[1]) end)')"
+if [[ "$FUNCTION_LOAD_RESULT" != "mylib" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected FUNCTION LOAD library name, got '$FUNCTION_LOAD_RESULT'" >&2
+    exit 1
+fi
+
+FUNCTION_LIST_LOADED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function list)"
+if [[ "$FUNCTION_LIST_LOADED_RESULT" != *"mylib"* || "$FUNCTION_LIST_LOADED_RESULT" != *"getvalue"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected loaded FUNCTION LIST, got '$FUNCTION_LIST_LOADED_RESULT'" >&2
+    exit 1
+fi
+
+FCALL_LOADED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" fcall getvalue 1 lua-key)"
+if [[ "$FCALL_LOADED_RESULT" != "value" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected FCALL loaded result, got '$FCALL_LOADED_RESULT'" >&2
+    exit 1
+fi
+
+FCALL_RO_LOADED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" fcall_ro getvalue 1 lua-key)"
+if [[ "$FCALL_RO_LOADED_RESULT" != "value" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected FCALL_RO loaded result, got '$FCALL_RO_LOADED_RESULT'" >&2
+    exit 1
+fi
+
+FUNCTION_DELETE_LOADED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function delete mylib)"
+if [[ "$FUNCTION_DELETE_LOADED_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected FUNCTION DELETE loaded library OK, got '$FUNCTION_DELETE_LOADED_RESULT'" >&2
     exit 1
 fi
 
 FUNCTION_LOAD_REPLACE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function load replace "return 1" 2>&1 || true)"
-if [[ "$FUNCTION_LOAD_REPLACE_RESULT" != "ERR FUNCTION LOAD is not supported by redis-uya partial" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected FUNCTION LOAD REPLACE partial error, got '$FUNCTION_LOAD_REPLACE_RESULT'" >&2
+if [[ "$FUNCTION_LOAD_REPLACE_RESULT" != "ERR unsupported function library subset" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected unsupported FUNCTION LOAD subset error, got '$FUNCTION_LOAD_REPLACE_RESULT'" >&2
     exit 1
 fi
 

@@ -2623,23 +2623,25 @@ FUNCTION KILL
 返回：
 
 - 返回当前 `FUNCTION` 命令帮助数组；HELP 中列出 `FUNCTION DELETE <library-name>` 等当前已暴露的控制面子命令
-- `FUNCTION LIST` 当前返回空数组，表示尚无已加载 function library
-- `FUNCTION STATS` 当前返回空库统计：`running_script = nil`、`LUA` 引擎 `libraries_count = 0`、`functions_count = 0`
-- `FUNCTION FLUSH` 当前返回 `OK`，空库状态下为 no-op
-- `FUNCTION DELETE` 当前返回 `ERR Library not found`，表示尚无可删除的 function library
-- `FUNCTION LOAD` 当前做参数形状校验；合法的 `LOAD code` 或 `LOAD REPLACE code` 返回 `ERR FUNCTION LOAD is not supported by redis-uya partial`
+- `FUNCTION LIST` 返回当前最小 function library 列表；支持 `LIBRARYNAME <exact-name|*>` 与 `WITHCODE`
+- `FUNCTION STATS` 返回当前库/函数数量；`running_script = nil`
+- `FUNCTION FLUSH` 清空当前最小 function library，成功返回 `OK`
+- `FUNCTION DELETE` 删除指定 library 并返回 `OK`；缺失 library 返回 `ERR Library not found`
+- `FUNCTION LOAD` 接受最小 Lua library 子集并返回 library 名；同名库需要 `REPLACE`
 - `FUNCTION DUMP` 当前返回 Redis 兼容的空库序列化 payload
 - `FUNCTION RESTORE` 当前只接受 Redis 兼容空库序列化 payload，成功返回 `+OK`
 - `FUNCTION KILL` 当前返回 `NOTBUSY No scripts in execution right now.`，表示没有正在运行的 function/script
 
 说明：
 
-- 当前实现为 partial，仅执行 `FUNCTION HELP`、空库状态的 `FUNCTION LIST`、空库统计的 `FUNCTION STATS`、no-op `FUNCTION FLUSH`、空库错误面的 `FUNCTION DELETE`、函数加载未支持错误面的 `FUNCTION LOAD`、空库序列化的 `FUNCTION DUMP`、空库 payload 的 `FUNCTION RESTORE` 和无运行脚本状态的 `FUNCTION KILL`
-- `FUNCTION LIST` 支持 `LIBRARYNAME <pattern>` 与 `WITHCODE` 参数校验，但 function library 存储尚未实现，因此始终返回空数组
-- `FUNCTION FLUSH` 支持 `ASYNC|SYNC` 参数校验，但 function library 存储尚未实现，因此不会清理任何真实库状态
+- 当前实现为 partial：每个 library 仅支持一个 `redis.register_function('name', function(keys, args) return redis.call(...) end)` 注册项，函数体仅支持现有单条 `return redis.call(...)` 子集；`keys[n]` / `args[n]` 会映射为 `FCALL` 的 key/arg 参数
+- `FUNCTION LIST` 支持 `LIBRARYNAME <exact-name|*>` 和 `WITHCODE`；`FUNCTION STATS` 反映当前最小库平面的 library/function 数量；`FUNCTION FLUSH` 支持 `ASYNC|SYNC` 参数校验并同步清空
+- `FCALL` 执行已加载的最小函数子集，`FCALL_RO` 对内部写命令返回 `ERR Write commands are not allowed from read-only scripts`
+- library/function 名仅接受 ASCII 字母、数字、`_` 和 `-`；每个函数名在当前进程中必须唯一，library 同名加载必须使用 `REPLACE`
+- function library 当前为进程内状态：不进入 RDB、AOF 或复制 library 元数据；函数执行后的实际数据命令仍遵循既有 AOF/复制传播路径
 - `FUNCTION RESTORE` 支持 `FLUSH|APPEND|REPLACE` 参数校验，但当前只接受空库 dump；非空或非法 payload 返回 `ERR DUMP payload version or checksum are wrong`
 - `COMMAND INFO/LIST/DOCS` 会暴露 `FUNCTION`、`FUNCTION|HELP`、`FUNCTION|LIST`、`FUNCTION|STATS`、`FUNCTION|FLUSH`、`FUNCTION|DELETE`、`FUNCTION|LOAD`、`FUNCTION|DUMP`、`FUNCTION|RESTORE` 和 `FUNCTION|KILL`
-- 当前不支持 function library 存储、非空 `FUNCTION RESTORE` 或真实 `FCALL/FCALL_RO` 执行
+- 当前不支持多函数 library、完整 Lua 语法/flags、非空 `FUNCTION DUMP/RESTORE`、RDB/AOF/复制 library 元数据持久化或长时间运行函数取消
 
 ### `GEOADD`
 

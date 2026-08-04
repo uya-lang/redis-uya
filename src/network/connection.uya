@@ -1503,6 +1503,25 @@ fn connection_function_find_prefix(source: &[byte], start: usize, prefix: &[byte
     return -1;
 }
 
+fn connection_function_find_registration_marker(source: &[byte], start: usize) i32 {
+    const marker: &[byte] = &"redis.register_function"[0: 23];
+    var search_start: usize = start;
+    while search_start < source.len {
+        const marker_relative: i32 = connection_function_find_prefix(source, search_start, marker);
+        if marker_relative < 0 {
+            return -1;
+        }
+        const marker_index: usize = marker_relative as usize;
+        var after_marker: usize = marker_index + marker.len;
+        connection_script_skip_space(source, &after_marker);
+        if after_marker < source.len && (source.ptr[after_marker] == 40 as byte || source.ptr[after_marker] == 123 as byte) {
+            return marker_index as i32;
+        }
+        search_start = marker_index + marker.len;
+    }
+    return -1;
+}
+
 fn connection_function_parse_name_after(source: &[byte], start: usize, out_len: &usize) !&[byte] {
     var index: usize = start;
     while index < source.len && connection_script_is_space(source.ptr[index]) {
@@ -1521,12 +1540,50 @@ fn connection_function_parse_name_after(source: &[byte], start: usize, out_len: 
 }
 
 fn connection_function_extract_registered_name_at(code: &[byte], marker_index: usize, marker_end: usize, out_start: &usize, out_len: &usize) !void {
-    const marker_len: usize = 24;
+    const marker_len: usize = 23;
     if marker_index + marker_len > marker_end || marker_end > code.len {
         return error.ConnectionScriptUnsupported;
     }
     var index: usize = marker_index + marker_len;
     connection_script_skip_space(code, &index);
+    if index >= marker_end {
+        return error.ConnectionScriptUnsupported;
+    }
+    if code.ptr[index] == 123 as byte {
+        index = index + 1;
+        const name_field_relative: i32 = connection_function_find_prefix(code[index: marker_end - index], 0, &"function_name"[0: 13]);
+        const callback_field_relative: i32 = connection_function_find_prefix(code[index: marker_end - index], 0, &"callback"[0: 8]);
+        if name_field_relative < 0 || callback_field_relative < 0 {
+            return error.ConnectionScriptUnsupported;
+        }
+        var callback_index: usize = index + callback_field_relative as usize + 8;
+        connection_script_skip_space(code, &callback_index);
+        if callback_index >= marker_end || code.ptr[callback_index] != 61 as byte {
+            return error.ConnectionScriptUnsupported;
+        }
+        callback_index = callback_index + 1;
+        connection_script_skip_space(code, &callback_index);
+        if !connection_script_match_prefix(code, callback_index, &"function"[0: 8]) {
+            return error.ConnectionScriptUnsupported;
+        }
+        callback_index = callback_index + 8;
+        connection_script_skip_space(code, &callback_index);
+        if callback_index >= marker_end || code.ptr[callback_index] != 40 as byte {
+            return error.ConnectionScriptUnsupported;
+        }
+        index = index + name_field_relative as usize + 13;
+        connection_script_skip_space(code, &index);
+        if index >= marker_end || code.ptr[index] != 61 as byte {
+            return error.ConnectionScriptUnsupported;
+        }
+        index = index + 1;
+        connection_script_skip_space(code, &index);
+    } else if code.ptr[index] == 40 as byte {
+        index = index + 1;
+        connection_script_skip_space(code, &index);
+    } else {
+        return error.ConnectionScriptUnsupported;
+    }
     if index >= marker_end || (code.ptr[index] != 39 as byte && code.ptr[index] != 34 as byte) {
         return error.ConnectionScriptUnsupported;
     }
@@ -1604,12 +1661,12 @@ fn connection_function_parse_entries(code: &[byte], entries: &[ConnectionFunctio
     *entry_count = 0;
     var search_start: usize = 0;
     while search_start < code.len {
-        const marker_relative: i32 = connection_function_find_prefix(code, search_start, &"redis.register_function("[0: 24]);
+        const marker_relative: i32 = connection_function_find_registration_marker(code, search_start);
         if marker_relative < 0 {
             break;
         }
         const marker_index: usize = marker_relative as usize;
-        const next_marker: i32 = connection_function_find_prefix(code, marker_index + 24, &"redis.register_function("[0: 24]);
+        const next_marker: i32 = connection_function_find_registration_marker(code, marker_index + 23);
         var marker_end: usize = code.len;
         if next_marker >= 0 {
             marker_end = next_marker as usize;

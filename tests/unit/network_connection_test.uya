@@ -431,6 +431,13 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const function_load_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$8\r\nFUNCTION\r\n$4\r\nLOAD\r\n$112\r\n#!lua name=mylib\nredis.register_function('getvalue', function(keys, args) return redis.call('GET', keys[1]) end)\r\n"[0: 148], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: function_load_result.response_len], &"$5\r\nmylib\r\n"[0: 11]));
 
+    const table_function_code: &[byte] = &"#!lua name=tablelib\nredis.register_function{\n  function_name = 'tableget',\n  callback = function(keys, args) return redis.call('GET', keys[1]) end\n}"[0: 150];
+    var table_function_entries: [ConnectionFunctionParsedEntry: CONNECTION_FUNCTIONS_PER_LIBRARY_MAX] = [];
+    var table_function_count: usize = 0;
+    try connection_function_parse_entries(table_function_code, table_function_entries[0: CONNECTION_FUNCTIONS_PER_LIBRARY_MAX], &table_function_count);
+    try assert_true(table_function_count == 1);
+    try assert_true(network_connection_slice_eq(table_function_code[table_function_entries[0].name_start: table_function_entries[0].name_len], &"tableget"[0: 8]));
+
     const function_list_loaded_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$8\r\nFUNCTION\r\n$4\r\nLIST\r\n"[0: 28], &out[0], 512, 1000u64);
     try assert_true(network_connection_contains(out[0: function_list_loaded_result.response_len], &"mylib"[0: 5]));
     try assert_true(network_connection_contains(out[0: function_list_loaded_result.response_len], &"getvalue"[0: 8]));

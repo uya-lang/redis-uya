@@ -1972,6 +1972,28 @@ def run_smoke() -> None:
                 raise AssertionError("expected FCALL_RO loaded getvalue result")
             if client.function_delete(b"mylib") != "OK":
                 raise AssertionError("expected FUNCTION DELETE loaded library to return OK")
+            table_function_code = (
+                b"#!lua name=tablelib\n"
+                b"redis.register_function{\n"
+                b"  function_name = 'tableget',\n"
+                b"  callback = function(keys, args) return redis.call('GET', keys[1]) end\n"
+                b"}"
+            )
+            if client.function_load(table_function_code) != b"tablelib":
+                raise AssertionError("expected table-form FUNCTION LOAD to return library name")
+            if client.fcall(b"tableget", 1, b"lua-key") != b"value":
+                raise AssertionError("expected table-form FUNCTION FCALL result")
+            if client.function_delete(b"tablelib") != "OK":
+                raise AssertionError("expected table-form FUNCTION DELETE to return OK")
+            try:
+                client.function_load(
+                    b"#!lua name=badtable\n"
+                    b"redis.register_function{ function_name = 'badtableget', callback = 'not-a-function', result = return redis.call('GET', keys[1]) }"
+                )
+                raise AssertionError("expected invalid table-form FUNCTION LOAD callback to fail")
+            except RespError as exc:
+                if str(exc) != "ERR unsupported function library subset":
+                    raise AssertionError(f"unexpected table-form FUNCTION LOAD callback error: {exc}") from exc
             try:
                 client.function_load(b"return 1", replace=True)
                 raise AssertionError("expected unsupported FUNCTION LOAD subset to fail")

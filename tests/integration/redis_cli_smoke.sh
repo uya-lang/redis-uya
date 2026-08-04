@@ -1232,6 +1232,24 @@ if [[ "$FUNCTION_DELETE_LOADED_RESULT" != "OK" ]]; then
     exit 1
 fi
 
+TABLE_FUNCTION_LOAD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function load $'#!lua name=tablelib\nredis.register_function{\n  function_name = \047tableget\047,\n  callback = function(keys, args) return redis.call(\047GET\047, keys[1]) end\n}')"
+if [[ "$TABLE_FUNCTION_LOAD_RESULT" != "tablelib" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected table-form FUNCTION LOAD library name, got '$TABLE_FUNCTION_LOAD_RESULT'" >&2
+    exit 1
+fi
+
+TABLE_FCALL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" fcall tableget 1 lua-key)"
+if [[ "$TABLE_FCALL_RESULT" != "value" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected table-form FUNCTION FCALL result, got '$TABLE_FCALL_RESULT'" >&2
+    exit 1
+fi
+
+TABLE_FUNCTION_DELETE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function delete tablelib)"
+if [[ "$TABLE_FUNCTION_DELETE_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected table-form FUNCTION DELETE OK, got '$TABLE_FUNCTION_DELETE_RESULT'" >&2
+    exit 1
+fi
+
 FUNCTION_LOAD_REPLACE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function load replace "return 1" 2>&1 || true)"
 if [[ "$FUNCTION_LOAD_REPLACE_RESULT" != "ERR unsupported function library subset" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected unsupported FUNCTION LOAD subset error, got '$FUNCTION_LOAD_REPLACE_RESULT'" >&2

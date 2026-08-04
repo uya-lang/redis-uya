@@ -2627,14 +2627,14 @@ FUNCTION KILL
 - `FUNCTION STATS` 返回当前库/函数数量；`running_script = nil`
 - `FUNCTION FLUSH` 清空当前最小 function library，成功返回 `OK`
 - `FUNCTION DELETE` 删除指定 library 并返回 `OK`；缺失 library 返回 `ERR Library not found`
-- `FUNCTION LOAD` 接受最小 Lua library 子集并返回 library 名；同名库需要 `REPLACE`
+- `FUNCTION LOAD` 接受最小 Lua library 子集并返回 library 名；支持位置参数和 table 形式的 `redis.register_function` 注册；同名库需要 `REPLACE`
 - `FUNCTION DUMP` 当前返回 Redis 兼容的空库序列化 payload
 - `FUNCTION RESTORE` 当前只接受 Redis 兼容空库序列化 payload，成功返回 `+OK`
 - `FUNCTION KILL` 当前返回 `NOTBUSY No scripts in execution right now.`，表示没有正在运行的 function/script
 
 说明：
 
-- 当前实现为 partial：每个 library 最多支持 8 个 `redis.register_function('name', function(keys, args) return redis.call(...) end)` 注册项；每个函数体仅支持现有单条 `return redis.call(...)` 子集；`keys[n]` / `args[n]` 会映射为 `FCALL` 的 key/arg 参数
+- 当前实现为 partial：每个 library 最多支持 8 个 `redis.register_function('name', function(keys, args) return redis.call(...) end)` 或 `redis.register_function{ function_name = 'name', callback = function(keys, args) return redis.call(...) end }` 注册项；每个函数体仅支持现有单条 `return redis.call(...)` 子集；`keys[n]` / `args[n]` 会映射为 `FCALL` 的 key/arg 参数
 - `FUNCTION LIST` 支持 `LIBRARYNAME <pattern>` 的 `*` / `?` glob 筛选和 `WITHCODE`；`FUNCTION STATS` 反映当前最小库平面的 library/function 数量；`FUNCTION FLUSH` 支持 `ASYNC|SYNC` 参数校验并同步清空
 - `FCALL` 执行已加载的最小函数子集，`FCALL_RO` 对内部写命令返回 `ERR Write commands are not allowed from read-only scripts`
 - library/function 名仅接受 ASCII 字母、数字、`_` 和 `-`；每个函数名在当前进程中必须唯一，library 同名加载必须使用 `REPLACE`

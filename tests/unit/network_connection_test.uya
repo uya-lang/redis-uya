@@ -1525,6 +1525,7 @@ export fn test_connection_process_client_commands() !void {
     var engine: Engine = engine_new();
     var tx: ConnectionTransaction = connection_transaction_new();
     tx.client_fd = 42;
+    connection_transaction_set_client_addresses(&tx, &"127.0.0.1:50000"[0: 15], &"127.0.0.1:6380"[0: 14]);
     defer {
         connection_transaction_reset(&tx);
     }
@@ -1614,12 +1615,15 @@ export fn test_connection_process_client_commands() !void {
 
     const client_info: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$4\r\nINFO\r\n"[0: 26], &out[0], 512, 1000u64);
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"id=1"[0: 4]));
+    try assert_true(network_connection_contains(out[0: client_info.response_len], &"addr=127.0.0.1:50000"[0: 20]));
+    try assert_true(network_connection_contains(out[0: client_info.response_len], &"laddr=127.0.0.1:6380"[0: 20]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"name=worker"[0: 11]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"lib-name=redis-uya-test"[0: 23]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"lib-ver=0.5.0"[0: 13]));
 
     var tx2: ConnectionTransaction = connection_transaction_new();
     tx2.client_fd = 43;
+    connection_transaction_set_client_addresses(&tx2, &"127.0.0.1:50001"[0: 15], &"127.0.0.1:6380"[0: 14]);
     defer {
         connection_transaction_reset(&tx2);
     }
@@ -1628,8 +1632,11 @@ export fn test_connection_process_client_commands() !void {
 
     const client_list: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$4\r\nLIST\r\n"[0: 26], &out[0], 512, 1000u64);
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"id=1"[0: 4]));
+    try assert_true(network_connection_contains(out[0: client_list.response_len], &"addr=127.0.0.1:50000"[0: 20]));
+    try assert_true(network_connection_contains(out[0: client_list.response_len], &"laddr=127.0.0.1:6380"[0: 20]));
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"name=worker"[0: 11]));
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"id=2"[0: 4]));
+    try assert_true(network_connection_contains(out[0: client_list.response_len], &"addr=127.0.0.1:50001"[0: 20]));
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"name=peer2"[0: 10]));
 
     const getredir_default: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$8\r\nGETREDIR\r\n"[0: 30], &out[0], 512, 1000u64);

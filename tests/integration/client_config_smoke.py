@@ -199,12 +199,28 @@ def run_smoke() -> None:
                 info = send_command(sock, b"CLIENT", b"INFO")
                 if not isinstance(info, bytes):
                     raise AssertionError(f"CLIENT INFO returned non-bulk value: {info!r}")
-                for needle in (b"name=smoke-client", b"lib-name=redis-uya-test", b"lib-ver=0.5.0"):
+                client_addr = f"{sock.getsockname()[0]}:{sock.getsockname()[1]}".encode()
+                client_local_addr = f"{sock.getpeername()[0]}:{sock.getpeername()[1]}".encode()
+                for needle in (
+                    b"addr=" + client_addr,
+                    b"laddr=" + client_local_addr,
+                    b"name=smoke-client",
+                    b"lib-name=redis-uya-test",
+                    b"lib-ver=0.5.0",
+                ):
                     if needle not in info:
                         raise AssertionError(f"missing {needle!r} in CLIENT INFO: {info!r}")
 
                 listed = send_command(sock, b"CLIENT", b"LIST")
-                if not isinstance(listed, bytes) or b"name=smoke-client" not in listed or b"name=peer-client" not in listed:
+                peer_addr = f"{peer_sock.getsockname()[0]}:{peer_sock.getsockname()[1]}".encode()
+                if (
+                    not isinstance(listed, bytes)
+                    or b"addr=" + client_addr not in listed
+                    or b"laddr=" + client_local_addr not in listed
+                    or b"addr=" + peer_addr not in listed
+                    or b"name=smoke-client" not in listed
+                    or b"name=peer-client" not in listed
+                ):
                     raise AssertionError(f"unexpected CLIENT LIST: {listed!r}")
 
                 client_help = send_command(sock, b"CLIENT", b"HELP")

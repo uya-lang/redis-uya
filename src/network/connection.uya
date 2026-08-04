@@ -4799,40 +4799,40 @@ fn connection_acl_log_client_id(tx: &ConnectionTransaction) i64 {
     return connection_client_id(tx);
 }
 
-fn connection_client_registry_info_line(client_id: i64, protocol_version: i32, name: &[byte], lib_name: &[byte], lib_ver: &[byte], sub_count: usize, multi_active: bool) !&RedisObject {
-    var raw: Sds = sds_empty() catch {
-        return error.AllocOutOfMemory;
-    };
-    defer {
-        sds_free(&raw);
+fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protocol_version: i32, addr: &[byte], local_addr: &[byte], name: &[byte], lib_name: &[byte], lib_ver: &[byte], sub_count: usize, multi_active: bool) !void {
+    try sds_cat(raw, &"id="[0: 3]);
+    try connection_sds_append_i64(raw, client_id);
+    try sds_cat(raw, &" addr="[0: 6]);
+    if addr.len > 0 {
+        try sds_cat(raw, addr);
     }
-
-    _ = sds_cat(&raw, &"id="[0: 3]) catch { return error.AllocOutOfMemory; };
-    _ = connection_sds_append_i64(&raw, client_id) catch { return error.AllocOutOfMemory; };
-    _ = sds_cat(&raw, &" name="[0: 6]) catch { return error.AllocOutOfMemory; };
+    try sds_cat(raw, &" laddr="[0: 7]);
+    if local_addr.len > 0 {
+        try sds_cat(raw, local_addr);
+    }
+    try sds_cat(raw, &" name="[0: 6]);
     if name.len > 0 {
-        _ = sds_cat(&raw, name) catch { return error.AllocOutOfMemory; };
+        try sds_cat(raw, name);
     }
-    _ = sds_cat(&raw, &" resp="[0: 6]) catch { return error.AllocOutOfMemory; };
-    _ = connection_sds_append_i64(&raw, protocol_version as i64) catch { return error.AllocOutOfMemory; };
-    _ = sds_cat(&raw, &" multi="[0: 7]) catch { return error.AllocOutOfMemory; };
+    try sds_cat(raw, &" resp="[0: 6]);
+    try connection_sds_append_i64(raw, protocol_version as i64);
+    try sds_cat(raw, &" multi="[0: 7]);
     if multi_active {
-        _ = sds_cat(&raw, &"1"[0: 1]) catch { return error.AllocOutOfMemory; };
+        try sds_cat(raw, &"1"[0: 1]);
     } else {
-        _ = sds_cat(&raw, &"0"[0: 1]) catch { return error.AllocOutOfMemory; };
+        try sds_cat(raw, &"0"[0: 1]);
     }
-    _ = sds_cat(&raw, &" sub="[0: 5]) catch { return error.AllocOutOfMemory; };
-    _ = connection_sds_append_u64(&raw, sub_count as u64) catch { return error.AllocOutOfMemory; };
-    _ = sds_cat(&raw, &" lib-name="[0: 10]) catch { return error.AllocOutOfMemory; };
+    try sds_cat(raw, &" sub="[0: 5]);
+    try connection_sds_append_u64(raw, sub_count as u64);
+    try sds_cat(raw, &" lib-name="[0: 10]);
     if lib_name.len > 0 {
-        _ = sds_cat(&raw, lib_name) catch { return error.AllocOutOfMemory; };
+        try sds_cat(raw, lib_name);
     }
-    _ = sds_cat(&raw, &" lib-ver="[0: 9]) catch { return error.AllocOutOfMemory; };
+    try sds_cat(raw, &" lib-ver="[0: 9]);
     if lib_ver.len > 0 {
-        _ = sds_cat(&raw, lib_ver) catch { return error.AllocOutOfMemory; };
+        try sds_cat(raw, lib_ver);
     }
-    _ = sds_cat(&raw, &"\r\n"[0: 2]) catch { return error.AllocOutOfMemory; };
-    return create_string_object(raw.buf[0: raw.len]);
+    try sds_cat(raw, &"\r\n"[0: 2]);
 }
 
 fn connection_client_list_reply() CommandReply {
@@ -4846,9 +4846,12 @@ fn connection_client_list_reply() CommandReply {
     var i: usize = 0;
     while i < CONNECTION_CLIENT_REGISTRY_MAX {
         if connection_client_registry[i].active {
-            const line_obj: &RedisObject = connection_client_registry_info_line(
+            _ = connection_client_registry_append_info_line(
+                &raw,
                 connection_client_registry[i].client_id,
                 connection_client_registry[i].protocol_version,
+                connection_client_registry[i].client_addr[0: connection_client_registry[i].client_addr_len],
+                connection_client_registry[i].client_local_addr[0: connection_client_registry[i].client_local_addr_len],
                 connection_client_registry[i].client_name[0: connection_client_registry[i].client_name_len],
                 connection_client_registry[i].client_lib_name[0: connection_client_registry[i].client_lib_name_len],
                 connection_client_registry[i].client_lib_ver[0: connection_client_registry[i].client_lib_ver_len],
@@ -4857,11 +4860,6 @@ fn connection_client_list_reply() CommandReply {
             ) catch {
                 return connection_error_reply(&"ERR out of memory"[0: 17]);
             };
-            _ = sds_cat(&raw, line_obj.value.buf[0: line_obj.value.len]) catch {
-                object_free(line_obj);
-                return connection_error_reply(&"ERR out of memory"[0: 17]);
-            };
-            object_free(line_obj);
         }
         i = i + 1;
     }
@@ -5501,31 +5499,20 @@ fn connection_client_info_reply(tx: &ConnectionTransaction) CommandReply {
         sds_free(&raw);
     }
 
-    _ = sds_cat(&raw, &"id="[0: 3]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
-    _ = connection_sds_append_i64(&raw, connection_client_id(tx)) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
-    _ = sds_cat(&raw, &" name="[0: 6]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
-    if tx.client_name_len > 0 {
-        _ = sds_cat(&raw, tx.client_name[0: tx.client_name_len]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
-    }
-    _ = sds_cat(&raw, &" resp="[0: 6]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
-    _ = connection_sds_append_i64(&raw, tx.protocol_version as i64) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
-    _ = sds_cat(&raw, &" multi="[0: 7]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
-    if tx.active {
-        _ = sds_cat(&raw, &"1"[0: 1]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
-    } else {
-        _ = sds_cat(&raw, &"0"[0: 1]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
-    }
-    _ = sds_cat(&raw, &" sub="[0: 5]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
-    _ = connection_sds_append_u64(&raw, tx.pubsub_count as u64) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
-    _ = sds_cat(&raw, &" lib-name="[0: 10]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
-    if tx.client_lib_name_len > 0 {
-        _ = sds_cat(&raw, tx.client_lib_name[0: tx.client_lib_name_len]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
-    }
-    _ = sds_cat(&raw, &" lib-ver="[0: 9]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
-    if tx.client_lib_ver_len > 0 {
-        _ = sds_cat(&raw, tx.client_lib_ver[0: tx.client_lib_ver_len]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
-    }
-    _ = sds_cat(&raw, &"\r\n"[0: 2]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_client_registry_append_info_line(
+        &raw,
+        connection_client_id(tx),
+        tx.protocol_version,
+        tx.client_addr[0: tx.client_addr_len],
+        tx.client_local_addr[0: tx.client_local_addr_len],
+        tx.client_name[0: tx.client_name_len],
+        tx.client_lib_name[0: tx.client_lib_name_len],
+        tx.client_lib_ver[0: tx.client_lib_ver_len],
+        tx.pubsub_count,
+        tx.active,
+    ) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
     return connection_bulk_reply_owned(raw.buf[0: raw.len]);
 }
 

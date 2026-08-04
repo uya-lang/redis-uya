@@ -3831,8 +3831,8 @@ CLIENT HELP
 - `CLIENT SETNAME`：保存连接级客户端名，成功返回 `+OK`
 - `CLIENT NO-EVICT`：保存当前连接的 no-evict 标志，成功返回 `+OK`
 - `CLIENT NO-TOUCH`：保存当前连接的 no-touch 标志，成功返回 `+OK`；开启后普通命令对象访问路径不刷新 LRU/LFU touch 统计
-- `CLIENT INFO`：返回当前连接的最小客户端信息行，包含 `id/name/resp/multi/sub/lib-name/lib-ver`
-- `CLIENT LIST`：返回当前活跃连接的最小信息行快照，每行包含 `id/name/resp/multi/sub/lib-name/lib-ver`
+- `CLIENT INFO`：返回当前连接的客户端信息行，包含真实 `id/addr/laddr` 以及 `name/resp/multi/sub/lib-name/lib-ver`
+- `CLIENT LIST`：返回当前活跃连接的信息行快照，每行包含真实 `id/addr/laddr` 以及 `name/resp/multi/sub/lib-name/lib-ver`
 - `CLIENT KILL ip:port`：按注册表中的远端地址精确关闭单个活跃连接，成功返回 `OK`，地址不存在返回 `ERR No such client`
 - `CLIENT KILL ID id [SKIPME yes|no]`：按连接 ID 关闭活跃连接；默认 `SKIPME yes` 不关闭当前连接，显式 `SKIPME no` 可关闭当前连接，返回整数 `0/1`
 - `CLIENT UNBLOCK id [TIMEOUT|ERROR]`：解除处于阻塞 pop 等待中的其他连接；默认 `TIMEOUT` 向目标连接返回对应阻塞命令的空结果，`ERROR` 向目标连接返回 `UNBLOCKED` 错误，当前命令返回整数 `0/1`
@@ -3849,6 +3849,7 @@ CLIENT HELP
 - 客户端名和 `SETINFO` 元数据存放在连接级 `ConnectionTransaction`
 - `CLIENT GETREDIR` 直接读取当前连接的 `tracking_redirect_id`
 - `CLIENT REPLY` 当前按连接维护 `OFF`/`SKIP` 状态，覆盖普通命令、事务控制命令和 `CLIENT` 子命令回复抑制；Pub/Sub push 与 monitor 推送不受影响
+- `CLIENT INFO/LIST` 的 `addr/laddr` 来自 server 接受连接时写入的连接注册表；当前尚未补齐 Redis 的 `age/idle/flags/db/cmd` 等完整统计字段
 - `CLIENT KILL` 当前支持 legacy `ip:port` 单目标地址形式，以及 `ID <id>` 和 `SKIPME yes|no` 过滤；仍不支持现代 `ADDR/LADDR/TYPE/USER/MAXAGE` 多条件、多目标组合
 - `CLIENT UNBLOCK` 当前支持阻塞 pop 等待路径的 `TIMEOUT` / `ERROR` 解除，不支持更复杂的模块阻塞客户端类型
 - `CLIENT PAUSE` 当前保留发起暂停的控制连接可继续发送 `CLIENT UNPAUSE`；`WRITE` 基于命令目录的写标志和当前已解析 batch 判断，不实现 Redis 原生跨线程 pause 协调

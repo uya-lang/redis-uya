@@ -259,6 +259,7 @@ var connection_script_cache: [ConnectionScriptCacheEntry: CONNECTION_SCRIPT_CACH
 
 struct ConnectionFunctionEntry {
     active: bool,
+    no_writes: bool,
     function_name_len: usize,
     function_name: [byte: CONNECTION_FUNCTION_NAME_MAX],
     script: &RedisObject,
@@ -274,6 +275,7 @@ struct ConnectionFunctionLibraryEntry {
 }
 
 struct ConnectionFunctionParsedEntry {
+    no_writes: bool,
     name_start: usize,
     name_len: usize,
     script_start: usize,
@@ -1469,6 +1471,7 @@ fn connection_function_clear_slot(index: usize) void {
             connection_function_libraries[index].functions[function].script = null as &RedisObject;
         }
         connection_function_libraries[index].functions[function].active = false;
+        connection_function_libraries[index].functions[function].no_writes = false;
         connection_function_libraries[index].functions[function].function_name_len = 0;
         function = function + 1;
     }
@@ -1522,6 +1525,71 @@ fn connection_function_find_registration_marker(source: &[byte], start: usize) i
     return -1;
 }
 
+fn connection_function_find_table_field(code: &[byte], start: usize, end: usize, field: &[byte]) i32 {
+    var search_start: usize = start;
+    while search_start < end {
+        const relative: i32 = connection_function_find_prefix(code[search_start: end - search_start], 0, field);
+        if relative < 0 {
+            return -1;
+        }
+        const field_index: usize = search_start + relative as usize;
+        var left: usize = field_index;
+        while left > start && connection_script_is_space(code.ptr[left - 1]) {
+            left = left - 1;
+        }
+        var right: usize = field_index + field.len;
+        connection_script_skip_space(code, &right);
+        if (left == start || code.ptr[left - 1] == 44 as byte) && right < end && code.ptr[right] == 61 as byte {
+            return field_index as i32;
+        }
+        search_start = field_index + field.len;
+    }
+    return -1;
+}
+
+fn connection_function_extract_no_writes_at(code: &[byte], marker_index: usize, marker_end: usize) !bool {
+    var index: usize = marker_index + 23;
+    connection_script_skip_space(code, &index);
+    if index >= marker_end || code.ptr[index] != 123 as byte {
+        return false;
+    }
+    index = index + 1;
+    const flags_field: i32 = connection_function_find_table_field(code, index, marker_end, &"flags"[0: 5]);
+    if flags_field < 0 {
+        return false;
+    }
+    index = flags_field as usize + 5;
+    connection_script_skip_space(code, &index);
+    if index >= marker_end || code.ptr[index] != 61 as byte {
+        return error.ConnectionScriptUnsupported;
+    }
+    index = index + 1;
+    connection_script_skip_space(code, &index);
+    if index >= marker_end || code.ptr[index] != 123 as byte {
+        return error.ConnectionScriptUnsupported;
+    }
+    index = index + 1;
+    connection_script_skip_space(code, &index);
+    if index >= marker_end || (code.ptr[index] != 39 as byte && code.ptr[index] != 34 as byte) {
+        return error.ConnectionScriptUnsupported;
+    }
+    const quote: byte = code.ptr[index];
+    index = index + 1;
+    if !connection_script_match_prefix(code, index, &"no-writes"[0: 9]) {
+        return error.ConnectionScriptUnsupported;
+    }
+    index = index + 9;
+    if index >= marker_end || code.ptr[index] != quote {
+        return error.ConnectionScriptUnsupported;
+    }
+    index = index + 1;
+    connection_script_skip_space(code, &index);
+    if index >= marker_end || code.ptr[index] != 125 as byte {
+        return error.ConnectionScriptUnsupported;
+    }
+    return true;
+}
+
 fn connection_function_parse_name_after(source: &[byte], start: usize, out_len: &usize) !&[byte] {
     var index: usize = start;
     while index < source.len && connection_script_is_space(source.ptr[index]) {
@@ -1551,12 +1619,12 @@ fn connection_function_extract_registered_name_at(code: &[byte], marker_index: u
     }
     if code.ptr[index] == 123 as byte {
         index = index + 1;
-        const name_field_relative: i32 = connection_function_find_prefix(code[index: marker_end - index], 0, &"function_name"[0: 13]);
-        const callback_field_relative: i32 = connection_function_find_prefix(code[index: marker_end - index], 0, &"callback"[0: 8]);
-        if name_field_relative < 0 || callback_field_relative < 0 {
+        const name_field: i32 = connection_function_find_table_field(code, index, marker_end, &"function_name"[0: 13]);
+        const callback_field: i32 = connection_function_find_table_field(code, index, marker_end, &"callback"[0: 8]);
+        if name_field < 0 || callback_field < 0 {
             return error.ConnectionScriptUnsupported;
         }
-        var callback_index: usize = index + callback_field_relative as usize + 8;
+        var callback_index: usize = callback_field as usize + 8;
         connection_script_skip_space(code, &callback_index);
         if callback_index >= marker_end || code.ptr[callback_index] != 61 as byte {
             return error.ConnectionScriptUnsupported;
@@ -1571,7 +1639,7 @@ fn connection_function_extract_registered_name_at(code: &[byte], marker_index: u
         if callback_index >= marker_end || code.ptr[callback_index] != 40 as byte {
             return error.ConnectionScriptUnsupported;
         }
-        index = index + name_field_relative as usize + 13;
+        index = name_field as usize + 13;
         connection_script_skip_space(code, &index);
         if index >= marker_end || code.ptr[index] != 61 as byte {
             return error.ConnectionScriptUnsupported;
@@ -1680,6 +1748,7 @@ fn connection_function_parse_entries(code: &[byte], entries: &[ConnectionFunctio
         var script_start: usize = 0;
         var script_len: usize = 0;
         try connection_function_extract_single_call_at(code, marker_index, marker_end, &script_start, &script_len);
+        const no_writes: bool = try connection_function_extract_no_writes_at(code, marker_index, marker_end);
         var previous: usize = 0;
         while previous < (*entry_count) {
             if entries.ptr[previous].name_len == name_len &&
@@ -1688,6 +1757,7 @@ fn connection_function_parse_entries(code: &[byte], entries: &[ConnectionFunctio
             }
             previous = previous + 1;
         }
+        entries.ptr[*entry_count].no_writes = no_writes;
         entries.ptr[*entry_count].name_start = name_start;
         entries.ptr[*entry_count].name_len = name_len;
         entries.ptr[*entry_count].script_start = script_start;
@@ -7292,9 +7362,18 @@ fn connection_function_list(command: &Command) CommandReply {
             var function: usize = 0;
             while function < CONNECTION_FUNCTIONS_PER_LIBRARY_MAX {
                 if entry.functions[function].active {
-                    _ = connection_sds_append_resp_array_header(&raw, 2) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+                    _ = connection_sds_append_resp_array_header(&raw, 6) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
                     _ = connection_sds_append_resp_bulk(&raw, &"name"[0: 4]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
                     _ = connection_sds_append_resp_bulk(&raw, entry.functions[function].function_name[0: entry.functions[function].function_name_len]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+                    _ = connection_sds_append_resp_bulk(&raw, &"description"[0: 11]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+                    _ = sds_cat(&raw, &"$-1\r\n"[0: 5]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+                    _ = connection_sds_append_resp_bulk(&raw, &"flags"[0: 5]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+                    if entry.functions[function].no_writes {
+                        _ = connection_sds_append_resp_array_header(&raw, 1) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+                        _ = connection_sds_append_resp_bulk(&raw, &"no-writes"[0: 9]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+                    } else {
+                        _ = connection_sds_append_resp_array_header(&raw, 0) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+                    }
                 }
                 function = function + 1;
             }
@@ -7440,6 +7519,7 @@ fn connection_function_load(command: &Command) CommandReply {
     parsed_index = 0;
     while parsed_index < parsed_count {
         connection_function_libraries[slot_index].functions[parsed_index].active = true;
+        connection_function_libraries[slot_index].functions[parsed_index].no_writes = parsed[parsed_index].no_writes;
         connection_function_libraries[slot_index].functions[parsed_index].function_name_len = parsed[parsed_index].name_len;
         connection_function_copy_name(connection_function_libraries[slot_index].functions[parsed_index].function_name[0: CONNECTION_FUNCTION_NAME_MAX], code[parsed[parsed_index].name_start: parsed[parsed_index].name_len]);
         connection_function_libraries[slot_index].functions[parsed_index].script = scripts[parsed_index];
@@ -7555,7 +7635,7 @@ fn connection_handle_fcall_at(
         }
         return connection_error_reply(&"ERR unsupported function library subset"[0: 39]);
     };
-    if command.info.cmd_type == CommandType.command_fcall_ro {
+    if command.info.cmd_type == CommandType.command_fcall_ro || entry.no_writes {
         const raw_cmd: &[byte] = raw_obj.value.buf[0: raw_obj.value.len];
         const parsed_inner: RespParseResult = parse_resp2(raw_cmd) catch {
             object_free(raw_obj);

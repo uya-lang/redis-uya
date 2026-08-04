@@ -1963,7 +1963,7 @@ def run_smoke() -> None:
                 len(function_list) != 1
                 or b"mylib" not in function_list[0]
                 or len(function_list[0]) < 6
-                or function_list[0][5] != [[b"name", b"getvalue"]]
+                or function_list[0][5] != [[b"name", b"getvalue", b"description", None, b"flags", []]]
             ):
                 raise AssertionError(f"unexpected loaded FUNCTION LIST result: {function_list!r}")
             if client.fcall(b"getvalue", 1, b"lua-key") != b"value":
@@ -1976,15 +1976,44 @@ def run_smoke() -> None:
                 b"#!lua name=tablelib\n"
                 b"redis.register_function{\n"
                 b"  function_name = 'tableget',\n"
-                b"  callback = function(keys, args) return redis.call('GET', keys[1]) end\n"
+                b"  callback = function(keys, args) return redis.call('GET', keys[1]) end,\n"
+                b"  flags = { 'no-writes' }\n"
                 b"}"
             )
             if client.function_load(table_function_code) != b"tablelib":
                 raise AssertionError("expected table-form FUNCTION LOAD to return library name")
+            table_function_list = client.function_list()
+            if table_function_list[0][5] != [[b"name", b"tableget", b"description", None, b"flags", [b"no-writes"]]]:
+                raise AssertionError(f"unexpected table-form FUNCTION LIST flags: {table_function_list!r}")
             if client.fcall(b"tableget", 1, b"lua-key") != b"value":
                 raise AssertionError("expected table-form FUNCTION FCALL result")
             if client.function_delete(b"tablelib") != "OK":
                 raise AssertionError("expected table-form FUNCTION DELETE to return OK")
+            no_writes_write_code = (
+                b"#!lua name=nowrites\n"
+                b"redis.register_function{ function_name = 'blockedwrite', callback = function(keys, args) return redis.call('SET', keys[1], args[1]) end, flags = { 'no-writes' } }"
+            )
+            if client.function_load(no_writes_write_code) != b"nowrites":
+                raise AssertionError("expected no-writes FUNCTION LOAD to return library name")
+            try:
+                client.fcall(b"blockedwrite", 1, b"lua-key", b"blocked")
+                raise AssertionError("expected no-writes FCALL write to fail")
+            except RespError as exc:
+                if str(exc) != "ERR Write commands are not allowed from read-only scripts":
+                    raise AssertionError(f"unexpected no-writes FCALL error: {exc}") from exc
+            if client.get("lua-key") != b"value":
+                raise AssertionError("expected no-writes FCALL rejection to preserve the existing value")
+            if client.function_delete(b"nowrites") != "OK":
+                raise AssertionError("expected no-writes FUNCTION DELETE to return OK")
+            try:
+                client.function_load(
+                    b"#!lua name=badflag\n"
+                    b"redis.register_function{ function_name = 'badflagget', callback = function(keys, args) return redis.call('GET', keys[1]) end, flags = { 'allow-oom' } }"
+                )
+                raise AssertionError("expected unsupported FUNCTION flag to fail")
+            except RespError as exc:
+                if str(exc) != "ERR unsupported function library subset":
+                    raise AssertionError(f"unexpected unsupported FUNCTION flag error: {exc}") from exc
             try:
                 client.function_load(
                     b"#!lua name=badtable\n"
@@ -2011,7 +2040,10 @@ def run_smoke() -> None:
             if (
                 len(multi_function_list) != 1
                 or multi_function_list[0][1] != b"multi"
-                or multi_function_list[0][5] != [[b"name", b"first"], [b"name", b"second"]]
+                or multi_function_list[0][5] != [
+                    [b"name", b"first", b"description", None, b"flags", []],
+                    [b"name", b"second", b"description", None, b"flags", []],
+                ]
                 or multi_function_list[0][7] != multi_function_code
             ):
                 raise AssertionError(f"unexpected multi-function FUNCTION LIST result: {multi_function_list!r}")

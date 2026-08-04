@@ -1232,15 +1232,39 @@ if [[ "$FUNCTION_DELETE_LOADED_RESULT" != "OK" ]]; then
     exit 1
 fi
 
-TABLE_FUNCTION_LOAD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function load $'#!lua name=tablelib\nredis.register_function{\n  function_name = \047tableget\047,\n  callback = function(keys, args) return redis.call(\047GET\047, keys[1]) end\n}')"
+TABLE_FUNCTION_LOAD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function load $'#!lua name=tablelib\nredis.register_function{\n  function_name = \047tableget\047,\n  callback = function(keys, args) return redis.call(\047GET\047, keys[1]) end,\n  flags = { \047no-writes\047 }\n}')"
 if [[ "$TABLE_FUNCTION_LOAD_RESULT" != "tablelib" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected table-form FUNCTION LOAD library name, got '$TABLE_FUNCTION_LOAD_RESULT'" >&2
+    exit 1
+fi
+
+TABLE_FUNCTION_LIST_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function list libraryname tablelib)"
+if [[ "$TABLE_FUNCTION_LIST_RESULT" != *"no-writes"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected table-form FUNCTION LIST no-writes flag, got '$TABLE_FUNCTION_LIST_RESULT'" >&2
     exit 1
 fi
 
 TABLE_FCALL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" fcall tableget 1 lua-key)"
 if [[ "$TABLE_FCALL_RESULT" != "value" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected table-form FUNCTION FCALL result, got '$TABLE_FCALL_RESULT'" >&2
+    exit 1
+fi
+
+NO_WRITES_LOAD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function load $'#!lua name=nowrites\nredis.register_function{ function_name = \047blockedwrite\047, callback = function(keys, args) return redis.call(\047SET\047, keys[1], args[1]) end, flags = { \047no-writes\047 } }')"
+if [[ "$NO_WRITES_LOAD_RESULT" != "nowrites" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected no-writes FUNCTION LOAD library name, got '$NO_WRITES_LOAD_RESULT'" >&2
+    exit 1
+fi
+
+NO_WRITES_FCALL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" fcall blockedwrite 1 lua-key blocked 2>&1 || true)"
+if [[ "$NO_WRITES_FCALL_RESULT" != "ERR Write commands are not allowed from read-only scripts" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected no-writes FCALL write rejection, got '$NO_WRITES_FCALL_RESULT'" >&2
+    exit 1
+fi
+
+NO_WRITES_DELETE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function delete nowrites)"
+if [[ "$NO_WRITES_DELETE_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected no-writes FUNCTION DELETE OK, got '$NO_WRITES_DELETE_RESULT'" >&2
     exit 1
 fi
 

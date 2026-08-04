@@ -436,6 +436,7 @@ export fn test_connection_process_ping_set_get_quit() !void {
     var table_function_count: usize = 0;
     try connection_function_parse_entries(table_function_code, table_function_entries[0: CONNECTION_FUNCTIONS_PER_LIBRARY_MAX], &table_function_count);
     try assert_true(table_function_count == 1);
+    try assert_true(!table_function_entries[0].no_writes);
     try assert_true(network_connection_slice_eq(table_function_code[table_function_entries[0].name_start: table_function_entries[0].name_len], &"tableget"[0: 8]));
 
     const function_list_loaded_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$8\r\nFUNCTION\r\n$4\r\nLIST\r\n"[0: 28], &out[0], 512, 1000u64);

@@ -223,10 +223,52 @@ def run_smoke() -> None:
                 ):
                     raise AssertionError(f"unexpected CLIENT LIST: {listed!r}")
 
+                filtered_peer = send_command(sock, b"CLIENT", b"LIST", b"ID", str(peer_id).encode())
+                if (
+                    not isinstance(filtered_peer, bytes)
+                    or f"id={peer_id} ".encode() not in filtered_peer
+                    or f"id={client_id} ".encode() in filtered_peer
+                ):
+                    raise AssertionError(f"unexpected CLIENT LIST ID peer result: {filtered_peer!r}")
+
+                filtered_both = send_command(
+                    sock,
+                    b"CLIENT",
+                    b"LIST",
+                    b"ID",
+                    str(peer_id).encode(),
+                    str(client_id).encode(),
+                )
+                filtered_both_lines = filtered_both.splitlines() if isinstance(filtered_both, bytes) else []
+                if (
+                    len(filtered_both_lines) != 2
+                    or not filtered_both_lines[0].startswith(f"id={peer_id} ".encode())
+                    or not filtered_both_lines[1].startswith(f"id={client_id} ".encode())
+                ):
+                    raise AssertionError(f"unexpected CLIENT LIST ID ordering: {filtered_both!r}")
+
+                filtered_duplicate = send_command(
+                    sock,
+                    b"CLIENT",
+                    b"LIST",
+                    b"ID",
+                    str(client_id).encode(),
+                    str(client_id).encode(),
+                )
+                filtered_duplicate_lines = filtered_duplicate.splitlines() if isinstance(filtered_duplicate, bytes) else []
+                if len(filtered_duplicate_lines) != 2 or any(
+                    not line.startswith(f"id={client_id} ".encode()) for line in filtered_duplicate_lines
+                ):
+                    raise AssertionError(f"unexpected duplicate CLIENT LIST ID result: {filtered_duplicate!r}")
+
+                if send_command(sock, b"CLIENT", b"LIST", b"ID", b"99999999") != b"":
+                    raise AssertionError("missing CLIENT LIST ID should return an empty bulk string")
+
                 client_help = send_command(sock, b"CLIENT", b"HELP")
                 if (
                     not isinstance(client_help, list)
                     or b"CLIENT REPLY <ON|OFF|SKIP>" not in client_help
+                    or b"CLIENT LIST [ID <id> ...]" not in client_help
                     or b"CLIENT TRACKINGINFO" not in client_help
                 ):
                     raise AssertionError(f"unexpected CLIENT HELP: {client_help!r}")

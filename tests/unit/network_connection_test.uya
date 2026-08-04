@@ -1546,6 +1546,7 @@ export fn test_connection_process_client_commands() !void {
     var client_help_out: [byte: 2048] = [];
     const client_help: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$4\r\nHELP\r\n"[0: 26], &client_help_out[0], 2048, 1000u64);
     try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT REPLY <ON|OFF|SKIP>"[0: 26]));
+    try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT LIST [ID <id> ...]"[0: 25]));
     try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT TRACKINGINFO"[0: 19]));
 
     const caching_yes: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$6\r\nCLIENT\r\n$7\r\nCACHING\r\n$3\r\nYES\r\n"[0: 38], &out[0], 512, 1000u64);
@@ -1638,6 +1639,23 @@ export fn test_connection_process_client_commands() !void {
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"id=2"[0: 4]));
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"addr=127.0.0.1:50001"[0: 20]));
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"name=peer2"[0: 10]));
+
+    const client_list_id: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$4\r\nLIST\r\n$2\r\nID\r\n$1\r\n2\r\n"[0: 41], &out[0], 512, 1000u64);
+    try assert_true(network_connection_contains(out[0: client_list_id.response_len], &"id=2 addr=127.0.0.1:50001"[0: 25]));
+    try assert_true(!network_connection_contains(out[0: client_list_id.response_len], &"id=1 addr=127.0.0.1:50000"[0: 25]));
+
+    const client_list_ids: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*5\r\n$6\r\nCLIENT\r\n$4\r\nLIST\r\n$2\r\nID\r\n$1\r\n2\r\n$1\r\n1\r\n"[0: 48], &out[0], 512, 1000u64);
+    try assert_true(network_connection_contains(out[0: client_list_ids.response_len], &"id=2 addr=127.0.0.1:50001"[0: 25]));
+    try assert_true(network_connection_contains(out[0: client_list_ids.response_len], &"id=1 addr=127.0.0.1:50000"[0: 25]));
+
+    const client_list_missing: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$4\r\nLIST\r\n$2\r\nID\r\n$8\r\n99999999\r\n"[0: 48], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_list_missing.response_len], &"$0\r\n\r\n"[0: 6]));
+
+    const client_list_id_empty: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$6\r\nCLIENT\r\n$4\r\nLIST\r\n$2\r\nID\r\n"[0: 34], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_list_id_empty.response_len], &"-ERR syntax error\r\n"[0: 19]));
+
+    const client_list_id_invalid: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$4\r\nLIST\r\n$2\r\nID\r\n$3\r\nbad\r\n"[0: 43], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_list_id_invalid.response_len], &"-ERR Invalid client ID\r\n"[0: 24]));
 
     const getredir_default: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$8\r\nGETREDIR\r\n"[0: 30], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: getredir_default.response_len], &":-1\r\n"[0: 5]));

@@ -4835,7 +4835,28 @@ fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protoc
     try sds_cat(raw, &"\r\n"[0: 2]);
 }
 
-fn connection_client_list_reply() CommandReply {
+fn connection_client_registry_append_slot_info(raw: &Sds, slot_index: usize) !void {
+    if slot_index >= CONNECTION_CLIENT_REGISTRY_MAX {
+        return;
+    }
+    if !connection_client_registry[slot_index].active {
+        return;
+    }
+    try connection_client_registry_append_info_line(
+        raw,
+        connection_client_registry[slot_index].client_id,
+        connection_client_registry[slot_index].protocol_version,
+        connection_client_registry[slot_index].client_addr[0: connection_client_registry[slot_index].client_addr_len],
+        connection_client_registry[slot_index].client_local_addr[0: connection_client_registry[slot_index].client_local_addr_len],
+        connection_client_registry[slot_index].client_name[0: connection_client_registry[slot_index].client_name_len],
+        connection_client_registry[slot_index].client_lib_name[0: connection_client_registry[slot_index].client_lib_name_len],
+        connection_client_registry[slot_index].client_lib_ver[0: connection_client_registry[slot_index].client_lib_ver_len],
+        connection_client_registry[slot_index].pubsub_count,
+        connection_client_registry[slot_index].multi_active,
+    );
+}
+
+fn connection_client_list_reply(command: &Command) CommandReply {
     var raw: Sds = sds_empty() catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
@@ -4843,25 +4864,48 @@ fn connection_client_list_reply() CommandReply {
         sds_free(&raw);
     }
 
-    var i: usize = 0;
-    while i < CONNECTION_CLIENT_REGISTRY_MAX {
-        if connection_client_registry[i].active {
-            _ = connection_client_registry_append_info_line(
-                &raw,
-                connection_client_registry[i].client_id,
-                connection_client_registry[i].protocol_version,
-                connection_client_registry[i].client_addr[0: connection_client_registry[i].client_addr_len],
-                connection_client_registry[i].client_local_addr[0: connection_client_registry[i].client_local_addr_len],
-                connection_client_registry[i].client_name[0: connection_client_registry[i].client_name_len],
-                connection_client_registry[i].client_lib_name[0: connection_client_registry[i].client_lib_name_len],
-                connection_client_registry[i].client_lib_ver[0: connection_client_registry[i].client_lib_ver_len],
-                connection_client_registry[i].pubsub_count,
-                connection_client_registry[i].multi_active,
-            ) catch {
+    if command.argc == 2 {
+        var i: usize = 0;
+        while i < CONNECTION_CLIENT_REGISTRY_MAX {
+            _ = connection_client_registry_append_slot_info(&raw, i) catch {
                 return connection_error_reply(&"ERR out of memory"[0: 17]);
             };
+            i = i + 1;
         }
-        i = i + 1;
+        return connection_bulk_reply_owned(raw.buf[0: raw.len]);
+    }
+
+    if command.argc < 4 {
+        return connection_error_reply(&"ERR syntax error"[0: 16]);
+    }
+    const selector: &[byte] = command_arg_data(command, 2) catch {
+        return connection_error_reply(&"ERR invalid request"[0: 19]);
+    };
+    if !connection_keyword_eq(selector, &"ID"[0: 2]) {
+        return connection_error_reply(&"ERR syntax error"[0: 16]);
+    }
+
+    var arg_index: usize = 3;
+    while arg_index < command.argc {
+        const id_arg: &[byte] = command_arg_data(command, arg_index) catch {
+            return connection_error_reply(&"ERR invalid request"[0: 19]);
+        };
+        const client_id_u64: u64 = connection_parse_u64(id_arg) catch {
+            return connection_error_reply(&"ERR Invalid client ID"[0: 21]);
+        };
+        if client_id_u64 > 9223372036854775807u64 {
+            return connection_error_reply(&"ERR Invalid client ID"[0: 21]);
+        }
+        const slot_index: i32 = connection_client_registry_find_client_id_slot(client_id_u64 as i64);
+        if slot_index >= 0 && slot_index < CONNECTION_CLIENT_REGISTRY_MAX as i32 {
+            const slot_usize: usize = slot_index as usize;
+            if slot_usize < CONNECTION_CLIENT_REGISTRY_MAX {
+                _ = connection_client_registry_append_slot_info(&raw, slot_usize) catch {
+                    return connection_error_reply(&"ERR out of memory"[0: 17]);
+                };
+            }
+        }
+        arg_index = arg_index + 1;
     }
     return connection_bulk_reply_owned(raw.buf[0: raw.len]);
 }
@@ -5448,7 +5492,7 @@ fn connection_client_help_reply() CommandReply {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
-    _ = list_object_push_tail(reply_list, &"CLIENT LIST"[0: 11]) catch {
+    _ = list_object_push_tail(reply_list, &"CLIENT LIST [ID <id> ...]"[0: 25]) catch {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
@@ -5794,10 +5838,7 @@ fn connection_handle_client(tx: &ConnectionTransaction, command: &Command, now_m
         return connection_client_info_reply(tx);
     }
     if connection_keyword_eq(subcommand, &"LIST"[0: 4]) {
-        if command.argc != 2 {
-            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
-        }
-        return connection_client_list_reply();
+        return connection_client_list_reply(command);
     }
     if connection_keyword_eq(subcommand, &"KILL"[0: 4]) {
         if command.argc == 3 {

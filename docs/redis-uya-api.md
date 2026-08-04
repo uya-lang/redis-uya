@@ -3809,7 +3809,7 @@ CLIENT NO-TOUCH ON|OFF
 CLIENT INFO
 CLIENT LIST [ID id ...]
 CLIENT KILL ip:port
-CLIENT KILL ID id [SKIPME yes|no]
+CLIENT KILL [ID id] [ADDR ip:port] [SKIPME yes|no]
 CLIENT UNBLOCK id [TIMEOUT|ERROR]
 CLIENT PAUSE timeout-ms [WRITE|ALL]
 CLIENT UNPAUSE
@@ -3834,7 +3834,7 @@ CLIENT HELP
 - `CLIENT INFO`：返回当前连接的客户端信息行，包含真实 `id/addr/laddr` 以及 `name/resp/multi/sub/lib-name/lib-ver`
 - `CLIENT LIST [ID id ...]`：无过滤时返回全部活跃连接的信息行快照；`ID` 接受一个或多个客户端 ID，按请求顺序输出匹配项，重复 ID 会重复输出，缺失 ID 被跳过；每行包含真实 `id/addr/laddr` 以及 `name/resp/multi/sub/lib-name/lib-ver`
 - `CLIENT KILL ip:port`：按注册表中的远端地址精确关闭单个活跃连接，成功返回 `OK`，地址不存在返回 `ERR No such client`
-- `CLIENT KILL ID id [SKIPME yes|no]`：按连接 ID 关闭活跃连接；默认 `SKIPME yes` 不关闭当前连接，显式 `SKIPME no` 可关闭当前连接，返回整数 `0/1`
+- `CLIENT KILL [ID id] [ADDR ip:port] [SKIPME yes|no]`：按连接 ID、远端地址或两者交集关闭单个活跃连接；重复相同 selector 合法，不相交或缺失目标返回 `0`；默认 `SKIPME yes` 不关闭当前连接，显式 `SKIPME no` 可关闭当前连接，成功返回 `1`
 - `CLIENT UNBLOCK id [TIMEOUT|ERROR]`：解除处于阻塞 pop 等待中的其他连接；默认 `TIMEOUT` 向目标连接返回对应阻塞命令的空结果，`ERROR` 向目标连接返回 `UNBLOCKED` 错误，当前命令返回整数 `0/1`
 - `CLIENT PAUSE timeout-ms [WRITE|ALL]`：暂停其他连接的命令处理；`ALL` 阻塞后续命令，`WRITE` 只阻塞写命令并允许读命令继续执行，返回 `+OK`
 - `CLIENT PAUSE` 的 timeout 不是非负整数或超出范围时，返回完整 `ERR timeout is not an integer or out of range`
@@ -3850,7 +3850,7 @@ CLIENT HELP
 - `CLIENT GETREDIR` 直接读取当前连接的 `tracking_redirect_id`
 - `CLIENT REPLY` 当前按连接维护 `OFF`/`SKIP` 状态，覆盖普通命令、事务控制命令和 `CLIENT` 子命令回复抑制；Pub/Sub push 与 monitor 推送不受影响
 - `CLIENT INFO/LIST` 的 `addr/laddr` 来自 server 接受连接时写入的连接注册表；`CLIENT LIST` 当前支持多值 `ID` 过滤，尚不支持 `TYPE` 过滤，也未补齐 Redis 的 `age/idle/flags/db/cmd` 等完整统计字段
-- `CLIENT KILL` 当前支持 legacy `ip:port` 单目标地址形式，以及 `ID <id>` 和 `SKIPME yes|no` 过滤；仍不支持现代 `ADDR/LADDR/TYPE/USER/MAXAGE` 多条件、多目标组合
+- `CLIENT KILL` 当前支持 legacy `ip:port` 单目标地址形式，以及现代 `ID/ADDR/SKIPME` 单目标交集过滤；仍不支持 `LADDR/TYPE/USER/MAXAGE` 多条件、多目标组合
 - `CLIENT UNBLOCK` 当前支持阻塞 pop 等待路径的 `TIMEOUT` / `ERROR` 解除，不支持更复杂的模块阻塞客户端类型
 - `CLIENT PAUSE` 当前保留发起暂停的控制连接可继续发送 `CLIENT UNPAUSE`；`WRITE` 基于命令目录的写标志和当前已解析 batch 判断，不实现 Redis 原生跨线程 pause 协调
 - `CLIENT TRACKING` 当前只保存连接级状态和 `BCAST PREFIX` 列表，不发送 invalidation push

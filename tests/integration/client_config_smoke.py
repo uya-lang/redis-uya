@@ -476,7 +476,65 @@ def run_smoke() -> None:
                     if not victim_failed:
                         raise AssertionError("victim connection stayed alive after CLIENT KILL")
 
+                if send_command(sock, b"CLIENT", b"KILL", b"ADDR", b"127.0.0.1:1") != 0:
+                    raise AssertionError("missing CLIENT KILL ADDR should return 0")
+
+                with connect_with_retry(port, time.monotonic() + 5.0) as addr_victim_sock:
+                    addr_victim_id = send_command(addr_victim_sock, b"CLIENT", b"ID")
+                    if not isinstance(addr_victim_id, int) or addr_victim_id <= 0:
+                        raise AssertionError(f"unexpected ADDR victim CLIENT ID: {addr_victim_id!r}")
+                    addr_victim_host, addr_victim_port = addr_victim_sock.getsockname()
+                    addr_victim = f"{addr_victim_host}:{addr_victim_port}".encode()
+                    mismatched = send_command(
+                        sock,
+                        b"CLIENT",
+                        b"KILL",
+                        b"ID",
+                        str(addr_victim_id).encode(),
+                        b"ADDR",
+                        client_addr,
+                    )
+                    if mismatched != 0:
+                        raise AssertionError(f"mismatched CLIENT KILL ID/ADDR should return 0, got {mismatched!r}")
+                    if send_command(addr_victim_sock, b"PING") != "PONG":
+                        raise AssertionError("mismatched CLIENT KILL ID/ADDR closed the victim")
+                    if send_command(sock, b"CLIENT", b"KILL", b"ADDR", addr_victim) != 1:
+                        raise AssertionError("CLIENT KILL ADDR did not report one killed client")
+                    addr_victim_failed = False
+                    try:
+                        send_command(addr_victim_sock, b"PING")
+                    except Exception:
+                        addr_victim_failed = True
+                    if not addr_victim_failed:
+                        raise AssertionError("ADDR victim connection stayed alive after CLIENT KILL")
+
+                with connect_with_retry(port, time.monotonic() + 5.0) as duplicate_addr_victim_sock:
+                    if send_command(duplicate_addr_victim_sock, b"PING") != "PONG":
+                        raise AssertionError("duplicate ADDR victim registration failed")
+                    duplicate_host, duplicate_port = duplicate_addr_victim_sock.getsockname()
+                    duplicate_addr = f"{duplicate_host}:{duplicate_port}".encode()
+                    duplicate_killed = send_command(
+                        sock,
+                        b"CLIENT",
+                        b"KILL",
+                        b"ADDR",
+                        duplicate_addr,
+                        b"ADDR",
+                        duplicate_addr,
+                    )
+                    if duplicate_killed != 1:
+                        raise AssertionError(f"duplicate CLIENT KILL ADDR result: {duplicate_killed!r}")
+                    duplicate_addr_failed = False
+                    try:
+                        send_command(duplicate_addr_victim_sock, b"PING")
+                    except Exception:
+                        duplicate_addr_failed = True
+                    if not duplicate_addr_failed:
+                        raise AssertionError("duplicate ADDR victim stayed alive after CLIENT KILL")
+
                 with connect_with_retry(port, time.monotonic() + 5.0) as legacy_victim_sock:
+                    if send_command(legacy_victim_sock, b"PING") != "PONG":
+                        raise AssertionError("legacy ADDR victim registration failed")
                     legacy_host, legacy_port = legacy_victim_sock.getsockname()
                     legacy_addr = f"{legacy_host}:{legacy_port}".encode()
                     legacy_killed = send_command(sock, b"CLIENT", b"KILL", legacy_addr)

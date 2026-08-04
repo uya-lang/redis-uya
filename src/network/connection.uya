@@ -4618,6 +4618,9 @@ fn connection_client_registry_find_client_id_slot(client_id: i64) i32 {
 }
 
 fn connection_client_registry_find_client_addr_slot(addr: &[byte]) i32 {
+    if addr.len == 0 {
+        return -1;
+    }
     var i: usize = 0;
     while i < CONNECTION_CLIENT_REGISTRY_MAX {
         if connection_client_registry[i].active &&
@@ -5496,7 +5499,7 @@ fn connection_client_help_reply() CommandReply {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
-    _ = list_object_push_tail(reply_list, &"CLIENT KILL ID <id> [SKIPME yes|no]"[0: 35]) catch {
+    _ = list_object_push_tail(reply_list, &"CLIENT KILL [ID <id>] [ADDR <ip:port>] [SKIPME yes|no]"[0: 54]) catch {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
@@ -5861,7 +5864,9 @@ fn connection_handle_client(tx: &ConnectionTransaction, command: &Command, now_m
         if command.argc < 4 {
             return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
         }
-        var target_id: i64 = -1;
+        var target_slot: i32 = -1;
+        var has_target: bool = false;
+        var target_matches: bool = true;
         var skip_me: bool = true;
         var index: usize = 2;
         while index < command.argc {
@@ -5869,7 +5874,7 @@ fn connection_handle_client(tx: &ConnectionTransaction, command: &Command, now_m
                 return connection_error_reply(&"ERR invalid request"[0: 19]);
             };
             if connection_keyword_eq(selector, &"ID"[0: 2]) {
-                if target_id >= 0 || index + 1 >= command.argc {
+                if index + 1 >= command.argc {
                     return connection_error_reply(&"ERR syntax error"[0: 16]);
                 }
                 const id_arg: &[byte] = command_arg_data(command, index + 1) catch {
@@ -5878,7 +5883,33 @@ fn connection_handle_client(tx: &ConnectionTransaction, command: &Command, now_m
                 const target_id_u64: u64 = connection_parse_u64(id_arg) catch {
                     return connection_error_reply(&"ERR invalid client ID"[0: 21]);
                 };
-                target_id = target_id_u64 as i64;
+                var selector_slot: i32 = -1;
+                if target_id_u64 <= 9223372036854775807u64 {
+                    selector_slot = connection_client_registry_find_client_id_slot(target_id_u64 as i64);
+                }
+                if !has_target {
+                    target_slot = selector_slot;
+                    has_target = true;
+                } else if selector_slot != target_slot {
+                    target_matches = false;
+                }
+                index = index + 2;
+                continue;
+            }
+            if connection_keyword_eq(selector, &"ADDR"[0: 4]) {
+                if index + 1 >= command.argc {
+                    return connection_error_reply(&"ERR syntax error"[0: 16]);
+                }
+                const addr_arg: &[byte] = command_arg_data(command, index + 1) catch {
+                    return connection_error_reply(&"ERR invalid request"[0: 19]);
+                };
+                const selector_slot: i32 = connection_client_registry_find_client_addr_slot(addr_arg);
+                if !has_target {
+                    target_slot = selector_slot;
+                    has_target = true;
+                } else if selector_slot != target_slot {
+                    target_matches = false;
+                }
                 index = index + 2;
                 continue;
             }
@@ -5901,10 +5932,21 @@ fn connection_handle_client(tx: &ConnectionTransaction, command: &Command, now_m
             }
             return connection_error_reply(&"ERR syntax error"[0: 16]);
         }
-        if target_id < 0 {
+        if !has_target {
             return connection_error_reply(&"ERR syntax error"[0: 16]);
         }
-        if (target_id == connection_client_id(tx) && skip_me) || !connection_client_registry_has_client_id(target_id) {
+        if !target_matches || target_slot < 0 || target_slot >= CONNECTION_CLIENT_REGISTRY_MAX as i32 {
+            return connection_make_reply(CommandReplyType.reply_integer, connection_reply_empty_slice(), 0);
+        }
+        const target_slot_index: usize = target_slot as usize;
+        if target_slot_index >= CONNECTION_CLIENT_REGISTRY_MAX {
+            return connection_make_reply(CommandReplyType.reply_integer, connection_reply_empty_slice(), 0);
+        }
+        if !connection_client_registry[target_slot_index].active {
+            return connection_make_reply(CommandReplyType.reply_integer, connection_reply_empty_slice(), 0);
+        }
+        const target_id: i64 = connection_client_registry[target_slot_index].client_id;
+        if target_id == connection_client_id(tx) && skip_me {
             return connection_make_reply(CommandReplyType.reply_integer, connection_reply_empty_slice(), 0);
         }
         var reply: CommandReply = connection_make_reply(CommandReplyType.reply_integer, connection_reply_empty_slice(), 1);

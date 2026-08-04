@@ -1547,6 +1547,7 @@ export fn test_connection_process_client_commands() !void {
     const client_help: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$4\r\nHELP\r\n"[0: 26], &client_help_out[0], 2048, 1000u64);
     try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT REPLY <ON|OFF|SKIP>"[0: 26]));
     try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT LIST [ID <id> ...]"[0: 25]));
+    try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT KILL [ID <id>] [ADDR <ip:port>] [SKIPME yes|no]"[0: 54]));
     try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT TRACKINGINFO"[0: 19]));
 
     const caching_yes: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$6\r\nCLIENT\r\n$7\r\nCACHING\r\n$3\r\nYES\r\n"[0: 38], &out[0], 512, 1000u64);
@@ -1724,6 +1725,29 @@ export fn test_connection_process_client_commands() !void {
     try assert_true(network_connection_slice_eq(out[0: client_kill.response_len], &":1\r\n"[0: 4]));
     try assert_eq_i32(client_kill.request_client_kill as i32, 1);
     try assert_eq_i32(client_kill.client_kill_id as i32, 2);
+
+    const client_kill_addr: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$4\r\nKILL\r\n$4\r\nADDR\r\n$15\r\n127.0.0.1:50001\r\n"[0: 58], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_kill_addr.response_len], &":1\r\n"[0: 4]));
+    try assert_eq_i32(client_kill_addr.request_client_kill as i32, 1);
+    try assert_eq_i32(client_kill_addr.client_kill_id as i32, 2);
+
+    const client_kill_addr_missing: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$4\r\nKILL\r\n$4\r\nADDR\r\n$11\r\n127.0.0.1:1\r\n"[0: 54], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_kill_addr_missing.response_len], &":0\r\n"[0: 4]));
+    try assert_eq_i32(client_kill_addr_missing.request_client_kill as i32, 0);
+
+    const client_kill_mismatch: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*6\r\n$6\r\nCLIENT\r\n$4\r\nKILL\r\n$2\r\nID\r\n$1\r\n2\r\n$4\r\nADDR\r\n$15\r\n127.0.0.1:50000\r\n"[0: 73], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_kill_mismatch.response_len], &":0\r\n"[0: 4]));
+    try assert_eq_i32(client_kill_mismatch.request_client_kill as i32, 0);
+
+    const client_kill_addr_duplicate: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*6\r\n$6\r\nCLIENT\r\n$4\r\nKILL\r\n$4\r\nADDR\r\n$15\r\n127.0.0.1:50001\r\n$4\r\nADDR\r\n$15\r\n127.0.0.1:50001\r\n"[0: 90], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_kill_addr_duplicate.response_len], &":1\r\n"[0: 4]));
+    try assert_eq_i32(client_kill_addr_duplicate.request_client_kill as i32, 1);
+    try assert_eq_i32(client_kill_addr_duplicate.client_kill_id as i32, 2);
+
+    const client_kill_id_duplicate: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*6\r\n$6\r\nCLIENT\r\n$4\r\nKILL\r\n$2\r\nID\r\n$1\r\n2\r\n$2\r\nID\r\n$1\r\n2\r\n"[0: 56], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_kill_id_duplicate.response_len], &":1\r\n"[0: 4]));
+    try assert_eq_i32(client_kill_id_duplicate.request_client_kill as i32, 1);
+    try assert_eq_i32(client_kill_id_duplicate.client_kill_id as i32, 2);
 
     const client_kill_self_skip: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*6\r\n$6\r\nCLIENT\r\n$4\r\nKILL\r\n$2\r\nID\r\n$1\r\n1\r\n$6\r\nSKIPME\r\n$3\r\nYES\r\n"[0: 62], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: client_kill_self_skip.response_len], &":0\r\n"[0: 4]));

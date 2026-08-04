@@ -160,7 +160,7 @@ server open
 - `CLIENT` 在 `connection.uya` 处理，因为 `SETNAME/GETNAME/SETINFO/INFO/LIST` 依赖连接级状态
 - `HELLO 2/3 SETNAME name` 与 `CLIENT SETNAME` 共享同一份连接级客户端名
 - `CLIENT INFO/LIST` 复用同一信息行编码路径；远端 `addr` 与本地 `laddr` 由 `server.uya` 接受连接时写入连接级注册表，`LIST` 可扫描活跃连接或按请求顺序查询多个 ID，连接关闭时由 server 注销
-- `CLIENT KILL` / `UNBLOCK` / `PAUSE` / `UNPAUSE` 通过 `ConnectionProcessResult` 把控制请求传回 `server.uya`，由 server 侧关闭目标连接、解除阻塞等待或更新全局 pause 状态；`CLIENT KILL` 支持 ID/SKIPME 和连接注册表远端 `ip:port` 单目标查找，`PAUSE WRITE` 使用连接层 RESP 探针和命令目录写标志只阻塞写命令
+- `CLIENT KILL` / `UNBLOCK` / `PAUSE` / `UNPAUSE` 通过 `ConnectionProcessResult` 把控制请求传回 `server.uya`，由 server 侧关闭目标连接、解除阻塞等待或更新全局 pause 状态；`CLIENT KILL` 将现代 `ID/ADDR` selector 解析为连接注册表 slot 并做单目标交集，legacy `ip:port` 也复用远端地址查找，`PAUSE WRITE` 使用连接层 RESP 探针和命令目录写标志只阻塞写命令
 - `CLIENT TRACKING` 当前维护连接级 flags/redirect/prefix 状态，并通过 `CLIENT GETREDIR` / `CLIENT TRACKINGINFO` 暴露，不包含 invalidation push 通道
 - `CLIENT REPLY` 当前在连接层维护 `OFF` / `SKIP` 回复抑制状态，覆盖命令回复编码路径；不改变 Pub/Sub push 或 `MONITOR` 推送
 - `CommandReply` 与 `ConnectionProcessResult` 不携带完整 `ServerConfig`；稀有的 `CONFIG SET` 通过持久 `CommandRuntimeInfo.pending_config` 传递候选状态，普通回复、零拷贝和批处理返回结构不再为配置更新承担宽字段复制成本

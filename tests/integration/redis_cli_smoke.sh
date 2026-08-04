@@ -1509,7 +1509,7 @@ if [[ "$CLIENT_CACHING_RESULT" != "OK" ]]; then
 fi
 
 CLIENT_HELP_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" client help)"
-if [[ "$CLIENT_HELP_RESULT" != *"CLIENT REPLY <ON|OFF|SKIP>"* || "$CLIENT_HELP_RESULT" != *"CLIENT LIST [ID <id> ...]"* || "$CLIENT_HELP_RESULT" != *"CLIENT TRACKINGINFO"* || "$CLIENT_HELP_RESULT" != *"CLIENT KILL <ip:port>"* ]]; then
+if [[ "$CLIENT_HELP_RESULT" != *"CLIENT REPLY <ON|OFF|SKIP>"* || "$CLIENT_HELP_RESULT" != *"CLIENT LIST [ID <id> ...]"* || "$CLIENT_HELP_RESULT" != *"CLIENT KILL [ID <id>] [ADDR <ip:port>] [SKIPME yes|no]"* || "$CLIENT_HELP_RESULT" != *"CLIENT TRACKINGINFO"* || "$CLIENT_HELP_RESULT" != *"CLIENT KILL <ip:port>"* ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected CLIENT HELP output, got '$CLIENT_HELP_RESULT'" >&2
     exit 1
 fi

@@ -418,6 +418,20 @@ def run_smoke() -> None:
                     if not victim_failed:
                         raise AssertionError("victim connection stayed alive after CLIENT KILL")
 
+                with connect_with_retry(port, time.monotonic() + 5.0) as legacy_victim_sock:
+                    legacy_host, legacy_port = legacy_victim_sock.getsockname()
+                    legacy_addr = f"{legacy_host}:{legacy_port}".encode()
+                    legacy_killed = send_command(sock, b"CLIENT", b"KILL", legacy_addr)
+                    if legacy_killed != "OK":
+                        raise AssertionError(f"unexpected legacy CLIENT KILL result: {legacy_killed!r}")
+                    legacy_failed = False
+                    try:
+                        send_command(legacy_victim_sock, b"PING")
+                    except Exception:
+                        legacy_failed = True
+                    if not legacy_failed:
+                        raise AssertionError("legacy address victim stayed alive after CLIENT KILL")
+
                 with connect_with_retry(port, time.monotonic() + 5.0) as self_kill_sock:
                     self_kill_id = send_command(self_kill_sock, b"CLIENT", b"ID")
                     if not isinstance(self_kill_id, int) or self_kill_id <= 0:

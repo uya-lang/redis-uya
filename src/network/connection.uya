@@ -4617,6 +4617,18 @@ fn connection_client_registry_find_client_id_slot(client_id: i64) i32 {
     return -1;
 }
 
+fn connection_client_registry_find_client_addr_slot(addr: &[byte]) i32 {
+    var i: usize = 0;
+    while i < CONNECTION_CLIENT_REGISTRY_MAX {
+        if connection_client_registry[i].active &&
+            connection_slice_eq(connection_client_registry[i].client_addr[0: connection_client_registry[i].client_addr_len], addr) {
+            return i as i32;
+        }
+        i = i + 1;
+    }
+    return -1;
+}
+
 fn connection_client_name_valid(name: &[byte]) bool {
     var i: usize = 0;
     while i < name.len {
@@ -5446,6 +5458,10 @@ fn connection_client_help_reply() CommandReply {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
+    _ = list_object_push_tail(reply_list, &"CLIENT KILL <ip:port>"[0: 21]) catch {
+        object_free(reply_list);
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
     _ = list_object_push_tail(reply_list, &"CLIENT UNBLOCK <id> [TIMEOUT|ERROR]"[0: 35]) catch {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
@@ -5797,6 +5813,23 @@ fn connection_handle_client(tx: &ConnectionTransaction, command: &Command, now_m
         return connection_client_list_reply();
     }
     if connection_keyword_eq(subcommand, &"KILL"[0: 4]) {
+        if command.argc == 3 {
+            const addr: &[byte] = command_arg_data(command, 2) catch {
+                return connection_error_reply(&"ERR invalid request"[0: 19]);
+            };
+            const addr_slot: i32 = connection_client_registry_find_client_addr_slot(addr);
+            if addr_slot < 0 || addr_slot >= CONNECTION_CLIENT_REGISTRY_MAX as i32 {
+                return connection_error_reply(&"ERR No such client"[0: 18]);
+            }
+            const addr_slot_index: usize = addr_slot as usize;
+            if addr_slot_index >= CONNECTION_CLIENT_REGISTRY_MAX {
+                return connection_error_reply(&"ERR No such client"[0: 18]);
+            }
+            var legacy_reply: CommandReply = connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+            legacy_reply.request_client_kill = true;
+            legacy_reply.client_kill_id = connection_client_registry[addr_slot_index].client_id;
+            return legacy_reply;
+        }
         if command.argc < 4 {
             return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
         }

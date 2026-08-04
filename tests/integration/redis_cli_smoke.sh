@@ -1509,8 +1509,14 @@ if [[ "$CLIENT_CACHING_RESULT" != "OK" ]]; then
 fi
 
 CLIENT_HELP_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" client help)"
-if [[ "$CLIENT_HELP_RESULT" != *"CLIENT REPLY <ON|OFF|SKIP>"* || "$CLIENT_HELP_RESULT" != *"CLIENT TRACKINGINFO"* ]]; then
+if [[ "$CLIENT_HELP_RESULT" != *"CLIENT REPLY <ON|OFF|SKIP>"* || "$CLIENT_HELP_RESULT" != *"CLIENT TRACKINGINFO"* || "$CLIENT_HELP_RESULT" != *"CLIENT KILL <ip:port>"* ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected CLIENT HELP output, got '$CLIENT_HELP_RESULT'" >&2
+    exit 1
+fi
+
+CLIENT_KILL_LEGACY_MISS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" client kill 127.0.0.1:1 2>&1 || true)"
+if [[ "$CLIENT_KILL_LEGACY_MISS_RESULT" != "ERR No such client" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected legacy CLIENT KILL miss error, got '$CLIENT_KILL_LEGACY_MISS_RESULT'" >&2
     exit 1
 fi
 

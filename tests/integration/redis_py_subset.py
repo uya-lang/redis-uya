@@ -1977,13 +1977,14 @@ def run_smoke() -> None:
                 b"redis.register_function{\n"
                 b"  function_name = 'tableget',\n"
                 b"  callback = function(keys, args) return redis.call('GET', keys[1]) end,\n"
+                b"  description = 'read one key',\n"
                 b"  flags = { 'no-writes' }\n"
                 b"}"
             )
             if client.function_load(table_function_code) != b"tablelib":
                 raise AssertionError("expected table-form FUNCTION LOAD to return library name")
             table_function_list = client.function_list()
-            if table_function_list[0][5] != [[b"name", b"tableget", b"description", None, b"flags", [b"no-writes"]]]:
+            if table_function_list[0][5] != [[b"name", b"tableget", b"description", b"read one key", b"flags", [b"no-writes"]]]:
                 raise AssertionError(f"unexpected table-form FUNCTION LIST flags: {table_function_list!r}")
             if client.fcall(b"tableget", 1, b"lua-key") != b"value":
                 raise AssertionError("expected table-form FUNCTION FCALL result")

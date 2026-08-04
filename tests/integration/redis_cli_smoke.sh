@@ -1232,15 +1232,15 @@ if [[ "$FUNCTION_DELETE_LOADED_RESULT" != "OK" ]]; then
     exit 1
 fi
 
-TABLE_FUNCTION_LOAD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function load $'#!lua name=tablelib\nredis.register_function{\n  function_name = \047tableget\047,\n  callback = function(keys, args) return redis.call(\047GET\047, keys[1]) end,\n  flags = { \047no-writes\047 }\n}')"
+TABLE_FUNCTION_LOAD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function load $'#!lua name=tablelib\nredis.register_function{\n  function_name = \047tableget\047,\n  callback = function(keys, args) return redis.call(\047GET\047, keys[1]) end,\n  description = \047read one key\047,\n  flags = { \047no-writes\047 }\n}')"
 if [[ "$TABLE_FUNCTION_LOAD_RESULT" != "tablelib" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected table-form FUNCTION LOAD library name, got '$TABLE_FUNCTION_LOAD_RESULT'" >&2
     exit 1
 fi
 
 TABLE_FUNCTION_LIST_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" function list libraryname tablelib)"
-if [[ "$TABLE_FUNCTION_LIST_RESULT" != *"no-writes"* ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected table-form FUNCTION LIST no-writes flag, got '$TABLE_FUNCTION_LIST_RESULT'" >&2
+if [[ "$TABLE_FUNCTION_LIST_RESULT" != *"no-writes"* || "$TABLE_FUNCTION_LIST_RESULT" != *"read one key"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected table-form FUNCTION LIST description and no-writes flag, got '$TABLE_FUNCTION_LIST_RESULT'" >&2
     exit 1
 fi
 

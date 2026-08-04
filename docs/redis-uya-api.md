@@ -2623,7 +2623,7 @@ FUNCTION KILL
 返回：
 
 - 返回当前 `FUNCTION` 命令帮助数组；HELP 中列出 `FUNCTION DELETE <library-name>` 等当前已暴露的控制面子命令
-- `FUNCTION LIST` 返回当前最小 function library 列表；支持 `LIBRARYNAME <pattern>` 的 `*` / `?` glob 筛选与 `WITHCODE`，函数项包含 `name`、null `description` 和真实 `flags` 数组
+- `FUNCTION LIST` 返回当前最小 function library 列表；支持 `LIBRARYNAME <pattern>` 的 `*` / `?` glob 筛选与 `WITHCODE`，函数项包含 `name`、真实 `description` 和 `flags` 数组；未声明 description 时返回 null
 - `FUNCTION STATS` 返回当前库/函数数量；`running_script = nil`
 - `FUNCTION FLUSH` 清空当前最小 function library，成功返回 `OK`
 - `FUNCTION DELETE` 删除指定 library 并返回 `OK`；缺失 library 返回 `ERR Library not found`
@@ -2634,14 +2634,14 @@ FUNCTION KILL
 
 说明：
 
-- 当前实现为 partial：每个 library 最多支持 8 个 `redis.register_function('name', function(keys, args) return redis.call(...) end)` 或 `redis.register_function{ function_name = 'name', callback = function(keys, args) return redis.call(...) end, flags = { 'no-writes' } }` 注册项；每个函数体仅支持现有单条 `return redis.call(...)` 子集；`keys[n]` / `args[n]` 会映射为 `FCALL` 的 key/arg 参数
+- 当前实现为 partial：每个 library 最多支持 8 个 `redis.register_function('name', function(keys, args) return redis.call(...) end)` 或 `redis.register_function{ function_name = 'name', callback = function(keys, args) return redis.call(...) end, description = '...', flags = { 'no-writes' } }` 注册项；description 为最多 128 字节的无转义 quoted 字符串；每个函数体仅支持现有单条 `return redis.call(...)` 子集；`keys[n]` / `args[n]` 会映射为 `FCALL` 的 key/arg 参数
 - `FUNCTION LIST` 支持 `LIBRARYNAME <pattern>` 的 `*` / `?` glob 筛选和 `WITHCODE`；`FUNCTION STATS` 反映当前最小库平面的 library/function 数量；`FUNCTION FLUSH` 支持 `ASYNC|SYNC` 参数校验并同步清空
 - `FCALL` 执行已加载的最小函数子集；声明 `no-writes` 的函数和所有 `FCALL_RO` 调用都会在执行前解析内部命令，并对写命令返回 `ERR Write commands are not allowed from read-only scripts`
 - library/function 名仅接受 ASCII 字母、数字、`_` 和 `-`；每个函数名在当前进程中必须唯一，library 同名加载必须使用 `REPLACE`
 - function library 当前为进程内状态：不进入 RDB、AOF 或复制 library 元数据；函数执行后的实际数据命令仍遵循既有 AOF/复制传播路径
 - `FUNCTION RESTORE` 支持 `FLUSH|APPEND|REPLACE` 参数校验，但当前只接受空库 dump；非空或非法 payload 返回 `ERR DUMP payload version or checksum are wrong`
 - `COMMAND INFO/LIST/DOCS` 会暴露 `FUNCTION`、`FUNCTION|HELP`、`FUNCTION|LIST`、`FUNCTION|STATS`、`FUNCTION|FLUSH`、`FUNCTION|DELETE`、`FUNCTION|LOAD`、`FUNCTION|DUMP`、`FUNCTION|RESTORE` 和 `FUNCTION|KILL`
-- 当前不支持超过 8 个函数的 library、完整 Lua 语法、除 `no-writes` 外的 function flags、function description、非空 `FUNCTION DUMP/RESTORE`、RDB/AOF/复制 library 元数据持久化或长时间运行函数取消
+- 当前不支持超过 8 个函数的 library、完整 Lua 语法、除 `no-writes` 外的 function flags、超过 128 字节或包含转义的 function description、非空 `FUNCTION DUMP/RESTORE`、RDB/AOF/复制 library 元数据持久化或长时间运行函数取消
 
 ### `GEOADD`
 

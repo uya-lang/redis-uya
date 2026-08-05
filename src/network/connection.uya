@@ -47,8 +47,12 @@ use src.storage.engine.engine_watch_unregister_client;
 use src.storage.engine.engine_watch_version;
 use src.storage.engine.lookup_key_at;
 use src.storage.engine.lookup_key_no_touch_at;
+use src.storage.dict.Dict;
 use src.storage.dict.DictIterator;
 use src.storage.dict.DictEntry;
+use src.storage.dict.dict_bucket_count;
+use src.storage.dict.dict_bucket_layout_size;
+use src.storage.dict.dict_entry_layout_size;
 use src.storage.dict.dict_iter_new;
 use src.storage.dict.dict_iter_next;
 use src.storage.object.ListNode;
@@ -60,7 +64,9 @@ use src.storage.object.create_hash_object;
 use src.storage.object.hash_object_set_field;
 use src.storage.object.hash_object_get_field;
 use src.storage.object.list_object_push_tail;
+use src.storage.object.list_node_layout_size;
 use src.storage.object.object_free;
+use src.storage.object.object_layout_size;
 use src.storage.object.zset_object_len;
 use src.storage.sds.Sds;
 use src.storage.sds.sds_empty;
@@ -130,6 +136,7 @@ export struct ConnectionTransaction {
     query_buffer_len: usize,
     query_buffer_capacity: usize,
     output_buffer_len: usize,
+    client_memory_base: usize,
     command_name_len: usize,
     command_name: [byte: CONNECTION_CLIENT_COMMAND_MAX],
     client_addr_len: usize,
@@ -406,6 +413,7 @@ fn connection_transaction_empty() ConnectionTransaction {
         query_buffer_len: 0,
         query_buffer_capacity: 0,
         output_buffer_len: 0,
+        client_memory_base: 0,
         command_name_len: 0,
         command_name: [],
         client_addr_len: 0,
@@ -442,6 +450,13 @@ fn connection_transaction_empty() ConnectionTransaction {
 
 export fn connection_transaction_new() ConnectionTransaction {
     return connection_transaction_empty();
+}
+
+export fn connection_transaction_set_memory_base(tx: &ConnectionTransaction, bytes: usize) void {
+    if tx == null {
+        return;
+    }
+    tx.client_memory_base = bytes;
 }
 
 export fn connection_transaction_reset(tx: &ConnectionTransaction) void {
@@ -769,6 +784,64 @@ fn connection_transaction_multi_memory(tx: &ConnectionTransaction) usize {
         node = node.next;
         count = count + 1;
     }
+    return total;
+}
+
+fn connection_client_owned_sds_memory(value: &Sds) usize {
+    if value == null || value.buf.ptr == null {
+        return 0;
+    }
+    return value.alloc + 1;
+}
+
+fn connection_client_owned_dict_memory(dict: &Dict) usize {
+    var total: usize = dict_bucket_count(dict) * dict_bucket_layout_size();
+    var iter: DictIterator = dict_iter_new();
+    var entry: &DictEntry = dict_iter_next(dict, &iter);
+    while entry != null {
+        total = total + dict_entry_layout_size();
+        total = total + connection_client_owned_sds_memory(&entry.key);
+        const value: &RedisObject = @ptr_from_usize(entry.value) as &RedisObject;
+        total = total + connection_client_owned_object_memory(value);
+        entry = dict_iter_next(dict, &iter);
+    }
+    return total;
+}
+
+fn connection_client_owned_object_memory(obj: &RedisObject) usize {
+    if obj == null {
+        return 0;
+    }
+    var total: usize = object_layout_size() + connection_client_owned_sds_memory(&obj.value);
+    if obj.obj_type == ObjectType.object_list {
+        var node: &ListNode = obj.list_head;
+        while node != null {
+            total = total + list_node_layout_size();
+            total = total + connection_client_owned_object_memory(node.value);
+            node = node.next;
+        }
+        return total;
+    }
+    if obj.obj_type == ObjectType.object_hash ||
+        obj.obj_type == ObjectType.object_set ||
+        obj.obj_type == ObjectType.object_zset {
+        total = total + connection_client_owned_dict_memory(&obj.hash_dict);
+        total = total + connection_client_owned_dict_memory(&obj.hash_expire_dict);
+    }
+    return total;
+}
+
+fn connection_client_total_memory(tx: &ConnectionTransaction) usize {
+    if tx == null {
+        return 0;
+    }
+    var total: usize = tx.client_memory_base;
+    if total == 0 {
+        total = (@size_of(ConnectionTransaction) as usize) + tx.query_buffer_capacity + CONNECTION_CLIENT_REPLY_BUFFER_CAP;
+    }
+    total = total + connection_client_owned_object_memory(tx.queue);
+    total = total + connection_client_owned_object_memory(tx.watched);
+    total = total + connection_client_owned_object_memory(tx.tracking_prefixes);
     return total;
 }
 
@@ -4949,7 +5022,7 @@ fn connection_client_elapsed_seconds(now_ms: u64, then_ms: u64) u64 {
     return (now_ms - then_ms) / 1000u64;
 }
 
-fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protocol_version: i32, fd: i32, created_ms: u64, last_interaction_ms: u64, now_ms: u64, command_name: &[byte], tracking_redirect_id: i64, addr: &[byte], local_addr: &[byte], name: &[byte], lib_name: &[byte], lib_ver: &[byte], username: &[byte], sub_count: usize, psub_count: usize, ssub_count: usize, query_buffer_len: usize, query_buffer_capacity: usize, output_buffer_len: usize, multi_count: i64, multi_memory: usize, monitoring: bool, blocking_active: bool, tracking_enabled: bool) !void {
+fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protocol_version: i32, fd: i32, created_ms: u64, last_interaction_ms: u64, now_ms: u64, command_name: &[byte], tracking_redirect_id: i64, addr: &[byte], local_addr: &[byte], name: &[byte], lib_name: &[byte], lib_ver: &[byte], username: &[byte], sub_count: usize, psub_count: usize, ssub_count: usize, query_buffer_len: usize, query_buffer_capacity: usize, output_buffer_len: usize, multi_count: i64, multi_memory: usize, total_memory: usize, monitoring: bool, blocking_active: bool, tracking_enabled: bool) !void {
     try sds_cat(raw, &"id="[0: 3]);
     try connection_sds_append_i64(raw, client_id);
     try sds_cat(raw, &" addr="[0: 6]);
@@ -4999,6 +5072,8 @@ fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protoc
     try sds_cat(raw, &" obl="[0: 5]);
     try connection_sds_append_u64(raw, output_buffer_len as u64);
     try sds_cat(raw, &" oll=0 omem=0"[0: 13]);
+    try sds_cat(raw, &" tot-mem="[0: 9]);
+    try connection_sds_append_u64(raw, total_memory as u64);
     if output_buffer_len > 0 {
         try sds_cat(raw, &" events=w"[0: 9]);
     } else {
@@ -5064,6 +5139,7 @@ fn connection_client_registry_append_slot_info(raw: &Sds, slot_index: usize, now
     var query_buffer_capacity: usize = 0;
     var output_buffer_len: usize = 0;
     var multi_memory: usize = 0;
+    var total_memory: usize = 0;
     if connection_client_registry[slot_index].multi_active {
         multi_count = 0;
     }
@@ -5076,6 +5152,7 @@ fn connection_client_registry_append_slot_info(raw: &Sds, slot_index: usize, now
             query_buffer_capacity = tx.query_buffer_capacity;
             output_buffer_len = tx.output_buffer_len;
             multi_memory = connection_transaction_multi_memory(tx);
+            total_memory = connection_client_total_memory(tx);
             if tx.active {
                 multi_count = tx.queue_count as i64;
             } else {
@@ -5114,6 +5191,7 @@ fn connection_client_registry_append_slot_info(raw: &Sds, slot_index: usize, now
         output_buffer_len,
         multi_count,
         multi_memory,
+        total_memory,
         connection_client_registry[slot_index].monitoring,
         connection_client_registry[slot_index].blocking_active,
         connection_client_registry[slot_index].tracking_enabled,
@@ -5894,6 +5972,7 @@ fn connection_client_info_reply(tx: &ConnectionTransaction, now_ms: u64) Command
         tx.output_buffer_len,
         multi_count,
         connection_transaction_multi_memory(tx),
+        connection_client_total_memory(tx),
         tx.monitoring,
         tx.blocking_active,
         tx.tracking_enabled,

@@ -23,6 +23,7 @@ use src.network.connection.connection_transaction_set_client_addresses;
 use src.network.connection.connection_transaction_set_client_times;
 use src.network.connection.connection_transaction_set_output_buffer;
 use src.network.connection.connection_transaction_set_query_buffer;
+use src.network.connection.connection_transaction_set_memory_base;
 use src.network.connection.connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_zero_copy_at;
 use src.network.connection.connection_encode_client_unblock_error_reply;
 use src.network.connection.connection_encode_client_unblock_timeout_reply;
@@ -2195,6 +2196,10 @@ export fn server_accept_once(server: &RedisServer) !void {
     server.clients[slot].last_interaction_ms = server.event_time_ms;
     server.clients[slot].transaction = connection_transaction_new();
     server.clients[slot].transaction.client_fd = fd;
+    connection_transaction_set_memory_base(
+        &server.clients[slot].transaction,
+        (@size_of(RedisClient) as usize) + SERVER_OUTPUT_CAP,
+    );
     connection_transaction_set_query_buffer(&server.clients[slot].transaction, 0, SERVER_INPUT_CAP);
     connection_transaction_set_client_addresses(
         &server.clients[slot].transaction,

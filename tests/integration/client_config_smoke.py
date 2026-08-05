@@ -259,6 +259,10 @@ def run_smoke() -> None:
                     raise AssertionError(f"CLIENT INFO returned invalid fixed reply buffer sizing: {info!r}")
                 if info_fields.get(b"obl") != b"0" or info_fields.get(b"oll") != b"0" or info_fields.get(b"omem") != b"0":
                     raise AssertionError(f"CLIENT INFO returned invalid output buffer usage: {info!r}")
+                info_total_memory_raw = info_fields.get(b"tot-mem", b"")
+                if not info_total_memory_raw.isdigit() or int(info_total_memory_raw) <= 81920 + 8192:
+                    raise AssertionError(f"CLIENT INFO returned invalid total client memory: {info!r}")
+                info_total_memory = int(info_total_memory_raw)
                 if info_fields.get(b"events") != b"r":
                     raise AssertionError(f"CLIENT INFO returned invalid event interest: {info!r}")
                 if not info_fields.get(b"age", b"").isdigit() or int(info_fields[b"age"]) < 1:
@@ -304,6 +308,9 @@ def run_smoke() -> None:
                     raise AssertionError(f"CLIENT LIST returned invalid empty transaction count: {peer_lines[0]!r}")
                 if peer_fields.get(b"multi-mem") != b"0":
                     raise AssertionError(f"CLIENT LIST returned invalid empty transaction memory: {peer_lines[0]!r}")
+                if peer_fields.get(b"tot-mem") != str(info_total_memory).encode():
+                    raise AssertionError(f"CLIENT LIST returned inconsistent fixed client memory: {peer_lines[0]!r}")
+                peer_empty_total_memory = int(peer_fields[b"tot-mem"])
                 if not peer_fields.get(b"age", b"").isdigit() or int(peer_fields[b"age"]) < 1:
                     raise AssertionError(f"CLIENT LIST returned invalid peer age: {peer_lines[0]!r}")
                 if not peer_fields.get(b"idle", b"").isdigit() or int(peer_fields[b"idle"]) < 1:
@@ -361,6 +368,12 @@ def run_smoke() -> None:
                     raise AssertionError(f"peer queued transaction count was not visible: {peer_after_queue!r}")
                 if peer_after_queue_fields.get(b"multi-mem") != b"14":
                     raise AssertionError(f"peer queued transaction memory was not visible: {peer_after_queue!r}")
+                peer_queued_total_memory_raw = peer_after_queue_fields.get(b"tot-mem", b"")
+                if (
+                    not peer_queued_total_memory_raw.isdigit()
+                    or int(peer_queued_total_memory_raw) <= peer_empty_total_memory + 14
+                ):
+                    raise AssertionError(f"peer queued total memory did not include owned queue metadata: {peer_after_queue!r}")
                 if send_command(peer_sock, b"DISCARD") != "OK":
                     raise AssertionError("peer DISCARD failed")
                 peer_after_discard = send_command(sock, b"CLIENT", b"LIST", b"ID", str(peer_id).encode())
@@ -377,6 +390,8 @@ def run_smoke() -> None:
                     raise AssertionError(f"peer transaction count did not reset after DISCARD: {peer_after_discard!r}")
                 if peer_after_discard_fields.get(b"multi-mem") != b"0":
                     raise AssertionError(f"peer transaction memory did not reset after DISCARD: {peer_after_discard!r}")
+                if peer_after_discard_fields.get(b"tot-mem") != str(peer_empty_total_memory).encode():
+                    raise AssertionError(f"peer total memory did not reset after DISCARD: {peer_after_discard!r}")
                 peer_config = send_command(peer_sock, b"CONFIG", b"GET", b"databases")
                 if not isinstance(peer_config, list):
                     raise AssertionError(f"peer CONFIG GET returned invalid reply: {peer_config!r}")
@@ -443,6 +458,8 @@ def run_smoke() -> None:
                         raise AssertionError(f"PUBSUB client returned invalid fixed reply buffer sizing: {type_pubsub!r}")
                     if type_pubsub_fields.get(b"obl") != b"0" or type_pubsub_fields.get(b"oll") != b"0" or type_pubsub_fields.get(b"omem") != b"0":
                         raise AssertionError(f"PUBSUB client returned invalid output buffer usage: {type_pubsub!r}")
+                    if type_pubsub_fields.get(b"tot-mem") != str(info_total_memory).encode():
+                        raise AssertionError(f"PUBSUB client returned invalid fixed total memory: {type_pubsub!r}")
                     if type_pubsub_fields.get(b"events") != b"r":
                         raise AssertionError(f"PUBSUB client returned invalid event interest: {type_pubsub!r}")
 
@@ -526,6 +543,8 @@ def run_smoke() -> None:
                 )
                 if tracking_client_fields.get(b"redir") != str(peer_id).encode():
                     raise AssertionError(f"CLIENT INFO did not expose redirect target: {tracking_client_info!r}")
+                if tracking_client_fields.get(b"tot-mem") != str(info_total_memory).encode():
+                    raise AssertionError(f"tracking without prefixes changed total memory: {tracking_client_info!r}")
                 tracking_client_list = send_command(sock, b"CLIENT", b"LIST", b"ID", str(client_id).encode())
                 tracking_list_fields = dict(
                     part.split(b"=", 1)
@@ -574,8 +593,25 @@ def run_smoke() -> None:
                     or tracking_prefix_info.get(b"prefixes") != [b"cache:", b"user:"]
                 ):
                     raise AssertionError(f"unexpected CLIENT TRACKINGINFO prefixes: {tracking_prefix_info!r}")
+                tracking_prefix_client_info = send_command(sock, b"CLIENT", b"INFO")
+                tracking_prefix_client_fields = dict(
+                    part.split(b"=", 1)
+                    for part in tracking_prefix_client_info.strip().split()
+                    if b"=" in part
+                )
+                tracking_prefix_total_memory = tracking_prefix_client_fields.get(b"tot-mem", b"")
+                if not tracking_prefix_total_memory.isdigit() or int(tracking_prefix_total_memory) <= info_total_memory:
+                    raise AssertionError(f"tracking prefixes did not increase total memory: {tracking_prefix_client_info!r}")
                 if send_command(sock, b"CLIENT", b"TRACKING", b"OFF") != "OK":
                     raise AssertionError("CLIENT TRACKING OFF after prefixes failed")
+                tracking_prefix_off_info = send_command(sock, b"CLIENT", b"INFO")
+                tracking_prefix_off_fields = dict(
+                    part.split(b"=", 1)
+                    for part in tracking_prefix_off_info.strip().split()
+                    if b"=" in part
+                )
+                if tracking_prefix_off_fields.get(b"tot-mem") != str(info_total_memory).encode():
+                    raise AssertionError(f"tracking prefix memory did not clear after OFF: {tracking_prefix_off_info!r}")
 
                 if send_command(sock, b"CLIENT", b"CACHING", b"YES") != "OK":
                     raise AssertionError("CLIENT CACHING YES failed")

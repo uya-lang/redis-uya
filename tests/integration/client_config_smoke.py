@@ -264,11 +264,49 @@ def run_smoke() -> None:
                 if send_command(sock, b"CLIENT", b"LIST", b"ID", b"99999999") != b"":
                     raise AssertionError("missing CLIENT LIST ID should return an empty bulk string")
 
+                with connect_with_retry(port, time.monotonic() + 5.0) as type_pubsub_sock:
+                    type_pubsub_id = send_command(type_pubsub_sock, b"CLIENT", b"ID")
+                    if not isinstance(type_pubsub_id, int) or type_pubsub_id <= 0:
+                        raise AssertionError(f"unexpected TYPE pubsub CLIENT ID: {type_pubsub_id!r}")
+                    subscribe_reply = send_command(type_pubsub_sock, b"SUBSCRIBE", b"type-channel")
+                    if not isinstance(subscribe_reply, list) or subscribe_reply[0] != b"subscribe":
+                        raise AssertionError(f"unexpected TYPE subscription reply: {subscribe_reply!r}")
+
+                    type_normal = send_command(sock, b"CLIENT", b"LIST", b"TYPE", b"NORMAL")
+                    if (
+                        not isinstance(type_normal, bytes)
+                        or f"id={client_id} ".encode() not in type_normal
+                        or f"id={type_pubsub_id} ".encode() in type_normal
+                    ):
+                        raise AssertionError(f"unexpected CLIENT LIST TYPE NORMAL result: {type_normal!r}")
+
+                    type_pubsub = send_command(sock, b"CLIENT", b"LIST", b"TYPE", b"PUBSUB")
+                    if (
+                        not isinstance(type_pubsub, bytes)
+                        or f"id={type_pubsub_id} ".encode() not in type_pubsub
+                        or f"id={client_id} ".encode() in type_pubsub
+                    ):
+                        raise AssertionError(f"unexpected CLIENT LIST TYPE PUBSUB result: {type_pubsub!r}")
+
+                    try:
+                        send_command(sock, b"CLIENT", b"LIST", b"TYPE", b"bad")
+                        raise AssertionError("invalid CLIENT LIST TYPE should fail")
+                    except RespError as exc:
+                        if "Unknown client type 'bad'" not in str(exc):
+                            raise
+
+                    try:
+                        send_command(sock, b"CLIENT", b"LIST", b"TYPE", b"NORMAL", b"ID", str(client_id).encode())
+                        raise AssertionError("combined CLIENT LIST TYPE/ID should fail")
+                    except RespError as exc:
+                        if "syntax error" not in str(exc):
+                            raise
+
                 client_help = send_command(sock, b"CLIENT", b"HELP")
                 if (
                     not isinstance(client_help, list)
                     or b"CLIENT REPLY <ON|OFF|SKIP>" not in client_help
-                    or b"CLIENT LIST [ID <id> ...]" not in client_help
+                    or b"CLIENT LIST [TYPE NORMAL|PUBSUB] | [ID <id> ...]" not in client_help
                     or b"CLIENT TRACKINGINFO" not in client_help
                 ):
                     raise AssertionError(f"unexpected CLIENT HELP: {client_help!r}")

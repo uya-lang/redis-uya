@@ -4859,6 +4859,25 @@ fn connection_client_registry_append_slot_info(raw: &Sds, slot_index: usize) !vo
     );
 }
 
+fn connection_client_unknown_type_reply(client_type: &[byte]) CommandReply {
+    var raw: Sds = sds_empty() catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    defer {
+        sds_free(&raw);
+    }
+    _ = sds_cat(&raw, &"ERR Unknown client type '"[0: 25]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = sds_cat(&raw, client_type) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = sds_cat(&raw, &"'"[0: 1]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    return connection_owned_error(raw.buf[0: raw.len]);
+}
+
 fn connection_client_list_reply(command: &Command) CommandReply {
     var raw: Sds = sds_empty() catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
@@ -4884,6 +4903,33 @@ fn connection_client_list_reply(command: &Command) CommandReply {
     const selector: &[byte] = command_arg_data(command, 2) catch {
         return connection_error_reply(&"ERR invalid request"[0: 19]);
     };
+    if connection_keyword_eq(selector, &"TYPE"[0: 4]) {
+        if command.argc != 4 {
+            return connection_error_reply(&"ERR syntax error"[0: 16]);
+        }
+        const client_type: &[byte] = command_arg_data(command, 3) catch {
+            return connection_error_reply(&"ERR invalid request"[0: 19]);
+        };
+        var want_pubsub: bool = false;
+        if connection_keyword_eq(client_type, &"NORMAL"[0: 6]) {
+            want_pubsub = false;
+        } else if connection_keyword_eq(client_type, &"PUBSUB"[0: 6]) {
+            want_pubsub = true;
+        } else {
+            return connection_client_unknown_type_reply(client_type);
+        }
+        var type_index: usize = 0;
+        while type_index < CONNECTION_CLIENT_REGISTRY_MAX {
+            if connection_client_registry[type_index].active &&
+                ((connection_client_registry[type_index].pubsub_count > 0) == want_pubsub) {
+                _ = connection_client_registry_append_slot_info(&raw, type_index) catch {
+                    return connection_error_reply(&"ERR out of memory"[0: 17]);
+                };
+            }
+            type_index = type_index + 1;
+        }
+        return connection_bulk_reply_owned(raw.buf[0: raw.len]);
+    }
     if !connection_keyword_eq(selector, &"ID"[0: 2]) {
         return connection_error_reply(&"ERR syntax error"[0: 16]);
     }
@@ -5495,7 +5541,7 @@ fn connection_client_help_reply() CommandReply {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
-    _ = list_object_push_tail(reply_list, &"CLIENT LIST [ID <id> ...]"[0: 25]) catch {
+    _ = list_object_push_tail(reply_list, &"CLIENT LIST [TYPE NORMAL|PUBSUB] | [ID <id> ...]"[0: 48]) catch {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
@@ -9636,6 +9682,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
     }
     if command.info.cmd_type == CommandType.command_subscribe {
         var subscribe_reply: CommandReply = connection_handle_subscribe(tx, &command);
+        connection_client_registry_sync(tx);
         const subscribe_n: usize = try connection_encode_reply_for_command(tx, &command, &subscribe_reply, out, out_cap, reply_off_before, reply_skip_before);
         command_reply_cleanup(&subscribe_reply);
         resp_parse_value_free(&parsed.value, parsed.elements_owned);
@@ -9643,6 +9690,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
     }
     if command.info.cmd_type == CommandType.command_unsubscribe {
         var unsubscribe_reply: CommandReply = connection_handle_unsubscribe(tx, &command);
+        connection_client_registry_sync(tx);
         const unsubscribe_n: usize = try connection_encode_reply_for_command(tx, &command, &unsubscribe_reply, out, out_cap, reply_off_before, reply_skip_before);
         command_reply_cleanup(&unsubscribe_reply);
         resp_parse_value_free(&parsed.value, parsed.elements_owned);
@@ -9650,6 +9698,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
     }
     if command.info.cmd_type == CommandType.command_psubscribe {
         var psubscribe_reply: CommandReply = connection_handle_psubscribe(tx, &command);
+        connection_client_registry_sync(tx);
         const psubscribe_n: usize = try connection_encode_reply_for_command(tx, &command, &psubscribe_reply, out, out_cap, reply_off_before, reply_skip_before);
         command_reply_cleanup(&psubscribe_reply);
         resp_parse_value_free(&parsed.value, parsed.elements_owned);
@@ -9657,6 +9706,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
     }
     if command.info.cmd_type == CommandType.command_punsubscribe {
         var punsubscribe_reply: CommandReply = connection_handle_punsubscribe(tx, &command);
+        connection_client_registry_sync(tx);
         const punsubscribe_n: usize = try connection_encode_reply_for_command(tx, &command, &punsubscribe_reply, out, out_cap, reply_off_before, reply_skip_before);
         command_reply_cleanup(&punsubscribe_reply);
         resp_parse_value_free(&parsed.value, parsed.elements_owned);
@@ -9664,6 +9714,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
     }
     if command.info.cmd_type == CommandType.command_ssubscribe {
         var ssubscribe_reply: CommandReply = connection_handle_ssubscribe(tx, &command);
+        connection_client_registry_sync(tx);
         const ssubscribe_n: usize = try connection_encode_reply_for_command(tx, &command, &ssubscribe_reply, out, out_cap, reply_off_before, reply_skip_before);
         command_reply_cleanup(&ssubscribe_reply);
         resp_parse_value_free(&parsed.value, parsed.elements_owned);
@@ -9671,6 +9722,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
     }
     if command.info.cmd_type == CommandType.command_sunsubscribe {
         var sunsubscribe_reply: CommandReply = connection_handle_sunsubscribe(tx, &command);
+        connection_client_registry_sync(tx);
         const sunsubscribe_n: usize = try connection_encode_reply_for_command(tx, &command, &sunsubscribe_reply, out, out_cap, reply_off_before, reply_skip_before);
         command_reply_cleanup(&sunsubscribe_reply);
         resp_parse_value_free(&parsed.value, parsed.elements_owned);

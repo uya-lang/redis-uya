@@ -1546,7 +1546,7 @@ export fn test_connection_process_client_commands() !void {
     var client_help_out: [byte: 2048] = [];
     const client_help: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$4\r\nHELP\r\n"[0: 26], &client_help_out[0], 2048, 1000u64);
     try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT REPLY <ON|OFF|SKIP>"[0: 26]));
-    try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT LIST [ID <id> ...]"[0: 25]));
+    try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT LIST [TYPE NORMAL|PUBSUB] | [ID <id> ...]"[0: 48]));
     try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT KILL [ID <id>] [ADDR <ip:port>] [SKIPME yes|no]"[0: 54]));
     try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT TRACKINGINFO"[0: 19]));
 
@@ -1657,6 +1657,29 @@ export fn test_connection_process_client_commands() !void {
 
     const client_list_id_invalid: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$4\r\nLIST\r\n$2\r\nID\r\n$3\r\nbad\r\n"[0: 43], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: client_list_id_invalid.response_len], &"-ERR Invalid client ID\r\n"[0: 24]));
+
+    var tx3: ConnectionTransaction = connection_transaction_new();
+    tx3.client_fd = 44;
+    connection_transaction_set_client_addresses(&tx3, &"127.0.0.1:50002"[0: 15], &"127.0.0.1:6380"[0: 14]);
+    defer {
+        connection_transaction_reset(&tx3);
+    }
+    const type_subscribe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx3, &"*2\r\n$9\r\nSUBSCRIBE\r\n$5\r\ntyped\r\n"[0: 30], &out[0], 512, 1000u64);
+    try assert_true(network_connection_contains(out[0: type_subscribe.response_len], &"subscribe"[0: 9]));
+
+    const client_list_type_normal: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$4\r\nLIST\r\n$4\r\nTYPE\r\n$6\r\nNORMAL\r\n"[0: 48], &out[0], 512, 1000u64);
+    try assert_true(network_connection_contains(out[0: client_list_type_normal.response_len], &"id=1 addr=127.0.0.1:50000"[0: 25]));
+    try assert_true(!network_connection_contains(out[0: client_list_type_normal.response_len], &"id=3 addr=127.0.0.1:50002"[0: 25]));
+
+    const client_list_type_pubsub: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$4\r\nLIST\r\n$4\r\nTYPE\r\n$6\r\nPUBSUB\r\n"[0: 48], &out[0], 512, 1000u64);
+    try assert_true(network_connection_contains(out[0: client_list_type_pubsub.response_len], &"id=3 addr=127.0.0.1:50002"[0: 25]));
+    try assert_true(!network_connection_contains(out[0: client_list_type_pubsub.response_len], &"id=1 addr=127.0.0.1:50000"[0: 25]));
+
+    const client_list_type_bad: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$4\r\nLIST\r\n$4\r\nTYPE\r\n$3\r\nbad\r\n"[0: 45], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_list_type_bad.response_len], &"-ERR Unknown client type 'bad'\r\n"[0: 32]));
+
+    const client_list_type_id: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*6\r\n$6\r\nCLIENT\r\n$4\r\nLIST\r\n$4\r\nTYPE\r\n$6\r\nNORMAL\r\n$2\r\nID\r\n$1\r\n1\r\n"[0: 63], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_list_type_id.response_len], &"-ERR syntax error\r\n"[0: 19]));
 
     const getredir_default: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$8\r\nGETREDIR\r\n"[0: 30], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: getredir_default.response_len], &":-1\r\n"[0: 5]));

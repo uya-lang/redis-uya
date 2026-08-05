@@ -1639,6 +1639,7 @@ export fn test_connection_process_client_commands() !void {
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"ssub=0"[0: 6]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"qbuf=26"[0: 7]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"qbuf-free=8166"[0: 14]));
+    try assert_true(network_connection_contains(out[0: client_info.response_len], &"argv-mem=0"[0: 10]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"rbs=81920"[0: 9]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"rbp=81920"[0: 9]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"obl=4096"[0: 8]));

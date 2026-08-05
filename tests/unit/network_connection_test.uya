@@ -23,6 +23,7 @@ use src.network.connection.connection_transaction_new;
 use src.network.connection.connection_transaction_reset;
 use src.network.connection.connection_transaction_set_client_addresses;
 use src.network.connection.connection_transaction_set_client_times;
+use src.network.connection.connection_transaction_set_output_buffer;
 use src.network.connection.connection_transaction_set_query_buffer;
 use src.network.connection.connection_pubsub_reset_for_test;
 use src.network.connection.connection_monitor_reset_for_test;
@@ -1620,6 +1621,7 @@ export fn test_connection_process_client_commands() !void {
     try assert_true(network_connection_slice_eq(out[0: set_lib_ver.response_len], &"+OK\r\n"[0: 5]));
     connection_transaction_set_client_times(&tx, 1000u64, 10000u64);
     connection_transaction_set_query_buffer(&tx, 26, 8192);
+    connection_transaction_set_output_buffer(&tx, 4096);
 
     const client_info: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$4\r\nINFO\r\n"[0: 26], &out[0], 512, 10000u64);
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"id=1"[0: 4]));
@@ -1637,6 +1639,9 @@ export fn test_connection_process_client_commands() !void {
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"ssub=0"[0: 6]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"qbuf=26"[0: 7]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"qbuf-free=8166"[0: 14]));
+    try assert_true(network_connection_contains(out[0: client_info.response_len], &"obl=4096"[0: 8]));
+    try assert_true(network_connection_contains(out[0: client_info.response_len], &"oll=0"[0: 5]));
+    try assert_true(network_connection_contains(out[0: client_info.response_len], &"omem=0"[0: 6]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"age=9 idle=0"[0: 12]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"name=worker"[0: 11]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"lib-name=redis-uya-test"[0: 23]));

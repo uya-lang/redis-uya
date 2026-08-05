@@ -129,6 +129,7 @@ export struct ConnectionTransaction {
     last_interaction_ms: u64,
     query_buffer_len: usize,
     query_buffer_capacity: usize,
+    output_buffer_len: usize,
     command_name_len: usize,
     command_name: [byte: CONNECTION_CLIENT_COMMAND_MAX],
     client_addr_len: usize,
@@ -403,6 +404,7 @@ fn connection_transaction_empty() ConnectionTransaction {
         last_interaction_ms: 0u64,
         query_buffer_len: 0,
         query_buffer_capacity: 0,
+        output_buffer_len: 0,
         command_name_len: 0,
         command_name: [],
         client_addr_len: 0,
@@ -4736,6 +4738,13 @@ export fn connection_transaction_set_query_buffer(tx: &ConnectionTransaction, le
     tx.query_buffer_capacity = capacity;
 }
 
+export fn connection_transaction_set_output_buffer(tx: &ConnectionTransaction, len: usize) void {
+    if tx == null {
+        return;
+    }
+    tx.output_buffer_len = len;
+}
+
 fn connection_client_registry_clear_slot(slot: &ConnectionClientRegistryEntry) void {
     slot.active = false;
     slot.tx_addr = 0 as usize;
@@ -4924,7 +4933,7 @@ fn connection_client_elapsed_seconds(now_ms: u64, then_ms: u64) u64 {
     return (now_ms - then_ms) / 1000u64;
 }
 
-fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protocol_version: i32, fd: i32, created_ms: u64, last_interaction_ms: u64, now_ms: u64, command_name: &[byte], tracking_redirect_id: i64, addr: &[byte], local_addr: &[byte], name: &[byte], lib_name: &[byte], lib_ver: &[byte], username: &[byte], sub_count: usize, psub_count: usize, ssub_count: usize, query_buffer_len: usize, query_buffer_capacity: usize, multi_count: i64, monitoring: bool, blocking_active: bool, tracking_enabled: bool) !void {
+fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protocol_version: i32, fd: i32, created_ms: u64, last_interaction_ms: u64, now_ms: u64, command_name: &[byte], tracking_redirect_id: i64, addr: &[byte], local_addr: &[byte], name: &[byte], lib_name: &[byte], lib_ver: &[byte], username: &[byte], sub_count: usize, psub_count: usize, ssub_count: usize, query_buffer_len: usize, query_buffer_capacity: usize, output_buffer_len: usize, multi_count: i64, monitoring: bool, blocking_active: bool, tracking_enabled: bool) !void {
     try sds_cat(raw, &"id="[0: 3]);
     try connection_sds_append_i64(raw, client_id);
     try sds_cat(raw, &" addr="[0: 6]);
@@ -4964,6 +4973,9 @@ fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protoc
     } else {
         try connection_sds_append_u64(raw, 0u64);
     }
+    try sds_cat(raw, &" obl="[0: 5]);
+    try connection_sds_append_u64(raw, output_buffer_len as u64);
+    try sds_cat(raw, &" oll=0 omem=0"[0: 13]);
     try sds_cat(raw, &" user="[0: 6]);
     try sds_cat(raw, username);
     try sds_cat(raw, &" redir="[0: 7]);
@@ -5022,6 +5034,7 @@ fn connection_client_registry_append_slot_info(raw: &Sds, slot_index: usize, now
     var multi_count: i64 = -1;
     var query_buffer_len: usize = 0;
     var query_buffer_capacity: usize = 0;
+    var output_buffer_len: usize = 0;
     if connection_client_registry[slot_index].multi_active {
         multi_count = 0;
     }
@@ -5032,6 +5045,7 @@ fn connection_client_registry_append_slot_info(raw: &Sds, slot_index: usize, now
             tracking_redirect_id = tx.tracking_redirect_id;
             query_buffer_len = tx.query_buffer_len;
             query_buffer_capacity = tx.query_buffer_capacity;
+            output_buffer_len = tx.output_buffer_len;
             if tx.active {
                 multi_count = tx.queue_count as i64;
             } else {
@@ -5067,6 +5081,7 @@ fn connection_client_registry_append_slot_info(raw: &Sds, slot_index: usize, now
         ssub_count,
         query_buffer_len,
         query_buffer_capacity,
+        output_buffer_len,
         multi_count,
         connection_client_registry[slot_index].monitoring,
         connection_client_registry[slot_index].blocking_active,
@@ -5845,6 +5860,7 @@ fn connection_client_info_reply(tx: &ConnectionTransaction, now_ms: u64) Command
         ssub_count,
         tx.query_buffer_len,
         tx.query_buffer_capacity,
+        tx.output_buffer_len,
         multi_count,
         tx.monitoring,
         tx.blocking_active,

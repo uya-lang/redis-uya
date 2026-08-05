@@ -21,6 +21,7 @@ use src.network.connection.connection_client_registry_client_id;
 use src.network.connection.connection_client_registry_sync;
 use src.network.connection.connection_transaction_set_client_addresses;
 use src.network.connection.connection_transaction_set_client_times;
+use src.network.connection.connection_transaction_set_output_buffer;
 use src.network.connection.connection_transaction_set_query_buffer;
 use src.network.connection.connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_zero_copy_at;
 use src.network.connection.connection_encode_client_unblock_error_reply;
@@ -1348,6 +1349,7 @@ struct ServerAsyncSendAllFuture : Future<!usize> {
     data: &const byte,
     count: usize,
     sent: usize,
+    tx: &ConnectionTransaction,
 
     fn poll(self: &Self, waker: &Waker) Poll<!usize> {
         while self.sent < self.count {
@@ -1359,6 +1361,7 @@ struct ServerAsyncSendAllFuture : Future<!usize> {
                     continue;
                 }
                 if eid == EAGAIN || eid == EWOULDBLOCK {
+                    connection_transaction_set_output_buffer(self.tx, self.count - self.sent);
                     waker.wait_writable(self.fd);
                     return Poll<!usize>.Pending({});
                 }
@@ -1368,6 +1371,7 @@ struct ServerAsyncSendAllFuture : Future<!usize> {
                 return poll_ready_ok<usize>(self.sent);
             }
             self.sent = self.sent + (n as usize);
+            connection_transaction_set_output_buffer(self.tx, self.count - self.sent);
         }
         return poll_ready_ok<usize>(self.sent);
     }
@@ -1377,8 +1381,8 @@ struct ServerAsyncSendAllFuture : Future<!usize> {
     }
 }
 
-fn server_async_send_all_from_future(fd: i32, data: &const byte, count: usize, sent: usize) Future<!usize> {
-    return ServerAsyncSendAllFuture{ fd: fd, data: data, count: count, sent: sent };
+fn server_async_send_all_from_future(fd: i32, data: &const byte, count: usize, sent: usize, tx: &ConnectionTransaction) Future<!usize> {
+    return ServerAsyncSendAllFuture{ fd: fd, data: data, count: count, sent: sent, tx: tx };
 }
 
 fn server_writev_progress_nonblocking(
@@ -1472,6 +1476,7 @@ struct ServerAsyncWritevAllFuture : Future<!usize> {
     head_sent: usize,
     body_sent: usize,
     tail_sent: usize,
+    tx: &ConnectionTransaction,
 
     fn poll(self: &Self, waker: &Waker) Poll<!usize> {
         const total: usize = self.head_len + self.body.len + self.tail_len;
@@ -1488,6 +1493,8 @@ struct ServerAsyncWritevAllFuture : Future<!usize> {
         const status: i32 = status_result catch {
             return Poll<!usize>.Ready(status_result as! usize);
         };
+        const sent: usize = self.head_sent + self.body_sent + self.tail_sent;
+        connection_transaction_set_output_buffer(self.tx, total - sent);
         if status > 0 {
             waker.wait_writable(self.fd);
             return Poll<!usize>.Pending({});
@@ -1512,6 +1519,7 @@ fn server_async_writev_all_future(
     head_sent: usize,
     body_sent: usize,
     tail_sent: usize,
+    tx: &ConnectionTransaction,
 ) Future<!usize> {
     return ServerAsyncWritevAllFuture{
         fd: fd,
@@ -1522,6 +1530,7 @@ fn server_async_writev_all_future(
         head_sent: head_sent,
         body_sent: body_sent,
         tail_sent: tail_sent,
+        tx: tx,
     };
 }
 
@@ -1707,6 +1716,7 @@ fn server_async_writev_all_future(
                 }
                 var zc_written: usize = client.output_len;
                 if zc_status > 0 {
+                    connection_transaction_set_output_buffer(&client.transaction, client.output_len - head_sent - body_sent - tail_sent);
                     zc_written = try @await server_async_writev_all_future(
                         fd,
                         client.output as &const byte,
@@ -1716,6 +1726,7 @@ fn server_async_writev_all_future(
                         head_sent,
                         body_sent,
                         tail_sent,
+                        &client.transaction,
                     );
                 }
                 if zc_written < client.output_len {
@@ -1733,7 +1744,8 @@ fn server_async_writev_all_future(
                     }
                     var written: usize = sent_now;
                     if send_status > 0 {
-                        written = try @await server_async_send_all_from_future(fd, client.output as &const byte, client.output_len, sent_now);
+                        connection_transaction_set_output_buffer(&client.transaction, client.output_len - sent_now);
+                        written = try @await server_async_send_all_from_future(fd, client.output as &const byte, client.output_len, sent_now, &client.transaction);
                     }
                     if written < client.output_len {
                         return false;

@@ -265,6 +265,8 @@ def run_smoke() -> None:
                 info_total_memory = int(info_total_memory_raw)
                 if info_fields.get(b"events") != b"r":
                     raise AssertionError(f"CLIENT INFO returned invalid event interest: {info!r}")
+                if info_fields.get(b"io-thread") != b"0":
+                    raise AssertionError(f"CLIENT INFO returned invalid I/O thread id: {info!r}")
                 if not info_fields.get(b"age", b"").isdigit() or int(info_fields[b"age"]) < 1:
                     raise AssertionError(f"CLIENT INFO returned invalid age: {info!r}")
                 if info_fields.get(b"idle") != b"0":
@@ -310,6 +312,8 @@ def run_smoke() -> None:
                     raise AssertionError(f"CLIENT LIST returned invalid empty transaction memory: {peer_lines[0]!r}")
                 if peer_fields.get(b"tot-mem") != str(info_total_memory).encode():
                     raise AssertionError(f"CLIENT LIST returned inconsistent fixed client memory: {peer_lines[0]!r}")
+                if peer_fields.get(b"io-thread") != b"0":
+                    raise AssertionError(f"CLIENT LIST returned invalid peer I/O thread id: {peer_lines[0]!r}")
                 peer_empty_total_memory = int(peer_fields[b"tot-mem"])
                 if not peer_fields.get(b"age", b"").isdigit() or int(peer_fields[b"age"]) < 1:
                     raise AssertionError(f"CLIENT LIST returned invalid peer age: {peer_lines[0]!r}")

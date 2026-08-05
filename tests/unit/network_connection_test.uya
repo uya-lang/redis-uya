@@ -1668,6 +1668,7 @@ export fn test_connection_process_client_commands() !void {
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"name=worker"[0: 11]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"lib-name=redis-uya-test"[0: 23]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"lib-ver=0.5.0"[0: 13]));
+    try assert_true(network_connection_contains(out[0: client_info.response_len], &"io-thread=0"[0: 11]));
 
     var tx2: ConnectionTransaction = connection_transaction_new();
     tx2.client_fd = 43;
@@ -1702,6 +1703,7 @@ export fn test_connection_process_client_commands() !void {
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"multi=0"[0: 7]));
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"multi-mem=0"[0: 11]));
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"tot-mem="[0: 8]));
+    try assert_true(network_connection_contains(out[0: client_list.response_len], &"io-thread=0"[0: 11]));
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"age=8 idle=3"[0: 12]));
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"name=peer2"[0: 10]));
 

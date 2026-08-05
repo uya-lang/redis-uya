@@ -5141,6 +5141,7 @@ fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protoc
     if lib_ver.len > 0 {
         try sds_cat(raw, lib_ver);
     }
+    try sds_cat(raw, &" io-thread=0"[0: 12]);
     try sds_cat(raw, &"\r\n"[0: 2]);
 }
 

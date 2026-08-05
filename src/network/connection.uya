@@ -137,6 +137,7 @@ export struct ConnectionTransaction {
     query_buffer_len: usize,
     query_buffer_capacity: usize,
     output_buffer_len: usize,
+    total_network_input: u64,
     client_memory_base: usize,
     command_name_len: usize,
     command_name: [byte: CONNECTION_CLIENT_COMMAND_MAX],
@@ -414,6 +415,7 @@ fn connection_transaction_empty() ConnectionTransaction {
         query_buffer_len: 0,
         query_buffer_capacity: 0,
         output_buffer_len: 0,
+        total_network_input: 0u64,
         client_memory_base: 0,
         command_name_len: 0,
         command_name: [],
@@ -4835,6 +4837,13 @@ export fn connection_transaction_set_output_buffer(tx: &ConnectionTransaction, l
     tx.output_buffer_len = len;
 }
 
+export fn connection_transaction_add_network_input(tx: &ConnectionTransaction, bytes: usize) void {
+    if tx == null {
+        return;
+    }
+    tx.total_network_input = tx.total_network_input + (bytes as u64);
+}
+
 fn connection_client_registry_clear_slot(slot: &ConnectionClientRegistryEntry) void {
     slot.active = false;
     slot.tx_addr = 0 as usize;
@@ -5023,7 +5032,7 @@ fn connection_client_elapsed_seconds(now_ms: u64, then_ms: u64) u64 {
     return (now_ms - then_ms) / 1000u64;
 }
 
-fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protocol_version: i32, fd: i32, created_ms: u64, last_interaction_ms: u64, now_ms: u64, command_name: &[byte], tracking_redirect_id: i64, addr: &[byte], local_addr: &[byte], name: &[byte], lib_name: &[byte], lib_ver: &[byte], username: &[byte], sub_count: usize, psub_count: usize, ssub_count: usize, query_buffer_len: usize, query_buffer_capacity: usize, output_buffer_len: usize, multi_count: i64, watch_count: usize, multi_memory: usize, total_memory: usize, monitoring: bool, blocking_active: bool, tracking_enabled: bool, tracking_bcast: bool, watch_dirty: bool, no_evict_enabled: bool, no_touch_enabled: bool) !void {
+fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protocol_version: i32, fd: i32, created_ms: u64, last_interaction_ms: u64, now_ms: u64, command_name: &[byte], tracking_redirect_id: i64, addr: &[byte], local_addr: &[byte], name: &[byte], lib_name: &[byte], lib_ver: &[byte], username: &[byte], sub_count: usize, psub_count: usize, ssub_count: usize, query_buffer_len: usize, query_buffer_capacity: usize, output_buffer_len: usize, multi_count: i64, watch_count: usize, multi_memory: usize, total_memory: usize, total_network_input: u64, monitoring: bool, blocking_active: bool, tracking_enabled: bool, tracking_bcast: bool, watch_dirty: bool, no_evict_enabled: bool, no_touch_enabled: bool) !void {
     try sds_cat(raw, &"id="[0: 3]);
     try connection_sds_append_i64(raw, client_id);
     try sds_cat(raw, &" addr="[0: 6]);
@@ -5142,6 +5151,8 @@ fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protoc
         try sds_cat(raw, lib_ver);
     }
     try sds_cat(raw, &" io-thread=0"[0: 12]);
+    try sds_cat(raw, &" tot-net-in="[0: 12]);
+    try connection_sds_append_u64(raw, total_network_input);
     try sds_cat(raw, &"\r\n"[0: 2]);
 }
 
@@ -5161,6 +5172,7 @@ fn connection_client_registry_append_slot_info(raw: &Sds, slot_index: usize, now
     var watch_count: usize = 0;
     var multi_memory: usize = 0;
     var total_memory: usize = 0;
+    var total_network_input: u64 = 0u64;
     var tracking_bcast: bool = false;
     var watch_dirty: bool = false;
     var no_evict_enabled: bool = false;
@@ -5181,6 +5193,7 @@ fn connection_client_registry_append_slot_info(raw: &Sds, slot_index: usize, now
             }
             multi_memory = connection_transaction_multi_memory(tx);
             total_memory = connection_client_total_memory(tx);
+            total_network_input = tx.total_network_input;
             tracking_bcast = tx.tracking_bcast;
             if tx.watched != null && tx.watch_engine != null {
                 watch_dirty = !connection_transaction_watches_match(tx, tx.watch_engine);
@@ -5227,6 +5240,7 @@ fn connection_client_registry_append_slot_info(raw: &Sds, slot_index: usize, now
         watch_count,
         multi_memory,
         total_memory,
+        total_network_input,
         connection_client_registry[slot_index].monitoring,
         connection_client_registry[slot_index].blocking_active,
         connection_client_registry[slot_index].tracking_enabled,
@@ -6017,6 +6031,7 @@ fn connection_client_info_reply(tx: &ConnectionTransaction, now_ms: u64) Command
         watch_count,
         connection_transaction_multi_memory(tx),
         connection_client_total_memory(tx),
+        tx.total_network_input,
         tx.monitoring,
         tx.blocking_active,
         tx.tracking_enabled,

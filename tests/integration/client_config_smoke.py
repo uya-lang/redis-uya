@@ -117,6 +117,13 @@ def send_command(sock: socket.socket, *parts: bytes):
     return read_resp(sock)
 
 
+def command_wire_size(*parts: bytes) -> int:
+    size = len(f"*{len(parts)}\r\n".encode())
+    for part in parts:
+        size += len(f"${len(part)}\r\n".encode()) + len(part) + 2
+    return size
+
+
 def send_only(sock: socket.socket, *parts: bytes) -> None:
     request = [f"*{len(parts)}\r\n".encode()]
     for part in parts:
@@ -267,10 +274,30 @@ def run_smoke() -> None:
                     raise AssertionError(f"CLIENT INFO returned invalid event interest: {info!r}")
                 if info_fields.get(b"io-thread") != b"0":
                     raise AssertionError(f"CLIENT INFO returned invalid I/O thread id: {info!r}")
+                info_total_net_in_raw = info_fields.get(b"tot-net-in", b"")
+                if not info_total_net_in_raw.isdigit() or int(info_total_net_in_raw) <= 0:
+                    raise AssertionError(f"CLIENT INFO returned invalid network input total: {info!r}")
+                info_total_net_in = int(info_total_net_in_raw)
                 if not info_fields.get(b"age", b"").isdigit() or int(info_fields[b"age"]) < 1:
                     raise AssertionError(f"CLIENT INFO returned invalid age: {info!r}")
                 if info_fields.get(b"idle") != b"0":
                     raise AssertionError(f"CLIENT INFO returned invalid idle: {info!r}")
+
+                if send_command(sock, b"PING") != "PONG":
+                    raise AssertionError("PING before network input observation failed")
+                info_after_ping = send_command(sock, b"CLIENT", b"INFO")
+                info_after_ping_fields = dict(
+                    part.split(b"=", 1)
+                    for part in info_after_ping.strip().split()
+                    if b"=" in part
+                )
+                expected_after_ping = (
+                    info_total_net_in
+                    + command_wire_size(b"PING")
+                    + command_wire_size(b"CLIENT", b"INFO")
+                )
+                if info_after_ping_fields.get(b"tot-net-in") != str(expected_after_ping).encode():
+                    raise AssertionError(f"CLIENT INFO returned inconsistent network input total: {info_after_ping!r}")
 
                 listed = send_command(sock, b"CLIENT", b"LIST")
                 peer_addr = f"{peer_sock.getsockname()[0]}:{peer_sock.getsockname()[1]}".encode()
@@ -290,6 +317,9 @@ def run_smoke() -> None:
                 current_fields = dict(part.split(b"=", 1) for part in current_lines[0].split() if b"=" in part)
                 if current_fields.get(b"cmd") != b"client|list":
                     raise AssertionError(f"CLIENT LIST returned invalid current command: {current_lines[0]!r}")
+                expected_after_list = expected_after_ping + command_wire_size(b"CLIENT", b"LIST")
+                if current_fields.get(b"tot-net-in") != str(expected_after_list).encode():
+                    raise AssertionError(f"CLIENT LIST returned inconsistent current network input total: {current_lines[0]!r}")
                 peer_lines = [line for line in listed_lines if line.startswith(f"id={peer_id} ".encode())]
                 if len(peer_lines) != 1:
                     raise AssertionError(f"CLIENT LIST did not return one peer line: {listed!r}")

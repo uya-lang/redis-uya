@@ -23,6 +23,7 @@ use src.network.connection.connection_transaction_set_client_addresses;
 use src.network.connection.connection_transaction_set_client_times;
 use src.network.connection.connection_transaction_set_output_buffer;
 use src.network.connection.connection_transaction_set_query_buffer;
+use src.network.connection.connection_transaction_add_network_input;
 use src.network.connection.connection_transaction_set_memory_base;
 use src.network.connection.connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_zero_copy_at;
 use src.network.connection.connection_encode_client_unblock_error_reply;
@@ -1771,6 +1772,7 @@ fn server_async_writev_all_future(
         if client.input_len == 0 {
             server_buffered_client_added(server);
         }
+        connection_transaction_add_network_input(&client.transaction, rn);
         client.input_len = client.input_len + rn;
         client.last_interaction_ms = server.event_time_ms;
         connection_transaction_set_client_times(&client.transaction, client.created_ms, client.last_interaction_ms);

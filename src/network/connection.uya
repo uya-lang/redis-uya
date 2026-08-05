@@ -222,6 +222,8 @@ struct ConnectionClientRegistryEntry {
     client_lib_name: [byte: CONNECTION_CLIENT_INFO_MAX],
     client_lib_ver_len: usize,
     client_lib_ver: [byte: CONNECTION_CLIENT_INFO_MAX],
+    username_len: usize,
+    username: [byte: CONNECTION_ACL_USER_NAME_MAX],
     pubsub_count: usize,
     multi_active: bool,
 }
@@ -4709,6 +4711,7 @@ fn connection_client_registry_clear_slot(slot: &ConnectionClientRegistryEntry) v
     slot.client_name_len = 0;
     slot.client_lib_name_len = 0;
     slot.client_lib_ver_len = 0;
+    slot.username_len = 0;
     slot.pubsub_count = 0;
     slot.multi_active = false;
     connection_client_registry_copy_bytes(slot.client_addr[0: CONNECTION_CLIENT_ADDR_MAX], connection_reply_empty_slice(), 0);
@@ -4716,6 +4719,7 @@ fn connection_client_registry_clear_slot(slot: &ConnectionClientRegistryEntry) v
     connection_client_registry_copy_bytes(slot.client_name[0: CONNECTION_CLIENT_NAME_MAX], connection_reply_empty_slice(), 0);
     connection_client_registry_copy_bytes(slot.client_lib_name[0: CONNECTION_CLIENT_INFO_MAX], connection_reply_empty_slice(), 0);
     connection_client_registry_copy_bytes(slot.client_lib_ver[0: CONNECTION_CLIENT_INFO_MAX], connection_reply_empty_slice(), 0);
+    connection_client_registry_copy_bytes(slot.username[0: CONNECTION_ACL_USER_NAME_MAX], connection_reply_empty_slice(), 0);
 }
 
 fn connection_client_registry_tx_addr(tx: &ConnectionTransaction) usize {
@@ -4788,6 +4792,8 @@ fn connection_client_registry_sync(tx: &ConnectionTransaction) void {
     slot.client_name_len = tx.client_name_len;
     slot.client_lib_name_len = tx.client_lib_name_len;
     slot.client_lib_ver_len = tx.client_lib_ver_len;
+    const username: &[byte] = connection_current_username(tx);
+    slot.username_len = username.len;
     slot.pubsub_count = tx.pubsub_count;
     slot.multi_active = tx.active;
     connection_client_registry_copy_bytes(slot.client_addr[0: CONNECTION_CLIENT_ADDR_MAX], tx.client_addr[0: CONNECTION_CLIENT_ADDR_MAX], slot.client_addr_len);
@@ -4795,6 +4801,7 @@ fn connection_client_registry_sync(tx: &ConnectionTransaction) void {
     connection_client_registry_copy_bytes(slot.client_name[0: CONNECTION_CLIENT_NAME_MAX], tx.client_name[0: CONNECTION_CLIENT_NAME_MAX], tx.client_name_len);
     connection_client_registry_copy_bytes(slot.client_lib_name[0: CONNECTION_CLIENT_INFO_MAX], tx.client_lib_name[0: CONNECTION_CLIENT_INFO_MAX], tx.client_lib_name_len);
     connection_client_registry_copy_bytes(slot.client_lib_ver[0: CONNECTION_CLIENT_INFO_MAX], tx.client_lib_ver[0: CONNECTION_CLIENT_INFO_MAX], tx.client_lib_ver_len);
+    connection_client_registry_copy_bytes(slot.username[0: CONNECTION_ACL_USER_NAME_MAX], username, slot.username_len);
 }
 
 fn connection_acl_log_client_id(tx: &ConnectionTransaction) i64 {
@@ -4802,7 +4809,7 @@ fn connection_acl_log_client_id(tx: &ConnectionTransaction) i64 {
     return connection_client_id(tx);
 }
 
-fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protocol_version: i32, fd: i32, addr: &[byte], local_addr: &[byte], name: &[byte], lib_name: &[byte], lib_ver: &[byte], sub_count: usize, multi_active: bool) !void {
+fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protocol_version: i32, fd: i32, addr: &[byte], local_addr: &[byte], name: &[byte], lib_name: &[byte], lib_ver: &[byte], username: &[byte], sub_count: usize, multi_active: bool) !void {
     try sds_cat(raw, &"id="[0: 3]);
     try connection_sds_append_i64(raw, client_id);
     try sds_cat(raw, &" addr="[0: 6]);
@@ -4830,6 +4837,8 @@ fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protoc
     try sds_cat(raw, &" db=0"[0: 5]);
     try sds_cat(raw, &" sub="[0: 5]);
     try connection_sds_append_u64(raw, sub_count as u64);
+    try sds_cat(raw, &" user="[0: 6]);
+    try sds_cat(raw, username);
     try sds_cat(raw, &" lib-name="[0: 10]);
     if lib_name.len > 0 {
         try sds_cat(raw, lib_name);
@@ -4858,6 +4867,7 @@ fn connection_client_registry_append_slot_info(raw: &Sds, slot_index: usize) !vo
         connection_client_registry[slot_index].client_name[0: connection_client_registry[slot_index].client_name_len],
         connection_client_registry[slot_index].client_lib_name[0: connection_client_registry[slot_index].client_lib_name_len],
         connection_client_registry[slot_index].client_lib_ver[0: connection_client_registry[slot_index].client_lib_ver_len],
+        connection_client_registry[slot_index].username[0: connection_client_registry[slot_index].username_len],
         connection_client_registry[slot_index].pubsub_count,
         connection_client_registry[slot_index].multi_active,
     );
@@ -5207,7 +5217,7 @@ fn connection_authenticate_named_user(tx: &ConnectionTransaction, username: &[by
     return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
 }
 
-fn connection_handle_auth(tx: &ConnectionTransaction, runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
+fn connection_handle_auth_state(tx: &ConnectionTransaction, runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
     if command.argc != 2 && command.argc != 3 {
         return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
     }
@@ -5268,6 +5278,12 @@ fn connection_handle_auth(tx: &ConnectionTransaction, runtime: &CommandRuntimeIn
     tx.authenticated = true;
     connection_set_authenticated_user(tx, &"default"[0: 7]);
     return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+}
+
+fn connection_handle_auth(tx: &ConnectionTransaction, runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
+    const reply: CommandReply = connection_handle_auth_state(tx, runtime, command);
+    connection_client_registry_sync(tx);
+    return reply;
 }
 
 fn connection_authenticate_username_password(tx: &ConnectionTransaction, runtime: &CommandRuntimeInfo, username: &[byte], password: &[byte]) CommandReply {
@@ -5606,6 +5622,7 @@ fn connection_client_info_reply(tx: &ConnectionTransaction) CommandReply {
         tx.client_name[0: tx.client_name_len],
         tx.client_lib_name[0: tx.client_lib_name_len],
         tx.client_lib_ver[0: tx.client_lib_ver_len],
+        connection_current_username(tx),
         tx.pubsub_count,
         tx.active,
     ) catch {
@@ -8431,6 +8448,7 @@ fn connection_handle_hello(tx: &ConnectionTransaction, runtime: &CommandRuntimeI
     }
     if has_auth {
         var auth_reply: CommandReply = connection_authenticate_username_password(tx, runtime, auth_username, auth_password);
+        connection_client_registry_sync(tx);
         if auth_reply.typ != CommandReplyType.reply_simple_string {
             return auth_reply;
         }

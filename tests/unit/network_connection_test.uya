@@ -1621,6 +1621,7 @@ export fn test_connection_process_client_commands() !void {
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"laddr=127.0.0.1:6380"[0: 20]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"fd=42"[0: 5]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"db=0"[0: 4]));
+    try assert_true(network_connection_contains(out[0: client_info.response_len], &"user=default"[0: 12]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"name=worker"[0: 11]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"lib-name=redis-uya-test"[0: 23]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"lib-ver=0.5.0"[0: 13]));
@@ -1640,11 +1641,13 @@ export fn test_connection_process_client_commands() !void {
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"laddr=127.0.0.1:6380"[0: 20]));
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"fd=42"[0: 5]));
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"db=0"[0: 4]));
+    try assert_true(network_connection_contains(out[0: client_list.response_len], &"user=default"[0: 12]));
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"name=worker"[0: 11]));
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"id=2"[0: 4]));
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"addr=127.0.0.1:50001"[0: 20]));
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"fd=43"[0: 5]));
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"db=0"[0: 4]));
+    try assert_true(network_connection_contains(out[0: client_list.response_len], &"user=default"[0: 12]));
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"name=peer2"[0: 10]));
 
     const client_list_id: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$4\r\nLIST\r\n$2\r\nID\r\n$1\r\n2\r\n"[0: 41], &out[0], 512, 1000u64);

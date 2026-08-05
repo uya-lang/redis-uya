@@ -190,6 +190,23 @@ def run_smoke() -> None:
                     raise AssertionError("CLIENT GETNAME did not return the stored name")
                 if send_command(peer_sock, b"CLIENT", b"SETNAME", b"peer-client") != "OK":
                     raise AssertionError("peer CLIENT SETNAME failed")
+                if (
+                    send_command(
+                        sock,
+                        b"ACL",
+                        b"SETUSER",
+                        b"peer-user",
+                        b"on",
+                        b">secret",
+                        b"~*",
+                        b"&*",
+                        b"+@all",
+                    )
+                    != "OK"
+                ):
+                    raise AssertionError("ACL SETUSER peer-user failed")
+                if send_command(peer_sock, b"AUTH", b"peer-user", b"secret") != "OK":
+                    raise AssertionError("peer named-user AUTH failed")
 
                 if send_command(sock, b"CLIENT", b"SETINFO", b"LIB-NAME", b"redis-uya-test") != "OK":
                     raise AssertionError("CLIENT SETINFO LIB-NAME failed")
@@ -215,6 +232,8 @@ def run_smoke() -> None:
                     raise AssertionError(f"CLIENT INFO returned invalid fd: {info!r}")
                 if info_fields.get(b"db") != b"0":
                     raise AssertionError(f"CLIENT INFO returned invalid db: {info!r}")
+                if info_fields.get(b"user") != b"default":
+                    raise AssertionError(f"CLIENT INFO returned invalid user: {info!r}")
 
                 listed = send_command(sock, b"CLIENT", b"LIST")
                 peer_addr = f"{peer_sock.getsockname()[0]}:{peer_sock.getsockname()[1]}".encode()
@@ -236,6 +255,8 @@ def run_smoke() -> None:
                     raise AssertionError(f"CLIENT LIST returned invalid peer fd: {peer_lines[0]!r}")
                 if peer_fields.get(b"db") != b"0":
                     raise AssertionError(f"CLIENT LIST returned invalid peer db: {peer_lines[0]!r}")
+                if peer_fields.get(b"user") != b"peer-user":
+                    raise AssertionError(f"CLIENT LIST returned invalid peer user: {peer_lines[0]!r}")
 
                 filtered_peer = send_command(sock, b"CLIENT", b"LIST", b"ID", str(peer_id).encode())
                 if (

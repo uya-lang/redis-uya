@@ -5022,7 +5022,7 @@ fn connection_client_elapsed_seconds(now_ms: u64, then_ms: u64) u64 {
     return (now_ms - then_ms) / 1000u64;
 }
 
-fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protocol_version: i32, fd: i32, created_ms: u64, last_interaction_ms: u64, now_ms: u64, command_name: &[byte], tracking_redirect_id: i64, addr: &[byte], local_addr: &[byte], name: &[byte], lib_name: &[byte], lib_ver: &[byte], username: &[byte], sub_count: usize, psub_count: usize, ssub_count: usize, query_buffer_len: usize, query_buffer_capacity: usize, output_buffer_len: usize, multi_count: i64, multi_memory: usize, total_memory: usize, monitoring: bool, blocking_active: bool, tracking_enabled: bool, tracking_bcast: bool, no_evict_enabled: bool, no_touch_enabled: bool) !void {
+fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protocol_version: i32, fd: i32, created_ms: u64, last_interaction_ms: u64, now_ms: u64, command_name: &[byte], tracking_redirect_id: i64, addr: &[byte], local_addr: &[byte], name: &[byte], lib_name: &[byte], lib_ver: &[byte], username: &[byte], sub_count: usize, psub_count: usize, ssub_count: usize, query_buffer_len: usize, query_buffer_capacity: usize, output_buffer_len: usize, multi_count: i64, multi_memory: usize, total_memory: usize, monitoring: bool, blocking_active: bool, tracking_enabled: bool, tracking_bcast: bool, watch_dirty: bool, no_evict_enabled: bool, no_touch_enabled: bool) !void {
     try sds_cat(raw, &"id="[0: 3]);
     try connection_sds_append_i64(raw, client_id);
     try sds_cat(raw, &" addr="[0: 6]);
@@ -5109,6 +5109,10 @@ fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protoc
         try sds_cat(raw, &"B"[0: 1]);
         has_flag = true;
     }
+    if watch_dirty {
+        try sds_cat(raw, &"d"[0: 1]);
+        has_flag = true;
+    }
     if no_evict_enabled {
         try sds_cat(raw, &"e"[0: 1]);
         has_flag = true;
@@ -5153,6 +5157,7 @@ fn connection_client_registry_append_slot_info(raw: &Sds, slot_index: usize, now
     var multi_memory: usize = 0;
     var total_memory: usize = 0;
     var tracking_bcast: bool = false;
+    var watch_dirty: bool = false;
     var no_evict_enabled: bool = false;
     var no_touch_enabled: bool = false;
     if connection_client_registry[slot_index].multi_active {
@@ -5169,6 +5174,9 @@ fn connection_client_registry_append_slot_info(raw: &Sds, slot_index: usize, now
             multi_memory = connection_transaction_multi_memory(tx);
             total_memory = connection_client_total_memory(tx);
             tracking_bcast = tx.tracking_bcast;
+            if tx.watched != null && tx.watch_engine != null {
+                watch_dirty = !connection_transaction_watches_match(tx, tx.watch_engine);
+            }
             no_evict_enabled = tx.no_evict_enabled;
             no_touch_enabled = tx.no_touch_enabled;
             if tx.active {
@@ -5214,6 +5222,7 @@ fn connection_client_registry_append_slot_info(raw: &Sds, slot_index: usize, now
         connection_client_registry[slot_index].blocking_active,
         connection_client_registry[slot_index].tracking_enabled,
         tracking_bcast,
+        watch_dirty,
         no_evict_enabled,
         no_touch_enabled,
     );
@@ -5998,6 +6007,7 @@ fn connection_client_info_reply(tx: &ConnectionTransaction, now_ms: u64) Command
         tx.blocking_active,
         tx.tracking_enabled,
         tx.tracking_bcast,
+        tx.watched != null && tx.watch_engine != null && !connection_transaction_watches_match(tx, tx.watch_engine),
         tx.no_evict_enabled,
         tx.no_touch_enabled,
     ) catch {

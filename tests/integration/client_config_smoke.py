@@ -392,6 +392,33 @@ def run_smoke() -> None:
                     raise AssertionError(f"peer transaction memory did not reset after DISCARD: {peer_after_discard!r}")
                 if peer_after_discard_fields.get(b"tot-mem") != str(peer_empty_total_memory).encode():
                     raise AssertionError(f"peer total memory did not reset after DISCARD: {peer_after_discard!r}")
+
+                if send_command(sock, b"WATCH", b"dirty-cas-key") != "OK":
+                    raise AssertionError("WATCH for dirty-CAS flag failed")
+                if send_command(peer_sock, b"SET", b"dirty-cas-key", b"changed") != "OK":
+                    raise AssertionError("peer mutation for dirty-CAS flag failed")
+                dirty_cas_info = send_command(sock, b"CLIENT", b"INFO")
+                dirty_cas_fields = dict(
+                    part.split(b"=", 1)
+                    for part in dirty_cas_info.strip().split()
+                    if b"=" in part
+                )
+                if dirty_cas_fields.get(b"flags") != b"d":
+                    raise AssertionError(f"CLIENT INFO did not expose dirty-CAS: {dirty_cas_info!r}")
+                dirty_cas_list = send_command(sock, b"CLIENT", b"LIST", b"ID", str(client_id).encode())
+                if b" flags=d " not in dirty_cas_list:
+                    raise AssertionError(f"CLIENT LIST did not expose dirty-CAS: {dirty_cas_list!r}")
+                if send_command(sock, b"UNWATCH") != "OK":
+                    raise AssertionError("UNWATCH after dirty-CAS flag failed")
+                dirty_cas_clean_info = send_command(sock, b"CLIENT", b"INFO")
+                dirty_cas_clean_fields = dict(
+                    part.split(b"=", 1)
+                    for part in dirty_cas_clean_info.strip().split()
+                    if b"=" in part
+                )
+                if dirty_cas_clean_fields.get(b"flags") != b"N":
+                    raise AssertionError(f"dirty-CAS flag did not clear after UNWATCH: {dirty_cas_clean_info!r}")
+
                 peer_config = send_command(peer_sock, b"CONFIG", b"GET", b"databases")
                 if not isinstance(peer_config, list):
                     raise AssertionError(f"peer CONFIG GET returned invalid reply: {peer_config!r}")

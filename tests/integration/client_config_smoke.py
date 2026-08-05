@@ -213,6 +213,8 @@ def run_smoke() -> None:
                 info_fields = dict(part.split(b"=", 1) for part in info.strip().split() if b"=" in part)
                 if not info_fields.get(b"fd", b"").isdigit() or int(info_fields[b"fd"]) <= 0:
                     raise AssertionError(f"CLIENT INFO returned invalid fd: {info!r}")
+                if info_fields.get(b"db") != b"0":
+                    raise AssertionError(f"CLIENT INFO returned invalid db: {info!r}")
 
                 listed = send_command(sock, b"CLIENT", b"LIST")
                 peer_addr = f"{peer_sock.getsockname()[0]}:{peer_sock.getsockname()[1]}".encode()
@@ -232,6 +234,8 @@ def run_smoke() -> None:
                 peer_fields = dict(part.split(b"=", 1) for part in peer_lines[0].split() if b"=" in part)
                 if not peer_fields.get(b"fd", b"").isdigit() or int(peer_fields[b"fd"]) <= 0:
                     raise AssertionError(f"CLIENT LIST returned invalid peer fd: {peer_lines[0]!r}")
+                if peer_fields.get(b"db") != b"0":
+                    raise AssertionError(f"CLIENT LIST returned invalid peer db: {peer_lines[0]!r}")
 
                 filtered_peer = send_command(sock, b"CLIENT", b"LIST", b"ID", str(peer_id).encode())
                 if (

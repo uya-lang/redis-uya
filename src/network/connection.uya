@@ -4827,6 +4827,7 @@ fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protoc
     } else {
         try sds_cat(raw, &"0"[0: 1]);
     }
+    try sds_cat(raw, &" db=0"[0: 5]);
     try sds_cat(raw, &" sub="[0: 5]);
     try connection_sds_append_u64(raw, sub_count as u64);
     try sds_cat(raw, &" lib-name="[0: 10]);

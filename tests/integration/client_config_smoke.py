@@ -382,6 +382,13 @@ def run_smoke() -> None:
                     if type_pubsub_fields.get(b"cmd") != b"subscribe":
                         raise AssertionError(f"PUBSUB client returned invalid command: {type_pubsub!r}")
 
+                    for replica_type in (b"MASTER", b"REPLICA", b"SLAVE"):
+                        replica_clients = send_command(sock, b"CLIENT", b"LIST", b"TYPE", replica_type)
+                        if replica_clients != b"":
+                            raise AssertionError(
+                                f"standalone CLIENT LIST TYPE {replica_type!r} should be empty: {replica_clients!r}"
+                            )
+
                     try:
                         send_command(sock, b"CLIENT", b"LIST", b"TYPE", b"bad")
                         raise AssertionError("invalid CLIENT LIST TYPE should fail")
@@ -400,7 +407,7 @@ def run_smoke() -> None:
                 if (
                     not isinstance(client_help, list)
                     or b"CLIENT REPLY <ON|OFF|SKIP>" not in client_help
-                    or b"CLIENT LIST [TYPE NORMAL|PUBSUB] | [ID <id> ...]" not in client_help
+                    or b"CLIENT LIST [TYPE NORMAL|MASTER|REPLICA|PUBSUB] | [ID <id> ...]" not in client_help
                     or b"CLIENT TRACKINGINFO" not in client_help
                 ):
                     raise AssertionError(f"unexpected CLIENT HELP: {client_help!r}")

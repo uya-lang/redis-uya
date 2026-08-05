@@ -5082,6 +5082,10 @@ fn connection_client_list_reply(command: &Command, now_ms: u64) CommandReply {
             want_pubsub = false;
         } else if connection_keyword_eq(client_type, &"PUBSUB"[0: 6]) {
             want_pubsub = true;
+        } else if connection_keyword_eq(client_type, &"MASTER"[0: 6]) ||
+            connection_keyword_eq(client_type, &"REPLICA"[0: 7]) ||
+            connection_keyword_eq(client_type, &"SLAVE"[0: 5]) {
+            return connection_bulk_reply_owned(raw.buf[0: raw.len]);
         } else {
             return connection_client_unknown_type_reply(client_type);
         }
@@ -5714,7 +5718,7 @@ fn connection_client_help_reply() CommandReply {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
-    _ = list_object_push_tail(reply_list, &"CLIENT LIST [TYPE NORMAL|PUBSUB] | [ID <id> ...]"[0: 48]) catch {
+    _ = list_object_push_tail(reply_list, &"CLIENT LIST [TYPE NORMAL|MASTER|REPLICA|PUBSUB] | [ID <id> ...]"[0: 63]) catch {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };

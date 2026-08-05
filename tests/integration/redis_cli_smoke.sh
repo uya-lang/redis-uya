@@ -1509,10 +1509,18 @@ if [[ "$CLIENT_CACHING_RESULT" != "OK" ]]; then
 fi
 
 CLIENT_HELP_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" client help)"
-if [[ "$CLIENT_HELP_RESULT" != *"CLIENT REPLY <ON|OFF|SKIP>"* || "$CLIENT_HELP_RESULT" != *"CLIENT LIST [TYPE NORMAL|PUBSUB] | [ID <id> ...]"* || "$CLIENT_HELP_RESULT" != *"CLIENT KILL [ID <id>] [ADDR <ip:port>] [SKIPME yes|no]"* || "$CLIENT_HELP_RESULT" != *"CLIENT TRACKINGINFO"* || "$CLIENT_HELP_RESULT" != *"CLIENT KILL <ip:port>"* ]]; then
+if [[ "$CLIENT_HELP_RESULT" != *"CLIENT REPLY <ON|OFF|SKIP>"* || "$CLIENT_HELP_RESULT" != *"CLIENT LIST [TYPE NORMAL|MASTER|REPLICA|PUBSUB] | [ID <id> ...]"* || "$CLIENT_HELP_RESULT" != *"CLIENT KILL [ID <id>] [ADDR <ip:port>] [SKIPME yes|no]"* || "$CLIENT_HELP_RESULT" != *"CLIENT TRACKINGINFO"* || "$CLIENT_HELP_RESULT" != *"CLIENT KILL <ip:port>"* ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected CLIENT HELP output, got '$CLIENT_HELP_RESULT'" >&2
     exit 1
 fi
+
+for CLIENT_REPLICA_TYPE in master replica slave; do
+    CLIENT_REPLICA_LIST_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" client list type "$CLIENT_REPLICA_TYPE")"
+    if [[ -n "$CLIENT_REPLICA_LIST_RESULT" ]]; then
+        echo "[FAIL] integration/redis_cli_smoke: expected empty CLIENT LIST TYPE $CLIENT_REPLICA_TYPE, got '$CLIENT_REPLICA_LIST_RESULT'" >&2
+        exit 1
+    fi
+done
 
 CLIENT_KILL_LEGACY_MISS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" client kill 127.0.0.1:1 2>&1 || true)"
 if [[ "$CLIENT_KILL_LEGACY_MISS_RESULT" != "ERR No such client" ]]; then

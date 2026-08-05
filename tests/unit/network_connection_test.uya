@@ -1547,7 +1547,7 @@ export fn test_connection_process_client_commands() !void {
     var client_help_out: [byte: 2048] = [];
     const client_help: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$4\r\nHELP\r\n"[0: 26], &client_help_out[0], 2048, 1000u64);
     try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT REPLY <ON|OFF|SKIP>"[0: 26]));
-    try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT LIST [TYPE NORMAL|PUBSUB] | [ID <id> ...]"[0: 48]));
+    try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT LIST [TYPE NORMAL|MASTER|REPLICA|PUBSUB] | [ID <id> ...]"[0: 63]));
     try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT KILL [ID <id>] [ADDR <ip:port>] [SKIPME yes|no]"[0: 54]));
     try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT TRACKINGINFO"[0: 19]));
 
@@ -1698,6 +1698,15 @@ export fn test_connection_process_client_commands() !void {
     try assert_true(network_connection_contains(out[0: client_list_type_pubsub.response_len], &"id=3 addr=127.0.0.1:50002"[0: 25]));
     try assert_true(network_connection_contains(out[0: client_list_type_pubsub.response_len], &"flags=P"[0: 7]));
     try assert_true(!network_connection_contains(out[0: client_list_type_pubsub.response_len], &"id=1 addr=127.0.0.1:50000"[0: 25]));
+
+    const client_list_type_master: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$4\r\nLIST\r\n$4\r\nTYPE\r\n$6\r\nMASTER\r\n"[0: 48], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_list_type_master.response_len], &"$0\r\n\r\n"[0: 6]));
+
+    const client_list_type_replica: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$4\r\nLIST\r\n$4\r\nTYPE\r\n$7\r\nREPLICA\r\n"[0: 49], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_list_type_replica.response_len], &"$0\r\n\r\n"[0: 6]));
+
+    const client_list_type_slave: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$4\r\nLIST\r\n$4\r\nTYPE\r\n$5\r\nSLAVE\r\n"[0: 47], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_list_type_slave.response_len], &"$0\r\n\r\n"[0: 6]));
 
     const client_list_type_bad: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$4\r\nLIST\r\n$4\r\nTYPE\r\n$3\r\nbad\r\n"[0: 45], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: client_list_type_bad.response_len], &"-ERR Unknown client type 'bad'\r\n"[0: 32]));

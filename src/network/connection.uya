@@ -181,6 +181,7 @@ const CONNECTION_CLIENT_REGISTRY_MAX: usize = 128;
 const CONNECTION_MONITOR_MAX_CLIENTS: usize = 64;
 const CONNECTION_BLOCKING_INPUT_CAP: usize = 8192;
 const CONNECTION_BLOCKING_OUTPUT_CAP: usize = 81920;
+const CONNECTION_CLIENT_REPLY_BUFFER_CAP: usize = CONNECTION_BLOCKING_OUTPUT_CAP;
 const CONNECTION_SCRIPT_CACHE_MAX: usize = 128;
 const CONNECTION_SCRIPT_SHA1_BYTES: usize = 20;
 const CONNECTION_SCRIPT_SHA1_HEX_BYTES: usize = 40;
@@ -4973,6 +4974,10 @@ fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protoc
     } else {
         try connection_sds_append_u64(raw, 0u64);
     }
+    try sds_cat(raw, &" rbs="[0: 5]);
+    try connection_sds_append_u64(raw, CONNECTION_CLIENT_REPLY_BUFFER_CAP as u64);
+    try sds_cat(raw, &" rbp="[0: 5]);
+    try connection_sds_append_u64(raw, CONNECTION_CLIENT_REPLY_BUFFER_CAP as u64);
     try sds_cat(raw, &" obl="[0: 5]);
     try connection_sds_append_u64(raw, output_buffer_len as u64);
     try sds_cat(raw, &" oll=0 omem=0"[0: 13]);

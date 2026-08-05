@@ -251,6 +251,8 @@ def run_smoke() -> None:
                     raise AssertionError(f"CLIENT INFO returned invalid subscription counts: {info!r}")
                 if info_fields.get(b"qbuf") != b"26" or info_fields.get(b"qbuf-free") != b"8166":
                     raise AssertionError(f"CLIENT INFO returned invalid query buffer usage: {info!r}")
+                if info_fields.get(b"rbs") != b"81920" or info_fields.get(b"rbp") != b"81920":
+                    raise AssertionError(f"CLIENT INFO returned invalid fixed reply buffer sizing: {info!r}")
                 if info_fields.get(b"obl") != b"0" or info_fields.get(b"oll") != b"0" or info_fields.get(b"omem") != b"0":
                     raise AssertionError(f"CLIENT INFO returned invalid output buffer usage: {info!r}")
                 if info_fields.get(b"events") != b"r":
@@ -423,6 +425,8 @@ def run_smoke() -> None:
                         raise AssertionError(f"PUBSUB client returned invalid subscription counts: {type_pubsub!r}")
                     if type_pubsub_fields.get(b"qbuf") != b"0" or type_pubsub_fields.get(b"qbuf-free") != b"8192":
                         raise AssertionError(f"PUBSUB client returned invalid query buffer usage: {type_pubsub!r}")
+                    if type_pubsub_fields.get(b"rbs") != b"81920" or type_pubsub_fields.get(b"rbp") != b"81920":
+                        raise AssertionError(f"PUBSUB client returned invalid fixed reply buffer sizing: {type_pubsub!r}")
                     if type_pubsub_fields.get(b"obl") != b"0" or type_pubsub_fields.get(b"oll") != b"0" or type_pubsub_fields.get(b"omem") != b"0":
                         raise AssertionError(f"PUBSUB client returned invalid output buffer usage: {type_pubsub!r}")
                     if type_pubsub_fields.get(b"events") != b"r":

@@ -1569,6 +1569,8 @@ export fn test_connection_process_client_commands() !void {
     const no_touch_on: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$6\r\nCLIENT\r\n$8\r\nNO-TOUCH\r\n$2\r\nON\r\n"[0: 38], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: no_touch_on.response_len], &"+OK\r\n"[0: 5]));
     try assert_eq_i32(tx.no_touch_enabled as i32, 1);
+    const no_touch_info: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$4\r\nINFO\r\n"[0: 26], &out[0], 512, 1000u64);
+    try assert_true(network_connection_contains(out[0: no_touch_info.response_len], &"flags=T"[0: 7]));
 
     const no_touch_off: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$6\r\nCLIENT\r\n$8\r\nNO-TOUCH\r\n$3\r\nOFF\r\n"[0: 39], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: no_touch_off.response_len], &"+OK\r\n"[0: 5]));
@@ -1606,6 +1608,8 @@ export fn test_connection_process_client_commands() !void {
     const no_evict_on: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$6\r\nCLIENT\r\n$8\r\nNO-EVICT\r\n$2\r\nON\r\n"[0: 38], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: no_evict_on.response_len], &"+OK\r\n"[0: 5]));
     try assert_eq_i32(tx.no_evict_enabled as i32, 1);
+    const no_evict_info: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$4\r\nINFO\r\n"[0: 26], &out[0], 512, 1000u64);
+    try assert_true(network_connection_contains(out[0: no_evict_info.response_len], &"flags=e"[0: 7]));
 
     const no_evict_off: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$6\r\nCLIENT\r\n$8\r\nNO-EVICT\r\n$3\r\nOFF\r\n"[0: 39], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: no_evict_off.response_len], &"+OK\r\n"[0: 5]));
@@ -1824,6 +1828,8 @@ export fn test_connection_process_client_commands() !void {
     try assert_true(network_connection_contains(out[0: tracking_prefix_info.response_len], &"bcast"[0: 5]));
     try assert_true(network_connection_contains(out[0: tracking_prefix_info.response_len], &"cache:"[0: 6]));
     try assert_true(network_connection_contains(out[0: tracking_prefix_info.response_len], &"user:"[0: 5]));
+    const tracking_prefix_client_info: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$4\r\nINFO\r\n"[0: 26], &out[0], 512, 1000u64);
+    try assert_true(network_connection_contains(out[0: tracking_prefix_client_info.response_len], &"flags=tB"[0: 8]));
 
     const tracking_prefix_off: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$6\r\nCLIENT\r\n$8\r\nTRACKING\r\n$3\r\nOFF\r\n"[0: 39], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: tracking_prefix_off.response_len], &"+OK\r\n"[0: 5]));

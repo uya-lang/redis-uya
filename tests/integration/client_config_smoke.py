@@ -602,6 +602,11 @@ def run_smoke() -> None:
                 tracking_prefix_total_memory = tracking_prefix_client_fields.get(b"tot-mem", b"")
                 if not tracking_prefix_total_memory.isdigit() or int(tracking_prefix_total_memory) <= info_total_memory:
                     raise AssertionError(f"tracking prefixes did not increase total memory: {tracking_prefix_client_info!r}")
+                if tracking_prefix_client_fields.get(b"flags") != b"tB":
+                    raise AssertionError(f"tracking BCAST flag was not visible: {tracking_prefix_client_info!r}")
+                tracking_prefix_client_list = send_command(sock, b"CLIENT", b"LIST", b"ID", str(client_id).encode())
+                if b" flags=tB " not in tracking_prefix_client_list:
+                    raise AssertionError(f"CLIENT LIST did not expose tracking BCAST: {tracking_prefix_client_list!r}")
                 if send_command(sock, b"CLIENT", b"TRACKING", b"OFF") != "OK":
                     raise AssertionError("CLIENT TRACKING OFF after prefixes failed")
                 tracking_prefix_off_info = send_command(sock, b"CLIENT", b"INFO")
@@ -644,6 +649,17 @@ def run_smoke() -> None:
 
                 if send_command(sock, b"CLIENT", b"NO-TOUCH", b"ON") != "OK":
                     raise AssertionError("CLIENT NO-TOUCH ON failed")
+                no_touch_info = send_command(sock, b"CLIENT", b"INFO")
+                no_touch_fields = dict(
+                    part.split(b"=", 1)
+                    for part in no_touch_info.strip().split()
+                    if b"=" in part
+                )
+                if no_touch_fields.get(b"flags") != b"T":
+                    raise AssertionError(f"CLIENT NO-TOUCH flag was not visible: {no_touch_info!r}")
+                no_touch_list = send_command(sock, b"CLIENT", b"LIST", b"ID", str(client_id).encode())
+                if b" flags=T " not in no_touch_list:
+                    raise AssertionError(f"CLIENT LIST did not expose NO-TOUCH: {no_touch_list!r}")
                 if send_command(sock, b"CLIENT", b"NO-TOUCH", b"OFF") != "OK":
                     raise AssertionError("CLIENT NO-TOUCH OFF failed")
                 try:
@@ -655,6 +671,17 @@ def run_smoke() -> None:
 
                 if send_command(sock, b"CLIENT", b"NO-EVICT", b"ON") != "OK":
                     raise AssertionError("CLIENT NO-EVICT ON failed")
+                no_evict_info = send_command(sock, b"CLIENT", b"INFO")
+                no_evict_fields = dict(
+                    part.split(b"=", 1)
+                    for part in no_evict_info.strip().split()
+                    if b"=" in part
+                )
+                if no_evict_fields.get(b"flags") != b"e":
+                    raise AssertionError(f"CLIENT NO-EVICT flag was not visible: {no_evict_info!r}")
+                no_evict_list = send_command(sock, b"CLIENT", b"LIST", b"ID", str(client_id).encode())
+                if b" flags=e " not in no_evict_list:
+                    raise AssertionError(f"CLIENT LIST did not expose NO-EVICT: {no_evict_list!r}")
                 if send_command(sock, b"CLIENT", b"NO-EVICT", b"OFF") != "OK":
                     raise AssertionError("CLIENT NO-EVICT OFF failed")
                 try:

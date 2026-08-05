@@ -4912,7 +4912,7 @@ fn connection_client_elapsed_seconds(now_ms: u64, then_ms: u64) u64 {
     return (now_ms - then_ms) / 1000u64;
 }
 
-fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protocol_version: i32, fd: i32, created_ms: u64, last_interaction_ms: u64, now_ms: u64, command_name: &[byte], tracking_redirect_id: i64, addr: &[byte], local_addr: &[byte], name: &[byte], lib_name: &[byte], lib_ver: &[byte], username: &[byte], sub_count: usize, multi_active: bool, monitoring: bool, blocking_active: bool, tracking_enabled: bool) !void {
+fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protocol_version: i32, fd: i32, created_ms: u64, last_interaction_ms: u64, now_ms: u64, command_name: &[byte], tracking_redirect_id: i64, addr: &[byte], local_addr: &[byte], name: &[byte], lib_name: &[byte], lib_ver: &[byte], username: &[byte], sub_count: usize, multi_count: i64, monitoring: bool, blocking_active: bool, tracking_enabled: bool) !void {
     try sds_cat(raw, &"id="[0: 3]);
     try connection_sds_append_i64(raw, client_id);
     try sds_cat(raw, &" addr="[0: 6]);
@@ -4936,11 +4936,7 @@ fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protoc
     try sds_cat(raw, &" resp="[0: 6]);
     try connection_sds_append_i64(raw, protocol_version as i64);
     try sds_cat(raw, &" multi="[0: 7]);
-    if multi_active {
-        try sds_cat(raw, &"1"[0: 1]);
-    } else {
-        try sds_cat(raw, &"0"[0: 1]);
-    }
+    try connection_sds_append_i64(raw, multi_count);
     try sds_cat(raw, &" db=0"[0: 5]);
     try sds_cat(raw, &" sub="[0: 5]);
     try connection_sds_append_u64(raw, sub_count as u64);
@@ -4958,7 +4954,7 @@ fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protoc
         try sds_cat(raw, &"P"[0: 1]);
         has_flag = true;
     }
-    if multi_active {
+    if multi_count >= 0 {
         try sds_cat(raw, &"x"[0: 1]);
         has_flag = true;
     }
@@ -4999,11 +4995,20 @@ fn connection_client_registry_append_slot_info(raw: &Sds, slot_index: usize, now
     }
     var command_name: &[byte] = connection_reply_empty_slice();
     var tracking_redirect_id: i64 = -1;
+    var multi_count: i64 = -1;
+    if connection_client_registry[slot_index].multi_active {
+        multi_count = 0;
+    }
     const tx_addr: usize = connection_client_registry[slot_index].tx_addr;
     if tx_addr != 0 as usize {
         const tx: &ConnectionTransaction = @ptr_from_usize(tx_addr) as &ConnectionTransaction;
         if tx != null {
             tracking_redirect_id = tx.tracking_redirect_id;
+            if tx.active {
+                multi_count = tx.queue_count as i64;
+            } else {
+                multi_count = -1;
+            }
             if tx.command_name_len <= CONNECTION_CLIENT_COMMAND_MAX {
                 command_name = tx.command_name[0: tx.command_name_len];
             }
@@ -5026,7 +5031,7 @@ fn connection_client_registry_append_slot_info(raw: &Sds, slot_index: usize, now
         connection_client_registry[slot_index].client_lib_ver[0: connection_client_registry[slot_index].client_lib_ver_len],
         connection_client_registry[slot_index].username[0: connection_client_registry[slot_index].username_len],
         connection_client_registry[slot_index].pubsub_count,
-        connection_client_registry[slot_index].multi_active,
+        multi_count,
         connection_client_registry[slot_index].monitoring,
         connection_client_registry[slot_index].blocking_active,
         connection_client_registry[slot_index].tracking_enabled,
@@ -5775,6 +5780,10 @@ fn connection_client_info_reply(tx: &ConnectionTransaction, now_ms: u64) Command
     defer {
         sds_free(&raw);
     }
+    var multi_count: i64 = -1;
+    if tx.active {
+        multi_count = tx.queue_count as i64;
+    }
 
     _ = connection_client_registry_append_info_line(
         &raw,
@@ -5793,7 +5802,7 @@ fn connection_client_info_reply(tx: &ConnectionTransaction, now_ms: u64) Command
         tx.client_lib_ver[0: tx.client_lib_ver_len],
         connection_current_username(tx),
         tx.pubsub_count,
-        tx.active,
+        multi_count,
         tx.monitoring,
         tx.blocking_active,
         tx.tracking_enabled,

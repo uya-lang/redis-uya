@@ -245,6 +245,8 @@ def run_smoke() -> None:
                     raise AssertionError(f"CLIENT INFO returned invalid command: {info!r}")
                 if info_fields.get(b"redir") != b"-1":
                     raise AssertionError(f"CLIENT INFO returned invalid default redirect: {info!r}")
+                if info_fields.get(b"multi") != b"-1":
+                    raise AssertionError(f"CLIENT INFO returned invalid transaction count: {info!r}")
                 if not info_fields.get(b"age", b"").isdigit() or int(info_fields[b"age"]) < 1:
                     raise AssertionError(f"CLIENT INFO returned invalid age: {info!r}")
                 if info_fields.get(b"idle") != b"0":
@@ -284,6 +286,8 @@ def run_smoke() -> None:
                     raise AssertionError(f"CLIENT LIST returned invalid peer command: {peer_lines[0]!r}")
                 if peer_fields.get(b"redir") != b"-1":
                     raise AssertionError(f"CLIENT LIST returned invalid peer redirect: {peer_lines[0]!r}")
+                if peer_fields.get(b"multi") != b"0":
+                    raise AssertionError(f"CLIENT LIST returned invalid empty transaction count: {peer_lines[0]!r}")
                 if not peer_fields.get(b"age", b"").isdigit() or int(peer_fields[b"age"]) < 1:
                     raise AssertionError(f"CLIENT LIST returned invalid peer age: {peer_lines[0]!r}")
                 if not peer_fields.get(b"idle", b"").isdigit() or int(peer_fields[b"idle"]) < 1:
@@ -329,6 +333,16 @@ def run_smoke() -> None:
 
                 if send_command(sock, b"CLIENT", b"LIST", b"ID", b"99999999") != b"":
                     raise AssertionError("missing CLIENT LIST ID should return an empty bulk string")
+                if send_command(peer_sock, b"PING") != "QUEUED":
+                    raise AssertionError("peer transaction PING was not queued")
+                peer_after_queue = send_command(sock, b"CLIENT", b"LIST", b"ID", str(peer_id).encode())
+                peer_after_queue_fields = dict(
+                    part.split(b"=", 1)
+                    for part in peer_after_queue.strip().split()
+                    if b"=" in part
+                )
+                if peer_after_queue_fields.get(b"multi") != b"1":
+                    raise AssertionError(f"peer queued transaction count was not visible: {peer_after_queue!r}")
                 if send_command(peer_sock, b"DISCARD") != "OK":
                     raise AssertionError("peer DISCARD failed")
                 peer_after_discard = send_command(sock, b"CLIENT", b"LIST", b"ID", str(peer_id).encode())
@@ -341,6 +355,8 @@ def run_smoke() -> None:
                     raise AssertionError(f"peer flags did not reset after DISCARD: {peer_after_discard!r}")
                 if peer_after_discard_fields.get(b"cmd") != b"discard":
                     raise AssertionError(f"peer command did not update after DISCARD: {peer_after_discard!r}")
+                if peer_after_discard_fields.get(b"multi") != b"-1":
+                    raise AssertionError(f"peer transaction count did not reset after DISCARD: {peer_after_discard!r}")
                 peer_config = send_command(peer_sock, b"CONFIG", b"GET", b"databases")
                 if not isinstance(peer_config, list):
                     raise AssertionError(f"peer CONFIG GET returned invalid reply: {peer_config!r}")

@@ -1640,6 +1640,7 @@ export fn test_connection_process_client_commands() !void {
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"qbuf=26"[0: 7]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"qbuf-free=8166"[0: 14]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"argv-mem=0"[0: 10]));
+    try assert_true(network_connection_contains(out[0: client_info.response_len], &"multi-mem=0"[0: 11]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"rbs=81920"[0: 9]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"rbp=81920"[0: 9]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"obl=4096"[0: 8]));
@@ -1682,6 +1683,7 @@ export fn test_connection_process_client_commands() !void {
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"flags=xt"[0: 8]));
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"cmd=multi"[0: 9]));
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"multi=0"[0: 7]));
+    try assert_true(network_connection_contains(out[0: client_list.response_len], &"multi-mem=0"[0: 11]));
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"age=8 idle=3"[0: 12]));
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"name=peer2"[0: 10]));
 
@@ -1693,10 +1695,12 @@ export fn test_connection_process_client_commands() !void {
     try assert_true(network_connection_slice_eq(out[0: second_queued_ping.response_len], &"+QUEUED\r\n"[0: 9]));
     const client_list_queued: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$4\r\nLIST\r\n$2\r\nID\r\n$1\r\n2\r\n"[0: 41], &out[0], 512, 1000u64);
     try assert_true(network_connection_contains(out[0: client_list_queued.response_len], &"multi=1"[0: 7]));
+    try assert_true(network_connection_contains(out[0: client_list_queued.response_len], &"multi-mem=14"[0: 12]));
     const second_discard: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx2, &"*1\r\n$7\r\nDISCARD\r\n"[0: 17], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: second_discard.response_len], &"+OK\r\n"[0: 5]));
     const client_list_discarded: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$4\r\nLIST\r\n$2\r\nID\r\n$1\r\n2\r\n"[0: 41], &out[0], 512, 1000u64);
     try assert_true(network_connection_contains(out[0: client_list_discarded.response_len], &"multi=-1"[0: 8]));
+    try assert_true(network_connection_contains(out[0: client_list_discarded.response_len], &"multi-mem=0"[0: 11]));
 
     const client_list_ids: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*5\r\n$6\r\nCLIENT\r\n$4\r\nLIST\r\n$2\r\nID\r\n$1\r\n2\r\n$1\r\n1\r\n"[0: 48], &out[0], 1024, 1000u64);
     try assert_true(network_connection_contains(out[0: client_list_ids.response_len], &"id=2 addr=127.0.0.1:50001"[0: 25]));

@@ -253,6 +253,8 @@ def run_smoke() -> None:
                     raise AssertionError(f"CLIENT INFO returned invalid query buffer usage: {info!r}")
                 if info_fields.get(b"argv-mem") != b"0":
                     raise AssertionError(f"CLIENT INFO returned invalid argument memory usage: {info!r}")
+                if info_fields.get(b"multi-mem") != b"0":
+                    raise AssertionError(f"CLIENT INFO returned invalid transaction memory usage: {info!r}")
                 if info_fields.get(b"rbs") != b"81920" or info_fields.get(b"rbp") != b"81920":
                     raise AssertionError(f"CLIENT INFO returned invalid fixed reply buffer sizing: {info!r}")
                 if info_fields.get(b"obl") != b"0" or info_fields.get(b"oll") != b"0" or info_fields.get(b"omem") != b"0":
@@ -300,6 +302,8 @@ def run_smoke() -> None:
                     raise AssertionError(f"CLIENT LIST returned invalid peer redirect: {peer_lines[0]!r}")
                 if peer_fields.get(b"multi") != b"0":
                     raise AssertionError(f"CLIENT LIST returned invalid empty transaction count: {peer_lines[0]!r}")
+                if peer_fields.get(b"multi-mem") != b"0":
+                    raise AssertionError(f"CLIENT LIST returned invalid empty transaction memory: {peer_lines[0]!r}")
                 if not peer_fields.get(b"age", b"").isdigit() or int(peer_fields[b"age"]) < 1:
                     raise AssertionError(f"CLIENT LIST returned invalid peer age: {peer_lines[0]!r}")
                 if not peer_fields.get(b"idle", b"").isdigit() or int(peer_fields[b"idle"]) < 1:
@@ -355,6 +359,8 @@ def run_smoke() -> None:
                 )
                 if peer_after_queue_fields.get(b"multi") != b"1":
                     raise AssertionError(f"peer queued transaction count was not visible: {peer_after_queue!r}")
+                if peer_after_queue_fields.get(b"multi-mem") != b"14":
+                    raise AssertionError(f"peer queued transaction memory was not visible: {peer_after_queue!r}")
                 if send_command(peer_sock, b"DISCARD") != "OK":
                     raise AssertionError("peer DISCARD failed")
                 peer_after_discard = send_command(sock, b"CLIENT", b"LIST", b"ID", str(peer_id).encode())
@@ -369,6 +375,8 @@ def run_smoke() -> None:
                     raise AssertionError(f"peer command did not update after DISCARD: {peer_after_discard!r}")
                 if peer_after_discard_fields.get(b"multi") != b"-1":
                     raise AssertionError(f"peer transaction count did not reset after DISCARD: {peer_after_discard!r}")
+                if peer_after_discard_fields.get(b"multi-mem") != b"0":
+                    raise AssertionError(f"peer transaction memory did not reset after DISCARD: {peer_after_discard!r}")
                 peer_config = send_command(peer_sock, b"CONFIG", b"GET", b"databases")
                 if not isinstance(peer_config, list):
                     raise AssertionError(f"peer CONFIG GET returned invalid reply: {peer_config!r}")
@@ -429,6 +437,8 @@ def run_smoke() -> None:
                         raise AssertionError(f"PUBSUB client returned invalid query buffer usage: {type_pubsub!r}")
                     if type_pubsub_fields.get(b"argv-mem") != b"0":
                         raise AssertionError(f"PUBSUB client returned invalid argument memory usage: {type_pubsub!r}")
+                    if type_pubsub_fields.get(b"multi-mem") != b"0":
+                        raise AssertionError(f"PUBSUB client returned invalid transaction memory usage: {type_pubsub!r}")
                     if type_pubsub_fields.get(b"rbs") != b"81920" or type_pubsub_fields.get(b"rbp") != b"81920":
                         raise AssertionError(f"PUBSUB client returned invalid fixed reply buffer sizing: {type_pubsub!r}")
                     if type_pubsub_fields.get(b"obl") != b"0" or type_pubsub_fields.get(b"oll") != b"0" or type_pubsub_fields.get(b"omem") != b"0":

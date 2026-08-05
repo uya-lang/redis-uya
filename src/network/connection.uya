@@ -55,6 +55,7 @@ use src.storage.dict.dict_bucket_layout_size;
 use src.storage.dict.dict_entry_layout_size;
 use src.storage.dict.dict_iter_new;
 use src.storage.dict.dict_iter_next;
+use src.storage.dict.dict_len;
 use src.storage.object.ListNode;
 use src.storage.object.ObjectType;
 use src.storage.object.RedisObject;
@@ -5022,7 +5023,7 @@ fn connection_client_elapsed_seconds(now_ms: u64, then_ms: u64) u64 {
     return (now_ms - then_ms) / 1000u64;
 }
 
-fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protocol_version: i32, fd: i32, created_ms: u64, last_interaction_ms: u64, now_ms: u64, command_name: &[byte], tracking_redirect_id: i64, addr: &[byte], local_addr: &[byte], name: &[byte], lib_name: &[byte], lib_ver: &[byte], username: &[byte], sub_count: usize, psub_count: usize, ssub_count: usize, query_buffer_len: usize, query_buffer_capacity: usize, output_buffer_len: usize, multi_count: i64, multi_memory: usize, total_memory: usize, monitoring: bool, blocking_active: bool, tracking_enabled: bool, tracking_bcast: bool, watch_dirty: bool, no_evict_enabled: bool, no_touch_enabled: bool) !void {
+fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protocol_version: i32, fd: i32, created_ms: u64, last_interaction_ms: u64, now_ms: u64, command_name: &[byte], tracking_redirect_id: i64, addr: &[byte], local_addr: &[byte], name: &[byte], lib_name: &[byte], lib_ver: &[byte], username: &[byte], sub_count: usize, psub_count: usize, ssub_count: usize, query_buffer_len: usize, query_buffer_capacity: usize, output_buffer_len: usize, multi_count: i64, watch_count: usize, multi_memory: usize, total_memory: usize, monitoring: bool, blocking_active: bool, tracking_enabled: bool, tracking_bcast: bool, watch_dirty: bool, no_evict_enabled: bool, no_touch_enabled: bool) !void {
     try sds_cat(raw, &"id="[0: 3]);
     try connection_sds_append_i64(raw, client_id);
     try sds_cat(raw, &" addr="[0: 6]);
@@ -5047,6 +5048,8 @@ fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protoc
     try connection_sds_append_i64(raw, protocol_version as i64);
     try sds_cat(raw, &" multi="[0: 7]);
     try connection_sds_append_i64(raw, multi_count);
+    try sds_cat(raw, &" watch="[0: 7]);
+    try connection_sds_append_u64(raw, watch_count as u64);
     try sds_cat(raw, &" db=0"[0: 5]);
     try sds_cat(raw, &" sub="[0: 5]);
     try connection_sds_append_u64(raw, sub_count as u64);
@@ -5154,6 +5157,7 @@ fn connection_client_registry_append_slot_info(raw: &Sds, slot_index: usize, now
     var query_buffer_len: usize = 0;
     var query_buffer_capacity: usize = 0;
     var output_buffer_len: usize = 0;
+    var watch_count: usize = 0;
     var multi_memory: usize = 0;
     var total_memory: usize = 0;
     var tracking_bcast: bool = false;
@@ -5171,6 +5175,9 @@ fn connection_client_registry_append_slot_info(raw: &Sds, slot_index: usize, now
             query_buffer_len = tx.query_buffer_len;
             query_buffer_capacity = tx.query_buffer_capacity;
             output_buffer_len = tx.output_buffer_len;
+            if tx.watched != null {
+                watch_count = dict_len(&tx.watched.hash_dict);
+            }
             multi_memory = connection_transaction_multi_memory(tx);
             total_memory = connection_client_total_memory(tx);
             tracking_bcast = tx.tracking_bcast;
@@ -5216,6 +5223,7 @@ fn connection_client_registry_append_slot_info(raw: &Sds, slot_index: usize, now
         query_buffer_capacity,
         output_buffer_len,
         multi_count,
+        watch_count,
         multi_memory,
         total_memory,
         connection_client_registry[slot_index].monitoring,
@@ -5974,6 +5982,10 @@ fn connection_client_info_reply(tx: &ConnectionTransaction, now_ms: u64) Command
     if tx.active {
         multi_count = tx.queue_count as i64;
     }
+    var watch_count: usize = 0;
+    if tx.watched != null {
+        watch_count = dict_len(&tx.watched.hash_dict);
+    }
     const sub_count: usize = connection_pubsub_count_fd_kind(tx.client_fd, false, false);
     const psub_count: usize = connection_pubsub_count_fd_kind(tx.client_fd, true, false);
     const ssub_count: usize = connection_pubsub_count_fd_kind(tx.client_fd, false, true);
@@ -6001,6 +6013,7 @@ fn connection_client_info_reply(tx: &ConnectionTransaction, now_ms: u64) Command
         tx.query_buffer_capacity,
         tx.output_buffer_len,
         multi_count,
+        watch_count,
         connection_transaction_multi_memory(tx),
         connection_client_total_memory(tx),
         tx.monitoring,

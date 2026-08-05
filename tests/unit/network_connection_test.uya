@@ -1385,11 +1385,16 @@ export fn test_connection_process_watch_unwatch() !void {
     try assert_true(network_connection_slice_eq(out[0: watch.response_len], &"+OK\r\n"[0: 5]));
     try assert_eq_i32(engine_watch_client_count(&engine) as i32, 1);
 
+    const watch_duplicate_and_second: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$5\r\nWATCH\r\n$7\r\nwatched\r\n$11\r\nwatched-two\r\n"[0: 46], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: watch_duplicate_and_second.response_len], &"+OK\r\n"[0: 5]));
+    try assert_eq_i32(engine_watch_client_count(&engine) as i32, 1);
+
     const outside_set: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$3\r\nSET\r\n$7\r\nwatched\r\n$7\r\noutside\r\n"[0: 41], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: outside_set.response_len], &"+OK\r\n"[0: 5]));
 
     const dirty_info: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$4\r\nINFO\r\n"[0: 26], &out[0], 512, 1000u64);
     try assert_true(network_connection_contains(out[0: dirty_info.response_len], &"flags=d"[0: 7]));
+    try assert_true(network_connection_contains(out[0: dirty_info.response_len], &"watch=2"[0: 7]));
 
     const multi: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$5\r\nMULTI\r\n"[0: 15], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: multi.response_len], &"+OK\r\n"[0: 5]));
@@ -1406,6 +1411,7 @@ export fn test_connection_process_watch_unwatch() !void {
 
     const clean_info: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$4\r\nINFO\r\n"[0: 26], &out[0], 512, 1000u64);
     try assert_true(network_connection_contains(out[0: clean_info.response_len], &"flags=N"[0: 7]));
+    try assert_true(network_connection_contains(out[0: clean_info.response_len], &"watch=0"[0: 7]));
 
     const get_outside: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*2\r\n$3\r\nGET\r\n$7\r\nwatched\r\n"[0: 26], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: get_outside.response_len], &"$7\r\noutside\r\n"[0: 13]));

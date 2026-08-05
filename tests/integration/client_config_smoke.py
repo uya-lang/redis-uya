@@ -405,9 +405,13 @@ def run_smoke() -> None:
                 )
                 if dirty_cas_fields.get(b"flags") != b"d":
                     raise AssertionError(f"CLIENT INFO did not expose dirty-CAS: {dirty_cas_info!r}")
+                if dirty_cas_fields.get(b"watch") != b"1":
+                    raise AssertionError(f"CLIENT INFO did not expose WATCH count: {dirty_cas_info!r}")
                 dirty_cas_list = send_command(sock, b"CLIENT", b"LIST", b"ID", str(client_id).encode())
                 if b" flags=d " not in dirty_cas_list:
                     raise AssertionError(f"CLIENT LIST did not expose dirty-CAS: {dirty_cas_list!r}")
+                if b" watch=1 " not in dirty_cas_list:
+                    raise AssertionError(f"CLIENT LIST did not expose WATCH count: {dirty_cas_list!r}")
                 if send_command(sock, b"UNWATCH") != "OK":
                     raise AssertionError("UNWATCH after dirty-CAS flag failed")
                 dirty_cas_clean_info = send_command(sock, b"CLIENT", b"INFO")
@@ -418,6 +422,8 @@ def run_smoke() -> None:
                 )
                 if dirty_cas_clean_fields.get(b"flags") != b"N":
                     raise AssertionError(f"dirty-CAS flag did not clear after UNWATCH: {dirty_cas_clean_info!r}")
+                if dirty_cas_clean_fields.get(b"watch") != b"0":
+                    raise AssertionError(f"WATCH count did not clear after UNWATCH: {dirty_cas_clean_info!r}")
 
                 peer_config = send_command(peer_sock, b"CONFIG", b"GET", b"databases")
                 if not isinstance(peer_config, list):

@@ -21,6 +21,7 @@ use src.network.connection.connection_client_registry_client_id;
 use src.network.connection.connection_client_registry_sync;
 use src.network.connection.connection_transaction_set_client_addresses;
 use src.network.connection.connection_transaction_set_client_times;
+use src.network.connection.connection_transaction_set_query_buffer;
 use src.network.connection.connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_zero_copy_at;
 use src.network.connection.connection_encode_client_unblock_error_reply;
 use src.network.connection.connection_encode_client_unblock_timeout_reply;
@@ -298,6 +299,7 @@ fn server_buffered_client_removed(server: &RedisServer) void {
 fn server_client_shift_input(server: &RedisServer, client: &RedisClient, consumed: usize) void {
     const had_input: bool = client.input_len > 0;
     connection_shift_buffer(&client.input[0], &client.input_len, consumed);
+    connection_transaction_set_query_buffer(&client.transaction, client.input_len, SERVER_INPUT_CAP);
     if had_input && client.input_len == 0 {
         server_buffered_client_removed(server);
     }
@@ -1554,6 +1556,7 @@ fn server_async_writev_all_future(
             var rewrite_failed: bool = false;
             var incomplete: bool = false;
             client.close_after_write = false;
+            connection_transaction_set_query_buffer(&client.transaction, client.input_len, SERVER_INPUT_CAP);
 
             const result_value: !ConnectionProcessResult = connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_zero_copy_at(
                 &server.engine,
@@ -2180,6 +2183,7 @@ export fn server_accept_once(server: &RedisServer) !void {
     server.clients[slot].last_interaction_ms = server.event_time_ms;
     server.clients[slot].transaction = connection_transaction_new();
     server.clients[slot].transaction.client_fd = fd;
+    connection_transaction_set_query_buffer(&server.clients[slot].transaction, 0, SERVER_INPUT_CAP);
     connection_transaction_set_client_addresses(
         &server.clients[slot].transaction,
         peer_addr[0: peer_addr_len],

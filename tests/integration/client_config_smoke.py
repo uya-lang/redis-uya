@@ -249,6 +249,8 @@ def run_smoke() -> None:
                     raise AssertionError(f"CLIENT INFO returned invalid transaction count: {info!r}")
                 if info_fields.get(b"sub") != b"0" or info_fields.get(b"psub") != b"0" or info_fields.get(b"ssub") != b"0":
                     raise AssertionError(f"CLIENT INFO returned invalid subscription counts: {info!r}")
+                if info_fields.get(b"qbuf") != b"26" or info_fields.get(b"qbuf-free") != b"8166":
+                    raise AssertionError(f"CLIENT INFO returned invalid query buffer usage: {info!r}")
                 if not info_fields.get(b"age", b"").isdigit() or int(info_fields[b"age"]) < 1:
                     raise AssertionError(f"CLIENT INFO returned invalid age: {info!r}")
                 if info_fields.get(b"idle") != b"0":
@@ -415,6 +417,8 @@ def run_smoke() -> None:
                         or type_pubsub_fields.get(b"ssub") != b"1"
                     ):
                         raise AssertionError(f"PUBSUB client returned invalid subscription counts: {type_pubsub!r}")
+                    if type_pubsub_fields.get(b"qbuf") != b"0" or type_pubsub_fields.get(b"qbuf-free") != b"8192":
+                        raise AssertionError(f"PUBSUB client returned invalid query buffer usage: {type_pubsub!r}")
 
                     for replica_type in (b"MASTER", b"REPLICA", b"SLAVE"):
                         replica_clients = send_command(sock, b"CLIENT", b"LIST", b"TYPE", replica_type)

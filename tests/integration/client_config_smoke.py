@@ -211,6 +211,7 @@ def run_smoke() -> None:
                     raise AssertionError("peer CLIENT TRACKING ON failed")
                 if send_command(peer_sock, b"MULTI") != "OK":
                     raise AssertionError("peer MULTI failed")
+                time.sleep(1.05)
 
                 if send_command(sock, b"CLIENT", b"SETINFO", b"LIB-NAME", b"redis-uya-test") != "OK":
                     raise AssertionError("CLIENT SETINFO LIB-NAME failed")
@@ -240,6 +241,10 @@ def run_smoke() -> None:
                     raise AssertionError(f"CLIENT INFO returned invalid user: {info!r}")
                 if info_fields.get(b"flags") != b"N":
                     raise AssertionError(f"CLIENT INFO returned invalid flags: {info!r}")
+                if not info_fields.get(b"age", b"").isdigit() or int(info_fields[b"age"]) < 1:
+                    raise AssertionError(f"CLIENT INFO returned invalid age: {info!r}")
+                if info_fields.get(b"idle") != b"0":
+                    raise AssertionError(f"CLIENT INFO returned invalid idle: {info!r}")
 
                 listed = send_command(sock, b"CLIENT", b"LIST")
                 peer_addr = f"{peer_sock.getsockname()[0]}:{peer_sock.getsockname()[1]}".encode()
@@ -265,6 +270,10 @@ def run_smoke() -> None:
                     raise AssertionError(f"CLIENT LIST returned invalid peer user: {peer_lines[0]!r}")
                 if peer_fields.get(b"flags") != b"xt":
                     raise AssertionError(f"CLIENT LIST returned invalid peer flags: {peer_lines[0]!r}")
+                if not peer_fields.get(b"age", b"").isdigit() or int(peer_fields[b"age"]) < 1:
+                    raise AssertionError(f"CLIENT LIST returned invalid peer age: {peer_lines[0]!r}")
+                if not peer_fields.get(b"idle", b"").isdigit() or int(peer_fields[b"idle"]) < 1:
+                    raise AssertionError(f"CLIENT LIST returned invalid peer idle: {peer_lines[0]!r}")
 
                 filtered_peer = send_command(sock, b"CLIENT", b"LIST", b"ID", str(peer_id).encode())
                 if (

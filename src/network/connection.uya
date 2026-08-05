@@ -125,6 +125,8 @@ export struct ConnectionTransaction {
     watch_engine: &Engine,
     protocol_version: i32,
     client_fd: i32,
+    created_ms: u64,
+    last_interaction_ms: u64,
     client_addr_len: usize,
     client_addr: [byte: CONNECTION_CLIENT_ADDR_MAX],
     client_local_addr_len: usize,
@@ -212,6 +214,8 @@ struct ConnectionClientRegistryEntry {
     client_id: i64,
     fd: i32,
     protocol_version: i32,
+    created_ms: u64,
+    last_interaction_ms: u64,
     client_addr_len: usize,
     client_addr: [byte: CONNECTION_CLIENT_ADDR_MAX],
     client_local_addr_len: usize,
@@ -390,6 +394,8 @@ fn connection_transaction_empty() ConnectionTransaction {
         watch_engine: null as &Engine,
         protocol_version: 2,
         client_fd: -1,
+        created_ms: 0u64,
+        last_interaction_ms: 0u64,
         client_addr_len: 0,
         client_addr: [],
         client_local_addr_len: 0,
@@ -4704,12 +4710,23 @@ export fn connection_transaction_set_client_addresses(tx: &ConnectionTransaction
     connection_client_registry_sync(tx);
 }
 
+export fn connection_transaction_set_client_times(tx: &ConnectionTransaction, created_ms: u64, last_interaction_ms: u64) void {
+    if tx == null {
+        return;
+    }
+    tx.created_ms = created_ms;
+    tx.last_interaction_ms = last_interaction_ms;
+    connection_client_registry_sync(tx);
+}
+
 fn connection_client_registry_clear_slot(slot: &ConnectionClientRegistryEntry) void {
     slot.active = false;
     slot.tx_addr = 0 as usize;
     slot.client_id = 0;
     slot.fd = -1;
     slot.protocol_version = 2;
+    slot.created_ms = 0u64;
+    slot.last_interaction_ms = 0u64;
     slot.client_addr_len = 0;
     slot.client_local_addr_len = 0;
     slot.client_name_len = 0;
@@ -4788,6 +4805,8 @@ export fn connection_client_registry_sync(tx: &ConnectionTransaction) void {
     slot.tx_addr = tx_addr;
     slot.fd = tx.client_fd;
     slot.protocol_version = tx.protocol_version;
+    slot.created_ms = tx.created_ms;
+    slot.last_interaction_ms = tx.last_interaction_ms;
     slot.client_addr_len = tx.client_addr_len;
     if slot.client_addr_len > CONNECTION_CLIENT_ADDR_MAX {
         slot.client_addr_len = CONNECTION_CLIENT_ADDR_MAX;
@@ -4819,7 +4838,14 @@ fn connection_acl_log_client_id(tx: &ConnectionTransaction) i64 {
     return connection_client_id(tx);
 }
 
-fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protocol_version: i32, fd: i32, addr: &[byte], local_addr: &[byte], name: &[byte], lib_name: &[byte], lib_ver: &[byte], username: &[byte], sub_count: usize, multi_active: bool, monitoring: bool, blocking_active: bool, tracking_enabled: bool) !void {
+fn connection_client_elapsed_seconds(now_ms: u64, then_ms: u64) u64 {
+    if then_ms == 0u64 || now_ms < then_ms {
+        return 0u64;
+    }
+    return (now_ms - then_ms) / 1000u64;
+}
+
+fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protocol_version: i32, fd: i32, created_ms: u64, last_interaction_ms: u64, now_ms: u64, addr: &[byte], local_addr: &[byte], name: &[byte], lib_name: &[byte], lib_ver: &[byte], username: &[byte], sub_count: usize, multi_active: bool, monitoring: bool, blocking_active: bool, tracking_enabled: bool) !void {
     try sds_cat(raw, &"id="[0: 3]);
     try connection_sds_append_i64(raw, client_id);
     try sds_cat(raw, &" addr="[0: 6]);
@@ -4836,6 +4862,10 @@ fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protoc
     if name.len > 0 {
         try sds_cat(raw, name);
     }
+    try sds_cat(raw, &" age="[0: 5]);
+    try connection_sds_append_u64(raw, connection_client_elapsed_seconds(now_ms, created_ms));
+    try sds_cat(raw, &" idle="[0: 6]);
+    try connection_sds_append_u64(raw, connection_client_elapsed_seconds(now_ms, last_interaction_ms));
     try sds_cat(raw, &" resp="[0: 6]);
     try connection_sds_append_i64(raw, protocol_version as i64);
     try sds_cat(raw, &" multi="[0: 7]);
@@ -4885,7 +4915,7 @@ fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protoc
     try sds_cat(raw, &"\r\n"[0: 2]);
 }
 
-fn connection_client_registry_append_slot_info(raw: &Sds, slot_index: usize) !void {
+fn connection_client_registry_append_slot_info(raw: &Sds, slot_index: usize, now_ms: u64) !void {
     if slot_index >= CONNECTION_CLIENT_REGISTRY_MAX {
         return;
     }
@@ -4897,6 +4927,9 @@ fn connection_client_registry_append_slot_info(raw: &Sds, slot_index: usize) !vo
         connection_client_registry[slot_index].client_id,
         connection_client_registry[slot_index].protocol_version,
         connection_client_registry[slot_index].fd,
+        connection_client_registry[slot_index].created_ms,
+        connection_client_registry[slot_index].last_interaction_ms,
+        now_ms,
         connection_client_registry[slot_index].client_addr[0: connection_client_registry[slot_index].client_addr_len],
         connection_client_registry[slot_index].client_local_addr[0: connection_client_registry[slot_index].client_local_addr_len],
         connection_client_registry[slot_index].client_name[0: connection_client_registry[slot_index].client_name_len],
@@ -4930,7 +4963,7 @@ fn connection_client_unknown_type_reply(client_type: &[byte]) CommandReply {
     return connection_owned_error(raw.buf[0: raw.len]);
 }
 
-fn connection_client_list_reply(command: &Command) CommandReply {
+fn connection_client_list_reply(command: &Command, now_ms: u64) CommandReply {
     var raw: Sds = sds_empty() catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
@@ -4941,7 +4974,7 @@ fn connection_client_list_reply(command: &Command) CommandReply {
     if command.argc == 2 {
         var i: usize = 0;
         while i < CONNECTION_CLIENT_REGISTRY_MAX {
-            _ = connection_client_registry_append_slot_info(&raw, i) catch {
+            _ = connection_client_registry_append_slot_info(&raw, i, now_ms) catch {
                 return connection_error_reply(&"ERR out of memory"[0: 17]);
             };
             i = i + 1;
@@ -4974,7 +5007,7 @@ fn connection_client_list_reply(command: &Command) CommandReply {
         while type_index < CONNECTION_CLIENT_REGISTRY_MAX {
             if connection_client_registry[type_index].active &&
                 ((connection_client_registry[type_index].pubsub_count > 0) == want_pubsub) {
-                _ = connection_client_registry_append_slot_info(&raw, type_index) catch {
+                _ = connection_client_registry_append_slot_info(&raw, type_index, now_ms) catch {
                     return connection_error_reply(&"ERR out of memory"[0: 17]);
                 };
             }
@@ -5001,7 +5034,7 @@ fn connection_client_list_reply(command: &Command) CommandReply {
         if slot_index >= 0 && slot_index < CONNECTION_CLIENT_REGISTRY_MAX as i32 {
             const slot_usize: usize = slot_index as usize;
             if slot_usize < CONNECTION_CLIENT_REGISTRY_MAX {
-                _ = connection_client_registry_append_slot_info(&raw, slot_usize) catch {
+                _ = connection_client_registry_append_slot_info(&raw, slot_usize, now_ms) catch {
                     return connection_error_reply(&"ERR out of memory"[0: 17]);
                 };
             }
@@ -5642,7 +5675,7 @@ fn connection_client_help_reply() CommandReply {
     return connection_array_reply_owned(reply_list, 18);
 }
 
-fn connection_client_info_reply(tx: &ConnectionTransaction) CommandReply {
+fn connection_client_info_reply(tx: &ConnectionTransaction, now_ms: u64) CommandReply {
     var raw: Sds = sds_empty() catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
@@ -5655,6 +5688,9 @@ fn connection_client_info_reply(tx: &ConnectionTransaction) CommandReply {
         connection_client_id(tx),
         tx.protocol_version,
         tx.client_fd,
+        tx.created_ms,
+        tx.last_interaction_ms,
+        now_ms,
         tx.client_addr[0: tx.client_addr_len],
         tx.client_local_addr[0: tx.client_local_addr_len],
         tx.client_name[0: tx.client_name_len],
@@ -5947,10 +5983,10 @@ fn connection_handle_client(tx: &ConnectionTransaction, command: &Command, now_m
         if command.argc != 2 {
             return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
         }
-        return connection_client_info_reply(tx);
+        return connection_client_info_reply(tx, now_ms);
     }
     if connection_keyword_eq(subcommand, &"LIST"[0: 4]) {
-        return connection_client_list_reply(command);
+        return connection_client_list_reply(command, now_ms);
     }
     if connection_keyword_eq(subcommand, &"KILL"[0: 4]) {
         if command.argc == 3 {

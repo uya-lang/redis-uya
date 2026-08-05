@@ -22,6 +22,7 @@ use src.network.connection.connection_client_registry_reset_for_test;
 use src.network.connection.connection_transaction_new;
 use src.network.connection.connection_transaction_reset;
 use src.network.connection.connection_transaction_set_client_addresses;
+use src.network.connection.connection_transaction_set_client_times;
 use src.network.connection.connection_pubsub_reset_for_test;
 use src.network.connection.connection_monitor_reset_for_test;
 use src.config.MaxmemoryPolicy;
@@ -1614,8 +1615,9 @@ export fn test_connection_process_client_commands() !void {
 
     const set_lib_ver: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$7\r\nSETINFO\r\n$7\r\nLIB-VER\r\n$5\r\n0.5.0\r\n"[0: 53], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: set_lib_ver.response_len], &"+OK\r\n"[0: 5]));
+    connection_transaction_set_client_times(&tx, 1000u64, 10000u64);
 
-    const client_info: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$4\r\nINFO\r\n"[0: 26], &out[0], 512, 1000u64);
+    const client_info: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$4\r\nINFO\r\n"[0: 26], &out[0], 512, 10000u64);
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"id=1"[0: 4]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"addr=127.0.0.1:50000"[0: 20]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"laddr=127.0.0.1:6380"[0: 20]));
@@ -1623,6 +1625,7 @@ export fn test_connection_process_client_commands() !void {
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"db=0"[0: 4]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"user=default"[0: 12]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"flags=N"[0: 7]));
+    try assert_true(network_connection_contains(out[0: client_info.response_len], &"age=9 idle=0"[0: 12]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"name=worker"[0: 11]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"lib-name=redis-uya-test"[0: 23]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"lib-ver=0.5.0"[0: 13]));
@@ -1630,6 +1633,7 @@ export fn test_connection_process_client_commands() !void {
     var tx2: ConnectionTransaction = connection_transaction_new();
     tx2.client_fd = 43;
     connection_transaction_set_client_addresses(&tx2, &"127.0.0.1:50001"[0: 15], &"127.0.0.1:6380"[0: 14]);
+    connection_transaction_set_client_times(&tx2, 2000u64, 7000u64);
     defer {
         connection_transaction_reset(&tx2);
     }
@@ -1640,7 +1644,7 @@ export fn test_connection_process_client_commands() !void {
     const second_multi: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx2, &"*1\r\n$5\r\nMULTI\r\n"[0: 15], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: second_multi.response_len], &"+OK\r\n"[0: 5]));
 
-    const client_list: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$4\r\nLIST\r\n"[0: 26], &out[0], 512, 1000u64);
+    const client_list: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$4\r\nLIST\r\n"[0: 26], &out[0], 512, 10000u64);
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"id=1"[0: 4]));
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"addr=127.0.0.1:50000"[0: 20]));
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"laddr=127.0.0.1:6380"[0: 20]));
@@ -1655,6 +1659,7 @@ export fn test_connection_process_client_commands() !void {
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"db=0"[0: 4]));
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"user=default"[0: 12]));
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"flags=xt"[0: 8]));
+    try assert_true(network_connection_contains(out[0: client_list.response_len], &"age=8 idle=3"[0: 12]));
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"name=peer2"[0: 10]));
 
     const client_list_id: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$4\r\nLIST\r\n$2\r\nID\r\n$1\r\n2\r\n"[0: 41], &out[0], 512, 1000u64);

@@ -207,6 +207,10 @@ def run_smoke() -> None:
                     raise AssertionError("ACL SETUSER peer-user failed")
                 if send_command(peer_sock, b"AUTH", b"peer-user", b"secret") != "OK":
                     raise AssertionError("peer named-user AUTH failed")
+                if send_command(peer_sock, b"CLIENT", b"TRACKING", b"ON") != "OK":
+                    raise AssertionError("peer CLIENT TRACKING ON failed")
+                if send_command(peer_sock, b"MULTI") != "OK":
+                    raise AssertionError("peer MULTI failed")
 
                 if send_command(sock, b"CLIENT", b"SETINFO", b"LIB-NAME", b"redis-uya-test") != "OK":
                     raise AssertionError("CLIENT SETINFO LIB-NAME failed")
@@ -234,6 +238,8 @@ def run_smoke() -> None:
                     raise AssertionError(f"CLIENT INFO returned invalid db: {info!r}")
                 if info_fields.get(b"user") != b"default":
                     raise AssertionError(f"CLIENT INFO returned invalid user: {info!r}")
+                if info_fields.get(b"flags") != b"N":
+                    raise AssertionError(f"CLIENT INFO returned invalid flags: {info!r}")
 
                 listed = send_command(sock, b"CLIENT", b"LIST")
                 peer_addr = f"{peer_sock.getsockname()[0]}:{peer_sock.getsockname()[1]}".encode()
@@ -257,6 +263,8 @@ def run_smoke() -> None:
                     raise AssertionError(f"CLIENT LIST returned invalid peer db: {peer_lines[0]!r}")
                 if peer_fields.get(b"user") != b"peer-user":
                     raise AssertionError(f"CLIENT LIST returned invalid peer user: {peer_lines[0]!r}")
+                if peer_fields.get(b"flags") != b"xt":
+                    raise AssertionError(f"CLIENT LIST returned invalid peer flags: {peer_lines[0]!r}")
 
                 filtered_peer = send_command(sock, b"CLIENT", b"LIST", b"ID", str(peer_id).encode())
                 if (
@@ -298,6 +306,16 @@ def run_smoke() -> None:
 
                 if send_command(sock, b"CLIENT", b"LIST", b"ID", b"99999999") != b"":
                     raise AssertionError("missing CLIENT LIST ID should return an empty bulk string")
+                if send_command(peer_sock, b"DISCARD") != "OK":
+                    raise AssertionError("peer DISCARD failed")
+                peer_after_discard = send_command(sock, b"CLIENT", b"LIST", b"ID", str(peer_id).encode())
+                peer_after_discard_fields = dict(
+                    part.split(b"=", 1)
+                    for part in peer_after_discard.strip().split()
+                    if b"=" in part
+                )
+                if peer_after_discard_fields.get(b"flags") != b"N":
+                    raise AssertionError(f"peer flags did not reset after DISCARD: {peer_after_discard!r}")
 
                 with connect_with_retry(port, time.monotonic() + 5.0) as type_pubsub_sock:
                     type_pubsub_id = send_command(type_pubsub_sock, b"CLIENT", b"ID")
@@ -322,6 +340,13 @@ def run_smoke() -> None:
                         or f"id={client_id} ".encode() in type_pubsub
                     ):
                         raise AssertionError(f"unexpected CLIENT LIST TYPE PUBSUB result: {type_pubsub!r}")
+                    type_pubsub_fields = dict(
+                        part.split(b"=", 1)
+                        for part in type_pubsub.strip().split()
+                        if b"=" in part
+                    )
+                    if type_pubsub_fields.get(b"flags") != b"P":
+                        raise AssertionError(f"PUBSUB client returned invalid flags: {type_pubsub!r}")
 
                     try:
                         send_command(sock, b"CLIENT", b"LIST", b"TYPE", b"bad")
@@ -345,6 +370,19 @@ def run_smoke() -> None:
                     or b"CLIENT TRACKINGINFO" not in client_help
                 ):
                     raise AssertionError(f"unexpected CLIENT HELP: {client_help!r}")
+
+                with connect_with_retry(port, time.monotonic() + 5.0) as monitor_sock:
+                    monitor_id = send_command(monitor_sock, b"CLIENT", b"ID")
+                    if send_command(monitor_sock, b"MONITOR") != "OK":
+                        raise AssertionError("MONITOR failed")
+                    monitor_line = send_command(sock, b"CLIENT", b"LIST", b"ID", str(monitor_id).encode())
+                    monitor_fields = dict(
+                        part.split(b"=", 1)
+                        for part in monitor_line.strip().split()
+                        if b"=" in part
+                    )
+                    if monitor_fields.get(b"flags") != b"O":
+                        raise AssertionError(f"MONITOR client returned invalid flags: {monitor_line!r}")
 
                 hello = send_command(sock, b"HELLO", b"3", b"SETNAME", b"resp3-client")
                 if not isinstance(hello, dict) or hello.get(b"proto") != 3:
@@ -512,6 +550,14 @@ def run_smoke() -> None:
                         raise AssertionError(f"unexpected blocked CLIENT ID: {blocked_id!r}")
                     send_only(blocked_sock, b"BLPOP", b"client-unblock-timeout", b"0")
                     time.sleep(0.1)
+                    blocked_line = send_command(sock, b"CLIENT", b"LIST", b"ID", str(blocked_id).encode())
+                    blocked_fields = dict(
+                        part.split(b"=", 1)
+                        for part in blocked_line.strip().split()
+                        if b"=" in part
+                    )
+                    if blocked_fields.get(b"flags") != b"b":
+                        raise AssertionError(f"blocked client returned invalid flags: {blocked_line!r}")
                     if send_command(sock, b"CLIENT", b"UNBLOCK", str(blocked_id).encode(), b"TIMEOUT") != 1:
                         raise AssertionError("CLIENT UNBLOCK TIMEOUT did not report one unblocked client")
                     if read_resp(blocked_sock) is not None:

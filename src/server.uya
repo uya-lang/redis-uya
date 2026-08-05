@@ -18,6 +18,7 @@ use src.network.listener.listener_close;
 use src.network.connection.ConnectionProcessResult;
 use src.network.connection.ConnectionTransaction;
 use src.network.connection.connection_client_registry_client_id;
+use src.network.connection.connection_client_registry_sync;
 use src.network.connection.connection_transaction_set_client_addresses;
 use src.network.connection.connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_zero_copy_at;
 use src.network.connection.connection_encode_client_unblock_error_reply;
@@ -1271,6 +1272,7 @@ fn server_client_unblock_by_id(server: &RedisServer, requester_slot: usize, targ
     server_blocked_client_removed(server);
     target.transaction.blocking_active = false;
     target.transaction.blocking_deadline_ms = 0u64;
+    connection_client_registry_sync(&target.transaction);
     target.blocked_request_len = 0;
     target.output_len = response_len;
     target.output_sent = 0;
@@ -2243,6 +2245,7 @@ fn server_run_blocked_clients_at(server: &RedisServer, now_ms: u64) void {
         }
         server_blocked_client_removed(server);
         client.transaction.blocking_active = false;
+        connection_client_registry_sync(&client.transaction);
         const keep_result: !bool = server_poll_client_async_slot(server, slot);
         if keep_result.error_id != 0 {
             server_close_client_slot(server, slot);

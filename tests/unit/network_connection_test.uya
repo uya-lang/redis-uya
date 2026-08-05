@@ -1518,8 +1518,10 @@ export fn test_connection_process_resp3_hello() !void {
 
 export fn test_connection_process_client_commands() !void {
     reset_memory_stats_for_test();
+    connection_pubsub_reset_for_test();
     connection_client_registry_reset_for_test();
     defer {
+        connection_pubsub_reset_for_test();
         connection_client_registry_reset_for_test();
     }
     const router: CommandRouter = command_router_new();
@@ -1628,6 +1630,9 @@ export fn test_connection_process_client_commands() !void {
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"cmd=client|info"[0: 15]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"redir=-1"[0: 8]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"multi=-1"[0: 8]));
+    try assert_true(network_connection_contains(out[0: client_info.response_len], &"sub=0"[0: 5]));
+    try assert_true(network_connection_contains(out[0: client_info.response_len], &"psub=0"[0: 6]));
+    try assert_true(network_connection_contains(out[0: client_info.response_len], &"ssub=0"[0: 6]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"age=9 idle=0"[0: 12]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"name=worker"[0: 11]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"lib-name=redis-uya-test"[0: 23]));
@@ -1701,6 +1706,10 @@ export fn test_connection_process_client_commands() !void {
     }
     const type_subscribe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx3, &"*2\r\n$9\r\nSUBSCRIBE\r\n$5\r\ntyped\r\n"[0: 30], &out[0], 512, 1000u64);
     try assert_true(network_connection_contains(out[0: type_subscribe.response_len], &"subscribe"[0: 9]));
+    const type_psubscribe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx3, &"*2\r\n$10\r\nPSUBSCRIBE\r\n$6\r\ntyped*\r\n"[0: 33], &out[0], 512, 1000u64);
+    try assert_true(network_connection_contains(out[0: type_psubscribe.response_len], &"psubscribe"[0: 10]));
+    const type_ssubscribe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx3, &"*2\r\n$10\r\nSSUBSCRIBE\r\n$11\r\ntyped-shard\r\n"[0: 39], &out[0], 512, 1000u64);
+    try assert_true(network_connection_contains(out[0: type_ssubscribe.response_len], &"ssubscribe"[0: 10]));
 
     const client_list_type_normal: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$4\r\nLIST\r\n$4\r\nTYPE\r\n$6\r\nNORMAL\r\n"[0: 48], &out[0], 512, 1000u64);
     try assert_true(network_connection_contains(out[0: client_list_type_normal.response_len], &"id=1 addr=127.0.0.1:50000"[0: 25]));
@@ -1709,6 +1718,9 @@ export fn test_connection_process_client_commands() !void {
     const client_list_type_pubsub: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$4\r\nLIST\r\n$4\r\nTYPE\r\n$6\r\nPUBSUB\r\n"[0: 48], &out[0], 512, 1000u64);
     try assert_true(network_connection_contains(out[0: client_list_type_pubsub.response_len], &"id=3 addr=127.0.0.1:50002"[0: 25]));
     try assert_true(network_connection_contains(out[0: client_list_type_pubsub.response_len], &"flags=P"[0: 7]));
+    try assert_true(network_connection_contains(out[0: client_list_type_pubsub.response_len], &"sub=1"[0: 5]));
+    try assert_true(network_connection_contains(out[0: client_list_type_pubsub.response_len], &"psub=1"[0: 6]));
+    try assert_true(network_connection_contains(out[0: client_list_type_pubsub.response_len], &"ssub=1"[0: 6]));
     try assert_true(!network_connection_contains(out[0: client_list_type_pubsub.response_len], &"id=1 addr=127.0.0.1:50000"[0: 25]));
 
     const client_list_type_master: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$4\r\nLIST\r\n$4\r\nTYPE\r\n$6\r\nMASTER\r\n"[0: 48], &out[0], 512, 1000u64);

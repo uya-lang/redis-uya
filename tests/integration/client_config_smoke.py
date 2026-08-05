@@ -247,6 +247,8 @@ def run_smoke() -> None:
                     raise AssertionError(f"CLIENT INFO returned invalid default redirect: {info!r}")
                 if info_fields.get(b"multi") != b"-1":
                     raise AssertionError(f"CLIENT INFO returned invalid transaction count: {info!r}")
+                if info_fields.get(b"sub") != b"0" or info_fields.get(b"psub") != b"0" or info_fields.get(b"ssub") != b"0":
+                    raise AssertionError(f"CLIENT INFO returned invalid subscription counts: {info!r}")
                 if not info_fields.get(b"age", b"").isdigit() or int(info_fields[b"age"]) < 1:
                     raise AssertionError(f"CLIENT INFO returned invalid age: {info!r}")
                 if info_fields.get(b"idle") != b"0":
@@ -376,6 +378,12 @@ def run_smoke() -> None:
                     subscribe_reply = send_command(type_pubsub_sock, b"SUBSCRIBE", b"type-channel")
                     if not isinstance(subscribe_reply, list) or subscribe_reply[0] != b"subscribe":
                         raise AssertionError(f"unexpected TYPE subscription reply: {subscribe_reply!r}")
+                    psubscribe_reply = send_command(type_pubsub_sock, b"PSUBSCRIBE", b"type-*")
+                    if not isinstance(psubscribe_reply, list) or psubscribe_reply[0] != b"psubscribe":
+                        raise AssertionError(f"unexpected TYPE pattern subscription reply: {psubscribe_reply!r}")
+                    ssubscribe_reply = send_command(type_pubsub_sock, b"SSUBSCRIBE", b"type-shard")
+                    if not isinstance(ssubscribe_reply, list) or ssubscribe_reply[0] != b"ssubscribe":
+                        raise AssertionError(f"unexpected TYPE shard subscription reply: {ssubscribe_reply!r}")
 
                     type_normal = send_command(sock, b"CLIENT", b"LIST", b"TYPE", b"NORMAL")
                     if (
@@ -399,8 +407,14 @@ def run_smoke() -> None:
                     )
                     if type_pubsub_fields.get(b"flags") != b"P":
                         raise AssertionError(f"PUBSUB client returned invalid flags: {type_pubsub!r}")
-                    if type_pubsub_fields.get(b"cmd") != b"subscribe":
+                    if type_pubsub_fields.get(b"cmd") != b"ssubscribe":
                         raise AssertionError(f"PUBSUB client returned invalid command: {type_pubsub!r}")
+                    if (
+                        type_pubsub_fields.get(b"sub") != b"1"
+                        or type_pubsub_fields.get(b"psub") != b"1"
+                        or type_pubsub_fields.get(b"ssub") != b"1"
+                    ):
+                        raise AssertionError(f"PUBSUB client returned invalid subscription counts: {type_pubsub!r}")
 
                     for replica_type in (b"MASTER", b"REPLICA", b"SLAVE"):
                         replica_clients = send_command(sock, b"CLIENT", b"LIST", b"TYPE", replica_type)

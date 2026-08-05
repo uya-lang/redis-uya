@@ -4912,7 +4912,7 @@ fn connection_client_elapsed_seconds(now_ms: u64, then_ms: u64) u64 {
     return (now_ms - then_ms) / 1000u64;
 }
 
-fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protocol_version: i32, fd: i32, created_ms: u64, last_interaction_ms: u64, now_ms: u64, command_name: &[byte], tracking_redirect_id: i64, addr: &[byte], local_addr: &[byte], name: &[byte], lib_name: &[byte], lib_ver: &[byte], username: &[byte], sub_count: usize, multi_count: i64, monitoring: bool, blocking_active: bool, tracking_enabled: bool) !void {
+fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protocol_version: i32, fd: i32, created_ms: u64, last_interaction_ms: u64, now_ms: u64, command_name: &[byte], tracking_redirect_id: i64, addr: &[byte], local_addr: &[byte], name: &[byte], lib_name: &[byte], lib_ver: &[byte], username: &[byte], sub_count: usize, psub_count: usize, ssub_count: usize, multi_count: i64, monitoring: bool, blocking_active: bool, tracking_enabled: bool) !void {
     try sds_cat(raw, &"id="[0: 3]);
     try connection_sds_append_i64(raw, client_id);
     try sds_cat(raw, &" addr="[0: 6]);
@@ -4940,6 +4940,10 @@ fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protoc
     try sds_cat(raw, &" db=0"[0: 5]);
     try sds_cat(raw, &" sub="[0: 5]);
     try connection_sds_append_u64(raw, sub_count as u64);
+    try sds_cat(raw, &" psub="[0: 6]);
+    try connection_sds_append_u64(raw, psub_count as u64);
+    try sds_cat(raw, &" ssub="[0: 6]);
+    try connection_sds_append_u64(raw, ssub_count as u64);
     try sds_cat(raw, &" user="[0: 6]);
     try sds_cat(raw, username);
     try sds_cat(raw, &" redir="[0: 7]);
@@ -4950,7 +4954,7 @@ fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protoc
         try sds_cat(raw, &"O"[0: 1]);
         has_flag = true;
     }
-    if sub_count > 0 {
+    if sub_count + psub_count + ssub_count > 0 {
         try sds_cat(raw, &"P"[0: 1]);
         has_flag = true;
     }
@@ -5014,6 +5018,10 @@ fn connection_client_registry_append_slot_info(raw: &Sds, slot_index: usize, now
             }
         }
     }
+    const client_fd: i32 = connection_client_registry[slot_index].fd;
+    const sub_count: usize = connection_pubsub_count_fd_kind(client_fd, false, false);
+    const psub_count: usize = connection_pubsub_count_fd_kind(client_fd, true, false);
+    const ssub_count: usize = connection_pubsub_count_fd_kind(client_fd, false, true);
     try connection_client_registry_append_info_line(
         raw,
         connection_client_registry[slot_index].client_id,
@@ -5030,7 +5038,9 @@ fn connection_client_registry_append_slot_info(raw: &Sds, slot_index: usize, now
         connection_client_registry[slot_index].client_lib_name[0: connection_client_registry[slot_index].client_lib_name_len],
         connection_client_registry[slot_index].client_lib_ver[0: connection_client_registry[slot_index].client_lib_ver_len],
         connection_client_registry[slot_index].username[0: connection_client_registry[slot_index].username_len],
-        connection_client_registry[slot_index].pubsub_count,
+        sub_count,
+        psub_count,
+        ssub_count,
         multi_count,
         connection_client_registry[slot_index].monitoring,
         connection_client_registry[slot_index].blocking_active,
@@ -5784,6 +5794,9 @@ fn connection_client_info_reply(tx: &ConnectionTransaction, now_ms: u64) Command
     if tx.active {
         multi_count = tx.queue_count as i64;
     }
+    const sub_count: usize = connection_pubsub_count_fd_kind(tx.client_fd, false, false);
+    const psub_count: usize = connection_pubsub_count_fd_kind(tx.client_fd, true, false);
+    const ssub_count: usize = connection_pubsub_count_fd_kind(tx.client_fd, false, true);
 
     _ = connection_client_registry_append_info_line(
         &raw,
@@ -5801,7 +5814,9 @@ fn connection_client_info_reply(tx: &ConnectionTransaction, now_ms: u64) Command
         tx.client_lib_name[0: tx.client_lib_name_len],
         tx.client_lib_ver[0: tx.client_lib_ver_len],
         connection_current_username(tx),
-        tx.pubsub_count,
+        sub_count,
+        psub_count,
+        ssub_count,
         multi_count,
         tx.monitoring,
         tx.blocking_active,
@@ -6444,6 +6459,24 @@ fn connection_pubsub_unregister_fd_kind(fd: i32, is_pattern: bool, is_shard: boo
         i = i + 1;
     }
     return removed;
+}
+
+fn connection_pubsub_count_fd_kind(fd: i32, is_pattern: bool, is_shard: bool) usize {
+    if fd < 0 {
+        return 0;
+    }
+    var count: usize = 0;
+    var i: usize = 0;
+    while i < CONNECTION_PUBSUB_MAX_SUBSCRIPTIONS {
+        if connection_pubsub_subscriptions[i].active &&
+            connection_pubsub_subscriptions[i].fd == fd &&
+            connection_pubsub_subscriptions[i].is_pattern == is_pattern &&
+            connection_pubsub_subscriptions[i].is_shard == is_shard {
+            count = count + 1;
+        }
+        i = i + 1;
+    }
+    return count;
 }
 
 export fn connection_pubsub_unregister_fd(fd: i32) void {

@@ -127,6 +127,8 @@ export struct ConnectionTransaction {
     client_fd: i32,
     created_ms: u64,
     last_interaction_ms: u64,
+    command_name_len: usize,
+    command_name: [byte: CONNECTION_CLIENT_COMMAND_MAX],
     client_addr_len: usize,
     client_addr: [byte: CONNECTION_CLIENT_ADDR_MAX],
     client_local_addr_len: usize,
@@ -167,6 +169,7 @@ const CONNECTION_PUBSUB_MAX_SUBSCRIPTIONS: usize = 128;
 const CONNECTION_PUBSUB_CHANNEL_MAX: usize = 64;
 const CONNECTION_CLIENT_NAME_MAX: usize = 64;
 const CONNECTION_CLIENT_INFO_MAX: usize = 64;
+const CONNECTION_CLIENT_COMMAND_MAX: usize = 64;
 const CONNECTION_ZERO_COPY_BULK_MIN: usize = 64;
 const CONNECTION_BATCH_MAX_COUNT: usize = 64;
 const CONNECTION_BATCH_PARSE_MIN_INPUT: usize = 64;
@@ -396,6 +399,8 @@ fn connection_transaction_empty() ConnectionTransaction {
         client_fd: -1,
         created_ms: 0u64,
         last_interaction_ms: 0u64,
+        command_name_len: 0,
+        command_name: [],
         client_addr_len: 0,
         client_addr: [],
         client_local_addr_len: 0,
@@ -4833,6 +4838,68 @@ export fn connection_client_registry_sync(tx: &ConnectionTransaction) void {
     connection_client_registry_copy_bytes(slot.username[0: CONNECTION_ACL_USER_NAME_MAX], username, slot.username_len);
 }
 
+fn connection_client_command_uses_subcommand(cmd_type: CommandType) bool {
+    return cmd_type == CommandType.command_acl ||
+        cmd_type == CommandType.command_client ||
+        cmd_type == CommandType.command_cluster ||
+        cmd_type == CommandType.command_command ||
+        cmd_type == CommandType.command_config ||
+        cmd_type == CommandType.command_debug ||
+        cmd_type == CommandType.command_function ||
+        cmd_type == CommandType.command_hotkeys ||
+        cmd_type == CommandType.command_latency ||
+        cmd_type == CommandType.command_memory ||
+        cmd_type == CommandType.command_module ||
+        cmd_type == CommandType.command_object ||
+        cmd_type == CommandType.command_pubsub ||
+        cmd_type == CommandType.command_script ||
+        cmd_type == CommandType.command_slowlog ||
+        cmd_type == CommandType.command_xgroup ||
+        cmd_type == CommandType.command_xinfo;
+}
+
+fn connection_transaction_set_client_command(tx: &ConnectionTransaction, command: &Command) void {
+    if tx == null || command == null {
+        return;
+    }
+    var command_len: usize = command.info.name.len;
+    var subcommand: &[byte] = connection_reply_empty_slice();
+    if command.argc > 1 &&
+        (command.info.first_key == 0 || command.info.cmd_type == CommandType.command_object) &&
+        connection_client_command_uses_subcommand(command.info.cmd_type) {
+        subcommand = command_arg_data(command, 1) catch {
+            return;
+        };
+        const qualified_len: usize = command.info.name.len + 1 + subcommand.len;
+        if subcommand.len > 0 && connection_client_name_valid(subcommand) && qualified_len <= CONNECTION_CLIENT_COMMAND_MAX {
+            command_len = qualified_len;
+        } else {
+            subcommand = connection_reply_empty_slice();
+        }
+    }
+    if command_len > CONNECTION_CLIENT_COMMAND_MAX {
+        command_len = CONNECTION_CLIENT_COMMAND_MAX;
+        subcommand = connection_reply_empty_slice();
+    }
+
+    tx.command_name_len = command_len;
+    var index: usize = 0;
+    while index < command.info.name.len && index < command_len {
+        tx.command_name[index] = connection_ascii_lower(command.info.name.ptr[index]);
+        index = index + 1;
+    }
+    if subcommand.len > 0 && index < command_len {
+        tx.command_name[index] = 124 as byte;
+        index = index + 1;
+        var sub_index: usize = 0;
+        while sub_index < subcommand.len && index < command_len {
+            tx.command_name[index] = connection_ascii_lower(subcommand.ptr[sub_index]);
+            index = index + 1;
+            sub_index = sub_index + 1;
+        }
+    }
+}
+
 fn connection_acl_log_client_id(tx: &ConnectionTransaction) i64 {
     connection_client_registry_sync(tx);
     return connection_client_id(tx);
@@ -4845,7 +4912,7 @@ fn connection_client_elapsed_seconds(now_ms: u64, then_ms: u64) u64 {
     return (now_ms - then_ms) / 1000u64;
 }
 
-fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protocol_version: i32, fd: i32, created_ms: u64, last_interaction_ms: u64, now_ms: u64, addr: &[byte], local_addr: &[byte], name: &[byte], lib_name: &[byte], lib_ver: &[byte], username: &[byte], sub_count: usize, multi_active: bool, monitoring: bool, blocking_active: bool, tracking_enabled: bool) !void {
+fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protocol_version: i32, fd: i32, created_ms: u64, last_interaction_ms: u64, now_ms: u64, command_name: &[byte], addr: &[byte], local_addr: &[byte], name: &[byte], lib_name: &[byte], lib_ver: &[byte], username: &[byte], sub_count: usize, multi_active: bool, monitoring: bool, blocking_active: bool, tracking_enabled: bool) !void {
     try sds_cat(raw, &"id="[0: 3]);
     try connection_sds_append_i64(raw, client_id);
     try sds_cat(raw, &" addr="[0: 6]);
@@ -4904,6 +4971,12 @@ fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protoc
     if !has_flag {
         try sds_cat(raw, &"N"[0: 1]);
     }
+    try sds_cat(raw, &" cmd="[0: 5]);
+    if command_name.len > 0 {
+        try sds_cat(raw, command_name);
+    } else {
+        try sds_cat(raw, &"NULL"[0: 4]);
+    }
     try sds_cat(raw, &" lib-name="[0: 10]);
     if lib_name.len > 0 {
         try sds_cat(raw, lib_name);
@@ -4922,6 +4995,14 @@ fn connection_client_registry_append_slot_info(raw: &Sds, slot_index: usize, now
     if !connection_client_registry[slot_index].active {
         return;
     }
+    var command_name: &[byte] = connection_reply_empty_slice();
+    const tx_addr: usize = connection_client_registry[slot_index].tx_addr;
+    if tx_addr != 0 as usize {
+        const tx: &ConnectionTransaction = @ptr_from_usize(tx_addr) as &ConnectionTransaction;
+        if tx != null && tx.command_name_len <= CONNECTION_CLIENT_COMMAND_MAX {
+            command_name = tx.command_name[0: tx.command_name_len];
+        }
+    }
     try connection_client_registry_append_info_line(
         raw,
         connection_client_registry[slot_index].client_id,
@@ -4930,6 +5011,7 @@ fn connection_client_registry_append_slot_info(raw: &Sds, slot_index: usize, now
         connection_client_registry[slot_index].created_ms,
         connection_client_registry[slot_index].last_interaction_ms,
         now_ms,
+        command_name,
         connection_client_registry[slot_index].client_addr[0: connection_client_registry[slot_index].client_addr_len],
         connection_client_registry[slot_index].client_local_addr[0: connection_client_registry[slot_index].client_local_addr_len],
         connection_client_registry[slot_index].client_name[0: connection_client_registry[slot_index].client_name_len],
@@ -5691,6 +5773,7 @@ fn connection_client_info_reply(tx: &ConnectionTransaction, now_ms: u64) Command
         tx.created_ms,
         tx.last_interaction_ms,
         now_ms,
+        tx.command_name[0: tx.command_name_len],
         tx.client_addr[0: tx.client_addr_len],
         tx.client_local_addr[0: tx.client_local_addr_len],
         tx.client_name[0: tx.client_name_len],
@@ -9403,6 +9486,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
         resp_parse_value_free(&parsed.value, parsed.elements_owned);
         return ConnectionProcessResult{ response_len: n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
     };
+    connection_transaction_set_client_command(tx, &command);
     const reply_off_before: bool = tx.reply_off_enabled;
     const reply_skip_before: bool = tx.reply_skip_next;
 

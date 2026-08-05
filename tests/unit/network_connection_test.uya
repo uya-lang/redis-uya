@@ -1625,6 +1625,7 @@ export fn test_connection_process_client_commands() !void {
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"db=0"[0: 4]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"user=default"[0: 12]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"flags=N"[0: 7]));
+    try assert_true(network_connection_contains(out[0: client_info.response_len], &"cmd=client|info"[0: 15]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"age=9 idle=0"[0: 12]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"name=worker"[0: 11]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"lib-name=redis-uya-test"[0: 23]));
@@ -1659,6 +1660,7 @@ export fn test_connection_process_client_commands() !void {
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"db=0"[0: 4]));
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"user=default"[0: 12]));
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"flags=xt"[0: 8]));
+    try assert_true(network_connection_contains(out[0: client_list.response_len], &"cmd=multi"[0: 9]));
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"age=8 idle=3"[0: 12]));
     try assert_true(network_connection_contains(out[0: client_list.response_len], &"name=peer2"[0: 10]));
 

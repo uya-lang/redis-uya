@@ -241,6 +241,8 @@ def run_smoke() -> None:
                     raise AssertionError(f"CLIENT INFO returned invalid user: {info!r}")
                 if info_fields.get(b"flags") != b"N":
                     raise AssertionError(f"CLIENT INFO returned invalid flags: {info!r}")
+                if info_fields.get(b"cmd") != b"client|info":
+                    raise AssertionError(f"CLIENT INFO returned invalid command: {info!r}")
                 if not info_fields.get(b"age", b"").isdigit() or int(info_fields[b"age"]) < 1:
                     raise AssertionError(f"CLIENT INFO returned invalid age: {info!r}")
                 if info_fields.get(b"idle") != b"0":
@@ -258,6 +260,12 @@ def run_smoke() -> None:
                 ):
                     raise AssertionError(f"unexpected CLIENT LIST: {listed!r}")
                 listed_lines = listed.splitlines()
+                current_lines = [line for line in listed_lines if line.startswith(f"id={client_id} ".encode())]
+                if len(current_lines) != 1:
+                    raise AssertionError(f"CLIENT LIST did not return the current client: {listed!r}")
+                current_fields = dict(part.split(b"=", 1) for part in current_lines[0].split() if b"=" in part)
+                if current_fields.get(b"cmd") != b"client|list":
+                    raise AssertionError(f"CLIENT LIST returned invalid current command: {current_lines[0]!r}")
                 peer_lines = [line for line in listed_lines if line.startswith(f"id={peer_id} ".encode())]
                 if len(peer_lines) != 1:
                     raise AssertionError(f"CLIENT LIST did not return one peer line: {listed!r}")
@@ -270,6 +278,8 @@ def run_smoke() -> None:
                     raise AssertionError(f"CLIENT LIST returned invalid peer user: {peer_lines[0]!r}")
                 if peer_fields.get(b"flags") != b"xt":
                     raise AssertionError(f"CLIENT LIST returned invalid peer flags: {peer_lines[0]!r}")
+                if peer_fields.get(b"cmd") != b"multi":
+                    raise AssertionError(f"CLIENT LIST returned invalid peer command: {peer_lines[0]!r}")
                 if not peer_fields.get(b"age", b"").isdigit() or int(peer_fields[b"age"]) < 1:
                     raise AssertionError(f"CLIENT LIST returned invalid peer age: {peer_lines[0]!r}")
                 if not peer_fields.get(b"idle", b"").isdigit() or int(peer_fields[b"idle"]) < 1:
@@ -325,6 +335,19 @@ def run_smoke() -> None:
                 )
                 if peer_after_discard_fields.get(b"flags") != b"N":
                     raise AssertionError(f"peer flags did not reset after DISCARD: {peer_after_discard!r}")
+                if peer_after_discard_fields.get(b"cmd") != b"discard":
+                    raise AssertionError(f"peer command did not update after DISCARD: {peer_after_discard!r}")
+                peer_config = send_command(peer_sock, b"CONFIG", b"GET", b"databases")
+                if not isinstance(peer_config, list):
+                    raise AssertionError(f"peer CONFIG GET returned invalid reply: {peer_config!r}")
+                peer_after_config = send_command(sock, b"CLIENT", b"LIST", b"ID", str(peer_id).encode())
+                peer_after_config_fields = dict(
+                    part.split(b"=", 1)
+                    for part in peer_after_config.strip().split()
+                    if b"=" in part
+                )
+                if peer_after_config_fields.get(b"cmd") != b"config|get":
+                    raise AssertionError(f"peer command did not expose CONFIG subcommand: {peer_after_config!r}")
 
                 with connect_with_retry(port, time.monotonic() + 5.0) as type_pubsub_sock:
                     type_pubsub_id = send_command(type_pubsub_sock, b"CLIENT", b"ID")
@@ -356,6 +379,8 @@ def run_smoke() -> None:
                     )
                     if type_pubsub_fields.get(b"flags") != b"P":
                         raise AssertionError(f"PUBSUB client returned invalid flags: {type_pubsub!r}")
+                    if type_pubsub_fields.get(b"cmd") != b"subscribe":
+                        raise AssertionError(f"PUBSUB client returned invalid command: {type_pubsub!r}")
 
                     try:
                         send_command(sock, b"CLIENT", b"LIST", b"TYPE", b"bad")
@@ -392,6 +417,8 @@ def run_smoke() -> None:
                     )
                     if monitor_fields.get(b"flags") != b"O":
                         raise AssertionError(f"MONITOR client returned invalid flags: {monitor_line!r}")
+                    if monitor_fields.get(b"cmd") != b"monitor":
+                        raise AssertionError(f"MONITOR client returned invalid command: {monitor_line!r}")
 
                 hello = send_command(sock, b"HELLO", b"3", b"SETNAME", b"resp3-client")
                 if not isinstance(hello, dict) or hello.get(b"proto") != 3:
@@ -567,6 +594,8 @@ def run_smoke() -> None:
                     )
                     if blocked_fields.get(b"flags") != b"b":
                         raise AssertionError(f"blocked client returned invalid flags: {blocked_line!r}")
+                    if blocked_fields.get(b"cmd") != b"blpop":
+                        raise AssertionError(f"blocked client returned invalid command: {blocked_line!r}")
                     if send_command(sock, b"CLIENT", b"UNBLOCK", str(blocked_id).encode(), b"TIMEOUT") != 1:
                         raise AssertionError("CLIENT UNBLOCK TIMEOUT did not report one unblocked client")
                     if read_resp(blocked_sock) is not None:

@@ -1642,6 +1642,7 @@ export fn test_connection_process_client_commands() !void {
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"obl=4096"[0: 8]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"oll=0"[0: 5]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"omem=0"[0: 6]));
+    try assert_true(network_connection_contains(out[0: client_info.response_len], &"events=w"[0: 8]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"age=9 idle=0"[0: 12]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"name=worker"[0: 11]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"lib-name=redis-uya-test"[0: 23]));

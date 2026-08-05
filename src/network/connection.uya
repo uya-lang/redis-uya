@@ -4976,6 +4976,11 @@ fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protoc
     try sds_cat(raw, &" obl="[0: 5]);
     try connection_sds_append_u64(raw, output_buffer_len as u64);
     try sds_cat(raw, &" oll=0 omem=0"[0: 13]);
+    if output_buffer_len > 0 {
+        try sds_cat(raw, &" events=w"[0: 9]);
+    } else {
+        try sds_cat(raw, &" events=r"[0: 9]);
+    }
     try sds_cat(raw, &" user="[0: 6]);
     try sds_cat(raw, username);
     try sds_cat(raw, &" redir="[0: 7]);

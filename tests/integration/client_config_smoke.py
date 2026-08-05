@@ -253,6 +253,8 @@ def run_smoke() -> None:
                     raise AssertionError(f"CLIENT INFO returned invalid query buffer usage: {info!r}")
                 if info_fields.get(b"obl") != b"0" or info_fields.get(b"oll") != b"0" or info_fields.get(b"omem") != b"0":
                     raise AssertionError(f"CLIENT INFO returned invalid output buffer usage: {info!r}")
+                if info_fields.get(b"events") != b"r":
+                    raise AssertionError(f"CLIENT INFO returned invalid event interest: {info!r}")
                 if not info_fields.get(b"age", b"").isdigit() or int(info_fields[b"age"]) < 1:
                     raise AssertionError(f"CLIENT INFO returned invalid age: {info!r}")
                 if info_fields.get(b"idle") != b"0":
@@ -423,6 +425,8 @@ def run_smoke() -> None:
                         raise AssertionError(f"PUBSUB client returned invalid query buffer usage: {type_pubsub!r}")
                     if type_pubsub_fields.get(b"obl") != b"0" or type_pubsub_fields.get(b"oll") != b"0" or type_pubsub_fields.get(b"omem") != b"0":
                         raise AssertionError(f"PUBSUB client returned invalid output buffer usage: {type_pubsub!r}")
+                    if type_pubsub_fields.get(b"events") != b"r":
+                        raise AssertionError(f"PUBSUB client returned invalid event interest: {type_pubsub!r}")
 
                     for replica_type in (b"MASTER", b"REPLICA", b"SLAVE"):
                         replica_clients = send_command(sock, b"CLIENT", b"LIST", b"TYPE", replica_type)

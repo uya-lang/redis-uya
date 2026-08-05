@@ -192,6 +192,8 @@ def run_smoke() -> None:
             raise AssertionError(f"slow reader has no pending output bytes: {slow_line!r}")
         if slow_fields.get(b"oll") != b"0" or slow_fields.get(b"omem") != b"0":
             raise AssertionError(f"slow reader returned invalid output queue usage: {slow_line!r}")
+        if slow_fields.get(b"events") != b"w":
+            raise AssertionError(f"slow reader returned invalid event interest: {slow_line!r}")
     finally:
         if active_sock is not None:
             active_sock.close()

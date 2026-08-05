@@ -4802,7 +4802,7 @@ fn connection_acl_log_client_id(tx: &ConnectionTransaction) i64 {
     return connection_client_id(tx);
 }
 
-fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protocol_version: i32, addr: &[byte], local_addr: &[byte], name: &[byte], lib_name: &[byte], lib_ver: &[byte], sub_count: usize, multi_active: bool) !void {
+fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protocol_version: i32, fd: i32, addr: &[byte], local_addr: &[byte], name: &[byte], lib_name: &[byte], lib_ver: &[byte], sub_count: usize, multi_active: bool) !void {
     try sds_cat(raw, &"id="[0: 3]);
     try connection_sds_append_i64(raw, client_id);
     try sds_cat(raw, &" addr="[0: 6]);
@@ -4813,6 +4813,8 @@ fn connection_client_registry_append_info_line(raw: &Sds, client_id: i64, protoc
     if local_addr.len > 0 {
         try sds_cat(raw, local_addr);
     }
+    try sds_cat(raw, &" fd="[0: 4]);
+    try connection_sds_append_i64(raw, fd as i64);
     try sds_cat(raw, &" name="[0: 6]);
     if name.len > 0 {
         try sds_cat(raw, name);
@@ -4849,6 +4851,7 @@ fn connection_client_registry_append_slot_info(raw: &Sds, slot_index: usize) !vo
         raw,
         connection_client_registry[slot_index].client_id,
         connection_client_registry[slot_index].protocol_version,
+        connection_client_registry[slot_index].fd,
         connection_client_registry[slot_index].client_addr[0: connection_client_registry[slot_index].client_addr_len],
         connection_client_registry[slot_index].client_local_addr[0: connection_client_registry[slot_index].client_local_addr_len],
         connection_client_registry[slot_index].client_name[0: connection_client_registry[slot_index].client_name_len],
@@ -5596,6 +5599,7 @@ fn connection_client_info_reply(tx: &ConnectionTransaction) CommandReply {
         &raw,
         connection_client_id(tx),
         tx.protocol_version,
+        tx.client_fd,
         tx.client_addr[0: tx.client_addr_len],
         tx.client_local_addr[0: tx.client_local_addr_len],
         tx.client_name[0: tx.client_name_len],

@@ -1626,6 +1626,7 @@ export fn test_connection_process_client_commands() !void {
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"user=default"[0: 12]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"flags=N"[0: 7]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"cmd=client|info"[0: 15]));
+    try assert_true(network_connection_contains(out[0: client_info.response_len], &"redir=-1"[0: 8]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"age=9 idle=0"[0: 12]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"name=worker"[0: 11]));
     try assert_true(network_connection_contains(out[0: client_info.response_len], &"lib-name=redis-uya-test"[0: 23]));
@@ -1752,6 +1753,9 @@ export fn test_connection_process_client_commands() !void {
     const getredir_active: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$8\r\nGETREDIR\r\n"[0: 30], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: getredir_active.response_len], &":2\r\n"[0: 4]));
 
+    const client_info_redirect: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$4\r\nINFO\r\n"[0: 26], &out[0], 512, 1000u64);
+    try assert_true(network_connection_contains(out[0: client_info_redirect.response_len], &"redir=2"[0: 7]));
+
     const tracking_info: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$12\r\nTRACKINGINFO\r\n"[0: 35], &out[0], 512, 1000u64);
     try assert_true(network_connection_contains(out[0: tracking_info.response_len], &"flags"[0: 5]));
     try assert_true(network_connection_contains(out[0: tracking_info.response_len], &"noloop"[0: 6]));
@@ -1762,6 +1766,9 @@ export fn test_connection_process_client_commands() !void {
 
     const getredir_off: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$8\r\nGETREDIR\r\n"[0: 30], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: getredir_off.response_len], &":-1\r\n"[0: 5]));
+
+    const client_info_redirect_off: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$4\r\nINFO\r\n"[0: 26], &out[0], 512, 1000u64);
+    try assert_true(network_connection_contains(out[0: client_info_redirect_off.response_len], &"redir=-1"[0: 8]));
 
     const tracking_prefix_bad: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*5\r\n$6\r\nCLIENT\r\n$8\r\nTRACKING\r\n$2\r\nON\r\n$6\r\nPREFIX\r\n$3\r\nfoo\r\n"[0: 59], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: tracking_prefix_bad.response_len], &"-ERR PREFIX option requires BCAST mode to be enabled\r\n"[0: 54]));

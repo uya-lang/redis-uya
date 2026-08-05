@@ -243,6 +243,8 @@ def run_smoke() -> None:
                     raise AssertionError(f"CLIENT INFO returned invalid flags: {info!r}")
                 if info_fields.get(b"cmd") != b"client|info":
                     raise AssertionError(f"CLIENT INFO returned invalid command: {info!r}")
+                if info_fields.get(b"redir") != b"-1":
+                    raise AssertionError(f"CLIENT INFO returned invalid default redirect: {info!r}")
                 if not info_fields.get(b"age", b"").isdigit() or int(info_fields[b"age"]) < 1:
                     raise AssertionError(f"CLIENT INFO returned invalid age: {info!r}")
                 if info_fields.get(b"idle") != b"0":
@@ -280,6 +282,8 @@ def run_smoke() -> None:
                     raise AssertionError(f"CLIENT LIST returned invalid peer flags: {peer_lines[0]!r}")
                 if peer_fields.get(b"cmd") != b"multi":
                     raise AssertionError(f"CLIENT LIST returned invalid peer command: {peer_lines[0]!r}")
+                if peer_fields.get(b"redir") != b"-1":
+                    raise AssertionError(f"CLIENT LIST returned invalid peer redirect: {peer_lines[0]!r}")
                 if not peer_fields.get(b"age", b"").isdigit() or int(peer_fields[b"age"]) < 1:
                     raise AssertionError(f"CLIENT LIST returned invalid peer age: {peer_lines[0]!r}")
                 if not peer_fields.get(b"idle", b"").isdigit() or int(peer_fields[b"idle"]) < 1:
@@ -454,6 +458,22 @@ def run_smoke() -> None:
                     raise AssertionError("CLIENT TRACKING ON failed")
                 if send_command(sock, b"CLIENT", b"GETREDIR") != peer_id:
                     raise AssertionError("CLIENT GETREDIR did not expose redirect target")
+                tracking_client_info = send_command(sock, b"CLIENT", b"INFO")
+                tracking_client_fields = dict(
+                    part.split(b"=", 1)
+                    for part in tracking_client_info.strip().split()
+                    if b"=" in part
+                )
+                if tracking_client_fields.get(b"redir") != str(peer_id).encode():
+                    raise AssertionError(f"CLIENT INFO did not expose redirect target: {tracking_client_info!r}")
+                tracking_client_list = send_command(sock, b"CLIENT", b"LIST", b"ID", str(client_id).encode())
+                tracking_list_fields = dict(
+                    part.split(b"=", 1)
+                    for part in tracking_client_list.strip().split()
+                    if b"=" in part
+                )
+                if tracking_list_fields.get(b"redir") != str(peer_id).encode():
+                    raise AssertionError(f"CLIENT LIST did not expose redirect target: {tracking_client_list!r}")
                 tracking_info = send_command(sock, b"CLIENT", b"TRACKINGINFO")
                 if (
                     not isinstance(tracking_info, dict)
@@ -468,6 +488,14 @@ def run_smoke() -> None:
                     raise AssertionError("CLIENT TRACKING OFF failed")
                 if send_command(sock, b"CLIENT", b"GETREDIR") != -1:
                     raise AssertionError("CLIENT GETREDIR should reset to -1 after TRACKING OFF")
+                tracking_off_info = send_command(sock, b"CLIENT", b"INFO")
+                tracking_off_fields = dict(
+                    part.split(b"=", 1)
+                    for part in tracking_off_info.strip().split()
+                    if b"=" in part
+                )
+                if tracking_off_fields.get(b"redir") != b"-1":
+                    raise AssertionError(f"CLIENT INFO did not clear redirect target: {tracking_off_info!r}")
                 try:
                     send_command(sock, b"CLIENT", b"TRACKING", b"ON", b"PREFIX", b"cache:")
                     raise AssertionError("CLIENT TRACKING PREFIX without BCAST should fail")

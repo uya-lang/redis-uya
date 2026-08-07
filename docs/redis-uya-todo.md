@@ -60,6 +60,7 @@
 - [x] `v0.8.1`：写路径性能修复
 
 当前进行中：
+- [x] `v0.9.4` SCRIPT 命令补齐：`SCRIPT EXISTS`（返回全 0 数组表示脚本未缓存）、`SCRIPT FLUSH [ASYNC|SYNC]`（清空脚本缓存）、`SCRIPT HELP`（帮助文本）、`SCRIPT DEBUG`（当前返回不支持错误）、`SCRIPT KILL`（返回无脚本运行错误）、`SCRIPT LOAD`（返回 OK），均已完成 Redis 兼容子集，`eval`/`evalsha`/`fcall` 仍保持 partial 状态
 
 - [x] `v0.9.0`：单机核心命令补齐与安全基线收口完成
 - [x] `v0.9.1`：审计整改与真实性修复完成，测试 / benchmark / DoD 校验已恢复绿态，控制面真值、版本串与命令完成度统计分层已收口

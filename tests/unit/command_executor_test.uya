@@ -11377,3 +11377,206 @@ export fn test_command_error_paths() !void {
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);
 }
+
+export fn test_command_script_exists() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var out: [byte: 2048] = [];
+
+    var exists_single_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nSCRIPT\r\n$6\r\nEXISTS\r\n$40\r\naaaabbbbccccddddeeeeffffaaaabbbbccccddddeeeeffff\r\n"[0: 80]);
+    const exists_single_command: Command = try command_executor_test_command(&router, &exists_single_parsed);
+    var exists_single_reply: CommandReply = command_execute_at(&engine, &exists_single_command, 1000u64);
+    try assert_eq_i32(exists_single_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    try assert_true(command_executor_test_slice_eq(exists_single_reply.data, &"*1\r\n:0\r\n"[0: 8]));
+    command_reply_cleanup(&exists_single_reply);
+    resp_value_free(&exists_single_parsed.value);
+
+    var exists_multi_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nSCRIPT\r\n$6\r\nEXISTS\r\n$40\r\naaaabbbbccccddddeeeeffffaaaabbbbccccddddeeeeffff\r\n$40\r\nbbbbccccddddeeeeffffaaaabbbbccccddddeeeeffff0000\r\n"[0: 124]);
+    const exists_multi_command: Command = try command_executor_test_command(&router, &exists_multi_parsed);
+    var exists_multi_reply: CommandReply = command_execute_at(&engine, &exists_multi_command, 1000u64);
+    try assert_eq_i32(exists_multi_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    try assert_true(command_executor_test_slice_eq(exists_multi_reply.data, &"*2\r\n:0\r\n:0\r\n"[0: 12]));
+    command_reply_cleanup(&exists_multi_reply);
+    resp_value_free(&exists_multi_parsed.value);
+
+    var exists_bad_arity_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nSCRIPT\r\n$6\r\nEXISTS\r\n"[0: 24]);
+    const exists_bad_arity_command: Command = try command_executor_test_command(&router, &exists_bad_arity_parsed);
+    var exists_bad_arity_reply: CommandReply = command_execute_at(&engine, &exists_bad_arity_command, 1000u64);
+    try assert_eq_i32(exists_bad_arity_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(exists_bad_arity_reply.data, &"ERR wrong number of arguments for 'script|exists' command"[0: 55]));
+    command_reply_cleanup(&exists_bad_arity_reply);
+    resp_value_free(&exists_bad_arity_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_command_script_flush() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+
+    var flush_sync_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nSCRIPT\r\n$5\r\nFLUSH\r\n$4\r\nSYNC\r\n"[0: 33]);
+    const flush_sync_command: Command = try command_executor_test_command(&router, &flush_sync_parsed);
+    var flush_sync_reply: CommandReply = command_execute_at(&engine, &flush_sync_command, 1000u64);
+    try assert_eq_i32(flush_sync_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(flush_sync_reply.data, &"OK"[0: 2]));
+    command_reply_cleanup(&flush_sync_reply);
+    resp_value_free(&flush_sync_parsed.value);
+
+    var flush_async_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nSCRIPT\r\n$5\r\nFLUSH\r\n$5\r\nASYNC\r\n"[0: 34]);
+    const flush_async_command: Command = try command_executor_test_command(&router, &flush_async_parsed);
+    var flush_async_reply: CommandReply = command_execute_at(&engine, &flush_async_command, 1000u64);
+    try assert_eq_i32(flush_async_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(flush_async_reply.data, &"OK"[0: 2]));
+    command_reply_cleanup(&flush_async_reply);
+    resp_value_free(&flush_async_parsed.value);
+
+    var flush_default_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nSCRIPT\r\n$5\r\nFLUSH\r\n"[0: 25]);
+    const flush_default_command: Command = try command_executor_test_command(&router, &flush_default_parsed);
+    var flush_default_reply: CommandReply = command_execute_at(&engine, &flush_default_command, 1000u64);
+    try assert_eq_i32(flush_default_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(flush_default_reply.data, &"OK"[0: 2]));
+    command_reply_cleanup(&flush_default_reply);
+    resp_value_free(&flush_default_parsed.value);
+
+    var flush_bad_mode_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nSCRIPT\r\n$5\r\nFLUSH\r\n$4\r\nBAD\r\n"[0: 33]);
+    const flush_bad_mode_command: Command = try command_executor_test_command(&router, &flush_bad_mode_parsed);
+    var flush_bad_mode_reply: CommandReply = command_execute_at(&engine, &flush_bad_mode_command, 1000u64);
+    try assert_eq_i32(flush_bad_mode_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(flush_bad_mode_reply.data, &"ERR SCRIPT FLUSH only supports SYNC|ASYNC option"[0: 49]));
+    command_reply_cleanup(&flush_bad_mode_reply);
+    resp_value_free(&flush_bad_mode_parsed.value);
+
+    var flush_too_many_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nSCRIPT\r\n$5\r\nFLUSH\r\n$4\r\nSYNC\r\n$4\r\nBAD\r\n"[0: 40]);
+    const flush_too_many_command: Command = try command_executor_test_command(&router, &flush_too_many_parsed);
+    var flush_too_many_reply: CommandReply = command_execute_at(&engine, &flush_too_many_command, 1000u64);
+    try assert_eq_i32(flush_too_many_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(flush_too_many_reply.data, &"ERR unknown subcommand or wrong number of arguments for 'flush'. Try SCRIPT HELP."[0: 80]));
+    command_reply_cleanup(&flush_too_many_reply);
+    resp_value_free(&flush_too_many_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_command_script_help() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var out: [byte: 2048] = [];
+
+    var help_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nSCRIPT\r\n$4\r\nHELP\r\n"[0: 26]);
+    const help_command: Command = try command_executor_test_command(&router, &help_parsed);
+    var help_reply: CommandReply = command_execute_at(&engine, &help_command, 1000u64);
+    const help_len: usize = try connection_encode_reply(&help_reply, &out[0], 2048);
+    try assert_true(command_executor_test_contains(out[0: help_len], &"SCRIPT EXISTS"[0: 13]));
+    try assert_true(command_executor_test_contains(out[0: help_len], &"SCRIPT FLUSH"[0: 12]));
+    try assert_true(command_executor_test_contains(out[0: help_len], &"SCRIPT HELP"[0: 11]));
+    command_reply_cleanup(&help_reply);
+    resp_value_free(&help_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_command_script_debug() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+
+    var debug_no_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nSCRIPT\r\n$5\r\nDEBUG\r\n$2\r\nNO\r\n"[0: 31]);
+    const debug_no_command: Command = try command_executor_test_command(&router, &debug_no_parsed);
+    var debug_no_reply: CommandReply = command_execute_at(&engine, &debug_no_command, 1000u64);
+    try assert_eq_i32(debug_no_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(debug_no_reply.data, &"OK"[0: 2]));
+    command_reply_cleanup(&debug_no_reply);
+    resp_value_free(&debug_no_parsed.value);
+
+    var debug_yes_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nSCRIPT\r\n$5\r\nDEBUG\r\n$3\r\nYES\r\n"[0: 32]);
+    const debug_yes_command: Command = try command_executor_test_command(&router, &debug_yes_parsed);
+    var debug_yes_reply: CommandReply = command_execute_at(&engine, &debug_yes_command, 1000u64);
+    try assert_eq_i32(debug_yes_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(debug_yes_reply.data, &"ERR SCRIPT DEBUG is not supported in redis-uya"[0: 46]));
+    command_reply_cleanup(&debug_yes_reply);
+    resp_value_free(&debug_yes_parsed.value);
+
+    var debug_bad_arity_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nSCRIPT\r\n$5\r\nDEBUG\r\n"[0: 26]);
+    const debug_bad_arity_command: Command = try command_executor_test_command(&router, &debug_bad_arity_parsed);
+    var debug_bad_arity_reply: CommandReply = command_execute_at(&engine, &debug_bad_arity_command, 1000u64);
+    try assert_eq_i32(debug_bad_arity_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(debug_bad_arity_reply.data, &"ERR wrong number of arguments for 'script|debug' command"[0: 55]));
+    command_reply_cleanup(&debug_bad_arity_reply);
+    resp_value_free(&debug_bad_arity_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_command_script_load() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+
+    var load_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nSCRIPT\r\n$4\r\nLOAD\r\n$7\r\nreturn 1\r\n"[0: 37]);
+    const load_command: Command = try command_executor_test_command(&router, &load_parsed);
+    var load_reply: CommandReply = command_execute_at(&engine, &load_command, 1000u64);
+    try assert_eq_i32(load_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(load_reply.data, &"OK"[0: 2]));
+    command_reply_cleanup(&load_reply);
+    resp_value_free(&load_parsed.value);
+
+    var load_bad_arity_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nSCRIPT\r\n$4\r\nLOAD\r\n"[0: 26]);
+    const load_bad_arity_command: Command = try command_executor_test_command(&router, &load_bad_arity_parsed);
+    var load_bad_arity_reply: CommandReply = command_execute_at(&engine, &load_bad_arity_command, 1000u64);
+    try assert_eq_i32(load_bad_arity_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(load_bad_arity_reply.data, &"ERR wrong number of arguments for 'script|load' command"[0: 54]));
+    command_reply_cleanup(&load_bad_arity_reply);
+    resp_value_free(&load_bad_arity_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_command_script_kill() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+
+    var kill_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nSCRIPT\r\n$4\r\nKILL\r\n"[0: 25]);
+    const kill_command: Command = try command_executor_test_command(&router, &kill_parsed);
+    var kill_reply: CommandReply = command_execute_at(&engine, &kill_command, 1000u64);
+    try assert_eq_i32(kill_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(kill_reply.data, &"NOSCRIPT No scripts are currently running."[0: 42]));
+    command_reply_cleanup(&kill_reply);
+    resp_value_free(&kill_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_command_script_unknown_subcommand() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+
+    var unknown_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nSCRIPT\r\n$1\r\nX\r\n"[0: 23]);
+    const unknown_command: Command = try command_executor_test_command(&router, &unknown_parsed);
+    var unknown_reply: CommandReply = command_execute_at(&engine, &unknown_command, 1000u64);
+    try assert_eq_i32(unknown_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(unknown_reply.data, &"ERR unknown subcommand 'SCRIPT <subcommand>'. Try SCRIPT HELP."[0: 60]));
+    command_reply_cleanup(&unknown_reply);
+    resp_value_free(&unknown_parsed.value);
+
+    var bad_arity_parsed: RespParseResult = try parse_resp2(&"*1\r\n$6\r\nSCRIPT\r\n"[0: 17]);
+    const bad_arity_command: Command = try command_executor_test_command(&router, &bad_arity_parsed);
+    var bad_arity_reply: CommandReply = command_execute_at(&engine, &bad_arity_command, 1000u64);
+    try assert_eq_i32(bad_arity_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(bad_arity_reply.data, &"ERR wrong number of arguments for 'script' command"[0: 49]));
+    command_reply_cleanup(&bad_arity_reply);
+    resp_value_free(&bad_arity_parsed.value);
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}

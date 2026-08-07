@@ -196,7 +196,7 @@
 | `cms.query` | `cms` | `standalone-error` | `v1.1.0` | `-2` | `cms` | `no` | `@cms, @read` |
 | `command` | `server` | `partial` | `-` | `-1` | `-` | `no` | `@slow, @connection` |
 | `command|count` | `server` | `full` | `-` | `2` | `-` | `no` | `@slow, @connection` |
-| `command|docs` | `server` | `partial` | `-` | `-2` | `-` | `no` | `@slow, @connection` |
+| `command|docs` | `server` | `full` | `-` | `2` | `-` | `no` | `@slow, @connection` |
 | `command|getkeys` | `server` | `partial` | `-` | `-3` | `-` | `no` | `@slow, @connection` |
 | `command|getkeysandflags` | `server` | `partial` | `-` | `-3` | `-` | `no` | `@slow, @connection` |
 | `command|help` | `server` | `full` | `-` | `2` | `-` | `no` | `@slow, @connection` |
@@ -290,7 +290,7 @@
 | `getrange` | `string` | `full` | `-` | `4` | `-` | `no` | `@read, @string, @slow` |
 | `getset` | `string` | `full` | `-` | `3` | `-` | `no` | `@write, @string, @fast` |
 | `hdel` | `hash` | `full` | `-` | `-3` | `-` | `no` | `@write, @hash, @fast` |
-| `hello` | `connection` | `partial` | `-` | `-1` | `-` | `no` | `@fast, @connection` |
+| `hello` | `connection` | `full` | `-` | `2` | `-` | `no` | `@fast, @connection` |
 | `hexists` | `hash` | `full` | `-` | `3` | `-` | `no` | `@read, @hash, @fast` |
 | `hexpire` | `hash` | `partial` | `-` | `-6` | `-` | `no` | `@write, @hash, @fast` |
 | `hexpireat` | `hash` | `partial` | `-` | `-6` | `-` | `no` | `@write, @hash, @fast` |

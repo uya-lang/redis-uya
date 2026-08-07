@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 365 | 259 | 153 | 202 | 7 | 3 | 0 |
+| Tier A: standalone core | 365 | 259 | 157 | 198 | 7 | 3 | 0 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 153 | 146 | 0 | 0 | 153 | 0 | 0 |
 
@@ -24,8 +24,8 @@
 
 | status | count |
 |--------|-------|
-| `full` | `154` |
-| `partial` | `209` |
+| `full` | `158` |
+| `partial` | `205` |
 | `standalone-error` | `186` |
 | `alias` | `3` |
 | `deferred` | `0` |
@@ -202,12 +202,12 @@
 | `command|help` | `server` | `full` | `-` | `2` | `-` | `no` | `@slow, @connection` |
 | `command|info` | `server` | `full` | `-` | `-2` | `-` | `no` | `@slow, @connection` |
 | `command|list` | `server` | `partial` | `-` | `-2` | `-` | `yes` | `@slow, @connection` |
-| `config` | `server` | `partial` | `-` | `-2` | `-` | `no` | `@slow` |
-| `config|get` | `server` | `partial` | `-` | `-3` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `config` | `server` | `full` | `-` | `-2` | `-` | `no` | `@slow` |
+| `config|get` | `server` | `full` | `-` | `-3` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `config|help` | `server` | `full` | `-` | `2` | `-` | `no` | `@slow` |
 | `config|resetstat` | `server` | `full` | `-` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `config|rewrite` | `server` | `partial` | `-` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `config|set` | `server` | `partial` | `-` | `-4` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `config|rewrite` | `server` | `full` | `-` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `config|set` | `server` | `full` | `-` | `-4` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `copy` | `generic` | `partial` | `-` | `-3` | `-` | `no` | `@keyspace, @write, @slow` |
 | `dbsize` | `server` | `full` | `-` | `1` | `-` | `no` | `@keyspace, @read, @fast` |
 | `debug` | `server` | `standalone-error` | `v1.1.0` | `-2` | `-` | `no` | `@admin, @slow, @dangerous` |

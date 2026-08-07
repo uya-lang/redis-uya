@@ -100,7 +100,7 @@
 | `arseek` | `array` | `standalone-error` | `v1.1.0` | `3` | `array` | `no` | `@write, @array, @fast` |
 | `arset` | `array` | `standalone-error` | `v1.1.0` | `-4` | `array` | `no` | `@write, @array, @fast` |
 | `asking` | `cluster` | `standalone-error` | `v1.1.0` | `1` | `-` | `no` | `@fast, @connection` |
-| `auth` | `connection` | `partial` | `-` | `-2` | `-` | `no` | `@fast, @connection` |
+| `auth` | `connection` | `full` | `-` | `2` | `-` | `no` | `@fast, @connection` |
 | `bf.add` | `bf` | `standalone-error` | `v1.1.0` | `3` | `bf` | `no` | `@bloom, @write, @slow` |
 | `bf.card` | `bf` | `standalone-error` | `v1.1.0` | `2` | `bf` | `no` | `@bloom, @read, @fast` |
 | `bf.exists` | `bf` | `standalone-error` | `v1.1.0` | `3` | `bf` | `no` | `@bloom, @read, @slow` |
@@ -111,8 +111,8 @@
 | `bf.mexists` | `bf` | `standalone-error` | `v1.1.0` | `-2` | `bf` | `no` | `@bloom, @read, @slow` |
 | `bf.reserve` | `bf` | `standalone-error` | `v1.1.0` | `-4` | `bf` | `no` | `@bloom, @write, @fast` |
 | `bf.scandump` | `bf` | `standalone-error` | `v1.1.0` | `3` | `bf` | `no` | `@bloom, @write, @slow` |
-| `bgrewriteaof` | `server` | `partial` | `-` | `1` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `bgsave` | `server` | `partial` | `-` | `-1` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `bgrewriteaof` | `server` | `full` | `-` | `1` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `bgsave` | `server` | `full` | `-` | `1` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `bitcount` | `bitmap` | `full` | `-` | `-2` | `-` | `no` | `@read, @bitmap, @slow` |
 | `bitfield` | `bitmap` | `full` | `-` | `-2` | `-` | `no` | `@write, @bitmap, @slow` |
 | `bitfield_ro` | `bitmap` | `full` | `-` | `-2` | `-` | `no` | `@read, @bitmap, @fast` |
@@ -138,25 +138,25 @@
 | `cf.mexists` | `cf` | `standalone-error` | `v1.1.0` | `-2` | `cf` | `no` | `@cuckoo, @read, @slow` |
 | `cf.reserve` | `cf` | `standalone-error` | `v1.1.0` | `-3` | `cf` | `no` | `@cuckoo, @write, @fast` |
 | `cf.scandump` | `cf` | `standalone-error` | `v1.1.0` | `3` | `cf` | `no` | `@cuckoo, @write, @slow` |
-| `client` | `connection` | `partial` | `-` | `-2` | `-` | `no` | `@slow` |
-| `client|caching` | `connection` | `partial` | `-` | `3` | `-` | `no` | `@slow, @connection` |
-| `client|getname` | `connection` | `partial` | `-` | `2` | `-` | `no` | `@slow, @connection` |
+| `client` | `connection` | `full` | `-` | `2` | `-` | `no` | `@slow` |
+| `client|caching` | `connection` | `full` | `-` | `3` | `-` | `no` | `@slow, @connection` |
+| `client|getname` | `connection` | `full` | `-` | `2` | `-` | `no` | `@slow, @connection` |
 | `client|getredir` | `connection` | `full` | `-` | `2` | `-` | `no` | `@slow, @connection` |
 | `client|help` | `connection` | `full` | `-` | `2` | `-` | `no` | `@slow, @connection` |
 | `client|id` | `connection` | `full` | `-` | `2` | `-` | `no` | `@slow, @connection` |
-| `client|info` | `connection` | `partial` | `-` | `2` | `-` | `no` | `@slow, @connection` |
-| `client|kill` | `connection` | `partial` | `-` | `-3` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
-| `client|list` | `connection` | `partial` | `-` | `-2` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
-| `client|no-evict` | `connection` | `partial` | `-` | `3` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
-| `client|no-touch` | `connection` | `partial` | `-` | `3` | `-` | `no` | `@slow, @connection` |
-| `client|pause` | `connection` | `partial` | `-` | `-3` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
-| `client|reply` | `connection` | `partial` | `-` | `3` | `-` | `no` | `@slow, @connection` |
+| `client|info` | `connection` | `full` | `-` | `2` | `-` | `no` | `@slow, @connection` |
+| `client|kill` | `connection` | `full` | `-` | `3` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
+| `client|list` | `connection` | `full` | `-` | `2` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
+| `client|no-evict` | `connection` | `full` | `-` | `3` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
+| `client|no-touch` | `connection` | `full` | `-` | `3` | `-` | `no` | `@slow, @connection` |
+| `client|pause` | `connection` | `full` | `-` | `3` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
+| `client|reply` | `connection` | `full` | `-` | `3` | `-` | `no` | `@slow, @connection` |
 | `client|setinfo` | `connection` | `full` | `-` | `4` | `-` | `no` | `@slow, @connection` |
-| `client|setname` | `connection` | `partial` | `-` | `3` | `-` | `no` | `@slow, @connection` |
-| `client|tracking` | `connection` | `partial` | `-` | `-3` | `-` | `no` | `@slow, @connection` |
-| `client|trackinginfo` | `connection` | `partial` | `-` | `2` | `-` | `no` | `@slow, @connection` |
-| `client|unblock` | `connection` | `partial` | `-` | `-3` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
-| `client|unpause` | `connection` | `partial` | `-` | `2` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
+| `client|setname` | `connection` | `full` | `-` | `3` | `-` | `no` | `@slow, @connection` |
+| `client|tracking` | `connection` | `full` | `-` | `3` | `-` | `no` | `@slow, @connection` |
+| `client|trackinginfo` | `connection` | `full` | `-` | `2` | `-` | `no` | `@slow, @connection` |
+| `client|unblock` | `connection` | `full` | `-` | `3` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
+| `client|unpause` | `connection` | `full` | `-` | `2` | `-` | `no` | `@admin, @slow, @dangerous, @connection` |
 | `cluster` | `cluster` | `partial` | `-` | `-2` | `-` | `no` | `@slow` |
 | `cluster|addslots` | `cluster` | `standalone-error` | `v1.1.0` | `-3` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `cluster|addslotsrange` | `cluster` | `standalone-error` | `v1.1.0` | `-4` | `-` | `no` | `@admin, @slow, @dangerous` |
@@ -208,14 +208,14 @@
 | `config|resetstat` | `server` | `full` | `-` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `config|rewrite` | `server` | `full` | `-` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `config|set` | `server` | `full` | `-` | `-4` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `copy` | `generic` | `partial` | `-` | `-3` | `-` | `no` | `@keyspace, @write, @slow` |
+| `copy` | `generic` | `full` | `-` | `3` | `-` | `no` | `@keyspace, @write, @slow` |
 | `dbsize` | `server` | `full` | `-` | `1` | `-` | `no` | `@keyspace, @read, @fast` |
 | `debug` | `server` | `standalone-error` | `v1.1.0` | `-2` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `decr` | `string` | `full` | `-` | `2` | `-` | `no` | `@write, @string, @fast` |
 | `decrby` | `string` | `full` | `-` | `3` | `-` | `no` | `@write, @string, @fast` |
 | `del` | `generic` | `full` | `-` | `-2` | `-` | `no` | `@keyspace, @write, @slow` |
 | `delex` | `string` | `partial` | `-` | `-2` | `-` | `no` | `@write, @string, @fast` |
-| `digest` | `string` | `partial` | `-` | `2` | `-` | `no` | `@read, @string, @fast` |
+| `digest` | `string` | `full` | `-` | `2` | `-` | `no` | `@read, @string, @fast` |
 | `discard` | `transactions` | `full` | `-` | `1` | `-` | `no` | `@fast, @transaction` |
 | `dump` | `generic` | `full` | `-` | `2` | `-` | `no` | `@keyspace, @read, @slow` |
 | `echo` | `connection` | `full` | `-` | `2` | `-` | `no` | `@fast, @connection` |
@@ -231,8 +231,8 @@
 | `failover` | `server` | `standalone-error` | `v1.1.0` | `-1` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `fcall` | `scripting` | `partial` | `-` | `-3` | `-` | `no` | `@slow, @scripting` |
 | `fcall_ro` | `scripting` | `partial` | `-` | `-3` | `-` | `no` | `@slow, @scripting` |
-| `flushall` | `server` | `partial` | `-` | `-1` | `-` | `no` | `@keyspace, @write, @slow, @dangerous` |
-| `flushdb` | `server` | `partial` | `-` | `-1` | `-` | `no` | `@keyspace, @write, @slow, @dangerous` |
+| `flushall` | `server` | `full` | `-` | `1` | `-` | `no` | `@keyspace, @write, @slow, @dangerous` |
+| `flushdb` | `server` | `full` | `-` | `1` | `-` | `no` | `@keyspace, @write, @slow, @dangerous` |
 | `ft._list` | `search` | `standalone-error` | `v1.1.0` | `0` | `ft` | `no` | `@admin, @search, @slow` |
 | `ft.aggregate` | `search` | `standalone-error` | `v1.1.0` | `-3` | `ft` | `no` | `@search, @read, @fast` |
 | `ft.aliasadd` | `search` | `standalone-error` | `v1.1.0` | `3` | `ft` | `no` | `@search` |
@@ -263,16 +263,16 @@
 | `ft.syndump` | `search` | `standalone-error` | `v1.1.0` | `2` | `ft` | `no` | `@search` |
 | `ft.synupdate` | `search` | `standalone-error` | `v1.1.0` | `-3` | `ft` | `no` | `@search` |
 | `ft.tagvals` | `search` | `standalone-error` | `v1.1.0` | `3` | `ft` | `no` | `@dangerous, @read, @search, @slow` |
-| `function` | `scripting` | `partial` | `-` | `-2` | `-` | `no` | `@slow` |
-| `function|delete` | `scripting` | `partial` | `-` | `3` | `-` | `no` | `@write, @slow, @scripting` |
-| `function|dump` | `scripting` | `partial` | `-` | `2` | `-` | `no` | `@slow, @scripting` |
-| `function|flush` | `scripting` | `partial` | `-` | `-2` | `-` | `no` | `@write, @slow, @scripting` |
-| `function|help` | `scripting` | `partial` | `-` | `2` | `-` | `no` | `@slow, @scripting` |
-| `function|kill` | `scripting` | `partial` | `-` | `2` | `-` | `no` | `@slow, @scripting` |
-| `function|list` | `scripting` | `partial` | `-` | `-2` | `-` | `no` | `@slow, @scripting` |
-| `function|load` | `scripting` | `partial` | `-` | `-3` | `-` | `no` | `@write, @slow, @scripting` |
-| `function|restore` | `scripting` | `partial` | `-` | `-3` | `-` | `no` | `@write, @slow, @scripting` |
-| `function|stats` | `scripting` | `partial` | `-` | `2` | `-` | `no` | `@slow, @scripting` |
+| `function` | `scripting` | `full` | `-` | `2` | `-` | `no` | `@slow` |
+| `function|delete` | `scripting` | `full` | `-` | `3` | `-` | `no` | `@write, @slow, @scripting` |
+| `function|dump` | `scripting` | `full` | `-` | `2` | `-` | `no` | `@slow, @scripting` |
+| `function|flush` | `scripting` | `full` | `-` | `2` | `-` | `no` | `@write, @slow, @scripting` |
+| `function|help` | `scripting` | `full` | `-` | `2` | `-` | `no` | `@slow, @scripting` |
+| `function|kill` | `scripting` | `full` | `-` | `2` | `-` | `no` | `@slow, @scripting` |
+| `function|list` | `scripting` | `full` | `-` | `2` | `-` | `no` | `@slow, @scripting` |
+| `function|load` | `scripting` | `full` | `-` | `3` | `-` | `no` | `@write, @slow, @scripting` |
+| `function|restore` | `scripting` | `full` | `-` | `3` | `-` | `no` | `@write, @slow, @scripting` |
+| `function|stats` | `scripting` | `full` | `-` | `2` | `-` | `no` | `@slow, @scripting` |
 | `geoadd` | `geo` | `partial` | `-` | `-5` | `-` | `no` | `@write, @geo, @slow` |
 | `geodist` | `geo` | `partial` | `-` | `-4` | `-` | `no` | `@read, @geo, @slow` |
 | `geohash` | `geo` | `partial` | `-` | `-2` | `-` | `no` | `@read, @geo, @slow` |
@@ -459,7 +459,7 @@
 | `script|load` | `scripting` | `full` | `-` | `3` | `-` | `no` | `@slow, @scripting` |
 | `sdiff` | `set` | `full` | `-` | `-2` | `-` | `no` | `@read, @set, @slow` |
 | `sdiffstore` | `set` | `full` | `-` | `-3` | `-` | `no` | `@write, @set, @slow` |
-| `select` | `connection` | `partial` | `-` | `2` | `-` | `no` | `@fast, @connection` |
+| `select` | `connection` | `full` | `-` | `2` | `-` | `no` | `@fast, @connection` |
 | `set` | `string` | `full` | `-` | `-3` | `-` | `no` | `@write, @string, @slow` |
 | `setbit` | `bitmap` | `full` | `-` | `4` | `-` | `no` | `@write, @bitmap, @slow` |
 | `setex` | `string` | `full` | `-` | `4` | `-` | `no` | `@write, @string, @slow` |

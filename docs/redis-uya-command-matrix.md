@@ -24,8 +24,8 @@
 
 | status | count |
 |--------|-------|
-| `full` | `192` |
-| `partial` | `169` |
+| `full` | `193` |
+| `partial` | `168` |
 | `standalone-error` | `185` |
 | `alias` | `3` |
 | `deferred` | `0` |

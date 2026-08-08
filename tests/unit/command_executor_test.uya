@@ -759,7 +759,7 @@ export fn test_command_command_catalog_core() !void {
     command_reply_cleanup(&list_hidden_reply);
     resp_value_free(&list_hidden_parsed.value);
 
-    try command_executor_test_assert_catalog_status(&"blmove"[0: 6], CommandCatalogStatus.status_partial);
+    try command_executor_test_assert_catalog_status(&"blmove"[0: 6], CommandCatalogStatus.status_full);
     try command_executor_test_assert_catalog_status(&"copy"[0: 4], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"restore-asking"[0: 14], CommandCatalogStatus.status_partial);
     try command_executor_test_assert_catalog_status(&"acl"[0: 3], CommandCatalogStatus.status_partial);

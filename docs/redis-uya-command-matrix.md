@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 382 | 265 | 146 | 209 | 7 | 3 | 17 |
+| Tier A: standalone core | 382 | 265 | 154 | 201 | 7 | 3 | 17 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 158 | 151 | 0 | 0 | 153 | 0 | 5 |
 
@@ -24,8 +24,8 @@
 
 | status | count |
 |--------|-------|
-| `full` | `147` |
-| `partial` | `216` |
+| `full` | `155` |
+| `partial` | `208` |
 | `standalone-error` | `186` |
 | `alias` | `3` |
 | `deferred` | `22` |
@@ -126,15 +126,15 @@
 | `bitfield_ro` | `bitmap` | `full` | `-` | `-2` | `-` | `no` | `@read, @bitmap, @fast` |
 | `bitop` | `bitmap` | `full` | `-` | `-4` | `-` | `no` | `@write, @bitmap, @slow` |
 | `bitpos` | `bitmap` | `full` | `-` | `-3` | `-` | `no` | `@read, @bitmap, @slow` |
-| `blmove` | `list` | `partial` | `-` | `6` | `-` | `no` | `@write, @list, @slow, @blocking` |
+| `blmove` | `list` | `full` | `-` | `6` | `-` | `no` | `@write, @list, @slow, @blocking` |
 | `blmovem` | `list` | `deferred` | `v0.9.1` | `-6` | `-` | `no` | `@write, @list, @slow, @blocking` |
-| `blmpop` | `list` | `partial` | `-` | `-5` | `-` | `no` | `@write, @list, @slow, @blocking` |
-| `blpop` | `list` | `partial` | `-` | `-3` | `-` | `no` | `@write, @list, @slow, @blocking` |
-| `brpop` | `list` | `partial` | `-` | `-3` | `-` | `no` | `@write, @list, @slow, @blocking` |
-| `brpoplpush` | `list` | `partial` | `-` | `4` | `-` | `no` | `@write, @list, @slow, @blocking` |
-| `bzmpop` | `sorted-set` | `partial` | `-` | `-5` | `-` | `no` | `@write, @sortedset, @slow, @blocking` |
-| `bzpopmax` | `sorted-set` | `partial` | `-` | `-3` | `-` | `no` | `@write, @sortedset, @fast, @blocking` |
-| `bzpopmin` | `sorted-set` | `partial` | `-` | `-3` | `-` | `no` | `@write, @sortedset, @fast, @blocking` |
+| `blmpop` | `list` | `full` | `-` | `-5` | `-` | `no` | `@write, @list, @slow, @blocking` |
+| `blpop` | `list` | `full` | `-` | `-3` | `-` | `no` | `@write, @list, @slow, @blocking` |
+| `brpop` | `list` | `full` | `-` | `-3` | `-` | `no` | `@write, @list, @slow, @blocking` |
+| `brpoplpush` | `list` | `full` | `-` | `4` | `-` | `no` | `@write, @list, @slow, @blocking` |
+| `bzmpop` | `sorted-set` | `full` | `-` | `-5` | `-` | `no` | `@write, @sortedset, @slow, @blocking` |
+| `bzpopmax` | `sorted-set` | `full` | `-` | `-3` | `-` | `no` | `@write, @sortedset, @fast, @blocking` |
+| `bzpopmin` | `sorted-set` | `full` | `-` | `-3` | `-` | `no` | `@write, @sortedset, @fast, @blocking` |
 | `cf.add` | `cf` | `standalone-error` | `v1.1.0` | `3` | `cf` | `no` | `@cuckoo, @write, @slow` |
 | `cf.addnx` | `cf` | `standalone-error` | `v1.1.0` | `3` | `cf` | `no` | `@cuckoo, @write, @slow` |
 | `cf.count` | `cf` | `standalone-error` | `v1.1.0` | `3` | `cf` | `no` | `@cuckoo, @read, @slow` |

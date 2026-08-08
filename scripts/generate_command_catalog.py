@@ -110,6 +110,14 @@ OPS_TARGET_NAMES = {
 }
 
 FULL_NAMES = {
+    "blmove",
+    "blmpop",
+    "blpop",
+    "brpop",
+    "brpoplpush",
+    "bzmpop",
+    "bzpopmax",
+    "bzpopmin",
     "append",
     "auth",
     "bgrewriteaof",
@@ -276,6 +284,7 @@ FULL_NAMES = {
     "zrevrangebyscore",
     "zrevrank",
     "zscan",
+
 }
 
 PARTIAL_NAMES = {
@@ -296,14 +305,6 @@ PARTIAL_NAMES = {
     "auth",
     "bgrewriteaof",
     "bgsave",
-    "blmove",
-    "blmpop",
-    "blpop",
-    "brpop",
-    "brpoplpush",
-    "bzmpop",
-    "bzpopmax",
-    "bzpopmin",
     "client",
     "client|caching",
     "client|getname",
@@ -495,6 +496,7 @@ PARTIAL_NAMES = {
     "pfcount",
     "pfmerge",
     "pfselftest",
+
 }
 
 STANDALONE_ERROR_NAMES = {

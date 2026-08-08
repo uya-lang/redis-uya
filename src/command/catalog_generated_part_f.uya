@@ -5,27 +5,27 @@ use src.command.catalog_generated_base.CommandCatalogStatus;
 export fn command_catalog_generated_part_f(index: usize) CommandCatalogEntry {
     if index == 80 {
         return CommandCatalogEntry{
-            name: &"client|list"[0: 11],
-            group: &"connection"[0: 10],
-            module_name: &""[0: 0],
+            name: &"cf.scandump"[0: 11],
+            group: &"cf"[0: 2],
+            module_name: &"cf"[0: 2],
             acl_tags: &""[0: 0],
             flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_partial,
-            target_version: &""[0: 0],
+            status: CommandCatalogStatus.status_standalone_error,
+            target_version: &"v1.1.0"[0: 6],
             summary: &""[0: 0],
             since: &""[0: 0],
             complexity: &""[0: 0],
             is_pattern: false,
-            is_top_level: false,
-            arity: -2,
-            first_key: 0,
+            is_top_level: true,
+            arity: 3,
+            first_key: 1,
             last_key: 0,
-            key_step: 0,
+            key_step: 1,
         };
     }
     if index == 81 {
         return CommandCatalogEntry{
-            name: &"client|no-evict"[0: 15],
+            name: &"client"[0: 6],
             group: &"connection"[0: 10],
             module_name: &""[0: 0],
             acl_tags: &""[0: 0],
@@ -36,8 +36,8 @@ export fn command_catalog_generated_part_f(index: usize) CommandCatalogEntry {
             since: &""[0: 0],
             complexity: &""[0: 0],
             is_pattern: false,
-            is_top_level: false,
-            arity: 3,
+            is_top_level: true,
+            arity: -2,
             first_key: 0,
             last_key: 0,
             key_step: 0,
@@ -45,7 +45,7 @@ export fn command_catalog_generated_part_f(index: usize) CommandCatalogEntry {
     }
     if index == 82 {
         return CommandCatalogEntry{
-            name: &"client|no-touch"[0: 15],
+            name: &"client|caching"[0: 14],
             group: &"connection"[0: 10],
             module_name: &""[0: 0],
             acl_tags: &""[0: 0],
@@ -65,6 +65,186 @@ export fn command_catalog_generated_part_f(index: usize) CommandCatalogEntry {
     }
     if index == 83 {
         return CommandCatalogEntry{
+            name: &"client|getname"[0: 14],
+            group: &"connection"[0: 10],
+            module_name: &""[0: 0],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_partial,
+            target_version: &""[0: 0],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: false,
+            arity: 2,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 84 {
+        return CommandCatalogEntry{
+            name: &"client|getredir"[0: 15],
+            group: &"connection"[0: 10],
+            module_name: &""[0: 0],
+            acl_tags: &"slow|connection"[0: 15],
+            flag_tags: &"noscript|loading|stale"[0: 22],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Returns the client ID to which the connection's tracking notifications are redirected."[0: 86],
+            since: &"6.0.0"[0: 5],
+            complexity: &"O(1)"[0: 4],
+            is_pattern: false,
+            is_top_level: false,
+            arity: 2,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 85 {
+        return CommandCatalogEntry{
+            name: &"client|help"[0: 11],
+            group: &"connection"[0: 10],
+            module_name: &""[0: 0],
+            acl_tags: &"slow|connection"[0: 15],
+            flag_tags: &"loading|stale"[0: 13],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Returns helpful text about the different subcommands."[0: 53],
+            since: &"5.0.0"[0: 5],
+            complexity: &"O(1)"[0: 4],
+            is_pattern: false,
+            is_top_level: false,
+            arity: 2,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 86 {
+        return CommandCatalogEntry{
+            name: &"client|id"[0: 9],
+            group: &"connection"[0: 10],
+            module_name: &""[0: 0],
+            acl_tags: &"slow|connection"[0: 15],
+            flag_tags: &"noscript|loading|stale"[0: 22],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Returns the unique client ID of the connection."[0: 47],
+            since: &"5.0.0"[0: 5],
+            complexity: &"O(1)"[0: 4],
+            is_pattern: false,
+            is_top_level: false,
+            arity: 2,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 87 {
+        return CommandCatalogEntry{
+            name: &"client|info"[0: 11],
+            group: &"connection"[0: 10],
+            module_name: &""[0: 0],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_partial,
+            target_version: &""[0: 0],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: false,
+            arity: 2,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 88 {
+        return CommandCatalogEntry{
+            name: &"client|kill"[0: 11],
+            group: &"connection"[0: 10],
+            module_name: &""[0: 0],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_partial,
+            target_version: &""[0: 0],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: false,
+            arity: -3,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 89 {
+        return CommandCatalogEntry{
+            name: &"client|list"[0: 11],
+            group: &"connection"[0: 10],
+            module_name: &""[0: 0],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_partial,
+            target_version: &""[0: 0],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: false,
+            arity: -2,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 90 {
+        return CommandCatalogEntry{
+            name: &"client|no-evict"[0: 15],
+            group: &"connection"[0: 10],
+            module_name: &""[0: 0],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_partial,
+            target_version: &""[0: 0],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: false,
+            arity: 3,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 91 {
+        return CommandCatalogEntry{
+            name: &"client|no-touch"[0: 15],
+            group: &"connection"[0: 10],
+            module_name: &""[0: 0],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_partial,
+            target_version: &""[0: 0],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: false,
+            arity: 3,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 92 {
+        return CommandCatalogEntry{
             name: &"client|pause"[0: 12],
             group: &"connection"[0: 10],
             module_name: &""[0: 0],
@@ -83,7 +263,7 @@ export fn command_catalog_generated_part_f(index: usize) CommandCatalogEntry {
             key_step: 0,
         };
     }
-    if index == 84 {
+    if index == 93 {
         return CommandCatalogEntry{
             name: &"client|reply"[0: 12],
             group: &"connection"[0: 10],
@@ -103,7 +283,7 @@ export fn command_catalog_generated_part_f(index: usize) CommandCatalogEntry {
             key_step: 0,
         };
     }
-    if index == 85 {
+    if index == 94 {
         return CommandCatalogEntry{
             name: &"client|setinfo"[0: 14],
             group: &"connection"[0: 10],
@@ -123,7 +303,7 @@ export fn command_catalog_generated_part_f(index: usize) CommandCatalogEntry {
             key_step: 0,
         };
     }
-    if index == 86 {
+    if index == 95 {
         return CommandCatalogEntry{
             name: &"client|setname"[0: 14],
             group: &"connection"[0: 10],
@@ -132,186 +312,6 @@ export fn command_catalog_generated_part_f(index: usize) CommandCatalogEntry {
             flag_tags: &""[0: 0],
             status: CommandCatalogStatus.status_partial,
             target_version: &""[0: 0],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: false,
-            arity: 3,
-            first_key: 0,
-            last_key: 0,
-            key_step: 0,
-        };
-    }
-    if index == 87 {
-        return CommandCatalogEntry{
-            name: &"client|tracking"[0: 15],
-            group: &"connection"[0: 10],
-            module_name: &""[0: 0],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_partial,
-            target_version: &""[0: 0],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: false,
-            arity: -3,
-            first_key: 0,
-            last_key: 0,
-            key_step: 0,
-        };
-    }
-    if index == 88 {
-        return CommandCatalogEntry{
-            name: &"client|trackinginfo"[0: 19],
-            group: &"connection"[0: 10],
-            module_name: &""[0: 0],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_partial,
-            target_version: &""[0: 0],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: false,
-            arity: 2,
-            first_key: 0,
-            last_key: 0,
-            key_step: 0,
-        };
-    }
-    if index == 89 {
-        return CommandCatalogEntry{
-            name: &"client|unblock"[0: 14],
-            group: &"connection"[0: 10],
-            module_name: &""[0: 0],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_partial,
-            target_version: &""[0: 0],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: false,
-            arity: -3,
-            first_key: 0,
-            last_key: 0,
-            key_step: 0,
-        };
-    }
-    if index == 90 {
-        return CommandCatalogEntry{
-            name: &"client|unpause"[0: 14],
-            group: &"connection"[0: 10],
-            module_name: &""[0: 0],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_partial,
-            target_version: &""[0: 0],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: false,
-            arity: 2,
-            first_key: 0,
-            last_key: 0,
-            key_step: 0,
-        };
-    }
-    if index == 91 {
-        return CommandCatalogEntry{
-            name: &"cluster"[0: 7],
-            group: &"cluster"[0: 7],
-            module_name: &""[0: 0],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_partial,
-            target_version: &""[0: 0],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: true,
-            arity: -2,
-            first_key: 0,
-            last_key: 0,
-            key_step: 0,
-        };
-    }
-    if index == 92 {
-        return CommandCatalogEntry{
-            name: &"cluster|addslots"[0: 16],
-            group: &"cluster"[0: 7],
-            module_name: &""[0: 0],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_standalone_error,
-            target_version: &"v1.1.0"[0: 6],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: false,
-            arity: -3,
-            first_key: 0,
-            last_key: 0,
-            key_step: 0,
-        };
-    }
-    if index == 93 {
-        return CommandCatalogEntry{
-            name: &"cluster|addslotsrange"[0: 21],
-            group: &"cluster"[0: 7],
-            module_name: &""[0: 0],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_standalone_error,
-            target_version: &"v1.1.0"[0: 6],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: false,
-            arity: -4,
-            first_key: 0,
-            last_key: 0,
-            key_step: 0,
-        };
-    }
-    if index == 94 {
-        return CommandCatalogEntry{
-            name: &"cluster|bumpepoch"[0: 17],
-            group: &"cluster"[0: 7],
-            module_name: &""[0: 0],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_standalone_error,
-            target_version: &"v1.1.0"[0: 6],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: false,
-            arity: 2,
-            first_key: 0,
-            last_key: 0,
-            key_step: 0,
-        };
-    }
-    if index == 95 {
-        return CommandCatalogEntry{
-            name: &"cluster|count-failure-reports"[0: 29],
-            group: &"cluster"[0: 7],
-            module_name: &""[0: 0],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_standalone_error,
-            target_version: &"v1.1.0"[0: 6],
             summary: &""[0: 0],
             since: &""[0: 0],
             complexity: &""[0: 0],

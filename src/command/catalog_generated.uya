@@ -36,9 +36,10 @@ use src.command.catalog_generated_part_af.command_catalog_generated_part_af;
 use src.command.catalog_generated_part_ag.command_catalog_generated_part_ag;
 use src.command.catalog_generated_part_ah.command_catalog_generated_part_ah;
 use src.command.catalog_generated_part_ai.command_catalog_generated_part_ai;
+use src.command.catalog_generated_part_aj.command_catalog_generated_part_aj;
 
-const COMMAND_CATALOG_TOTAL_COUNT: usize = 552;
-const COMMAND_CATALOG_TOP_LEVEL_COUNT: usize = 409;
+const COMMAND_CATALOG_TOTAL_COUNT: usize = 574;
+const COMMAND_CATALOG_TOP_LEVEL_COUNT: usize = 420;
 
 export fn command_catalog_generated_total_count() usize {
     return COMMAND_CATALOG_TOTAL_COUNT;
@@ -151,8 +152,11 @@ export fn command_catalog_generated_entry(index: usize) !CommandCatalogEntry {
     if index >= 528 && index < 544 {
         return command_catalog_generated_part_ah(index);
     }
-    if index >= 544 && index < 552 {
+    if index >= 544 && index < 560 {
         return command_catalog_generated_part_ai(index);
+    }
+    if index >= 560 && index < 574 {
+        return command_catalog_generated_part_aj(index);
     }
     return error.CommandUnknown;
 }

@@ -5,36 +5,16 @@ use src.command.catalog_generated_base.CommandCatalogStatus;
 export fn command_catalog_generated_part_k(index: usize) CommandCatalogEntry {
     if index == 160 {
         return CommandCatalogEntry{
-            name: &"expireat"[0: 8],
+            name: &"dump"[0: 4],
             group: &"generic"[0: 7],
             module_name: &""[0: 0],
-            acl_tags: &"keyspace|write|fast"[0: 19],
-            flag_tags: &"write|fast"[0: 10],
+            acl_tags: &"keyspace|read|slow"[0: 18],
+            flag_tags: &"readonly"[0: 8],
             status: CommandCatalogStatus.status_full,
             target_version: &""[0: 0],
-            summary: &"Sets the expiration time of a key to a Unix timestamp."[0: 54],
-            since: &"1.2.0"[0: 5],
-            complexity: &"O(1)"[0: 4],
-            is_pattern: false,
-            is_top_level: true,
-            arity: -3,
-            first_key: 1,
-            last_key: 0,
-            key_step: 1,
-        };
-    }
-    if index == 161 {
-        return CommandCatalogEntry{
-            name: &"expiretime"[0: 10],
-            group: &"generic"[0: 7],
-            module_name: &""[0: 0],
-            acl_tags: &"keyspace|read|fast"[0: 18],
-            flag_tags: &"readonly|fast"[0: 13],
-            status: CommandCatalogStatus.status_full,
-            target_version: &""[0: 0],
-            summary: &"Returns the expiration time of a key as a Unix timestamp."[0: 57],
-            since: &"7.0.0"[0: 5],
-            complexity: &"O(1)"[0: 4],
+            summary: &"Returns a serialized representation of the value stored at a key."[0: 65],
+            since: &"2.6.0"[0: 5],
+            complexity: &"O(1) to access the key and additional O(N*M) to serialize it, where N is the number of Redis objects composing the value and M their average size. For small string values the time complexity is thus O(1)+O(1*M) where M is small, so simply O(1)."[0: 244],
             is_pattern: false,
             is_top_level: true,
             arity: 2,
@@ -43,21 +23,41 @@ export fn command_catalog_generated_part_k(index: usize) CommandCatalogEntry {
             key_step: 1,
         };
     }
+    if index == 161 {
+        return CommandCatalogEntry{
+            name: &"echo"[0: 4],
+            group: &"connection"[0: 10],
+            module_name: &""[0: 0],
+            acl_tags: &"fast|connection"[0: 15],
+            flag_tags: &"loading|stale|fast"[0: 18],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Returns the given string."[0: 25],
+            since: &"1.0.0"[0: 5],
+            complexity: &"O(1)"[0: 4],
+            is_pattern: false,
+            is_top_level: true,
+            arity: 2,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
     if index == 162 {
         return CommandCatalogEntry{
-            name: &"failover"[0: 8],
-            group: &"server"[0: 6],
+            name: &"eval"[0: 4],
+            group: &"scripting"[0: 9],
             module_name: &""[0: 0],
             acl_tags: &""[0: 0],
             flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_standalone_error,
-            target_version: &"v1.1.0"[0: 6],
+            status: CommandCatalogStatus.status_partial,
+            target_version: &""[0: 0],
             summary: &""[0: 0],
             since: &""[0: 0],
             complexity: &""[0: 0],
             is_pattern: false,
             is_top_level: true,
-            arity: -1,
+            arity: -3,
             first_key: 0,
             last_key: 0,
             key_step: 0,
@@ -65,7 +65,7 @@ export fn command_catalog_generated_part_k(index: usize) CommandCatalogEntry {
     }
     if index == 163 {
         return CommandCatalogEntry{
-            name: &"fcall"[0: 5],
+            name: &"eval_ro"[0: 7],
             group: &"scripting"[0: 9],
             module_name: &""[0: 0],
             acl_tags: &""[0: 0],
@@ -85,7 +85,7 @@ export fn command_catalog_generated_part_k(index: usize) CommandCatalogEntry {
     }
     if index == 164 {
         return CommandCatalogEntry{
-            name: &"fcall_ro"[0: 8],
+            name: &"evalsha"[0: 7],
             group: &"scripting"[0: 9],
             module_name: &""[0: 0],
             acl_tags: &""[0: 0],
@@ -105,6 +105,186 @@ export fn command_catalog_generated_part_k(index: usize) CommandCatalogEntry {
     }
     if index == 165 {
         return CommandCatalogEntry{
+            name: &"evalsha_ro"[0: 10],
+            group: &"scripting"[0: 9],
+            module_name: &""[0: 0],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_partial,
+            target_version: &""[0: 0],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: true,
+            arity: -3,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 166 {
+        return CommandCatalogEntry{
+            name: &"exec"[0: 4],
+            group: &"transactions"[0: 12],
+            module_name: &""[0: 0],
+            acl_tags: &"slow|transaction"[0: 16],
+            flag_tags: &"noscript|loading|stale|skip_slowlog"[0: 35],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Executes all commands in a transaction."[0: 39],
+            since: &"1.2.0"[0: 5],
+            complexity: &"Depends on commands in the transaction"[0: 38],
+            is_pattern: false,
+            is_top_level: true,
+            arity: 1,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 167 {
+        return CommandCatalogEntry{
+            name: &"exists"[0: 6],
+            group: &"generic"[0: 7],
+            module_name: &""[0: 0],
+            acl_tags: &"keyspace|read|fast"[0: 18],
+            flag_tags: &"readonly|fast"[0: 13],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Determines whether one or more keys exist."[0: 42],
+            since: &"1.0.0"[0: 5],
+            complexity: &"O(N) where N is the number of keys to check."[0: 44],
+            is_pattern: false,
+            is_top_level: true,
+            arity: -2,
+            first_key: 1,
+            last_key: -1,
+            key_step: 1,
+        };
+    }
+    if index == 168 {
+        return CommandCatalogEntry{
+            name: &"expire"[0: 6],
+            group: &"generic"[0: 7],
+            module_name: &""[0: 0],
+            acl_tags: &"keyspace|write|fast"[0: 19],
+            flag_tags: &"write|fast"[0: 10],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Sets the expiration time of a key in seconds."[0: 45],
+            since: &"1.0.0"[0: 5],
+            complexity: &"O(1)"[0: 4],
+            is_pattern: false,
+            is_top_level: true,
+            arity: -3,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 169 {
+        return CommandCatalogEntry{
+            name: &"expireat"[0: 8],
+            group: &"generic"[0: 7],
+            module_name: &""[0: 0],
+            acl_tags: &"keyspace|write|fast"[0: 19],
+            flag_tags: &"write|fast"[0: 10],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Sets the expiration time of a key to a Unix timestamp."[0: 54],
+            since: &"1.2.0"[0: 5],
+            complexity: &"O(1)"[0: 4],
+            is_pattern: false,
+            is_top_level: true,
+            arity: -3,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 170 {
+        return CommandCatalogEntry{
+            name: &"expiretime"[0: 10],
+            group: &"generic"[0: 7],
+            module_name: &""[0: 0],
+            acl_tags: &"keyspace|read|fast"[0: 18],
+            flag_tags: &"readonly|fast"[0: 13],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Returns the expiration time of a key as a Unix timestamp."[0: 57],
+            since: &"7.0.0"[0: 5],
+            complexity: &"O(1)"[0: 4],
+            is_pattern: false,
+            is_top_level: true,
+            arity: 2,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 171 {
+        return CommandCatalogEntry{
+            name: &"failover"[0: 8],
+            group: &"server"[0: 6],
+            module_name: &""[0: 0],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_standalone_error,
+            target_version: &"v1.1.0"[0: 6],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: true,
+            arity: -1,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 172 {
+        return CommandCatalogEntry{
+            name: &"fcall"[0: 5],
+            group: &"scripting"[0: 9],
+            module_name: &""[0: 0],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_partial,
+            target_version: &""[0: 0],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: true,
+            arity: -3,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 173 {
+        return CommandCatalogEntry{
+            name: &"fcall_ro"[0: 8],
+            group: &"scripting"[0: 9],
+            module_name: &""[0: 0],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_partial,
+            target_version: &""[0: 0],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: true,
+            arity: -3,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 174 {
+        return CommandCatalogEntry{
             name: &"flushall"[0: 8],
             group: &"server"[0: 6],
             module_name: &""[0: 0],
@@ -123,7 +303,7 @@ export fn command_catalog_generated_part_k(index: usize) CommandCatalogEntry {
             key_step: 0,
         };
     }
-    if index == 166 {
+    if index == 175 {
         return CommandCatalogEntry{
             name: &"flushdb"[0: 7],
             group: &"server"[0: 6],
@@ -138,186 +318,6 @@ export fn command_catalog_generated_part_k(index: usize) CommandCatalogEntry {
             is_pattern: false,
             is_top_level: true,
             arity: -1,
-            first_key: 0,
-            last_key: 0,
-            key_step: 0,
-        };
-    }
-    if index == 167 {
-        return CommandCatalogEntry{
-            name: &"ft._list"[0: 8],
-            group: &"search"[0: 6],
-            module_name: &"ft"[0: 2],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_standalone_error,
-            target_version: &"v1.1.0"[0: 6],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: true,
-            arity: 0,
-            first_key: 0,
-            last_key: 0,
-            key_step: 0,
-        };
-    }
-    if index == 168 {
-        return CommandCatalogEntry{
-            name: &"ft.aggregate"[0: 12],
-            group: &"search"[0: 6],
-            module_name: &"ft"[0: 2],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_standalone_error,
-            target_version: &"v1.1.0"[0: 6],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: true,
-            arity: -3,
-            first_key: 0,
-            last_key: 0,
-            key_step: 0,
-        };
-    }
-    if index == 169 {
-        return CommandCatalogEntry{
-            name: &"ft.aliasadd"[0: 11],
-            group: &"search"[0: 6],
-            module_name: &"ft"[0: 2],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_standalone_error,
-            target_version: &"v1.1.0"[0: 6],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: true,
-            arity: 3,
-            first_key: 0,
-            last_key: 0,
-            key_step: 0,
-        };
-    }
-    if index == 170 {
-        return CommandCatalogEntry{
-            name: &"ft.aliasdel"[0: 11],
-            group: &"search"[0: 6],
-            module_name: &"ft"[0: 2],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_standalone_error,
-            target_version: &"v1.1.0"[0: 6],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: true,
-            arity: 2,
-            first_key: 0,
-            last_key: 0,
-            key_step: 0,
-        };
-    }
-    if index == 171 {
-        return CommandCatalogEntry{
-            name: &"ft.aliasupdate"[0: 14],
-            group: &"search"[0: 6],
-            module_name: &"ft"[0: 2],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_standalone_error,
-            target_version: &"v1.1.0"[0: 6],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: true,
-            arity: 3,
-            first_key: 0,
-            last_key: 0,
-            key_step: 0,
-        };
-    }
-    if index == 172 {
-        return CommandCatalogEntry{
-            name: &"ft.alter"[0: 8],
-            group: &"search"[0: 6],
-            module_name: &"ft"[0: 2],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_standalone_error,
-            target_version: &"v1.1.0"[0: 6],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: true,
-            arity: -6,
-            first_key: 0,
-            last_key: 0,
-            key_step: 0,
-        };
-    }
-    if index == 173 {
-        return CommandCatalogEntry{
-            name: &"ft.config|get"[0: 13],
-            group: &"search"[0: 6],
-            module_name: &"ft"[0: 2],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_standalone_error,
-            target_version: &"v1.1.0"[0: 6],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: false,
-            arity: 2,
-            first_key: 0,
-            last_key: 0,
-            key_step: 0,
-        };
-    }
-    if index == 174 {
-        return CommandCatalogEntry{
-            name: &"ft.config|help"[0: 14],
-            group: &"search"[0: 6],
-            module_name: &"ft"[0: 2],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_standalone_error,
-            target_version: &"v1.1.0"[0: 6],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: false,
-            arity: 2,
-            first_key: 0,
-            last_key: 0,
-            key_step: 0,
-        };
-    }
-    if index == 175 {
-        return CommandCatalogEntry{
-            name: &"ft.config|set"[0: 13],
-            group: &"search"[0: 6],
-            module_name: &"ft"[0: 2],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_standalone_error,
-            target_version: &"v1.1.0"[0: 6],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: false,
-            arity: 3,
             first_key: 0,
             last_key: 0,
             key_step: 0,

@@ -5,9 +5,9 @@ use src.command.catalog_generated_base.CommandCatalogStatus;
 export fn command_catalog_generated_part_ac(index: usize) CommandCatalogEntry {
     if index == 448 {
         return CommandCatalogEntry{
-            name: &"topk.list"[0: 9],
-            group: &"topk"[0: 4],
-            module_name: &"topk"[0: 4],
+            name: &"tdigest.byrank"[0: 14],
+            group: &"tdigest"[0: 7],
+            module_name: &"tdigest"[0: 7],
             acl_tags: &""[0: 0],
             flag_tags: &""[0: 0],
             status: CommandCatalogStatus.status_standalone_error,
@@ -25,9 +25,9 @@ export fn command_catalog_generated_part_ac(index: usize) CommandCatalogEntry {
     }
     if index == 449 {
         return CommandCatalogEntry{
-            name: &"topk.query"[0: 10],
-            group: &"topk"[0: 4],
-            module_name: &"topk"[0: 4],
+            name: &"tdigest.byrevrank"[0: 17],
+            group: &"tdigest"[0: 7],
+            module_name: &"tdigest"[0: 7],
             acl_tags: &""[0: 0],
             flag_tags: &""[0: 0],
             status: CommandCatalogStatus.status_standalone_error,
@@ -45,9 +45,9 @@ export fn command_catalog_generated_part_ac(index: usize) CommandCatalogEntry {
     }
     if index == 450 {
         return CommandCatalogEntry{
-            name: &"topk.reserve"[0: 12],
-            group: &"topk"[0: 4],
-            module_name: &"topk"[0: 4],
+            name: &"tdigest.cdf"[0: 11],
+            group: &"tdigest"[0: 7],
+            module_name: &"tdigest"[0: 7],
             acl_tags: &""[0: 0],
             flag_tags: &""[0: 0],
             status: CommandCatalogStatus.status_standalone_error,
@@ -57,7 +57,7 @@ export fn command_catalog_generated_part_ac(index: usize) CommandCatalogEntry {
             complexity: &""[0: 0],
             is_pattern: false,
             is_top_level: true,
-            arity: -3,
+            arity: -2,
             first_key: 1,
             last_key: 0,
             key_step: 1,
@@ -65,29 +65,9 @@ export fn command_catalog_generated_part_ac(index: usize) CommandCatalogEntry {
     }
     if index == 451 {
         return CommandCatalogEntry{
-            name: &"touch"[0: 5],
-            group: &"generic"[0: 7],
-            module_name: &""[0: 0],
-            acl_tags: &"keyspace|read|fast"[0: 18],
-            flag_tags: &"readonly|fast"[0: 13],
-            status: CommandCatalogStatus.status_full,
-            target_version: &""[0: 0],
-            summary: &"Returns the number of existing keys out of those specified after updating the time they were last accessed."[0: 107],
-            since: &"3.2.1"[0: 5],
-            complexity: &"O(N) where N is the number of keys that will be touched."[0: 56],
-            is_pattern: false,
-            is_top_level: true,
-            arity: -2,
-            first_key: 1,
-            last_key: -1,
-            key_step: 1,
-        };
-    }
-    if index == 452 {
-        return CommandCatalogEntry{
-            name: &"ts.add"[0: 6],
-            group: &"timeseries"[0: 10],
-            module_name: &"ts"[0: 2],
+            name: &"tdigest.create"[0: 14],
+            group: &"tdigest"[0: 7],
+            module_name: &"tdigest"[0: 7],
             acl_tags: &""[0: 0],
             flag_tags: &""[0: 0],
             status: CommandCatalogStatus.status_standalone_error,
@@ -97,7 +77,27 @@ export fn command_catalog_generated_part_ac(index: usize) CommandCatalogEntry {
             complexity: &""[0: 0],
             is_pattern: false,
             is_top_level: true,
-            arity: -4,
+            arity: -2,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 452 {
+        return CommandCatalogEntry{
+            name: &"tdigest.info"[0: 12],
+            group: &"tdigest"[0: 7],
+            module_name: &"tdigest"[0: 7],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_standalone_error,
+            target_version: &"v1.1.0"[0: 6],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: true,
+            arity: 2,
             first_key: 1,
             last_key: 0,
             key_step: 1,
@@ -105,9 +105,9 @@ export fn command_catalog_generated_part_ac(index: usize) CommandCatalogEntry {
     }
     if index == 453 {
         return CommandCatalogEntry{
-            name: &"ts.alter"[0: 8],
-            group: &"timeseries"[0: 10],
-            module_name: &"ts"[0: 2],
+            name: &"tdigest.max"[0: 11],
+            group: &"tdigest"[0: 7],
+            module_name: &"tdigest"[0: 7],
             acl_tags: &""[0: 0],
             flag_tags: &""[0: 0],
             status: CommandCatalogStatus.status_standalone_error,
@@ -117,7 +117,7 @@ export fn command_catalog_generated_part_ac(index: usize) CommandCatalogEntry {
             complexity: &""[0: 0],
             is_pattern: false,
             is_top_level: true,
-            arity: -2,
+            arity: 2,
             first_key: 1,
             last_key: 0,
             key_step: 1,
@@ -125,49 +125,9 @@ export fn command_catalog_generated_part_ac(index: usize) CommandCatalogEntry {
     }
     if index == 454 {
         return CommandCatalogEntry{
-            name: &"ts.create"[0: 9],
-            group: &"timeseries"[0: 10],
-            module_name: &"ts"[0: 2],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_standalone_error,
-            target_version: &"v1.1.0"[0: 6],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: true,
-            arity: -2,
-            first_key: 1,
-            last_key: 0,
-            key_step: 1,
-        };
-    }
-    if index == 455 {
-        return CommandCatalogEntry{
-            name: &"ts.createrule"[0: 13],
-            group: &"timeseries"[0: 10],
-            module_name: &"ts"[0: 2],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_standalone_error,
-            target_version: &"v1.1.0"[0: 6],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: true,
-            arity: -6,
-            first_key: 1,
-            last_key: 0,
-            key_step: 1,
-        };
-    }
-    if index == 456 {
-        return CommandCatalogEntry{
-            name: &"ts.decrby"[0: 9],
-            group: &"timeseries"[0: 10],
-            module_name: &"ts"[0: 2],
+            name: &"tdigest.merge"[0: 13],
+            group: &"tdigest"[0: 7],
+            module_name: &"tdigest"[0: 7],
             acl_tags: &""[0: 0],
             flag_tags: &""[0: 0],
             status: CommandCatalogStatus.status_standalone_error,
@@ -179,15 +139,15 @@ export fn command_catalog_generated_part_ac(index: usize) CommandCatalogEntry {
             is_top_level: true,
             arity: -3,
             first_key: 1,
-            last_key: 0,
+            last_key: -1,
             key_step: 1,
         };
     }
-    if index == 457 {
+    if index == 455 {
         return CommandCatalogEntry{
-            name: &"ts.del"[0: 6],
-            group: &"timeseries"[0: 10],
-            module_name: &"ts"[0: 2],
+            name: &"tdigest.min"[0: 11],
+            group: &"tdigest"[0: 7],
+            module_name: &"tdigest"[0: 7],
             acl_tags: &""[0: 0],
             flag_tags: &""[0: 0],
             status: CommandCatalogStatus.status_standalone_error,
@@ -197,7 +157,47 @@ export fn command_catalog_generated_part_ac(index: usize) CommandCatalogEntry {
             complexity: &""[0: 0],
             is_pattern: false,
             is_top_level: true,
-            arity: 4,
+            arity: 2,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 456 {
+        return CommandCatalogEntry{
+            name: &"tdigest.quantile"[0: 16],
+            group: &"tdigest"[0: 7],
+            module_name: &"tdigest"[0: 7],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_standalone_error,
+            target_version: &"v1.1.0"[0: 6],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: true,
+            arity: -2,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 457 {
+        return CommandCatalogEntry{
+            name: &"tdigest.rank"[0: 12],
+            group: &"tdigest"[0: 7],
+            module_name: &"tdigest"[0: 7],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_standalone_error,
+            target_version: &"v1.1.0"[0: 6],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: true,
+            arity: -2,
             first_key: 1,
             last_key: 0,
             key_step: 1,
@@ -205,9 +205,9 @@ export fn command_catalog_generated_part_ac(index: usize) CommandCatalogEntry {
     }
     if index == 458 {
         return CommandCatalogEntry{
-            name: &"ts.deleterule"[0: 13],
-            group: &"timeseries"[0: 10],
-            module_name: &"ts"[0: 2],
+            name: &"tdigest.reset"[0: 13],
+            group: &"tdigest"[0: 7],
+            module_name: &"tdigest"[0: 7],
             acl_tags: &""[0: 0],
             flag_tags: &""[0: 0],
             status: CommandCatalogStatus.status_standalone_error,
@@ -217,7 +217,7 @@ export fn command_catalog_generated_part_ac(index: usize) CommandCatalogEntry {
             complexity: &""[0: 0],
             is_pattern: false,
             is_top_level: true,
-            arity: 3,
+            arity: 2,
             first_key: 1,
             last_key: 0,
             key_step: 1,
@@ -225,9 +225,9 @@ export fn command_catalog_generated_part_ac(index: usize) CommandCatalogEntry {
     }
     if index == 459 {
         return CommandCatalogEntry{
-            name: &"ts.get"[0: 6],
-            group: &"timeseries"[0: 10],
-            module_name: &"ts"[0: 2],
+            name: &"tdigest.revrank"[0: 15],
+            group: &"tdigest"[0: 7],
+            module_name: &"tdigest"[0: 7],
             acl_tags: &""[0: 0],
             flag_tags: &""[0: 0],
             status: CommandCatalogStatus.status_standalone_error,
@@ -245,9 +245,9 @@ export fn command_catalog_generated_part_ac(index: usize) CommandCatalogEntry {
     }
     if index == 460 {
         return CommandCatalogEntry{
-            name: &"ts.incrby"[0: 9],
-            group: &"timeseries"[0: 10],
-            module_name: &"ts"[0: 2],
+            name: &"tdigest.trimmed_mean"[0: 20],
+            group: &"tdigest"[0: 7],
+            module_name: &"tdigest"[0: 7],
             acl_tags: &""[0: 0],
             flag_tags: &""[0: 0],
             status: CommandCatalogStatus.status_standalone_error,
@@ -257,7 +257,7 @@ export fn command_catalog_generated_part_ac(index: usize) CommandCatalogEntry {
             complexity: &""[0: 0],
             is_pattern: false,
             is_top_level: true,
-            arity: -3,
+            arity: 4,
             first_key: 1,
             last_key: 0,
             key_step: 1,
@@ -265,9 +265,29 @@ export fn command_catalog_generated_part_ac(index: usize) CommandCatalogEntry {
     }
     if index == 461 {
         return CommandCatalogEntry{
-            name: &"ts.info"[0: 7],
-            group: &"timeseries"[0: 10],
-            module_name: &"ts"[0: 2],
+            name: &"time"[0: 4],
+            group: &"server"[0: 6],
+            module_name: &""[0: 0],
+            acl_tags: &"fast"[0: 4],
+            flag_tags: &"loading|stale|fast"[0: 18],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Returns the server time."[0: 24],
+            since: &"2.6.0"[0: 5],
+            complexity: &"O(1)"[0: 4],
+            is_pattern: false,
+            is_top_level: true,
+            arity: 1,
+            first_key: 0,
+            last_key: 0,
+            key_step: 0,
+        };
+    }
+    if index == 462 {
+        return CommandCatalogEntry{
+            name: &"topk.add"[0: 8],
+            group: &"topk"[0: 4],
+            module_name: &"topk"[0: 4],
             acl_tags: &""[0: 0],
             flag_tags: &""[0: 0],
             status: CommandCatalogStatus.status_standalone_error,
@@ -283,11 +303,11 @@ export fn command_catalog_generated_part_ac(index: usize) CommandCatalogEntry {
             key_step: 1,
         };
     }
-    if index == 462 {
+    if index == 463 {
         return CommandCatalogEntry{
-            name: &"ts.madd"[0: 7],
-            group: &"timeseries"[0: 10],
-            module_name: &"ts"[0: 2],
+            name: &"topk.count"[0: 10],
+            group: &"topk"[0: 4],
+            module_name: &"topk"[0: 4],
             acl_tags: &""[0: 0],
             flag_tags: &""[0: 0],
             status: CommandCatalogStatus.status_standalone_error,
@@ -297,30 +317,10 @@ export fn command_catalog_generated_part_ac(index: usize) CommandCatalogEntry {
             complexity: &""[0: 0],
             is_pattern: false,
             is_top_level: true,
-            arity: -1,
+            arity: -2,
             first_key: 1,
             last_key: 0,
             key_step: 1,
-        };
-    }
-    if index == 463 {
-        return CommandCatalogEntry{
-            name: &"ts.mget"[0: 7],
-            group: &"timeseries"[0: 10],
-            module_name: &"ts"[0: 2],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_standalone_error,
-            target_version: &"v1.1.0"[0: 6],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: true,
-            arity: -1,
-            first_key: 0,
-            last_key: 0,
-            key_step: 0,
         };
     }
     return CommandCatalogEntry{

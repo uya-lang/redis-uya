@@ -5,6 +5,206 @@ use src.command.catalog_generated_base.CommandCatalogStatus;
 export fn command_catalog_generated_part_o(index: usize) CommandCatalogEntry {
     if index == 224 {
         return CommandCatalogEntry{
+            name: &"georadiusbymember_ro"[0: 20],
+            group: &"geo"[0: 3],
+            module_name: &""[0: 0],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_partial,
+            target_version: &""[0: 0],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: true,
+            arity: -5,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 225 {
+        return CommandCatalogEntry{
+            name: &"geosearch"[0: 9],
+            group: &"geo"[0: 3],
+            module_name: &""[0: 0],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_partial,
+            target_version: &""[0: 0],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: true,
+            arity: -7,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 226 {
+        return CommandCatalogEntry{
+            name: &"geosearchstore"[0: 14],
+            group: &"geo"[0: 3],
+            module_name: &""[0: 0],
+            acl_tags: &""[0: 0],
+            flag_tags: &""[0: 0],
+            status: CommandCatalogStatus.status_partial,
+            target_version: &""[0: 0],
+            summary: &""[0: 0],
+            since: &""[0: 0],
+            complexity: &""[0: 0],
+            is_pattern: false,
+            is_top_level: true,
+            arity: -8,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 227 {
+        return CommandCatalogEntry{
+            name: &"get"[0: 3],
+            group: &"string"[0: 6],
+            module_name: &""[0: 0],
+            acl_tags: &"read|string|fast"[0: 16],
+            flag_tags: &"readonly|fast"[0: 13],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Returns the string value of a key."[0: 34],
+            since: &"1.0.0"[0: 5],
+            complexity: &"O(1)"[0: 4],
+            is_pattern: false,
+            is_top_level: true,
+            arity: 2,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 228 {
+        return CommandCatalogEntry{
+            name: &"getbit"[0: 6],
+            group: &"bitmap"[0: 6],
+            module_name: &""[0: 0],
+            acl_tags: &"read|bitmap|fast"[0: 16],
+            flag_tags: &"readonly|fast"[0: 13],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Returns a bit value by offset."[0: 30],
+            since: &"2.2.0"[0: 5],
+            complexity: &"O(1)"[0: 4],
+            is_pattern: false,
+            is_top_level: true,
+            arity: 3,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 229 {
+        return CommandCatalogEntry{
+            name: &"getdel"[0: 6],
+            group: &"string"[0: 6],
+            module_name: &""[0: 0],
+            acl_tags: &"write|string|fast"[0: 17],
+            flag_tags: &"write|fast"[0: 10],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Returns the string value of a key after deleting the key."[0: 57],
+            since: &"6.2.0"[0: 5],
+            complexity: &"O(1)"[0: 4],
+            is_pattern: false,
+            is_top_level: true,
+            arity: 2,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 230 {
+        return CommandCatalogEntry{
+            name: &"getex"[0: 5],
+            group: &"string"[0: 6],
+            module_name: &""[0: 0],
+            acl_tags: &"write|string|fast"[0: 17],
+            flag_tags: &"write|fast"[0: 10],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Returns the string value of a key after setting its expiration time."[0: 68],
+            since: &"6.2.0"[0: 5],
+            complexity: &"O(1)"[0: 4],
+            is_pattern: false,
+            is_top_level: true,
+            arity: -2,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 231 {
+        return CommandCatalogEntry{
+            name: &"getrange"[0: 8],
+            group: &"string"[0: 6],
+            module_name: &""[0: 0],
+            acl_tags: &"read|string|slow"[0: 16],
+            flag_tags: &"readonly"[0: 8],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Returns a substring of the string stored at a key."[0: 50],
+            since: &"2.4.0"[0: 5],
+            complexity: &"O(N) where N is the length of the returned string. The complexity is ultimately determined by the returned length, but because creating a substring from an existing string is very cheap, it can be considered O(1) for small strings."[0: 231],
+            is_pattern: false,
+            is_top_level: true,
+            arity: 4,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 232 {
+        return CommandCatalogEntry{
+            name: &"getset"[0: 6],
+            group: &"string"[0: 6],
+            module_name: &""[0: 0],
+            acl_tags: &"write|string|fast"[0: 17],
+            flag_tags: &"write|denyoom|fast"[0: 18],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Returns the previous string value of a key after setting it to a new value."[0: 75],
+            since: &"1.0.0"[0: 5],
+            complexity: &"O(1)"[0: 4],
+            is_pattern: false,
+            is_top_level: true,
+            arity: 3,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 233 {
+        return CommandCatalogEntry{
+            name: &"hdel"[0: 4],
+            group: &"hash"[0: 4],
+            module_name: &""[0: 0],
+            acl_tags: &"write|hash|fast"[0: 15],
+            flag_tags: &"write|fast"[0: 10],
+            status: CommandCatalogStatus.status_full,
+            target_version: &""[0: 0],
+            summary: &"Deletes one or more fields and their values from a hash. Deletes the hash if no fields remain."[0: 94],
+            since: &"2.0.0"[0: 5],
+            complexity: &"O(N) where N is the number of fields to be removed."[0: 51],
+            is_pattern: false,
+            is_top_level: true,
+            arity: -3,
+            first_key: 1,
+            last_key: 0,
+            key_step: 1,
+        };
+    }
+    if index == 234 {
+        return CommandCatalogEntry{
             name: &"hello"[0: 5],
             group: &"connection"[0: 10],
             module_name: &""[0: 0],
@@ -23,7 +223,7 @@ export fn command_catalog_generated_part_o(index: usize) CommandCatalogEntry {
             key_step: 0,
         };
     }
-    if index == 225 {
+    if index == 235 {
         return CommandCatalogEntry{
             name: &"hexists"[0: 7],
             group: &"hash"[0: 4],
@@ -43,7 +243,7 @@ export fn command_catalog_generated_part_o(index: usize) CommandCatalogEntry {
             key_step: 1,
         };
     }
-    if index == 226 {
+    if index == 236 {
         return CommandCatalogEntry{
             name: &"hexpire"[0: 7],
             group: &"hash"[0: 4],
@@ -63,7 +263,7 @@ export fn command_catalog_generated_part_o(index: usize) CommandCatalogEntry {
             key_step: 1,
         };
     }
-    if index == 227 {
+    if index == 237 {
         return CommandCatalogEntry{
             name: &"hexpireat"[0: 9],
             group: &"hash"[0: 4],
@@ -83,7 +283,7 @@ export fn command_catalog_generated_part_o(index: usize) CommandCatalogEntry {
             key_step: 1,
         };
     }
-    if index == 228 {
+    if index == 238 {
         return CommandCatalogEntry{
             name: &"hexpiretime"[0: 11],
             group: &"hash"[0: 4],
@@ -103,7 +303,7 @@ export fn command_catalog_generated_part_o(index: usize) CommandCatalogEntry {
             key_step: 1,
         };
     }
-    if index == 229 {
+    if index == 239 {
         return CommandCatalogEntry{
             name: &"hget"[0: 4],
             group: &"hash"[0: 4],
@@ -121,206 +321,6 @@ export fn command_catalog_generated_part_o(index: usize) CommandCatalogEntry {
             first_key: 1,
             last_key: 0,
             key_step: 1,
-        };
-    }
-    if index == 230 {
-        return CommandCatalogEntry{
-            name: &"hgetall"[0: 7],
-            group: &"hash"[0: 4],
-            module_name: &""[0: 0],
-            acl_tags: &"read|hash|slow"[0: 14],
-            flag_tags: &"readonly"[0: 8],
-            status: CommandCatalogStatus.status_full,
-            target_version: &""[0: 0],
-            summary: &"Returns all fields and values in a hash."[0: 40],
-            since: &"2.0.0"[0: 5],
-            complexity: &"O(N) where N is the size of the hash."[0: 37],
-            is_pattern: false,
-            is_top_level: true,
-            arity: 2,
-            first_key: 1,
-            last_key: 0,
-            key_step: 1,
-        };
-    }
-    if index == 231 {
-        return CommandCatalogEntry{
-            name: &"hgetdel"[0: 7],
-            group: &"hash"[0: 4],
-            module_name: &""[0: 0],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_partial,
-            target_version: &""[0: 0],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: true,
-            arity: -5,
-            first_key: 1,
-            last_key: 0,
-            key_step: 1,
-        };
-    }
-    if index == 232 {
-        return CommandCatalogEntry{
-            name: &"hgetex"[0: 6],
-            group: &"hash"[0: 4],
-            module_name: &""[0: 0],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_partial,
-            target_version: &""[0: 0],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: true,
-            arity: -5,
-            first_key: 1,
-            last_key: 0,
-            key_step: 1,
-        };
-    }
-    if index == 233 {
-        return CommandCatalogEntry{
-            name: &"hincrby"[0: 7],
-            group: &"hash"[0: 4],
-            module_name: &""[0: 0],
-            acl_tags: &"write|hash|fast"[0: 15],
-            flag_tags: &"write|denyoom|fast"[0: 18],
-            status: CommandCatalogStatus.status_full,
-            target_version: &""[0: 0],
-            summary: &"Increments the integer value of a field in a hash by a number. Uses 0 as initial value if the field doesn't exist."[0: 114],
-            since: &"2.0.0"[0: 5],
-            complexity: &"O(1)"[0: 4],
-            is_pattern: false,
-            is_top_level: true,
-            arity: 4,
-            first_key: 1,
-            last_key: 0,
-            key_step: 1,
-        };
-    }
-    if index == 234 {
-        return CommandCatalogEntry{
-            name: &"hincrbyfloat"[0: 12],
-            group: &"hash"[0: 4],
-            module_name: &""[0: 0],
-            acl_tags: &"write|hash|fast"[0: 15],
-            flag_tags: &"write|denyoom|fast"[0: 18],
-            status: CommandCatalogStatus.status_full,
-            target_version: &""[0: 0],
-            summary: &"Increments the floating point value of a field by a number. Uses 0 as initial value if the field doesn't exist."[0: 111],
-            since: &"2.6.0"[0: 5],
-            complexity: &"O(1)"[0: 4],
-            is_pattern: false,
-            is_top_level: true,
-            arity: 4,
-            first_key: 1,
-            last_key: 0,
-            key_step: 1,
-        };
-    }
-    if index == 235 {
-        return CommandCatalogEntry{
-            name: &"hkeys"[0: 5],
-            group: &"hash"[0: 4],
-            module_name: &""[0: 0],
-            acl_tags: &"read|hash|slow"[0: 14],
-            flag_tags: &"readonly"[0: 8],
-            status: CommandCatalogStatus.status_full,
-            target_version: &""[0: 0],
-            summary: &"Returns all fields in a hash."[0: 29],
-            since: &"2.0.0"[0: 5],
-            complexity: &"O(N) where N is the size of the hash."[0: 37],
-            is_pattern: false,
-            is_top_level: true,
-            arity: 2,
-            first_key: 1,
-            last_key: 0,
-            key_step: 1,
-        };
-    }
-    if index == 236 {
-        return CommandCatalogEntry{
-            name: &"hlen"[0: 4],
-            group: &"hash"[0: 4],
-            module_name: &""[0: 0],
-            acl_tags: &"read|hash|fast"[0: 14],
-            flag_tags: &"readonly|fast"[0: 13],
-            status: CommandCatalogStatus.status_full,
-            target_version: &""[0: 0],
-            summary: &"Returns the number of fields in a hash."[0: 39],
-            since: &"2.0.0"[0: 5],
-            complexity: &"O(1)"[0: 4],
-            is_pattern: false,
-            is_top_level: true,
-            arity: 2,
-            first_key: 1,
-            last_key: 0,
-            key_step: 1,
-        };
-    }
-    if index == 237 {
-        return CommandCatalogEntry{
-            name: &"hmget"[0: 5],
-            group: &"hash"[0: 4],
-            module_name: &""[0: 0],
-            acl_tags: &"read|hash|fast"[0: 14],
-            flag_tags: &"readonly|fast"[0: 13],
-            status: CommandCatalogStatus.status_full,
-            target_version: &""[0: 0],
-            summary: &"Returns the values of all fields in a hash."[0: 43],
-            since: &"2.0.0"[0: 5],
-            complexity: &"O(N) where N is the number of fields being requested."[0: 53],
-            is_pattern: false,
-            is_top_level: true,
-            arity: -3,
-            first_key: 1,
-            last_key: 0,
-            key_step: 1,
-        };
-    }
-    if index == 238 {
-        return CommandCatalogEntry{
-            name: &"hmset"[0: 5],
-            group: &"hash"[0: 4],
-            module_name: &""[0: 0],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_alias,
-            target_version: &""[0: 0],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: true,
-            arity: -4,
-            first_key: 1,
-            last_key: 0,
-            key_step: 1,
-        };
-    }
-    if index == 239 {
-        return CommandCatalogEntry{
-            name: &"hotkeys"[0: 7],
-            group: &"server"[0: 6],
-            module_name: &""[0: 0],
-            acl_tags: &""[0: 0],
-            flag_tags: &""[0: 0],
-            status: CommandCatalogStatus.status_partial,
-            target_version: &""[0: 0],
-            summary: &""[0: 0],
-            since: &""[0: 0],
-            complexity: &""[0: 0],
-            is_pattern: false,
-            is_top_level: true,
-            arity: -2,
-            first_key: 0,
-            last_key: 0,
-            key_step: 0,
         };
     }
     return CommandCatalogEntry{

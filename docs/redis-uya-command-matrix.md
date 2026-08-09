@@ -1,7 +1,7 @@
 # redis-uya command matrix
 
 > version: v0.9.3-dev
-> date: 2026-08-08
+> date: 2026-08-09
 > source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`
 > runtime source: `src/command/catalog_generated.uya`
 
@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 382 | 265 | 154 | 201 | 7 | 3 | 17 |
+| Tier A: standalone core | 382 | 265 | 173 | 182 | 7 | 3 | 17 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 158 | 151 | 0 | 0 | 153 | 0 | 5 |
 
@@ -24,8 +24,8 @@
 
 | status | count |
 |--------|-------|
-| `full` | `155` |
-| `partial` | `208` |
+| `full` | `174` |
+| `partial` | `189` |
 | `standalone-error` | `186` |
 | `alias` | `3` |
 | `deferred` | `22` |
@@ -100,7 +100,7 @@
 | `arseek` | `array` | `standalone-error` | `v1.1.0` | `3` | `array` | `no` | `@write, @array, @fast` |
 | `arset` | `array` | `standalone-error` | `v1.1.0` | `-4` | `array` | `no` | `@write, @array, @fast` |
 | `asking` | `cluster` | `standalone-error` | `v1.1.0` | `1` | `-` | `no` | `@fast, @connection` |
-| `auth` | `connection` | `partial` | `-` | `-2` | `-` | `no` | `@fast, @connection` |
+| `auth` | `connection` | `full` | `-` | `-2` | `-` | `no` | `@fast, @connection` |
 | `backup` | `server` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@slow` |
 | `backup|abort` | `server` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `backup|cleanup` | `server` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
@@ -119,8 +119,8 @@
 | `bf.mexists` | `bf` | `standalone-error` | `v1.1.0` | `-2` | `bf` | `no` | `@bloom, @read, @slow` |
 | `bf.reserve` | `bf` | `standalone-error` | `v1.1.0` | `-4` | `bf` | `no` | `@bloom, @write, @fast` |
 | `bf.scandump` | `bf` | `standalone-error` | `v1.1.0` | `3` | `bf` | `no` | `@bloom, @write, @slow` |
-| `bgrewriteaof` | `server` | `partial` | `-` | `1` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `bgsave` | `server` | `partial` | `-` | `-1` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `bgrewriteaof` | `server` | `full` | `-` | `1` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `bgsave` | `server` | `full` | `-` | `-1` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `bitcount` | `bitmap` | `full` | `-` | `-2` | `-` | `no` | `@read, @bitmap, @slow` |
 | `bitfield` | `bitmap` | `full` | `-` | `-2` | `-` | `no` | `@write, @bitmap, @slow` |
 | `bitfield_ro` | `bitmap` | `full` | `-` | `-2` | `-` | `no` | `@read, @bitmap, @fast` |
@@ -205,7 +205,7 @@
 | `cms.query` | `cms` | `standalone-error` | `v1.1.0` | `-2` | `cms` | `no` | `@cms, @read` |
 | `command` | `server` | `partial` | `-` | `-1` | `-` | `no` | `@slow, @connection` |
 | `command|count` | `server` | `full` | `-` | `2` | `-` | `no` | `@slow, @connection` |
-| `command|docs` | `server` | `partial` | `-` | `-2` | `-` | `no` | `@slow, @connection` |
+| `command|docs` | `server` | `full` | `-` | `-2` | `-` | `no` | `@slow, @connection` |
 | `command|getkeys` | `server` | `partial` | `-` | `-3` | `-` | `no` | `@slow, @connection` |
 | `command|getkeysandflags` | `server` | `partial` | `-` | `-3` | `-` | `no` | `@slow, @connection` |
 | `command|help` | `server` | `full` | `-` | `2` | `-` | `no` | `@slow, @connection` |
@@ -240,8 +240,8 @@
 | `failover` | `server` | `standalone-error` | `v1.1.0` | `-1` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `fcall` | `scripting` | `partial` | `-` | `-3` | `-` | `no` | `@slow, @scripting` |
 | `fcall_ro` | `scripting` | `partial` | `-` | `-3` | `-` | `no` | `@slow, @scripting` |
-| `flushall` | `server` | `partial` | `-` | `-1` | `-` | `no` | `@keyspace, @write, @slow, @dangerous` |
-| `flushdb` | `server` | `partial` | `-` | `-1` | `-` | `no` | `@keyspace, @write, @slow, @dangerous` |
+| `flushall` | `server` | `full` | `-` | `-1` | `-` | `no` | `@keyspace, @write, @slow, @dangerous` |
+| `flushdb` | `server` | `full` | `-` | `-1` | `-` | `no` | `@keyspace, @write, @slow, @dangerous` |
 | `ft._list` | `search` | `standalone-error` | `v1.1.0` | `0` | `ft` | `no` | `@admin, @search, @slow` |
 | `ft.aggregate` | `search` | `standalone-error` | `v1.1.0` | `-3` | `ft` | `no` | `@search, @read, @fast` |
 | `ft.aliasadd` | `search` | `standalone-error` | `v1.1.0` | `3` | `ft` | `no` | `@search` |
@@ -300,7 +300,7 @@
 | `getrange` | `string` | `full` | `-` | `4` | `-` | `no` | `@read, @string, @slow` |
 | `getset` | `string` | `full` | `-` | `3` | `-` | `no` | `@write, @string, @fast` |
 | `hdel` | `hash` | `full` | `-` | `-3` | `-` | `no` | `@write, @hash, @fast` |
-| `hello` | `connection` | `partial` | `-` | `-1` | `-` | `no` | `@fast, @connection` |
+| `hello` | `connection` | `full` | `-` | `-1` | `-` | `no` | `@fast, @connection` |
 | `hexists` | `hash` | `full` | `-` | `3` | `-` | `no` | `@read, @hash, @fast` |
 | `hexpire` | `hash` | `partial` | `-` | `-6` | `-` | `no` | `@write, @hash, @fast` |
 | `hexpireat` | `hash` | `partial` | `-` | `-6` | `-` | `no` | `@write, @hash, @fast` |
@@ -412,7 +412,7 @@
 | `module|loadex` | `server` | `standalone-error` | `v1.1.0` | `-3` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `module|unload` | `server` | `standalone-error` | `v1.1.0` | `3` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `monitor` | `server` | `partial` | `-` | `1` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `move` | `generic` | `partial` | `-` | `3` | `-` | `no` | `@keyspace, @write, @fast` |
+| `move` | `generic` | `full` | `-` | `3` | `-` | `no` | `@keyspace, @write, @fast` |
 | `mset` | `string` | `full` | `-` | `-3` | `-` | `no` | `@write, @string, @slow` |
 | `msetex` | `string` | `partial` | `-` | `-4` | `-` | `no` | `@write, @string, @slow` |
 | `msetnx` | `string` | `full` | `-` | `-3` | `-` | `no` | `@write, @string, @slow` |
@@ -435,9 +435,9 @@
 | `ping` | `connection` | `full` | `-` | `-1` | `-` | `no` | `@fast, @connection` |
 | `psetex` | `string` | `full` | `-` | `4` | `-` | `no` | `@write, @string, @slow` |
 | `psubscribe` | `pubsub` | `full` | `-` | `-2` | `-` | `yes` | `@pubsub, @slow` |
-| `psync` | `server` | `partial` | `-` | `-3` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `psync` | `server` | `full` | `-` | `-3` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `pttl` | `generic` | `full` | `-` | `2` | `-` | `no` | `@keyspace, @read, @fast` |
-| `publish` | `pubsub` | `partial` | `-` | `3` | `-` | `no` | `@pubsub, @fast` |
+| `publish` | `pubsub` | `full` | `-` | `3` | `-` | `no` | `@pubsub, @fast` |
 | `pubsub` | `pubsub` | `partial` | `-` | `-2` | `-` | `no` | `@slow` |
 | `pubsub|channels` | `pubsub` | `full` | `-` | `-2` | `-` | `yes` | `@pubsub, @slow` |
 | `pubsub|help` | `pubsub` | `full` | `-` | `2` | `-` | `no` | `@slow` |
@@ -446,16 +446,16 @@
 | `pubsub|shardchannels` | `pubsub` | `partial` | `-` | `-2` | `-` | `yes` | `@pubsub, @slow` |
 | `pubsub|shardnumsub` | `pubsub` | `partial` | `-` | `-2` | `-` | `no` | `@pubsub, @slow` |
 | `punsubscribe` | `pubsub` | `full` | `-` | `-1` | `-` | `yes` | `@pubsub, @slow` |
-| `quit` | `connection` | `partial` | `-` | `-1` | `-` | `no` | `@fast, @connection` |
+| `quit` | `connection` | `full` | `-` | `-1` | `-` | `no` | `@fast, @connection` |
 | `randomkey` | `generic` | `full` | `-` | `1` | `-` | `no` | `@keyspace, @read, @slow` |
 | `readonly` | `cluster` | `standalone-error` | `v1.1.0` | `1` | `-` | `no` | `@fast, @connection` |
 | `readwrite` | `cluster` | `standalone-error` | `v1.1.0` | `1` | `-` | `no` | `@fast, @connection` |
 | `rename` | `generic` | `full` | `-` | `3` | `-` | `no` | `@keyspace, @write, @slow` |
 | `renamenx` | `generic` | `full` | `-` | `3` | `-` | `no` | `@keyspace, @write, @fast` |
 | `replconf` | `server` | `partial` | `-` | `-1` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `replicaof` | `server` | `partial` | `-` | `3` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `replicaof` | `server` | `full` | `-` | `3` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `reset` | `connection` | `full` | `-` | `1` | `-` | `no` | `@fast, @connection` |
-| `restore` | `generic` | `partial` | `-` | `-4` | `-` | `no` | `@keyspace, @write, @slow, @dangerous` |
+| `restore` | `generic` | `full` | `-` | `-4` | `-` | `no` | `@keyspace, @write, @slow, @dangerous` |
 | `restore-asking` | `server` | `partial` | `-` | `-4` | `-` | `no` | `@keyspace, @write, @slow, @dangerous` |
 | `role` | `server` | `full` | `-` | `1` | `-` | `no` | `@admin, @fast, @dangerous` |
 | `rpop` | `list` | `full` | `-` | `-2` | `-` | `no` | `@write, @list, @fast` |
@@ -463,7 +463,7 @@
 | `rpush` | `list` | `full` | `-` | `-3` | `-` | `no` | `@write, @list, @fast` |
 | `rpushx` | `list` | `full` | `-` | `-3` | `-` | `no` | `@write, @list, @fast` |
 | `sadd` | `set` | `full` | `-` | `-3` | `-` | `no` | `@write, @set, @fast` |
-| `save` | `server` | `partial` | `-` | `1` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `save` | `server` | `full` | `-` | `1` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `scan` | `generic` | `full` | `-` | `-2` | `-` | `yes` | `@keyspace, @read, @slow` |
 | `scard` | `set` | `full` | `-` | `2` | `-` | `no` | `@read, @set, @fast` |
 | `script` | `scripting` | `partial` | `-` | `-2` | `-` | `no` | `@slow` |
@@ -476,7 +476,7 @@
 | `sdiff` | `set` | `full` | `-` | `-2` | `-` | `no` | `@read, @set, @slow` |
 | `sdiffcard` | `set` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @set, @slow` |
 | `sdiffstore` | `set` | `full` | `-` | `-3` | `-` | `no` | `@write, @set, @slow` |
-| `select` | `connection` | `partial` | `-` | `2` | `-` | `no` | `@fast, @connection` |
+| `select` | `connection` | `full` | `-` | `2` | `-` | `no` | `@fast, @connection` |
 | `set` | `string` | `full` | `-` | `-3` | `-` | `no` | `@write, @string, @slow` |
 | `setbit` | `bitmap` | `full` | `-` | `4` | `-` | `no` | `@write, @bitmap, @slow` |
 | `setex` | `string` | `full` | `-` | `4` | `-` | `no` | `@write, @string, @slow` |
@@ -496,7 +496,7 @@
 | `smembers` | `set` | `full` | `-` | `2` | `-` | `no` | `@read, @set, @slow` |
 | `smismember` | `set` | `full` | `-` | `-3` | `-` | `no` | `@read, @set, @fast` |
 | `smove` | `set` | `full` | `-` | `4` | `-` | `no` | `@write, @set, @fast` |
-| `sort` | `generic` | `partial` | `-` | `-2` | `-` | `yes` | `@write, @set, @sortedset, @list, @slow, @dangerous` |
+| `sort` | `generic` | `full` | `-` | `-2` | `-` | `yes` | `@write, @set, @sortedset, @list, @slow, @dangerous` |
 | `sort_ro` | `generic` | `full` | `-` | `-2` | `-` | `yes` | `@read, @set, @sortedset, @list, @slow, @dangerous` |
 | `spop` | `set` | `full` | `-` | `-2` | `-` | `no` | `@write, @set, @fast` |
 | `spublish` | `pubsub` | `partial` | `-` | `3` | `-` | `no` | `@pubsub, @fast` |
@@ -505,7 +505,7 @@
 | `sscan` | `set` | `full` | `-` | `-3` | `-` | `yes` | `@read, @set, @slow` |
 | `ssubscribe` | `pubsub` | `partial` | `-` | `-2` | `-` | `no` | `@pubsub, @slow` |
 | `strlen` | `string` | `full` | `-` | `2` | `-` | `no` | `@read, @string, @fast` |
-| `subscribe` | `pubsub` | `partial` | `-` | `-2` | `-` | `no` | `@pubsub, @slow` |
+| `subscribe` | `pubsub` | `full` | `-` | `-2` | `-` | `no` | `@pubsub, @slow` |
 | `substr` | `string` | `alias` | `-` | `4` | `-` | `no` | `@read, @string, @slow` |
 | `sunion` | `set` | `full` | `-` | `-2` | `-` | `no` | `@read, @set, @slow` |
 | `sunioncard` | `set` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @set, @slow` |
@@ -560,7 +560,7 @@
 | `ttl` | `generic` | `full` | `-` | `2` | `-` | `no` | `@keyspace, @read, @fast` |
 | `type` | `generic` | `full` | `-` | `2` | `-` | `no` | `@keyspace, @read, @fast` |
 | `unlink` | `generic` | `full` | `-` | `-2` | `-` | `no` | `@keyspace, @write, @fast` |
-| `unsubscribe` | `pubsub` | `partial` | `-` | `-1` | `-` | `no` | `@pubsub, @slow` |
+| `unsubscribe` | `pubsub` | `full` | `-` | `-1` | `-` | `no` | `@pubsub, @slow` |
 | `unwatch` | `transactions` | `full` | `-` | `1` | `-` | `no` | `@fast, @transaction` |
 | `vadd` | `vector_set` | `standalone-error` | `v1.1.0` | `0` | `vector_set` | `no` | `-` |
 | `vcard` | `vector_set` | `standalone-error` | `v1.1.0` | `0` | `vector_set` | `no` | `-` |
@@ -575,7 +575,7 @@
 | `vrem` | `vector_set` | `standalone-error` | `v1.1.0` | `0` | `vector_set` | `no` | `-` |
 | `vsetattr` | `vector_set` | `standalone-error` | `v1.1.0` | `0` | `vector_set` | `no` | `-` |
 | `vsim` | `vector_set` | `standalone-error` | `v1.1.0` | `0` | `vector_set` | `no` | `-` |
-| `wait` | `generic` | `partial` | `-` | `3` | `-` | `no` | `@slow, @blocking, @connection` |
+| `wait` | `generic` | `full` | `-` | `3` | `-` | `no` | `@slow, @blocking, @connection` |
 | `waitaof` | `generic` | `partial` | `-` | `4` | `-` | `no` | `@slow, @blocking, @connection` |
 | `watch` | `transactions` | `full` | `-` | `-2` | `-` | `no` | `@fast, @transaction` |
 | `xack` | `stream` | `partial` | `-` | `-4` | `-` | `no` | `@write, @stream, @fast` |

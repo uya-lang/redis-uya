@@ -468,6 +468,7 @@
 - [x] List 第一批基础：`RPUSH`、`RPOP`、`LINDEX`、`LSET`、`LLEN`
 - [x] List 第二批：`LINSERT`、`LTRIM`、`LREM`
 - [x] List 第三批条件写入与定位：`LPUSHX`、`RPUSHX`、`LPOS`
+- [x] List 批量搬移：`LMOVEM source destination LEFT|RIGHT LEFT|RIGHT [COUNT|EXACTLY count OBO|BULK]`，覆盖默认单元素数组、数量上限、`EXACTLY` 不足时 Null Array/no-op、目标顺序、同 key 批量旋转、动态 key flags 与 AOF replay
 - [x] Set 第一批随机取值：`SPOP`、`SRANDMEMBER`
 - [x] Set 第二批集合运算：`SINTER`、`SDIFF`、`SUNION`
 - [x] Set 第三批集合写回：`SINTERSTORE`、`SDIFFSTORE`、`SUNIONSTORE`
@@ -529,7 +530,7 @@
 ### U3. 先补 Redis Open Source 核心，而不是先扩模块
 
 - [x] Blocking list / zset：已补 `BLPOP`、`BRPOP`、`BRPOPLPUSH`、`BLMOVE`、`BLMPOP`、`BZPOPMIN`、`BZPOPMAX`、`BZMPOP`
-- [x] 常用 list / zset 缺口：已补 `LMOVE`、`LMPOP`、`RPOPLPUSH`、`ZRANK`、`ZREVRANK`、`ZSCORE`、`ZMSCORE`、`ZPOPMIN`、`ZPOPMAX`、`ZMPOP`、`ZLEXCOUNT`、`ZRANGEBYLEX`、`ZRANGESTORE REV/BYSCORE/BYLEX/LIMIT`、`ZREMRANGEBYLEX`、`ZREVRANGE`、`ZREVRANGEBYLEX`、`ZRANDMEMBER`、`ZDIFF`、`ZDIFFSTORE`、`ZINTER`、`ZINTERCARD`、`ZINTERSTORE`、`ZUNION`、`ZUNIONSTORE`，多 key 聚合命令支持整数 `WEIGHTS` 与 `AGGREGATE SUM|MIN|MAX`
+- [x] 常用 list / zset 缺口：已补 `LMOVE`、`LMOVEM`、`LMPOP`、`RPOPLPUSH`、`ZRANK`、`ZREVRANK`、`ZSCORE`、`ZMSCORE`、`ZPOPMIN`、`ZPOPMAX`、`ZMPOP`、`ZLEXCOUNT`、`ZRANGEBYLEX`、`ZRANGESTORE REV/BYSCORE/BYLEX/LIMIT`、`ZREMRANGEBYLEX`、`ZREVRANGE`、`ZREVRANGEBYLEX`、`ZRANDMEMBER`、`ZDIFF`、`ZDIFFSTORE`、`ZINTER`、`ZINTERCARD`、`ZINTERSTORE`、`ZUNION`、`ZUNIONSTORE`，多 key 聚合命令支持整数 `WEIGHTS` 与 `AGGREGATE SUM|MIN|MAX`
 - [x] 常用 bitmap / bitfield：已补 `SETBIT`、`GETBIT`、`BITCOUNT`、`BITPOS`、`BITOP`、`BITFIELD`、`BITFIELD_RO`，并收口 `BITOP NOT` 多 source 的完整错误文本
 - [x] 常用 HLL / GEO / Key：已补 `PFADD`、`PFCOUNT`、`PFMERGE`（exact set-backed partial）、`PFSELFTEST`（no-op self-test partial）、`PFDEBUG`（standalone-error），以及 `GEOADD`、`GEODIST`、`GEOHASH`、`GEOPOS`、`GEOSEARCH`、`GEOSEARCHSTORE`、`GEORADIUS`、`GEORADIUS_RO`、`GEORADIUSBYMEMBER`、`GEORADIUSBYMEMBER_RO`（exact zset-backed partial；`GEOSEARCHSTORE` 和写型 legacy radius 的 `STOREDIST` 当前写入整数距离 score；missing center member 完整错误文本已收口），`COPY`（当前单 DB 深拷贝 partial，支持 `REPLACE`、`DB 0` 与 TTL 保留），`RESTORE-ASKING`（复用 `RESTORE` 的单 DB RDB payload 写入 partial，支持 `REPLACE` 覆盖、`ABSTTL` 与 `IDLETIME`/`FREQ` 元数据）
 - [x] Scripting 第一批：已补 `EVAL`、`EVALSHA`、`SCRIPT LOAD/EXISTS/FLUSH`，当前为 single-call script subset partial

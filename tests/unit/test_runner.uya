@@ -121,6 +121,7 @@ use tests.unit.command_executor_test.test_command_streams_first_batch;
 use tests.unit.command_executor_test.test_command_linsert_ltrim_lrem;
 use tests.unit.command_executor_test.test_command_lpushx_rpushx_lpos;
 use tests.unit.command_executor_test.test_command_lmove_rpoplpush;
+use tests.unit.command_executor_test.test_command_lmovem;
 use tests.unit.command_executor_test.test_command_rpush_rpop_lindex_lset_llen;
 use tests.unit.command_executor_test.test_command_sadd_srem_smembers;
 use tests.unit.command_executor_test.test_command_sinter_sdiff_sunion;
@@ -213,6 +214,7 @@ use tests.unit.persistence_aof_test.test_aof_replay_flush_commands;
 use tests.unit.persistence_aof_test.test_aof_replay_restore_command;
 use tests.unit.persistence_aof_test.test_aof_replay_sort_store_command;
 use tests.unit.persistence_aof_test.test_aof_replay_smove_command;
+use tests.unit.persistence_aof_test.test_aof_replay_lmovem_command;
 use tests.unit.persistence_rdb_test.test_rdb_save_and_load_string_subset;
 use tests.unit.persistence_rdb_test.test_rdb_dump_and_load_bytes_string_subset;
 use tests.unit.persistence_rdb_test.test_rdb_dump_and_load_bytes_current_types;
@@ -721,6 +723,10 @@ export fn main() i32 {
     _ = test_command_lmove_rpoplpush() catch { printf("[FAIL] command_executor/list_moves\n" as *byte); failed = failed + 1; };
     if failed == before_exec_list_moves { printf("[PASS] command_executor/list_moves\n" as *byte); }
 
+    const before_exec_list_movem: i32 = failed;
+    _ = test_command_lmovem() catch { printf("[FAIL] command_executor/list_movem\n" as *byte); failed = failed + 1; };
+    if failed == before_exec_list_movem { printf("[PASS] command_executor/list_movem\n" as *byte); }
+
     const before_exec_set: i32 = failed;
     _ = test_command_sadd_srem_smembers() catch { printf("[FAIL] command_executor/set\n" as *byte); failed = failed + 1; };
     if failed == before_exec_set { printf("[PASS] command_executor/set\n" as *byte); }
@@ -1056,6 +1062,10 @@ export fn main() i32 {
     const before_aof_smove_cmd: i32 = failed;
     _ = test_aof_replay_smove_command() catch { printf("[FAIL] persistence_aof/replay_smove\n" as *byte); failed = failed + 1; };
     if failed == before_aof_smove_cmd { printf("[PASS] persistence_aof/replay_smove\n" as *byte); }
+
+    const before_aof_lmovem_cmd: i32 = failed;
+    _ = test_aof_replay_lmovem_command() catch { printf("[FAIL] persistence_aof/replay_lmovem\n" as *byte); failed = failed + 1; };
+    if failed == before_aof_lmovem_cmd { printf("[PASS] persistence_aof/replay_lmovem\n" as *byte); }
 
     const before_aof_flush: i32 = failed;
     _ = test_aof_flush_persists_buffer_without_close() catch { printf("[FAIL] persistence_aof/flush\n" as *byte); failed = failed + 1; };

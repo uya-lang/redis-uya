@@ -951,6 +951,24 @@ class RedisPySubsetClient:
         assert result is None or isinstance(result, bytes)
         return result
 
+    def lmovem(
+        self,
+        source: str,
+        destination: str,
+        wherefrom: str,
+        whereto: str,
+        selector: str | None = None,
+        count: int | None = None,
+        ordering: str | None = None,
+    ) -> list[bytes] | None:
+        parts = [b"LMOVEM", source.encode(), destination.encode(), wherefrom.encode(), whereto.encode()]
+        if selector is not None or count is not None or ordering is not None:
+            assert selector is not None and count is not None and ordering is not None
+            parts.extend([selector.encode(), str(count).encode(), ordering.encode()])
+        result = self._request(*parts)
+        assert result is None or isinstance(result, list)
+        return result
+
     def blmove(self, source: str, destination: str, wherefrom: str, whereto: str, timeout: float) -> bytes | None:
         result = self._request(
             b"BLMOVE",
@@ -2651,6 +2669,17 @@ def run_smoke() -> None:
             assert client.lrange("src", 0, -1) == []
             assert client.lrange("dst", 0, -1) == [b"a", b"c", b"b"]
             assert client.delete("src", "dst") == 1
+            assert client.rpush("mvsrc", "a", "b", "c", "d") == 4
+            assert client.rpush("mvdst", "x") == 1
+            assert client.lmovem("mvsrc", "mvdst", "LEFT", "RIGHT", "COUNT", 2, "BULK") == [b"a", b"b"]
+            assert client.lrange("mvsrc", 0, -1) == [b"c", b"d"]
+            assert client.lrange("mvdst", 0, -1) == [b"x", b"a", b"b"]
+            assert client.lmovem("mvsrc", "mvdst", "LEFT", "RIGHT", "EXACTLY", 3, "BULK") is None
+            assert client.lmovem("mvsrc", "mvdst", "RIGHT", "LEFT") == [b"d"]
+            assert client.rpush("mvsame", "a", "b", "c") == 3
+            assert client.lmovem("mvsame", "mvsame", "LEFT", "RIGHT", "COUNT", 2, "BULK") == [b"a", b"b"]
+            assert client.lrange("mvsame", 0, -1) == [b"c", b"a", b"b"]
+            assert client.delete("mvsrc", "mvdst", "mvsame") == 3
             assert client.rpush("lmpop", "a", "b", "c") == 3
             assert client.lmpop("LEFT", "missing", "lmpop", count=2) == [b"lmpop", [b"a", b"b"]]
             assert client.lmpop("RIGHT", "lmpop") == [b"lmpop", [b"c"]]

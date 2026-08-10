@@ -759,6 +759,42 @@ export fn test_aof_replay_smove_command() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_aof_replay_lmovem_command() !void {
+    reset_memory_stats_for_test();
+    const path: &const byte = "build/test-aof-lmovem.aof";
+    _ = unlink(path);
+
+    var writer: AofWriter = try aof_open_truncate(path);
+    try aof_append_raw(&writer, &"*5\r\n$5\r\nRPUSH\r\n$5\r\nmvsrc\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\nc\r\n"[0: 47]);
+    try aof_append_raw(&writer, &"*3\r\n$5\r\nRPUSH\r\n$5\r\nmvdst\r\n$1\r\nx\r\n"[0: 33]);
+    try aof_append_raw(&writer, &"*8\r\n$6\r\nLMOVEM\r\n$5\r\nmvsrc\r\n$5\r\nmvdst\r\n$4\r\nLEFT\r\n$5\r\nRIGHT\r\n$5\r\nCOUNT\r\n$1\r\n2\r\n$4\r\nBULK\r\n"[0: 87]);
+    aof_close(&writer);
+
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    try aof_replay_file_at(path, &engine, &router, 1000u64);
+
+    const src_obj: &RedisObject = try lookup_key_at(&engine, &"mvsrc"[0: 5], 1000u64);
+    try assert_eq_i32(src_obj.obj_type as i32, ObjectType.object_list as i32);
+    try assert_eq_i32(src_obj.list_len as i32, 1);
+    const src_first: &RedisObject = try list_object_index_value(src_obj, 0);
+    try assert_true(aof_test_slice_eq(src_first.value.buf[0: src_first.value.len], &"c"[0: 1]));
+
+    const dst_obj: &RedisObject = try lookup_key_at(&engine, &"mvdst"[0: 5], 1000u64);
+    try assert_eq_i32(dst_obj.obj_type as i32, ObjectType.object_list as i32);
+    try assert_eq_i32(dst_obj.list_len as i32, 3);
+    const dst_first: &RedisObject = try list_object_index_value(dst_obj, 0);
+    const dst_second: &RedisObject = try list_object_index_value(dst_obj, 1);
+    const dst_third: &RedisObject = try list_object_index_value(dst_obj, 2);
+    try assert_true(aof_test_slice_eq(dst_first.value.buf[0: dst_first.value.len], &"x"[0: 1]));
+    try assert_true(aof_test_slice_eq(dst_second.value.buf[0: dst_second.value.len], &"a"[0: 1]));
+    try assert_true(aof_test_slice_eq(dst_third.value.buf[0: dst_third.value.len], &"b"[0: 1]));
+
+    engine_free(&engine);
+    _ = unlink(path);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_aof_flush_persists_buffer_without_close() !void {
     reset_memory_stats_for_test();
     const path: &const byte = "build/test-aof-flush.aof";

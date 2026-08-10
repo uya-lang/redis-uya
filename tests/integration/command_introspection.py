@@ -914,20 +914,22 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"BZMPOP missing from COMMAND INFO: {blocking_zset_info!r}")
 
-            list_move_info = send_command(sock, b"COMMAND", b"INFO", b"LMOVE", b"BLMOVE", b"RPOPLPUSH", b"LMPOP", b"BLMPOP")
+            list_move_info = send_command(sock, b"COMMAND", b"INFO", b"LMOVE", b"LMOVEM", b"BLMOVE", b"RPOPLPUSH", b"LMPOP", b"BLMPOP")
             if (
                 not isinstance(list_move_info, list)
-                or len(list_move_info) != 5
+                or len(list_move_info) != 6
                 or not isinstance(list_move_info[0], list)
                 or list_move_info[0][0] != b"lmove"
                 or not isinstance(list_move_info[1], list)
-                or list_move_info[1][0] != b"blmove"
+                or list_move_info[1][0] != b"lmovem"
                 or not isinstance(list_move_info[2], list)
-                or list_move_info[2][0] != b"rpoplpush"
+                or list_move_info[2][0] != b"blmove"
                 or not isinstance(list_move_info[3], list)
-                or list_move_info[3][0] != b"lmpop"
+                or list_move_info[3][0] != b"rpoplpush"
                 or not isinstance(list_move_info[4], list)
-                or list_move_info[4][0] != b"blmpop"
+                or list_move_info[4][0] != b"lmpop"
+                or not isinstance(list_move_info[5], list)
+                or list_move_info[5][0] != b"blmpop"
             ):
                 raise AssertionError(f"list move commands missing from COMMAND INFO: {list_move_info!r}")
 
@@ -1893,6 +1895,10 @@ def run_smoke() -> None:
             if blmove_getkeys != [b"src", b"dst"]:
                 raise AssertionError(f"unexpected COMMAND GETKEYS BLMOVE result: {blmove_getkeys!r}")
 
+            lmovem_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"LMOVEM", b"src", b"dst", b"LEFT", b"RIGHT", b"COUNT", b"2", b"BULK")
+            if lmovem_getkeys != [b"src", b"dst"]:
+                raise AssertionError(f"unexpected COMMAND GETKEYS LMOVEM result: {lmovem_getkeys!r}")
+
             blmpop_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"BLMPOP", b"1", b"2", b"a", b"b", b"LEFT", b"COUNT", b"2")
             if blmpop_getkeys != [b"a", b"b"]:
                 raise AssertionError(f"unexpected COMMAND GETKEYS BLMPOP result: {blmpop_getkeys!r}")
@@ -2126,6 +2132,20 @@ def run_smoke() -> None:
                 or b"insert" not in blmove_getkeysandflags[1][1]
             ):
                 raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS BLMOVE keys: {blmove_getkeysandflags!r}")
+
+            lmovem_getkeysandflags = send_command(sock, b"COMMAND", b"GETKEYSANDFLAGS", b"LMOVEM", b"src", b"dst", b"LEFT", b"RIGHT", b"COUNT", b"2", b"BULK")
+            if (
+                not isinstance(lmovem_getkeysandflags, list)
+                or len(lmovem_getkeysandflags) != 2
+                or lmovem_getkeysandflags[0][0] != b"src"
+                or b"RW" not in lmovem_getkeysandflags[0][1]
+                or b"access" not in lmovem_getkeysandflags[0][1]
+                or b"delete" not in lmovem_getkeysandflags[0][1]
+                or lmovem_getkeysandflags[1][0] != b"dst"
+                or b"RW" not in lmovem_getkeysandflags[1][1]
+                or b"insert" not in lmovem_getkeysandflags[1][1]
+            ):
+                raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS LMOVEM keys: {lmovem_getkeysandflags!r}")
 
             blmpop_getkeysandflags = send_command(sock, b"COMMAND", b"GETKEYSANDFLAGS", b"BLMPOP", b"1", b"2", b"a", b"b", b"RIGHT", b"COUNT", b"2")
             if not isinstance(blmpop_getkeysandflags, list) or len(blmpop_getkeysandflags) != 2:

@@ -1976,6 +1976,32 @@ if [[ "$DST_RANGE_RESULT" != $'a\nc\nb' ]]; then
     exit 1
 fi
 
+LMOVEM_SRC_SEED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" rpush mvsrc a b c d)"
+LMOVEM_DST_SEED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" rpush mvdst x)"
+if [[ "$LMOVEM_SRC_SEED_RESULT" != "4" || "$LMOVEM_DST_SEED_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: failed to seed LMOVEM lists" >&2
+    exit 1
+fi
+
+LMOVEM_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lmovem mvsrc mvdst LEFT RIGHT COUNT 2 BULK)"
+if [[ "$LMOVEM_RESULT" != $'a\nb' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected LMOVEM a/b, got '$LMOVEM_RESULT'" >&2
+    exit 1
+fi
+
+LMOVEM_EXACTLY_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lmovem mvsrc mvdst LEFT RIGHT EXACTLY 3 BULK)"
+if [[ -n "$LMOVEM_EXACTLY_RESULT" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected LMOVEM EXACTLY null, got '$LMOVEM_EXACTLY_RESULT'" >&2
+    exit 1
+fi
+
+LMOVEM_SRC_RANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lrange mvsrc 0 -1)"
+LMOVEM_DST_RANGE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" lrange mvdst 0 -1)"
+if [[ "$LMOVEM_SRC_RANGE_RESULT" != $'c\nd' || "$LMOVEM_DST_RANGE_RESULT" != $'x\na\nb' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: unexpected LMOVEM list state" >&2
+    exit 1
+fi
+
 LMPOP_SEED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" rpush lmpop a b c)"
 if [[ "$LMPOP_SEED_RESULT" != "3" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected lmpop seed RPUSH 3, got '$LMPOP_SEED_RESULT'" >&2

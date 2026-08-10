@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 382 | 265 | 146 | 211 | 7 | 3 | 15 |
+| Tier A: standalone core | 382 | 265 | 147 | 211 | 7 | 3 | 14 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 158 | 151 | 0 | 0 | 153 | 0 | 5 |
 
@@ -24,11 +24,11 @@
 
 | status | count |
 |--------|-------|
-| `full` | `147` |
+| `full` | `148` |
 | `partial` | `218` |
 | `standalone-error` | `186` |
 | `alias` | `3` |
-| `deferred` | `20` |
+| `deferred` | `19` |
 
 ## Group counts
 
@@ -385,7 +385,7 @@
 | `linsert` | `list` | `full` | `-` | `5` | `-` | `no` | `@write, @list, @slow` |
 | `llen` | `list` | `full` | `-` | `2` | `-` | `no` | `@read, @list, @fast` |
 | `lmove` | `list` | `full` | `-` | `5` | `-` | `no` | `@write, @list, @slow` |
-| `lmovem` | `list` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@write, @list, @slow` |
+| `lmovem` | `list` | `full` | `-` | `-5` | `-` | `no` | `@write, @list, @slow` |
 | `lmpop` | `list` | `full` | `-` | `-4` | `-` | `no` | `@write, @list, @slow` |
 | `lolwut` | `server` | `partial` | `-` | `-1` | `-` | `no` | `@read, @fast` |
 | `lpop` | `list` | `full` | `-` | `-2` | `-` | `no` | `@write, @list, @fast` |

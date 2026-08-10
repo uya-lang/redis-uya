@@ -884,6 +884,29 @@ RPOP key [count]
 - key 不存在或空 list 返回 Null Bulk
 - `count` 为 `0` 时返回空 Array
 
+### `LMOVEM`
+
+格式：
+
+```text
+LMOVEM source destination LEFT|RIGHT LEFT|RIGHT [COUNT|EXACTLY count OBO|BULK]
+```
+
+返回：
+
+- 返回按 destination 最终顺序排列的 Bulk String Array
+- 省略数量选项时移动一个元素并返回单元素 Array
+- source 不存在或为空时返回 Null Array
+- `EXACTLY` 指定数量超过 source 长度时返回 Null Array，source 和 destination 均不修改
+
+说明：
+
+- `COUNT` 最多移动指定数量；`EXACTLY` 仅在元素充足时执行完整批量移动
+- `OBO` 保持逐个执行等价 `LMOVE` 的顺序，`BULK` 保持批量块顺序
+- source 与 destination 相同时执行原地批量旋转
+- 实现先克隆 source/destination，并在工作副本上完成弹出、顺序计算和可能扩容的推入，再替换 keyspace 对象
+- AOF 记录并回放原始 `LMOVEM` 请求
+
 ### `BLPOP`
 
 格式：

@@ -309,6 +309,7 @@ build/redis-uya 6380 1
 - List 第一批基础：`RPUSH`、`RPOP`、`LINDEX`、`LSET`、`LLEN`
 - List 第二批变异：`LINSERT`、`LTRIM`、`LREM`
 - List 第三批条件：`LPUSHX`、`RPUSHX`、`LPOS`
+- List 批量搬移：`LMOVEM` 支持默认单元素数组、`COUNT` / `EXACTLY` 数量语义、`OBO` / `BULK` 顺序、同 key 批量旋转和 AOF replay
 - Set 第一批随机取值：`SPOP`、`SRANDMEMBER`
 - Set 第二批集合运算：`SINTER`、`SDIFF`、`SUNION`
 - Set 第三批集合写回：`SINTERSTORE`、`SDIFFSTORE`、`SUNIONSTORE`

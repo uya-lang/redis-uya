@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 382 | 265 | 147 | 211 | 7 | 3 | 14 |
+| Tier A: standalone core | 382 | 265 | 147 | 212 | 7 | 3 | 13 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 158 | 151 | 0 | 0 | 153 | 0 | 5 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `148` |
-| `partial` | `218` |
+| `partial` | `219` |
 | `standalone-error` | `186` |
 | `alias` | `3` |
-| `deferred` | `19` |
+| `deferred` | `18` |
 
 ## Group counts
 
@@ -127,7 +127,7 @@
 | `bitop` | `bitmap` | `full` | `-` | `-4` | `-` | `no` | `@write, @bitmap, @slow` |
 | `bitpos` | `bitmap` | `full` | `-` | `-3` | `-` | `no` | `@read, @bitmap, @slow` |
 | `blmove` | `list` | `partial` | `-` | `6` | `-` | `no` | `@write, @list, @slow, @blocking` |
-| `blmovem` | `list` | `deferred` | `v0.9.1` | `-6` | `-` | `no` | `@write, @list, @slow, @blocking` |
+| `blmovem` | `list` | `partial` | `-` | `-6` | `-` | `no` | `@write, @list, @slow, @blocking` |
 | `blmpop` | `list` | `partial` | `-` | `-5` | `-` | `no` | `@write, @list, @slow, @blocking` |
 | `blpop` | `list` | `partial` | `-` | `-3` | `-` | `no` | `@write, @list, @slow, @blocking` |
 | `brpop` | `list` | `partial` | `-` | `-3` | `-` | `no` | `@write, @list, @slow, @blocking` |

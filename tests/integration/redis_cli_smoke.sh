@@ -2002,6 +2002,24 @@ if [[ "$LMOVEM_SRC_RANGE_RESULT" != $'c\nd' || "$LMOVEM_DST_RANGE_RESULT" != $'x
     exit 1
 fi
 
+BLMOVEM_SEED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" rpush bmvsrc a b c)"
+if [[ "$BLMOVEM_SEED_RESULT" != "3" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: failed to seed BLMOVEM source" >&2
+    exit 1
+fi
+
+BLMOVEM_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" blmovem bmvsrc bmvdst LEFT RIGHT 1 COUNT 2 BULK)"
+if [[ "$BLMOVEM_RESULT" != $'a\nb' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected BLMOVEM a/b, got '$BLMOVEM_RESULT'" >&2
+    exit 1
+fi
+
+BLMOVEM_TIMEOUT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" blmovem missing-bmv bmvdst LEFT RIGHT 0.01)"
+if [[ -n "$BLMOVEM_TIMEOUT_RESULT" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected BLMOVEM timeout null, got '$BLMOVEM_TIMEOUT_RESULT'" >&2
+    exit 1
+fi
+
 LMPOP_SEED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" rpush lmpop a b c)"
 if [[ "$LMPOP_SEED_RESULT" != "3" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected lmpop seed RPUSH 3, got '$LMPOP_SEED_RESULT'" >&2

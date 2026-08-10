@@ -907,6 +907,26 @@ LMOVEM source destination LEFT|RIGHT LEFT|RIGHT [COUNT|EXACTLY count OBO|BULK]
 - 实现先克隆 source/destination，并在工作副本上完成弹出、顺序计算和可能扩容的推入，再替换 keyspace 对象
 - AOF 记录并回放原始 `LMOVEM` 请求
 
+### `BLMOVEM`
+
+格式：
+
+```text
+BLMOVEM source destination LEFT|RIGHT LEFT|RIGHT timeout [COUNT|EXACTLY count OBO|BULK]
+```
+
+返回：
+
+- 元素可用时返回与 `LMOVEM` 相同的 destination 顺序数组
+- timeout 到期前条件始终不满足时返回 Null Array
+
+说明：
+
+- `COUNT count` 在 source 至少有一个元素时解除阻塞，并最多移动 `count` 个元素
+- `EXACTLY count` 只有在 source 至少有 `count` 个元素时解除阻塞；部分到达的元素保持在 source 中等待后续元素
+- timeout 接受非负整数或浮点秒，`0` 表示无限等待
+- 成功搬移才进入 AOF 和复制传播；超时 Null Array 不记录写入
+
 ### `BLPOP`
 
 格式：

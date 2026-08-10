@@ -7889,70 +7889,17 @@ fn command_executor_lmove(engine: &Engine, command: &Command, now_ms: u64) Comma
     return command_executor_list_move_internal(engine, source, destination, now_ms, pop_left, push_left);
 }
 
-fn command_executor_lmovem(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
-    if command.argc != 5 && command.argc != 8 {
-        return command_executor_syntax_error();
-    }
-    const source: &[byte] = command_executor_arg(command, 1) catch {
-        return command_executor_wrong_arity();
-    };
-    const destination: &[byte] = command_executor_arg(command, 2) catch {
-        return command_executor_wrong_arity();
-    };
-    const wherefrom: &[byte] = command_executor_arg(command, 3) catch {
-        return command_executor_wrong_arity();
-    };
-    const whereto: &[byte] = command_executor_arg(command, 4) catch {
-        return command_executor_wrong_arity();
-    };
-
-    var pop_left: bool = false;
-    if command_executor_keyword_eq(wherefrom, &"LEFT"[0: 4]) {
-        pop_left = true;
-    } else if !command_executor_keyword_eq(wherefrom, &"RIGHT"[0: 5]) {
-        return command_executor_syntax_error();
-    }
-
-    var push_left: bool = false;
-    if command_executor_keyword_eq(whereto, &"LEFT"[0: 4]) {
-        push_left = true;
-    } else if !command_executor_keyword_eq(whereto, &"RIGHT"[0: 5]) {
-        return command_executor_syntax_error();
-    }
-
-    var exactly: bool = false;
-    var ordering_obo: bool = false;
-    var requested_count: usize = 1;
-    if command.argc == 8 {
-        const selector: &[byte] = command_executor_arg(command, 5) catch {
-            return command_executor_syntax_error();
-        };
-        if command_executor_keyword_eq(selector, &"EXACTLY"[0: 7]) {
-            exactly = true;
-        } else if !command_executor_keyword_eq(selector, &"COUNT"[0: 5]) {
-            return command_executor_syntax_error();
-        }
-        const count_data: &[byte] = command_executor_arg(command, 6) catch {
-            return command_executor_syntax_error();
-        };
-        const count_i64: i64 = command_executor_parse_i64(count_data) catch {
-            return command_executor_error(&"ERR count should be greater than 0"[0: 34]);
-        };
-        if count_i64 <= 0 {
-            return command_executor_error(&"ERR count should be greater than 0"[0: 34]);
-        }
-        requested_count = count_i64 as usize;
-
-        const ordering: &[byte] = command_executor_arg(command, 7) catch {
-            return command_executor_syntax_error();
-        };
-        if command_executor_keyword_eq(ordering, &"OBO"[0: 3]) {
-            ordering_obo = true;
-        } else if !command_executor_keyword_eq(ordering, &"BULK"[0: 4]) {
-            return command_executor_syntax_error();
-        }
-    }
-
+fn command_executor_list_movem_internal(
+    engine: &Engine,
+    source: &[byte],
+    destination: &[byte],
+    now_ms: u64,
+    pop_left: bool,
+    push_left: bool,
+    exactly: bool,
+    ordering_obo: bool,
+    requested_count: usize,
+) CommandReply {
     const source_obj: &RedisObject = command_executor_lookup_key_at(engine, source, now_ms) catch {
         return command_executor_reply(CommandReplyType.reply_null_array, command_executor_empty_slice(), 0);
     };
@@ -8128,6 +8075,113 @@ fn command_executor_lmovem(engine: &Engine, command: &Command, now_ms: u64) Comm
         }
     }
     return command_executor_owned_array(reply_list);
+}
+
+fn command_executor_list_movem_from_command(
+    engine: &Engine,
+    command: &Command,
+    now_ms: u64,
+    blocking: bool,
+) CommandReply {
+    var base_argc: usize = 5;
+    var option_index: usize = 5;
+    if blocking {
+        base_argc = 6;
+        option_index = 6;
+    }
+    if command.argc != base_argc && command.argc != base_argc + 3 {
+        return command_executor_syntax_error();
+    }
+
+    const source: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const destination: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+    const wherefrom: &[byte] = command_executor_arg(command, 3) catch {
+        return command_executor_wrong_arity();
+    };
+    const whereto: &[byte] = command_executor_arg(command, 4) catch {
+        return command_executor_wrong_arity();
+    };
+
+    if blocking {
+        const timeout_data: &[byte] = command_executor_arg(command, 5) catch {
+            return command_executor_wrong_arity();
+        };
+        _ = command_executor_validate_blocking_timeout(timeout_data) catch {
+            return command_executor_error(&"ERR value is not a valid float"[0: 30]);
+        };
+    }
+
+    var pop_left: bool = false;
+    if command_executor_keyword_eq(wherefrom, &"LEFT"[0: 4]) {
+        pop_left = true;
+    } else if !command_executor_keyword_eq(wherefrom, &"RIGHT"[0: 5]) {
+        return command_executor_syntax_error();
+    }
+
+    var push_left: bool = false;
+    if command_executor_keyword_eq(whereto, &"LEFT"[0: 4]) {
+        push_left = true;
+    } else if !command_executor_keyword_eq(whereto, &"RIGHT"[0: 5]) {
+        return command_executor_syntax_error();
+    }
+
+    var exactly: bool = false;
+    var ordering_obo: bool = false;
+    var requested_count: usize = 1;
+    if command.argc == base_argc + 3 {
+        const selector: &[byte] = command_executor_arg(command, option_index) catch {
+            return command_executor_syntax_error();
+        };
+        if command_executor_keyword_eq(selector, &"EXACTLY"[0: 7]) {
+            exactly = true;
+        } else if !command_executor_keyword_eq(selector, &"COUNT"[0: 5]) {
+            return command_executor_syntax_error();
+        }
+
+        const count_data: &[byte] = command_executor_arg(command, option_index + 1) catch {
+            return command_executor_syntax_error();
+        };
+        const count_i64: i64 = command_executor_parse_i64(count_data) catch {
+            return command_executor_error(&"ERR count should be greater than 0"[0: 34]);
+        };
+        if count_i64 <= 0 {
+            return command_executor_error(&"ERR count should be greater than 0"[0: 34]);
+        }
+        requested_count = count_i64 as usize;
+
+        const ordering: &[byte] = command_executor_arg(command, option_index + 2) catch {
+            return command_executor_syntax_error();
+        };
+        if command_executor_keyword_eq(ordering, &"OBO"[0: 3]) {
+            ordering_obo = true;
+        } else if !command_executor_keyword_eq(ordering, &"BULK"[0: 4]) {
+            return command_executor_syntax_error();
+        }
+    }
+
+    return command_executor_list_movem_internal(
+        engine,
+        source,
+        destination,
+        now_ms,
+        pop_left,
+        push_left,
+        exactly,
+        ordering_obo,
+        requested_count,
+    );
+}
+
+fn command_executor_lmovem(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    return command_executor_list_movem_from_command(engine, command, now_ms, false);
+}
+
+fn command_executor_blmovem(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    return command_executor_list_movem_from_command(engine, command, now_ms, true);
 }
 
 fn command_executor_blmove(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
@@ -20593,6 +20647,7 @@ fn command_executor_command_key_flags(info: &CommandInfo, key_ordinal: usize) &[
     }
     if info.cmd_type == CommandType.command_lmove ||
         info.cmd_type == CommandType.command_lmovem ||
+        info.cmd_type == CommandType.command_blmovem ||
         info.cmd_type == CommandType.command_blmove ||
         info.cmd_type == CommandType.command_rpoplpush ||
         info.cmd_type == CommandType.command_brpoplpush {
@@ -22076,6 +22131,9 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
     }
     if command.info.cmd_type == CommandType.command_lmovem {
         return command_executor_lmovem(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_blmovem {
+        return command_executor_blmovem(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_blmove {
         return command_executor_blmove(engine, command, now_ms);

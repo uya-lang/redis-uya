@@ -499,6 +499,24 @@ export fn test_aof_replay_blocking_list_commands() !void {
         256,
         1000u64,
     );
+    _ = try connection_process_input_with_aof_at(
+        &engine,
+        &router,
+        &writer,
+        &"*5\r\n$5\r\nRPUSH\r\n$6\r\nbmvsrc\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\nc\r\n"[0: 48],
+        &out[0],
+        256,
+        1000u64,
+    );
+    _ = try connection_process_input_with_aof_at(
+        &engine,
+        &router,
+        &writer,
+        &"*9\r\n$7\r\nBLMOVEM\r\n$6\r\nbmvsrc\r\n$6\r\nbmvdst\r\n$4\r\nLEFT\r\n$5\r\nRIGHT\r\n$1\r\n1\r\n$5\r\nCOUNT\r\n$1\r\n2\r\n$4\r\nBULK\r\n"[0: 97],
+        &out[0],
+        256,
+        1000u64,
+    );
     aof_close(&writer);
     engine_free(&engine);
 
@@ -514,6 +532,18 @@ export fn test_aof_replay_blocking_list_commands() !void {
     try assert_eq_i32(mpop_obj.list_len as i32, 1);
     const mpop_value: &RedisObject = try list_object_index_value(mpop_obj, 0);
     try assert_true(aof_test_slice_eq(mpop_value.value.buf[0: mpop_value.value.len], &"a"[0: 1]));
+    const bmvsrc_obj: &RedisObject = try lookup_key_at(&replay_engine, &"bmvsrc"[0: 6], 2000u64);
+    try assert_eq_i32(bmvsrc_obj.obj_type as i32, ObjectType.object_list as i32);
+    try assert_eq_i32(bmvsrc_obj.list_len as i32, 1);
+    const bmvsrc_value: &RedisObject = try list_object_index_value(bmvsrc_obj, 0);
+    try assert_true(aof_test_slice_eq(bmvsrc_value.value.buf[0: bmvsrc_value.value.len], &"c"[0: 1]));
+    const bmvdst_obj: &RedisObject = try lookup_key_at(&replay_engine, &"bmvdst"[0: 6], 2000u64);
+    try assert_eq_i32(bmvdst_obj.obj_type as i32, ObjectType.object_list as i32);
+    try assert_eq_i32(bmvdst_obj.list_len as i32, 2);
+    const bmvdst_first: &RedisObject = try list_object_index_value(bmvdst_obj, 0);
+    const bmvdst_second: &RedisObject = try list_object_index_value(bmvdst_obj, 1);
+    try assert_true(aof_test_slice_eq(bmvdst_first.value.buf[0: bmvdst_first.value.len], &"a"[0: 1]));
+    try assert_true(aof_test_slice_eq(bmvdst_second.value.buf[0: bmvdst_second.value.len], &"b"[0: 1]));
     engine_free(&replay_engine);
     _ = unlink(path);
     try assert_eq_i32(used_memory() as i32, 0);

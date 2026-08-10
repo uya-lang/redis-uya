@@ -57,7 +57,7 @@
 - Hash 命令子集：`HSET`、`HGET`、`HDEL`、`HEXISTS`、`HLEN`、`HMGET`、`HMSET`、`HSETNX`、`HSTRLEN`、`HRANDFIELD`，以及 field TTL 兼容面 `HGETEX/HSETEX/HEXPIRE/HPEXPIRE/HEXPIREAT/HPEXPIREAT/HTTL/HPTTL/HEXPIRETIME/HPEXPIRETIME/HPERSIST`
 - List 最小对象：基于双向链表的最小 list value 容器
 - List 命令子集：`LPUSH`、`LPOP`、`LRANGE`
-- Blocking list/zset 第一批：`BLPOP`、`BRPOP`、`BRPOPLPUSH`、`BLMOVE`、`BLMPOP`、`BZPOPMIN`、`BZPOPMAX`、`BZMPOP` 已支持立即命中、server-side block/unblock、超时返回与 AOF replay
+- Blocking list/zset 第一批：`BLPOP`、`BRPOP`、`BRPOPLPUSH`、`BLMOVE`、`BLMOVEM`、`BLMPOP`、`BZPOPMIN`、`BZPOPMAX`、`BZMPOP` 已支持立即命中、server-side block/unblock、超时返回与 AOF replay
 - Set 最小对象：基于项目内 `Dict` 的最小 set value 容器
 - Set 命令子集：`SADD`、`SCARD`、`SISMEMBER`、`SMISMEMBER`、`SMEMBERS`、`SREM`、`SMOVE`、`SSCAN`
 - ZSet 最小对象：基于项目内 `Dict` 的最小 zset value 容器，支持按 score 排序范围读取
@@ -309,7 +309,7 @@ build/redis-uya 6380 1
 - List 第一批基础：`RPUSH`、`RPOP`、`LINDEX`、`LSET`、`LLEN`
 - List 第二批变异：`LINSERT`、`LTRIM`、`LREM`
 - List 第三批条件：`LPUSHX`、`RPUSHX`、`LPOS`
-- List 批量搬移：`LMOVEM` 支持默认单元素数组、`COUNT` / `EXACTLY` 数量语义、`OBO` / `BULK` 顺序、同 key 批量旋转和 AOF replay
+- List 批量搬移：`LMOVEM`、`BLMOVEM` 支持默认单元素数组、`COUNT` / `EXACTLY` 数量语义、`OBO` / `BULK` 顺序、同 key 批量旋转和 AOF replay；`BLMOVEM EXACTLY` 在完整数量可用前保持阻塞
 - Set 第一批随机取值：`SPOP`、`SRANDMEMBER`
 - Set 第二批集合运算：`SINTER`、`SDIFF`、`SUNION`
 - Set 第三批集合写回：`SINTERSTORE`、`SDIFFSTORE`、`SUNIONSTORE`

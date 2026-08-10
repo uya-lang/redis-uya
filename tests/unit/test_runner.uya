@@ -180,6 +180,7 @@ use tests.unit.network_connection_test.test_connection_process_slowlog;
 use tests.unit.network_connection_test.test_connection_process_latency;
 use tests.unit.network_connection_test.test_connection_process_monitor;
 use tests.unit.network_connection_test.test_connection_process_lmpop;
+use tests.unit.network_connection_test.test_connection_process_blocking_list_commands;
 use tests.unit.network_connection_test.test_connection_process_touch_unlink;
 use tests.unit.network_connection_test.test_connection_process_keys;
 use tests.unit.network_connection_test.test_connection_process_sort_ro;
@@ -954,6 +955,10 @@ export fn main() i32 {
     const before_conn_lmpop: i32 = failed;
     _ = test_connection_process_lmpop() catch { printf("[FAIL] network_connection/lmpop\n" as *byte); failed = failed + 1; };
     if failed == before_conn_lmpop { printf("[PASS] network_connection/lmpop\n" as *byte); }
+
+    const before_conn_blocking_list: i32 = failed;
+    _ = test_connection_process_blocking_list_commands() catch { printf("[FAIL] network_connection/blocking_list\n" as *byte); failed = failed + 1; };
+    if failed == before_conn_blocking_list { printf("[PASS] network_connection/blocking_list\n" as *byte); }
 
     const before_conn_touch_unlink: i32 = failed;
     _ = test_connection_process_touch_unlink() catch { printf("[FAIL] network_connection/touch_unlink\n" as *byte); failed = failed + 1; };

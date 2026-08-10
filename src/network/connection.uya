@@ -970,6 +970,7 @@ fn connection_command_is_blocking_pop(cmd_type: CommandType) bool {
     return cmd_type == CommandType.command_blpop ||
         cmd_type == CommandType.command_brpop ||
         cmd_type == CommandType.command_blmove ||
+        cmd_type == CommandType.command_blmovem ||
         cmd_type == CommandType.command_blmpop ||
         cmd_type == CommandType.command_brpoplpush ||
         cmd_type == CommandType.command_bzpopmax ||
@@ -1006,6 +1007,67 @@ fn connection_should_block_pop_command(engine: &Engine, tx: &ConnectionTransacti
             index = index + 1;
         }
         return true;
+    }
+
+    if command.info.cmd_type == CommandType.command_blmovem {
+        if command.argc != 6 && command.argc != 9 {
+            return false;
+        }
+        const wherefrom_movem: &[byte] = command_arg_data(command, 3) catch {
+            return false;
+        };
+        const whereto_movem: &[byte] = command_arg_data(command, 4) catch {
+            return false;
+        };
+        if (!connection_keyword_eq(wherefrom_movem, &"LEFT"[0: 4]) &&
+                !connection_keyword_eq(wherefrom_movem, &"RIGHT"[0: 5])) ||
+            (!connection_keyword_eq(whereto_movem, &"LEFT"[0: 4]) &&
+                !connection_keyword_eq(whereto_movem, &"RIGHT"[0: 5])) {
+            return false;
+        }
+
+        var exactly_movem: bool = false;
+        var required_movem: usize = 1;
+        if command.argc == 9 {
+            const selector_movem: &[byte] = command_arg_data(command, 6) catch {
+                return false;
+            };
+            if connection_keyword_eq(selector_movem, &"EXACTLY"[0: 7]) {
+                exactly_movem = true;
+            } else if !connection_keyword_eq(selector_movem, &"COUNT"[0: 5]) {
+                return false;
+            }
+            const count_data_movem: &[byte] = command_arg_data(command, 7) catch {
+                return false;
+            };
+            const count_movem: u64 = connection_parse_u64(count_data_movem) catch {
+                return false;
+            };
+            if count_movem == 0u64 || count_movem > 9223372036854775807u64 {
+                return false;
+            }
+            const ordering_movem: &[byte] = command_arg_data(command, 8) catch {
+                return false;
+            };
+            if !connection_keyword_eq(ordering_movem, &"OBO"[0: 3]) &&
+                !connection_keyword_eq(ordering_movem, &"BULK"[0: 4]) {
+                return false;
+            }
+            if exactly_movem {
+                required_movem = count_movem as usize;
+            }
+        }
+
+        const source_movem: &[byte] = command_arg_data(command, 1) catch {
+            return false;
+        };
+        const obj_movem: &RedisObject = connection_lookup_key_for_client_at(engine, tx, source_movem, now_ms) catch {
+            return true;
+        };
+        if obj_movem.obj_type != ObjectType.object_list {
+            return false;
+        }
+        return obj_movem.list_len < required_movem;
     }
 
     if command.info.cmd_type == CommandType.command_blmove ||
@@ -7409,6 +7471,7 @@ fn connection_should_append_aof(command: &Command, reply: &CommandReply) bool {
     }
     if command.info.cmd_type == CommandType.command_zmpop ||
         command.info.cmd_type == CommandType.command_bzmpop ||
+        command.info.cmd_type == CommandType.command_blmovem ||
         command.info.cmd_type == CommandType.command_blmpop {
         return reply.typ == CommandReplyType.reply_array_bulk || reply.typ == CommandReplyType.reply_raw_bytes;
     }
@@ -7513,6 +7576,8 @@ fn connection_execute_blocking_pop_command_at(
     if command.info.cmd_type == CommandType.command_bzmpop ||
         command.info.cmd_type == CommandType.command_blmpop {
         timeout_index = 1;
+    } else if command.info.cmd_type == CommandType.command_blmovem {
+        timeout_index = 5;
     }
     const timeout_data: &[byte] = command_arg_data(command, timeout_index) catch {
         const err_reply: CommandReply = connection_error_reply(&"ERR wrong number of arguments"[0: 29]);

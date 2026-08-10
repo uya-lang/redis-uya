@@ -110,204 +110,6 @@ OPS_TARGET_NAMES = {
 }
 
 FULL_NAMES = {
-    "acl",
-    "acl|cat",
-    "acl|deluser",
-    "acl|dryrun",
-    "acl|genpass",
-    "acl|getuser",
-    "acl|help",
-    "acl|list",
-    "acl|load",
-    "acl|log",
-    "acl|save",
-    "acl|setuser",
-    "acl|users",
-    "acl|whoami",
-    "blmovem",
-    "client",
-    "client|caching",
-    "client|getname",
-    "client|info",
-    "client|kill",
-    "client|list",
-    "client|no-evict",
-    "client|no-touch",
-    "client|pause",
-    "client|reply",
-    "client|setname",
-    "client|tracking",
-    "client|trackinginfo",
-    "client|unblock",
-    "client|unpause",
-    "command",
-    "command|getkeys",
-    "command|getkeysandflags",
-    "command|list",
-    "config",
-    "config|get",
-    "config|rewrite",
-    "config|set",
-    "copy",
-    "delex",
-    "digest",
-    "eval",
-    "eval_ro",
-    "evalsha",
-    "evalsha_ro",
-    "fcall",
-    "fcall_ro",
-    "function",
-    "function|delete",
-    "function|dump",
-    "function|flush",
-    "function|help",
-    "function|kill",
-    "function|list",
-    "function|load",
-    "function|restore",
-    "function|stats",
-    "geoadd",
-    "geodist",
-    "geohash",
-    "geopos",
-    "georadius",
-    "georadius_ro",
-    "georadiusbymember",
-    "georadiusbymember_ro",
-    "geosearch",
-    "geosearchstore",
-    "hexpire",
-    "hexpireat",
-    "hexpiretime",
-    "hgetdel",
-    "hgetex",
-    "himport",
-    "himport|discard",
-    "himport|discardall",
-    "himport|prepare",
-    "himport|set",
-    "hotkeys",
-    "hotkeys|get",
-    "hotkeys|help",
-    "hotkeys|reset",
-    "hotkeys|start",
-    "hotkeys|stop",
-    "hpersist",
-    "hpexpire",
-    "hpexpireat",
-    "hpexpiretime",
-    "hpttl",
-    "hrandfield",
-    "hsetex",
-    "httl",
-    "increx",
-    "info",
-    "latency",
-    "latency|doctor",
-    "latency|graph",
-    "latency|help",
-    "latency|histogram",
-    "latency|history",
-    "latency|latest",
-    "latency|reset",
-    "lcs",
-    "lmovem",
-    "lolwut",
-    "memory",
-    "memory|doctor",
-    "memory|help",
-    "memory|malloc-stats",
-    "memory|purge",
-    "memory|stats",
-    "memory|usage",
-    "module",
-    "module|help",
-    "module|list",
-    "monitor",
-    "msetex",
-    "object",
-    "pfadd",
-    "pfcount",
-
-    "pfmerge",
-    "pfselftest",
-    "pubsub",
-    "replconf",
-    "restore-asking",
-    "script",
-    "script|debug",
-    "script|exists",
-    "script|flush",
-    "script|help",
-    "script|kill",
-    "script|load",
-    "sdiffcard",
-    "slowlog",
-    "slowlog|get",
-    "slowlog|help",
-    "slowlog|len",
-    "slowlog|reset",
-    "spublish",
-    "ssubscribe",
-    "sunioncard",
-    "sunsubscribe",
-    "swapdb",
-    "sync",
-    "waitaof",
-    "xack",
-    "xackdel",
-    "xadd",
-    "xautoclaim",
-    "xcfgset",
-    "xclaim",
-    "xdel",
-    "xdelex",
-    "xgroup",
-    "xgroup|create",
-    "xgroup|createconsumer",
-    "xgroup|delconsumer",
-    "xgroup|destroy",
-    "xgroup|help",
-    "xgroup|setid",
-    "xidmprecord",
-    "xinfo",
-    "xinfo|consumers",
-    "xinfo|groups",
-    "xinfo|help",
-    "xinfo|stream",
-    "xlen",
-    "xnack",
-    "xpending",
-    "xrange",
-    "xread",
-    "xreadgroup",
-    "xrevrange",
-    "xsetid",
-    "xtrim",
-    "zdiff",
-    "zdiffstore",
-    "zinter",
-    "zintercard",
-    "zinterstore",
-    "zlexcount",
-    "zmpop",
-    "zrandmember",
-    "zrangebylex",
-    "zrangestore",
-    "zremrangebylex",
-    "zrevrange",
-    "zrevrangebylex",
-    "zunion",
-    "zunionstore",
-    "blmove",
-    "blmpop",
-    "blpop",
-    "brpop",
-    "brpoplpush",
-    "bzmpop",
-    "bzpopmax",
-    "bzpopmin",
     "append",
     "auth",
     "bgrewriteaof",
@@ -474,34 +276,228 @@ FULL_NAMES = {
     "zrevrangebyscore",
     "zrevrank",
     "zscan",
-
 }
 
 PARTIAL_NAMES = {
+    "acl",
+    "acl|cat",
+    "acl|deluser",
+    "acl|dryrun",
+    "acl|genpass",
+    "acl|getuser",
+    "acl|help",
+    "acl|list",
+    "acl|load",
+    "acl|log",
+    "acl|save",
+    "acl|setuser",
+    "acl|users",
+    "acl|whoami",
+    "auth",
+    "bgrewriteaof",
+    "bgsave",
+    "blmove",
+    "blmpop",
+    "blpop",
+    "brpop",
+    "brpoplpush",
+    "bzmpop",
+    "bzpopmax",
+    "bzpopmin",
+    "client",
+    "client|caching",
+    "client|getname",
+    "client|kill",
+    "client|info",
+    "client|list",
+    "client|no-evict",
+    "client|no-touch",
+    "client|pause",
+    "client|reply",
+    "client|setname",
+    "client|tracking",
+    "client|trackinginfo",
+    "client|unblock",
+    "client|unpause",
+    "cluster",
+    "cluster|info",
+    "cluster|keyslot",
+    "cluster|meet",
+    "cluster|nodes",
+    "cluster|setslot",
+    "cluster|slots",
+    "command",
+    "command|getkeys",
+    "command|getkeysandflags",
+    "command|list",
+    "command|docs",
+    "config",
+    "config|get",
+    "config|rewrite",
+    "config|set",
+    "copy",
+    "delex",
+    "digest",
+    "hexpire",
+    "hexpireat",
+    "hexpiretime",
+    "hgetdel",
+    "hgetex",
+    "hsetex",
+    "hpersist",
+    "hpexpire",
+    "hpexpireat",
+    "hpexpiretime",
+    "hpttl",
+    "httl",
+    "msetex",
+    "lcs",
+    "increx",
+    "flushall",
+    "flushdb",
+    "hello",
+    "hotkeys",
+    "hotkeys|get",
+    "hotkeys|help",
+    "hotkeys|reset",
+    "hotkeys|start",
+    "hotkeys|stop",
+    "hrandfield",
+    "info",
+    "latency",
+    "latency|doctor",
+    "latency|graph",
+    "latency|help",
+    "latency|histogram",
+    "latency|history",
+    "latency|latest",
+    "latency|reset",
+    "monitor",
+    "move",
+    "memory",
+    "memory|doctor",
+    "memory|help",
+    "memory|malloc-stats",
+    "memory|purge",
+    "memory|stats",
+    "memory|usage",
+    "module",
+    "module|help",
+    "module|list",
+    "object",
+    "publish",
+    "pubsub",
     "pubsub|shardchannels",
     "pubsub|shardnumsub",
-
+    "geoadd",
+    "geodist",
+    "geohash",
+    "geopos",
+    "georadius",
+    "georadius_ro",
+    "georadiusbymember",
+    "georadiusbymember_ro",
+    "geosearch",
+    "geosearchstore",
+    "eval",
+    "eval_ro",
+    "evalsha",
+    "evalsha_ro",
+    "fcall",
+    "fcall_ro",
+    "function",
+    "function|delete",
+    "function|dump",
+    "function|flush",
+    "function|help",
+    "function|kill",
+    "function|load",
+    "function|list",
+    "function|restore",
+    "function|stats",
+    "script",
+    "script|debug",
+    "script|exists",
+    "script|flush",
+    "script|help",
+    "script|kill",
+    "script|load",
+    "psync",
+    "quit",
+    "replicaof",
+    "replconf",
+    "restore",
+    "restore-asking",
+    "save",
+    "select",
+    "lolwut",
+    "sort",
+    "slowlog",
+    "slowlog|get",
+    "slowlog|help",
+    "slowlog|len",
+    "slowlog|reset",
+    "subscribe",
+    "spublish",
+    "ssubscribe",
+    "swapdb",
+    "sync",
+    "sunsubscribe",
+    "unsubscribe",
+    "wait",
+    "waitaof",
+    "zdiff",
+    "zdiffstore",
+    "zinter",
+    "zintercard",
+    "zinterstore",
+    "zunion",
+    "zunionstore",
+    "zmpop",
+    "zrandmember",
+    "zlexcount",
+    "zrangebylex",
+    "zrangestore",
+    "zremrangebylex",
+    "zrevrange",
+    "zrevrangebylex",
+    "xack",
+    "xackdel",
+    "xadd",
+    "xautoclaim",
+    "xcfgset",
+    "xclaim",
+    "xdel",
+    "xdelex",
+    "xgroup",
+    "xgroup|create",
+    "xgroup|createconsumer",
+    "xgroup|delconsumer",
+    "xgroup|destroy",
+    "xgroup|help",
+    "xgroup|setid",
+    "xinfo",
+    "xinfo|consumers",
+    "xinfo|groups",
+    "xinfo|help",
+    "xinfo|stream",
+    "xidmprecord",
+    "xlen",
+    "xnack",
+    "xpending",
+    "xrange",
+    "xread",
+    "xreadgroup",
+    "xrevrange",
+    "xsetid",
+    "xtrim",
+    "pfadd",
+    "pfcount",
+    "pfmerge",
+    "pfselftest",
 }
 
 STANDALONE_ERROR_NAMES = {
-    "ar.*",
-    "backup",
-    "backup|abort",
-    "backup|cleanup",
-    "backup|help",
-    "backup|list",
-    "backup|seal",
-    "backup|start",
-    "backup|status",
-    "ft.*",
-    "fts.*",
-    "ts.nrange",
-    "ts.nrevrange",
-    "ts.querylabels",
-    "ts.read",
-    "vadd",
-    "vcard",
-    "vdim",
     "arcount",
     "ardel",
     "ardelrange",
@@ -610,7 +606,7 @@ STANDALONE_ERROR_NAMES = {
     "module|load",
     "module|loadex",
     "module|unload",
-
+    "pfdebug",
     "tdigest.add",
     "tdigest.byrank",
     "tdigest.byrevrank",
@@ -662,7 +658,6 @@ STANDALONE_ERROR_NAMES = {
     "vrem",
     "vsetattr",
     "vsim",
-    "pfdebug",
 }
 
 ALIAS_NAMES = {
@@ -670,6 +665,8 @@ ALIAS_NAMES = {
     "slaveof": "replicaof",
     "substr": "getrange",
 }
+
+
 @dataclass
 class CommandEntry:
     title: str
@@ -693,6 +690,8 @@ class CommandEntry:
     status: str = "deferred"
     target_version: str = ""
     subcommands: list[str] = field(default_factory=list)
+
+
 def fetch_text(url: str) -> str:
     last_error: Exception | None = None
     for _ in range(FETCH_RETRIES):
@@ -703,14 +702,20 @@ def fetch_text(url: str) -> str:
         except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
             last_error = exc
     raise RuntimeError(f"failed to fetch {url}: {last_error}") from last_error
+
+
 def normalize_text(value: str | None) -> str:
     if value is None:
         return ""
     value = value.replace("\u00a0", " ")
     value = re.sub(r"\s+", " ", value).strip()
     return value
+
+
 def command_name_to_runtime(title: str) -> str:
     return title.lower().replace(" ", "|")
+
+
 def module_name_for(group: str, name: str) -> str:
     head = name.split("|", 1)[0]
     if "." in head:
@@ -718,6 +723,8 @@ def module_name_for(group: str, name: str) -> str:
     if group in ADVANCED_GROUP_TARGETS and group not in {"bitmap", "geo", "hyperloglog"}:
         return group
     return ""
+
+
 def iter_argument_nodes(args: list[Any]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for arg in args:
@@ -728,11 +735,15 @@ def iter_argument_nodes(args: list[Any]) -> list[dict[str, Any]]:
         if isinstance(nested, list):
             out.extend(iter_argument_nodes(nested))
     return out
+
+
 def argument_is_pattern(args: list[Any]) -> bool:
     for arg in iter_argument_nodes(args):
         if arg.get("type") == "pattern":
             return True
     return False
+
+
 def transform_doc_argument(arg: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for key, value in arg.items():
@@ -747,6 +758,8 @@ def transform_doc_argument(arg: dict[str, Any]) -> dict[str, Any]:
             continue
         out[key] = value
     return out
+
+
 def transform_key_spec(spec: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {}
     flags: list[str] = []
@@ -762,6 +775,8 @@ def transform_key_spec(spec: dict[str, Any]) -> dict[str, Any]:
     if "find_keys" in spec:
         out["find_keys"] = spec["find_keys"]
     return out
+
+
 def infer_flags(meta: dict[str, Any]) -> list[str]:
     explicit = meta.get("command_flags")
     if isinstance(explicit, list) and explicit:
@@ -776,6 +791,8 @@ def infer_flags(meta: dict[str, Any]) -> list[str]:
     if "@fast" in acl:
         flags.append("fast")
     return flags
+
+
 def infer_argument_min_tokens(arg: dict[str, Any]) -> int:
     arg_type = arg.get("type")
     if arg.get("optional") or arg.get("multiple"):
@@ -791,6 +808,8 @@ def infer_argument_min_tokens(arg: dict[str, Any]) -> int:
         prefix = 1 if isinstance(arg.get("token"), str) and arg["token"] else 0
         return prefix + sum(infer_argument_min_tokens(item) for item in nested if isinstance(item, dict))
     return 1
+
+
 def argument_is_variable(arg: dict[str, Any]) -> bool:
     if arg.get("optional") or arg.get("multiple"):
         return True
@@ -803,6 +822,8 @@ def argument_is_variable(arg: dict[str, Any]) -> bool:
             if isinstance(item, dict) and argument_is_variable(item):
                 return True
     return False
+
+
 def infer_arity(meta: dict[str, Any]) -> int:
     explicit = meta.get("arity")
     if isinstance(explicit, int):
@@ -821,6 +842,8 @@ def infer_arity(meta: dict[str, Any]) -> int:
     if variable:
         return -minimum
     return minimum
+
+
 def infer_key_specs(meta: dict[str, Any], flags: list[str]) -> list[dict[str, Any]]:
     explicit = meta.get("key_specs")
     if isinstance(explicit, list) and explicit:
@@ -861,6 +884,8 @@ def infer_key_specs(meta: dict[str, Any], flags: list[str]) -> list[dict[str, An
         spec["RW"] = True
         spec["update"] = True
     return [transform_key_spec(spec)]
+
+
 def legacy_key_triplet(key_specs: list[dict[str, Any]]) -> tuple[int, int, int]:
     for key_spec in key_specs:
         begin_search = key_spec.get("begin_search")
@@ -878,6 +903,8 @@ def legacy_key_triplet(key_specs: list[dict[str, Any]]) -> tuple[int, int, int]:
         step = int(find_spec.get("keystep", 0))
         return first, last, step
     return 0, 0, 0
+
+
 def build_docs_fields(meta: dict[str, Any]) -> list[tuple[str, Any]]:
     fields: list[tuple[str, Any]] = []
     summary = normalize_text(meta.get("description"))
@@ -896,28 +923,44 @@ def build_docs_fields(meta: dict[str, Any]) -> list[tuple[str, Any]]:
     if isinstance(arguments, list) and arguments:
         fields.append(("arguments", [transform_doc_argument(item) for item in arguments if isinstance(item, dict)]))
     return fields
+
+
 def resp_bulk(value: str) -> bytes:
     data = value.encode("utf-8")
     return f"${len(data)}\r\n".encode("ascii") + data + b"\r\n"
+
+
 def resp_simple(value: str) -> bytes:
     data = value.encode("utf-8")
     return b"+" + data + b"\r\n"
+
+
 def resp_integer(value: int) -> bytes:
     return f":{value}\r\n".encode("ascii")
+
+
 def resp_null(resp3: bool) -> bytes:
     if resp3:
         return b"_\r\n"
     return b"$-1\r\n"
+
+
 def resp_array(items: list[bytes]) -> bytes:
     return f"*{len(items)}\r\n".encode("ascii") + b"".join(items)
+
+
 def resp_set(items: list[bytes]) -> bytes:
     return f"~{len(items)}\r\n".encode("ascii") + b"".join(items)
+
+
 def resp_map(items: list[tuple[bytes, bytes]]) -> bytes:
     body = bytearray()
     for key, value in items:
         body.extend(key)
         body.extend(value)
     return f"%{len(items)}\r\n".encode("ascii") + bytes(body)
+
+
 def encode_resp2(value: Any) -> bytes:
     if isinstance(value, tuple) and value and value[0] == "simple":
         return resp_simple(value[1])
@@ -936,6 +979,8 @@ def encode_resp2(value: Any) -> bytes:
             items.append(encode_resp2(item))
         return resp_array(items)
     raise TypeError(f"unsupported RESP2 value: {type(value)!r}")
+
+
 def encode_resp3(value: Any, *, set_like: bool = False) -> bytes:
     if isinstance(value, tuple) and value and value[0] == "simple":
         return resp_simple(value[1])
@@ -958,6 +1003,8 @@ def encode_resp3(value: Any, *, set_like: bool = False) -> bytes:
             items.append((resp_bulk(str(key)), encode_resp3(item)))
         return resp_map(items)
     raise TypeError(f"unsupported RESP3 value: {type(value)!r}")
+
+
 def uya_string_literal(data: bytes) -> str:
     parts: list[str] = []
     for byte in data:
@@ -975,6 +1022,8 @@ def uya_string_literal(data: bytes) -> str:
             parts.append(f"\\x{byte:02x}")
     escaped = "".join(parts)
     return f'&"{escaped}"[0: {len(data)}]'
+
+
 def part_label(index: int) -> str:
     alphabet = "abcdefghijklmnopqrstuvwxyz"
     label = ""
@@ -985,6 +1034,8 @@ def part_label(index: int) -> str:
             break
         value = (value // 26) - 1
     return label
+
+
 def target_version_for(entry: CommandEntry, status: str) -> str:
     if status in {"full", "partial", "alias"}:
         return ""
@@ -1001,6 +1052,8 @@ def target_version_for(entry: CommandEntry, status: str) -> str:
     if entry.group in {"string", "hash", "list", "set", "sorted-set"}:
         return "v0.9.1"
     return "v0.9.1"
+
+
 def classify_status(entry: CommandEntry) -> tuple[str, str]:
     if entry.name in ALIAS_NAMES:
         return "alias", target_version_for(entry, "alias")
@@ -1013,6 +1066,8 @@ def classify_status(entry: CommandEntry) -> tuple[str, str]:
     if entry.group in {"cluster", "sentinel"}:
         return "standalone-error", target_version_for(entry, "standalone-error")
     return "deferred", target_version_for(entry, "deferred")
+
+
 def build_info_value(entry: CommandEntry, entries_by_name: dict[str, CommandEntry], *, resp3: bool) -> list[Any]:
     first_key, last_key, key_step = legacy_key_triplet([
         {"begin_search": spec.get("begin_search"), "find_keys": spec.get("find_keys")}
@@ -1043,6 +1098,8 @@ def build_info_value(entry: CommandEntry, entries_by_name: dict[str, CommandEntr
         key_specs_value,
         subcommands_value,
     ]
+
+
 def build_docs_value(entry: CommandEntry) -> dict[str, Any]:
     value: dict[str, Any] = {}
     if entry.summary:
@@ -1056,6 +1113,8 @@ def build_docs_value(entry: CommandEntry) -> dict[str, Any]:
     if entry.arguments_resp:
         value["arguments"] = entry.arguments_resp
     return value
+
+
 def parse_entry(title: str, link: str) -> CommandEntry:
     markdown = fetch_text(link + "index.html.md")
     if "```json metadata" not in markdown:
@@ -1089,6 +1148,8 @@ def parse_entry(title: str, link: str) -> CommandEntry:
     entry.first_key, entry.last_key, entry.key_step = legacy_key_triplet(entry.key_specs_resp)
     entry.status, entry.target_version = classify_status(entry)
     return entry
+
+
 def collect_command_links() -> list[tuple[str, str]]:
     xml_text = fetch_text(INDEX_URL)
     root = ET.fromstring(xml_text)
@@ -1103,6 +1164,8 @@ def collect_command_links() -> list[tuple[str, str]]:
             continue
         items.append((title, link))
     return items
+
+
 def build_catalog() -> list[CommandEntry]:
     links = collect_command_links()
     entries: list[CommandEntry] = []
@@ -1127,6 +1190,8 @@ def build_catalog() -> list[CommandEntry]:
     for entry in entries:
         entry.subcommands = subcommands.get(entry.name, [])
     return entries
+
+
 def status_enum_name(status: str) -> str:
     return {
         "full": "status_full",
@@ -1135,6 +1200,8 @@ def status_enum_name(status: str) -> str:
         "alias": "status_alias",
         "deferred": "status_deferred",
     }[status]
+
+
 def render_uya_base() -> str:
     lines: list[str] = []
     lines.append("// generated by scripts/generate_command_catalog.py; DO NOT EDIT.\n")
@@ -1164,6 +1231,8 @@ def render_uya_base() -> str:
     lines.append("    key_step: i32,\n")
     lines.append("}\n\n")
     return "".join(lines)
+
+
 def render_uya_part(entries: list[CommandEntry], part_index: int, start: int, end: int) -> str:
     label = part_label(part_index)
     lines: list[str] = []
@@ -1220,6 +1289,8 @@ def render_uya_part(entries: list[CommandEntry], part_index: int, start: int, en
     lines.append("    };\n")
     lines.append("}\n")
     return "".join(lines)
+
+
 def render_uya_wrapper(entries: list[CommandEntry]) -> str:
     total_count = len(entries)
     top_level_count = sum(1 for entry in entries if entry.is_top_level)
@@ -1253,6 +1324,8 @@ def render_uya_wrapper(entries: list[CommandEntry]) -> str:
     lines.append("    return error.CommandUnknown;\n")
     lines.append("}\n")
     return "".join(lines)
+
+
 def render_docs(entries: list[CommandEntry]) -> str:
     today = date.today().isoformat()
     total = len(entries)
@@ -1327,6 +1400,8 @@ def render_docs(entries: list[CommandEntry]) -> str:
             f"| `{entry.name}` | `{entry.group}` | `{entry.status}` | `{target}` | `{entry.arity}` | `{module}` | `{pattern}` | `{acl}` |\n"
         )
     return "".join(lines)
+
+
 def main() -> int:
     entries = build_catalog()
     UYA_BASE_OUT.write_text(render_uya_base(), encoding="utf-8")
@@ -1347,5 +1422,7 @@ def main() -> int:
         f"{part_count} part files and {DOC_OUT.relative_to(ROOT)}"
     )
     return 0
+
+
 if __name__ == "__main__":
     raise SystemExit(main())

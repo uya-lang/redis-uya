@@ -2628,8 +2628,8 @@ FUNCTION KILL
 - `FUNCTION FLUSH` 清空当前最小 function library，成功返回 `OK`
 - `FUNCTION DELETE` 删除指定 library 并返回 `OK`；缺失 library 返回 `ERR Library not found`
 - `FUNCTION LOAD` 接受最小 Lua library 子集并返回 library 名；支持位置参数和 table 形式的 `redis.register_function` 注册；同名库需要 `REPLACE`
-- `FUNCTION DUMP` 当前返回 Redis 兼容的空库序列化 payload
-- `FUNCTION RESTORE` 当前只接受 Redis 兼容空库序列化 payload，成功返回 `+OK`
+- `FUNCTION DUMP` 返回 Redis 7 `FUNCTION2` 格式的当前 library 序列化 payload；空库 payload 与 Redis 7 字节一致
+- `FUNCTION RESTORE` 接受非压缩或 Redis LZF 编码的 Redis 7 Function payload，成功返回 `+OK`
 - `FUNCTION KILL` 当前返回 `NOTBUSY No scripts in execution right now.`，表示没有正在运行的 function/script
 
 说明：
@@ -2639,9 +2639,11 @@ FUNCTION KILL
 - `FCALL` 执行已加载的最小函数子集；声明 `no-writes` 的函数和所有 `FCALL_RO` 调用都会在执行前解析内部命令，并对写命令返回 `ERR Write commands are not allowed from read-only scripts`
 - library/function 名仅接受 ASCII 字母、数字、`_` 和 `-`；每个函数名在当前进程中必须唯一，library 同名加载必须使用 `REPLACE`
 - function library 当前为进程内状态：不进入 RDB、AOF 或复制 library 元数据；函数执行后的实际数据命令仍遵循既有 AOF/复制传播路径
-- `FUNCTION RESTORE` 支持 `FLUSH|APPEND|REPLACE` 参数校验，但当前只接受空库 dump；非空或非法 payload 返回 `ERR DUMP payload version or checksum are wrong`
+- `FUNCTION DUMP` 使用 `FUNCTION2` opcode、Redis RDB 6/14/32-bit length、little-endian version 10 和 Redis CRC64；输出不主动执行 LZF 压缩，但可被 Redis 7 直接恢复
+- `FUNCTION RESTORE` 默认采用 `APPEND`；`APPEND` 保留现有库并拒绝同名库，`REPLACE` 只替换 payload 中的同名库，`FLUSH` 先以 payload 替换全部库；解析、CRC、冲突检查和对象分配先在独立 staging 表完成，失败不会修改当前 library 状态
+- `FUNCTION RESTORE` 可读取 Redis 7 默认生成的 LZF library code，解压后单库代码上限为 `81920` 字节；非法版本、长度、LZF 或 checksum 返回 `ERR DUMP payload version or checksum are wrong`
 - `COMMAND INFO/LIST/DOCS` 会暴露 `FUNCTION`、`FUNCTION|HELP`、`FUNCTION|LIST`、`FUNCTION|STATS`、`FUNCTION|FLUSH`、`FUNCTION|DELETE`、`FUNCTION|LOAD`、`FUNCTION|DUMP`、`FUNCTION|RESTORE` 和 `FUNCTION|KILL`
-- 当前不支持超过 8 个函数的 library、完整 Lua 语法、除 `no-writes` 外的 function flags、超过 128 字节或包含转义的 function description、非空 `FUNCTION DUMP/RESTORE`、RDB/AOF/复制 library 元数据持久化或长时间运行函数取消
+- 当前不支持超过 8 个函数的 library、完整 Lua 语法、除 `no-writes` 外的 function flags、超过 128 字节或包含转义的 function description、RDB/AOF/复制 library 元数据持久化或长时间运行函数取消
 
 ### `GEOADD`
 

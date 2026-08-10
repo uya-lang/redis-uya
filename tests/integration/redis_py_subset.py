@@ -2058,6 +2058,67 @@ def run_smoke() -> None:
             multi_function_stats = client.function_stats()
             if multi_function_stats[3][1][3] != 2:
                 raise AssertionError(f"unexpected multi-function FUNCTION STATS result: {multi_function_stats!r}")
+            multi_function_dump = client.function_dump()
+            if not multi_function_dump.startswith(b"\xf5") or multi_function_dump[-10:-8] != b"\x0a\x00":
+                raise AssertionError(f"unexpected non-empty FUNCTION DUMP payload: {multi_function_dump!r}")
+            if client.function_flush() != "OK" or client.function_restore(multi_function_dump) != "OK":
+                raise AssertionError("expected FUNCTION DUMP/RESTORE non-empty library round-trip")
+            restored_multi_list = client._request(b"FUNCTION", b"LIST", b"WITHCODE")
+            if len(restored_multi_list) != 1 or restored_multi_list[0][7] != multi_function_code:
+                raise AssertionError(f"unexpected restored FUNCTION LIST result: {restored_multi_list!r}")
+            if client.fcall(b"first", 1, b"lua-key") != b"multi-updated":
+                raise AssertionError("expected restored first function to execute")
+
+            side_function_code = (
+                b"#!lua name=side\n"
+                b"redis.register_function('sideget', function(keys, args) return redis.call('GET', keys[1]) end)"
+            )
+            if client.function_flush() != "OK" or client.function_load(side_function_code) != b"side":
+                raise AssertionError("expected side function library setup")
+            if client.function_restore(multi_function_dump) != "OK":
+                raise AssertionError("expected default FUNCTION RESTORE policy to append")
+            appended_function_list = client.function_list()
+            if len(appended_function_list) != 2:
+                raise AssertionError(f"expected appended FUNCTION libraries, got {appended_function_list!r}")
+            try:
+                client.function_restore(multi_function_dump, b"APPEND")
+                raise AssertionError("expected duplicate APPEND restore to fail")
+            except RespError as exc:
+                if str(exc) != "ERR Library multi already exists":
+                    raise AssertionError(f"unexpected duplicate FUNCTION RESTORE error: {exc}") from exc
+
+            replacement_multi_code = (
+                b"#!lua name=multi\n"
+                b"redis.register_function('replacement', function(keys, args) return redis.call('GET', keys[1]) end)"
+            )
+            if client.function_load(replacement_multi_code, replace=True) != b"multi":
+                raise AssertionError("expected replacement FUNCTION library setup")
+            if client.function_restore(multi_function_dump, b"REPLACE") != "OK":
+                raise AssertionError("expected FUNCTION RESTORE REPLACE to restore dumped library")
+            if client.fcall(b"second", 1, b"lua-key", b"restored-write") != "OK":
+                raise AssertionError("expected REPLACE-restored function to execute")
+            if client.fcall(b"sideget", 1, b"lua-key") != b"restored-write":
+                raise AssertionError("expected REPLACE policy to retain unrelated libraries")
+
+            if client.function_restore(multi_function_dump, b"FLUSH") != "OK":
+                raise AssertionError("expected FUNCTION RESTORE FLUSH to replace all libraries")
+            flushed_function_list = client.function_list()
+            if len(flushed_function_list) != 1 or flushed_function_list[0][1] != b"multi":
+                raise AssertionError(f"unexpected FLUSH-restored FUNCTION LIST result: {flushed_function_list!r}")
+            try:
+                client.fcall(b"sideget", 1, b"lua-key")
+                raise AssertionError("expected FLUSH restore to remove unrelated functions")
+            except RespError as exc:
+                if str(exc) != "ERR Function not found":
+                    raise AssertionError(f"unexpected removed side function error: {exc}") from exc
+            corrupted_function_dump = multi_function_dump[:-1] + bytes([multi_function_dump[-1] ^ 0x01])
+            try:
+                client.function_restore(corrupted_function_dump, b"REPLACE")
+                raise AssertionError("expected corrupted FUNCTION RESTORE payload to fail")
+            except RespError as exc:
+                if str(exc) != "ERR DUMP payload version or checksum are wrong":
+                    raise AssertionError(f"unexpected corrupted FUNCTION RESTORE error: {exc}") from exc
+
             if client.function_delete(b"multi") != "OK":
                 raise AssertionError("expected multi-function FUNCTION DELETE to return OK")
             try:
@@ -2066,6 +2127,22 @@ def run_smoke() -> None:
             except RespError as exc:
                 if str(exc) != "ERR Function not found":
                     raise AssertionError(f"unexpected deleted multi-function FCALL error: {exc}") from exc
+            redis_lzf_function_dump = bytes.fromhex(
+                "f5c3406840711d23216c7561206e616d653d696e7465726f700a72656469732e72656769732010145f66756e6374696f6e2827726561646b6579272c20e00013200e0e732c2061726773292072657475726e2006403e0863616c6c2827474554202d4024085b315d2920656e64290a0040a7e4a717a96354"
+            )
+            if client.function_restore(redis_lzf_function_dump, b"FLUSH") != "OK":
+                raise AssertionError("expected Redis LZF FUNCTION DUMP payload to restore")
+            redis_lzf_function_list = client._request(b"FUNCTION", b"LIST", b"WITHCODE")
+            if (
+                len(redis_lzf_function_list) != 1
+                or redis_lzf_function_list[0][1] != b"interop"
+                or redis_lzf_function_list[0][5][0][1] != b"readkey"
+            ):
+                raise AssertionError(f"unexpected Redis LZF-restored FUNCTION LIST result: {redis_lzf_function_list!r}")
+            if client.fcall(b"readkey", 1, b"lua-key") != b"restored-write":
+                raise AssertionError("expected Redis LZF-restored function to execute")
+            if client.function_delete(b"interop") != "OK":
+                raise AssertionError("expected Redis LZF-restored library delete")
             empty_function_dump = client.function_dump()
             if empty_function_dump != bytes.fromhex("0a005d9b5c400f7fa2da"):
                 raise AssertionError("expected FUNCTION DUMP empty-library payload")

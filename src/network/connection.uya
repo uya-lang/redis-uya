@@ -71,9 +71,13 @@ use src.storage.object.object_layout_size;
 use src.storage.object.zset_object_len;
 use src.storage.sds.Sds;
 use src.storage.sds.sds_empty;
+use src.storage.sds.sds_new_len;
 use src.storage.sds.sds_free;
 use src.storage.sds.sds_cat;
 use src.version.redis_uya_version;
+use src.util.crc64.crc64;
+use src.util.endian.read_u32_be;
+use src.util.endian.write_u32_be;
 use src.util.time.now_ms_safe;
 use libc.errno;
 use libc.IOVec;
@@ -96,6 +100,8 @@ error ConnectionScriptUnsupported;
 error ConnectionScriptMissingReference;
 error ConnectionScriptCacheMiss;
 error ConnectionScriptCommandDisallowed;
+error ConnectionFunctionDumpInvalid;
+error ConnectionFunctionDuplicateName;
 
 const CONNECTION_CLIENT_ADDR_MAX: usize = 32;
 
@@ -199,6 +205,10 @@ const CONNECTION_FUNCTION_LIBRARY_MAX: usize = 32;
 const CONNECTION_FUNCTIONS_PER_LIBRARY_MAX: usize = 8;
 const CONNECTION_FUNCTION_NAME_MAX: usize = 64;
 const CONNECTION_FUNCTION_DESCRIPTION_MAX: usize = 128;
+const CONNECTION_FUNCTION_CODE_MAX_BYTES: usize = CONNECTION_BLOCKING_OUTPUT_CAP;
+const CONNECTION_FUNCTION_DUMP_OPCODE: byte = 0xf5 as byte;
+const CONNECTION_FUNCTION_DUMP_VERSION: u16 = 10 as u16;
+const CONNECTION_FUNCTION_DUMP_TRAILER_BYTES: usize = 10;
 const CONNECTION_ACL_DENIED_COMMAND_MAX: usize = 64;
 const CONNECTION_ACL_DENIED_CATEGORY_MAX: usize = 32;
 const CONNECTION_ACL_COMMAND_NAME_MAX: usize = 64;
@@ -314,7 +324,19 @@ struct ConnectionFunctionParsedEntry {
     script_len: usize,
 }
 
+enum ConnectionFunctionRestorePolicy {
+    function_restore_append,
+    function_restore_replace,
+    function_restore_flush,
+}
+
+struct ConnectionFunctionDumpCode {
+    code: &[byte],
+    owned_object: &RedisObject,
+}
+
 var connection_function_libraries: [ConnectionFunctionLibraryEntry: CONNECTION_FUNCTION_LIBRARY_MAX] = [];
+var connection_function_restore_staging: [ConnectionFunctionLibraryEntry: CONNECTION_FUNCTION_LIBRARY_MAX] = [];
 
 struct ConnectionAclDeniedCommand {
     active: bool,
@@ -1579,33 +1601,37 @@ fn connection_function_find_free() i32 {
     return -1;
 }
 
-fn connection_function_clear_slot(index: usize) void {
-    if index >= CONNECTION_FUNCTION_LIBRARY_MAX {
-        return;
-    }
-    if !connection_function_libraries[index].active {
+fn connection_function_clear_entry(entry: &ConnectionFunctionLibraryEntry) void {
+    if !entry.active {
         return;
     }
     var function: usize = 0;
     while function < CONNECTION_FUNCTIONS_PER_LIBRARY_MAX {
-        if connection_function_libraries[index].functions[function].script != null {
-            object_free(connection_function_libraries[index].functions[function].script);
-            connection_function_libraries[index].functions[function].script = null as &RedisObject;
+        if entry.functions[function].script != null {
+            object_free(entry.functions[function].script);
+            entry.functions[function].script = null as &RedisObject;
         }
-        connection_function_libraries[index].functions[function].active = false;
-        connection_function_libraries[index].functions[function].no_writes = false;
-        connection_function_libraries[index].functions[function].function_name_len = 0;
-        connection_function_libraries[index].functions[function].has_description = false;
-        connection_function_libraries[index].functions[function].description_len = 0;
+        entry.functions[function].active = false;
+        entry.functions[function].no_writes = false;
+        entry.functions[function].function_name_len = 0;
+        entry.functions[function].has_description = false;
+        entry.functions[function].description_len = 0;
         function = function + 1;
     }
-    if connection_function_libraries[index].code != null {
-        object_free(connection_function_libraries[index].code);
-        connection_function_libraries[index].code = null as &RedisObject;
+    if entry.code != null {
+        object_free(entry.code);
+        entry.code = null as &RedisObject;
     }
-    connection_function_libraries[index].active = false;
-    connection_function_libraries[index].library_name_len = 0;
-    connection_function_libraries[index].function_count = 0;
+    entry.active = false;
+    entry.library_name_len = 0;
+    entry.function_count = 0;
+}
+
+fn connection_function_clear_slot(index: usize) void {
+    if index >= CONNECTION_FUNCTION_LIBRARY_MAX {
+        return;
+    }
+    connection_function_clear_entry(&connection_function_libraries[index]);
 }
 
 fn connection_function_flush_all() void {
@@ -1614,6 +1640,49 @@ fn connection_function_flush_all() void {
         connection_function_clear_slot(index);
         index = index + 1;
     }
+}
+
+fn connection_function_restore_staging_clear_all() void {
+    var index: usize = 0;
+    while index < CONNECTION_FUNCTION_LIBRARY_MAX {
+        connection_function_clear_entry(&connection_function_restore_staging[index]);
+        index = index + 1;
+    }
+}
+
+fn connection_function_move_entry(dst: &ConnectionFunctionLibraryEntry, src: &ConnectionFunctionLibraryEntry) void {
+    connection_function_clear_entry(dst);
+    dst.active = src.active;
+    dst.library_name_len = src.library_name_len;
+    connection_function_copy_name(dst.library_name[0: CONNECTION_FUNCTION_NAME_MAX], src.library_name[0: src.library_name_len]);
+    dst.function_count = src.function_count;
+    dst.code = src.code;
+    src.code = null as &RedisObject;
+    var function: usize = 0;
+    while function < CONNECTION_FUNCTIONS_PER_LIBRARY_MAX {
+        dst.functions[function].active = src.functions[function].active;
+        dst.functions[function].no_writes = src.functions[function].no_writes;
+        dst.functions[function].function_name_len = src.functions[function].function_name_len;
+        connection_function_copy_name(
+            dst.functions[function].function_name[0: CONNECTION_FUNCTION_NAME_MAX],
+            src.functions[function].function_name[0: src.functions[function].function_name_len],
+        );
+        dst.functions[function].has_description = src.functions[function].has_description;
+        dst.functions[function].description_len = src.functions[function].description_len;
+        connection_function_copy_name(
+            dst.functions[function].description[0: CONNECTION_FUNCTION_DESCRIPTION_MAX],
+            src.functions[function].description[0: src.functions[function].description_len],
+        );
+        dst.functions[function].script = src.functions[function].script;
+        src.functions[function].script = null as &RedisObject;
+        src.functions[function].active = false;
+        src.functions[function].function_name_len = 0;
+        src.functions[function].description_len = 0;
+        function = function + 1;
+    }
+    src.active = false;
+    src.library_name_len = 0;
+    src.function_count = 0;
 }
 
 fn connection_function_find_prefix(source: &[byte], start: usize, prefix: &[byte]) i32 {
@@ -1987,6 +2056,111 @@ fn connection_function_normalize_script(script: &[byte]) !&RedisObject {
     return create_string_object(raw.buf[0: raw.len]) catch {
         return error.AllocOutOfMemory;
     };
+}
+
+fn connection_function_prepare_entry(code: &[byte], entry: &ConnectionFunctionLibraryEntry) !void {
+    if entry.active {
+        return error.ConnectionScriptUnsupported;
+    }
+    if !connection_script_match_prefix(code, 0, &"#!lua name="[0: 11]) {
+        return error.ConnectionScriptUnsupported;
+    }
+    var library_name_len: usize = 0;
+    const library_name: &[byte] = try connection_function_parse_name_after(code, 11, &library_name_len);
+    var parsed: [ConnectionFunctionParsedEntry: CONNECTION_FUNCTIONS_PER_LIBRARY_MAX] = [];
+    var parsed_count: usize = 0;
+    try connection_function_parse_entries(code, parsed[0: CONNECTION_FUNCTIONS_PER_LIBRARY_MAX], &parsed_count);
+
+    var scripts: [&RedisObject: CONNECTION_FUNCTIONS_PER_LIBRARY_MAX] = [];
+    var parsed_index: usize = 0;
+    while parsed_index < parsed_count {
+        scripts[parsed_index] = connection_function_normalize_script(code[parsed[parsed_index].script_start: parsed[parsed_index].script_len]) catch |err| {
+            var cleanup_index: usize = 0;
+            while cleanup_index < parsed_index {
+                if scripts[cleanup_index] != null {
+                    object_free(scripts[cleanup_index]);
+                }
+                cleanup_index = cleanup_index + 1;
+            }
+            return err;
+        };
+        parsed_index = parsed_index + 1;
+    }
+    const code_obj: &RedisObject = create_string_object(code) catch {
+        parsed_index = 0;
+        while parsed_index < parsed_count {
+            object_free(scripts[parsed_index]);
+            parsed_index = parsed_index + 1;
+        }
+        return error.AllocOutOfMemory;
+    };
+
+    entry.active = true;
+    entry.library_name_len = library_name_len;
+    connection_function_copy_name(entry.library_name[0: CONNECTION_FUNCTION_NAME_MAX], library_name);
+    entry.function_count = parsed_count;
+    entry.code = code_obj;
+    parsed_index = 0;
+    while parsed_index < parsed_count {
+        entry.functions[parsed_index].active = true;
+        entry.functions[parsed_index].no_writes = parsed[parsed_index].no_writes;
+        entry.functions[parsed_index].function_name_len = parsed[parsed_index].name_len;
+        connection_function_copy_name(
+            entry.functions[parsed_index].function_name[0: CONNECTION_FUNCTION_NAME_MAX],
+            code[parsed[parsed_index].name_start: parsed[parsed_index].name_len],
+        );
+        entry.functions[parsed_index].has_description = parsed[parsed_index].has_description;
+        entry.functions[parsed_index].description_len = parsed[parsed_index].description_len;
+        if parsed[parsed_index].description_len > 0 {
+            connection_function_copy_name(
+                entry.functions[parsed_index].description[0: CONNECTION_FUNCTION_DESCRIPTION_MAX],
+                code[parsed[parsed_index].description_start: parsed[parsed_index].description_len],
+            );
+        }
+        entry.functions[parsed_index].script = scripts[parsed_index];
+        parsed_index = parsed_index + 1;
+    }
+}
+
+fn connection_function_entry_find_name(entry: &ConnectionFunctionLibraryEntry, name: &[byte]) bool {
+    if !entry.active {
+        return false;
+    }
+    var function: usize = 0;
+    while function < CONNECTION_FUNCTIONS_PER_LIBRARY_MAX {
+        if entry.functions[function].active &&
+            connection_slice_eq(entry.functions[function].function_name[0: entry.functions[function].function_name_len], name) {
+            return true;
+        }
+        function = function + 1;
+    }
+    return false;
+}
+
+fn connection_function_staging_has_library_before(index: usize, name: &[byte]) bool {
+    var current: usize = 0;
+    while current < index {
+        if connection_function_restore_staging[current].active &&
+            connection_slice_eq(
+                connection_function_restore_staging[current].library_name[0: connection_function_restore_staging[current].library_name_len],
+                name,
+            ) {
+            return true;
+        }
+        current = current + 1;
+    }
+    return false;
+}
+
+fn connection_function_staging_has_name_before(index: usize, name: &[byte]) bool {
+    var current: usize = 0;
+    while current < index {
+        if connection_function_entry_find_name(&connection_function_restore_staging[current], name) {
+            return true;
+        }
+        current = current + 1;
+    }
+    return false;
 }
 
 fn connection_acl_default_denied_find(name: &[byte]) i32 {
@@ -7960,6 +8134,376 @@ fn connection_handle_eval_like_at(
     return connection_execute_script_effect_at(engine, runtime, router, aof, rewrite_buf, backlog, raw_obj, now_ms, rewrite_failed, client_id, username);
 }
 
+fn connection_function_dump_append_byte(raw: &Sds, value: byte) !void {
+    var bytes: [byte: 1] = [value];
+    try sds_cat(raw, bytes[0: 1]);
+}
+
+fn connection_function_dump_append_length(raw: &Sds, value: usize) !void {
+    if value < 64 {
+        try connection_function_dump_append_byte(raw, value as byte);
+        return;
+    }
+    if value < 16384 {
+        try connection_function_dump_append_byte(raw, (0x40u32 | ((value as u32) >> 8)) as byte);
+        try connection_function_dump_append_byte(raw, (value & 255usize) as byte);
+        return;
+    }
+    if (value as u64) > 0xffffffffu64 {
+        return error.ConnectionFunctionDumpInvalid;
+    }
+    var bytes: [byte: 4] = [];
+    _ = write_u32_be(bytes[0: 4], value as u32);
+    try connection_function_dump_append_byte(raw, 0x80 as byte);
+    try sds_cat(raw, bytes[0: 4]);
+}
+
+fn connection_function_dump_append_u64_le(raw: &Sds, value: u64) !void {
+    var bytes: [byte: 8] = [];
+    var index: usize = 0;
+    while index < 8 {
+        bytes[index] = ((value >> ((index * 8) as i32)) & 255u64) as byte;
+        index = index + 1;
+    }
+    try sds_cat(raw, bytes[0: 8]);
+}
+
+fn connection_function_dump_read_u64_le(data: &[byte]) u64 {
+    var value: u64 = 0u64;
+    var index: usize = 0;
+    while index < 8 && index < data.len {
+        value = value | ((data.ptr[index] as u64) << ((index * 8) as i32));
+        index = index + 1;
+    }
+    return value;
+}
+
+fn connection_function_dump_read_length(payload: &[byte], pos: &usize, end: usize) !usize {
+    if *pos >= end {
+        return error.ConnectionFunctionDumpInvalid;
+    }
+    const first: byte = payload.ptr[*pos];
+    *pos = *pos + 1;
+    const encoding: byte = first & (0xc0 as byte);
+    if encoding == 0 as byte {
+        return (first & (0x3f as byte)) as usize;
+    }
+    if encoding == 0x40 as byte {
+        if *pos >= end {
+            return error.ConnectionFunctionDumpInvalid;
+        }
+        const value: usize = (((first & (0x3f as byte)) as usize) << 8) | (payload.ptr[*pos] as usize);
+        *pos = *pos + 1;
+        return value;
+    }
+    if first == 0x80 as byte {
+        if *pos + 4 > end {
+            return error.ConnectionFunctionDumpInvalid;
+        }
+        const value: usize = read_u32_be(payload[*pos: 4]) as usize;
+        *pos = *pos + 4;
+        return value;
+    }
+    return error.ConnectionFunctionDumpInvalid;
+}
+
+fn connection_function_lzf_decompress(input: &[byte], output: &Sds) !void {
+    var input_pos: usize = 0;
+    var output_pos: usize = 0;
+    while input_pos < input.len {
+        const control: usize = input.ptr[input_pos] as usize;
+        input_pos = input_pos + 1;
+        if control < 32 {
+            const literal_len: usize = control + 1;
+            if literal_len > input.len - input_pos || literal_len > output.len - output_pos {
+                return error.ConnectionFunctionDumpInvalid;
+            }
+            var copied: usize = 0;
+            while copied < literal_len {
+                output.buf.ptr[output_pos] = input.ptr[input_pos];
+                output_pos = output_pos + 1;
+                input_pos = input_pos + 1;
+                copied = copied + 1;
+            }
+        } else {
+            var match_len: usize = control >> 5;
+            var distance: usize = (control & 31usize) << 8;
+            if match_len == 7 {
+                if input_pos >= input.len {
+                    return error.ConnectionFunctionDumpInvalid;
+                }
+                match_len = match_len + (input.ptr[input_pos] as usize);
+                input_pos = input_pos + 1;
+            }
+            if input_pos >= input.len {
+                return error.ConnectionFunctionDumpInvalid;
+            }
+            distance = distance + (input.ptr[input_pos] as usize) + 1;
+            input_pos = input_pos + 1;
+            match_len = match_len + 2;
+            if distance > output_pos || match_len > output.len - output_pos {
+                return error.ConnectionFunctionDumpInvalid;
+            }
+            var reference: usize = output_pos - distance;
+            var copied_match: usize = 0;
+            while copied_match < match_len {
+                output.buf.ptr[output_pos] = output.buf.ptr[reference];
+                output_pos = output_pos + 1;
+                reference = reference + 1;
+                copied_match = copied_match + 1;
+            }
+        }
+    }
+    if output_pos != output.len {
+        return error.ConnectionFunctionDumpInvalid;
+    }
+}
+
+fn connection_function_dump_read_code(payload: &[byte], pos: &usize, end: usize) !ConnectionFunctionDumpCode {
+    if *pos >= end {
+        return error.ConnectionFunctionDumpInvalid;
+    }
+    if payload.ptr[*pos] == 0xc3 as byte {
+        *pos = *pos + 1;
+        const compressed_len: usize = try connection_function_dump_read_length(payload, pos, end);
+        const original_len: usize = try connection_function_dump_read_length(payload, pos, end);
+        if original_len == 0 || original_len > CONNECTION_FUNCTION_CODE_MAX_BYTES || compressed_len > end - *pos {
+            return error.ConnectionFunctionDumpInvalid;
+        }
+        var decoded: Sds = sds_new_len(original_len) catch {
+            return error.AllocOutOfMemory;
+        };
+        defer {
+            sds_free(&decoded);
+        }
+        try connection_function_lzf_decompress(payload[*pos: compressed_len], &decoded);
+        *pos = *pos + compressed_len;
+        const obj: &RedisObject = create_string_object(decoded.buf[0: decoded.len]) catch {
+            return error.AllocOutOfMemory;
+        };
+        return ConnectionFunctionDumpCode{ code: obj.value.buf[0: obj.value.len], owned_object: obj };
+    }
+    const code_len: usize = try connection_function_dump_read_length(payload, pos, end);
+    if code_len == 0 || code_len > CONNECTION_FUNCTION_CODE_MAX_BYTES || code_len > end - *pos {
+        return error.ConnectionFunctionDumpInvalid;
+    }
+    const code: &[byte] = payload[*pos: code_len];
+    *pos = *pos + code_len;
+    return ConnectionFunctionDumpCode{ code: code, owned_object: null as &RedisObject };
+}
+
+fn connection_function_dump(command: &Command) CommandReply {
+    if command.argc != 2 {
+        return connection_error_reply(&"ERR wrong number of arguments for 'function|dump' command"[0: 57]);
+    }
+    var payload: Sds = sds_empty() catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    defer {
+        sds_free(&payload);
+    }
+    var index: usize = 0;
+    while index < CONNECTION_FUNCTION_LIBRARY_MAX {
+        const entry: &ConnectionFunctionLibraryEntry = &connection_function_libraries[index];
+        if entry.active && entry.code != null {
+            _ = connection_function_dump_append_byte(&payload, CONNECTION_FUNCTION_DUMP_OPCODE) catch {
+                return connection_error_reply(&"ERR out of memory"[0: 17]);
+            };
+            _ = connection_function_dump_append_length(&payload, entry.code.value.len) catch |err| {
+                if err == error.ConnectionFunctionDumpInvalid {
+                    return connection_error_reply(&"ERR function library code is too large to dump"[0: 46]);
+                }
+                return connection_error_reply(&"ERR out of memory"[0: 17]);
+            };
+            _ = sds_cat(&payload, entry.code.value.buf[0: entry.code.value.len]) catch {
+                return connection_error_reply(&"ERR out of memory"[0: 17]);
+            };
+        }
+        index = index + 1;
+    }
+    _ = connection_function_dump_append_byte(&payload, (CONNECTION_FUNCTION_DUMP_VERSION & 255 as u16) as byte) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = connection_function_dump_append_byte(&payload, ((CONNECTION_FUNCTION_DUMP_VERSION >> 8) & 255 as u16) as byte) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    const checksum: u64 = crc64(payload.buf[0: payload.len]);
+    _ = connection_function_dump_append_u64_le(&payload, checksum) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    return connection_bulk_reply_owned(payload.buf[0: payload.len]);
+}
+
+fn connection_function_restore_library_exists(name: &[byte]) CommandReply {
+    var message: Sds = sds_empty() catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    defer {
+        sds_free(&message);
+    }
+    _ = sds_cat(&message, &"ERR Library "[0: 12]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = sds_cat(&message, name) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = sds_cat(&message, &" already exists"[0: 15]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    return connection_owned_error(message.buf[0: message.len]);
+}
+
+fn connection_function_restore(command: &Command) CommandReply {
+    if command.argc < 3 {
+        return connection_error_reply(&"ERR wrong number of arguments for 'function|restore' command"[0: 60]);
+    }
+    if command.argc > 4 {
+        return connection_error_reply(&"ERR unknown subcommand or wrong number of arguments for 'RESTORE'. Try FUNCTION HELP."[0: 85]);
+    }
+    var policy: ConnectionFunctionRestorePolicy = ConnectionFunctionRestorePolicy.function_restore_append;
+    if command.argc == 4 {
+        const policy_data: &[byte] = command_arg_data(command, 3) catch {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        };
+        if connection_keyword_eq(policy_data, &"FLUSH"[0: 5]) {
+            policy = ConnectionFunctionRestorePolicy.function_restore_flush;
+        } else if connection_keyword_eq(policy_data, &"APPEND"[0: 6]) {
+            policy = ConnectionFunctionRestorePolicy.function_restore_append;
+        } else if connection_keyword_eq(policy_data, &"REPLACE"[0: 7]) {
+            policy = ConnectionFunctionRestorePolicy.function_restore_replace;
+        } else {
+            return connection_error_reply(&"ERR Wrong restore policy given, value should be either FLUSH, APPEND or REPLACE."[0: 80]);
+        }
+    }
+    const payload: &[byte] = command_arg_data(command, 2) catch {
+        return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+    };
+    if payload.len < CONNECTION_FUNCTION_DUMP_TRAILER_BYTES {
+        return connection_error_reply(&"ERR DUMP payload version or checksum are wrong"[0: 46]);
+    }
+    const body_end: usize = payload.len - CONNECTION_FUNCTION_DUMP_TRAILER_BYTES;
+    if payload.ptr[body_end] != (CONNECTION_FUNCTION_DUMP_VERSION & 255 as u16) as byte ||
+        payload.ptr[body_end + 1] != ((CONNECTION_FUNCTION_DUMP_VERSION >> 8) & 255 as u16) as byte {
+        return connection_error_reply(&"ERR DUMP payload version or checksum are wrong"[0: 46]);
+    }
+    const expected_checksum: u64 = connection_function_dump_read_u64_le(payload[payload.len - 8: 8]);
+    if crc64(payload[0: payload.len - 8]) != expected_checksum {
+        return connection_error_reply(&"ERR DUMP payload version or checksum are wrong"[0: 46]);
+    }
+
+    connection_function_restore_staging_clear_all();
+    var committed: bool = false;
+    defer {
+        if !committed {
+            connection_function_restore_staging_clear_all();
+        }
+    }
+    var pos: usize = 0;
+    var library_count: usize = 0;
+    while pos < body_end {
+        if library_count >= CONNECTION_FUNCTION_LIBRARY_MAX || payload.ptr[pos] != CONNECTION_FUNCTION_DUMP_OPCODE {
+            return connection_error_reply(&"ERR DUMP payload version or checksum are wrong"[0: 46]);
+        }
+        pos = pos + 1;
+        const dump_code: ConnectionFunctionDumpCode = connection_function_dump_read_code(payload, &pos, body_end) catch |err| {
+            if err == error.AllocOutOfMemory {
+                return connection_error_reply(&"ERR out of memory"[0: 17]);
+            }
+            return connection_error_reply(&"ERR DUMP payload version or checksum are wrong"[0: 46]);
+        };
+        _ = connection_function_prepare_entry(dump_code.code, &connection_function_restore_staging[library_count]) catch |err| {
+            if dump_code.owned_object != null {
+                object_free(dump_code.owned_object);
+            }
+            if err == error.AllocOutOfMemory {
+                return connection_error_reply(&"ERR out of memory"[0: 17]);
+            }
+            return connection_error_reply(&"ERR unsupported function library subset"[0: 39]);
+        };
+        if dump_code.owned_object != null {
+            object_free(dump_code.owned_object);
+        }
+        const prepared: &ConnectionFunctionLibraryEntry = &connection_function_restore_staging[library_count];
+        const prepared_name: &[byte] = prepared.library_name[0: prepared.library_name_len];
+        if connection_function_staging_has_library_before(library_count, prepared_name) {
+            return connection_function_restore_library_exists(prepared_name);
+        }
+        if policy == ConnectionFunctionRestorePolicy.function_restore_append && connection_function_find_library(prepared_name) >= 0 {
+            return connection_function_restore_library_exists(prepared_name);
+        }
+        var function: usize = 0;
+        while function < CONNECTION_FUNCTIONS_PER_LIBRARY_MAX {
+            if prepared.functions[function].active {
+                const function_name: &[byte] = prepared.functions[function].function_name[0: prepared.functions[function].function_name_len];
+                if connection_function_staging_has_name_before(library_count, function_name) {
+                    return connection_error_reply(&"ERR Function already exists"[0: 27]);
+                }
+                if policy != ConnectionFunctionRestorePolicy.function_restore_flush {
+                    var existing_library_index: usize = 0;
+                    var existing_function_index: usize = 0;
+                    if connection_function_find_name(function_name, &existing_library_index, &existing_function_index) {
+                        const same_library: bool = connection_slice_eq(
+                            connection_function_libraries[existing_library_index].library_name[0: connection_function_libraries[existing_library_index].library_name_len],
+                            prepared_name,
+                        );
+                        if policy == ConnectionFunctionRestorePolicy.function_restore_append || !same_library {
+                            return connection_error_reply(&"ERR Function already exists"[0: 27]);
+                        }
+                    }
+                }
+            }
+            function = function + 1;
+        }
+        library_count = library_count + 1;
+    }
+
+    var current_count: usize = 0;
+    var replacement_count: usize = 0;
+    var index: usize = 0;
+    while index < CONNECTION_FUNCTION_LIBRARY_MAX {
+        if connection_function_libraries[index].active {
+            current_count = current_count + 1;
+        }
+        index = index + 1;
+    }
+    if policy == ConnectionFunctionRestorePolicy.function_restore_replace {
+        index = 0;
+        while index < library_count {
+            if connection_function_find_library(connection_function_restore_staging[index].library_name[0: connection_function_restore_staging[index].library_name_len]) >= 0 {
+                replacement_count = replacement_count + 1;
+            }
+            index = index + 1;
+        }
+    }
+    var final_count: usize = library_count;
+    if policy != ConnectionFunctionRestorePolicy.function_restore_flush {
+        final_count = current_count + library_count - replacement_count;
+    }
+    if final_count > CONNECTION_FUNCTION_LIBRARY_MAX {
+        return connection_error_reply(&"ERR function library limit reached"[0: 34]);
+    }
+
+    if policy == ConnectionFunctionRestorePolicy.function_restore_flush {
+        connection_function_flush_all();
+    }
+    index = 0;
+    while index < library_count {
+        var target: i32 = -1;
+        if policy == ConnectionFunctionRestorePolicy.function_restore_replace {
+            target = connection_function_find_library(connection_function_restore_staging[index].library_name[0: connection_function_restore_staging[index].library_name_len]);
+        }
+        if target < 0 {
+            target = connection_function_find_free();
+        }
+        if target < 0 || target as usize >= CONNECTION_FUNCTION_LIBRARY_MAX {
+            return connection_error_reply(&"ERR function library limit reached"[0: 34]);
+        }
+        const target_index: usize = target as usize;
+        if target_index >= CONNECTION_FUNCTION_LIBRARY_MAX {
+            return connection_error_reply(&"ERR function library limit reached"[0: 34]);
+        }
+        connection_function_move_entry(&connection_function_libraries[target_index], &connection_function_restore_staging[index]);
+        index = index + 1;
+    }
+    committed = true;
+    connection_function_restore_staging_clear_all();
+    return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+}
+
 fn connection_function_list(command: &Command) CommandReply {
     var index: usize = 2;
     var library_filter: &[byte] = [];
@@ -8097,104 +8641,57 @@ fn connection_function_load(command: &Command) CommandReply {
     const code: &[byte] = command_arg_data(command, code_index) catch {
         return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
     };
-    if !connection_script_match_prefix(code, 0, &"#!lua name="[0: 11]) {
-        return connection_error_reply(&"ERR unsupported function library subset"[0: 39]);
+    connection_function_restore_staging_clear_all();
+    var committed: bool = false;
+    defer {
+        if !committed {
+            connection_function_restore_staging_clear_all();
+        }
     }
-    var library_name_len: usize = 0;
-    const library_name: &[byte] = connection_function_parse_name_after(code, 11, &library_name_len) catch {
+    _ = connection_function_prepare_entry(code, &connection_function_restore_staging[0]) catch |err| {
+        if err == error.AllocOutOfMemory {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        }
         return connection_error_reply(&"ERR unsupported function library subset"[0: 39]);
     };
-    var parsed: [ConnectionFunctionParsedEntry: CONNECTION_FUNCTIONS_PER_LIBRARY_MAX] = [];
-    var parsed_count: usize = 0;
-    _ = connection_function_parse_entries(code, parsed[0: CONNECTION_FUNCTIONS_PER_LIBRARY_MAX], &parsed_count) catch {
-        return connection_error_reply(&"ERR unsupported function library subset"[0: 39]);
-    };
+    const prepared: &ConnectionFunctionLibraryEntry = &connection_function_restore_staging[0];
+    const library_name: &[byte] = prepared.library_name[0: prepared.library_name_len];
     const existing_library: i32 = connection_function_find_library(library_name);
     if existing_library >= 0 && !replace {
         return connection_error_reply(&"ERR Function library already exists"[0: 35]);
     }
-    var parsed_index: usize = 0;
-    while parsed_index < parsed_count {
+    var function: usize = 0;
+    while function < CONNECTION_FUNCTIONS_PER_LIBRARY_MAX {
+        if !prepared.functions[function].active {
+            function = function + 1;
+            continue;
+        }
         var existing_library_index: usize = 0;
         var existing_function_index: usize = 0;
-        if connection_function_find_name(code[parsed[parsed_index].name_start: parsed[parsed_index].name_len], &existing_library_index, &existing_function_index) &&
+        if connection_function_find_name(
+            prepared.functions[function].function_name[0: prepared.functions[function].function_name_len],
+            &existing_library_index,
+            &existing_function_index,
+        ) &&
             (existing_library < 0 || existing_library_index != existing_library as usize) {
             return connection_error_reply(&"ERR Function already exists"[0: 27]);
         }
-        parsed_index = parsed_index + 1;
+        function = function + 1;
     }
-    var scripts: [&RedisObject: CONNECTION_FUNCTIONS_PER_LIBRARY_MAX] = [];
-    parsed_index = 0;
-    while parsed_index < parsed_count {
-        scripts[parsed_index] = connection_function_normalize_script(code[parsed[parsed_index].script_start: parsed[parsed_index].script_len]) catch |err| {
-            var cleanup_index: usize = 0;
-            while cleanup_index < parsed_index {
-                if scripts[cleanup_index] != null {
-                    object_free(scripts[cleanup_index]);
-                }
-                cleanup_index = cleanup_index + 1;
-            }
-            if err == error.AllocOutOfMemory {
-                return connection_error_reply(&"ERR out of memory"[0: 17]);
-            }
-            return connection_error_reply(&"ERR unsupported function library subset"[0: 39]);
-        };
-        parsed_index = parsed_index + 1;
-    }
-    const code_obj: &RedisObject = create_string_object(code) catch {
-        parsed_index = 0;
-        while parsed_index < parsed_count {
-            object_free(scripts[parsed_index]);
-            parsed_index = parsed_index + 1;
-        }
-        return connection_error_reply(&"ERR out of memory"[0: 17]);
-    };
     var slot: i32 = existing_library;
     if slot < 0 {
         slot = connection_function_find_free();
     }
     if slot < 0 {
-        parsed_index = 0;
-        while parsed_index < parsed_count {
-            object_free(scripts[parsed_index]);
-            parsed_index = parsed_index + 1;
-        }
-        object_free(code_obj);
         return connection_error_reply(&"ERR function library limit reached"[0: 34]);
     }
     const slot_index: usize = slot as usize;
     if slot_index >= CONNECTION_FUNCTION_LIBRARY_MAX {
-        parsed_index = 0;
-        while parsed_index < parsed_count {
-            object_free(scripts[parsed_index]);
-            parsed_index = parsed_index + 1;
-        }
-        object_free(code_obj);
         return connection_error_reply(&"ERR function library limit reached"[0: 34]);
     }
-    if existing_library >= 0 {
-        connection_function_clear_slot(slot_index);
-    }
-    connection_function_libraries[slot_index].active = true;
-    connection_function_libraries[slot_index].library_name_len = library_name_len;
-    connection_function_copy_name(connection_function_libraries[slot_index].library_name[0: CONNECTION_FUNCTION_NAME_MAX], library_name);
-    connection_function_libraries[slot_index].function_count = parsed_count;
-    parsed_index = 0;
-    while parsed_index < parsed_count {
-        connection_function_libraries[slot_index].functions[parsed_index].active = true;
-        connection_function_libraries[slot_index].functions[parsed_index].no_writes = parsed[parsed_index].no_writes;
-        connection_function_libraries[slot_index].functions[parsed_index].function_name_len = parsed[parsed_index].name_len;
-        connection_function_copy_name(connection_function_libraries[slot_index].functions[parsed_index].function_name[0: CONNECTION_FUNCTION_NAME_MAX], code[parsed[parsed_index].name_start: parsed[parsed_index].name_len]);
-        connection_function_libraries[slot_index].functions[parsed_index].has_description = parsed[parsed_index].has_description;
-        connection_function_libraries[slot_index].functions[parsed_index].description_len = parsed[parsed_index].description_len;
-        if parsed[parsed_index].description_len > 0 {
-            connection_function_copy_name(connection_function_libraries[slot_index].functions[parsed_index].description[0: CONNECTION_FUNCTION_DESCRIPTION_MAX], code[parsed[parsed_index].description_start: parsed[parsed_index].description_len]);
-        }
-        connection_function_libraries[slot_index].functions[parsed_index].script = scripts[parsed_index];
-        parsed_index = parsed_index + 1;
-    }
-    connection_function_libraries[slot_index].code = code_obj;
-    return connection_bulk_reply_owned(library_name);
+    connection_function_move_entry(&connection_function_libraries[slot_index], prepared);
+    committed = true;
+    return connection_bulk_reply_owned(connection_function_libraries[slot_index].library_name[0: connection_function_libraries[slot_index].library_name_len]);
 }
 
 fn connection_function_delete(command: &Command) CommandReply {
@@ -8252,6 +8749,12 @@ fn connection_handle_function(engine: &Engine, runtime: &CommandRuntimeInfo, com
     }
     if connection_keyword_eq(subcommand, &"FLUSH"[0: 5]) {
         return connection_function_flush(command);
+    }
+    if connection_keyword_eq(subcommand, &"DUMP"[0: 4]) {
+        return connection_function_dump(command);
+    }
+    if connection_keyword_eq(subcommand, &"RESTORE"[0: 7]) {
+        return connection_function_restore(command);
     }
     return command_execute_with_runtime_at(engine, runtime, command, now_ms);
 }

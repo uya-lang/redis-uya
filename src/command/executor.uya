@@ -9274,6 +9274,7 @@ fn command_executor_select(runtime: &CommandRuntimeInfo, command: &Command) Comm
     }
     return command_executor_simple(&"OK"[0: 2]);
 }
+
 fn command_executor_object_help() CommandReply {
     const reply_list: &RedisObject = create_list_object() catch {
         return command_executor_oom();
@@ -10258,156 +10259,6 @@ fn command_executor_latency(command: &Command) CommandReply {
     };
     return command_executor_owned_error(err.buf[0: err.len]);
 }
-fn command_executor_script_exists(command: &Command) CommandReply {
-    if command.argc < 2 {
-        return command_executor_owned_error(&"ERR wrong number of arguments for 'script|exists' command"[0: 55]);
-    }
-    var raw: Sds = sds_empty() catch {
-        return command_executor_oom();
-    };
-    defer {
-        sds_free(&raw);
-    }
-    _ = command_executor_resp_collection_prefix(&raw, &"*"[0: 1], command.argc - 1) catch {
-        return command_executor_oom();
-    };
-    var i: usize = 1;
-    while i < command.argc {
-        _ = command_executor_info_append_i64(&raw, &":0\r\n"[0: 4], 0) catch {
-            return command_executor_oom();
-        };
-        i = i + 1;
-    }
-    return command_executor_owned_raw(raw.buf[0: raw.len]);
-}
-
-fn command_executor_script_flush(command: &Command) CommandReply {
-    if command.argc > 3 {
-        return command_executor_owned_error(&"ERR unknown subcommand or wrong number of arguments for 'flush'. Try SCRIPT HELP."[0: 80]);
-    }
-    if command.argc == 3 {
-        const mode: &[byte] = command_executor_arg(command, 2) catch {
-            return command_executor_wrong_arity();
-        };
-        if !command_executor_keyword_eq(mode, &"SYNC"[0: 4]) && !command_executor_keyword_eq(mode, &"ASYNC"[0: 5]) {
-            return command_executor_owned_error(&"ERR SCRIPT FLUSH only supports SYNC|ASYNC option"[0: 49]);
-        }
-    }
-    return command_executor_simple(&"OK"[0: 2]);
-}
-
-fn command_executor_script_help() CommandReply {
-    const reply_list: &RedisObject = create_list_object() catch {
-        return command_executor_oom();
-    };
-    _ = list_object_push_tail(reply_list, &"SCRIPT <subcommand> [<arg> [value] [opt] ...]. Subcommands are:"[0: 62]) catch {
-        object_free(reply_list);
-        return command_executor_oom();
-    };
-    _ = list_object_push_tail(reply_list, &"SCRIPT EXISTS <sha1> [<sha2> ...]"[0: 32]) catch {
-        object_free(reply_list);
-        return command_executor_oom();
-    };
-    _ = list_object_push_tail(reply_list, &"    Detect if one or more script payloads are already cached."[0: 61]) catch {
-        object_free(reply_list);
-        return command_executor_oom();
-    };
-    _ = list_object_push_tail(reply_list, &"SCRIPT FLUSH [ASYNC|SYNC]"[0: 25]) catch {
-        object_free(reply_list);
-        return command_executor_oom();
-    };
-    _ = list_object_push_tail(reply_list, &"    Clear the script cache. SYNC blocks until all scripts are flushed."[0: 70]) catch {
-        object_free(reply_list);
-        return command_executor_oom();
-    };
-    _ = list_object_push_tail(reply_list, &"SCRIPT DEBUG <YES|NO|SELF>"[0: 26]) catch {
-        object_free(reply_list);
-        return command_executor_oom();
-    };
-    _ = list_object_push_tail(reply_list, &"    Set script debugging mode. Currently not supported in redis-uya."[0: 67]) catch {
-        object_free(reply_list);
-        return command_executor_oom();
-    };
-    _ = list_object_push_tail(reply_list, &"SCRIPT KILL"[0: 11]) catch {
-        object_free(reply_list);
-        return command_executor_oom();
-    };
-    _ = list_object_push_tail(reply_list, &"    Interrupt a running script. Currently returns Script not currently running."[0: 79]) catch {
-        object_free(reply_list);
-        return command_executor_oom();
-    };
-    _ = list_object_push_tail(reply_list, &"SCRIPT LOAD <script>"[0: 20]) catch {
-        object_free(reply_list);
-        return command_executor_oom();
-    };
-    _ = list_object_push_tail(reply_list, &"    Load a script into the cache without executing it. Currently returns Script loaded but not cached."[0: 101]) catch {
-        object_free(reply_list);
-        return command_executor_oom();
-    };
-    _ = list_object_push_tail(reply_list, &"SCRIPT HELP"[0: 11]) catch {
-        object_free(reply_list);
-        return command_executor_oom();
-    };
-    _ = list_object_push_tail(reply_list, &"    Prints this help."[0: 20]) catch {
-        object_free(reply_list);
-        return command_executor_oom();
-    };
-    return command_executor_owned_array(reply_list);
-}
-
-fn command_executor_script_debug(command: &Command) CommandReply {
-    if command.argc != 3 {
-        return command_executor_owned_error(&"ERR wrong number of arguments for 'script|debug' command"[0: 55]);
-    }
-    const mode: &[byte] = command_executor_arg(command, 2) catch {
-        return command_executor_wrong_arity();
-    };
-    if command_executor_keyword_eq(mode, &"NO"[0: 2]) {
-        return command_executor_simple(&"OK"[0: 2]);
-    }
-    return command_executor_owned_error(&"ERR SCRIPT DEBUG is not supported in redis-uya"[0: 46]);
-}
-
-fn command_executor_script(command: &Command) CommandReply {
-    if command.argc < 2 {
-        return command_executor_owned_error(&"ERR wrong number of arguments for 'script' command"[0: 49]);
-    }
-    const subcommand: &[byte] = command_executor_arg(command, 1) catch {
-        return command_executor_owned_error(&"ERR wrong number of arguments for 'script' command"[0: 49]);
-    };
-    if command_executor_keyword_eq(subcommand, &"EXISTS"[0: 6]) {
-        return command_executor_script_exists(command);
-    }
-    if command_executor_keyword_eq(subcommand, &"FLUSH"[0: 5]) {
-        return command_executor_script_flush(command);
-    }
-    if command_executor_keyword_eq(subcommand, &"HELP"[0: 4]) {
-        if command.argc != 2 {
-            return command_executor_owned_error(&"ERR wrong number of arguments for 'script' command"[0: 49]);
-        }
-        return command_executor_script_help();
-    }
-    if command_executor_keyword_eq(subcommand, &"DEBUG"[0: 5]) {
-        return command_executor_script_debug(command);
-    }
-    if command_executor_keyword_eq(subcommand, &"KILL"[0: 4]) {
-        if command.argc != 2 {
-            return command_executor_owned_error(&"ERR wrong number of arguments for 'script' command"[0: 49]);
-        }
-        return command_executor_owned_error(&"NOSCRIPT No scripts are currently running."[0: 42]);
-    }
-    if command_executor_keyword_eq(subcommand, &"LOAD"[0: 4]) {
-        if command.argc != 3 {
-            return command_executor_owned_error(&"ERR wrong number of arguments for 'script|load' command"[0: 54]);
-        }
-        _ = command_executor_arg(command, 2) catch {
-            return command_executor_wrong_arity();
-        };
-        return command_executor_simple(&"OK"[0: 2]);
-    }
-    return command_executor_owned_error(&"ERR unknown subcommand 'SCRIPT <subcommand>'. Try SCRIPT HELP."[0: 60]);
-}
-
 
 fn command_executor_function_help() CommandReply {
     const reply_list: &RedisObject = create_list_object() catch {
@@ -21868,9 +21719,6 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
     }
     if command.info.cmd_type == CommandType.command_latency {
         return command_executor_latency(command);
-    }
-    if command.info.cmd_type == CommandType.command_script {
-        return command_executor_script(command);
     }
     if command.info.cmd_type == CommandType.command_function {
         return command_executor_function(command);

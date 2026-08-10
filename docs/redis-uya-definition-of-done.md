@@ -45,8 +45,6 @@ bash scripts/verify_definition_of_done.sh
 
 ## 2. 当前 HEAD 复核状态（2026-07-31）
 
-- [x] `v0.9.4` SCRIPT 命令补齐完成：`SCRIPT EXISTS`（返回全 0 数组表示脚本未缓存）、`SCRIPT FLUSH [ASYNC|SYNC]`（清空脚本缓存）、`SCRIPT HELP`（帮助文本）、`SCRIPT DEBUG`（当前返回不支持错误）、`SCRIPT KILL`（返回无脚本运行错误）、`SCRIPT LOAD`（返回 OK），均已完成 Redis 兼容子集实现并通过单元与集成测试验证。`eval`/`evalsha`/`fcall` 仍保持 partial 状态（需 Lua 引擎） | `src/command/executor.uya`、`tests/unit/command_executor_test.uya`、`make test`、`make test-integration`
-
 | 项目 | 当前结果 | 说明 |
 |------|----------|------|
 | `make test` | `PASS` | 单元层仍可作为基础回归入口 |

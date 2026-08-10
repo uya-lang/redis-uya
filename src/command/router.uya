@@ -225,6 +225,8 @@ export enum CommandType {
     command_sort_ro,
     command_smove,
     command_sintercard,
+    command_sdiffcard,
+    command_sunioncard,
     command_getbit,
     command_setbit,
     command_bitcount,
@@ -303,7 +305,7 @@ export fn command_flag_write() u64 {
     return COMMAND_FLAG_WRITE;
 }
 
-const MIN_COMMAND_COUNT: usize = 411;
+const MIN_COMMAND_COUNT: usize = 413;
 
 fn command_router_name_eq(a: &[byte], b: &[byte]) bool {
     return bytes_ascii_case_eq(a, b);
@@ -1575,6 +1577,12 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
     }
     if index == 410 {
         return command_router_info(CommandType.command_module_unsupported, &"FT.TAGVALS"[0: 10], 3, COMMAND_FLAG_READONLY, 1, 1, 1);
+    }
+    if index == 411 {
+        return command_router_info(CommandType.command_sdiffcard, &"SDIFFCARD"[0: 9], -3, COMMAND_FLAG_READONLY, 2, -1, 1);
+    }
+    if index == 412 {
+        return command_router_info(CommandType.command_sunioncard, &"SUNIONCARD"[0: 10], -3, COMMAND_FLAG_READONLY, 2, -1, 1);
     }
     return error.CommandUnknown;
 }

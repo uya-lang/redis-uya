@@ -1161,6 +1161,20 @@ SDIFF key [key ...]
 
 - 返回第一个 set 相对后续 set 的差集 RESP Array
 
+### `SDIFFCARD`
+
+格式：
+
+```text
+SDIFFCARD numkeys key [key ...] [LIMIT limit]
+```
+
+返回：
+
+- 返回第一个 set 相对后续 set 的差集成员个数，Integer
+- `LIMIT` 为正时，达到上限后直接返回上限值；`LIMIT 0` 视为不限制
+- 第一个 key 不存在时返回 `0`，后续不存在的 key 按空 set 处理
+
 ### `SUNION`
 
 格式：
@@ -1172,6 +1186,21 @@ SUNION key [key ...]
 返回：
 
 - 返回多个 set 的并集 RESP Array
+
+### `SUNIONCARD`
+
+格式：
+
+```text
+SUNIONCARD numkeys key [key ...] [APPROX] [LIMIT limit]
+```
+
+返回：
+
+- 返回多个 set 去重后的并集成员个数，Integer
+- `LIMIT` 为正时，达到上限后直接返回上限值；`LIMIT 0` 视为不限制
+- `APPROX` 语法可用；当前实现仍走精确临时 set 路径并返回零误差结果，因此命令状态标记为 `partial`
+- `COMMAND GETKEYS` / `COMMAND GETKEYSANDFLAGS` 只提取 `numkeys` 指定的 key，不把 `APPROX`、`LIMIT` 或 limit 值识别为 key
 
 ### `SINTERSTORE`
 

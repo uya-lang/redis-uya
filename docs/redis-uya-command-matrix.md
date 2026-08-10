@@ -1,7 +1,7 @@
 # redis-uya command matrix
 
 > version: v0.9.3-dev
-> date: 2026-08-08
+> date: 2026-08-10
 > source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`
 > runtime source: `src/command/catalog_generated.uya`
 
@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 382 | 265 | 146 | 209 | 7 | 3 | 17 |
+| Tier A: standalone core | 382 | 265 | 146 | 211 | 7 | 3 | 15 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 158 | 151 | 0 | 0 | 153 | 0 | 5 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `147` |
-| `partial` | `216` |
+| `partial` | `218` |
 | `standalone-error` | `186` |
 | `alias` | `3` |
-| `deferred` | `22` |
+| `deferred` | `20` |
 
 ## Group counts
 
@@ -474,7 +474,7 @@
 | `script|kill` | `scripting` | `partial` | `-` | `2` | `-` | `no` | `@slow, @scripting` |
 | `script|load` | `scripting` | `partial` | `-` | `3` | `-` | `no` | `@slow, @scripting` |
 | `sdiff` | `set` | `full` | `-` | `-2` | `-` | `no` | `@read, @set, @slow` |
-| `sdiffcard` | `set` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @set, @slow` |
+| `sdiffcard` | `set` | `partial` | `-` | `-3` | `-` | `no` | `@read, @set, @slow` |
 | `sdiffstore` | `set` | `full` | `-` | `-3` | `-` | `no` | `@write, @set, @slow` |
 | `select` | `connection` | `partial` | `-` | `2` | `-` | `no` | `@fast, @connection` |
 | `set` | `string` | `full` | `-` | `-3` | `-` | `no` | `@write, @string, @slow` |
@@ -508,7 +508,7 @@
 | `subscribe` | `pubsub` | `partial` | `-` | `-2` | `-` | `no` | `@pubsub, @slow` |
 | `substr` | `string` | `alias` | `-` | `4` | `-` | `no` | `@read, @string, @slow` |
 | `sunion` | `set` | `full` | `-` | `-2` | `-` | `no` | `@read, @set, @slow` |
-| `sunioncard` | `set` | `deferred` | `v0.9.1` | `-3` | `-` | `no` | `@read, @set, @slow` |
+| `sunioncard` | `set` | `partial` | `-` | `-3` | `-` | `no` | `@read, @set, @slow` |
 | `sunionstore` | `set` | `full` | `-` | `-3` | `-` | `no` | `@write, @set, @slow` |
 | `sunsubscribe` | `pubsub` | `partial` | `-` | `-1` | `-` | `no` | `@pubsub, @slow` |
 | `swapdb` | `server` | `partial` | `-` | `3` | `-` | `no` | `@keyspace, @write, @fast, @dangerous` |

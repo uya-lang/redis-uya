@@ -3250,6 +3250,30 @@ if [[ "$SINTERCARD_LIMIT_RESULT" != "1" ]]; then
     exit 1
 fi
 
+SDIFFCARD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" sdiffcard 2 s1 s2)"
+if [[ "$SDIFFCARD_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SDIFFCARD 2, got '$SDIFFCARD_RESULT'" >&2
+    exit 1
+fi
+
+SDIFFCARD_LIMIT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" sdiffcard 2 s1 missing limit 1)"
+if [[ "$SDIFFCARD_LIMIT_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SDIFFCARD LIMIT 1, got '$SDIFFCARD_LIMIT_RESULT'" >&2
+    exit 1
+fi
+
+SUNIONCARD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" sunioncard 3 s1 s2 s3)"
+if [[ "$SUNIONCARD_RESULT" != "4" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SUNIONCARD 4, got '$SUNIONCARD_RESULT'" >&2
+    exit 1
+fi
+
+SUNIONCARD_APPROX_LIMIT_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" sunioncard 3 s1 s2 s3 approx limit 2)"
+if [[ "$SUNIONCARD_APPROX_LIMIT_RESULT" != "2" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected SUNIONCARD APPROX LIMIT 2, got '$SUNIONCARD_APPROX_LIMIT_RESULT'" >&2
+    exit 1
+fi
+
 SDIFF_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" sdiff s1 s2)"
 if [[ "$SDIFF_RESULT" != $'a\nd' ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected SDIFF a/d, got '$SDIFF_RESULT'" >&2

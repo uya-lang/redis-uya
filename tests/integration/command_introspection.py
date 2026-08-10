@@ -440,6 +440,17 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"COMMAND INFO SUBSTR returned wrong payload: {substr_info!r}")
 
+            set_card_info = send_command(sock, b"COMMAND", b"INFO", b"SDIFFCARD", b"SUNIONCARD")
+            if (
+                not isinstance(set_card_info, list)
+                or len(set_card_info) != 2
+                or not isinstance(set_card_info[0], list)
+                or set_card_info[0][0] != b"sdiffcard"
+                or not isinstance(set_card_info[1], list)
+                or set_card_info[1][0] != b"sunioncard"
+            ):
+                raise AssertionError(f"COMMAND INFO set cardinality returned wrong payload: {set_card_info!r}")
+
             cluster_mode_info = send_command(sock, b"COMMAND", b"INFO", b"ASKING", b"READONLY", b"READWRITE")
             if (
                 not isinstance(cluster_mode_info, list)
@@ -1890,6 +1901,18 @@ def run_smoke() -> None:
             if zmpop_getkeys != [b"a", b"b"]:
                 raise AssertionError(f"unexpected COMMAND GETKEYS ZMPOP result: {zmpop_getkeys!r}")
 
+            sintercard_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"SINTERCARD", b"2", b"a", b"b", b"LIMIT", b"1")
+            if sintercard_getkeys != [b"a", b"b"]:
+                raise AssertionError(f"unexpected COMMAND GETKEYS SINTERCARD result: {sintercard_getkeys!r}")
+
+            sdiffcard_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"SDIFFCARD", b"2", b"a", b"b", b"LIMIT", b"1")
+            if sdiffcard_getkeys != [b"a", b"b"]:
+                raise AssertionError(f"unexpected COMMAND GETKEYS SDIFFCARD result: {sdiffcard_getkeys!r}")
+
+            sunioncard_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"SUNIONCARD", b"2", b"a", b"b", b"APPROX", b"LIMIT", b"1")
+            if sunioncard_getkeys != [b"a", b"b"]:
+                raise AssertionError(f"unexpected COMMAND GETKEYS SUNIONCARD result: {sunioncard_getkeys!r}")
+
             restore_asking_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"RESTORE-ASKING", b"dst", b"0", b"payload")
             if restore_asking_getkeys != [b"dst"]:
                 raise AssertionError(f"unexpected COMMAND GETKEYS RESTORE-ASKING result: {restore_asking_getkeys!r}")
@@ -1912,6 +1935,19 @@ def run_smoke() -> None:
                 or b"update" not in copy_getkeysandflags[1][1]
             ):
                 raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS COPY keys: {copy_getkeysandflags!r}")
+
+            set_card_getkeysandflags = send_command(sock, b"COMMAND", b"GETKEYSANDFLAGS", b"SUNIONCARD", b"2", b"a", b"b", b"APPROX", b"LIMIT", b"1")
+            if (
+                not isinstance(set_card_getkeysandflags, list)
+                or len(set_card_getkeysandflags) != 2
+                or set_card_getkeysandflags[0][0] != b"a"
+                or b"RO" not in set_card_getkeysandflags[0][1]
+                or b"access" not in set_card_getkeysandflags[0][1]
+                or set_card_getkeysandflags[1][0] != b"b"
+                or b"RO" not in set_card_getkeysandflags[1][1]
+                or b"access" not in set_card_getkeysandflags[1][1]
+            ):
+                raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS set cardinality keys: {set_card_getkeysandflags!r}")
 
             delex_getkeysandflags = send_command(sock, b"COMMAND", b"GETKEYSANDFLAGS", b"DELEX", b"src")
             if (

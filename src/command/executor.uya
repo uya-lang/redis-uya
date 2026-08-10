@@ -9107,6 +9107,250 @@ fn command_executor_sintercard(engine: &Engine, command: &Command, now_ms: u64) 
     return command_executor_integer(count as i64);
 }
 
+fn command_executor_sdiffcard(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 3 {
+        return command_executor_wrong_arity();
+    }
+
+    const numkeys_data: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const numkeys_i64: i64 = command_executor_parse_i64(numkeys_data) catch {
+        return command_executor_error(&"ERR numkeys should be greater than 0"[0: 36]);
+    };
+    if numkeys_i64 <= 0 {
+        return command_executor_error(&"ERR numkeys should be greater than 0"[0: 36]);
+    }
+
+    const numkeys: usize = numkeys_i64 as usize;
+    const keys_end: usize = 2 + numkeys;
+    if command.argc < keys_end {
+        return command_executor_error(&"ERR Number of keys can't be greater than number of args"[0: 55]);
+    }
+
+    var limit: usize = 0;
+    if command.argc > keys_end {
+        if command.argc != keys_end + 2 {
+            return command_executor_syntax_error();
+        }
+        const option: &[byte] = command_executor_arg(command, keys_end) catch {
+            return command_executor_syntax_error();
+        };
+        if !command_executor_keyword_eq(option, &"LIMIT"[0: 5]) {
+            return command_executor_syntax_error();
+        }
+        const limit_data: &[byte] = command_executor_arg(command, keys_end + 1) catch {
+            return command_executor_syntax_error();
+        };
+        const limit_i64: i64 = command_executor_parse_i64(limit_data) catch {
+            return command_executor_error(&"ERR LIMIT can't be negative"[0: 27]);
+        };
+        if limit_i64 < 0 {
+            return command_executor_error(&"ERR LIMIT can't be negative"[0: 27]);
+        }
+        limit = limit_i64 as usize;
+    }
+
+    var first_obj: &RedisObject = null as &RedisObject;
+    var check_index: usize = 2;
+    while check_index < keys_end {
+        const key: &[byte] = command_executor_arg(command, check_index) catch {
+            return command_executor_wrong_arity();
+        };
+        const obj_result: !&RedisObject = command_executor_lookup_key_at(engine, key, now_ms);
+        const obj: &RedisObject = obj_result catch {
+            check_index = check_index + 1;
+            null as &RedisObject;
+        };
+        if obj == null {
+            continue;
+        }
+        if obj.obj_type != ObjectType.object_set {
+            return command_executor_wrongtype();
+        }
+        if check_index == 2 {
+            first_obj = obj;
+        }
+        check_index = check_index + 1;
+    }
+
+    if first_obj == null {
+        return command_executor_integer(0);
+    }
+    if numkeys == 1 {
+        const first_len: usize = set_object_len(first_obj) catch {
+            return command_executor_wrongtype();
+        };
+        if limit > 0 && first_len > limit {
+            return command_executor_integer(limit as i64);
+        }
+        return command_executor_integer(first_len as i64);
+    }
+
+    const members: &RedisObject = command_executor_set_sorted_members(first_obj) catch |err| {
+        if err == error.AllocOutOfMemory {
+            return command_executor_oom();
+        }
+        return command_executor_wrongtype();
+    };
+    defer {
+        object_free(members);
+    }
+
+    var count: usize = 0;
+    var node: &ListNode = members.list_head;
+    while node != null {
+        const member: &[byte] = node.value.value.buf[0: node.value.value.len];
+        var present_elsewhere: bool = false;
+        var key_index: usize = 3;
+        while key_index < keys_end {
+            const key: &[byte] = command_executor_arg(command, key_index) catch {
+                return command_executor_wrong_arity();
+            };
+            const obj_result: !&RedisObject = command_executor_lookup_key_at(engine, key, now_ms);
+            const obj: &RedisObject = obj_result catch {
+                key_index = key_index + 1;
+                null as &RedisObject;
+            };
+            if obj == null {
+                continue;
+            }
+            const present: bool = command_executor_set_contains(obj, member) catch {
+                return command_executor_wrongtype();
+            };
+            if present {
+                present_elsewhere = true;
+                break;
+            }
+            key_index = key_index + 1;
+        }
+        if !present_elsewhere {
+            count = count + 1;
+            if limit > 0 && count >= limit {
+                return command_executor_integer(limit as i64);
+            }
+        }
+        node = node.next;
+    }
+    return command_executor_integer(count as i64);
+}
+
+fn command_executor_sunioncard(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
+    if command.argc < 3 {
+        return command_executor_wrong_arity();
+    }
+
+    const numkeys_data: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const numkeys_i64: i64 = command_executor_parse_i64(numkeys_data) catch {
+        return command_executor_error(&"ERR numkeys should be greater than 0"[0: 36]);
+    };
+    if numkeys_i64 <= 0 {
+        return command_executor_error(&"ERR numkeys should be greater than 0"[0: 36]);
+    }
+
+    const numkeys: usize = numkeys_i64 as usize;
+    const keys_end: usize = 2 + numkeys;
+    if command.argc < keys_end {
+        return command_executor_error(&"ERR Number of keys can't be greater than number of args"[0: 55]);
+    }
+
+    var approximate: bool = false;
+    var limit: usize = 0;
+    var option_index: usize = keys_end;
+    while option_index < command.argc {
+        const option: &[byte] = command_executor_arg(command, option_index) catch {
+            return command_executor_syntax_error();
+        };
+        if command_executor_keyword_eq(option, &"APPROX"[0: 6]) {
+            approximate = true;
+            option_index = option_index + 1;
+            continue;
+        }
+        if command_executor_keyword_eq(option, &"LIMIT"[0: 5]) {
+            if option_index + 1 >= command.argc {
+                return command_executor_syntax_error();
+            }
+            const limit_data: &[byte] = command_executor_arg(command, option_index + 1) catch {
+                return command_executor_syntax_error();
+            };
+            const limit_i64: i64 = command_executor_parse_i64(limit_data) catch {
+                return command_executor_error(&"ERR LIMIT can't be negative"[0: 27]);
+            };
+            if limit_i64 < 0 {
+                return command_executor_error(&"ERR LIMIT can't be negative"[0: 27]);
+            }
+            limit = limit_i64 as usize;
+            option_index = option_index + 2;
+            continue;
+        }
+        return command_executor_syntax_error();
+    }
+    _ = approximate;
+
+    var check_index: usize = 2;
+    while check_index < keys_end {
+        const key: &[byte] = command_executor_arg(command, check_index) catch {
+            return command_executor_wrong_arity();
+        };
+        const obj_result: !&RedisObject = command_executor_lookup_key_at(engine, key, now_ms);
+        const obj: &RedisObject = obj_result catch {
+            check_index = check_index + 1;
+            null as &RedisObject;
+        };
+        if obj == null {
+            continue;
+        }
+        if obj.obj_type != ObjectType.object_set {
+            return command_executor_wrongtype();
+        }
+        check_index = check_index + 1;
+    }
+
+    const result_set: &RedisObject = create_set_object() catch {
+        return command_executor_oom();
+    };
+    var count: usize = 0;
+    var key_index: usize = 2;
+    while key_index < keys_end {
+        const key: &[byte] = command_executor_arg(command, key_index) catch {
+            object_free(result_set);
+            return command_executor_wrong_arity();
+        };
+        const obj_result: !&RedisObject = command_executor_lookup_key_at(engine, key, now_ms);
+        const obj: &RedisObject = obj_result catch {
+            key_index = key_index + 1;
+            null as &RedisObject;
+        };
+        if obj == null {
+            continue;
+        }
+        var iter: DictIterator = dict_iter_new();
+        var entry: &DictEntry = dict_iter_next(&obj.hash_dict, &iter);
+        while entry != null {
+            const inserted: bool = set_object_add_member(result_set, entry.key.buf[0: entry.key.len]) catch |err| {
+                object_free(result_set);
+                if err == error.AllocOutOfMemory {
+                    return command_executor_oom();
+                }
+                return command_executor_wrongtype();
+            };
+            if inserted {
+                count = count + 1;
+                if limit > 0 && count >= limit {
+                    object_free(result_set);
+                    return command_executor_integer(limit as i64);
+                }
+            }
+            entry = dict_iter_next(&obj.hash_dict, &iter);
+        }
+        key_index = key_index + 1;
+    }
+    object_free(result_set);
+    return command_executor_integer(count as i64);
+}
+
 fn command_executor_set_store_result(engine: &Engine, target: &[byte], result_set: &RedisObject, now_ms: u64) CommandReply {
     const len: usize = set_object_len(result_set) catch {
         object_free(result_set);
@@ -20327,6 +20571,51 @@ fn command_executor_command_lmpop_numkeys(command: &Command) !usize {
     return numkeys;
 }
 
+fn command_executor_command_setcard_numkeys(command: &Command) !usize {
+    const full_argc: usize = command_executor_command_full_argc(command);
+    if full_argc < 3 {
+        return error.CommandWrongArity;
+    }
+    const numkeys_data: &[byte] = try command_executor_command_full_arg(command, 1);
+    const numkeys_i64: i64 = command_executor_parse_i64(numkeys_data) catch {
+        return error.CommandWrongArity;
+    };
+    if numkeys_i64 <= 0 {
+        return error.CommandWrongArity;
+    }
+    const numkeys: usize = numkeys_i64 as usize;
+    if full_argc < 2 + numkeys {
+        return error.CommandWrongArity;
+    }
+    return numkeys;
+}
+
+fn command_executor_command_getkeys_setcard(command: &Command, buf: &Sds) !void {
+    const numkeys: usize = try command_executor_command_setcard_numkeys(command);
+    try command_executor_resp_collection_prefix(buf, &"*"[0: 1], numkeys);
+    var key_index: usize = 2;
+    while key_index < 2 + numkeys {
+        const key: &[byte] = try command_executor_command_full_arg(command, key_index);
+        try command_executor_command_append_getkeys_key(buf, key);
+        key_index = key_index + 1;
+    }
+}
+
+fn command_executor_command_getkeysandflags_setcard(
+    runtime: &CommandRuntimeInfo,
+    command: &Command,
+    buf: &Sds,
+) !void {
+    const numkeys: usize = try command_executor_command_setcard_numkeys(command);
+    try command_executor_resp_collection_prefix(buf, &"*"[0: 1], numkeys);
+    var key_index: usize = 2;
+    while key_index < 2 + numkeys {
+        const key: &[byte] = try command_executor_command_full_arg(command, key_index);
+        try command_executor_command_append_getkeysandflags_item(buf, key, &"RO|access"[0: 9], runtime.protocol_version);
+        key_index = key_index + 1;
+    }
+}
+
 fn command_executor_command_getkeys_lmpop(command: &Command, buf: &Sds) !void {
     const numkeys: usize = try command_executor_command_lmpop_numkeys(command);
     try command_executor_resp_collection_prefix(buf, &"*"[0: 1], numkeys);
@@ -20655,6 +20944,21 @@ fn command_executor_command_getkeys(runtime: &CommandRuntimeInfo, command: &Comm
             };
         } else {
             _ = command_executor_command_getkeys_msetex(command, &buf) catch {
+                return command_executor_command_invalid_command_arity();
+            };
+        }
+        return command_executor_owned_raw(buf.buf[0: buf.len]);
+    }
+
+    if info.cmd_type == CommandType.command_sintercard ||
+        info.cmd_type == CommandType.command_sdiffcard ||
+        info.cmd_type == CommandType.command_sunioncard {
+        if with_flags {
+            _ = command_executor_command_getkeysandflags_setcard(runtime, command, &buf) catch {
+                return command_executor_command_invalid_command_arity();
+            };
+        } else {
+            _ = command_executor_command_getkeys_setcard(command, &buf) catch {
                 return command_executor_command_invalid_command_arity();
             };
         }
@@ -21557,6 +21861,12 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
     }
     if command.info.cmd_type == CommandType.command_sintercard {
         return command_executor_sintercard(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_sdiffcard {
+        return command_executor_sdiffcard(engine, command, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_sunioncard {
+        return command_executor_sunioncard(engine, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_sdiff {
         return command_executor_sdiff(engine, command, now_ms);

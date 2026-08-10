@@ -6746,6 +6746,99 @@ export fn test_command_sintercard() !void {
     try assert_true(command_executor_test_slice_eq(syntax_reply.data, &"ERR syntax error"[0: 16]));
     resp_value_free(&syntax_parsed.value);
 
+    var sdiffcard_parsed: RespParseResult = try parse_resp2(&"*4\r\n$9\r\nSDIFFCARD\r\n$1\r\n2\r\n$2\r\ns1\r\n$2\r\ns2\r\n"[0: 43]);
+    const sdiffcard_command: Command = try command_executor_test_command(&router, &sdiffcard_parsed);
+    const sdiffcard_reply: CommandReply = command_execute_at(&engine, &sdiffcard_command, 1000u64);
+    try assert_eq_i32(sdiffcard_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(sdiffcard_reply.integer as i32, 1);
+    resp_value_free(&sdiffcard_parsed.value);
+
+    var sdiffcard_same_parsed: RespParseResult = try parse_resp2(&"*4\r\n$9\r\nSDIFFCARD\r\n$1\r\n2\r\n$2\r\ns1\r\n$2\r\ns1\r\n"[0: 43]);
+    const sdiffcard_same_command: Command = try command_executor_test_command(&router, &sdiffcard_same_parsed);
+    const sdiffcard_same_reply: CommandReply = command_execute_at(&engine, &sdiffcard_same_command, 1000u64);
+    try assert_eq_i32(sdiffcard_same_reply.integer as i32, 0);
+    resp_value_free(&sdiffcard_same_parsed.value);
+
+    var sdiffcard_limit_parsed: RespParseResult = try parse_resp2(&"*6\r\n$9\r\nSDIFFCARD\r\n$1\r\n2\r\n$2\r\ns1\r\n$7\r\nmissing\r\n$5\r\nLIMIT\r\n$1\r\n1\r\n"[0: 66]);
+    const sdiffcard_limit_command: Command = try command_executor_test_command(&router, &sdiffcard_limit_parsed);
+    const sdiffcard_limit_reply: CommandReply = command_execute_at(&engine, &sdiffcard_limit_command, 1000u64);
+    try assert_eq_i32(sdiffcard_limit_reply.integer as i32, 1);
+    resp_value_free(&sdiffcard_limit_parsed.value);
+
+    var sdiffcard_limit_zero_parsed: RespParseResult = try parse_resp2(&"*6\r\n$9\r\nSDIFFCARD\r\n$1\r\n2\r\n$2\r\ns1\r\n$2\r\ns2\r\n$5\r\nLIMIT\r\n$1\r\n0\r\n"[0: 60]);
+    const sdiffcard_limit_zero_command: Command = try command_executor_test_command(&router, &sdiffcard_limit_zero_parsed);
+    const sdiffcard_limit_zero_reply: CommandReply = command_execute_at(&engine, &sdiffcard_limit_zero_command, 1000u64);
+    try assert_eq_i32(sdiffcard_limit_zero_reply.integer as i32, 1);
+    resp_value_free(&sdiffcard_limit_zero_parsed.value);
+
+    var sdiffcard_missing_parsed: RespParseResult = try parse_resp2(&"*4\r\n$9\r\nSDIFFCARD\r\n$1\r\n2\r\n$7\r\nmissing\r\n$2\r\ns1\r\n"[0: 48]);
+    const sdiffcard_missing_command: Command = try command_executor_test_command(&router, &sdiffcard_missing_parsed);
+    const sdiffcard_missing_reply: CommandReply = command_execute_at(&engine, &sdiffcard_missing_command, 1000u64);
+    try assert_eq_i32(sdiffcard_missing_reply.integer as i32, 0);
+    resp_value_free(&sdiffcard_missing_parsed.value);
+
+    var sunioncard_parsed: RespParseResult = try parse_resp2(&"*4\r\n$10\r\nSUNIONCARD\r\n$1\r\n2\r\n$2\r\ns1\r\n$2\r\ns2\r\n"[0: 45]);
+    const sunioncard_command: Command = try command_executor_test_command(&router, &sunioncard_parsed);
+    const sunioncard_reply: CommandReply = command_execute_at(&engine, &sunioncard_command, 1000u64);
+    try assert_eq_i32(sunioncard_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(sunioncard_reply.integer as i32, 3);
+    resp_value_free(&sunioncard_parsed.value);
+
+    var sunioncard_limit_parsed: RespParseResult = try parse_resp2(&"*6\r\n$10\r\nSUNIONCARD\r\n$1\r\n2\r\n$2\r\ns1\r\n$2\r\ns2\r\n$5\r\nLIMIT\r\n$1\r\n2\r\n"[0: 63]);
+    const sunioncard_limit_command: Command = try command_executor_test_command(&router, &sunioncard_limit_parsed);
+    const sunioncard_limit_reply: CommandReply = command_execute_at(&engine, &sunioncard_limit_command, 1000u64);
+    try assert_eq_i32(sunioncard_limit_reply.integer as i32, 2);
+    resp_value_free(&sunioncard_limit_parsed.value);
+
+    var sunioncard_limit_zero_parsed: RespParseResult = try parse_resp2(&"*6\r\n$10\r\nSUNIONCARD\r\n$1\r\n2\r\n$2\r\ns1\r\n$2\r\ns2\r\n$5\r\nLIMIT\r\n$1\r\n0\r\n"[0: 62]);
+    const sunioncard_limit_zero_command: Command = try command_executor_test_command(&router, &sunioncard_limit_zero_parsed);
+    const sunioncard_limit_zero_reply: CommandReply = command_execute_at(&engine, &sunioncard_limit_zero_command, 1000u64);
+    try assert_eq_i32(sunioncard_limit_zero_reply.integer as i32, 3);
+    resp_value_free(&sunioncard_limit_zero_parsed.value);
+
+    var sunioncard_approx_parsed: RespParseResult = try parse_resp2(&"*5\r\n$10\r\nSUNIONCARD\r\n$1\r\n2\r\n$2\r\ns1\r\n$2\r\ns2\r\n$6\r\nAPPROX\r\n"[0: 58]);
+    const sunioncard_approx_command: Command = try command_executor_test_command(&router, &sunioncard_approx_parsed);
+    const sunioncard_approx_reply: CommandReply = command_execute_at(&engine, &sunioncard_approx_command, 1000u64);
+    try assert_eq_i32(sunioncard_approx_reply.integer as i32, 3);
+    resp_value_free(&sunioncard_approx_parsed.value);
+
+    var sunioncard_approx_limit_parsed: RespParseResult = try parse_resp2(&"*7\r\n$10\r\nSUNIONCARD\r\n$1\r\n2\r\n$2\r\ns1\r\n$2\r\ns2\r\n$6\r\nAPPROX\r\n$5\r\nLIMIT\r\n$1\r\n2\r\n"[0: 76]);
+    const sunioncard_approx_limit_command: Command = try command_executor_test_command(&router, &sunioncard_approx_limit_parsed);
+    const sunioncard_approx_limit_reply: CommandReply = command_execute_at(&engine, &sunioncard_approx_limit_command, 1000u64);
+    try assert_eq_i32(sunioncard_approx_limit_reply.integer as i32, 2);
+    resp_value_free(&sunioncard_approx_limit_parsed.value);
+
+    var card_wrongtype_parsed: RespParseResult = try parse_resp2(&"*4\r\n$10\r\nSUNIONCARD\r\n$1\r\n2\r\n$2\r\ns1\r\n$3\r\nbad\r\n"[0: 46]);
+    const card_wrongtype_command: Command = try command_executor_test_command(&router, &card_wrongtype_parsed);
+    const card_wrongtype_reply: CommandReply = command_execute_at(&engine, &card_wrongtype_command, 1000u64);
+    try assert_eq_i32(card_wrongtype_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(card_wrongtype_reply.data, &"WRONGTYPE Operation against a key holding the wrong kind of value"[0: 65]));
+    resp_value_free(&card_wrongtype_parsed.value);
+
+    var card_mismatch_parsed: RespParseResult = try parse_resp2(&"*4\r\n$9\r\nSDIFFCARD\r\n$1\r\n3\r\n$2\r\ns1\r\n$2\r\ns2\r\n"[0: 43]);
+    const card_mismatch_command: Command = try command_executor_test_command(&router, &card_mismatch_parsed);
+    const card_mismatch_reply: CommandReply = command_execute_at(&engine, &card_mismatch_command, 1000u64);
+    try assert_true(command_executor_test_slice_eq(card_mismatch_reply.data, &"ERR Number of keys can't be greater than number of args"[0: 55]));
+    resp_value_free(&card_mismatch_parsed.value);
+
+    var card_negative_limit_parsed: RespParseResult = try parse_resp2(&"*6\r\n$10\r\nSUNIONCARD\r\n$1\r\n2\r\n$2\r\ns1\r\n$2\r\ns2\r\n$5\r\nLIMIT\r\n$2\r\n-1\r\n"[0: 64]);
+    const card_negative_limit_command: Command = try command_executor_test_command(&router, &card_negative_limit_parsed);
+    const card_negative_limit_reply: CommandReply = command_execute_at(&engine, &card_negative_limit_command, 1000u64);
+    try assert_true(command_executor_test_slice_eq(card_negative_limit_reply.data, &"ERR LIMIT can't be negative"[0: 27]));
+    resp_value_free(&card_negative_limit_parsed.value);
+
+    var card_zero_numkeys_parsed: RespParseResult = try parse_resp2(&"*3\r\n$9\r\nSDIFFCARD\r\n$1\r\n0\r\n$2\r\ns1\r\n"[0: 34]);
+    const card_zero_numkeys_command: Command = try command_executor_test_command(&router, &card_zero_numkeys_parsed);
+    const card_zero_numkeys_reply: CommandReply = command_execute_at(&engine, &card_zero_numkeys_command, 1000u64);
+    try assert_true(command_executor_test_slice_eq(card_zero_numkeys_reply.data, &"ERR numkeys should be greater than 0"[0: 36]));
+    resp_value_free(&card_zero_numkeys_parsed.value);
+
+    var card_bad_option_parsed: RespParseResult = try parse_resp2(&"*5\r\n$10\r\nSUNIONCARD\r\n$1\r\n2\r\n$2\r\ns1\r\n$2\r\ns2\r\n$5\r\nBOGUS\r\n"[0: 55]);
+    const card_bad_option_command: Command = try command_executor_test_command(&router, &card_bad_option_parsed);
+    const card_bad_option_reply: CommandReply = command_execute_at(&engine, &card_bad_option_command, 1000u64);
+    try assert_true(command_executor_test_slice_eq(card_bad_option_reply.data, &"ERR syntax error"[0: 16]));
+    resp_value_free(&card_bad_option_parsed.value);
+
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);
 }

@@ -29,7 +29,7 @@ fn command_router_slice_eq(a: &[byte], b: &[byte]) bool {
 
 export fn test_command_router_lookup_and_case() !void {
     const router: CommandRouter = command_router_new();
-    try assert_eq_i32(command_router_count(&router) as i32, 411);
+    try assert_eq_i32(command_router_count(&router) as i32, 413);
 
     const ping: CommandInfo = try command_router_lookup(&router, &"PING"[0: 4]);
     try assert_eq_i32(ping.cmd_type as i32, CommandType.command_ping as i32);
@@ -857,6 +857,14 @@ export fn test_command_router_lookup_and_case() !void {
     const sintercard: CommandInfo = try command_router_lookup(&router, &"SINTERCARD"[0: 10]);
     try assert_eq_i32(sintercard.cmd_type as i32, CommandType.command_sintercard as i32);
     try assert_eq_i32(sintercard.arity, -3);
+
+    const sdiffcard: CommandInfo = try command_router_lookup(&router, &"SDIFFCARD"[0: 9]);
+    try assert_eq_i32(sdiffcard.cmd_type as i32, CommandType.command_sdiffcard as i32);
+    try assert_eq_i32(sdiffcard.arity, -3);
+
+    const sunioncard: CommandInfo = try command_router_lookup(&router, &"SUNIONCARD"[0: 10]);
+    try assert_eq_i32(sunioncard.cmd_type as i32, CommandType.command_sunioncard as i32);
+    try assert_eq_i32(sunioncard.arity, -3);
 
     const sdiff: CommandInfo = try command_router_lookup(&router, &"sdiff"[0: 5]);
     try assert_eq_i32(sdiff.cmd_type as i32, CommandType.command_sdiff as i32);

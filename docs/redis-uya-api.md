@@ -870,6 +870,30 @@ HIMPORT DISCARDALL
 - `COMMAND INFO/DOCS/GETKEYS/GETKEYSANDFLAGS` 暴露 parent 与四个子命令；`SET` 的动态 key flags 为 `OW|update`
 - 当前脚本执行器仍是受限 single-call subset，未开放脚本内 `HIMPORT`
 
+### `BACKUP`
+
+格式：
+
+```text
+BACKUP START
+BACKUP SEAL
+BACKUP ABORT
+BACKUP CLEANUP
+BACKUP STATUS
+BACKUP LIST
+BACKUP HELP
+```
+
+说明：
+
+- `START` 在 `backupdirname` 创建项目内 RDB 基础快照，随后进入 `incrementing` 并捕获普通命令、事务、脚本和 `HIMPORT` 的规范化写入
+- `SEAL` 把增量写入保存为 AOF，同时写出 `redis-uya-backup-v1` manifest；`LIST` 按 base RDB、incremental AOF、manifest 顺序返回绝对路径
+- 恢复时先把 base RDB 放到目标实例的 `dir/dbfilename`，再以 incremental AOF 作为 `appendfilename` 启动；集成测试用独立实例验证普通、删除、事务、脚本和 `HIMPORT` 写入均可重放
+- `STATUS` 返回 `state/error/start_time/end_time`；支持 `idle`、`incrementing`、`sealed`、`failed`
+- `ABORT` 把活动备份标为 `failed`，`CLEANUP` 删除产物并恢复 `idle`；活动备份必须先 `ABORT`，sealed/failed 备份必须先 `CLEANUP` 才能重新开始
+- `CONFIG GET/SET/REWRITE backupdirname` 可配置备份目录，默认值为 `backupdir`
+- 当前为 `partial`：基础快照同步执行，不暴露 Redis 的 `pending/snapshotting` 中间态，也不复用 Redis 多段 AOF manifest 或硬链接文件
+
 ### `RPUSH`
 
 格式：

@@ -66,6 +66,7 @@
 - 当前开发工具链已同步到 Uya `1.0` 分支 `f54bd7bf` / v0.9.9，与 `origin/1.0` 一致；启动器与实际 build 编译器均由该提交源码重新生成并成套同步，产物哈希、规范回退和项目验证见 `redis-uya-uya-sync-2026-07-22.md`。
 - 当前 `HEAD` 的完整单测、完整集成和 redis-cli smoke 已通过；release 矩阵见 `benchmarks/v0.9.3-release-performance.md`。16B 到 1032B Slab class 已统一按接近 64KiB 的 arena 页批量补充；同条件 20K 父提交对比中 `SET 16B` 吞吐提升 `33.0%`、p99 降低 `55.5%`、RSS 降低 `17.1%`，当前五项绝对吞吐、归一化吞吐与 p99 回归 guard 通过。
 - 当前主线的第一优先级已从 `v0.9.1` 的真实性修复转入 `v0.9.3` 的 Redis Open Source 单机核心缺口补齐，并持续保持控制面真值、版本口径与统计分层不回退。
+- Tier A 当前已无 `deferred` 条目；最新补齐的 `BACKUP` 命令族以 base RDB + incremental AOF + manifest 的单机 profile 标记为 `partial`，与 Redis 多段 AOF/硬链接实现差异已在 API 和架构文档明确记录。
 - `v1.0.0` 的命令封版门槛先收敛 Redis Open Source 单机核心；JSON/Search/Time Series/概率结构/Vector 等模块命令继续追踪，但不再作为当前阶段完成度的包装材料。
 
 当前执行路线见：

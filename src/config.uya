@@ -47,6 +47,7 @@ export struct ServerConfig {
     dir: [byte: 256],
     dbfilename: [byte: 128],
     appendfilename: [byte: 128],
+    backupdirname: [byte: 256],
     requirepass: [byte: 128],
     replicaof_host: [byte: 64],
     replicaof_port: i32,
@@ -93,6 +94,7 @@ export fn default_config() ServerConfig {
     copy_literal(cfg.dir[0: 256], &"./"[0: 2]);
     copy_literal(cfg.dbfilename[0: 128], &"dump.rdb"[0: 8]);
     copy_literal(cfg.appendfilename[0: 128], &"appendonly.aof"[0: 14]);
+    copy_literal(cfg.backupdirname[0: 256], &"backupdir"[0: 9]);
     copy_literal(cfg.requirepass[0: 128], &""[0: 0]);
     copy_literal(cfg.replicaof_host[0: 64], &""[0: 0]);
     cfg.replicaof_port = 0;
@@ -246,6 +248,10 @@ export fn config_apply_runtime_set(cfg: &ServerConfig, key: &[byte], value: &[by
     }
     if token_eq(key, &"appendfilename"[0: 14]) {
         copy_literal(cfg.appendfilename[0: 128], value);
+        return true;
+    }
+    if token_eq(key, &"backupdirname"[0: 13]) {
+        copy_literal(cfg.backupdirname[0: 256], value);
         return true;
     }
     if token_eq(key, &"requirepass"[0: 11]) {
@@ -486,6 +492,7 @@ fn config_rewrite_payload(cfg: &ServerConfig) !Sds {
     try config_append_line(&buf, &"dir"[0: 3], config_cstring_slice(cfg.dir[0: 256]));
     try config_append_line(&buf, &"dbfilename"[0: 10], config_cstring_slice(cfg.dbfilename[0: 128]));
     try config_append_line(&buf, &"appendfilename"[0: 14], config_cstring_slice(cfg.appendfilename[0: 128]));
+    try config_append_line(&buf, &"backupdirname"[0: 13], config_cstring_slice(cfg.backupdirname[0: 256]));
     try config_append_i32_line(&buf, &"maxclients"[0: 10], cfg.maxclients);
     try config_append_i32_line(&buf, &"databases"[0: 9], cfg.databases);
     try config_append_i32_line(&buf, &"timeout"[0: 7], cfg.timeout_seconds);
@@ -566,6 +573,8 @@ fn parse_line(cfg: &ServerConfig, line: &[byte]) !void {
         copy_literal(cfg.dbfilename[0: 128], value);
     } else if token_eq(key, &"appendfilename"[0: 14]) {
         copy_literal(cfg.appendfilename[0: 128], value);
+    } else if token_eq(key, &"backupdirname"[0: 13]) {
+        copy_literal(cfg.backupdirname[0: 256], value);
     } else if token_eq(key, &"requirepass"[0: 11]) {
         copy_literal(cfg.requirepass[0: 128], value);
     } else if token_eq(key, &"replicaof"[0: 9]) {

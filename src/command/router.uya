@@ -278,6 +278,7 @@ export enum CommandType {
     command_lmovem,
     command_blmovem,
     command_himport,
+    command_backup,
 }
 
 export struct CommandInfo {
@@ -308,7 +309,7 @@ export fn command_flag_write() u64 {
     return COMMAND_FLAG_WRITE;
 }
 
-const MIN_COMMAND_COUNT: usize = 416;
+const MIN_COMMAND_COUNT: usize = 417;
 
 fn command_router_name_eq(a: &[byte], b: &[byte]) bool {
     return bytes_ascii_case_eq(a, b);
@@ -1595,6 +1596,9 @@ fn command_router_info_by_index(index: usize) !CommandInfo {
     }
     if index == 415 {
         return command_router_info(CommandType.command_himport, &"HIMPORT"[0: 7], -2, 0u64, 0, 0, 0);
+    }
+    if index == 416 {
+        return command_router_info(CommandType.command_backup, &"BACKUP"[0: 6], 2, COMMAND_FLAG_READONLY, 0, 0, 0);
     }
     return error.CommandUnknown;
 }

@@ -1,6 +1,9 @@
 // server.uya - minimal single-threaded Redis server loop.
 
 use src.command.executor.CommandRuntimeInfo;
+use src.persistence.backup.BackupState;
+use src.persistence.backup.backup_state_new;
+use src.persistence.backup.backup_state_free;
 use src.command.router.CommandRouter;
 use src.command.router.command_router_new;
 use src.cluster.topology.ClusterTopology;
@@ -192,6 +195,7 @@ export struct RedisServer {
     aof_rewrite_current: &ListNode,
     aof_rewrite_buf: Sds,
     aof_rewrite_tmp_path: [byte: 512],
+    backup: BackupState,
     cluster_topology: ClusterTopology,
     shutdown_requested: bool,
     client_pause_until_ms: u64,
@@ -407,6 +411,7 @@ fn server_runtime_info_initialize(server: &RedisServer) void {
         lastsave_ms: server.lastsave_ms,
         protocol_version: 2,
         no_touch_enabled: false,
+        backup: &server.backup,
     };
     server_runtime_info_sync_replid(server);
 }
@@ -429,6 +434,9 @@ fn server_runtime_info(server: &RedisServer) &CommandRuntimeInfo {
     }
     if server.aof_rewrite_in_progress && server.aof_rewrite_buf.buf.ptr != null {
         maxmemory_excluded_bytes = maxmemory_excluded_bytes + server.aof_rewrite_buf.alloc + 1;
+    }
+    if server.backup.incremental.buf.ptr != null {
+        maxmemory_excluded_bytes = maxmemory_excluded_bytes + server.backup.incremental.alloc + 1;
     }
     const info: &CommandRuntimeInfo = &server.runtime_info;
     info.active_clients = server.active_clients;
@@ -1912,6 +1920,14 @@ export fn server_open_with_aof_and_memory_policy(
         engine_free(&engine);
         return error.ServerAofOpenFailed;
     };
+    var backup: BackupState = backup_state_new() catch {
+        replication_backlog_free(&repl_backlog);
+        sds_free(&rewrite_buf);
+        aof_close(&aof);
+        listener_close(&listener);
+        engine_free(&engine);
+        return error.ServerAofOpenFailed;
+    };
     const start_ms: u64 = now_ms_safe();
     var server: RedisServer = RedisServer{
         engine: engine,
@@ -1951,6 +1967,7 @@ export fn server_open_with_aof_and_memory_policy(
         aof_rewrite_current: null as &ListNode,
         aof_rewrite_buf: rewrite_buf,
         aof_rewrite_tmp_path: [],
+        backup: backup,
         cluster_topology: cluster_topology,
         shutdown_requested: false,
         client_pause_until_ms: 0u64,
@@ -1993,6 +2010,7 @@ export fn server_close(server: &RedisServer) void {
         _ = waitpid(server.aof_rewrite_child_pid, &rewrite_status, 0);
     }
     server_reset_rewrite_state(server);
+    backup_state_free(&server.backup);
     replication_backlog_free(&server.repl_backlog);
     aof_close(&server.aof);
     listener_close(&server.listener);

@@ -1,0 +1,387 @@
+// persistence/backup.uya - standalone base-RDB plus incremental-AOF backups.
+
+use std.io.file.File;
+use std.io.file.file_open;
+use std.io.file.file_close;
+use std.io.file.file_write;
+use libc.O_WRONLY;
+use libc.O_CREAT;
+use libc.O_TRUNC;
+use libc.S_IRUSR;
+use libc.S_IWUSR;
+use libc.mkdir;
+use libc.rmdir;
+use libc.unlink;
+use libc.getcwd;
+use libc.opendir;
+use libc.readdir;
+use libc.closedir;
+use libc.DIR;
+use libc.Dirent;
+use src.persistence.rdb.rdb_build_path;
+use src.persistence.rdb.rdb_save_file_at;
+use src.persistence.rdb.rdb_file_exists;
+use src.storage.engine.Engine;
+use src.storage.sds.Sds;
+use src.storage.sds.sds_empty;
+use src.storage.sds.sds_free;
+use src.storage.sds.sds_cat;
+
+export error BackupInProgress;
+export error BackupSealedExists;
+export error BackupDirectoryCreateFailed;
+export error BackupDirectoryNotEmpty;
+export error BackupPathTooLong;
+export error BackupSnapshotFailed;
+export error BackupNotReady;
+export error BackupNoProgress;
+export error BackupInProgressCleanup;
+export error BackupWriteFailed;
+
+export enum BackupStatus {
+    backup_idle,
+    backup_incrementing,
+    backup_sealed,
+    backup_failed,
+}
+
+export struct BackupState {
+    status: BackupStatus,
+    error_message: [byte: 128],
+    error_len: usize,
+    start_time: u64,
+    end_time: u64,
+    directory: [byte: 640],
+    base_path: [byte: 768],
+    incremental_path: [byte: 768],
+    manifest_path: [byte: 768],
+    incremental: Sds,
+}
+
+fn backup_copy_cstring(dst: &[byte], src: &[byte]) !void {
+    if src.len + 1 > dst.len {
+        return error.BackupPathTooLong;
+    }
+    var index: usize = 0;
+    while index < src.len {
+        dst.ptr[index] = src.ptr[index];
+        index = index + 1;
+    }
+    dst.ptr[index] = 0 as byte;
+}
+
+fn backup_cstring_slice(data: &[byte]) &[byte] {
+    var len: usize = 0;
+    while len < data.len && data.ptr[len] != 0 as byte {
+        len = len + 1;
+    }
+    return data[0: len];
+}
+
+fn backup_set_error(state: &BackupState, message: &[byte]) void {
+    var len: usize = message.len;
+    if len > 127 {
+        len = 127;
+    }
+    var index: usize = 0;
+    while index < len {
+        state.error_message[index] = message.ptr[index];
+        index = index + 1;
+    }
+    state.error_message[len] = 0 as byte;
+    state.error_len = len;
+}
+
+fn backup_clear_error(state: &BackupState) void {
+    state.error_message[0] = 0 as byte;
+    state.error_len = 0;
+}
+
+fn backup_fail_at(state: &BackupState, message: &[byte], now_ms: u64) void {
+    backup_set_error(state, message);
+    state.status = BackupStatus.backup_failed;
+    state.end_time = now_ms / 1000u64;
+}
+
+fn backup_clear_incremental(state: &BackupState) void {
+    state.incremental.len = 0;
+    if state.incremental.buf.ptr != null {
+        state.incremental.buf.ptr[0] = 0 as byte;
+    }
+}
+
+export fn backup_state_new() !BackupState {
+    return BackupState{
+        status: BackupStatus.backup_idle,
+        error_message: [],
+        error_len: 0,
+        start_time: 0u64,
+        end_time: 0u64,
+        directory: [],
+        base_path: [],
+        incremental_path: [],
+        manifest_path: [],
+        incremental: try sds_empty(),
+    };
+}
+
+export fn backup_state_free(state: &BackupState) void {
+    if state == null {
+        return;
+    }
+    sds_free(&state.incremental);
+}
+
+export fn backup_status_name(status: BackupStatus) &[byte] {
+    if status == BackupStatus.backup_incrementing {
+        return &"incrementing"[0: 12];
+    }
+    if status == BackupStatus.backup_sealed {
+        return &"sealed"[0: 6];
+    }
+    if status == BackupStatus.backup_failed {
+        return &"failed"[0: 6];
+    }
+    return &"idle"[0: 4];
+}
+
+export fn backup_error_message(state: &BackupState) &[byte] {
+    if state == null || state.error_len == 0 {
+        return (null as &byte)[0: 0];
+    }
+    return state.error_message[0: state.error_len];
+}
+
+export fn backup_is_incrementing(state: &BackupState) bool {
+    return state != null && state.status == BackupStatus.backup_incrementing;
+}
+
+export fn backup_capture_failed_at(state: &BackupState, now_ms: u64) void {
+    if state == null || state.status != BackupStatus.backup_incrementing {
+        return;
+    }
+    backup_fail_at(state, &"incremental capture failed"[0: 26], now_ms);
+}
+
+fn backup_directory_is_empty(path: &const byte) bool {
+    const dir: &DIR = opendir(path);
+    if dir == null {
+        return false;
+    }
+    defer {
+        _ = closedir(dir);
+    }
+    while 1 != 0 {
+        const entry: &Dirent = readdir(dir);
+        if entry == null {
+            return true;
+        }
+        const name: &[byte] = backup_cstring_slice(entry.d_name[0: 256]);
+        if !(name.len == 1 && name.ptr[0] == 46 as byte) &&
+            !(name.len == 2 && name.ptr[0] == 46 as byte && name.ptr[1] == 46 as byte) {
+            return false;
+        }
+    }
+    return true;
+}
+
+fn backup_absolute_directory(out: &[byte], configured: &[byte]) !void {
+    if configured.len == 0 {
+        return error.BackupDirectoryCreateFailed;
+    }
+    if configured.ptr[0] == 47 as byte {
+        try backup_copy_cstring(out, configured);
+        return;
+    }
+    var cwd: [byte: 512] = [];
+    if getcwd(&cwd[0], 512) == null {
+        return error.BackupDirectoryCreateFailed;
+    }
+    const cwd_slice: &[byte] = backup_cstring_slice(cwd[0: 512]);
+    if cwd_slice.len + 1 + configured.len + 1 > out.len {
+        return error.BackupPathTooLong;
+    }
+    var pos: usize = 0;
+    var index: usize = 0;
+    while index < cwd_slice.len {
+        out.ptr[pos] = cwd_slice.ptr[index];
+        pos = pos + 1;
+        index = index + 1;
+    }
+    if pos == 0 || out.ptr[pos - 1] != 47 as byte {
+        out.ptr[pos] = 47 as byte;
+        pos = pos + 1;
+    }
+    index = 0;
+    while index < configured.len {
+        out.ptr[pos] = configured.ptr[index];
+        pos = pos + 1;
+        index = index + 1;
+    }
+    out.ptr[pos] = 0 as byte;
+}
+
+fn backup_write_file(path: &const byte, data: &[byte]) !void {
+    const mode: u32 = (S_IRUSR | S_IWUSR) as u32;
+    var file: File = file_open(path, (O_WRONLY | O_CREAT | O_TRUNC) as i32, mode) catch {
+        return error.BackupWriteFailed;
+    };
+    defer {
+        _ = file_close(&file) catch {};
+    }
+    var written: usize = 0;
+    while written < data.len {
+        const ptr: &const byte = @ptr_from_usize(@usize_from_ptr(data.ptr as &void) + written) as &const byte;
+        const count: usize = file_write(&file, ptr, data.len - written) catch {
+            return error.BackupWriteFailed;
+        };
+        if count == 0 {
+            return error.BackupWriteFailed;
+        }
+        written = written + count;
+    }
+}
+
+export fn backup_start_at(state: &BackupState, engine: &Engine, dirname: &[byte], now_ms: u64) !void {
+    if state.status == BackupStatus.backup_incrementing {
+        return error.BackupInProgress;
+    }
+    if state.status == BackupStatus.backup_sealed {
+        return error.BackupSealedExists;
+    }
+    backup_clear_error(state);
+    state.start_time = now_ms / 1000u64;
+    state.end_time = 0u64;
+    backup_clear_incremental(state);
+    state.directory[0] = 0 as byte;
+    state.base_path[0] = 0 as byte;
+    state.incremental_path[0] = 0 as byte;
+    state.manifest_path[0] = 0 as byte;
+    _ = backup_absolute_directory(state.directory[0: 640], dirname) catch |err| {
+        backup_fail_at(state, &"backup path unavailable"[0: 23], now_ms);
+        return err;
+    };
+    const directory: &const byte = &state.directory[0] as &const byte;
+    if mkdir(directory, 448) != 0 {
+        const existing: &DIR = opendir(directory);
+        if existing == null {
+            backup_fail_at(state, &"backup directory create failed"[0: 30], now_ms);
+            return error.BackupDirectoryCreateFailed;
+        }
+        _ = closedir(existing);
+    }
+    if !backup_directory_is_empty(directory) {
+        backup_fail_at(state, &"backup directory is not empty"[0: 29], now_ms);
+        return error.BackupDirectoryNotEmpty;
+    }
+    _ = rdb_build_path(state.base_path[0: 768], backup_cstring_slice(state.directory[0: 640]), &"backup.rdb"[0: 10]) catch {
+        backup_fail_at(state, &"backup path too long"[0: 20], now_ms);
+        return error.BackupPathTooLong;
+    };
+    _ = rdb_build_path(state.incremental_path[0: 768], backup_cstring_slice(state.directory[0: 640]), &"incremental.aof"[0: 15]) catch {
+        backup_fail_at(state, &"backup path too long"[0: 20], now_ms);
+        return error.BackupPathTooLong;
+    };
+    _ = rdb_build_path(state.manifest_path[0: 768], backup_cstring_slice(state.directory[0: 640]), &"manifest"[0: 8]) catch {
+        backup_fail_at(state, &"backup path too long"[0: 20], now_ms);
+        return error.BackupPathTooLong;
+    };
+    _ = rdb_save_file_at(&state.base_path[0] as &const byte, engine, now_ms) catch {
+        backup_fail_at(state, &"base snapshot failed"[0: 20], now_ms);
+        state.base_path[0] = 0 as byte;
+        return error.BackupSnapshotFailed;
+    };
+    state.status = BackupStatus.backup_incrementing;
+}
+
+export fn backup_seal_at(state: &BackupState, now_ms: u64) !void {
+    if state.status != BackupStatus.backup_incrementing {
+        return error.BackupNotReady;
+    }
+    _ = backup_write_file(&state.incremental_path[0] as &const byte, state.incremental.buf[0: state.incremental.len]) catch {
+        backup_fail_at(state, &"incremental write failed"[0: 24], now_ms);
+        return error.BackupWriteFailed;
+    };
+    var manifest: Sds = sds_empty() catch {
+        backup_fail_at(state, &"manifest allocation failed"[0: 26], now_ms);
+        return error.BackupWriteFailed;
+    };
+    defer {
+        sds_free(&manifest);
+    }
+    _ = sds_cat(&manifest, &"redis-uya-backup-v1\nbase=backup.rdb\nincremental=incremental.aof\n"[0: 64]) catch {
+        backup_fail_at(state, &"manifest allocation failed"[0: 26], now_ms);
+        return error.BackupWriteFailed;
+    };
+    _ = backup_write_file(&state.manifest_path[0] as &const byte, manifest.buf[0: manifest.len]) catch {
+        backup_fail_at(state, &"manifest write failed"[0: 21], now_ms);
+        return error.BackupWriteFailed;
+    };
+    state.status = BackupStatus.backup_sealed;
+    state.end_time = now_ms / 1000u64;
+}
+
+export fn backup_abort_at(state: &BackupState, now_ms: u64) !void {
+    if state.status != BackupStatus.backup_incrementing {
+        return error.BackupNoProgress;
+    }
+    backup_fail_at(state, &"aborted by user"[0: 15], now_ms);
+}
+
+export fn backup_cleanup(state: &BackupState) !void {
+    if state.status == BackupStatus.backup_incrementing {
+        return error.BackupInProgressCleanup;
+    }
+    if state.directory[0] != 0 as byte {
+        _ = unlink(&state.base_path[0] as &const byte);
+        _ = unlink(&state.incremental_path[0] as &const byte);
+        _ = unlink(&state.manifest_path[0] as &const byte);
+        if (state.base_path[0] != 0 as byte && rdb_file_exists(&state.base_path[0] as &const byte)) ||
+            (state.incremental_path[0] != 0 as byte && rdb_file_exists(&state.incremental_path[0] as &const byte)) ||
+            (state.manifest_path[0] != 0 as byte && rdb_file_exists(&state.manifest_path[0] as &const byte)) {
+            return error.BackupWriteFailed;
+        }
+        if rmdir(&state.directory[0] as &const byte) != 0 {
+            const remaining: &DIR = opendir(&state.directory[0] as &const byte);
+            if remaining != null {
+                _ = closedir(remaining);
+                return error.BackupWriteFailed;
+            }
+        }
+    }
+    state.status = BackupStatus.backup_idle;
+    state.start_time = 0u64;
+    state.end_time = 0u64;
+    state.directory[0] = 0 as byte;
+    state.base_path[0] = 0 as byte;
+    state.incremental_path[0] = 0 as byte;
+    state.manifest_path[0] = 0 as byte;
+    backup_clear_error(state);
+    backup_clear_incremental(state);
+}
+
+export fn backup_file_count(state: &BackupState) usize {
+    if state == null || state.status == BackupStatus.backup_idle {
+        return 0;
+    }
+    if state.status == BackupStatus.backup_sealed {
+        return 3;
+    }
+    if state.base_path[0] != 0 as byte && rdb_file_exists(&state.base_path[0] as &const byte) {
+        return 1;
+    }
+    return 0;
+}
+
+export fn backup_file_at(state: &BackupState, index: usize) &[byte] {
+    if state == null || index >= backup_file_count(state) {
+        return (null as &byte)[0: 0];
+    }
+    if index == 0 {
+        return backup_cstring_slice(state.base_path[0: 768]);
+    }
+    if index == 1 {
+        return backup_cstring_slice(state.incremental_path[0: 768]);
+    }
+    return backup_cstring_slice(state.manifest_path[0: 768]);
+}

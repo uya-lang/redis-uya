@@ -37,6 +37,8 @@ use src.network.protocol.resp_parse_value_free;
 use src.persistence.aof.AofWriter;
 use src.persistence.aof.aof_append_command_result_at;
 use src.persistence.aof.aof_append_command_result_to_sds_at;
+use src.persistence.backup.backup_is_incrementing;
+use src.persistence.backup.backup_capture_failed_at;
 use src.persistence.aof.aof_append_raw;
 use src.persistence.rdb.rdb_dump_object_at;
 use src.replication.backlog.ReplicationBacklog;
@@ -2966,6 +2968,16 @@ fn connection_acl_named_user_command_denied(user: &ConnectionAclUser, name: &[by
     return false;
 }
 
+fn connection_acl_backup_child_name(name: &[byte]) bool {
+    return connection_keyword_eq(name, &"backup|abort"[0: 12]) ||
+        connection_keyword_eq(name, &"backup|cleanup"[0: 14]) ||
+        connection_keyword_eq(name, &"backup|help"[0: 11]) ||
+        connection_keyword_eq(name, &"backup|list"[0: 11]) ||
+        connection_keyword_eq(name, &"backup|seal"[0: 11]) ||
+        connection_keyword_eq(name, &"backup|start"[0: 12]) ||
+        connection_keyword_eq(name, &"backup|status"[0: 13]);
+}
+
 fn connection_acl_user_command_denied(username: &[byte], name: &[byte]) bool {
     if connection_keyword_eq(username, &"default"[0: 7]) {
         if connection_acl_default_command_denied(name) {
@@ -2976,6 +2988,9 @@ fn connection_acl_user_command_denied(username: &[byte], name: &[byte]) bool {
             connection_keyword_eq(name, &"himport|discard"[0: 15]) ||
             connection_keyword_eq(name, &"himport|discardall"[0: 18]) {
             return connection_acl_default_command_denied(&"himport"[0: 7]);
+        }
+        if connection_acl_backup_child_name(name) {
+            return connection_acl_default_command_denied(&"backup"[0: 6]);
         }
         return false;
     }
@@ -3000,27 +3015,33 @@ fn connection_acl_user_command_denied(username: &[byte], name: &[byte]) bool {
         connection_keyword_eq(name, &"himport|discardall"[0: 18]) {
         return connection_acl_named_user_command_denied(user, &"himport"[0: 7]);
     }
+    if connection_acl_backup_child_name(name) {
+        return connection_acl_named_user_command_denied(user, &"backup"[0: 6]);
+    }
     return false;
 }
 
 fn connection_acl_effective_command_name(command: &Command) &[byte] {
-    if command.info.cmd_type != CommandType.command_himport || command.argc < 2 {
+    if command.argc < 2 {
         return command.info.name;
     }
     const subcommand: &[byte] = command_arg_data(command, 1) catch {
         return command.info.name;
     };
-    if connection_keyword_eq(subcommand, &"PREPARE"[0: 7]) {
-        return &"himport|prepare"[0: 15];
+    if command.info.cmd_type == CommandType.command_himport {
+        if connection_keyword_eq(subcommand, &"PREPARE"[0: 7]) { return &"himport|prepare"[0: 15]; }
+        if connection_keyword_eq(subcommand, &"SET"[0: 3]) { return &"himport|set"[0: 11]; }
+        if connection_keyword_eq(subcommand, &"DISCARD"[0: 7]) { return &"himport|discard"[0: 15]; }
+        if connection_keyword_eq(subcommand, &"DISCARDALL"[0: 10]) { return &"himport|discardall"[0: 18]; }
     }
-    if connection_keyword_eq(subcommand, &"SET"[0: 3]) {
-        return &"himport|set"[0: 11];
-    }
-    if connection_keyword_eq(subcommand, &"DISCARD"[0: 7]) {
-        return &"himport|discard"[0: 15];
-    }
-    if connection_keyword_eq(subcommand, &"DISCARDALL"[0: 10]) {
-        return &"himport|discardall"[0: 18];
+    if command.info.cmd_type == CommandType.command_backup {
+        if connection_keyword_eq(subcommand, &"ABORT"[0: 5]) { return &"backup|abort"[0: 12]; }
+        if connection_keyword_eq(subcommand, &"CLEANUP"[0: 7]) { return &"backup|cleanup"[0: 14]; }
+        if connection_keyword_eq(subcommand, &"HELP"[0: 4]) { return &"backup|help"[0: 11]; }
+        if connection_keyword_eq(subcommand, &"LIST"[0: 4]) { return &"backup|list"[0: 11]; }
+        if connection_keyword_eq(subcommand, &"SEAL"[0: 4]) { return &"backup|seal"[0: 11]; }
+        if connection_keyword_eq(subcommand, &"START"[0: 5]) { return &"backup|start"[0: 12]; }
+        if connection_keyword_eq(subcommand, &"STATUS"[0: 6]) { return &"backup|status"[0: 13]; }
     }
     return command.info.name;
 }
@@ -3721,6 +3742,9 @@ fn connection_acl_rule_command_name(router: &CommandRouter, name: &[byte]) !&[by
         }
         if connection_keyword_eq(name, &"himport|discardall"[0: 18]) {
             return &"himport|discardall"[0: 18];
+        }
+        if connection_acl_backup_child_name(name) {
+            return name;
         }
         return error.CommandUnknown;
     };
@@ -4968,7 +4992,8 @@ fn connection_script_command_allowed(cmd_type: CommandType) bool {
         cmd_type == CommandType.command_evalsha_ro ||
         cmd_type == CommandType.command_script ||
         cmd_type == CommandType.command_function ||
-        cmd_type == CommandType.command_himport {
+        cmd_type == CommandType.command_himport ||
+        cmd_type == CommandType.command_backup {
         return false;
     }
     return true;
@@ -5306,6 +5331,7 @@ export fn connection_client_registry_sync(tx: &ConnectionTransaction) void {
 
 fn connection_client_command_uses_subcommand(cmd_type: CommandType) bool {
     return cmd_type == CommandType.command_acl ||
+        cmd_type == CommandType.command_backup ||
         cmd_type == CommandType.command_client ||
         cmd_type == CommandType.command_cluster ||
         cmd_type == CommandType.command_command ||
@@ -6250,6 +6276,11 @@ fn connection_himport_propagate(
             if rewrite_failed != null {
                 *rewrite_failed = true;
             }
+        };
+    }
+    if backup_is_incrementing(runtime.backup) {
+        _ = sds_cat(&runtime.backup.incremental, raw.buf[0: raw.len]) catch {
+            backup_capture_failed_at(runtime.backup, now_ms_safe());
         };
     }
     if backlog != null && backlog.active && runtime.replication_role == ReplicationRole.role_master {
@@ -8552,6 +8583,11 @@ fn connection_execute_script_effect_at(
                 }
             };
         }
+        if backup_is_incrementing(runtime.backup) && reply.typ != CommandReplyType.reply_error {
+            _ = aof_append_command_result_to_sds_at(&runtime.backup.incremental, &inner_command, raw_cmd, now_ms, &reply) catch {
+                backup_capture_failed_at(runtime.backup, now_ms);
+            };
+        }
         if backlog != null && runtime.replication_role == ReplicationRole.role_master && reply.typ != CommandReplyType.reply_error {
             _ = replication_backlog_append_command_result_at(backlog, &inner_command, raw_cmd, now_ms, &reply) catch {};
         }
@@ -9554,6 +9590,11 @@ fn connection_transaction_execute_at(
                     }
                 };
             }
+            if backup_is_incrementing(runtime.backup) && reply.typ != CommandReplyType.reply_error {
+                _ = aof_append_command_result_to_sds_at(&runtime.backup.incremental, &command, raw_cmd, now_ms, &reply) catch {
+                    backup_capture_failed_at(runtime.backup, now_ms);
+                };
+            }
             if backlog != null && runtime.replication_role == ReplicationRole.role_master && reply.typ != CommandReplyType.reply_error {
                 _ = replication_backlog_append_command_result_at(backlog, &command, raw_cmd, now_ms, &reply) catch {};
             }
@@ -9693,6 +9734,11 @@ fn connection_execute_standard_command_at(
                 if rewrite_failed != null {
                     *rewrite_failed = true;
                 }
+            };
+        }
+        if backup_is_incrementing(runtime.backup) {
+            _ = aof_append_command_result_to_sds_at(&runtime.backup.incremental, command, input[0: parsed.consumed], now_ms, &reply) catch {
+                backup_capture_failed_at(runtime.backup, now_ms);
             };
         }
         if backlog != null && runtime.replication_role == ReplicationRole.role_master {

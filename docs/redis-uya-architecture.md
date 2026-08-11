@@ -78,6 +78,7 @@ server open
 - `aof.uya`：写命令追加、流式回放、损坏安全失败
 - `rdb.uya`：项目内最小 RDB 子集 save/load
 - `rewrite.uya`：离线 AOF rewrite 原型
+- `backup.uya`：`BACKUP` 独立状态机与产物生命周期；同步生成 base RDB，在活动期由连接层把规范化写命令捕获到增量 SDS，封存时写出 incremental AOF 与项目 manifest
 
 ### `src/server.uya`
 
@@ -155,6 +156,7 @@ server open
 - `EVAL/EVALSHA/EVAL_RO/EVALSHA_RO/SCRIPT DEBUG/LOAD/EXISTS/FLUSH/KILL` 由 `connection.uya` 处理，因为脚本缓存、事务重放、AOF append 和 replication backlog 需要连接层传播边界；当前仅支持单条 `return redis.call(...)` 子集，`*_RO` 在执行前解析内部命令并拒绝写标记命令和 `SORT ... STORE` 等参数驱动写路径，`SCRIPT DEBUG` 是 no-op 兼容面，`SCRIPT KILL` 只覆盖无运行脚本错误面
 - `FUNCTION` 与 `FCALL/FCALL_RO` 的最小 library 平面由 `connection.uya` 接管：固定容量进程内表保存 library 名、函数名、bounded description、`no-writes` flag、原始代码和规范化单条调用体，`LOAD/LIST/STATS/DELETE/FLUSH` 反映真实状态，`LIST LIBRARYNAME <pattern>` 支持 `*` / `?` glob 并回显函数 description/flags，`FCALL*` 复用脚本内部命令的 ACL、只读校验、AOF 及 replication backlog 实际数据效果传播；`DUMP` 按 Redis 7 `FUNCTION2` opcode、RDB length、version 10 和 CRC64 输出 library code，`RESTORE` 同时读取非压缩和 Redis LZF 字符串编码，以独立 staging 表完成全量解析、冲突检查和对象分配后再执行 `APPEND/REPLACE/FLUSH` 原子提交；`no-writes` 和 `FCALL_RO` 共用执行前写命令拒绝路径。每库最多 8 个位置参数或 table 形式 `redis.register_function(... return redis.call(...) end)` 子集，其他 flags 和 library 元数据 RDB/AOF/复制持久化尚未支持
 - `HIMPORT` 由 `connection.uya` 维护连接级 fieldset：`PREPARE` 以 hash 去重后保存原始 field 顺序，`SET` 先构造完整新 hash，再原子替换目标并清理旧 TTL；`DISCARD/DISCARDALL` 只清 fieldset。由于 fieldset 不属于数据库状态，AOF、rewrite 增量缓冲和 master replication backlog 统一追加由项目内 RDB payload 构造的 `RESTORE key 0 payload REPLACE`，副本与重启回放不依赖原连接的 `PREPARE`
+- `BACKUP` 状态由 `RedisServer` 持有并通过 `CommandRuntimeInfo` 暴露；`START/SEAL/ABORT/CLEANUP/STATUS/LIST/HELP` 在执行器处理，普通、事务、脚本和 `HIMPORT` 写传播点同时捕获规范化增量。增量 SDS 属于服务器维护开销，从 maxmemory 数据预算中排除；捕获分配失败会把备份转为 `failed`，不会静默封存不完整备份
 - `ACL CAT/GENPASS/HELP/LOAD/SAVE/WHOAMI` 仍由 `command/executor.uya` 执行；`ACL SETUSER/DRYRUN/LIST/GETUSER/USERS/DELUSER/LOG` 在真实连接路径由 `connection.uya` 接管默认用户的进程内命令 deny list、分类 deny list、key pattern、channel pattern、named user 元数据、named user deny list、named user key/channel pattern、`requirepass` 只读回显和拒绝日志，以便在命令执行前统一返回 `NOPERM` 并记录 `ACL LOG`。默认用户与 named user 分别维护活跃命令/分类拒绝规则计数，规则表为空时跳过固定 deny 表或生成命令目录扫描，新增、删除、`resetcommands`、用户重置和删除路径保持计数同步。当前支持默认用户和 named user 的命令级 `+cmd/-cmd`、分类级 `+@category/-@category` 允许/拒绝、`resetcommands` 清空命令与分类拒绝、`allkeys/resetkeys/~pattern` 固定 key range 权限 partial、`allchannels/resetchannels/&pattern` Pub/Sub channel 权限 partial、`clearselectors/resetselectors` 兼容 no-op、named user 进程内创建/列出/详情/删除和 dry-run 用户存在性检查、`>password` / `<password` / `resetpass` / `nopass` 口令管理、`AUTH username password` / `HELLO ... AUTH username password` 认证、`ACL WHOAMI` 当前用户名回显、`ACL LIST` / `ACL GETUSER` 回显当前规则、`requirepass` 哈希标记、事务队列前置拒绝、脚本内部命令拒绝和当前用户命令/key/channel 权限拒绝 ring 日志基础审计字段，`client-info` 记录拒绝发生时的真实连接 id、addr 与 laddr；selector 权限、ACL 文件加载保存和 Redis 动态 key spec / movablekeys 完整解析后续再补
 - `COMMAND` 由 `command/executor.uya` 执行，当前覆盖 `COMMAND`、`COUNT`、`LIST`、`INFO`、`DOCS`，运行时数据统一来自 `catalog_generated*`
 - `COMMAND DOCS` 已支持命令名定向查询和无参数全量 docs 查询；连接/服务端当前使用扩大的输出缓冲完成 RESP2/RESP3 大响应发送第一批闭环

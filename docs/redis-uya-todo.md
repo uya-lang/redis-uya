@@ -466,6 +466,7 @@
 - [x] Hash legacy alias：`HMSET` 多 field 写入返回 `OK`，覆盖错类型、参数数量、`COMMAND*` 和 redis-py/redis-cli smoke
 - [x] Hash field TTL 运行期、持久化与复制传播语义：`HGETEX`、`HSETEX`、`HEXPIRE`、`HPEXPIRE`、`HEXPIREAT`、`HPEXPIREAT`、`HTTL`、`HPTTL`、`HEXPIRETIME`、`HPEXPIRETIME`、`HPERSIST` 已补 field 级绝对毫秒过期元数据、`NX/XX/GT/LT` 条件、`KEEPTTL/PERSIST`、正 TTL/过期时间查询、`HPERSIST` 清理、到期 field lazy expire、普通 hash 写入清理目标 field TTL、RDB save/load、DUMP/RESTORE bytes、AOF append、AOF rewrite 与复制 backlog 保存 field TTL
 - [x] Hash 会话 fieldset 导入：`HIMPORT PREPARE/SET/DISCARD/DISCARDALL` 覆盖连接隔离、重复 field 拒绝、同名替换、按定义顺序映射、完整 hash 替换与 TTL 清理、事务/RESET 生命周期、maxmemory、ACL category/子命令/key pattern、动态 key flags，并把 AOF/rewrite/backlog 传播规范化为可独立重放的 `RESTORE ... REPLACE`
+- [x] 单机备份 partial：`BACKUP START/SEAL/ABORT/CLEANUP/STATUS/LIST/HELP` 覆盖 base RDB、增量 AOF、manifest、状态机、绝对产物路径、`backupdirname` 配置、ACL 子命令与普通/事务/脚本/HIMPORT 写捕获；当前同步快照且不复用 Redis 多段 AOF/硬链接实现
 - [x] List 第一批基础：`RPUSH`、`RPOP`、`LINDEX`、`LSET`、`LLEN`
 - [x] List 第二批：`LINSERT`、`LTRIM`、`LREM`
 - [x] List 第三批条件写入与定位：`LPUSHX`、`RPUSHX`、`LPOS`

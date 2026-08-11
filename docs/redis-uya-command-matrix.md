@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 382 | 265 | 152 | 212 | 7 | 3 | 8 |
+| Tier A: standalone core | 382 | 265 | 152 | 220 | 7 | 3 | 0 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 158 | 151 | 0 | 0 | 153 | 0 | 5 |
 
@@ -25,10 +25,10 @@
 | status | count |
 |--------|-------|
 | `full` | `153` |
-| `partial` | `219` |
+| `partial` | `227` |
 | `standalone-error` | `186` |
 | `alias` | `3` |
-| `deferred` | `13` |
+| `deferred` | `5` |
 
 ## Group counts
 
@@ -101,14 +101,14 @@
 | `arset` | `array` | `standalone-error` | `v1.1.0` | `-4` | `array` | `no` | `@write, @array, @fast` |
 | `asking` | `cluster` | `standalone-error` | `v1.1.0` | `1` | `-` | `no` | `@fast, @connection` |
 | `auth` | `connection` | `partial` | `-` | `-2` | `-` | `no` | `@fast, @connection` |
-| `backup` | `server` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@slow` |
-| `backup|abort` | `server` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `backup|cleanup` | `server` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `backup|help` | `server` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@slow` |
-| `backup|list` | `server` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `backup|seal` | `server` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `backup|start` | `server` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
-| `backup|status` | `server` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `backup` | `server` | `partial` | `-` | `2` | `-` | `no` | `@slow` |
+| `backup|abort` | `server` | `partial` | `-` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `backup|cleanup` | `server` | `partial` | `-` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `backup|help` | `server` | `partial` | `-` | `2` | `-` | `no` | `@slow` |
+| `backup|list` | `server` | `partial` | `-` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `backup|seal` | `server` | `partial` | `-` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `backup|start` | `server` | `partial` | `-` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
+| `backup|status` | `server` | `partial` | `-` | `2` | `-` | `no` | `@admin, @slow, @dangerous` |
 | `bf.add` | `bf` | `standalone-error` | `v1.1.0` | `3` | `bf` | `no` | `@bloom, @write, @slow` |
 | `bf.card` | `bf` | `standalone-error` | `v1.1.0` | `2` | `bf` | `no` | `@bloom, @read, @fast` |
 | `bf.exists` | `bf` | `standalone-error` | `v1.1.0` | `3` | `bf` | `no` | `@bloom, @read, @slow` |

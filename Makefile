@@ -55,6 +55,7 @@ test: verify-uya-source-contract
 test-integration: build
 	python3 tests/integration/smoke_tcp.py
 	python3 tests/integration/himport_smoke.py
+	python3 tests/integration/backup_smoke.py
 	python3 tests/integration/blocking_list_smoke.py
 	python3 tests/integration/blocking_zset_smoke.py
 	python3 tests/integration/idle_client.py

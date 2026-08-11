@@ -85,6 +85,15 @@ use src.persistence.rdb.rdb_build_path;
 use src.persistence.rdb.rdb_dump_object_at;
 use src.persistence.rdb.rdb_load_bytes_at;
 use src.persistence.rdb.rdb_save_file_at;
+use src.persistence.backup.BackupState;
+use src.persistence.backup.backup_status_name;
+use src.persistence.backup.backup_error_message;
+use src.persistence.backup.backup_start_at;
+use src.persistence.backup.backup_seal_at;
+use src.persistence.backup.backup_abort_at;
+use src.persistence.backup.backup_cleanup;
+use src.persistence.backup.backup_file_count;
+use src.persistence.backup.backup_file_at;
 use src.replication.state.ReplicationRole;
 use src.replication.state.ReplicationState;
 use src.replication.state.replication_role_name;
@@ -259,6 +268,7 @@ export struct CommandRuntimeInfo {
     lastsave_ms: u64,
     protocol_version: i32,
     no_touch_enabled: bool,
+    backup: &BackupState,
 }
 
 struct SortOptions {
@@ -337,6 +347,7 @@ export fn command_runtime_default() CommandRuntimeInfo {
         lastsave_ms: 0u64,
         protocol_version: 2,
         no_touch_enabled: false,
+        backup: null as &BackupState,
     };
 }
 
@@ -19065,6 +19076,143 @@ fn command_executor_scan_keys(engine: &Engine, command: &Command, now_ms: u64) C
     return reply;
 }
 
+fn command_executor_backup_append_bulk(raw: &Sds, value: &[byte]) !void {
+    try command_executor_info_append_u64(raw, &"$%u\r\n"[0: 5], value.len as u64);
+    try sds_cat(raw, value);
+    try sds_cat(raw, &"\r\n"[0: 2]);
+}
+
+fn command_executor_backup_status(runtime: &CommandRuntimeInfo) CommandReply {
+    if runtime.backup == null {
+        return command_executor_error(&"ERR backup state unavailable"[0: 28]);
+    }
+    var raw: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&raw);
+    }
+    if runtime.protocol_version == 3 {
+        _ = sds_cat(&raw, &"%4\r\n"[0: 4]) catch { return command_executor_oom(); };
+    } else {
+        _ = sds_cat(&raw, &"*8\r\n"[0: 4]) catch { return command_executor_oom(); };
+    }
+    _ = command_executor_backup_append_bulk(&raw, &"state"[0: 5]) catch { return command_executor_oom(); };
+    _ = command_executor_backup_append_bulk(&raw, backup_status_name(runtime.backup.status)) catch { return command_executor_oom(); };
+    _ = command_executor_backup_append_bulk(&raw, &"error"[0: 5]) catch { return command_executor_oom(); };
+    _ = command_executor_backup_append_bulk(&raw, backup_error_message(runtime.backup)) catch { return command_executor_oom(); };
+    _ = command_executor_backup_append_bulk(&raw, &"start_time"[0: 10]) catch { return command_executor_oom(); };
+    _ = command_executor_info_append_u64(&raw, &":%u\r\n"[0: 5], runtime.backup.start_time) catch { return command_executor_oom(); };
+    _ = command_executor_backup_append_bulk(&raw, &"end_time"[0: 8]) catch { return command_executor_oom(); };
+    _ = command_executor_info_append_u64(&raw, &":%u\r\n"[0: 5], runtime.backup.end_time) catch { return command_executor_oom(); };
+    return command_executor_owned_raw(raw.buf[0: raw.len]);
+}
+
+fn command_executor_backup_list(runtime: &CommandRuntimeInfo) CommandReply {
+    if runtime.backup == null {
+        return command_executor_error(&"ERR backup state unavailable"[0: 28]);
+    }
+    const reply_list: &RedisObject = create_list_object() catch {
+        return command_executor_oom();
+    };
+    const count: usize = backup_file_count(runtime.backup);
+    var index: usize = 0;
+    while index < count {
+        _ = list_object_push_tail(reply_list, backup_file_at(runtime.backup, index)) catch {
+            object_free(reply_list);
+            return command_executor_oom();
+        };
+        index = index + 1;
+    }
+    return command_executor_owned_array(reply_list);
+}
+
+fn command_executor_backup_help() CommandReply {
+    const reply_list: &RedisObject = create_list_object() catch {
+        return command_executor_oom();
+    };
+    _ = list_object_push_tail(reply_list, &"BACKUP START"[0: 12]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Create a base snapshot and begin incremental write capture."[0: 63]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"BACKUP SEAL"[0: 11]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Persist the incremental AOF and seal the backup."[0: 52]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"BACKUP ABORT"[0: 12]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Abort the active backup."[0: 28]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"BACKUP CLEANUP"[0: 14]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Remove backup artifacts and reset backup state."[0: 51]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"BACKUP STATUS"[0: 13]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Return backup state, error, and timestamps."[0: 47]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"BACKUP LIST"[0: 11]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Return immutable backup artifact paths."[0: 43]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"BACKUP HELP"[0: 11]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Print this help."[0: 20]) catch { object_free(reply_list); return command_executor_oom(); };
+    return command_executor_owned_array(reply_list);
+}
+
+fn command_executor_backup(engine: &Engine, runtime: &CommandRuntimeInfo, command: &Command, now_ms: u64) CommandReply {
+    if command.argc != 2 {
+        return command_executor_wrong_arity();
+    }
+    const subcommand: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    if command_executor_keyword_eq(subcommand, &"HELP"[0: 4]) {
+        return command_executor_backup_help();
+    }
+    if command_executor_keyword_eq(subcommand, &"STATUS"[0: 6]) {
+        return command_executor_backup_status(runtime);
+    }
+    if command_executor_keyword_eq(subcommand, &"LIST"[0: 4]) {
+        return command_executor_backup_list(runtime);
+    }
+    if runtime.backup == null {
+        return command_executor_error(&"ERR backup state unavailable"[0: 28]);
+    }
+    if command_executor_keyword_eq(subcommand, &"START"[0: 5]) {
+        const dirname: &[byte] = command_executor_cstring_slice(runtime.config.backupdirname[0: 256]);
+        _ = backup_start_at(runtime.backup, engine, dirname, now_ms) catch |err| {
+            if err == error.BackupInProgress {
+                return command_executor_error(&"ERR A backup is already in progress, ABORT it first"[0: 51]);
+            }
+            if err == error.BackupSealedExists {
+                return command_executor_error(&"ERR A sealed backup exists, CLEANUP it first"[0: 44]);
+            }
+            if err == error.BackupDirectoryNotEmpty {
+                return command_executor_error(&"ERR Backup directory is not empty"[0: 33]);
+            }
+            if err == error.BackupPathTooLong {
+                return command_executor_error(&"ERR Backup path too long"[0: 24]);
+            }
+            return command_executor_error(&"ERR Failed to start backup"[0: 26]);
+        };
+        return command_executor_simple(&"OK"[0: 2]);
+    }
+    if command_executor_keyword_eq(subcommand, &"SEAL"[0: 4]) {
+        _ = backup_seal_at(runtime.backup, now_ms) catch |err| {
+            if err == error.BackupNotReady {
+                return command_executor_error(&"ERR No backup ready to seal (must be in the incrementing state)"[0: 63]);
+            }
+            return command_executor_error(&"ERR Failed to seal backup"[0: 25]);
+        };
+        return command_executor_simple(&"OK"[0: 2]);
+    }
+    if command_executor_keyword_eq(subcommand, &"ABORT"[0: 5]) {
+        _ = backup_abort_at(runtime.backup, now_ms) catch {
+            return command_executor_error(&"ERR No backup in progress"[0: 25]);
+        };
+        return command_executor_simple(&"OK"[0: 2]);
+    }
+    if command_executor_keyword_eq(subcommand, &"CLEANUP"[0: 7]) {
+        _ = backup_cleanup(runtime.backup) catch |err| {
+            if err == error.BackupInProgressCleanup {
+                return command_executor_error(&"ERR Backup is in progress"[0: 25]);
+            }
+            return command_executor_error(&"ERR Failed to cleanup backup"[0: 28]);
+        };
+        return command_executor_simple(&"OK"[0: 2]);
+    }
+    return command_executor_error(&"ERR unknown subcommand or wrong number of arguments for 'backup' command"[0: 72]);
+}
+
 fn command_executor_save(engine: &Engine, runtime: &CommandRuntimeInfo, now_ms: u64) CommandReply {
     var path_buf: [byte: 512] = [];
     const dir: &[byte] = command_executor_cstring_slice(runtime.config.dir[0: 256]);
@@ -19546,6 +19694,12 @@ fn command_executor_config(runtime: &CommandRuntimeInfo, command: &Command) Comm
             return command_executor_oom();
         };
     }
+    if command_executor_keyword_match(pattern, &"backupdirname"[0: 13]) {
+        _ = command_executor_config_append_pair(reply_list, &"backupdirname"[0: 13], command_executor_cstring_slice(runtime.config.backupdirname[0: 256])) catch {
+            object_free(reply_list);
+            return command_executor_oom();
+        };
+    }
     if command_executor_keyword_match(pattern, &"replicaof"[0: 9]) {
         _ = command_executor_config_append_replicaof(reply_list, runtime) catch {
             object_free(reply_list);
@@ -19952,6 +20106,15 @@ fn command_executor_command_visible_latency_subcommand(name: &[byte]) bool {
 }
 
 fn command_executor_command_visible_subcommand(parent_name: &[byte], subcommand_name: &[byte]) bool {
+    if command_executor_slice_eq(parent_name, &"backup"[0: 6]) {
+        return command_executor_slice_eq(subcommand_name, &"abort"[0: 5]) ||
+            command_executor_slice_eq(subcommand_name, &"cleanup"[0: 7]) ||
+            command_executor_slice_eq(subcommand_name, &"help"[0: 4]) ||
+            command_executor_slice_eq(subcommand_name, &"list"[0: 4]) ||
+            command_executor_slice_eq(subcommand_name, &"seal"[0: 4]) ||
+            command_executor_slice_eq(subcommand_name, &"start"[0: 5]) ||
+            command_executor_slice_eq(subcommand_name, &"status"[0: 6]);
+    }
     if command_executor_slice_eq(parent_name, &"himport"[0: 7]) {
         return command_executor_slice_eq(subcommand_name, &"prepare"[0: 7]) ||
             command_executor_slice_eq(subcommand_name, &"set"[0: 3]) ||
@@ -21847,6 +22010,7 @@ export fn command_reply_cleanup(reply: &CommandReply) void {
 
 fn command_executor_latency_uses_subcommand_name(cmd_type: CommandType) bool {
     return cmd_type == CommandType.command_acl ||
+        cmd_type == CommandType.command_backup ||
         cmd_type == CommandType.command_cluster ||
         cmd_type == CommandType.command_command ||
         cmd_type == CommandType.command_config ||
@@ -22679,6 +22843,9 @@ fn command_execute_with_runtime_dispatch_at(engine: &Engine, runtime: &CommandRu
     }
     if command.info.cmd_type == CommandType.command_save {
         return command_executor_save(engine, runtime, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_backup {
+        return command_executor_backup(engine, runtime, command, now_ms);
     }
     if command.info.cmd_type == CommandType.command_bgsave {
         return command_executor_bgsave(engine, runtime, command, now_ms);

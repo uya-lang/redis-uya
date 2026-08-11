@@ -823,6 +823,27 @@ def run_smoke() -> None:
             if not isinstance(himport_docs, list) or b"himport" not in himport_docs or b"himport|set" not in himport_docs:
                 raise AssertionError(f"himport commands missing from COMMAND DOCS: {himport_docs!r}")
 
+            backup_names = [
+                b"backup",
+                b"backup|abort",
+                b"backup|cleanup",
+                b"backup|help",
+                b"backup|list",
+                b"backup|seal",
+                b"backup|start",
+                b"backup|status",
+            ]
+            backup_info = send_command(sock, b"COMMAND", b"INFO", *backup_names)
+            if (
+                not isinstance(backup_info, list)
+                or len(backup_info) != len(backup_names)
+                or any(not isinstance(item, list) or item[0] != name for item, name in zip(backup_info, backup_names))
+            ):
+                raise AssertionError(f"backup commands missing from COMMAND INFO: {backup_info!r}")
+            backup_docs = send_command(sock, b"COMMAND", b"DOCS", b"BACKUP", b"BACKUP|START")
+            if not isinstance(backup_docs, list) or b"backup" not in backup_docs or b"backup|start" not in backup_docs:
+                raise AssertionError(f"backup commands missing from COMMAND DOCS: {backup_docs!r}")
+
             stream_info = send_command(sock, b"COMMAND", b"INFO", b"XACK", b"XNACK", b"XADD", b"XCFGSET", b"XIDMPRECORD", b"XCLAIM", b"XDEL", b"XGROUP", b"XINFO", b"XLEN", b"XPENDING", b"XRANGE", b"XREVRANGE", b"XREAD", b"XTRIM")
             if (
                 not isinstance(stream_info, list)

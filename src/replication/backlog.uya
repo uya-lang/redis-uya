@@ -7,6 +7,7 @@ use src.persistence.aof.aof_append_command_result_to_sds_at;
 use src.storage.sds.Sds;
 use src.storage.sds.sds_empty;
 use src.storage.sds.sds_free;
+use src.storage.sds.sds_cat;
 use src.storage.sds.sds_discard_prefix;
 use src.storage.sds.sds_len;
 use src.util.crc64.crc64;
@@ -163,6 +164,17 @@ export fn replication_backlog_append_command_result_at(backlog: &ReplicationBack
     }
     const before_len: usize = sds_len(&backlog.history);
     try aof_append_command_result_to_sds_at(&backlog.history, command, raw, now_ms, reply);
+    const after_len: usize = sds_len(&backlog.history);
+    backlog.master_offset = backlog.master_offset + ((after_len - before_len) as u64);
+    replication_backlog_trim(backlog);
+}
+
+export fn replication_backlog_append_raw(backlog: &ReplicationBacklog, raw: &[byte]) !void {
+    if !backlog.active || raw.len == 0 {
+        return;
+    }
+    const before_len: usize = sds_len(&backlog.history);
+    try sds_cat(&backlog.history, raw);
     const after_len: usize = sds_len(&backlog.history);
     backlog.master_offset = backlog.master_offset + ((after_len - before_len) as u64);
     replication_backlog_trim(backlog);

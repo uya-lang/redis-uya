@@ -2724,3 +2724,86 @@ export fn test_connection_process_pubsub_introspection() !void {
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);
 }
+
+export fn test_connection_process_himport() !void {
+    reset_memory_stats_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var tx: ConnectionTransaction = connection_transaction_new();
+    var other_tx: ConnectionTransaction = connection_transaction_new();
+    defer {
+        connection_transaction_reset(&other_tx);
+        connection_transaction_reset(&tx);
+    }
+    var out: [byte: 512] = [];
+
+    const prepare: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*5\r\n$7\r\nHIMPORT\r\n$7\r\nPREPARE\r\n$2\r\nfs\r\n$1\r\nb\r\n$2\r\naa\r\n"[0: 53], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: prepare.response_len], &"+OK\r\n"[0: 5]));
+
+    const set_result: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*6\r\n$7\r\nHIMPORT\r\n$3\r\nSET\r\n$3\r\nkey\r\n$2\r\nfs\r\n$3\r\none\r\n$3\r\ntwo\r\n"[0: 61], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: set_result.response_len], &"+OK\r\n"[0: 5]));
+
+    const hget_b: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$4\r\nHGET\r\n$3\r\nkey\r\n$1\r\nb\r\n"[0: 30], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: hget_b.response_len], &"$3\r\none\r\n"[0: 9]));
+
+    const hget_aa: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$4\r\nHGET\r\n$3\r\nkey\r\n$2\r\naa\r\n"[0: 31], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: hget_aa.response_len], &"$3\r\ntwo\r\n"[0: 9]));
+
+    const duplicate: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*5\r\n$7\r\nHIMPORT\r\n$7\r\nPREPARE\r\n$3\r\ndup\r\n$1\r\na\r\n$1\r\na\r\n"[0: 53], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: duplicate.response_len], &"-ERR duplicate field name in fieldset\r\n"[0: 39]));
+
+    const unknown: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &other_tx, &"*5\r\n$7\r\nHIMPORT\r\n$3\r\nSET\r\n$1\r\nk\r\n$7\r\nmissing\r\n$1\r\nv\r\n"[0: 53], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: unknown.response_len], &"-ERR no such fieldset\r\n"[0: 23]));
+
+    const wrong_count: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*5\r\n$7\r\nHIMPORT\r\n$3\r\nSET\r\n$3\r\nkey\r\n$2\r\nfs\r\n$3\r\none\r\n"[0: 52], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: wrong_count.response_len], &"-ERR value count does not match fieldset field count\r\n"[0: 54]));
+
+    const replace_prepare: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$7\r\nHIMPORT\r\n$7\r\nPREPARE\r\n$2\r\nfs\r\n$1\r\nx\r\n"[0: 45], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: replace_prepare.response_len], &"+OK\r\n"[0: 5]));
+
+    const replace_set: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*5\r\n$7\r\nHIMPORT\r\n$3\r\nSET\r\n$3\r\nkey\r\n$2\r\nfs\r\n$3\r\nnew\r\n"[0: 52], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: replace_set.response_len], &"+OK\r\n"[0: 5]));
+
+    const removed_old: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$4\r\nHGET\r\n$3\r\nkey\r\n$2\r\naa\r\n"[0: 31], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: removed_old.response_len], &"$-1\r\n"[0: 5]));
+
+    const hget_x: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$4\r\nHGET\r\n$3\r\nkey\r\n$1\r\nx\r\n"[0: 30], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: hget_x.response_len], &"$3\r\nnew\r\n"[0: 9]));
+
+    const discard: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$7\r\nHIMPORT\r\n$7\r\nDISCARD\r\n$2\r\nfs\r\n"[0: 38], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: discard.response_len], &":1\r\n"[0: 4]));
+    const discard_missing: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$7\r\nHIMPORT\r\n$7\r\nDISCARD\r\n$2\r\nfs\r\n"[0: 38], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: discard_missing.response_len], &":0\r\n"[0: 4]));
+
+    _ = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$7\r\nHIMPORT\r\n$7\r\nPREPARE\r\n$2\r\nf1\r\n$1\r\na\r\n"[0: 45], &out[0], 512, 1000u64);
+    _ = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$7\r\nHIMPORT\r\n$7\r\nPREPARE\r\n$2\r\nf2\r\n$1\r\nb\r\n"[0: 45], &out[0], 512, 1000u64);
+    const discard_all: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$7\r\nHIMPORT\r\n$10\r\nDISCARDALL\r\n"[0: 34], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: discard_all.response_len], &":2\r\n"[0: 4]));
+
+    _ = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$7\r\nHIMPORT\r\n$7\r\nPREPARE\r\n$2\r\nfs\r\n$1\r\nx\r\n"[0: 45], &out[0], 512, 1000u64);
+    const reset: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$5\r\nRESET\r\n"[0: 15], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: reset.response_len], &"+RESET\r\n"[0: 8]));
+    const after_reset: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*5\r\n$7\r\nHIMPORT\r\n$3\r\nSET\r\n$3\r\nkey\r\n$2\r\nfs\r\n$3\r\nnew\r\n"[0: 52], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: after_reset.response_len], &"-ERR no such fieldset\r\n"[0: 23]));
+
+    const wrong_seed: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nSET\r\n$5\r\nwrong\r\n$1\r\nx\r\n"[0: 31], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: wrong_seed.response_len], &"+OK\r\n"[0: 5]));
+    const wrong_type: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*5\r\n$7\r\nHIMPORT\r\n$3\r\nSET\r\n$5\r\nwrong\r\n$7\r\nmissing\r\n$1\r\nv\r\n"[0: 57], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: wrong_type.response_len], &"-WRONGTYPE Operation against a key holding the wrong kind of value\r\n"[0: 68]));
+
+    const multi: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$5\r\nMULTI\r\n"[0: 15], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: multi.response_len], &"+OK\r\n"[0: 5]));
+    const queued_prepare: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$7\r\nHIMPORT\r\n$7\r\nPREPARE\r\n$3\r\ntxf\r\n$1\r\ny\r\n"[0: 46], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: queued_prepare.response_len], &"+QUEUED\r\n"[0: 9]));
+    const queued_set: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*5\r\n$7\r\nHIMPORT\r\n$3\r\nSET\r\n$4\r\ntkey\r\n$3\r\ntxf\r\n$3\r\nval\r\n"[0: 54], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: queued_set.response_len], &"+QUEUED\r\n"[0: 9]));
+    const exec: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$4\r\nEXEC\r\n"[0: 14], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: exec.response_len], &"*2\r\n+OK\r\n+OK\r\n"[0: 14]));
+    const tx_hget: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$4\r\nHGET\r\n$4\r\ntkey\r\n$1\r\ny\r\n"[0: 31], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: tx_hget.response_len], &"$3\r\nval\r\n"[0: 9]));
+
+    connection_transaction_reset(&other_tx);
+    connection_transaction_reset(&tx);
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}

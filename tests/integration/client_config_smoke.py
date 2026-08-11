@@ -416,8 +416,8 @@ def run_smoke() -> None:
                     for part in peer_after_discard.strip().split()
                     if b"=" in part
                 )
-                if peer_after_discard_fields.get(b"flags") != b"N":
-                    raise AssertionError(f"peer flags did not reset after DISCARD: {peer_after_discard!r}")
+                if peer_after_discard_fields.get(b"flags") != b"t":
+                    raise AssertionError(f"peer tracking flag did not survive DISCARD: {peer_after_discard!r}")
                 if peer_after_discard_fields.get(b"cmd") != b"discard":
                     raise AssertionError(f"peer command did not update after DISCARD: {peer_after_discard!r}")
                 if peer_after_discard_fields.get(b"multi") != b"-1":

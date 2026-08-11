@@ -796,6 +796,33 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"monitor command missing from COMMAND INFO: {monitor_info!r}")
 
+            himport_info = send_command(
+                sock,
+                b"COMMAND",
+                b"INFO",
+                b"HIMPORT",
+                b"HIMPORT|PREPARE",
+                b"HIMPORT|SET",
+                b"HIMPORT|DISCARD",
+                b"HIMPORT|DISCARDALL",
+            )
+            expected_himport_names = [
+                b"himport",
+                b"himport|prepare",
+                b"himport|set",
+                b"himport|discard",
+                b"himport|discardall",
+            ]
+            if (
+                not isinstance(himport_info, list)
+                or len(himport_info) != len(expected_himport_names)
+                or any(not isinstance(item, list) or item[0] != name for item, name in zip(himport_info, expected_himport_names))
+            ):
+                raise AssertionError(f"himport commands missing from COMMAND INFO: {himport_info!r}")
+            himport_docs = send_command(sock, b"COMMAND", b"DOCS", b"HIMPORT", b"HIMPORT|SET")
+            if not isinstance(himport_docs, list) or b"himport" not in himport_docs or b"himport|set" not in himport_docs:
+                raise AssertionError(f"himport commands missing from COMMAND DOCS: {himport_docs!r}")
+
             stream_info = send_command(sock, b"COMMAND", b"INFO", b"XACK", b"XNACK", b"XADD", b"XCFGSET", b"XIDMPRECORD", b"XCLAIM", b"XDEL", b"XGROUP", b"XINFO", b"XLEN", b"XPENDING", b"XRANGE", b"XREVRANGE", b"XREAD", b"XTRIM")
             if (
                 not isinstance(stream_info, list)
@@ -2166,6 +2193,22 @@ def run_smoke() -> None:
                 or b"insert" not in blmovem_getkeysandflags[1][1]
             ):
                 raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS BLMOVEM keys: {blmovem_getkeysandflags!r}")
+
+            himport_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"HIMPORT", b"SET", b"import-key", b"fieldset", b"value")
+            if himport_getkeys != [b"import-key"]:
+                raise AssertionError(f"unexpected COMMAND GETKEYS HIMPORT SET result: {himport_getkeys!r}")
+            himport_prepare_getkeys = send_command(sock, b"COMMAND", b"GETKEYS", b"HIMPORT", b"PREPARE", b"fieldset", b"field")
+            if himport_prepare_getkeys != []:
+                raise AssertionError(f"unexpected COMMAND GETKEYS HIMPORT PREPARE result: {himport_prepare_getkeys!r}")
+            himport_getkeysandflags = send_command(sock, b"COMMAND", b"GETKEYSANDFLAGS", b"HIMPORT", b"SET", b"import-key", b"fieldset", b"value")
+            if (
+                not isinstance(himport_getkeysandflags, list)
+                or len(himport_getkeysandflags) != 1
+                or himport_getkeysandflags[0][0] != b"import-key"
+                or b"OW" not in himport_getkeysandflags[0][1]
+                or b"update" not in himport_getkeysandflags[0][1]
+            ):
+                raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS HIMPORT SET result: {himport_getkeysandflags!r}")
 
             blmpop_getkeysandflags = send_command(sock, b"COMMAND", b"GETKEYSANDFLAGS", b"BLMPOP", b"1", b"2", b"a", b"b", b"RIGHT", b"COUNT", b"2")
             if not isinstance(blmpop_getkeysandflags, list) or len(blmpop_getkeysandflags) != 2:

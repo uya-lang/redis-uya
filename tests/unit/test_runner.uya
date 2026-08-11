@@ -86,6 +86,7 @@ use tests.unit.network_protocol_test.test_resp2_batch_incomplete_tail;
 use tests.unit.network_protocol_test.test_resp2_batch_invalid_tail_frees_prefix;
 use tests.unit.network_protocol_test.test_resp3_batch_multiple_values;
 use tests.unit.replication_backlog_test.test_replication_backlog_append_and_trim;
+use tests.unit.replication_backlog_test.test_replication_backlog_append_raw;
 use tests.unit.command_router_test.test_command_router_lookup_and_case;
 use tests.unit.command_router_test.test_command_router_arity_validation;
 use tests.unit.command_router_test.test_command_router_unknown_command;
@@ -198,6 +199,7 @@ use tests.unit.network_connection_test.test_connection_process_command_docs_all_
 use tests.unit.network_connection_test.test_connection_process_auth_requirepass_shutdown;
 use tests.unit.network_connection_test.test_connection_process_pubsub_commands;
 use tests.unit.network_connection_test.test_connection_process_pubsub_introspection;
+use tests.unit.network_connection_test.test_connection_process_himport;
 use tests.unit.network_connection_test.test_connection_process_error_paths;
 use tests.unit.persistence_aof_test.test_aof_connection_append_and_replay_set;
 use tests.unit.persistence_aof_test.test_aof_replay_set_then_del;
@@ -600,6 +602,10 @@ export fn main() i32 {
     _ = test_replication_backlog_append_and_trim() catch { printf("[FAIL] replication/backlog\n" as *byte); failed = failed + 1; };
     if failed == before_repl_backlog { printf("[PASS] replication/backlog\n" as *byte); }
 
+    const before_repl_backlog_raw: i32 = failed;
+    _ = test_replication_backlog_append_raw() catch { printf("[FAIL] replication/backlog_raw\n" as *byte); failed = failed + 1; };
+    if failed == before_repl_backlog_raw { printf("[PASS] replication/backlog_raw\n" as *byte); }
+
     const before_exec_ping: i32 = failed;
     _ = test_command_ping_and_info() catch { printf("[FAIL] command_executor/ping_info\n" as *byte); failed = failed + 1; };
     if failed == before_exec_ping { printf("[PASS] command_executor/ping_info\n" as *byte); }
@@ -959,6 +965,10 @@ export fn main() i32 {
     const before_conn_blocking_list: i32 = failed;
     _ = test_connection_process_blocking_list_commands() catch { printf("[FAIL] network_connection/blocking_list\n" as *byte); failed = failed + 1; };
     if failed == before_conn_blocking_list { printf("[PASS] network_connection/blocking_list\n" as *byte); }
+
+    const before_conn_himport: i32 = failed;
+    _ = test_connection_process_himport() catch { printf("[FAIL] network_connection/himport\n" as *byte); failed = failed + 1; };
+    if failed == before_conn_himport { printf("[PASS] network_connection/himport\n" as *byte); }
 
     const before_conn_touch_unlink: i32 = failed;
     _ = test_connection_process_touch_unlink() catch { printf("[FAIL] network_connection/touch_unlink\n" as *byte); failed = failed + 1; };

@@ -842,6 +842,34 @@ HSCAN key cursor [COUNT count]
 - 当前实现支持 `COUNT`
 - key 不存在时返回 cursor `0` 和空 Array
 
+### `HIMPORT`
+
+格式：
+
+```text
+HIMPORT PREPARE fieldset-name field [field ...]
+HIMPORT SET key fieldset-name value [value ...]
+HIMPORT DISCARD fieldset-name
+HIMPORT DISCARDALL
+```
+
+返回：
+
+- `PREPARE`：成功返回 `OK`；同名 fieldset 会被新定义完整替换，重复 field 返回 `ERR duplicate field name in fieldset`
+- `SET`：成功返回 `OK`；value 数量必须与 fieldset 中的 field 数量完全一致
+- `DISCARD`：删除成功返回 `1`，fieldset 不存在返回 `0`
+- `DISCARDALL`：返回当前连接被删除的 fieldset 数量
+
+说明：
+
+- fieldset 是连接级会话状态，只能被创建它的连接使用；连接关闭或 `RESET` 会清理，普通 `MULTI/EXEC/DISCARD` 不会清理
+- `SET` 按 `PREPARE` 参数顺序把 value 映射到 field，并完整替换目标 hash；旧 field 和 key TTL 都会被清除
+- 目标 key 已存在且不是 hash 时优先返回 `WRONGTYPE`；fieldset 不存在返回 `ERR no such fieldset`
+- `HIMPORT SET` 接入写命令、maxmemory、只读副本、ACL category、子命令规则和 key pattern 检查；其余子命令不申请写权限
+- AOF、AOF rewrite 增量缓冲和 master replication backlog 不记录连接级 `HIMPORT` 请求，而是传播可独立重放的 `RESTORE key 0 payload REPLACE`
+- `COMMAND INFO/DOCS/GETKEYS/GETKEYSANDFLAGS` 暴露 parent 与四个子命令；`SET` 的动态 key flags 为 `OW|update`
+- 当前脚本执行器仍是受限 single-call subset，未开放脚本内 `HIMPORT`
+
 ### `RPUSH`
 
 格式：

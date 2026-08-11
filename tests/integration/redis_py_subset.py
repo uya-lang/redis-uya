@@ -718,6 +718,18 @@ class RedisPySubsetClient:
         assert isinstance(result, list)
         return result
 
+    def himport_prepare(self, name: str, *fields: str) -> bool:
+        return self._request(b"HIMPORT", b"PREPARE", name.encode(), *(field.encode() for field in fields)) == "OK"
+
+    def himport_set(self, key: str, name: str, *values: str) -> bool:
+        return self._request(b"HIMPORT", b"SET", key.encode(), name.encode(), *(value.encode() for value in values)) == "OK"
+
+    def himport_discard(self, name: str) -> int:
+        return int(self._request(b"HIMPORT", b"DISCARD", name.encode()))
+
+    def himport_discardall(self) -> int:
+        return int(self._request(b"HIMPORT", b"DISCARDALL"))
+
     def hrandfield(self, key: str, count: int | None = None, withvalues: bool = False) -> bytes | list[bytes] | None:
         parts: list[bytes] = [b"HRANDFIELD", key.encode()]
         if count is not None:
@@ -2579,6 +2591,14 @@ def run_smoke() -> None:
 
             assert client.hset("hash", "field", "value") == 1
             assert client.hget("hash", "field") == b"value"
+            assert client.himport_prepare("import-fields", "short", "long-field")
+            assert client.himport_set("import-hash", "import-fields", "one", "two")
+            assert client.hget("import-hash", "short") == b"one"
+            assert client.hget("import-hash", "long-field") == b"two"
+            assert client.himport_discard("import-fields") == 1
+            assert client.himport_prepare("import-a", "field")
+            assert client.himport_prepare("import-b", "field")
+            assert client.himport_discardall() == 2
             assert client.hincrby("hash", "counter", 2) == 2
             assert client.hincrbyfloat("hash", "ratio", "1.5") == b"1.5"
             assert set(client.hkeys("hash")) == {b"counter", b"field", b"ratio"}
@@ -2899,7 +2919,7 @@ def run_smoke() -> None:
             assert client.exists("touchme") == 0
 
             keys_all = client.keys("*")
-            if keys_all != [b"hash", b"key", b"list", b"set", b"zset"]:
+            if keys_all != [b"hash", b"import-hash", b"key", b"list", b"set", b"zset"]:
                 raise AssertionError(f"unexpected KEYS * result: {keys_all!r}")
             keys_k = client.keys("k*")
             if keys_k != [b"key"]:
@@ -2908,7 +2928,7 @@ def run_smoke() -> None:
             cursor, keys = client.scan(0, count=16)
             if cursor != 0:
                 raise AssertionError(f"expected final scan cursor 0, got {cursor}")
-            expected_keys = {b"hash", b"key", b"list", b"set", b"zset"}
+            expected_keys = {b"hash", b"import-hash", b"key", b"list", b"set", b"zset"}
             if set(keys) != expected_keys:
                 raise AssertionError(f"unexpected scan keys: {keys!r}")
 

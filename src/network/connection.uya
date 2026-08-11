@@ -6,6 +6,7 @@ use src.command.executor.CommandRuntimeInfo;
 use src.command.executor.command_runtime_default;
 use src.command.executor.command_execute_at;
 use src.command.executor.command_execute_with_runtime_at;
+use src.command.executor.command_prepare_maxmemory_at;
 use src.command.executor.command_reply_cleanup;
 use src.command.catalog_generated_base.CommandCatalogEntry;
 use src.command.catalog.command_catalog_has_acl_category;
@@ -36,17 +37,23 @@ use src.network.protocol.resp_parse_value_free;
 use src.persistence.aof.AofWriter;
 use src.persistence.aof.aof_append_command_result_at;
 use src.persistence.aof.aof_append_command_result_to_sds_at;
+use src.persistence.aof.aof_append_raw;
 use src.persistence.rdb.rdb_dump_object_at;
 use src.replication.backlog.ReplicationBacklog;
 use src.replication.backlog.replication_backlog_append_command_result_at;
+use src.replication.backlog.replication_backlog_append_raw;
 use src.replication.backlog.replication_backlog_slice_from;
 use src.replication.state.ReplicationRole;
 use src.storage.engine.Engine;
+use src.storage.engine.engine_new;
+use src.storage.engine.engine_free;
 use src.storage.engine.engine_watch_register_client;
 use src.storage.engine.engine_watch_unregister_client;
 use src.storage.engine.engine_watch_version;
 use src.storage.engine.lookup_key_at;
 use src.storage.engine.lookup_key_no_touch_at;
+use src.storage.engine.set_key_at;
+use src.storage.engine.clear_key_expire;
 use src.storage.dict.Dict;
 use src.storage.dict.DictIterator;
 use src.storage.dict.DictEntry;
@@ -64,9 +71,12 @@ use src.storage.object.create_list_object;
 use src.storage.object.create_hash_object;
 use src.storage.object.hash_object_set_field;
 use src.storage.object.hash_object_get_field;
+use src.storage.object.hash_object_delete_field;
+use src.storage.object.hash_object_len;
 use src.storage.object.list_object_push_tail;
 use src.storage.object.list_node_layout_size;
 use src.storage.object.object_free;
+use src.storage.object.object_clone;
 use src.storage.object.object_layout_size;
 use src.storage.object.zset_object_len;
 use src.storage.sds.Sds;
@@ -168,6 +178,7 @@ export struct ConnectionTransaction {
     tracking_optout: bool,
     tracking_noloop: bool,
     tracking_prefixes: &RedisObject,
+    himport_fieldsets: &RedisObject,
     reply_off_enabled: bool,
     reply_skip_next: bool,
     caching_enabled: bool,
@@ -462,6 +473,7 @@ fn connection_transaction_empty() ConnectionTransaction {
         tracking_optout: false,
         tracking_noloop: false,
         tracking_prefixes: null as &RedisObject,
+        himport_fieldsets: null as &RedisObject,
         reply_off_enabled: false,
         reply_skip_next: false,
         caching_enabled: false,
@@ -496,6 +508,10 @@ export fn connection_transaction_reset(tx: &ConnectionTransaction) void {
     }
     connection_transaction_clear_watches(tx);
     connection_client_tracking_clear(tx);
+    if tx.himport_fieldsets != null {
+        object_free(tx.himport_fieldsets);
+        tx.himport_fieldsets = null as &RedisObject;
+    }
     tx.active = false;
     tx.queue = null as &RedisObject;
     tx.queue_count = 0;
@@ -529,6 +545,16 @@ fn connection_transaction_clear_watches(tx: &ConnectionTransaction) void {
     }
     tx.watch_registered = false;
     tx.watch_engine = null as &Engine;
+}
+
+fn connection_transaction_finish(tx: &ConnectionTransaction) void {
+    if tx == null {
+        return;
+    }
+    connection_transaction_clear_queue(tx);
+    connection_transaction_clear_watches(tx);
+    tx.blocking_active = false;
+    tx.blocking_deadline_ms = 0u64;
 }
 
 fn connection_dummy_resp_parse_result() RespParseResult {
@@ -867,6 +893,7 @@ fn connection_client_total_memory(tx: &ConnectionTransaction) usize {
     total = total + connection_client_owned_object_memory(tx.queue);
     total = total + connection_client_owned_object_memory(tx.watched);
     total = total + connection_client_owned_object_memory(tx.tracking_prefixes);
+    total = total + connection_client_owned_object_memory(tx.himport_fieldsets);
     return total;
 }
 
@@ -2941,17 +2968,61 @@ fn connection_acl_named_user_command_denied(user: &ConnectionAclUser, name: &[by
 
 fn connection_acl_user_command_denied(username: &[byte], name: &[byte]) bool {
     if connection_keyword_eq(username, &"default"[0: 7]) {
-        return connection_acl_default_command_denied(name);
+        if connection_acl_default_command_denied(name) {
+            return true;
+        }
+        if connection_keyword_eq(name, &"himport|prepare"[0: 15]) ||
+            connection_keyword_eq(name, &"himport|set"[0: 11]) ||
+            connection_keyword_eq(name, &"himport|discard"[0: 15]) ||
+            connection_keyword_eq(name, &"himport|discardall"[0: 18]) {
+            return connection_acl_default_command_denied(&"himport"[0: 7]);
+        }
+        return false;
     }
     const slot: i32 = connection_acl_user_find(username);
     if slot < 0 || slot >= CONNECTION_ACL_USER_MAX as i32 {
         return false;
     }
     const slot_index: usize = slot as usize;
-    if slot_index >= CONNECTION_ACL_USER_MAX || !connection_acl_users[slot_index].active {
+    if slot_index >= CONNECTION_ACL_USER_MAX {
         return false;
     }
-    return connection_acl_named_user_command_denied(&connection_acl_users[slot_index], name);
+    const user: &ConnectionAclUser = &connection_acl_users[slot_index];
+    if !user.active {
+        return false;
+    }
+    if connection_acl_named_user_command_denied(user, name) {
+        return true;
+    }
+    if connection_keyword_eq(name, &"himport|prepare"[0: 15]) ||
+        connection_keyword_eq(name, &"himport|set"[0: 11]) ||
+        connection_keyword_eq(name, &"himport|discard"[0: 15]) ||
+        connection_keyword_eq(name, &"himport|discardall"[0: 18]) {
+        return connection_acl_named_user_command_denied(user, &"himport"[0: 7]);
+    }
+    return false;
+}
+
+fn connection_acl_effective_command_name(command: &Command) &[byte] {
+    if command.info.cmd_type != CommandType.command_himport || command.argc < 2 {
+        return command.info.name;
+    }
+    const subcommand: &[byte] = command_arg_data(command, 1) catch {
+        return command.info.name;
+    };
+    if connection_keyword_eq(subcommand, &"PREPARE"[0: 7]) {
+        return &"himport|prepare"[0: 15];
+    }
+    if connection_keyword_eq(subcommand, &"SET"[0: 3]) {
+        return &"himport|set"[0: 11];
+    }
+    if connection_keyword_eq(subcommand, &"DISCARD"[0: 7]) {
+        return &"himport|discard"[0: 15];
+    }
+    if connection_keyword_eq(subcommand, &"DISCARDALL"[0: 10]) {
+        return &"himport|discardall"[0: 18];
+    }
+    return command.info.name;
 }
 
 export fn connection_acl_denied_command_count_for_test(username: &[byte]) usize {
@@ -3126,6 +3197,21 @@ fn connection_acl_count_range_keys(info: &CommandInfo, full_argc: usize) usize {
 }
 
 fn connection_acl_user_command_key_denied(username: &[byte], info: &CommandInfo, command: &Command, arg_offset: usize, full_argc: usize) bool {
+    if info.cmd_type == CommandType.command_himport {
+        if connection_acl_user_allkeys(username) || full_argc < 3 {
+            return false;
+        }
+        const subcommand: &[byte] = command_arg_data(command, arg_offset + 1) catch {
+            return false;
+        };
+        if !connection_keyword_eq(subcommand, &"SET"[0: 3]) {
+            return false;
+        }
+        const key: &[byte] = command_arg_data(command, arg_offset + 2) catch {
+            return false;
+        };
+        return !connection_acl_user_key_allowed(username, key);
+    }
     const key_count: usize = connection_acl_count_range_keys(info, full_argc);
     if key_count == 0 {
         return false;
@@ -3622,6 +3708,25 @@ fn connection_acl_setuser_mutating_modifier(modifier: &[byte]) bool {
     return false;
 }
 
+fn connection_acl_rule_command_name(router: &CommandRouter, name: &[byte]) !&[byte] {
+    const info: CommandInfo = command_router_lookup(router, name) catch {
+        if connection_keyword_eq(name, &"himport|prepare"[0: 15]) {
+            return &"himport|prepare"[0: 15];
+        }
+        if connection_keyword_eq(name, &"himport|set"[0: 11]) {
+            return &"himport|set"[0: 11];
+        }
+        if connection_keyword_eq(name, &"himport|discard"[0: 15]) {
+            return &"himport|discard"[0: 15];
+        }
+        if connection_keyword_eq(name, &"himport|discardall"[0: 18]) {
+            return &"himport|discardall"[0: 18];
+        }
+        return error.CommandUnknown;
+    };
+    return info.name;
+}
+
 fn connection_acl_setuser_command_modifier(router: &CommandRouter, modifier: &[byte]) CommandReply {
     if modifier.len <= 1 {
         return connection_acl_setuser_modifier_error(modifier, &"': Syntax error"[0: 15]);
@@ -3650,15 +3755,15 @@ fn connection_acl_setuser_command_modifier(router: &CommandRouter, modifier: &[b
         }
         return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
     }
-    const info: CommandInfo = command_router_lookup(router, command_name) catch {
+    const normalized_name: &[byte] = connection_acl_rule_command_name(router, command_name) catch {
         return connection_acl_setuser_modifier_error(modifier, &"': Unknown command or category name in ACL"[0: 42]);
     };
     if op == 45 as byte {
-        _ = connection_acl_default_denied_add(info.name) catch {
+        _ = connection_acl_default_denied_add(normalized_name) catch {
             return connection_error_reply(&"ERR ACL SETUSER redis-uya partial command deny list is full"[0: 59]);
         };
     } else {
-        connection_acl_default_denied_remove(info.name);
+        connection_acl_default_denied_remove(normalized_name);
     }
     return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
 }
@@ -3681,7 +3786,7 @@ fn connection_acl_setuser_named_allows_modifier(router: &CommandRouter, modifier
             const category: &[byte] = command_name[1: command_name.len - 1];
             return connection_acl_category_known(category);
         }
-        _ = command_router_lookup(router, command_name) catch {
+        _ = connection_acl_rule_command_name(router, command_name) catch {
             return false;
         };
         return true;
@@ -3712,15 +3817,15 @@ fn connection_acl_setuser_named_command_modifier(router: &CommandRouter, user: &
         }
         return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
     }
-    const info: CommandInfo = command_router_lookup(router, command_name) catch {
+    const normalized_name: &[byte] = connection_acl_rule_command_name(router, command_name) catch {
         return connection_acl_setuser_modifier_error(modifier, &"': Unknown command or category name in ACL"[0: 42]);
     };
     if op == 45 as byte {
-        _ = connection_acl_user_denied_command_add(user, info.name) catch {
+        _ = connection_acl_user_denied_command_add(user, normalized_name) catch {
             return connection_error_reply(&"ERR ACL SETUSER redis-uya partial named user command deny list is full"[0: 70]);
         };
     } else {
-        connection_acl_user_denied_command_remove(user, info.name);
+        connection_acl_user_denied_command_remove(user, normalized_name);
     }
     return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
 }
@@ -4862,7 +4967,8 @@ fn connection_script_command_allowed(cmd_type: CommandType) bool {
         cmd_type == CommandType.command_eval_ro ||
         cmd_type == CommandType.command_evalsha_ro ||
         cmd_type == CommandType.command_script ||
-        cmd_type == CommandType.command_function {
+        cmd_type == CommandType.command_function ||
+        cmd_type == CommandType.command_himport {
         return false;
     }
     return true;
@@ -4907,6 +5013,10 @@ fn connection_reset_state(tx: &ConnectionTransaction) void {
     tx.authenticated = false;
     connection_clear_authenticated_user(tx);
     connection_client_tracking_clear(tx);
+    if tx.himport_fieldsets != null {
+        object_free(tx.himport_fieldsets);
+        tx.himport_fieldsets = null as &RedisObject;
+    }
     tx.reply_off_enabled = false;
     tx.reply_skip_next = false;
     tx.caching_enabled = false;
@@ -5996,6 +6106,328 @@ fn connection_client_tracking_clear(tx: &ConnectionTransaction) void {
         object_free(tx.tracking_prefixes);
     }
     tx.tracking_prefixes = null as &RedisObject;
+}
+
+fn connection_himport_wrongtype() CommandReply {
+    return connection_error_reply(&"WRONGTYPE Operation against a key holding the wrong kind of value"[0: 65]);
+}
+
+fn connection_himport_wrong_arity(subcommand: &[byte]) CommandReply {
+    if connection_keyword_eq(subcommand, &"PREPARE"[0: 7]) {
+        return connection_error_reply(&"ERR wrong number of arguments for 'himport|prepare' command"[0: 59]);
+    }
+    if connection_keyword_eq(subcommand, &"SET"[0: 3]) {
+        return connection_error_reply(&"ERR wrong number of arguments for 'himport|set' command"[0: 55]);
+    }
+    if connection_keyword_eq(subcommand, &"DISCARD"[0: 7]) {
+        return connection_error_reply(&"ERR wrong number of arguments for 'himport|discard' command"[0: 59]);
+    }
+    if connection_keyword_eq(subcommand, &"DISCARDALL"[0: 10]) {
+        return connection_error_reply(&"ERR wrong number of arguments for 'himport|discardall' command"[0: 62]);
+    }
+    return connection_error_reply(&"ERR unknown HIMPORT subcommand"[0: 30]);
+}
+
+fn connection_himport_append_u32(buf: &Sds, value: usize) !void {
+    if value > 0xffffffffusize {
+        return error.ConnectionInputTooLarge;
+    }
+    var encoded: [byte: 4] = [];
+    _ = write_u32_be(encoded[0: 4], value as u32);
+    try sds_cat(buf, encoded[0: 4]);
+}
+
+fn connection_himport_prepare(tx: &ConnectionTransaction, command: &Command) CommandReply {
+    if command.argc < 4 {
+        return connection_himport_wrong_arity(&"PREPARE"[0: 7]);
+    }
+    const name: &[byte] = command_arg_data(command, 2) catch {
+        return connection_himport_wrong_arity(&"PREPARE"[0: 7]);
+    };
+    const seen: &RedisObject = create_hash_object() catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    defer {
+        object_free(seen);
+    }
+    var field_index: usize = 3;
+    while field_index < command.argc {
+        const field: &[byte] = command_arg_data(command, field_index) catch {
+            return connection_himport_wrong_arity(&"PREPARE"[0: 7]);
+        };
+        const inserted: bool = hash_object_set_field(seen, field, connection_reply_empty_slice()) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+        if !inserted {
+            return connection_error_reply(&"ERR duplicate field name in fieldset"[0: 36]);
+        }
+        field_index = field_index + 1;
+    }
+
+    var encoded: Sds = sds_empty() catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    defer {
+        sds_free(&encoded);
+    }
+    _ = connection_himport_append_u32(&encoded, command.argc - 3) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    field_index = 3;
+    while field_index < command.argc {
+        const field: &[byte] = command_arg_data(command, field_index) catch {
+            return connection_himport_wrong_arity(&"PREPARE"[0: 7]);
+        };
+        _ = connection_himport_append_u32(&encoded, field.len) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+        _ = sds_cat(&encoded, field) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+        field_index = field_index + 1;
+    }
+
+    if tx.himport_fieldsets == null {
+        tx.himport_fieldsets = create_hash_object() catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+    }
+    _ = hash_object_set_field(tx.himport_fieldsets, name, encoded.buf[0: encoded.len]) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+}
+
+fn connection_himport_restore_raw(key: &[byte], obj: &RedisObject, now_ms: u64) !Sds {
+    var temp_engine: Engine = engine_new();
+    defer {
+        engine_free(&temp_engine);
+    }
+    const clone: &RedisObject = try object_clone(obj);
+    _ = set_key_at(&temp_engine, key, clone, now_ms) catch |err| {
+        object_free(clone);
+        return err;
+    };
+    const payload: &RedisObject = try rdb_dump_object_at(&temp_engine, now_ms);
+    defer {
+        object_free(payload);
+    }
+
+    var raw: Sds = sds_empty() catch {
+        return error.AllocOutOfMemory;
+    };
+    errdefer {
+        sds_free(&raw);
+    }
+    try connection_sds_append_resp_array_header(&raw, 5);
+    try connection_sds_append_resp_bulk(&raw, &"RESTORE"[0: 7]);
+    try connection_sds_append_resp_bulk(&raw, key);
+    try connection_sds_append_resp_bulk(&raw, &"0"[0: 1]);
+    try connection_sds_append_resp_bulk(&raw, payload.value.buf[0: payload.value.len]);
+    try connection_sds_append_resp_bulk(&raw, &"REPLACE"[0: 7]);
+    return raw;
+}
+
+fn connection_himport_lookup_key_or_null(engine: &Engine, key: &[byte], now_ms: u64) &RedisObject {
+    return lookup_key_at(engine, key, now_ms) catch {
+        return null as &RedisObject;
+    };
+}
+
+fn connection_himport_propagate(
+    runtime: &CommandRuntimeInfo,
+    aof: &AofWriter,
+    rewrite_buf: &Sds,
+    backlog: &ReplicationBacklog,
+    raw: &Sds,
+    rewrite_failed: &bool,
+) !void {
+    if aof != null && aof.enabled {
+        try aof_append_raw(aof, raw.buf[0: raw.len]);
+    }
+    if rewrite_buf != null && runtime.aof_rewrite_in_progress {
+        _ = sds_cat(rewrite_buf, raw.buf[0: raw.len]) catch {
+            if rewrite_failed != null {
+                *rewrite_failed = true;
+            }
+        };
+    }
+    if backlog != null && backlog.active && runtime.replication_role == ReplicationRole.role_master {
+        _ = replication_backlog_append_raw(backlog, raw.buf[0: raw.len]) catch {};
+    }
+}
+
+fn connection_himport_set(
+    engine: &Engine,
+    runtime: &CommandRuntimeInfo,
+    aof: &AofWriter,
+    rewrite_buf: &Sds,
+    backlog: &ReplicationBacklog,
+    tx: &ConnectionTransaction,
+    command: &Command,
+    now_ms: u64,
+    rewrite_failed: &bool,
+) CommandReply {
+    if command.argc < 5 {
+        return connection_himport_wrong_arity(&"SET"[0: 3]);
+    }
+    const key: &[byte] = command_arg_data(command, 2) catch {
+        return connection_himport_wrong_arity(&"SET"[0: 3]);
+    };
+    const existing: &RedisObject = connection_himport_lookup_key_or_null(engine, key, now_ms);
+    if existing != null && existing.obj_type != ObjectType.object_hash {
+        return connection_himport_wrongtype();
+    }
+    const fieldset_name: &[byte] = command_arg_data(command, 3) catch {
+        return connection_himport_wrong_arity(&"SET"[0: 3]);
+    };
+    if tx.himport_fieldsets == null {
+        return connection_error_reply(&"ERR no such fieldset"[0: 20]);
+    }
+    const fieldset: &RedisObject = hash_object_get_field(tx.himport_fieldsets, fieldset_name) catch {
+        return connection_error_reply(&"ERR no such fieldset"[0: 20]);
+    };
+    const encoded: &[byte] = fieldset.value.buf[0: fieldset.value.len];
+    if encoded.len < 4 {
+        return connection_error_reply(&"ERR invalid fieldset"[0: 20]);
+    }
+    const field_count: usize = read_u32_be(encoded[0: 4]) as usize;
+    if command.argc - 4 != field_count {
+        return connection_error_reply(&"ERR value count does not match fieldset field count"[0: 51]);
+    }
+    if !command_prepare_maxmemory_at(engine, runtime, command, now_ms) {
+        return connection_error_reply(&"OOM command not allowed when used memory > 'maxmemory'"[0: 54]);
+    }
+
+    const hash: &RedisObject = create_hash_object() catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    var hash_owned: bool = true;
+    defer {
+        if hash_owned {
+            object_free(hash);
+        }
+    }
+    var pos: usize = 4;
+    var field_index: usize = 0;
+    while field_index < field_count {
+        if pos + 4 > encoded.len {
+            return connection_error_reply(&"ERR invalid fieldset"[0: 20]);
+        }
+        const field_len: usize = read_u32_be(encoded[pos: 4]) as usize;
+        pos = pos + 4;
+        if field_len > encoded.len - pos {
+            return connection_error_reply(&"ERR invalid fieldset"[0: 20]);
+        }
+        const value: &[byte] = command_arg_data(command, 4 + field_index) catch {
+            return connection_himport_wrong_arity(&"SET"[0: 3]);
+        };
+        _ = hash_object_set_field(hash, encoded[pos: field_len], value) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+        pos = pos + field_len;
+        field_index = field_index + 1;
+    }
+    if pos != encoded.len {
+        return connection_error_reply(&"ERR invalid fieldset"[0: 20]);
+    }
+
+    const needs_propagation: bool = (aof != null && aof.enabled) ||
+        (rewrite_buf != null && runtime.aof_rewrite_in_progress) ||
+        (backlog != null && backlog.active && runtime.replication_role == ReplicationRole.role_master);
+    var restore_raw: Sds = Sds{ buf: (null as &byte)[0: 0], len: 0, alloc: 0 };
+    if needs_propagation {
+        restore_raw = connection_himport_restore_raw(key, hash, now_ms) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+    }
+    defer {
+        if restore_raw.buf.ptr != null {
+            sds_free(&restore_raw);
+        }
+    }
+
+    _ = set_key_at(engine, key, hash, now_ms) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    hash_owned = false;
+    _ = clear_key_expire(engine, key);
+    if needs_propagation {
+        _ = connection_himport_propagate(runtime, aof, rewrite_buf, backlog, &restore_raw, rewrite_failed) catch {
+            return connection_error_reply(&"ERR AOF append failed"[0: 21]);
+        };
+    }
+    return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+}
+
+fn connection_himport_discard(tx: &ConnectionTransaction, command: &Command) CommandReply {
+    if command.argc != 3 {
+        return connection_himport_wrong_arity(&"DISCARD"[0: 7]);
+    }
+    if tx.himport_fieldsets == null {
+        return connection_make_reply(CommandReplyType.reply_integer, connection_reply_empty_slice(), 0);
+    }
+    const name: &[byte] = command_arg_data(command, 2) catch {
+        return connection_himport_wrong_arity(&"DISCARD"[0: 7]);
+    };
+    const removed: bool = hash_object_delete_field(tx.himport_fieldsets, name) catch {
+        return connection_himport_wrongtype();
+    };
+    const remaining: usize = hash_object_len(tx.himport_fieldsets) catch {
+        return connection_himport_wrongtype();
+    };
+    if remaining == 0 {
+        object_free(tx.himport_fieldsets);
+        tx.himport_fieldsets = null as &RedisObject;
+    }
+    return connection_make_reply(CommandReplyType.reply_integer, connection_reply_empty_slice(), removed as i64);
+}
+
+fn connection_himport_discardall(tx: &ConnectionTransaction, command: &Command) CommandReply {
+    if command.argc != 2 {
+        return connection_himport_wrong_arity(&"DISCARDALL"[0: 10]);
+    }
+    if tx.himport_fieldsets == null {
+        return connection_make_reply(CommandReplyType.reply_integer, connection_reply_empty_slice(), 0);
+    }
+    const removed: usize = hash_object_len(tx.himport_fieldsets) catch {
+        return connection_himport_wrongtype();
+    };
+    object_free(tx.himport_fieldsets);
+    tx.himport_fieldsets = null as &RedisObject;
+    return connection_make_reply(CommandReplyType.reply_integer, connection_reply_empty_slice(), removed as i64);
+}
+
+fn connection_handle_himport_at(
+    engine: &Engine,
+    runtime: &CommandRuntimeInfo,
+    aof: &AofWriter,
+    rewrite_buf: &Sds,
+    backlog: &ReplicationBacklog,
+    tx: &ConnectionTransaction,
+    command: &Command,
+    now_ms: u64,
+    rewrite_failed: &bool,
+) CommandReply {
+    if command.argc < 2 {
+        return connection_himport_wrong_arity(connection_reply_empty_slice());
+    }
+    const subcommand: &[byte] = command_arg_data(command, 1) catch {
+        return connection_himport_wrong_arity(connection_reply_empty_slice());
+    };
+    if connection_keyword_eq(subcommand, &"PREPARE"[0: 7]) {
+        return connection_himport_prepare(tx, command);
+    }
+    if connection_keyword_eq(subcommand, &"SET"[0: 3]) {
+        return connection_himport_set(engine, runtime, aof, rewrite_buf, backlog, tx, command, now_ms, rewrite_failed);
+    }
+    if connection_keyword_eq(subcommand, &"DISCARD"[0: 7]) {
+        return connection_himport_discard(tx, command);
+    }
+    if connection_keyword_eq(subcommand, &"DISCARDALL"[0: 10]) {
+        return connection_himport_discardall(tx, command);
+    }
+    return connection_himport_wrong_arity(subcommand);
 }
 
 fn connection_sds_append_resp_array_header(buf: &Sds, count: usize) !void {
@@ -7521,6 +7953,12 @@ fn connection_should_append_aof(command: &Command, reply: &CommandReply) bool {
 fn connection_command_requests_write(command: &Command) bool {
     if command == null {
         return false;
+    }
+    if command.info.cmd_type == CommandType.command_himport && command.argc >= 2 {
+        const subcommand: &[byte] = command_arg_data(command, 1) catch {
+            return false;
+        };
+        return connection_keyword_eq(subcommand, &"SET"[0: 3]);
     }
     if command.info.cmd_type == CommandType.command_sort {
         if command.argc < 4 {
@@ -9073,15 +9511,17 @@ fn connection_transaction_execute_at(
             );
         } else if command.info.cmd_type == CommandType.command_auth {
             reply = connection_handle_auth(tx, runtime, &command);
-        } else if connection_acl_user_command_denied(connection_current_username(tx), command.info.name) {
-            reply = connection_acl_permission_denied_reply_for_user(command.info.name, &"transaction"[0: 11], connection_current_username(tx), now_ms, connection_acl_log_client_id(tx));
-        } else if command.info.first_key > 0 && command.info.key_step > 0 &&
+        } else if connection_acl_user_command_denied(connection_current_username(tx), connection_acl_effective_command_name(&command)) {
+            reply = connection_acl_permission_denied_reply_for_user(connection_acl_effective_command_name(&command), &"transaction"[0: 11], connection_current_username(tx), now_ms, connection_acl_log_client_id(tx));
+        } else if ((command.info.first_key > 0 && command.info.key_step > 0) || command.info.cmd_type == CommandType.command_himport) &&
             connection_acl_user_allkeys(connection_current_username(tx)) == false &&
             connection_acl_user_command_key_denied(connection_current_username(tx), &command.info, &command, 0, command.argc) {
-            reply = connection_acl_key_permission_denied_reply_for_user(command.info.name, &"transaction"[0: 11], connection_current_username(tx), now_ms, connection_acl_log_client_id(tx));
+            reply = connection_acl_key_permission_denied_reply_for_user(connection_acl_effective_command_name(&command), &"transaction"[0: 11], connection_current_username(tx), now_ms, connection_acl_log_client_id(tx));
         } else if connection_acl_user_allchannels(connection_current_username(tx)) == false &&
             connection_acl_user_command_channel_denied(connection_current_username(tx), &command.info, &command, 0, command.argc) {
             reply = connection_acl_channel_permission_denied_reply_for_user(command.info.name, &"transaction"[0: 11], connection_current_username(tx), now_ms, connection_acl_log_client_id(tx));
+        } else if command.info.cmd_type == CommandType.command_himport {
+            reply = connection_handle_himport_at(engine, runtime, aof, rewrite_buf, backlog, tx, &command, now_ms, rewrite_failed);
         } else if command.info.cmd_type == CommandType.command_acl {
             reply = connection_handle_acl(engine, runtime, router, tx, &command, now_ms, connection_acl_log_client_id(tx));
         } else {
@@ -10376,7 +10816,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
             return ConnectionProcessResult{ response_len: pubsub_tx_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
         }
         if command.info.cmd_type == CommandType.command_discard {
-            connection_transaction_reset(tx);
+            connection_transaction_finish(tx);
             connection_client_registry_sync(tx);
             const discard_reply: CommandReply = connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
             const discard_n: usize = try connection_encode_reply_for_command(tx, &command, &discard_reply, out, out_cap, reply_off_before, reply_skip_before);
@@ -10407,17 +10847,17 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
             resp_parse_value_free(&parsed.value, parsed.elements_owned);
             return ConnectionProcessResult{ response_len: blocking_tx_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
         }
-        if connection_acl_user_command_denied(connection_current_username(tx), command.info.name) {
-            const acl_tx_reply: CommandReply = connection_acl_permission_denied_reply_for_user(command.info.name, &"transaction"[0: 11], connection_current_username(tx), now_ms, connection_acl_log_client_id(tx));
+        if connection_acl_user_command_denied(connection_current_username(tx), connection_acl_effective_command_name(&command)) {
+            const acl_tx_reply: CommandReply = connection_acl_permission_denied_reply_for_user(connection_acl_effective_command_name(&command), &"transaction"[0: 11], connection_current_username(tx), now_ms, connection_acl_log_client_id(tx));
             const acl_tx_n: usize = try connection_encode_reply_for_command(tx, &command, &acl_tx_reply, out, out_cap, reply_off_before, reply_skip_before);
             command_reply_cleanup(&acl_tx_reply);
             resp_parse_value_free(&parsed.value, parsed.elements_owned);
             return ConnectionProcessResult{ response_len: acl_tx_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
         }
-        if command.info.first_key > 0 && command.info.key_step > 0 &&
+        if ((command.info.first_key > 0 && command.info.key_step > 0) || command.info.cmd_type == CommandType.command_himport) &&
             connection_acl_user_allkeys(connection_current_username(tx)) == false &&
             connection_acl_user_command_key_denied(connection_current_username(tx), &command.info, &command, 0, command.argc) {
-            const acl_key_tx_reply: CommandReply = connection_acl_key_permission_denied_reply_for_user(command.info.name, &"transaction"[0: 11], connection_current_username(tx), now_ms, connection_acl_log_client_id(tx));
+            const acl_key_tx_reply: CommandReply = connection_acl_key_permission_denied_reply_for_user(connection_acl_effective_command_name(&command), &"transaction"[0: 11], connection_current_username(tx), now_ms, connection_acl_log_client_id(tx));
             const acl_key_tx_n: usize = try connection_encode_reply_for_command(tx, &command, &acl_key_tx_reply, out, out_cap, reply_off_before, reply_skip_before);
             command_reply_cleanup(&acl_key_tx_reply);
             resp_parse_value_free(&parsed.value, parsed.elements_owned);
@@ -10434,7 +10874,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
         if command.info.cmd_type == CommandType.command_exec {
             if !connection_transaction_watches_match(tx, engine) {
                 var aborted_reply: CommandReply = connection_raw_reply_owned(&"*-1\r\n"[0: 5]);
-                connection_transaction_reset(tx);
+                connection_transaction_finish(tx);
                 connection_client_registry_sync(tx);
                 const aborted_n: usize = try connection_encode_reply_for_command(tx, &command, &aborted_reply, out, out_cap, reply_off_before, reply_skip_before);
                 command_reply_cleanup(&aborted_reply);
@@ -10467,7 +10907,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
                 rewrite_failed,
                 tx.protocol_version,
             );
-            connection_transaction_reset(tx);
+            connection_transaction_finish(tx);
             connection_client_registry_sync(tx);
             const exec_n: usize = try connection_encode_reply_for_command(tx, &command, &exec_reply, out, out_cap, reply_off_before, reply_skip_before);
             command_reply_cleanup(&exec_reply);
@@ -10528,17 +10968,17 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
     }
     if !connection_acl_current_user_unrestricted(tx) {
         const username: &[byte] = connection_current_username(tx);
-        if connection_acl_user_command_denied(username, command.info.name) {
-            const acl_reply: CommandReply = connection_acl_permission_denied_reply_for_user(command.info.name, &"command"[0: 7], username, now_ms, connection_acl_log_client_id(tx));
+        if connection_acl_user_command_denied(username, connection_acl_effective_command_name(&command)) {
+            const acl_reply: CommandReply = connection_acl_permission_denied_reply_for_user(connection_acl_effective_command_name(&command), &"command"[0: 7], username, now_ms, connection_acl_log_client_id(tx));
             const acl_n: usize = try connection_encode_reply_for_command(tx, &command, &acl_reply, out, out_cap, reply_off_before, reply_skip_before);
             command_reply_cleanup(&acl_reply);
             resp_parse_value_free(&parsed.value, parsed.elements_owned);
             return ConnectionProcessResult{ response_len: acl_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
         }
-        if command.info.first_key > 0 && command.info.key_step > 0 &&
+        if ((command.info.first_key > 0 && command.info.key_step > 0) || command.info.cmd_type == CommandType.command_himport) &&
             connection_acl_user_allkeys(username) == false &&
             connection_acl_user_command_key_denied(username, &command.info, &command, 0, command.argc) {
-            const acl_key_reply: CommandReply = connection_acl_key_permission_denied_reply_for_user(command.info.name, &"command"[0: 7], username, now_ms, connection_acl_log_client_id(tx));
+            const acl_key_reply: CommandReply = connection_acl_key_permission_denied_reply_for_user(connection_acl_effective_command_name(&command), &"command"[0: 7], username, now_ms, connection_acl_log_client_id(tx));
             const acl_key_n: usize = try connection_encode_reply_for_command(tx, &command, &acl_key_reply, out, out_cap, reply_off_before, reply_skip_before);
             command_reply_cleanup(&acl_key_reply);
             resp_parse_value_free(&parsed.value, parsed.elements_owned);
@@ -10826,6 +11266,27 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
         const discard_without_multi_n: usize = try connection_encode_reply_for_command(tx, &command, &discard_without_multi, out, out_cap, reply_off_before, reply_skip_before);
         resp_parse_value_free(&parsed.value, parsed.elements_owned);
         return ConnectionProcessResult{ response_len: discard_without_multi_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
+    }
+
+    if command.info.cmd_type == CommandType.command_himport {
+        var himport_reply: CommandReply = connection_handle_himport_at(
+            engine,
+            runtime,
+            aof,
+            rewrite_buf,
+            backlog,
+            tx,
+            &command,
+            now_ms,
+            rewrite_failed,
+        );
+        if himport_reply.typ != CommandReplyType.reply_error {
+            connection_monitor_broadcast(&command, tx.client_fd, now_ms);
+        }
+        const himport_n: usize = try connection_encode_reply_for_command(tx, &command, &himport_reply, out, out_cap, reply_off_before, reply_skip_before);
+        command_reply_cleanup(&himport_reply);
+        resp_parse_value_free(&parsed.value, parsed.elements_owned);
+        return ConnectionProcessResult{ response_len: himport_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
     }
 
     return connection_execute_standard_command_at(

@@ -1433,6 +1433,15 @@ fn command_executor_sort_emit_window(total: usize, options: &SortOptions) SortEm
 
 fn command_executor_growth_write_command(command: &Command) bool {
     const cmd_type: CommandType = command.info.cmd_type;
+    if cmd_type == CommandType.command_himport {
+        if command.argc < 2 {
+            return false;
+        }
+        const subcommand: &[byte] = command_executor_arg(command, 1) catch {
+            return false;
+        };
+        return command_executor_keyword_eq(subcommand, &"SET"[0: 3]);
+    }
     if cmd_type == CommandType.command_set {
         return command.argc == 3;
     }
@@ -1701,6 +1710,10 @@ fn command_executor_prepare_maxmemory(engine: &Engine, runtime: &CommandRuntimeI
         return command_executor_memory_fits(effective_maxmemory, estimated);
     }
     return false;
+}
+
+export fn command_prepare_maxmemory_at(engine: &Engine, runtime: &CommandRuntimeInfo, command: &Command, now_ms: u64) bool {
+    return command_executor_prepare_maxmemory(engine, runtime, command, now_ms);
 }
 
 fn command_executor_estimate_sds_allocation(len: usize) usize {
@@ -19939,6 +19952,12 @@ fn command_executor_command_visible_latency_subcommand(name: &[byte]) bool {
 }
 
 fn command_executor_command_visible_subcommand(parent_name: &[byte], subcommand_name: &[byte]) bool {
+    if command_executor_slice_eq(parent_name, &"himport"[0: 7]) {
+        return command_executor_slice_eq(subcommand_name, &"prepare"[0: 7]) ||
+            command_executor_slice_eq(subcommand_name, &"set"[0: 3]) ||
+            command_executor_slice_eq(subcommand_name, &"discard"[0: 7]) ||
+            command_executor_slice_eq(subcommand_name, &"discardall"[0: 10]);
+    }
     if command_executor_slice_eq(parent_name, &"client"[0: 6]) {
         return command_executor_command_visible_client_subcommand(subcommand_name);
     }
@@ -20749,7 +20768,8 @@ fn command_executor_command_key_flags(info: &CommandInfo, key_ordinal: usize) &[
         info.cmd_type == CommandType.command_mset ||
         info.cmd_type == CommandType.command_msetex ||
         info.cmd_type == CommandType.command_setrange ||
-        info.cmd_type == CommandType.command_restore {
+        info.cmd_type == CommandType.command_restore ||
+        info.cmd_type == CommandType.command_himport {
         return &"OW|update"[0: 9];
     }
     if info.flags == 0u64 {
@@ -21179,6 +21199,57 @@ fn command_executor_command_getkeysandflags_memory(
     try command_executor_command_append_getkeysandflags_item(buf, key, &"RO|access"[0: 9], runtime.protocol_version);
 }
 
+fn command_executor_command_himport_set(command: &Command) !bool {
+    const full_argc: usize = command_executor_command_full_argc(command);
+    if full_argc < 2 {
+        return error.CommandWrongArity;
+    }
+    const subcommand: &[byte] = try command_executor_command_full_arg(command, 1);
+    if command_executor_keyword_eq(subcommand, &"SET"[0: 3]) {
+        if full_argc < 5 {
+            return error.CommandWrongArity;
+        }
+        return true;
+    }
+    if command_executor_keyword_eq(subcommand, &"PREPARE"[0: 7]) {
+        if full_argc < 4 {
+            return error.CommandWrongArity;
+        }
+        return false;
+    }
+    if command_executor_keyword_eq(subcommand, &"DISCARD"[0: 7]) {
+        if full_argc != 3 {
+            return error.CommandWrongArity;
+        }
+        return false;
+    }
+    if command_executor_keyword_eq(subcommand, &"DISCARDALL"[0: 10]) {
+        if full_argc != 2 {
+            return error.CommandWrongArity;
+        }
+        return false;
+    }
+    return error.CommandWrongArity;
+}
+
+fn command_executor_command_getkeys_himport(command: &Command, buf: &Sds) !void {
+    const is_set: bool = try command_executor_command_himport_set(command);
+    try command_executor_resp_collection_prefix(buf, &"*"[0: 1], is_set as usize);
+    if is_set {
+        const key: &[byte] = try command_executor_command_full_arg(command, 2);
+        try command_executor_command_append_getkeys_key(buf, key);
+    }
+}
+
+fn command_executor_command_getkeysandflags_himport(runtime: &CommandRuntimeInfo, command: &Command, buf: &Sds) !void {
+    const is_set: bool = try command_executor_command_himport_set(command);
+    try command_executor_resp_collection_prefix(buf, &"*"[0: 1], is_set as usize);
+    if is_set {
+        const key: &[byte] = try command_executor_command_full_arg(command, 2);
+        try command_executor_command_append_getkeysandflags_item(buf, key, &"OW|update"[0: 9], runtime.protocol_version);
+    }
+}
+
 fn command_executor_command_getkeys(runtime: &CommandRuntimeInfo, command: &Command, with_flags: bool) CommandReply {
     const info: CommandInfo = command_executor_command_lookup_full_command(command) catch |err| {
         if err == error.CommandUnknown {
@@ -21192,6 +21263,19 @@ fn command_executor_command_getkeys(runtime: &CommandRuntimeInfo, command: &Comm
     };
     defer {
         sds_free(&buf);
+    }
+
+    if info.cmd_type == CommandType.command_himport {
+        if with_flags {
+            _ = command_executor_command_getkeysandflags_himport(runtime, command, &buf) catch {
+                return command_executor_command_invalid_command_arity();
+            };
+        } else {
+            _ = command_executor_command_getkeys_himport(command, &buf) catch {
+                return command_executor_command_invalid_command_arity();
+            };
+        }
+        return command_executor_owned_raw(buf.buf[0: buf.len]);
     }
 
     if info.cmd_type == CommandType.command_sort {
@@ -21775,7 +21859,8 @@ fn command_executor_latency_uses_subcommand_name(cmd_type: CommandType) bool {
         cmd_type == CommandType.command_script ||
         cmd_type == CommandType.command_slowlog ||
         cmd_type == CommandType.command_xgroup ||
-        cmd_type == CommandType.command_xinfo;
+        cmd_type == CommandType.command_xinfo ||
+        cmd_type == CommandType.command_himport;
 }
 
 fn command_executor_latency_histogram_name(command: &Command, out: &[byte], uses_subcommand_name: bool) &[byte] {

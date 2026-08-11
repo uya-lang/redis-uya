@@ -1,7 +1,7 @@
 # redis-uya command matrix
 
 > version: v0.9.3-dev
-> date: 2026-08-10
+> date: 2026-08-11
 > source: Redis 8.6 Commands Reference + `scripts/generate_command_catalog.py`
 > runtime source: `src/command/catalog_generated.uya`
 
@@ -16,7 +16,7 @@
 
 | tier | tracked official names | tracked top-level names | `full` | `partial` | `standalone-error` | `alias` | `deferred` |
 |------|-----------------------:|------------------------:|-------:|----------:|-------------------:|--------:|-----------:|
-| Tier A: standalone core | 382 | 265 | 147 | 212 | 7 | 3 | 13 |
+| Tier A: standalone core | 382 | 265 | 152 | 212 | 7 | 3 | 8 |
 | Tier B: mode commands | 34 | 4 | 1 | 7 | 26 | 0 | 0 |
 | Tier C: module commands | 158 | 151 | 0 | 0 | 153 | 0 | 5 |
 
@@ -24,11 +24,11 @@
 
 | status | count |
 |--------|-------|
-| `full` | `148` |
+| `full` | `153` |
 | `partial` | `219` |
 | `standalone-error` | `186` |
 | `alias` | `3` |
-| `deferred` | `18` |
+| `deferred` | `13` |
 
 ## Group counts
 
@@ -309,11 +309,11 @@
 | `hgetall` | `hash` | `full` | `-` | `2` | `-` | `no` | `@read, @hash, @slow` |
 | `hgetdel` | `hash` | `partial` | `-` | `-5` | `-` | `no` | `@write, @hash, @fast` |
 | `hgetex` | `hash` | `partial` | `-` | `-5` | `-` | `no` | `@write, @hash, @fast` |
-| `himport` | `hash` | `deferred` | `v0.9.1` | `-2` | `-` | `no` | `@hash, @slow` |
-| `himport|discard` | `hash` | `deferred` | `v0.9.1` | `3` | `-` | `no` | `@hash, @slow` |
-| `himport|discardall` | `hash` | `deferred` | `v0.9.1` | `2` | `-` | `no` | `@hash, @slow` |
-| `himport|prepare` | `hash` | `deferred` | `v0.9.1` | `-4` | `-` | `no` | `@hash, @slow` |
-| `himport|set` | `hash` | `deferred` | `v0.9.1` | `-5` | `-` | `no` | `@write, @hash, @slow` |
+| `himport` | `hash` | `full` | `-` | `-2` | `-` | `no` | `@hash, @slow` |
+| `himport|discard` | `hash` | `full` | `-` | `3` | `-` | `no` | `@hash, @slow` |
+| `himport|discardall` | `hash` | `full` | `-` | `2` | `-` | `no` | `@hash, @slow` |
+| `himport|prepare` | `hash` | `full` | `-` | `-4` | `-` | `no` | `@hash, @slow` |
+| `himport|set` | `hash` | `full` | `-` | `-5` | `-` | `no` | `@write, @hash, @slow` |
 | `hincrby` | `hash` | `full` | `-` | `4` | `-` | `no` | `@write, @hash, @fast` |
 | `hincrbyfloat` | `hash` | `full` | `-` | `4` | `-` | `no` | `@write, @hash, @fast` |
 | `hkeys` | `hash` | `full` | `-` | `2` | `-` | `no` | `@read, @hash, @slow` |

@@ -2878,6 +2878,18 @@ if [[ "$HGETALL_RESULT" != "6" ]]; then
     exit 1
 fi
 
+HIMPORT_SESSION_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" <<'EOF'
+himport prepare import-fields short long-field
+himport set import-hash import-fields one two
+hmget import-hash short long-field
+himport discard import-fields
+EOF
+)"
+if [[ "$HIMPORT_SESSION_RESULT" != $'OK\nOK\none\ntwo\n1' ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: unexpected HIMPORT session result '$HIMPORT_SESSION_RESULT'" >&2
+    exit 1
+fi
+
 HRANDFIELD_SINGLE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" hrandfield hash)"
 if [[ "$HRANDFIELD_SINGLE_RESULT" != "counter" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected HRANDFIELD counter, got '$HRANDFIELD_SINGLE_RESULT'" >&2

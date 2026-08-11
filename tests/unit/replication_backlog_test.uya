@@ -12,6 +12,7 @@ use src.replication.backlog.ReplicationBacklog;
 use src.replication.backlog.replication_backlog_new;
 use src.replication.backlog.replication_backlog_free;
 use src.replication.backlog.replication_backlog_append_command_at;
+use src.replication.backlog.replication_backlog_append_raw;
 use src.replication.backlog.replication_backlog_history_len;
 use src.replication.backlog.replication_backlog_first_offset;
 use src.replication.backlog.replication_backlog_can_continue;
@@ -125,6 +126,26 @@ export fn test_replication_backlog_normalizes_hash_field_expire() !void {
     const history: &[byte] = replication_backlog_slice_from(&backlog, 0u64);
     try assert_true(replication_backlog_test_slice_eq(history, expected));
     try assert_eq_i32(backlog.master_offset as i32, expected.len as i32);
+
+    replication_backlog_free(&backlog);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_replication_backlog_append_raw() !void {
+    reset_memory_stats_for_test();
+    var backlog: ReplicationBacklog = try replication_backlog_new(16, 789u64);
+
+    try replication_backlog_append_raw(&backlog, &"0123456789abcdefghij"[0: 20]);
+    try assert_eq_i32(backlog.master_offset as i32, 20);
+    try assert_eq_i32(replication_backlog_history_len(&backlog) as i32, 16);
+    try assert_eq_i32(replication_backlog_first_offset(&backlog) as i32, 4);
+    try assert_true(replication_backlog_test_slice_eq(
+        replication_backlog_slice_from(&backlog, 4u64),
+        &"456789abcdefghij"[0: 16],
+    ));
+
+    try replication_backlog_append_raw(&backlog, &""[0: 0]);
+    try assert_eq_i32(backlog.master_offset as i32, 20);
 
     replication_backlog_free(&backlog);
     try assert_eq_i32(used_memory() as i32, 0);

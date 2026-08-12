@@ -75,6 +75,8 @@
 - Tier A 中不允许存在 `deferred`。
 - Tier B 可保持 `standalone-error`，但必须有稳定、兼容、可测试的错误语义。
 - Tier C 可以继续保留 `deferred`，但必须与 Tier A/B 的完成度分开统计。
+- `scripts/verify_command_scope.py` 从已提交矩阵执行封版门禁，Tier A 或 Tier B 重新出现 `deferred`、命令重复、分组未分类、状态非法或 deferred 缺少目标版本时立即失败。
+- `make test` 与 Definition of Done 验证都会运行该门禁；负例由 `tests/scripts/test_verify_command_scope.py` 固化，避免只检查当前成功快照。
 
 ## 4. 单机命令验收
 

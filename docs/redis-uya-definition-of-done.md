@@ -233,6 +233,7 @@ bash scripts/verify_definition_of_done.sh
 | DoD 项 | 证据 |
 |--------|------|
 | 官方命令全集矩阵可追踪：基于 Redis 8.6 命令页生成 `531` 个官方命令名、状态、目标版本与基础元数据，并落盘为命令矩阵文档 | `scripts/generate_command_catalog.py`、`docs/redis-uya-command-matrix.md` |
+| 命令范围封版门禁可用：从已提交矩阵校验命令名唯一、Tier 分组完整、状态与目标版本合法，并强制 Tier A 单机核心和 Tier B 模式命令保持零 `deferred`；正例读取当前 574 项矩阵，负例覆盖 Tier A/Tier B 回退和 deferred 缺目标版本 | `scripts/verify_command_scope.py`、`tests/scripts/test_verify_command_scope.py`、`make verify-command-scope`、`make test-command-scope`、`make test`、`scripts/verify_definition_of_done.sh` |
 | 运行时共享目录可用：`src/command/catalog_generated*` 提供统一命令目录，`COMMAND` 家族与文档矩阵不再各维护一份命令名清单 | `src/command/catalog.uya`、`src/command/catalog_generated_base.uya`、`src/command/catalog_generated.uya`、`src/command/catalog_generated_part_*.uya` |
 | `COMMAND` 控制面第一批可用：`COMMAND`、`COMMAND COUNT`、`COMMAND LIST`、`COMMAND INFO`、`COMMAND DOCS` 覆盖 RESP2/RESP3 基础返回、`LIST FILTERBY PATTERN/ACLCAT/MODULE`、`INFO` 未知命令占位和 `DOCS` 未知命令忽略边界 | `src/command/router.uya`、`src/command/executor.uya`、`tests/unit/command_router_test.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/test_runner.uya`、`tests/integration/command_introspection.py` |
 | `COMMAND DOCS` 无参数全量输出可用：覆盖 `531` 个目录项的 RESP2/RESP3 全量 docs 返回，以及服务端大响应发送第一批闭环 | `src/command/executor.uya`、`src/network/connection.uya`、`src/server.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/network_connection_test.uya`、`tests/unit/test_runner.uya`、`tests/integration/command_introspection.py` |

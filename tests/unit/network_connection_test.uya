@@ -1591,7 +1591,7 @@ export fn test_connection_process_client_commands() !void {
     const client_help: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$4\r\nHELP\r\n"[0: 26], &client_help_out[0], 2048, 1000u64);
     try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT REPLY <ON|OFF|SKIP>"[0: 26]));
     try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT LIST [TYPE NORMAL|MASTER|REPLICA|PUBSUB] | [ID <id> ...]"[0: 63]));
-    try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT KILL [ID <id>] [ADDR <ip:port>] [USER <username>] [TYPE <normal|master|replica|pubsub>] [SKIPME yes|no]"[0: 110]));
+    try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT KILL [ID <id>] [ADDR <ip:port>] [LADDR <ip:port>] [USER <username>] [TYPE <normal|master|replica|pubsub>] [SKIPME yes|no]"[0: 128]));
     try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT TRACKINGINFO"[0: 19]));
 
     const caching_yes: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$6\r\nCLIENT\r\n$7\r\nCACHING\r\n$3\r\nYES\r\n"[0: 38], &out[0], 512, 1000u64);
@@ -1957,6 +1957,23 @@ export fn test_connection_process_client_commands() !void {
     try assert_true(network_connection_slice_eq(out[0: client_kill_type_self.response_len], &":2\r\n"[0: 4]));
     try assert_eq_i32(client_kill_type_self.client_kill_self as i32, 1);
     try assert_eq_i32(client_kill_type_self.close_after as i32, 1);
+
+    const client_kill_laddr: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$4\r\nKILL\r\n$5\r\nLADDR\r\n$14\r\n127.0.0.1:6380\r\n"[0: 58], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_kill_laddr.response_len], &":2\r\n"[0: 4]));
+    try assert_eq_i32(client_kill_laddr.request_client_kill as i32, 1);
+    try assert_eq_i32(client_kill_laddr.client_kill_laddr_id as i32, 1);
+
+    const client_kill_laddr_missing: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$4\r\nKILL\r\n$5\r\nLADDR\r\n$11\r\n127.0.0.1:1\r\n"[0: 55], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_kill_laddr_missing.response_len], &":0\r\n"[0: 4]));
+
+    const client_kill_laddr_id: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*6\r\n$6\r\nCLIENT\r\n$4\r\nKILL\r\n$2\r\nID\r\n$1\r\n2\r\n$5\r\nLADDR\r\n$14\r\n127.0.0.1:6380\r\n"[0: 73], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_kill_laddr_id.response_len], &":1\r\n"[0: 4]));
+    try assert_eq_i32(client_kill_laddr_id.client_kill_id as i32, 2);
+
+    const client_kill_laddr_self: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*6\r\n$6\r\nCLIENT\r\n$4\r\nKILL\r\n$5\r\nLADDR\r\n$14\r\n127.0.0.1:6380\r\n$6\r\nSKIPME\r\n$2\r\nNO\r\n"[0: 78], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_kill_laddr_self.response_len], &":3\r\n"[0: 4]));
+    try assert_eq_i32(client_kill_laddr_self.client_kill_self as i32, 1);
+    try assert_eq_i32(client_kill_laddr_self.close_after as i32, 1);
 
     const client_kill_self_skip: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*6\r\n$6\r\nCLIENT\r\n$4\r\nKILL\r\n$2\r\nID\r\n$1\r\n1\r\n$6\r\nSKIPME\r\n$3\r\nYES\r\n"[0: 62], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: client_kill_self_skip.response_len], &":0\r\n"[0: 4]));

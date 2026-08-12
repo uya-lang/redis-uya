@@ -556,7 +556,7 @@ def run_smoke() -> None:
                     not isinstance(client_help, list)
                     or b"CLIENT REPLY <ON|OFF|SKIP>" not in client_help
                     or b"CLIENT LIST [TYPE NORMAL|MASTER|REPLICA|PUBSUB] | [ID <id> ...]" not in client_help
-                    or b"CLIENT KILL [ID <id>] [ADDR <ip:port>] [USER <username>] [TYPE <normal|master|replica|pubsub>] [SKIPME yes|no]" not in client_help
+                    or b"CLIENT KILL [ID <id>] [ADDR <ip:port>] [LADDR <ip:port>] [USER <username>] [TYPE <normal|master|replica|pubsub>] [SKIPME yes|no]" not in client_help
                     or b"CLIENT TRACKINGINFO" not in client_help
                 ):
                     raise AssertionError(f"unexpected CLIENT HELP: {client_help!r}")
@@ -1059,6 +1059,39 @@ def run_smoke() -> None:
                         b"NORMAL",
                     ) != 1:
                         raise AssertionError("CLIENT KILL ID/TYPE NORMAL did not close its target")
+
+                if send_command(sock, b"CLIENT", b"KILL", b"LADDR", b"127.0.0.1:1") != 0:
+                    raise AssertionError("missing CLIENT KILL LADDR should return 0")
+                with connect_with_retry(port, time.monotonic() + 5.0) as laddr_victim_one:
+                    with connect_with_retry(port, time.monotonic() + 5.0) as laddr_victim_two:
+                        laddr_victim_one_id = send_command(laddr_victim_one, b"CLIENT", b"ID")
+                        if not isinstance(laddr_victim_one_id, int) or laddr_victim_one_id <= 0:
+                            raise AssertionError(f"unexpected LADDR victim CLIENT ID: {laddr_victim_one_id!r}")
+                        laddr_value = f"{laddr_victim_one.getpeername()[0]}:{laddr_victim_one.getpeername()[1]}".encode()
+                        mismatched_laddr = send_command(
+                            sock,
+                            b"CLIENT",
+                            b"KILL",
+                            b"ID",
+                            str(laddr_victim_one_id).encode(),
+                            b"LADDR",
+                            b"127.0.0.1:1",
+                        )
+                        if mismatched_laddr != 0:
+                            raise AssertionError(f"mismatched CLIENT KILL ID/LADDR should return 0, got {mismatched_laddr!r}")
+                        if send_command(laddr_victim_one, b"PING") != "PONG":
+                            raise AssertionError("mismatched CLIENT KILL ID/LADDR closed its target")
+                        laddr_killed = send_command(sock, b"CLIENT", b"KILL", b"LADDR", laddr_value)
+                        if laddr_killed != 2:
+                            raise AssertionError(f"CLIENT KILL LADDR should close two peer clients, got {laddr_killed!r}")
+                        for laddr_victim in (laddr_victim_one, laddr_victim_two):
+                            laddr_failed = False
+                            try:
+                                send_command(laddr_victim, b"PING")
+                            except Exception:
+                                laddr_failed = True
+                            if not laddr_failed:
+                                raise AssertionError("LADDR victim connection stayed alive after CLIENT KILL")
 
                 if send_command(sock, b"CONFIG", b"SET", b"maxmemory", b"1mb") != "OK":
                     raise AssertionError("CONFIG SET maxmemory failed")

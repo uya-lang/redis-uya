@@ -140,6 +140,10 @@ const CONNECTION_CLIENT_ADDR_MAX: usize = 32;
 const CONNECTION_CLIENT_KILL_USER_NONE: i32 = -2;
 const CONNECTION_CLIENT_KILL_USER_DEFAULT: i32 = -1;
 const CONNECTION_CLIENT_KILL_USER_UNKNOWN: i32 = -3;
+const CONNECTION_CLIENT_KILL_TYPE_NONE: i32 = -1;
+const CONNECTION_CLIENT_KILL_TYPE_NORMAL: i32 = 0;
+const CONNECTION_CLIENT_KILL_TYPE_PUBSUB: i32 = 1;
+const CONNECTION_CLIENT_KILL_TYPE_REPLICATION: i32 = 2;
 
 export struct ConnectionProcessResult {
     response_len: usize,
@@ -157,6 +161,7 @@ export struct ConnectionProcessResult {
     request_client_kill: bool,
     client_kill_id: i64,
     client_kill_user_selector: i32,
+    client_kill_type_selector: i32,
     client_kill_self: bool,
     request_client_pause: bool,
     client_pause_timeout_ms: u64,
@@ -664,6 +669,7 @@ fn connection_zero_copy_process_result(
         request_client_kill: false,
         client_kill_id: 0,
         client_kill_user_selector: CONNECTION_CLIENT_KILL_USER_NONE,
+        client_kill_type_selector: CONNECTION_CLIENT_KILL_TYPE_NONE,
         client_kill_self: false,
         request_client_pause: false,
         client_pause_timeout_ms: 0u64,
@@ -694,6 +700,7 @@ fn connection_make_reply(typ: CommandReplyType, data: &[byte], integer: i64) Com
         request_client_kill: false,
         client_kill_id: 0,
         client_kill_user_selector: CONNECTION_CLIENT_KILL_USER_NONE,
+        client_kill_type_selector: CONNECTION_CLIENT_KILL_TYPE_NONE,
         client_kill_self: false,
         request_client_pause: false,
         client_pause_timeout_ms: 0u64,
@@ -3757,6 +3764,19 @@ export fn connection_transaction_client_kill_user_matches(tx: &ConnectionTransac
     );
 }
 
+export fn connection_transaction_client_kill_type_matches(tx: &ConnectionTransaction, selector: i32) bool {
+    if selector == CONNECTION_CLIENT_KILL_TYPE_NONE {
+        return true;
+    }
+    if selector == CONNECTION_CLIENT_KILL_TYPE_NORMAL {
+        return tx == null || tx.pubsub_count == 0;
+    }
+    if selector == CONNECTION_CLIENT_KILL_TYPE_PUBSUB {
+        return tx != null && tx.pubsub_count > 0;
+    }
+    return false;
+}
+
 fn connection_current_user_is_default(tx: &ConnectionTransaction) bool {
     return connection_keyword_eq(connection_current_username(tx), &"default"[0: 7]);
 }
@@ -5978,6 +5998,26 @@ fn connection_client_registry_slot_matches_user_selector(slot_index: usize, sele
     );
 }
 
+fn connection_client_registry_slot_matches_type_selector(slot_index: usize, selector: i32) bool {
+    if slot_index >= CONNECTION_CLIENT_REGISTRY_MAX {
+        return false;
+    }
+    const proven_slot_index: usize = slot_index;
+    if proven_slot_index >= CONNECTION_CLIENT_REGISTRY_MAX || !connection_client_registry[proven_slot_index].active {
+        return false;
+    }
+    if selector == CONNECTION_CLIENT_KILL_TYPE_NONE {
+        return true;
+    }
+    if selector == CONNECTION_CLIENT_KILL_TYPE_NORMAL {
+        return connection_client_registry[proven_slot_index].pubsub_count == 0;
+    }
+    if selector == CONNECTION_CLIENT_KILL_TYPE_PUBSUB {
+        return connection_client_registry[proven_slot_index].pubsub_count > 0;
+    }
+    return false;
+}
+
 fn connection_client_kill_no_such_user_reply(username: &[byte]) CommandReply {
     var err: Sds = sds_empty() catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
@@ -7507,7 +7547,7 @@ fn connection_client_help_reply() CommandReply {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
-    _ = list_object_push_tail(reply_list, &"CLIENT KILL [ID <id>] [ADDR <ip:port>] [USER <username>] [SKIPME yes|no]"[0: 72]) catch {
+    _ = list_object_push_tail(reply_list, &"CLIENT KILL [ID <id>] [ADDR <ip:port>] [USER <username>] [TYPE <normal|master|replica|pubsub>] [SKIPME yes|no]"[0: 110]) catch {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
@@ -7912,6 +7952,7 @@ fn connection_handle_client(tx: &ConnectionTransaction, command: &Command, now_m
         var target_matches: bool = true;
         var skip_me: bool = true;
         var kill_user_selector: i32 = CONNECTION_CLIENT_KILL_USER_NONE;
+        var kill_type_selector: i32 = CONNECTION_CLIENT_KILL_TYPE_NONE;
         var index: usize = 2;
         while index < command.argc {
             const selector: &[byte] = command_arg_data(command, index) catch {
@@ -7936,6 +7977,27 @@ fn connection_handle_client(tx: &ConnectionTransaction, command: &Command, now_m
                     has_target = true;
                 } else if selector_slot != target_slot {
                     target_matches = false;
+                }
+                index = index + 2;
+                continue;
+            }
+            if connection_keyword_eq(selector, &"TYPE"[0: 4]) {
+                if index + 1 >= command.argc {
+                    return connection_error_reply(&"ERR syntax error"[0: 16]);
+                }
+                const client_type: &[byte] = command_arg_data(command, index + 1) catch {
+                    return connection_error_reply(&"ERR invalid request"[0: 19]);
+                };
+                if connection_keyword_eq(client_type, &"NORMAL"[0: 6]) {
+                    kill_type_selector = CONNECTION_CLIENT_KILL_TYPE_NORMAL;
+                } else if connection_keyword_eq(client_type, &"PUBSUB"[0: 6]) {
+                    kill_type_selector = CONNECTION_CLIENT_KILL_TYPE_PUBSUB;
+                } else if connection_keyword_eq(client_type, &"MASTER"[0: 6]) ||
+                    connection_keyword_eq(client_type, &"REPLICA"[0: 7]) ||
+                    connection_keyword_eq(client_type, &"SLAVE"[0: 5]) {
+                    kill_type_selector = CONNECTION_CLIENT_KILL_TYPE_REPLICATION;
+                } else {
+                    return connection_client_unknown_type_reply(client_type);
                 }
                 index = index + 2;
                 continue;
@@ -7991,7 +8053,7 @@ fn connection_handle_client(tx: &ConnectionTransaction, command: &Command, now_m
             }
             return connection_error_reply(&"ERR syntax error"[0: 16]);
         }
-        if !has_target && kill_user_selector == CONNECTION_CLIENT_KILL_USER_NONE {
+        if !has_target && kill_user_selector == CONNECTION_CLIENT_KILL_USER_NONE && kill_type_selector == CONNECTION_CLIENT_KILL_TYPE_NONE {
             return connection_error_reply(&"ERR syntax error"[0: 16]);
         }
         if has_target && (!target_matches || target_slot < 0 || target_slot >= CONNECTION_CLIENT_REGISTRY_MAX as i32) {
@@ -8012,6 +8074,7 @@ fn connection_handle_client(tx: &ConnectionTransaction, command: &Command, now_m
             if connection_client_registry[scan_index].active &&
                 (!has_target || scan_index == target_slot_index) &&
                 (kill_user_selector == CONNECTION_CLIENT_KILL_USER_NONE || connection_client_registry_slot_matches_user_selector(scan_index, kill_user_selector)) &&
+                connection_client_registry_slot_matches_type_selector(scan_index, kill_type_selector) &&
                 (!skip_me || connection_client_registry[scan_index].client_id != current_id) {
                 matched = matched + 1;
                 if connection_client_registry[scan_index].client_id == current_id {
@@ -8029,6 +8092,7 @@ fn connection_handle_client(tx: &ConnectionTransaction, command: &Command, now_m
             reply.client_kill_id = connection_client_registry[target_slot_index].client_id;
         }
         reply.client_kill_user_selector = kill_user_selector;
+        reply.client_kill_type_selector = kill_type_selector;
         reply.client_kill_self = matched_self;
         return reply;
     }
@@ -10656,6 +10720,7 @@ fn connection_execute_standard_command_at(
     const request_client_kill: bool = reply.request_client_kill;
     const client_kill_id: i64 = reply.client_kill_id;
     const client_kill_user_selector: i32 = reply.client_kill_user_selector;
+    const client_kill_type_selector: i32 = reply.client_kill_type_selector;
     const client_kill_self: bool = reply.client_kill_self;
     const request_client_pause: bool = reply.request_client_pause;
     const client_pause_timeout_ms: u64 = reply.client_pause_timeout_ms;
@@ -10737,6 +10802,7 @@ fn connection_execute_standard_command_at(
         request_client_kill: request_client_kill,
         client_kill_id: client_kill_id,
         client_kill_user_selector: client_kill_user_selector,
+        client_kill_type_selector: client_kill_type_selector,
         client_kill_self: client_kill_self,
         request_client_pause: request_client_pause,
         client_pause_timeout_ms: client_pause_timeout_ms,
@@ -11545,6 +11611,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_in
     var request_client_kill: bool = false;
     var client_kill_id: i64 = 0;
     var client_kill_user_selector: i32 = CONNECTION_CLIENT_KILL_USER_NONE;
+    var client_kill_type_selector: i32 = CONNECTION_CLIENT_KILL_TYPE_NONE;
     var client_kill_self: bool = false;
     var request_client_pause: bool = false;
     var client_pause_timeout_ms: u64 = 0u64;
@@ -11605,6 +11672,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_in
             request_client_kill = true;
             client_kill_id = result.client_kill_id;
             client_kill_user_selector = result.client_kill_user_selector;
+            client_kill_type_selector = result.client_kill_type_selector;
             client_kill_self = result.client_kill_self;
             client_pause_timeout_ms = result.client_pause_timeout_ms;
             client_pause_write_only = result.client_pause_write_only;
@@ -11646,6 +11714,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_in
         request_client_kill: request_client_kill,
         client_kill_id: client_kill_id,
         client_kill_user_selector: client_kill_user_selector,
+        client_kill_type_selector: client_kill_type_selector,
         client_kill_self: client_kill_self,
         request_client_pause: request_client_pause,
         client_pause_timeout_ms: client_pause_timeout_ms,
@@ -12078,6 +12147,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
         const client_request_kill: bool = client_reply.request_client_kill;
         const client_kill_id: i64 = client_reply.client_kill_id;
         const client_kill_user_selector: i32 = client_reply.client_kill_user_selector;
+        const client_kill_type_selector: i32 = client_reply.client_kill_type_selector;
         const client_kill_self: bool = client_reply.client_kill_self;
         const client_request_pause: bool = client_reply.request_client_pause;
         const client_pause_timeout_ms: u64 = client_reply.client_pause_timeout_ms;
@@ -12099,6 +12169,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
             request_client_kill: client_request_kill,
             client_kill_id: client_kill_id,
             client_kill_user_selector: client_kill_user_selector,
+            client_kill_type_selector: client_kill_type_selector,
             client_kill_self: client_kill_self,
             request_client_pause: client_request_pause,
             client_pause_timeout_ms: client_pause_timeout_ms,

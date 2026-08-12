@@ -556,7 +556,7 @@ def run_smoke() -> None:
                     not isinstance(client_help, list)
                     or b"CLIENT REPLY <ON|OFF|SKIP>" not in client_help
                     or b"CLIENT LIST [TYPE NORMAL|MASTER|REPLICA|PUBSUB] | [ID <id> ...]" not in client_help
-                    or b"CLIENT KILL [ID <id>] [ADDR <ip:port>] [USER <username>] [SKIPME yes|no]" not in client_help
+                    or b"CLIENT KILL [ID <id>] [ADDR <ip:port>] [USER <username>] [TYPE <normal|master|replica|pubsub>] [SKIPME yes|no]" not in client_help
                     or b"CLIENT TRACKINGINFO" not in client_help
                 ):
                     raise AssertionError(f"unexpected CLIENT HELP: {client_help!r}")
@@ -1007,6 +1007,58 @@ def run_smoke() -> None:
                     raise AssertionError("peer named-user connection stayed alive after CLIENT KILL USER")
                 if send_command(sock, b"CLIENT", b"KILL", b"USER", b"peer-user") != 0:
                     raise AssertionError("CLIENT KILL USER should return 0 when the known user has no clients")
+
+                for replica_type in (b"MASTER", b"REPLICA", b"SLAVE"):
+                    if send_command(sock, b"CLIENT", b"KILL", b"TYPE", replica_type) != 0:
+                        raise AssertionError(f"standalone CLIENT KILL TYPE {replica_type!r} should return 0")
+                try:
+                    send_command(sock, b"CLIENT", b"KILL", b"TYPE", b"bad")
+                    raise AssertionError("CLIENT KILL TYPE accepted an unknown type")
+                except RespError as exc:
+                    if str(exc) != "ERR Unknown client type 'bad'":
+                        raise AssertionError(f"unexpected CLIENT KILL TYPE error: {exc}") from exc
+
+                with connect_with_retry(port, time.monotonic() + 5.0) as type_pubsub_one:
+                    with connect_with_retry(port, time.monotonic() + 5.0) as type_pubsub_two:
+                        if send_command(type_pubsub_one, b"SUBSCRIBE", b"kill-type-one") != [b"subscribe", b"kill-type-one", 1]:
+                            raise AssertionError("first CLIENT KILL TYPE Pub/Sub registration failed")
+                        if send_command(type_pubsub_two, b"PSUBSCRIBE", b"kill-type-*") != [b"psubscribe", b"kill-type-*", 1]:
+                            raise AssertionError("second CLIENT KILL TYPE Pub/Sub registration failed")
+                        if send_command(sock, b"CLIENT", b"KILL", b"TYPE", b"PUBSUB") != 2:
+                            raise AssertionError("CLIENT KILL TYPE PUBSUB did not report two killed clients")
+                        for type_pubsub_sock in (type_pubsub_one, type_pubsub_two):
+                            type_pubsub_failed = False
+                            try:
+                                send_command(type_pubsub_sock, b"PING")
+                            except Exception:
+                                type_pubsub_failed = True
+                            if not type_pubsub_failed:
+                                raise AssertionError("Pub/Sub connection stayed alive after CLIENT KILL TYPE PUBSUB")
+
+                with connect_with_retry(port, time.monotonic() + 5.0) as type_normal_victim:
+                    type_normal_id = send_command(type_normal_victim, b"CLIENT", b"ID")
+                    if send_command(
+                        sock,
+                        b"CLIENT",
+                        b"KILL",
+                        b"ID",
+                        str(type_normal_id).encode(),
+                        b"TYPE",
+                        b"PUBSUB",
+                    ) != 0:
+                        raise AssertionError("mismatched CLIENT KILL ID/TYPE should return 0")
+                    if send_command(type_normal_victim, b"PING") != "PONG":
+                        raise AssertionError("mismatched CLIENT KILL ID/TYPE closed a normal client")
+                    if send_command(
+                        sock,
+                        b"CLIENT",
+                        b"KILL",
+                        b"ID",
+                        str(type_normal_id).encode(),
+                        b"TYPE",
+                        b"NORMAL",
+                    ) != 1:
+                        raise AssertionError("CLIENT KILL ID/TYPE NORMAL did not close its target")
 
                 if send_command(sock, b"CONFIG", b"SET", b"maxmemory", b"1mb") != "OK":
                     raise AssertionError("CONFIG SET maxmemory failed")

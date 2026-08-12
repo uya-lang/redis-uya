@@ -1509,7 +1509,7 @@ if [[ "$CLIENT_CACHING_RESULT" != "OK" ]]; then
 fi
 
 CLIENT_HELP_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" client help)"
-if [[ "$CLIENT_HELP_RESULT" != *"CLIENT REPLY <ON|OFF|SKIP>"* || "$CLIENT_HELP_RESULT" != *"CLIENT LIST [TYPE NORMAL|MASTER|REPLICA|PUBSUB] | [ID <id> ...]"* || "$CLIENT_HELP_RESULT" != *"CLIENT KILL [ID <id>] [ADDR <ip:port>] [USER <username>] [SKIPME yes|no]"* || "$CLIENT_HELP_RESULT" != *"CLIENT TRACKINGINFO"* || "$CLIENT_HELP_RESULT" != *"CLIENT KILL <ip:port>"* ]]; then
+if [[ "$CLIENT_HELP_RESULT" != *"CLIENT REPLY <ON|OFF|SKIP>"* || "$CLIENT_HELP_RESULT" != *"CLIENT LIST [TYPE NORMAL|MASTER|REPLICA|PUBSUB] | [ID <id> ...]"* || "$CLIENT_HELP_RESULT" != *"CLIENT KILL [ID <id>] [ADDR <ip:port>] [USER <username>] [TYPE <normal|master|replica|pubsub>] [SKIPME yes|no]"* || "$CLIENT_HELP_RESULT" != *"CLIENT TRACKINGINFO"* || "$CLIENT_HELP_RESULT" != *"CLIENT KILL <ip:port>"* ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected CLIENT HELP output, got '$CLIENT_HELP_RESULT'" >&2
     exit 1
 fi
@@ -1537,6 +1537,18 @@ fi
 CLIENT_KILL_USER_MISSING_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" client kill user missing 2>&1 || true)"
 if [[ "$CLIENT_KILL_USER_MISSING_RESULT" != "ERR No such user 'missing'" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected CLIENT KILL USER missing error, got '$CLIENT_KILL_USER_MISSING_RESULT'" >&2
+    exit 1
+fi
+
+CLIENT_KILL_TYPE_REPLICA_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" client kill type replica)"
+if [[ "$CLIENT_KILL_TYPE_REPLICA_RESULT" != "0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected standalone CLIENT KILL TYPE replica 0, got '$CLIENT_KILL_TYPE_REPLICA_RESULT'" >&2
+    exit 1
+fi
+
+CLIENT_KILL_TYPE_BAD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" client kill type bad 2>&1 || true)"
+if [[ "$CLIENT_KILL_TYPE_BAD_RESULT" != "ERR Unknown client type 'bad'" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected CLIENT KILL TYPE bad error, got '$CLIENT_KILL_TYPE_BAD_RESULT'" >&2
     exit 1
 fi
 

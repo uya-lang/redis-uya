@@ -1591,7 +1591,7 @@ export fn test_connection_process_client_commands() !void {
     const client_help: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$4\r\nHELP\r\n"[0: 26], &client_help_out[0], 2048, 1000u64);
     try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT REPLY <ON|OFF|SKIP>"[0: 26]));
     try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT LIST [TYPE NORMAL|MASTER|REPLICA|PUBSUB] | [ID <id> ...]"[0: 63]));
-    try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT KILL [ID <id>] [ADDR <ip:port>] [USER <username>] [SKIPME yes|no]"[0: 72]));
+    try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT KILL [ID <id>] [ADDR <ip:port>] [USER <username>] [TYPE <normal|master|replica|pubsub>] [SKIPME yes|no]"[0: 110]));
     try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT TRACKINGINFO"[0: 19]));
 
     const caching_yes: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$6\r\nCLIENT\r\n$7\r\nCACHING\r\n$3\r\nYES\r\n"[0: 38], &out[0], 512, 1000u64);
@@ -1930,6 +1930,33 @@ export fn test_connection_process_client_commands() !void {
     try assert_eq_i32(client_kill_user_self.request_client_kill as i32, 1);
     try assert_eq_i32(client_kill_user_self.client_kill_self as i32, 1);
     try assert_eq_i32(client_kill_user_self.close_after as i32, 1);
+
+    const client_kill_type_normal: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$4\r\nKILL\r\n$4\r\nTYPE\r\n$6\r\nNORMAL\r\n"[0: 48], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_kill_type_normal.response_len], &":1\r\n"[0: 4]));
+    try assert_eq_i32(client_kill_type_normal.request_client_kill as i32, 1);
+    try assert_eq_i32(client_kill_type_normal.client_kill_type_selector, 0);
+
+    const client_kill_type_pubsub: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$4\r\nKILL\r\n$4\r\nTYPE\r\n$6\r\nPUBSUB\r\n"[0: 48], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_kill_type_pubsub.response_len], &":1\r\n"[0: 4]));
+    try assert_eq_i32(client_kill_type_pubsub.client_kill_type_selector, 1);
+
+    const client_kill_type_mismatch: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*6\r\n$6\r\nCLIENT\r\n$4\r\nKILL\r\n$2\r\nID\r\n$1\r\n3\r\n$4\r\nTYPE\r\n$6\r\nNORMAL\r\n"[0: 63], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_kill_type_mismatch.response_len], &":0\r\n"[0: 4]));
+
+    const client_kill_type_intersection: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*6\r\n$6\r\nCLIENT\r\n$4\r\nKILL\r\n$2\r\nID\r\n$1\r\n3\r\n$4\r\nTYPE\r\n$6\r\nPUBSUB\r\n"[0: 63], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_kill_type_intersection.response_len], &":1\r\n"[0: 4]));
+    try assert_eq_i32(client_kill_type_intersection.client_kill_id as i32, 3);
+
+    const client_kill_type_replication: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$4\r\nKILL\r\n$4\r\nTYPE\r\n$6\r\nMASTER\r\n"[0: 48], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_kill_type_replication.response_len], &":0\r\n"[0: 4]));
+
+    const client_kill_type_bad: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$4\r\nKILL\r\n$4\r\nTYPE\r\n$3\r\nbad\r\n"[0: 45], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_kill_type_bad.response_len], &"-ERR Unknown client type 'bad'\r\n"[0: 32]));
+
+    const client_kill_type_self: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*6\r\n$6\r\nCLIENT\r\n$4\r\nKILL\r\n$4\r\nTYPE\r\n$6\r\nNORMAL\r\n$6\r\nSKIPME\r\n$2\r\nNO\r\n"[0: 68], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_kill_type_self.response_len], &":2\r\n"[0: 4]));
+    try assert_eq_i32(client_kill_type_self.client_kill_self as i32, 1);
+    try assert_eq_i32(client_kill_type_self.close_after as i32, 1);
 
     const client_kill_self_skip: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*6\r\n$6\r\nCLIENT\r\n$4\r\nKILL\r\n$2\r\nID\r\n$1\r\n1\r\n$6\r\nSKIPME\r\n$3\r\nYES\r\n"[0: 62], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: client_kill_self_skip.response_len], &":0\r\n"[0: 4]));

@@ -23,6 +23,7 @@ use src.network.connection.ConnectionTransaction;
 use src.network.connection.connection_client_registry_client_id;
 use src.network.connection.connection_client_registry_sync;
 use src.network.connection.connection_transaction_client_kill_user_matches;
+use src.network.connection.connection_transaction_client_kill_type_matches;
 use src.network.connection.connection_transaction_set_client_addresses;
 use src.network.connection.connection_transaction_set_client_times;
 use src.network.connection.connection_transaction_set_output_buffer;
@@ -1163,12 +1164,13 @@ fn server_find_client_slot_by_client_id(server: &RedisServer, client_id: i64) i3
     return -1;
 }
 
-fn server_kill_clients_matching(server: &RedisServer, current_slot: usize, client_id: i64, user_selector: i32) void {
+fn server_kill_clients_matching(server: &RedisServer, current_slot: usize, client_id: i64, user_selector: i32, type_selector: i32) void {
     var i: usize = 0;
     while i < SERVER_MAX_CLIENTS {
         if i != current_slot && server.clients[i].fd >= 0 &&
             (client_id <= 0 || connection_client_registry_client_id(&server.clients[i].transaction) == client_id) &&
-            connection_transaction_client_kill_user_matches(&server.clients[i].transaction, user_selector) {
+            connection_transaction_client_kill_user_matches(&server.clients[i].transaction, user_selector) &&
+            connection_transaction_client_kill_type_matches(&server.clients[i].transaction, type_selector) {
             server_close_client_slot(server, i);
         }
         i = i + 1;
@@ -1705,6 +1707,7 @@ fn server_async_writev_all_future(
                         slot,
                         result.client_kill_id,
                         result.client_kill_user_selector,
+                        result.client_kill_type_selector,
                     );
                 }
             }

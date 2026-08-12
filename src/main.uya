@@ -6,6 +6,7 @@ use src.server.server_default_aof_path;
 use src.server.server_run;
 use src.server.server_close;
 use src.server.server_set_requirepass;
+use src.server.server_set_aclfile_and_load;
 use src.config.MaxmemoryPolicy;
 use std.runtime.get_argc;
 use std.runtime.get_argv;
@@ -121,6 +122,21 @@ fn main_requirepass_arg() &[byte] {
     return arg[0: len];
 }
 
+fn main_aclfile_arg() &[byte] {
+    if get_argc() <= 7 {
+        return (null as &byte)[0: 0];
+    }
+    const arg: &byte = get_argv(7);
+    if arg == null {
+        return (null as &byte)[0: 0];
+    }
+    var len: usize = 0;
+    while arg[len] != 0 as byte {
+        len = len + 1;
+    }
+    return arg[0: len];
+}
+
 export fn main() i32 {
     const port: u16 = main_port_arg();
     const maxclients: i32 = main_maxclients_arg();
@@ -128,6 +144,7 @@ export fn main() i32 {
     const maxmemory: usize = main_maxmemory_arg();
     const maxmemory_policy: MaxmemoryPolicy = main_maxmemory_policy_arg();
     const requirepass: &[byte] = main_requirepass_arg();
+    const aclfile: &[byte] = main_aclfile_arg();
     var server: RedisServer = server_open_with_aof_and_memory_policy(port, maxclients, aof_path, maxmemory, maxmemory_policy) catch |err| {
         printf("redis-uya failed to listen: %u\n" as *byte, @error_id(err));
         return 1;
@@ -137,6 +154,12 @@ export fn main() i32 {
     }
     if requirepass.len > 0 {
         server_set_requirepass(&server, requirepass);
+    }
+    if aclfile.len > 0 {
+        _ = server_set_aclfile_and_load(&server, aclfile) catch |err| {
+            printf("redis-uya failed to load aclfile: %u\n" as *byte, @error_id(err));
+            return 1;
+        };
     }
 
     printf("redis-uya v0.9.3-dev listening on 127.0.0.1:%u\n" as *byte, server.listener.port as u32);

@@ -107,10 +107,10 @@ ACL WHOAMI
 - `ACL GETUSER default` 返回当前默认用户详情，并在 `commands`、`keys` 与 `channels` 字段中反映当前命令/分类 deny list、key pattern 和 channel pattern 规则；启用 `requirepass` 时 `flags` 不再包含 `nopass`，`passwords` 返回 `#` 开头的哈希标记而不暴露明文；已创建 named user 返回 `flags/passwords/commands/keys/channels/selectors` 元数据视图，`>password` 写入的口令同样只回显 `#` 哈希标记；未知用户名返回 null
 - `ACL HELP` 返回 Redis 兼容的 ACL 子命令帮助数组
 - `ACL LIST` 返回当前默认用户和已创建 named user 的 config file 格式描述；默认是 `user default on nopass ~* &* +@all`，启用 `requirepass` 时会用 `#` 开头的哈希标记替代默认用户的 `nopass`，执行 `ACL SETUSER default -get`、`-@string`、`resetkeys`、`~safe*`、`resetchannels` 或 `&safe*` 后会追加对应命令、key 和 channel 规则；named user 同样回显自身命令规则、key/channel 规则和 `#` 哈希口令标记
-- `ACL LOAD` 当前按未配置 ACL 文件的 Redis 兼容错误返回，不会修改用户状态
+- `ACL LOAD` 从 `aclfile` 指定文件原子加载默认用户、named user、单口令、命令/分类 deny list、key pattern 和 channel pattern；文件不可读、超过 64 KiB、缺少或重复 `default`、重复 named user、包含未支持 modifier 时返回错误并完整恢复加载前状态
 - `ACL LOG [count]` 当前返回命令权限、key pattern 权限和 channel pattern 权限拒绝的进程内 ring 日志，覆盖 `ACL DRYRUN`、真实命令、事务队列前置拒绝和脚本内部命令拒绝产生的 `NOPERM`，字段包含 `reason/context/object/username/age-seconds/client-info/entry-id/timestamp-created/timestamp-last-updated/count`，其中 `client-info` 会记录拒绝发生时的真实连接 `id/addr/laddr`；`ACL LOG RESET` 会清空该日志
-- `ACL SAVE` 当前按未配置 ACL 文件的 Redis 兼容错误返回，不会写入 ACL 文件
-- `ACL SETUSER default [attribute ...]` 当前支持 `on`、`nopass`、`&*`、`+@all`、`clearselectors`、`resetselectors` 兼容面，也支持命令级 `-cmd` / `+cmd`、分类级 `-@category` / `+@category`、`resetcommands`、`allkeys`、`resetkeys`、`~pattern`、`allchannels`、`resetchannels` 和 `&pattern`；例如 `ACL SETUSER default -get` 或 `ACL SETUSER default -@string` 会让 default 用户连接的后续 `GET` 与 `ACL DRYRUN default GET ...` 返回命令 `NOPERM`，`ACL SETUSER default resetkeys` 会让固定 key range 命令返回 key 访问 `NOPERM`，`ACL SETUSER default ~safe*` 只允许匹配 key，`allkeys` 或 `~*` 恢复全 key 访问；`ACL SETUSER default resetchannels` 会让 `PUBLISH/SUBSCRIBE/PSUBSCRIBE/SSUBSCRIBE` 等带 channel 参数命令返回 channel 访问 `NOPERM`，`ACL SETUSER default &safe*` 只允许匹配 channel，`allchannels` 或 `&*` 恢复全 channel 访问
+- `ACL SAVE` 把当前支持的 ACL 状态规范化写到 `aclfile`：临时文件以 `0600` 排他创建，完整写入并关闭后再原子 rename；保存失败会保留原文件并清理临时文件。未配置 `aclfile` 时返回 Redis 兼容错误
+- `ACL SETUSER default [attribute ...]` 当前支持 `on`、`nopass`、`resetpass`、`>password`、`<password`、`&*`、`+@all`、`clearselectors`、`resetselectors` 兼容面，也支持命令级 `-cmd` / `+cmd`、分类级 `-@category` / `+@category`、`resetcommands`、`allkeys`、`resetkeys`、`~pattern`、`allchannels`、`resetchannels` 和 `&pattern`；default 的口令 modifier 会同步运行时 `requirepass`。例如 `ACL SETUSER default -get` 或 `ACL SETUSER default -@string` 会让 default 用户连接的后续 `GET` 与 `ACL DRYRUN default GET ...` 返回命令 `NOPERM`，`ACL SETUSER default resetkeys` 会让固定 key range 命令返回 key 访问 `NOPERM`，`ACL SETUSER default ~safe*` 只允许匹配 key，`allkeys` 或 `~*` 恢复全 key 访问；`ACL SETUSER default resetchannels` 会让 `PUBLISH/SUBSCRIBE/PSUBSCRIBE/SSUBSCRIBE` 等带 channel 参数命令返回 channel 访问 `NOPERM`，`ACL SETUSER default &safe*` 只允许匹配 channel，`allchannels` 或 `&*` 恢复全 channel 访问
 - `ACL SETUSER <named-user> [attribute ...]` 当前支持进程内 named user 元数据创建与更新，覆盖 `on`、`off`、`nopass`、`resetpass`、`>password`、`<password`、`~*`、`&*`、`+@all`、`allkeys`、`resetkeys`、`~pattern`、`allchannels`、`resetchannels`、`&pattern`、`clearselectors`、`resetselectors`、`-cmd/+cmd` 和 `-@category/+@category`；`>password` 可用于后续 `AUTH username password` / `HELLO ... AUTH username password`，`nopass` 会清空口令并允许任意口令认证该 named user；当前不支持 selector 真实授权
 - `ACL USERS` 返回当前已知用户名数组；默认包含 `default`，并追加通过 `ACL SETUSER` 创建且尚未 `ACL DELUSER` 删除的 named user
 - `ACL WHOAMI` 返回当前连接用户名；未进行 named user 认证时为 `default`，`AUTH username password` 或 `HELLO ... AUTH username password` 成功后返回对应 named user
@@ -119,7 +119,9 @@ ACL WHOAMI
 
 - 当前实现为 partial，仅暴露 `ACL CAT`、`ACL DELUSER`、`ACL DRYRUN`、`ACL GENPASS`、`ACL GETUSER`、`ACL HELP`、`ACL LIST`、`ACL LOAD`、`ACL LOG`、`ACL SAVE`、`ACL SETUSER`、`ACL USERS`、`ACL WHOAMI` 和 `COMMAND*` 可见面
 - `COMMAND INFO/LIST/DOCS` 会暴露 `ACL`、`ACL|CAT`、`ACL|DELUSER`、`ACL|DRYRUN`、`ACL|GENPASS`、`ACL|GETUSER`、`ACL|HELP`、`ACL|LIST`、`ACL|LOAD`、`ACL|LOG`、`ACL|SAVE`、`ACL|SETUSER`、`ACL|USERS` 与 `ACL|WHOAMI`
-- 当前支持 ACL named user 进程内元数据、口令写入与认证最小闭环、命令级 deny list、分类级 deny list、基于 `CommandInfo.first_key/last_key/key_step` 的固定 key range 命令 key pattern 权限，以及 Pub/Sub 命令 channel pattern 权限；不支持 selector 权限、ACL 文件加载保存或 Redis 动态 key spec / movablekeys 的完整 key 解析。命令规则、key/channel 规则、named user 元数据与 ACL LOG 都是进程内状态，尚未持久化到 ACL 文件或 RDB/AOF
+- `aclfile` 可通过配置文本、`CONFIG GET/SET/REWRITE` 或第八个启动参数设置；不含 `/` 的文件名相对当前 `dir` 解析，含 `/` 的路径按原值使用。启动时指定文件会在进入事件循环前加载，加载失败则启动失败
+- 当前 ACL 文件保存的是项目单口令模型可重新认证的 `>plaintext` token，依赖 `0600` 文件权限保护；`ACL LIST/GETUSER` 仍只回显哈希标记。当前加载器不接受 Redis `#hash` 口令、多个口令、selector 或不可由空白分隔文本无损表示的用户名/口令/pattern
+- 当前支持 ACL named user 元数据、口令写入与认证最小闭环、命令级 deny list、分类级 deny list、基于 `CommandInfo.first_key/last_key/key_step` 的固定 key range 命令 key pattern 权限，以及 Pub/Sub 命令 channel pattern 权限，并可持久化这一支持子集；不支持 selector 权限或 Redis 动态 key spec / movablekeys 的完整 key 解析。ACL LOG 仍是进程内状态，不写入 ACL 文件、RDB 或 AOF
 
 ### `COMMAND`
 
@@ -3910,9 +3912,9 @@ CONFIG RESETSTAT
 返回：
 
 - 返回 RESP Array，按 `name`、`value` 成对展开
-- 当前支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`replicaof`、`masterauth`、`maxmemory`、`maxmemory-policy`、`maxclients`、`databases`、`timeout`、`save`、`latency-tracking`、`latency-monitor-threshold`、`slowlog-log-slower-than`、`slowlog-max-len`
+- 当前支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`aclfile`、`requirepass`、`replicaof`、`masterauth`、`maxmemory`、`maxmemory-policy`、`maxclients`、`databases`、`timeout`、`save`、`latency-tracking`、`latency-monitor-threshold`、`slowlog-log-slower-than`、`slowlog-max-len`
 - 支持最小 `*` 通配模式
-- `CONFIG SET` 当前支持运行时子集：`port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`replicaof`、`masterauth`、`maxmemory`、`maxmemory-policy`、`maxclients`、`databases`、`timeout`、`save`、`latency-tracking`、`latency-monitor-threshold`、`slowlog-log-slower-than`、`slowlog-max-len`
+- `CONFIG SET` 当前支持运行时子集：`port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`aclfile`、`requirepass`、`replicaof`、`masterauth`、`maxmemory`、`maxmemory-policy`、`maxclients`、`databases`、`timeout`、`save`、`latency-tracking`、`latency-monitor-threshold`、`slowlog-log-slower-than`、`slowlog-max-len`
 - `CONFIG REWRITE` 当前会把运行时有效配置写到 `<appendfilename>.conf`，成功返回 `+OK`；当前已覆盖 `maxclients`、`databases` 等第二批运行时字段的落盘
 - `CONFIG HELP` 返回当前支持的 CONFIG 子命令列表
 - `CONFIG RESETSTAT` 当前返回 `+OK`，并清理 `LATENCY HISTOGRAM` 的命令直方图状态

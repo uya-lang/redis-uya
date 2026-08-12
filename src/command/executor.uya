@@ -19700,6 +19700,12 @@ fn command_executor_config(runtime: &CommandRuntimeInfo, command: &Command) Comm
             return command_executor_oom();
         };
     }
+    if command_executor_keyword_match(pattern, &"aclfile"[0: 7]) {
+        _ = command_executor_config_append_pair(reply_list, &"aclfile"[0: 7], command_executor_cstring_slice(runtime.config.aclfile[0: 256])) catch {
+            object_free(reply_list);
+            return command_executor_oom();
+        };
+    }
     if command_executor_keyword_match(pattern, &"replicaof"[0: 9]) {
         _ = command_executor_config_append_replicaof(reply_list, runtime) catch {
             object_free(reply_list);

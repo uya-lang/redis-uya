@@ -29,6 +29,7 @@ use src.network.connection.connection_transaction_set_query_buffer;
 use src.network.connection.connection_transaction_add_network_input;
 use src.network.connection.connection_transaction_set_memory_base;
 use src.network.connection.connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_zero_copy_at;
+use src.network.connection.connection_acl_load_file;
 use src.network.connection.connection_encode_client_unblock_error_reply;
 use src.network.connection.connection_encode_client_unblock_timeout_reply;
 use src.network.connection.connection_client_registry_unregister_tx;
@@ -383,6 +384,14 @@ fn server_runtime_info_sync_replid(server: &RedisServer) void {
 
 export fn server_set_requirepass(server: &RedisServer, requirepass: &[byte]) void {
     config_copy_bytes(server.config.requirepass[0: 128], requirepass);
+    server_runtime_info_sync_config(server);
+}
+
+export fn server_set_aclfile_and_load(server: &RedisServer, aclfile: &[byte]) !void {
+    config_copy_bytes(server.config.aclfile[0: 256], aclfile);
+    server_runtime_info_sync_config(server);
+    try connection_acl_load_file(&server.runtime_info, &server.router);
+    server.config = server.runtime_info.pending_config;
     server_runtime_info_sync_config(server);
 }
 

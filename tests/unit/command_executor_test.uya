@@ -290,6 +290,14 @@ export fn test_command_info_and_config() !void {
     command_reply_cleanup(&config_append_reply);
     resp_value_free(&config_append_parsed.value);
 
+    var config_aclfile_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nCONFIG\r\n$3\r\nGET\r\n$7\r\naclfile\r\n"[0: 38]);
+    const config_aclfile_command: Command = try command_executor_test_command(&router, &config_aclfile_parsed);
+    var config_aclfile_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_aclfile_command, 5000u64);
+    const config_aclfile_len: usize = try connection_encode_reply(&config_aclfile_reply, &out[0], 512);
+    try assert_true(command_executor_test_slice_eq(out[0: config_aclfile_len], &"*2\r\n$7\r\naclfile\r\n$0\r\n\r\n"[0: 23]));
+    command_reply_cleanup(&config_aclfile_reply);
+    resp_value_free(&config_aclfile_parsed.value);
+
     var config_max_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nCONFIG\r\n$3\r\nGET\r\n$4\r\nmax*\r\n"[0: 35]);
     const config_max_command: Command = try command_executor_test_command(&router, &config_max_parsed);
     var config_max_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_max_command, 5000u64);
@@ -495,6 +503,13 @@ export fn test_command_info_and_config() !void {
     try assert_true(command_executor_test_slice_eq(runtime.pending_config.appendfilename[0: 11], &"nextlog.aof"[0: 11]));
     resp_value_free(&config_set_appendfilename_parsed.value);
 
+    var config_set_aclfile_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$7\r\naclfile\r\n$9\r\nusers.acl\r\n"[0: 54]);
+    const config_set_aclfile_command: Command = try command_executor_test_command(&router, &config_set_aclfile_parsed);
+    const config_set_aclfile_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_set_aclfile_command, 5000u64);
+    try assert_eq_i32(config_set_aclfile_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
+    try assert_true(command_executor_test_slice_eq(runtime.pending_config.aclfile[0: 9], &"users.acl"[0: 9]));
+    resp_value_free(&config_set_aclfile_parsed.value);
+
     var config_set_masterauth_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$10\r\nmasterauth\r\n$13\r\nupstream-pass\r\n"[0: 62]);
     const config_set_masterauth_command: Command = try command_executor_test_command(&router, &config_set_masterauth_parsed);
     const config_set_masterauth_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_set_masterauth_command, 5000u64);
@@ -545,6 +560,7 @@ export fn test_command_info_and_config() !void {
     runtime.config.save_seconds = 60;
     runtime.config.save_changes = 10;
     config_copy_bytes(runtime.config.requirepass[0: 128], &"next"[0: 4]);
+    config_copy_bytes(runtime.config.aclfile[0: 256], &"users.acl"[0: 9]);
 
     var rewrite_path_buf: [byte: 512] = [];
     try config_rewrite_path(rewrite_path_buf[0: 512], &runtime.config);
@@ -567,6 +583,7 @@ export fn test_command_info_and_config() !void {
     try assert_eq_i32(rewritten_cfg.save_seconds, 60);
     try assert_eq_i32(rewritten_cfg.save_changes, 10);
     try assert_true(command_executor_test_slice_eq(rewritten_cfg.requirepass[0: 4], &"next"[0: 4]));
+    try assert_true(command_executor_test_slice_eq(rewritten_cfg.aclfile[0: 9], &"users.acl"[0: 9]));
     _ = unlink(&rewrite_path_buf[0] as &const byte);
 
     runtime.replication_role = ReplicationRole.role_replica;

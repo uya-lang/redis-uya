@@ -30,10 +30,10 @@ make build
 make run
 ```
 
-指定端口、最大连接数、AOF 路径和最大内存：
+指定端口、最大连接数、AOF 路径、最大内存、认证口令和 ACL 文件：
 
 ```bash
-build/redis-uya 6380 8 build/dev.aof 1048576 allkeys-lru
+build/redis-uya 6380 8 build/dev.aof 1048576 allkeys-lru rootpass build/users.acl
 ```
 
 参数顺序：
@@ -43,6 +43,8 @@ build/redis-uya 6380 8 build/dev.aof 1048576 allkeys-lru
 3. AOF 文件路径，可省略，默认 `build/appendonly.aof`
 4. `maxmemory` 字节数，可省略，`0` 表示不限制
 5. `maxmemory-policy`，可省略，当前支持 `noeviction`、`allkeys-lru`、`allkeys-lfu`、`volatile-lru`、`volatile-lfu` 与 `volatile-ttl`，默认 `noeviction`
+6. `requirepass`，可省略；需要只配置后续 `aclfile` 时使用空字符串占位
+7. `aclfile`，可省略；指定后会在启动监听完成、进入事件循环前加载，文件无效或不可读时启动失败
 
 ## 3. 基础验证
 

@@ -1981,7 +1981,7 @@ fn internal_lookup(db: &RedisDb, key: Sds) ?&RedisObject { ... }
 | Sentinel | ❌ 不支持 | - |
 | Cluster | ❌ 不支持 | v0.3.0 |
 | Lua | ❌ 不支持 | - |
-| ACL | ❌ 不支持 | - |
+| ACL | ⚠️ default/named user、权限规则与 ACL 文件 partial | v0.9.3 |
 | Streams | ❌ 不支持 | - |
 | Functions | ❌ 不支持 | - |
 

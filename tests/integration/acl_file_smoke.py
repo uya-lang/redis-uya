@@ -1,0 +1,295 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import socket
+import stat
+import subprocess
+import time
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[2]
+BIN = ROOT / "build" / "redis-uya"
+
+
+class RespError(RuntimeError):
+    pass
+
+
+def find_free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
+def stop_process(proc: subprocess.Popen[str]) -> None:
+    if proc.poll() is None:
+        proc.terminate()
+        try:
+            proc.wait(timeout=5.0)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=5.0)
+
+
+def connect_with_retry(port: int) -> socket.socket:
+    deadline = time.monotonic() + 5.0
+    last_error: OSError | None = None
+    while time.monotonic() < deadline:
+        try:
+            sock = socket.create_connection(("127.0.0.1", port), timeout=0.2)
+            sock.settimeout(2.0)
+            return sock
+        except OSError as exc:
+            last_error = exc
+            time.sleep(0.05)
+    raise RuntimeError(f"failed to connect to redis-uya on port {port}: {last_error}")
+
+
+def read_line(sock: socket.socket) -> bytes:
+    data = bytearray()
+    while not data.endswith(b"\r\n"):
+        chunk = sock.recv(1)
+        if not chunk:
+            raise RuntimeError("connection closed while reading RESP line")
+        data.extend(chunk)
+    return bytes(data[:-2])
+
+
+def read_exact(sock: socket.socket, size: int) -> bytes:
+    data = bytearray()
+    while len(data) < size:
+        chunk = sock.recv(size - len(data))
+        if not chunk:
+            raise RuntimeError("connection closed while reading RESP payload")
+        data.extend(chunk)
+    return bytes(data)
+
+
+def read_resp(sock: socket.socket):
+    prefix = read_exact(sock, 1)
+    if prefix == b"+":
+        return read_line(sock).decode()
+    if prefix == b"-":
+        raise RespError(read_line(sock).decode())
+    if prefix == b":":
+        return int(read_line(sock))
+    if prefix == b"$":
+        length = int(read_line(sock))
+        if length < 0:
+            return None
+        payload = read_exact(sock, length)
+        if read_exact(sock, 2) != b"\r\n":
+            raise RuntimeError("invalid bulk terminator")
+        return payload
+    if prefix == b"*":
+        count = int(read_line(sock))
+        if count < 0:
+            return None
+        return [read_resp(sock) for _ in range(count)]
+    raise RuntimeError(f"unsupported RESP prefix: {prefix!r}")
+
+
+def send_command(sock: socket.socket, *args: bytes):
+    request = bytearray(f"*{len(args)}\r\n".encode())
+    for arg in args:
+        request.extend(f"${len(arg)}\r\n".encode())
+        request.extend(arg)
+        request.extend(b"\r\n")
+    sock.sendall(request)
+    return read_resp(sock)
+
+
+def expect_error(sock: socket.socket, contains: str, *args: bytes) -> None:
+    try:
+        send_command(sock, *args)
+    except RespError as exc:
+        if contains not in str(exc):
+            raise AssertionError(f"unexpected error for {args!r}: {exc}") from exc
+        return
+    raise AssertionError(f"expected error for {args!r}")
+
+
+def config_value(sock: socket.socket, key: bytes) -> bytes:
+    reply = send_command(sock, b"CONFIG", b"GET", key)
+    if not isinstance(reply, list) or len(reply) != 2 or reply[0] != key or not isinstance(reply[1], bytes):
+        raise AssertionError(f"invalid CONFIG GET {key!r} reply: {reply!r}")
+    return reply[1]
+
+
+def authenticate(port: int, username: bytes, password: bytes) -> socket.socket:
+    sock = connect_with_retry(port)
+    try:
+        if send_command(sock, b"AUTH", username, password) != "OK":
+            raise AssertionError(f"AUTH failed for {username!r}")
+        return sock
+    except Exception:
+        sock.close()
+        raise
+
+
+def expect_auth_error(port: int, username: bytes, password: bytes) -> None:
+    with connect_with_retry(port) as sock:
+        expect_error(sock, "WRONGPASS", b"AUTH", username, password)
+
+
+def start_server(port: int, aof_path: Path, acl_path: Path | None = None) -> subprocess.Popen[str]:
+    args = [str(BIN), str(port), "8", str(aof_path)]
+    if acl_path is not None:
+        args.extend(["0", "noeviction", "", str(acl_path)])
+    return subprocess.Popen(
+        args,
+        cwd=ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+
+def run_smoke() -> None:
+    if not BIN.exists():
+        raise RuntimeError("build/redis-uya is missing; run `make build` first")
+
+    port = find_free_port()
+    acl_path = ROOT / "build" / f"acl-file-smoke-{port}.acl"
+    aof_path = ROOT / "build" / f"acl-file-smoke-{port}.aof"
+    restart_aof_path = ROOT / "build" / f"acl-file-restart-{port}.aof"
+    invalid_path = ROOT / "build" / f"acl-file-invalid-{port}.acl"
+    invalid_aof_path = ROOT / "build" / f"acl-file-invalid-{port}.aof"
+    for path in (acl_path, Path(f"{acl_path}.tmp"), aof_path, restart_aof_path, invalid_path, invalid_aof_path):
+        path.unlink(missing_ok=True)
+
+    proc = start_server(port, aof_path)
+    try:
+        with connect_with_retry(port) as admin:
+            expect_error(admin, "not configured to use an ACL file", b"ACL", b"SAVE")
+            expect_error(admin, "not configured to use an ACL file", b"ACL", b"LOAD")
+            if config_value(admin, b"aclfile") != b"":
+                raise AssertionError("aclfile default is not empty")
+            if send_command(admin, b"CONFIG", b"SET", b"aclfile", str(acl_path).encode()) != "OK":
+                raise AssertionError("CONFIG SET aclfile failed")
+            if config_value(admin, b"aclfile") != str(acl_path).encode():
+                raise AssertionError("CONFIG GET aclfile mismatch")
+
+            if send_command(admin, b"ACL", b"SETUSER", b"default", b">rootpass") != "OK":
+                raise AssertionError("failed to set default ACL password")
+            if send_command(
+                admin,
+                b"ACL",
+                b"SETUSER",
+                b"app",
+                b"on",
+                b">secret",
+                b"resetkeys",
+                b"~safe*",
+                b"resetchannels",
+                b"&news*",
+                b"-del",
+                b"-@admin",
+            ) != "OK":
+                raise AssertionError("failed to create app ACL user")
+            if send_command(admin, b"ACL", b"SETUSER", b"disabled", b"off", b">hidden") != "OK":
+                raise AssertionError("failed to create disabled ACL user")
+            Path(f"{acl_path}.tmp").write_text("stale")
+            Path(f"{acl_path}.tmp").chmod(0o666)
+            if send_command(admin, b"ACL", b"SAVE") != "OK":
+                raise AssertionError("ACL SAVE failed")
+
+            saved = acl_path.read_bytes()
+            expected_lines = {
+                b"user default on >rootpass ~* &* +@all",
+                b"user app on >secret ~safe* &news* +@all -del -@admin",
+                b"user disabled off >hidden ~* &* +@all",
+            }
+            if set(saved.splitlines()) != expected_lines:
+                raise AssertionError(f"unexpected ACL file payload: {saved!r}")
+            if stat.S_IMODE(acl_path.stat().st_mode) != 0o600:
+                raise AssertionError("ACL SAVE did not create a mode 0600 file")
+            if Path(f"{acl_path}.tmp").exists():
+                raise AssertionError("ACL SAVE left its temporary file behind")
+            if send_command(admin, b"ACL", b"SETUSER", b"app", b">bad password") != "OK":
+                raise AssertionError("failed to set a non-serializable password")
+            expect_error(admin, "Error saving the ACLs", b"ACL", b"SAVE")
+            if acl_path.read_bytes() != saved or Path(f"{acl_path}.tmp").exists():
+                raise AssertionError("failed ACL SAVE modified the active file or left a temporary file")
+            if send_command(admin, b"ACL", b"SETUSER", b"app", b">secret") != "OK":
+                raise AssertionError("failed to restore the app password")
+            acl_list = send_command(admin, b"ACL", b"LIST")
+            if b"rootpass" in repr(acl_list).encode() or b"secret" in repr(acl_list).encode():
+                raise AssertionError("ACL LIST exposed a plaintext password")
+
+            if send_command(admin, b"ACL", b"SETUSER", b"default", b">changedroot") != "OK":
+                raise AssertionError("failed to mutate default password")
+            if send_command(admin, b"ACL", b"SETUSER", b"app", b">changed", b"allkeys", b"allchannels", b"+del", b"+@admin") != "OK":
+                raise AssertionError("failed to mutate app user")
+            if send_command(admin, b"ACL", b"DELUSER", b"disabled") != 1:
+                raise AssertionError("failed to remove disabled user")
+
+            acl_path.write_bytes(saved + b"user app on >duplicate ~* &* +@all\n")
+            expect_error(admin, "Error loading the ACLs", b"ACL", b"LOAD")
+            with authenticate(port, b"default", b"changedroot") as changed_default:
+                if send_command(changed_default, b"PING") != "PONG":
+                    raise AssertionError("failed ACL LOAD changed the default user")
+            with authenticate(port, b"app", b"changed") as changed_app:
+                if send_command(changed_app, b"DEL", b"unsafe") != 0:
+                    raise AssertionError("failed ACL LOAD changed app command permissions")
+            expect_auth_error(port, b"disabled", b"hidden")
+
+            acl_path.write_bytes(saved.replace(b">secret", b">sec\x00ret"))
+            expect_error(admin, "Error loading the ACLs", b"ACL", b"LOAD")
+            with authenticate(port, b"app", b"changed") as unchanged_app:
+                if send_command(unchanged_app, b"PING") != "PONG":
+                    raise AssertionError("control-character ACL load changed app authentication")
+
+            acl_path.write_bytes(saved)
+            if send_command(admin, b"ACL", b"LOAD") != "OK":
+                raise AssertionError("ACL LOAD failed")
+
+        expect_auth_error(port, b"default", b"changedroot")
+        expect_auth_error(port, b"app", b"changed")
+        with authenticate(port, b"default", b"rootpass") as restored_default:
+            if send_command(restored_default, b"PING") != "PONG":
+                raise AssertionError("restored default user cannot run PING")
+        with authenticate(port, b"app", b"secret") as app:
+            if send_command(app, b"SET", b"safe:key", b"value") != "OK":
+                raise AssertionError("restored app user cannot access an allowed key")
+            expect_error(app, "no permissions to access one of the keys", b"SET", b"unsafe", b"value")
+            expect_error(app, "has no permissions to run the 'del' command", b"DEL", b"safe:key")
+            if send_command(app, b"PUBLISH", b"news:one", b"message") != 0:
+                raise AssertionError("restored app user cannot publish to an allowed channel")
+            expect_error(app, "no permissions to access one of the channels", b"PUBLISH", b"other", b"message")
+        expect_auth_error(port, b"disabled", b"hidden")
+    finally:
+        stop_process(proc)
+
+    restart_port = find_free_port()
+    restart_proc = start_server(restart_port, restart_aof_path, acl_path)
+    try:
+        with connect_with_retry(restart_port) as unauthenticated:
+            expect_error(unauthenticated, "NOAUTH", b"PING")
+        with authenticate(restart_port, b"default", b"rootpass") as restarted:
+            if config_value(restarted, b"aclfile") != str(acl_path).encode():
+                raise AssertionError("startup ACL path was not retained in runtime config")
+        with authenticate(restart_port, b"app", b"secret") as restarted_app:
+            expect_error(restarted_app, "has no permissions to run the 'del' command", b"DEL", b"safe:key")
+    finally:
+        stop_process(restart_proc)
+
+    invalid_path.write_text("user app on >secret ~* &* +@all\n")
+    invalid_proc = start_server(find_free_port(), invalid_aof_path, invalid_path)
+    try:
+        return_code = invalid_proc.wait(timeout=5.0)
+        if return_code == 0:
+            raise AssertionError("startup accepted an ACL file without the default user")
+        output = "".join(invalid_proc.communicate())
+        if "failed to load aclfile" not in output:
+            raise AssertionError(f"startup ACL failure was not reported: {output!r}")
+    finally:
+        stop_process(invalid_proc)
+        for path in (acl_path, Path(f"{acl_path}.tmp"), aof_path, restart_aof_path, invalid_path, invalid_aof_path):
+            path.unlink(missing_ok=True)
+
+
+if __name__ == "__main__":
+    run_smoke()
+    print("acl_file_smoke: ok")

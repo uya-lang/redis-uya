@@ -2281,7 +2281,7 @@ export fn test_connection_process_acl_named_user_metadata() !void {
     try assert_eq_i32(connection_acl_denied_command_count_for_test(&"bob"[0: 3]) as i32, 0);
 
     const getuser_bob: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$7\r\nGETUSER\r\n$3\r\nbob\r\n"[0: 35], &out[0], 4096, 1000u64);
-    try assert_true(network_connection_contains(out[0: getuser_bob.response_len], &"$9\r\npasswords\r\n*1\r\n$41\r\n#"[0: 25]));
+    try assert_true(network_connection_contains(out[0: getuser_bob.response_len], &"$9\r\npasswords\r\n*1\r\n$65\r\n#"[0: 25]));
     try assert_true(!network_connection_contains(out[0: getuser_bob.response_len], &"secret"[0: 6]));
 
     const list_with_bob_password: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$3\r\nACL\r\n$4\r\nLIST\r\n"[0: 23], &out[0], 4096, 1000u64);
@@ -2516,7 +2516,7 @@ export fn test_connection_process_auth_requirepass_shutdown() !void {
     try assert_true(network_connection_contains(out[0: config_requirepass.response_len], &"secret"[0: 6]));
 
     const acl_auth_getuser: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*3\r\n$3\r\nACL\r\n$7\r\nGETUSER\r\n$7\r\ndefault\r\n"[0: 39], &out[0], 512, 1000u64);
-    try assert_true(network_connection_contains(out[0: acl_auth_getuser.response_len], &"$9\r\npasswords\r\n*1\r\n$41\r\n#"[0: 25]));
+    try assert_true(network_connection_contains(out[0: acl_auth_getuser.response_len], &"$9\r\npasswords\r\n*1\r\n$65\r\n#"[0: 25]));
     try assert_true(!network_connection_contains(out[0: acl_auth_getuser.response_len], &"nopass"[0: 6]));
     try assert_true(!network_connection_contains(out[0: acl_auth_getuser.response_len], &"secret"[0: 6]));
 

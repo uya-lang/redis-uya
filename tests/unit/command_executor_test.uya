@@ -422,12 +422,21 @@ export fn test_command_info_and_config() !void {
     try assert_eq_i32(runtime.pending_config.save_changes, 10);
     resp_value_free(&config_set_save_parsed.value);
 
+    runtime.config.requirepass_hash_set = true;
+    runtime.config.requirepass_hash[0] = 255 as byte;
+    runtime.config.requirepass_hash[31] = 255 as byte;
     var config_set_requirepass_parsed: RespParseResult = try parse_resp2(&"*4\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$11\r\nrequirepass\r\n$4\r\nnext\r\n"[0: 56]);
     const config_set_requirepass_command: Command = try command_executor_test_command(&router, &config_set_requirepass_parsed);
     const config_set_requirepass_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &config_set_requirepass_command, 5000u64);
     try assert_eq_i32(config_set_requirepass_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
     try assert_eq_i32(config_set_requirepass_reply.request_config_set as i32, 1);
     try assert_true(command_executor_test_slice_eq(runtime.pending_config.requirepass[0: 4], &"next"[0: 4]));
+    try assert_eq_i32(runtime.pending_config.requirepass_hash_set as i32, 0);
+    try assert_eq_i32(runtime.pending_config.requirepass_hash[0] as i32, 0);
+    try assert_eq_i32(runtime.pending_config.requirepass_hash[31] as i32, 0);
+    runtime.config.requirepass_hash_set = false;
+    runtime.config.requirepass_hash[0] = 0 as byte;
+    runtime.config.requirepass_hash[31] = 0 as byte;
     resp_value_free(&config_set_requirepass_parsed.value);
 
     var config_set_multi_parsed: RespParseResult = try parse_resp2(&"*6\r\n$6\r\nCONFIG\r\n$3\r\nSET\r\n$9\r\nmaxmemory\r\n$3\r\n2mb\r\n$16\r\nlatency-tracking\r\n$2\r\nno\r\n"[0: 80]);

@@ -46,6 +46,9 @@ export fn test_config_defaults() !void {
     try assert_true(cstr_eq(cfg.dbfilename[0: 128], &"dump.rdb"[0: 8]));
     try assert_true(cstr_eq(cfg.aclfile[0: 256], &""[0: 0]));
     try assert_true(cstr_eq(cfg.requirepass[0: 128], &""[0: 0]));
+    try assert_eq_i32(cfg.requirepass_hash_set as i32, 0);
+    try assert_eq_i32(cfg.requirepass_hash[0] as i32, 0);
+    try assert_eq_i32(cfg.requirepass_hash[31] as i32, 0);
 }
 
 export fn test_config_parse_core_fields() !void {
@@ -63,6 +66,7 @@ export fn test_config_parse_core_fields() !void {
     const acl_cfg: ServerConfig = try parse_config_text(&"aclfile users.acl\n"[0: 18]);
     try assert_true(cstr_eq(acl_cfg.aclfile[0: 256], &"users.acl"[0: 9]));
     try assert_true(cstr_eq(cfg.requirepass[0: 128], &"lock"[0: 4]));
+    try assert_eq_i32(cfg.requirepass_hash_set as i32, 0);
     try assert_true(cstr_eq(cfg.replicaof_host[0: 64], &"10.0.0.8"[0: 8]));
     try assert_eq_i32(cfg.replicaof_port, 6381);
     try assert_true(cstr_eq(cfg.masterauth[0: 128], &"secret"[0: 6]));

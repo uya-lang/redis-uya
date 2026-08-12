@@ -50,6 +50,8 @@ export struct ServerConfig {
     backupdirname: [byte: 256],
     aclfile: [byte: 256],
     requirepass: [byte: 128],
+    requirepass_hash: [byte: 32],
+    requirepass_hash_set: bool,
     replicaof_host: [byte: 64],
     replicaof_port: i32,
     masterauth: [byte: 128],
@@ -72,6 +74,14 @@ fn copy_literal(dst: &[byte], src: &[byte]) void {
     if i < dst.len { dst.ptr[i] = 0; }
 }
 
+fn clear_bytes(dst: &[byte]) void {
+    var i: usize = 0;
+    while i < dst.len {
+        dst.ptr[i] = 0 as byte;
+        i = i + 1;
+    }
+}
+
 export fn config_copy_bytes(dst: &[byte], src: &[byte]) void {
     copy_literal(dst, src);
 }
@@ -90,6 +100,7 @@ export fn default_config() ServerConfig {
         slowlog_max_len: 128,
         save_seconds: 900,
         save_changes: 1,
+        requirepass_hash_set: false,
     };
     copy_literal(cfg.bind[0: 64], &"0.0.0.0"[0: 7]);
     copy_literal(cfg.dir[0: 256], &"./"[0: 2]);
@@ -98,6 +109,7 @@ export fn default_config() ServerConfig {
     copy_literal(cfg.backupdirname[0: 256], &"backupdir"[0: 9]);
     copy_literal(cfg.aclfile[0: 256], &""[0: 0]);
     copy_literal(cfg.requirepass[0: 128], &""[0: 0]);
+    clear_bytes(cfg.requirepass_hash[0: 32]);
     copy_literal(cfg.replicaof_host[0: 64], &""[0: 0]);
     cfg.replicaof_port = 0;
     copy_literal(cfg.masterauth[0: 128], &""[0: 0]);
@@ -261,7 +273,10 @@ export fn config_apply_runtime_set(cfg: &ServerConfig, key: &[byte], value: &[by
         return true;
     }
     if token_eq(key, &"requirepass"[0: 11]) {
+        clear_bytes(cfg.requirepass[0: 128]);
         copy_literal(cfg.requirepass[0: 128], value);
+        cfg.requirepass_hash_set = false;
+        clear_bytes(cfg.requirepass_hash[0: 32]);
         return true;
     }
     if token_eq(key, &"replicaof"[0: 9]) {
@@ -588,7 +603,10 @@ fn parse_line(cfg: &ServerConfig, line: &[byte]) !void {
     } else if token_eq(key, &"aclfile"[0: 7]) {
         copy_literal(cfg.aclfile[0: 256], value);
     } else if token_eq(key, &"requirepass"[0: 11]) {
+        clear_bytes(cfg.requirepass[0: 128]);
         copy_literal(cfg.requirepass[0: 128], value);
+        cfg.requirepass_hash_set = false;
+        clear_bytes(cfg.requirepass_hash[0: 32]);
     } else if token_eq(key, &"replicaof"[0: 9]) {
         copy_literal(cfg.replicaof_host[0: 64], value);
         const port_token: &[byte] = next_token(line, &pos);

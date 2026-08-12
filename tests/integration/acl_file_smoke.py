@@ -173,13 +173,23 @@ def run_smoke() -> None:
 
             if send_command(admin, b"ACL", b"SETUSER", b"default", b">rootpass") != "OK":
                 raise AssertionError("failed to set default ACL password")
+            secret_hash = b"2bb80d537b1da3e38bd30361aa855686bde0eacd7162fef6a25fe97bf527a25b"
+            expect_error(admin, "password hash must be exactly 64 characters", b"ACL", b"SETUSER", b"app", b"#abc")
+            expect_error(
+                admin,
+                "password hash must be exactly 64 characters",
+                b"ACL",
+                b"SETUSER",
+                b"app",
+                b"#2BB80d537b1da3e38bd30361aa855686bde0eacd7162fef6a25fe97bf527a25b",
+            )
             if send_command(
                 admin,
                 b"ACL",
                 b"SETUSER",
                 b"app",
                 b"on",
-                b">secret",
+                b"#" + secret_hash,
                 b"resetkeys",
                 b"~safe*",
                 b"resetchannels",
@@ -188,6 +198,35 @@ def run_smoke() -> None:
                 b"-@admin",
             ) != "OK":
                 raise AssertionError("failed to create app ACL user")
+            with authenticate(port, b"app", b"secret") as hashed_app:
+                if send_command(hashed_app, b"PING") != "PONG":
+                    raise AssertionError("direct password hash cannot authenticate")
+            expect_error(
+                admin,
+                "password you are trying to remove from the user does not exist",
+                b"ACL",
+                b"SETUSER",
+                b"app",
+                b"!" + (b"0" * 64),
+            )
+            if send_command(admin, b"ACL", b"SETUSER", b"app", b"!" + secret_hash) != "OK":
+                raise AssertionError("failed to remove app password hash")
+            expect_auth_error(port, b"app", b"secret")
+            if send_command(admin, b"ACL", b"SETUSER", b"app", b"#" + secret_hash) != "OK":
+                raise AssertionError("failed to restore app password hash")
+            expect_error(
+                admin,
+                "password you are trying to remove from the user does not exist",
+                b"ACL",
+                b"SETUSER",
+                b"app",
+                b"<wrong",
+            )
+            if send_command(admin, b"ACL", b"SETUSER", b"app", b"<secret") != "OK":
+                raise AssertionError("failed to remove app password by plaintext")
+            expect_auth_error(port, b"app", b"secret")
+            if send_command(admin, b"ACL", b"SETUSER", b"app", b"#" + secret_hash) != "OK":
+                raise AssertionError("failed to restore app password after plaintext removal")
             if send_command(admin, b"ACL", b"SETUSER", b"disabled", b"off", b">hidden") != "OK":
                 raise AssertionError("failed to create disabled ACL user")
             Path(f"{acl_path}.tmp").write_text("stale")
@@ -197,9 +236,9 @@ def run_smoke() -> None:
 
             saved = acl_path.read_bytes()
             expected_lines = {
-                b"user default on >rootpass ~* &* +@all",
-                b"user app on >secret ~safe* &news* +@all -del -@admin",
-                b"user disabled off >hidden ~* &* +@all",
+                b"user default on #5012f5182061c46e57859cf617128c6f70eddfba4db27772bdede5a039fa7085 ~* &* +@all",
+                b"user app on #" + secret_hash + b" ~safe* &news* +@all -del -@admin",
+                b"user disabled off #e564b4081d7a9ea4b00dada53bdae70c99b87b6fce869f0c3dd4d2bfa1e53e1c ~* &* +@all",
             }
             if set(saved.splitlines()) != expected_lines:
                 raise AssertionError(f"unexpected ACL file payload: {saved!r}")
@@ -207,16 +246,16 @@ def run_smoke() -> None:
                 raise AssertionError("ACL SAVE did not create a mode 0600 file")
             if Path(f"{acl_path}.tmp").exists():
                 raise AssertionError("ACL SAVE left its temporary file behind")
-            if send_command(admin, b"ACL", b"SETUSER", b"app", b">bad password") != "OK":
-                raise AssertionError("failed to set a non-serializable password")
-            expect_error(admin, "Error saving the ACLs", b"ACL", b"SAVE")
-            if acl_path.read_bytes() != saved or Path(f"{acl_path}.tmp").exists():
-                raise AssertionError("failed ACL SAVE modified the active file or left a temporary file")
-            if send_command(admin, b"ACL", b"SETUSER", b"app", b">secret") != "OK":
-                raise AssertionError("failed to restore the app password")
+            if any(password in saved for password in (b"rootpass", b"secret", b"hidden")):
+                raise AssertionError("ACL SAVE exposed a plaintext password")
             acl_list = send_command(admin, b"ACL", b"LIST")
             if b"rootpass" in repr(acl_list).encode() or b"secret" in repr(acl_list).encode():
                 raise AssertionError("ACL LIST exposed a plaintext password")
+            if not isinstance(acl_list, list) or not all(
+                isinstance(entry, bytes) and (b" nopass " in entry or any(len(token) == 65 and token.startswith(b"#") for token in entry.split()))
+                for entry in acl_list
+            ):
+                raise AssertionError(f"ACL LIST did not expose canonical SHA-256 markers: {acl_list!r}")
 
             if send_command(admin, b"ACL", b"SETUSER", b"default", b">changedroot") != "OK":
                 raise AssertionError("failed to mutate default password")
@@ -235,11 +274,11 @@ def run_smoke() -> None:
                     raise AssertionError("failed ACL LOAD changed app command permissions")
             expect_auth_error(port, b"disabled", b"hidden")
 
-            acl_path.write_bytes(saved.replace(b">secret", b">sec\x00ret"))
+            acl_path.write_bytes(saved.replace(secret_hash, b"2BB80d537b1da3e38bd30361aa855686bde0eacd7162fef6a25fe97bf527a25b"))
             expect_error(admin, "Error loading the ACLs", b"ACL", b"LOAD")
             with authenticate(port, b"app", b"changed") as unchanged_app:
                 if send_command(unchanged_app, b"PING") != "PONG":
-                    raise AssertionError("control-character ACL load changed app authentication")
+                    raise AssertionError("invalid password hash load changed app authentication")
 
             acl_path.write_bytes(saved)
             if send_command(admin, b"ACL", b"LOAD") != "OK":
@@ -275,7 +314,7 @@ def run_smoke() -> None:
     finally:
         stop_process(restart_proc)
 
-    invalid_path.write_text("user app on >secret ~* &* +@all\n")
+    invalid_path.write_text(f"user app on #{secret_hash.decode()} ~* &* +@all\n")
     invalid_proc = start_server(find_free_port(), invalid_aof_path, invalid_path)
     try:
         return_code = invalid_proc.wait(timeout=5.0)

@@ -383,7 +383,18 @@ fn server_runtime_info_sync_replid(server: &RedisServer) void {
 }
 
 export fn server_set_requirepass(server: &RedisServer, requirepass: &[byte]) void {
+    var i: usize = 0;
+    while i < 128 {
+        server.config.requirepass[i] = 0 as byte;
+        i = i + 1;
+    }
     config_copy_bytes(server.config.requirepass[0: 128], requirepass);
+    server.config.requirepass_hash_set = false;
+    i = 0;
+    while i < 32 {
+        server.config.requirepass_hash[i] = 0 as byte;
+        i = i + 1;
+    }
     server_runtime_info_sync_config(server);
 }
 

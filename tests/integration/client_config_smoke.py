@@ -556,6 +556,7 @@ def run_smoke() -> None:
                     not isinstance(client_help, list)
                     or b"CLIENT REPLY <ON|OFF|SKIP>" not in client_help
                     or b"CLIENT LIST [TYPE NORMAL|MASTER|REPLICA|PUBSUB] | [ID <id> ...]" not in client_help
+                    or b"CLIENT KILL [ID <id>] [ADDR <ip:port>] [USER <username>] [SKIPME yes|no]" not in client_help
                     or b"CLIENT TRACKINGINFO" not in client_help
                 ):
                     raise AssertionError(f"unexpected CLIENT HELP: {client_help!r}")
@@ -949,6 +950,63 @@ def run_smoke() -> None:
                         self_failed = True
                     if not self_failed:
                         raise AssertionError("self connection stayed alive after CLIENT KILL SKIPME NO")
+
+                try:
+                    send_command(sock, b"CLIENT", b"KILL", b"USER", b"missing")
+                    raise AssertionError("CLIENT KILL USER accepted an unknown user")
+                except RespError as exc:
+                    if str(exc) != "ERR No such user 'missing'":
+                        raise AssertionError(f"unexpected CLIENT KILL USER error: {exc}") from exc
+
+                with connect_with_retry(port, time.monotonic() + 5.0) as user_victim_sock:
+                    if send_command(user_victim_sock, b"AUTH", b"peer-user", b"secret") != "OK":
+                        raise AssertionError("CLIENT KILL USER victim AUTH failed")
+                    user_victim_id = send_command(user_victim_sock, b"CLIENT", b"ID")
+                    if not isinstance(user_victim_id, int) or user_victim_id <= 0:
+                        raise AssertionError(f"unexpected USER victim CLIENT ID: {user_victim_id!r}")
+                    mismatched_user = send_command(
+                        sock,
+                        b"CLIENT",
+                        b"KILL",
+                        b"ID",
+                        str(user_victim_id).encode(),
+                        b"USER",
+                        b"default",
+                    )
+                    if mismatched_user != 0:
+                        raise AssertionError(f"mismatched CLIENT KILL ID/USER should return 0, got {mismatched_user!r}")
+                    if send_command(user_victim_sock, b"PING") != "PONG":
+                        raise AssertionError("mismatched CLIENT KILL ID/USER closed the victim")
+                    killed_user = send_command(
+                        sock,
+                        b"CLIENT",
+                        b"KILL",
+                        b"ID",
+                        str(user_victim_id).encode(),
+                        b"USER",
+                        b"peer-user",
+                    )
+                    if killed_user != 1:
+                        raise AssertionError(f"CLIENT KILL ID/USER did not report one killed client: {killed_user!r}")
+                    user_victim_failed = False
+                    try:
+                        send_command(user_victim_sock, b"PING")
+                    except Exception:
+                        user_victim_failed = True
+                    if not user_victim_failed:
+                        raise AssertionError("USER victim connection stayed alive after CLIENT KILL")
+
+                if send_command(sock, b"CLIENT", b"KILL", b"USER", b"default", b"USER", b"peer-user") != 1:
+                    raise AssertionError("CLIENT KILL USER did not close the remaining named-user connection")
+                peer_failed = False
+                try:
+                    send_command(peer_sock, b"PING")
+                except Exception:
+                    peer_failed = True
+                if not peer_failed:
+                    raise AssertionError("peer named-user connection stayed alive after CLIENT KILL USER")
+                if send_command(sock, b"CLIENT", b"KILL", b"USER", b"peer-user") != 0:
+                    raise AssertionError("CLIENT KILL USER should return 0 when the known user has no clients")
 
                 if send_command(sock, b"CONFIG", b"SET", b"maxmemory", b"1mb") != "OK":
                     raise AssertionError("CONFIG SET maxmemory failed")

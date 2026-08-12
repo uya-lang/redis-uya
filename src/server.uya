@@ -22,6 +22,7 @@ use src.network.connection.ConnectionProcessResult;
 use src.network.connection.ConnectionTransaction;
 use src.network.connection.connection_client_registry_client_id;
 use src.network.connection.connection_client_registry_sync;
+use src.network.connection.connection_transaction_client_kill_user_matches;
 use src.network.connection.connection_transaction_set_client_addresses;
 use src.network.connection.connection_transaction_set_client_times;
 use src.network.connection.connection_transaction_set_output_buffer;
@@ -1162,6 +1163,18 @@ fn server_find_client_slot_by_client_id(server: &RedisServer, client_id: i64) i3
     return -1;
 }
 
+fn server_kill_clients_matching(server: &RedisServer, current_slot: usize, client_id: i64, user_selector: i32) void {
+    var i: usize = 0;
+    while i < SERVER_MAX_CLIENTS {
+        if i != current_slot && server.clients[i].fd >= 0 &&
+            (client_id <= 0 || connection_client_registry_client_id(&server.clients[i].transaction) == client_id) &&
+            connection_transaction_client_kill_user_matches(&server.clients[i].transaction, user_selector) {
+            server_close_client_slot(server, i);
+        }
+        i = i + 1;
+    }
+}
+
 fn server_has_pending_client_output(server: &RedisServer) bool {
     var i: usize = 0;
     while i < SERVER_MAX_CLIENTS {
@@ -1687,13 +1700,12 @@ fn server_async_writev_all_future(
                         response_len = 4;
                     }
                 } else {
-                    const kill_slot_i32: i32 = server_find_client_slot_by_client_id(server, result.client_kill_id);
-                    if kill_slot_i32 >= 0 {
-                        const kill_slot: usize = kill_slot_i32 as usize;
-                        if kill_slot < SERVER_MAX_CLIENTS && kill_slot != slot {
-                            server_close_client_slot(server, kill_slot);
-                        }
-                    }
+                    server_kill_clients_matching(
+                        server,
+                        slot,
+                        result.client_kill_id,
+                        result.client_kill_user_selector,
+                    );
                 }
             }
             if result.request_shutdown {

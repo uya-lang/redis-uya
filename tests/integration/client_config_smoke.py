@@ -556,7 +556,7 @@ def run_smoke() -> None:
                     not isinstance(client_help, list)
                     or b"CLIENT REPLY <ON|OFF|SKIP>" not in client_help
                     or b"CLIENT LIST [TYPE NORMAL|MASTER|REPLICA|PUBSUB] | [ID <id> ...]" not in client_help
-                    or b"CLIENT KILL [ID <id>] [ADDR <ip:port>] [LADDR <ip:port>] [USER <username>] [TYPE <normal|master|replica|pubsub>] [SKIPME yes|no]" not in client_help
+                    or b"CLIENT KILL [ID <id>] [ADDR <ip:port>] [LADDR <ip:port>] [USER <username>] [TYPE <normal|master|replica|pubsub>] [MAXAGE <seconds>] [SKIPME yes|no]" not in client_help
                     or b"CLIENT TRACKINGINFO" not in client_help
                 ):
                     raise AssertionError(f"unexpected CLIENT HELP: {client_help!r}")
@@ -1092,6 +1092,54 @@ def run_smoke() -> None:
                                 laddr_failed = True
                             if not laddr_failed:
                                 raise AssertionError("LADDR victim connection stayed alive after CLIENT KILL")
+
+                try:
+                    send_command(sock, b"CLIENT", b"KILL", b"MAXAGE", b"bad")
+                    raise AssertionError("invalid CLIENT KILL MAXAGE should fail")
+                except RuntimeError as exc:
+                    if str(exc) != "ERR maxage is not an integer or out of range":
+                        raise AssertionError(f"unexpected CLIENT KILL MAXAGE integer error: {exc}") from exc
+                try:
+                    send_command(sock, b"CLIENT", b"KILL", b"MAXAGE", b"0")
+                    raise AssertionError("zero CLIENT KILL MAXAGE should fail")
+                except RuntimeError as exc:
+                    if str(exc) != "ERR maxage should be greater than 0":
+                        raise AssertionError(f"unexpected CLIENT KILL MAXAGE zero error: {exc}") from exc
+                with connect_with_retry(port, time.monotonic() + 5.0) as maxage_old:
+                    maxage_old_id = send_command(maxage_old, b"CLIENT", b"ID")
+                    time.sleep(1.1)
+                    with connect_with_retry(port, time.monotonic() + 5.0) as maxage_young:
+                        maxage_young_id = send_command(maxage_young, b"CLIENT", b"ID")
+                        if send_command(
+                            sock,
+                            b"CLIENT",
+                            b"KILL",
+                            b"ID",
+                            str(maxage_young_id).encode(),
+                            b"MAXAGE",
+                            b"1",
+                        ) != 0:
+                            raise AssertionError("young CLIENT KILL ID/MAXAGE intersection should return 0")
+                        if send_command(maxage_young, b"PING") != "PONG":
+                            raise AssertionError("young CLIENT KILL MAXAGE target was closed")
+                        if send_command(
+                            sock,
+                            b"CLIENT",
+                            b"KILL",
+                            b"ID",
+                            str(maxage_old_id).encode(),
+                            b"MAXAGE",
+                            b"1",
+                        ) != 1:
+                            raise AssertionError("old CLIENT KILL ID/MAXAGE target was not closed")
+                        try:
+                            send_command(maxage_old, b"PING")
+                            raise AssertionError("old CLIENT KILL MAXAGE target stayed alive")
+                        except RuntimeError as exc:
+                            if "connection closed while reading" not in str(exc):
+                                raise
+                        except (ConnectionError, OSError):
+                            pass
 
                 if send_command(sock, b"CONFIG", b"SET", b"maxmemory", b"1mb") != "OK":
                     raise AssertionError("CONFIG SET maxmemory failed")

@@ -161,6 +161,8 @@ export struct ConnectionProcessResult {
     request_client_kill: bool,
     client_kill_id: i64,
     client_kill_laddr_id: i64,
+    client_kill_has_maxage: bool,
+    client_kill_maxage_seconds: u64,
     client_kill_user_selector: i32,
     client_kill_type_selector: i32,
     client_kill_self: bool,
@@ -670,6 +672,8 @@ fn connection_zero_copy_process_result(
         request_client_kill: false,
         client_kill_id: 0,
         client_kill_laddr_id: 0,
+        client_kill_has_maxage: false,
+        client_kill_maxage_seconds: 0u64,
         client_kill_user_selector: CONNECTION_CLIENT_KILL_USER_NONE,
         client_kill_type_selector: CONNECTION_CLIENT_KILL_TYPE_NONE,
         client_kill_self: false,
@@ -702,6 +706,8 @@ fn connection_make_reply(typ: CommandReplyType, data: &[byte], integer: i64) Com
         request_client_kill: false,
         client_kill_id: 0,
         client_kill_laddr_id: 0,
+        client_kill_has_maxage: false,
+        client_kill_maxage_seconds: 0u64,
         client_kill_user_selector: CONNECTION_CLIENT_KILL_USER_NONE,
         client_kill_type_selector: CONNECTION_CLIENT_KILL_TYPE_NONE,
         client_kill_self: false,
@@ -963,6 +969,43 @@ fn connection_parse_u64(data: &[byte]) !u64 {
         }
         value = value * 10u64 + ((ch - 48 as byte) as u64);
         i = i + 1;
+    }
+    return value;
+}
+
+fn connection_parse_client_maxage(data: &[byte]) !u64 {
+    if data.len == 0 {
+        return error.ConnectionIoFailed;
+    }
+    var negative: bool = false;
+    var i: usize = 0;
+    if data.ptr[0] == 43 as byte || data.ptr[0] == 45 as byte {
+        negative = data.ptr[0] == 45 as byte;
+        i = 1;
+        if i >= data.len {
+            return error.ConnectionIoFailed;
+        }
+    }
+    var value: u64 = 0u64;
+    while i < data.len {
+        const ch: byte = data.ptr[i];
+        if ch < 48 as byte || ch > 57 as byte {
+            return error.ConnectionIoFailed;
+        }
+        const digit: u64 = (ch - 48 as byte) as u64;
+        var final_digit_limit: u64 = 7u64;
+        if negative {
+            final_digit_limit = 8u64;
+        }
+        if value > 922337203685477580u64 ||
+            (value == 922337203685477580u64 && digit > final_digit_limit) {
+            return error.ConnectionIoFailed;
+        }
+        value = value * 10u64 + digit;
+        i = i + 1;
+    }
+    if negative {
+        return 0u64;
     }
     return value;
 }
@@ -3790,6 +3833,17 @@ export fn connection_transaction_client_local_addr_matches(left: &ConnectionTran
     );
 }
 
+export fn connection_transaction_client_age_at_least(tx: &ConnectionTransaction, now_ms: u64, maxage_seconds: u64) bool {
+    if tx == null {
+        return false;
+    }
+    var elapsed_ms: u64 = 0u64;
+    if now_ms >= tx.created_ms {
+        elapsed_ms = now_ms - tx.created_ms;
+    }
+    return elapsed_ms / 1000u64 >= maxage_seconds;
+}
+
 fn connection_current_user_is_default(tx: &ConnectionTransaction) bool {
     return connection_keyword_eq(connection_current_username(tx), &"default"[0: 7]);
 }
@@ -6032,6 +6086,21 @@ fn connection_client_registry_slots_share_local_addr(left_index: usize, right_in
     );
 }
 
+fn connection_client_registry_slot_age_at_least(slot_index: usize, now_ms: u64, maxage_seconds: u64) bool {
+    if slot_index >= CONNECTION_CLIENT_REGISTRY_MAX {
+        return false;
+    }
+    if !connection_client_registry[slot_index].active {
+        return false;
+    }
+    const created_ms: u64 = connection_client_registry[slot_index].created_ms;
+    var elapsed_ms: u64 = 0u64;
+    if now_ms >= created_ms {
+        elapsed_ms = now_ms - created_ms;
+    }
+    return elapsed_ms / 1000u64 >= maxage_seconds;
+}
+
 fn connection_client_registry_slot_matches_user_selector(slot_index: usize, selector: i32) bool {
     if slot_index >= CONNECTION_CLIENT_REGISTRY_MAX || !connection_client_registry[slot_index].active {
         return false;
@@ -7604,7 +7673,7 @@ fn connection_client_help_reply() CommandReply {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
-    _ = list_object_push_tail(reply_list, &"CLIENT KILL [ID <id>] [ADDR <ip:port>] [LADDR <ip:port>] [USER <username>] [TYPE <normal|master|replica|pubsub>] [SKIPME yes|no]"[0: 128]) catch {
+    _ = list_object_push_tail(reply_list, &"CLIENT KILL [ID <id>] [ADDR <ip:port>] [LADDR <ip:port>] [USER <username>] [TYPE <normal|master|replica|pubsub>] [MAXAGE <seconds>] [SKIPME yes|no]"[0: 147]) catch {
         object_free(reply_list);
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
@@ -8009,6 +8078,8 @@ fn connection_handle_client(tx: &ConnectionTransaction, command: &Command, now_m
         var target_matches: bool = true;
         var has_laddr: bool = false;
         var laddr_slot: i32 = -1;
+        var has_maxage: bool = false;
+        var maxage_seconds: u64 = 0u64;
         var skip_me: bool = true;
         var kill_user_selector: i32 = CONNECTION_CLIENT_KILL_USER_NONE;
         var kill_type_selector: i32 = CONNECTION_CLIENT_KILL_TYPE_NONE;
@@ -8090,6 +8161,24 @@ fn connection_handle_client(tx: &ConnectionTransaction, command: &Command, now_m
                 index = index + 2;
                 continue;
             }
+            if connection_keyword_eq(selector, &"MAXAGE"[0: 6]) {
+                if index + 1 >= command.argc {
+                    return connection_error_reply(&"ERR syntax error"[0: 16]);
+                }
+                const maxage_arg: &[byte] = command_arg_data(command, index + 1) catch {
+                    return connection_error_reply(&"ERR invalid request"[0: 19]);
+                };
+                const parsed_maxage: u64 = connection_parse_client_maxage(maxage_arg) catch {
+                    return connection_error_reply(&"ERR maxage is not an integer or out of range"[0: 44]);
+                };
+                if parsed_maxage == 0u64 {
+                    return connection_error_reply(&"ERR maxage should be greater than 0"[0: 35]);
+                }
+                has_maxage = true;
+                maxage_seconds = parsed_maxage;
+                index = index + 2;
+                continue;
+            }
             if connection_keyword_eq(selector, &"USER"[0: 4]) {
                 if index + 1 >= command.argc {
                     return connection_error_reply(&"ERR syntax error"[0: 16]);
@@ -8124,7 +8213,7 @@ fn connection_handle_client(tx: &ConnectionTransaction, command: &Command, now_m
             }
             return connection_error_reply(&"ERR syntax error"[0: 16]);
         }
-        if !has_target && !has_laddr && kill_user_selector == CONNECTION_CLIENT_KILL_USER_NONE && kill_type_selector == CONNECTION_CLIENT_KILL_TYPE_NONE {
+        if !has_target && !has_laddr && !has_maxage && kill_user_selector == CONNECTION_CLIENT_KILL_USER_NONE && kill_type_selector == CONNECTION_CLIENT_KILL_TYPE_NONE {
             return connection_error_reply(&"ERR syntax error"[0: 16]);
         }
         if has_target && (!target_matches || target_slot < 0 || target_slot >= CONNECTION_CLIENT_REGISTRY_MAX as i32) {
@@ -8155,6 +8244,7 @@ fn connection_handle_client(tx: &ConnectionTransaction, command: &Command, now_m
             if connection_client_registry[scan_index].active &&
                 (!has_target || scan_index == target_slot_index) &&
                 (!has_laddr || connection_client_registry_slots_share_local_addr(scan_index, laddr_slot_index)) &&
+                (!has_maxage || connection_client_registry_slot_age_at_least(scan_index, now_ms, maxage_seconds)) &&
                 (kill_user_selector == CONNECTION_CLIENT_KILL_USER_NONE || connection_client_registry_slot_matches_user_selector(scan_index, kill_user_selector)) &&
                 connection_client_registry_slot_matches_type_selector(scan_index, kill_type_selector) &&
                 (!skip_me || connection_client_registry[scan_index].client_id != current_id) {
@@ -8176,6 +8266,8 @@ fn connection_handle_client(tx: &ConnectionTransaction, command: &Command, now_m
         if has_laddr {
             reply.client_kill_laddr_id = connection_client_registry[laddr_slot_index].client_id;
         }
+        reply.client_kill_has_maxage = has_maxage;
+        reply.client_kill_maxage_seconds = maxage_seconds;
         reply.client_kill_user_selector = kill_user_selector;
         reply.client_kill_type_selector = kill_type_selector;
         reply.client_kill_self = matched_self;
@@ -10805,6 +10897,8 @@ fn connection_execute_standard_command_at(
     const request_client_kill: bool = reply.request_client_kill;
     const client_kill_id: i64 = reply.client_kill_id;
     const client_kill_laddr_id: i64 = reply.client_kill_laddr_id;
+    const client_kill_has_maxage: bool = reply.client_kill_has_maxage;
+    const client_kill_maxage_seconds: u64 = reply.client_kill_maxage_seconds;
     const client_kill_user_selector: i32 = reply.client_kill_user_selector;
     const client_kill_type_selector: i32 = reply.client_kill_type_selector;
     const client_kill_self: bool = reply.client_kill_self;
@@ -10888,6 +10982,8 @@ fn connection_execute_standard_command_at(
         request_client_kill: request_client_kill,
         client_kill_id: client_kill_id,
         client_kill_laddr_id: client_kill_laddr_id,
+        client_kill_has_maxage: client_kill_has_maxage,
+        client_kill_maxage_seconds: client_kill_maxage_seconds,
         client_kill_user_selector: client_kill_user_selector,
         client_kill_type_selector: client_kill_type_selector,
         client_kill_self: client_kill_self,
@@ -11698,6 +11794,8 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_in
     var request_client_kill: bool = false;
     var client_kill_id: i64 = 0;
     var client_kill_laddr_id: i64 = 0;
+    var client_kill_has_maxage: bool = false;
+    var client_kill_maxage_seconds: u64 = 0u64;
     var client_kill_user_selector: i32 = CONNECTION_CLIENT_KILL_USER_NONE;
     var client_kill_type_selector: i32 = CONNECTION_CLIENT_KILL_TYPE_NONE;
     var client_kill_self: bool = false;
@@ -11760,6 +11858,8 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_in
             request_client_kill = true;
             client_kill_id = result.client_kill_id;
             client_kill_laddr_id = result.client_kill_laddr_id;
+            client_kill_has_maxage = result.client_kill_has_maxage;
+            client_kill_maxage_seconds = result.client_kill_maxage_seconds;
             client_kill_user_selector = result.client_kill_user_selector;
             client_kill_type_selector = result.client_kill_type_selector;
             client_kill_self = result.client_kill_self;
@@ -11803,6 +11903,8 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_in
         request_client_kill: request_client_kill,
         client_kill_id: client_kill_id,
         client_kill_laddr_id: client_kill_laddr_id,
+        client_kill_has_maxage: client_kill_has_maxage,
+        client_kill_maxage_seconds: client_kill_maxage_seconds,
         client_kill_user_selector: client_kill_user_selector,
         client_kill_type_selector: client_kill_type_selector,
         client_kill_self: client_kill_self,
@@ -12237,6 +12339,8 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
         const client_request_kill: bool = client_reply.request_client_kill;
         const client_kill_id: i64 = client_reply.client_kill_id;
         const client_kill_laddr_id: i64 = client_reply.client_kill_laddr_id;
+        const client_kill_has_maxage: bool = client_reply.client_kill_has_maxage;
+        const client_kill_maxage_seconds: u64 = client_reply.client_kill_maxage_seconds;
         const client_kill_user_selector: i32 = client_reply.client_kill_user_selector;
         const client_kill_type_selector: i32 = client_reply.client_kill_type_selector;
         const client_kill_self: bool = client_reply.client_kill_self;
@@ -12260,6 +12364,8 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
             request_client_kill: client_request_kill,
             client_kill_id: client_kill_id,
             client_kill_laddr_id: client_kill_laddr_id,
+            client_kill_has_maxage: client_kill_has_maxage,
+            client_kill_maxage_seconds: client_kill_maxage_seconds,
             client_kill_user_selector: client_kill_user_selector,
             client_kill_type_selector: client_kill_type_selector,
             client_kill_self: client_kill_self,

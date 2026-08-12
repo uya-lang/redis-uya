@@ -1509,7 +1509,7 @@ if [[ "$CLIENT_CACHING_RESULT" != "OK" ]]; then
 fi
 
 CLIENT_HELP_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" client help)"
-if [[ "$CLIENT_HELP_RESULT" != *"CLIENT REPLY <ON|OFF|SKIP>"* || "$CLIENT_HELP_RESULT" != *"CLIENT LIST [TYPE NORMAL|MASTER|REPLICA|PUBSUB] | [ID <id> ...]"* || "$CLIENT_HELP_RESULT" != *"CLIENT KILL [ID <id>] [ADDR <ip:port>] [LADDR <ip:port>] [USER <username>] [TYPE <normal|master|replica|pubsub>] [SKIPME yes|no]"* || "$CLIENT_HELP_RESULT" != *"CLIENT TRACKINGINFO"* || "$CLIENT_HELP_RESULT" != *"CLIENT KILL <ip:port>"* ]]; then
+if [[ "$CLIENT_HELP_RESULT" != *"CLIENT REPLY <ON|OFF|SKIP>"* || "$CLIENT_HELP_RESULT" != *"CLIENT LIST [TYPE NORMAL|MASTER|REPLICA|PUBSUB] | [ID <id> ...]"* || "$CLIENT_HELP_RESULT" != *"CLIENT KILL [ID <id>] [ADDR <ip:port>] [LADDR <ip:port>] [USER <username>] [TYPE <normal|master|replica|pubsub>] [MAXAGE <seconds>] [SKIPME yes|no]"* || "$CLIENT_HELP_RESULT" != *"CLIENT TRACKINGINFO"* || "$CLIENT_HELP_RESULT" != *"CLIENT KILL <ip:port>"* ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected CLIENT HELP output, got '$CLIENT_HELP_RESULT'" >&2
     exit 1
 fi
@@ -1555,6 +1555,24 @@ fi
 CLIENT_KILL_LADDR_MISSING_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" client kill laddr 127.0.0.1:1)"
 if [[ "$CLIENT_KILL_LADDR_MISSING_RESULT" != "0" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected missing CLIENT KILL LADDR 0, got '$CLIENT_KILL_LADDR_MISSING_RESULT'" >&2
+    exit 1
+fi
+
+CLIENT_KILL_MAXAGE_BAD_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" client kill maxage bad 2>&1 || true)"
+if [[ "$CLIENT_KILL_MAXAGE_BAD_RESULT" != "ERR maxage is not an integer or out of range" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: unexpected CLIENT KILL MAXAGE integer error '$CLIENT_KILL_MAXAGE_BAD_RESULT'" >&2
+    exit 1
+fi
+
+CLIENT_KILL_MAXAGE_ZERO_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" client kill maxage 0 2>&1 || true)"
+if [[ "$CLIENT_KILL_MAXAGE_ZERO_RESULT" != "ERR maxage should be greater than 0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: unexpected CLIENT KILL MAXAGE zero error '$CLIENT_KILL_MAXAGE_ZERO_RESULT'" >&2
+    exit 1
+fi
+
+CLIENT_KILL_MAXAGE_NEGATIVE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" client kill maxage -1 2>&1 || true)"
+if [[ "$CLIENT_KILL_MAXAGE_NEGATIVE_RESULT" != "ERR maxage should be greater than 0" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: unexpected CLIENT KILL MAXAGE negative error '$CLIENT_KILL_MAXAGE_NEGATIVE_RESULT'" >&2
     exit 1
 fi
 

@@ -1591,7 +1591,7 @@ export fn test_connection_process_client_commands() !void {
     const client_help: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$4\r\nHELP\r\n"[0: 26], &client_help_out[0], 2048, 1000u64);
     try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT REPLY <ON|OFF|SKIP>"[0: 26]));
     try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT LIST [TYPE NORMAL|MASTER|REPLICA|PUBSUB] | [ID <id> ...]"[0: 63]));
-    try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT KILL [ID <id>] [ADDR <ip:port>] [LADDR <ip:port>] [USER <username>] [TYPE <normal|master|replica|pubsub>] [SKIPME yes|no]"[0: 128]));
+    try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT KILL [ID <id>] [ADDR <ip:port>] [LADDR <ip:port>] [USER <username>] [TYPE <normal|master|replica|pubsub>] [MAXAGE <seconds>] [SKIPME yes|no]"[0: 147]));
     try assert_true(network_connection_contains(client_help_out[0: client_help.response_len], &"CLIENT TRACKINGINFO"[0: 19]));
 
     const caching_yes: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$6\r\nCLIENT\r\n$7\r\nCACHING\r\n$3\r\nYES\r\n"[0: 38], &out[0], 512, 1000u64);
@@ -1769,6 +1769,7 @@ export fn test_connection_process_client_commands() !void {
     var tx3: ConnectionTransaction = connection_transaction_new();
     tx3.client_fd = 44;
     connection_transaction_set_client_addresses(&tx3, &"127.0.0.1:50002"[0: 15], &"127.0.0.1:6380"[0: 14]);
+    connection_transaction_set_client_times(&tx3, 3000u64, 7000u64);
     defer {
         connection_transaction_reset(&tx3);
     }
@@ -1974,6 +1975,29 @@ export fn test_connection_process_client_commands() !void {
     try assert_true(network_connection_slice_eq(out[0: client_kill_laddr_self.response_len], &":3\r\n"[0: 4]));
     try assert_eq_i32(client_kill_laddr_self.client_kill_self as i32, 1);
     try assert_eq_i32(client_kill_laddr_self.close_after as i32, 1);
+
+    const client_kill_maxage_bad: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$4\r\nKILL\r\n$6\r\nMAXAGE\r\n$3\r\nbad\r\n"[0: 47], &out[0], 512, 10000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_kill_maxage_bad.response_len], &"-ERR maxage is not an integer or out of range\r\n"[0: 47]));
+
+    const client_kill_maxage_zero: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$4\r\nKILL\r\n$6\r\nMAXAGE\r\n$1\r\n0\r\n"[0: 45], &out[0], 512, 10000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_kill_maxage_zero.response_len], &"-ERR maxage should be greater than 0\r\n"[0: 38]));
+
+    const client_kill_maxage_negative: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$4\r\nKILL\r\n$6\r\nMAXAGE\r\n$2\r\n-1\r\n"[0: 46], &out[0], 512, 10000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_kill_maxage_negative.response_len], &"-ERR maxage should be greater than 0\r\n"[0: 38]));
+
+    const client_kill_maxage_overflow: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$4\r\nKILL\r\n$6\r\nMAXAGE\r\n$19\r\n9223372036854775808\r\n"[0: 64], &out[0], 512, 10000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_kill_maxage_overflow.response_len], &"-ERR maxage is not an integer or out of range\r\n"[0: 47]));
+
+    const client_kill_maxage_boundary: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*6\r\n$6\r\nCLIENT\r\n$4\r\nKILL\r\n$2\r\nID\r\n$1\r\n2\r\n$6\r\nMAXAGE\r\n$1\r\n8\r\n"[0: 60], &out[0], 512, 10000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_kill_maxage_boundary.response_len], &":1\r\n"[0: 4]));
+    try assert_eq_i32(client_kill_maxage_boundary.client_kill_has_maxage as i32, 1);
+    try assert_eq_i32(client_kill_maxage_boundary.client_kill_maxage_seconds as i32, 8);
+
+    const client_kill_maxage_young: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*6\r\n$6\r\nCLIENT\r\n$4\r\nKILL\r\n$2\r\nID\r\n$1\r\n2\r\n$6\r\nMAXAGE\r\n$1\r\n9\r\n"[0: 60], &out[0], 512, 10000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_kill_maxage_young.response_len], &":0\r\n"[0: 4]));
+
+    const client_kill_maxage_duplicate: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*6\r\n$6\r\nCLIENT\r\n$4\r\nKILL\r\n$6\r\nMAXAGE\r\n$1\r\n7\r\n$6\r\nMAXAGE\r\n$1\r\n8\r\n"[0: 64], &out[0], 512, 10000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_kill_maxage_duplicate.response_len], &":1\r\n"[0: 4]));
 
     const client_kill_self_skip: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*6\r\n$6\r\nCLIENT\r\n$4\r\nKILL\r\n$2\r\nID\r\n$1\r\n1\r\n$6\r\nSKIPME\r\n$3\r\nYES\r\n"[0: 62], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: client_kill_self_skip.response_len], &":0\r\n"[0: 4]));

@@ -217,12 +217,22 @@ def run_smoke() -> None:
                 b"resetchannels",
                 b"&news*",
                 b"-del",
+                b"-set",
+                b"-publish",
                 b"-@admin",
+                b"(~safe* +set)",
+                b"(~reports* +get)",
+                b"(&news* +publish)",
             ) != "OK":
                 raise AssertionError("failed to create app ACL user")
             with authenticate(port, b"app", b"secret") as hashed_app:
                 if send_command(hashed_app, b"PING") != "PONG":
                     raise AssertionError("direct password hash cannot authenticate")
+                if send_command(hashed_app, b"SET", b"safe:key", b"value") != "OK":
+                    raise AssertionError("selector cannot grant SET on an allowed key")
+                if send_command(hashed_app, b"GET", b"reports:one") is not None:
+                    raise AssertionError("selector cannot grant GET on its own key pattern")
+                expect_error(hashed_app, "has no permissions to run the 'set' command", b"SET", b"reports:one", b"value")
             with authenticate(port, b"app", b"secret2") as second_app:
                 if send_command(second_app, b"PING") != "PONG":
                     raise AssertionError("second app password cannot authenticate")
@@ -276,7 +286,7 @@ def run_smoke() -> None:
             saved = acl_path.read_bytes()
             expected_lines = {
                 b"user default on #" + root_hash + b" #" + root2_hash + b" ~* &* +@all",
-                b"user app on #" + secret2_hash + b" #" + secret_hash + b" ~safe* &news* +@all -del -@admin",
+                b"user app on #" + secret2_hash + b" #" + secret_hash + b" ~safe* &news* +@all -del -set -publish -@admin (~safe* resetchannels -@all +set) (~reports* resetchannels -@all +get) (resetkeys &news* -@all +publish)",
                 b"user disabled off #e564b4081d7a9ea4b00dada53bdae70c99b87b6fce869f0c3dd4d2bfa1e53e1c ~* &* +@all",
             }
             if set(saved.splitlines()) != expected_lines:
@@ -298,7 +308,7 @@ def run_smoke() -> None:
 
             if send_command(admin, b"ACL", b"SETUSER", b"default", b">changedroot") != "OK":
                 raise AssertionError("failed to mutate default password")
-            if send_command(admin, b"ACL", b"SETUSER", b"app", b">changed", b"allkeys", b"allchannels", b"+del", b"+@admin") != "OK":
+            if send_command(admin, b"ACL", b"SETUSER", b"app", b">changed", b"allkeys", b"allchannels", b"+del", b"+set", b"+publish", b"+@admin", b"clearselectors") != "OK":
                 raise AssertionError("failed to mutate app user")
             if send_command(admin, b"ACL", b"DELUSER", b"disabled") != 1:
                 raise AssertionError("failed to remove disabled user")
@@ -313,6 +323,13 @@ def run_smoke() -> None:
                     raise AssertionError("failed ACL LOAD changed app command permissions")
             expect_auth_error(port, b"disabled", b"hidden")
 
+            first_selector = b"(~safe* resetchannels -@all +set)"
+            acl_path.write_bytes(saved.replace(first_selector, b"(~safe* resetchannels -@all +set"))
+            expect_error(admin, "Error loading the ACLs", b"ACL", b"LOAD")
+            with authenticate(port, b"app", b"changed") as selector_rollback_app:
+                if send_command(selector_rollback_app, b"SET", b"unsafe", b"value") != "OK":
+                    raise AssertionError("invalid selector load did not restore the previous ACL state")
+
             acl_path.write_bytes(saved.replace(secret_hash, b"2BB80d537b1da3e38bd30361aa855686bde0eacd7162fef6a25fe97bf527a25b"))
             expect_error(admin, "Error loading the ACLs", b"ACL", b"LOAD")
             with authenticate(port, b"app", b"changed") as unchanged_app:
@@ -320,7 +337,7 @@ def run_smoke() -> None:
                     raise AssertionError("invalid password hash load changed app authentication")
 
             overflow_hashes = [hashlib.sha256(f"overflow-{index}".encode()).hexdigest().encode() for index in range(9)]
-            saved_app_line = b"user app on #" + secret2_hash + b" #" + secret_hash + b" ~safe* &news* +@all -del -@admin"
+            saved_app_line = b"user app on #" + secret2_hash + b" #" + secret_hash + b" ~safe* &news* +@all -del -set -publish -@admin (~safe* resetchannels -@all +set) (~reports* resetchannels -@all +get) (resetkeys &news* -@all +publish)"
             overflow_app_line = b"user app on " + b" ".join(b"#" + item for item in overflow_hashes) + b" ~safe* &news* +@all -del -@admin"
             acl_path.write_bytes(saved.replace(saved_app_line, overflow_app_line))
             expect_error(admin, "Error loading the ACLs", b"ACL", b"LOAD")
@@ -342,11 +359,14 @@ def run_smoke() -> None:
         with authenticate(port, b"app", b"secret") as app:
             if send_command(app, b"SET", b"safe:key", b"value") != "OK":
                 raise AssertionError("restored app user cannot access an allowed key")
-            expect_error(app, "no permissions to access one of the keys", b"SET", b"unsafe", b"value")
+            if send_command(app, b"GET", b"reports:one") is not None:
+                raise AssertionError("restored selector cannot access its allowed key")
+            expect_error(app, "has no permissions to run the 'set' command", b"SET", b"reports:one", b"value")
+            expect_error(app, "has no permissions to run the 'set' command", b"SET", b"unsafe", b"value")
             expect_error(app, "has no permissions to run the 'del' command", b"DEL", b"safe:key")
             if send_command(app, b"PUBLISH", b"news:one", b"message") != 0:
                 raise AssertionError("restored app user cannot publish to an allowed channel")
-            expect_error(app, "no permissions to access one of the channels", b"PUBLISH", b"other", b"message")
+            expect_error(app, "has no permissions to run the 'publish' command", b"PUBLISH", b"other", b"message")
         with authenticate(port, b"app", b"secret2"):
             pass
         expect_auth_error(port, b"disabled", b"hidden")
@@ -365,6 +385,10 @@ def run_smoke() -> None:
             pass
         with authenticate(restart_port, b"app", b"secret") as restarted_app:
             expect_error(restarted_app, "has no permissions to run the 'del' command", b"DEL", b"safe:key")
+            if send_command(restarted_app, b"SET", b"safe:key", b"restart") != "OK":
+                raise AssertionError("startup ACL selector cannot grant SET")
+            if send_command(restarted_app, b"GET", b"reports:restart") is not None:
+                raise AssertionError("startup ACL selector cannot grant GET")
         with authenticate(restart_port, b"app", b"secret2"):
             pass
     finally:

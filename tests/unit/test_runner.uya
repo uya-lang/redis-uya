@@ -195,6 +195,7 @@ use tests.unit.network_connection_test.test_connection_process_client_commands;
 use tests.unit.network_connection_test.test_connection_process_reset;
 use tests.unit.network_connection_test.test_connection_process_acl_permission_denial;
 use tests.unit.network_connection_test.test_connection_process_acl_named_user_metadata;
+use tests.unit.network_connection_test.test_connection_process_acl_selectors;
 use tests.unit.network_connection_test.test_connection_process_command_docs_all_large_reply;
 use tests.unit.network_connection_test.test_connection_process_auth_requirepass_shutdown;
 use tests.unit.network_connection_test.test_connection_process_pubsub_commands;
@@ -1021,6 +1022,10 @@ export fn main() i32 {
     const before_conn_acl_named: i32 = failed;
     _ = test_connection_process_acl_named_user_metadata() catch { printf("[FAIL] network_connection/acl_named_user\n" as *byte); failed = failed + 1; };
     if failed == before_conn_acl_named { printf("[PASS] network_connection/acl_named_user\n" as *byte); }
+
+    const before_conn_acl_selectors: i32 = failed;
+    _ = test_connection_process_acl_selectors() catch { printf("[FAIL] network_connection/acl_selectors\n" as *byte); failed = failed + 1; };
+    if failed == before_conn_acl_selectors { printf("[PASS] network_connection/acl_selectors\n" as *byte); }
 
     const before_conn_docs_all: i32 = failed;
     _ = test_connection_process_command_docs_all_large_reply() catch { printf("[FAIL] network_connection/command_docs_all\n" as *byte); failed = failed + 1; };

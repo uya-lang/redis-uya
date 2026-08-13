@@ -396,12 +396,6 @@ struct ConnectionFunctionDumpCode {
 var connection_function_libraries: [ConnectionFunctionLibraryEntry: CONNECTION_FUNCTION_LIBRARY_MAX] = [];
 var connection_function_restore_staging: [ConnectionFunctionLibraryEntry: CONNECTION_FUNCTION_LIBRARY_MAX] = [];
 
-struct ConnectionAclDeniedCommand {
-    active: bool,
-    name_len: usize,
-    name: [byte: CONNECTION_ACL_COMMAND_NAME_MAX],
-}
-
 struct ConnectionAclKeyPattern {
     active: bool,
     pattern_len: usize,
@@ -452,9 +446,13 @@ enum ConnectionAclPermissionResult {
     connection_acl_permission_channel_denied,
 }
 
-var connection_acl_default_denied_commands: [ConnectionAclDeniedCommand: CONNECTION_ACL_DENIED_COMMAND_MAX] = [];
+var connection_acl_default_allcommands: bool = true;
+var connection_acl_default_next_rule_order: u32 = 0u32;
+var connection_acl_default_allowed_commands: [ConnectionAclSelectorRule: CONNECTION_ACL_DENIED_COMMAND_MAX] = [];
+var connection_acl_default_allowed_categories: [ConnectionAclSelectorRule: CONNECTION_ACL_DENIED_CATEGORY_MAX] = [];
+var connection_acl_default_denied_commands: [ConnectionAclSelectorRule: CONNECTION_ACL_DENIED_COMMAND_MAX] = [];
 var connection_acl_default_denied_command_count: usize = 0;
-var connection_acl_default_denied_categories: [ConnectionAclDeniedCommand: CONNECTION_ACL_DENIED_CATEGORY_MAX] = [];
+var connection_acl_default_denied_categories: [ConnectionAclSelectorRule: CONNECTION_ACL_DENIED_CATEGORY_MAX] = [];
 var connection_acl_default_denied_category_count: usize = 0;
 var connection_acl_default_key_rules: ConnectionAclKeyRules = ConnectionAclKeyRules{ allkeys: true, patterns: [] };
 var connection_acl_default_channel_rules: ConnectionAclChannelRules = ConnectionAclChannelRules{ allchannels: true, patterns: [] };
@@ -468,9 +466,13 @@ struct ConnectionAclUser {
     name: [byte: CONNECTION_ACL_USER_NAME_MAX],
     password_hash_count: usize,
     password_hashes: [byte: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES],
-    denied_commands: [ConnectionAclDeniedCommand: CONNECTION_ACL_DENIED_COMMAND_MAX],
+    allcommands: bool,
+    next_rule_order: u32,
+    allowed_commands: [ConnectionAclSelectorRule: CONNECTION_ACL_DENIED_COMMAND_MAX],
+    allowed_categories: [ConnectionAclSelectorRule: CONNECTION_ACL_DENIED_CATEGORY_MAX],
+    denied_commands: [ConnectionAclSelectorRule: CONNECTION_ACL_DENIED_COMMAND_MAX],
     denied_command_count: usize,
-    denied_categories: [ConnectionAclDeniedCommand: CONNECTION_ACL_DENIED_CATEGORY_MAX],
+    denied_categories: [ConnectionAclSelectorRule: CONNECTION_ACL_DENIED_CATEGORY_MAX],
     denied_category_count: usize,
     allkeys: bool,
     key_patterns: [ConnectionAclKeyPattern: CONNECTION_ACL_KEY_PATTERN_MAX],
@@ -480,9 +482,13 @@ struct ConnectionAclUser {
 }
 
 var connection_acl_users: [ConnectionAclUser: CONNECTION_ACL_USER_MAX] = [];
-var connection_acl_load_backup_default_denied_commands: [ConnectionAclDeniedCommand: CONNECTION_ACL_DENIED_COMMAND_MAX] = [];
+var connection_acl_load_backup_default_allcommands: bool = true;
+var connection_acl_load_backup_default_next_rule_order: u32 = 0u32;
+var connection_acl_load_backup_default_allowed_commands: [ConnectionAclSelectorRule: CONNECTION_ACL_DENIED_COMMAND_MAX] = [];
+var connection_acl_load_backup_default_allowed_categories: [ConnectionAclSelectorRule: CONNECTION_ACL_DENIED_CATEGORY_MAX] = [];
+var connection_acl_load_backup_default_denied_commands: [ConnectionAclSelectorRule: CONNECTION_ACL_DENIED_COMMAND_MAX] = [];
 var connection_acl_load_backup_default_denied_command_count: usize = 0;
-var connection_acl_load_backup_default_denied_categories: [ConnectionAclDeniedCommand: CONNECTION_ACL_DENIED_CATEGORY_MAX] = [];
+var connection_acl_load_backup_default_denied_categories: [ConnectionAclSelectorRule: CONNECTION_ACL_DENIED_CATEGORY_MAX] = [];
 var connection_acl_load_backup_default_denied_category_count: usize = 0;
 var connection_acl_load_backup_default_key_rules: ConnectionAclKeyRules = ConnectionAclKeyRules{ allkeys: true, patterns: [] };
 var connection_acl_load_backup_default_channel_rules: ConnectionAclChannelRules = ConnectionAclChannelRules{ allchannels: true, patterns: [] };
@@ -2389,21 +2395,7 @@ fn connection_function_staging_has_name_before(index: usize, name: &[byte]) bool
 fn connection_acl_default_denied_find(name: &[byte]) i32 {
     var index: usize = 0;
     while index < CONNECTION_ACL_DENIED_COMMAND_MAX {
-        if connection_acl_default_denied_commands[index].active &&
-            connection_keyword_eq(connection_acl_default_denied_commands[index].name[0: connection_acl_default_denied_commands[index].name_len], name) {
-            return index as i32;
-        }
-        index = index + 1;
-    }
-    return -1;
-}
-
-fn connection_acl_default_denied_find_free() i32 {
-    var index: usize = 0;
-    while index < CONNECTION_ACL_DENIED_COMMAND_MAX {
-        if !connection_acl_default_denied_commands[index].active {
-            return index as i32;
-        }
+        if connection_acl_default_denied_commands[index].active && connection_keyword_eq(connection_acl_default_denied_commands[index].name[0: connection_acl_default_denied_commands[index].name_len], name) { return index as i32; }
         index = index + 1;
     }
     return -1;
@@ -2414,6 +2406,7 @@ fn connection_acl_default_denied_clear_all() void {
     while index < CONNECTION_ACL_DENIED_COMMAND_MAX {
         connection_acl_default_denied_commands[index].active = false;
         connection_acl_default_denied_commands[index].name_len = 0;
+        connection_acl_default_denied_commands[index].order = 0u32;
         index = index + 1;
     }
     connection_acl_default_denied_command_count = 0;
@@ -2422,21 +2415,7 @@ fn connection_acl_default_denied_clear_all() void {
 fn connection_acl_default_category_find(name: &[byte]) i32 {
     var index: usize = 0;
     while index < CONNECTION_ACL_DENIED_CATEGORY_MAX {
-        if connection_acl_default_denied_categories[index].active &&
-            connection_keyword_eq(connection_acl_default_denied_categories[index].name[0: connection_acl_default_denied_categories[index].name_len], name) {
-            return index as i32;
-        }
-        index = index + 1;
-    }
-    return -1;
-}
-
-fn connection_acl_default_category_find_free() i32 {
-    var index: usize = 0;
-    while index < CONNECTION_ACL_DENIED_CATEGORY_MAX {
-        if !connection_acl_default_denied_categories[index].active {
-            return index as i32;
-        }
+        if connection_acl_default_denied_categories[index].active && connection_keyword_eq(connection_acl_default_denied_categories[index].name[0: connection_acl_default_denied_categories[index].name_len], name) { return index as i32; }
         index = index + 1;
     }
     return -1;
@@ -2447,9 +2426,31 @@ fn connection_acl_default_categories_clear_all() void {
     while index < CONNECTION_ACL_DENIED_CATEGORY_MAX {
         connection_acl_default_denied_categories[index].active = false;
         connection_acl_default_denied_categories[index].name_len = 0;
+        connection_acl_default_denied_categories[index].order = 0u32;
         index = index + 1;
     }
     connection_acl_default_denied_category_count = 0;
+}
+
+fn connection_acl_default_clear_command_rules(allcommands: bool) void {
+    connection_acl_default_allcommands = allcommands;
+    connection_acl_default_next_rule_order = 0u32;
+    var index: usize = 0;
+    while index < CONNECTION_ACL_DENIED_COMMAND_MAX {
+        connection_acl_default_allowed_commands[index].active = false;
+        connection_acl_default_allowed_commands[index].name_len = 0;
+        connection_acl_default_allowed_commands[index].order = 0u32;
+        index = index + 1;
+    }
+    index = 0;
+    while index < CONNECTION_ACL_DENIED_CATEGORY_MAX {
+        connection_acl_default_allowed_categories[index].active = false;
+        connection_acl_default_allowed_categories[index].name_len = 0;
+        connection_acl_default_allowed_categories[index].order = 0u32;
+        index = index + 1;
+    }
+    connection_acl_default_denied_clear_all();
+    connection_acl_default_categories_clear_all();
 }
 
 fn connection_acl_key_patterns_clear(patterns: &[ConnectionAclKeyPattern]) void {
@@ -2917,8 +2918,7 @@ fn connection_acl_user_delete(username: &[byte]) bool {
 }
 
 export fn connection_acl_reset_for_test() void {
-    connection_acl_default_denied_clear_all();
-    connection_acl_default_categories_clear_all();
+    connection_acl_default_clear_command_rules(true);
     connection_acl_default_key_patterns_reset_allkeys();
     connection_acl_default_channel_patterns_reset_allchannels();
     connection_acl_default_selectors_clear();
@@ -2927,31 +2927,26 @@ export fn connection_acl_reset_for_test() void {
 }
 
 fn connection_acl_default_denied_add(name: &[byte]) !void {
-    if name.len == 0 || name.len > CONNECTION_ACL_COMMAND_NAME_MAX {
-        return error.ConnectionInputTooLarge;
-    }
-    if connection_acl_default_denied_find(name) >= 0 {
-        return;
-    }
-    const slot: i32 = connection_acl_default_denied_find_free();
+    const existed: bool = connection_acl_default_denied_find(name) >= 0;
+    connection_acl_default_next_rule_order = connection_acl_default_next_rule_order + 1u32;
+    var slot: i32 = connection_acl_default_denied_find(name);
     if slot < 0 {
-        return error.ConnectionInputTooLarge;
+        var index: usize = 0;
+        while index < CONNECTION_ACL_DENIED_COMMAND_MAX {
+            if connection_acl_default_denied_commands[index].active == false { slot = index as i32; break; }
+            index = index + 1;
+        }
     }
+    if slot < 0 { return error.ConnectionInputTooLarge; }
     const slot_index: usize = slot as usize;
-    if slot_index >= CONNECTION_ACL_DENIED_COMMAND_MAX {
-        return error.ConnectionInputTooLarge;
-    }
+    if slot_index >= CONNECTION_ACL_DENIED_COMMAND_MAX { return error.ConnectionInputTooLarge; }
     connection_acl_default_denied_commands[slot_index].active = true;
     connection_acl_default_denied_commands[slot_index].name_len = name.len;
-    connection_acl_default_denied_command_count = connection_acl_default_denied_command_count + 1;
-    var i: usize = 0;
-    while i < name.len {
-        connection_acl_default_denied_commands[slot_index].name[i] = connection_ascii_lower(name.ptr[i]);
-        i = i + 1;
-    }
-    while i < CONNECTION_ACL_COMMAND_NAME_MAX {
-        connection_acl_default_denied_commands[slot_index].name[i] = 0 as byte;
-        i = i + 1;
+    connection_acl_default_denied_commands[slot_index].order = connection_acl_default_next_rule_order;
+    var byte_index: usize = 0;
+    while byte_index < name.len { connection_acl_default_denied_commands[slot_index].name[byte_index] = connection_ascii_lower(name.ptr[byte_index]); byte_index = byte_index + 1; }
+    if existed == false {
+        connection_acl_default_denied_command_count = connection_acl_default_denied_command_count + 1;
     }
 }
 
@@ -2966,37 +2961,33 @@ fn connection_acl_default_denied_remove(name: &[byte]) void {
     }
     connection_acl_default_denied_commands[slot_index].active = false;
     connection_acl_default_denied_commands[slot_index].name_len = 0;
+    connection_acl_default_denied_commands[slot_index].order = 0u32;
     if connection_acl_default_denied_command_count > 0 {
         connection_acl_default_denied_command_count = connection_acl_default_denied_command_count - 1;
     }
 }
 
 fn connection_acl_default_category_add(name: &[byte]) !void {
-    if name.len == 0 || name.len > CONNECTION_ACL_COMMAND_NAME_MAX {
-        return error.ConnectionInputTooLarge;
-    }
-    if connection_acl_default_category_find(name) >= 0 {
-        return;
-    }
-    const slot: i32 = connection_acl_default_category_find_free();
+    const existed: bool = connection_acl_default_category_find(name) >= 0;
+    connection_acl_default_next_rule_order = connection_acl_default_next_rule_order + 1u32;
+    var slot: i32 = connection_acl_default_category_find(name);
     if slot < 0 {
-        return error.ConnectionInputTooLarge;
+        var index: usize = 0;
+        while index < CONNECTION_ACL_DENIED_CATEGORY_MAX {
+            if connection_acl_default_denied_categories[index].active == false { slot = index as i32; break; }
+            index = index + 1;
+        }
     }
+    if slot < 0 { return error.ConnectionInputTooLarge; }
     const slot_index: usize = slot as usize;
-    if slot_index >= CONNECTION_ACL_DENIED_CATEGORY_MAX {
-        return error.ConnectionInputTooLarge;
-    }
+    if slot_index >= CONNECTION_ACL_DENIED_CATEGORY_MAX { return error.ConnectionInputTooLarge; }
     connection_acl_default_denied_categories[slot_index].active = true;
     connection_acl_default_denied_categories[slot_index].name_len = name.len;
-    connection_acl_default_denied_category_count = connection_acl_default_denied_category_count + 1;
-    var i: usize = 0;
-    while i < name.len {
-        connection_acl_default_denied_categories[slot_index].name[i] = connection_ascii_lower(name.ptr[i]);
-        i = i + 1;
-    }
-    while i < CONNECTION_ACL_COMMAND_NAME_MAX {
-        connection_acl_default_denied_categories[slot_index].name[i] = 0 as byte;
-        i = i + 1;
+    connection_acl_default_denied_categories[slot_index].order = connection_acl_default_next_rule_order;
+    var byte_index: usize = 0;
+    while byte_index < name.len { connection_acl_default_denied_categories[slot_index].name[byte_index] = connection_ascii_lower(name.ptr[byte_index]); byte_index = byte_index + 1; }
+    if existed == false {
+        connection_acl_default_denied_category_count = connection_acl_default_denied_category_count + 1;
     }
 }
 
@@ -3011,9 +3002,86 @@ fn connection_acl_default_category_remove(name: &[byte]) void {
     }
     connection_acl_default_denied_categories[slot_index].active = false;
     connection_acl_default_denied_categories[slot_index].name_len = 0;
+    connection_acl_default_denied_categories[slot_index].order = 0u32;
     if connection_acl_default_denied_category_count > 0 {
         connection_acl_default_denied_category_count = connection_acl_default_denied_category_count - 1;
     }
+}
+
+fn connection_acl_default_allowed_command_remove(name: &[byte]) void {
+    var index: usize = 0;
+    while index < CONNECTION_ACL_DENIED_COMMAND_MAX {
+        if connection_acl_default_allowed_commands[index].active && connection_keyword_eq(connection_acl_default_allowed_commands[index].name[0: connection_acl_default_allowed_commands[index].name_len], name) {
+            connection_acl_default_allowed_commands[index].active = false;
+            connection_acl_default_allowed_commands[index].name_len = 0;
+            connection_acl_default_allowed_commands[index].order = 0u32;
+            return;
+        }
+        index = index + 1;
+    }
+}
+
+fn connection_acl_default_allowed_category_remove(name: &[byte]) void {
+    var index: usize = 0;
+    while index < CONNECTION_ACL_DENIED_CATEGORY_MAX {
+        if connection_acl_default_allowed_categories[index].active && connection_keyword_eq(connection_acl_default_allowed_categories[index].name[0: connection_acl_default_allowed_categories[index].name_len], name) {
+            connection_acl_default_allowed_categories[index].active = false;
+            connection_acl_default_allowed_categories[index].name_len = 0;
+            connection_acl_default_allowed_categories[index].order = 0u32;
+            return;
+        }
+        index = index + 1;
+    }
+}
+
+fn connection_acl_default_allowed_command_add(name: &[byte]) !void {
+    connection_acl_default_next_rule_order = connection_acl_default_next_rule_order + 1u32;
+    var index: usize = 0;
+    while index < CONNECTION_ACL_DENIED_COMMAND_MAX {
+        if connection_acl_default_allowed_commands[index].active && connection_keyword_eq(connection_acl_default_allowed_commands[index].name[0: connection_acl_default_allowed_commands[index].name_len], name) {
+            connection_acl_default_allowed_commands[index].order = connection_acl_default_next_rule_order;
+            return;
+        }
+        index = index + 1;
+    }
+    index = 0;
+    while index < CONNECTION_ACL_DENIED_COMMAND_MAX {
+        if connection_acl_default_allowed_commands[index].active == false {
+            connection_acl_default_allowed_commands[index].active = true;
+            connection_acl_default_allowed_commands[index].name_len = name.len;
+            connection_acl_default_allowed_commands[index].order = connection_acl_default_next_rule_order;
+            var byte_index: usize = 0;
+            while byte_index < name.len { connection_acl_default_allowed_commands[index].name[byte_index] = connection_ascii_lower(name.ptr[byte_index]); byte_index = byte_index + 1; }
+            return;
+        }
+        index = index + 1;
+    }
+    return error.ConnectionInputTooLarge;
+}
+
+fn connection_acl_default_allowed_category_add(name: &[byte]) !void {
+    connection_acl_default_next_rule_order = connection_acl_default_next_rule_order + 1u32;
+    var index: usize = 0;
+    while index < CONNECTION_ACL_DENIED_CATEGORY_MAX {
+        if connection_acl_default_allowed_categories[index].active && connection_keyword_eq(connection_acl_default_allowed_categories[index].name[0: connection_acl_default_allowed_categories[index].name_len], name) {
+            connection_acl_default_allowed_categories[index].order = connection_acl_default_next_rule_order;
+            return;
+        }
+        index = index + 1;
+    }
+    index = 0;
+    while index < CONNECTION_ACL_DENIED_CATEGORY_MAX {
+        if connection_acl_default_allowed_categories[index].active == false {
+            connection_acl_default_allowed_categories[index].active = true;
+            connection_acl_default_allowed_categories[index].name_len = name.len;
+            connection_acl_default_allowed_categories[index].order = connection_acl_default_next_rule_order;
+            var byte_index: usize = 0;
+            while byte_index < name.len { connection_acl_default_allowed_categories[index].name[byte_index] = connection_ascii_lower(name.ptr[byte_index]); byte_index = byte_index + 1; }
+            return;
+        }
+        index = index + 1;
+    }
+    return error.ConnectionInputTooLarge;
 }
 
 fn connection_acl_category_known(category: &[byte]) bool {
@@ -3041,41 +3109,42 @@ fn connection_acl_category_known(category: &[byte]) bool {
 }
 
 fn connection_acl_default_command_denied(name: &[byte]) bool {
-    if connection_acl_default_denied_command_count > 0 && connection_acl_default_denied_find(name) >= 0 {
-        return true;
-    }
-    if connection_acl_default_denied_category_count == 0 {
-        return false;
-    }
-    const entry: CommandCatalogEntry = command_catalog_lookup(name) catch {
-        return false;
-    };
+    const entry: CommandCatalogEntry = command_catalog_lookup(name) catch { return connection_acl_default_allcommands == false; };
+    const parent: &[byte] = connection_acl_parent_command_name(name);
+    var allowed_order: u32 = 0u32;
+    var denied_order: u32 = 0u32;
     var index: usize = 0;
-    while index < CONNECTION_ACL_DENIED_CATEGORY_MAX {
-        if connection_acl_default_denied_categories[index].active &&
-            command_catalog_has_acl_category(&entry, connection_acl_default_denied_categories[index].name[0: connection_acl_default_denied_categories[index].name_len]) {
-            return true;
-        }
+    while index < CONNECTION_ACL_DENIED_COMMAND_MAX {
+        const allowed_name: &[byte] = connection_acl_default_allowed_commands[index].name[0: connection_acl_default_allowed_commands[index].name_len];
+        const denied_name: &[byte] = connection_acl_default_denied_commands[index].name[0: connection_acl_default_denied_commands[index].name_len];
+        if connection_acl_default_allowed_commands[index].active && (connection_keyword_eq(allowed_name, name) || (parent.len > 0 && connection_keyword_eq(allowed_name, parent))) && connection_acl_default_allowed_commands[index].order > allowed_order { allowed_order = connection_acl_default_allowed_commands[index].order; }
+        if connection_acl_default_denied_commands[index].active && (connection_keyword_eq(denied_name, name) || (parent.len > 0 && connection_keyword_eq(denied_name, parent))) && connection_acl_default_denied_commands[index].order > denied_order { denied_order = connection_acl_default_denied_commands[index].order; }
         index = index + 1;
     }
-    return false;
+    index = 0;
+    while index < CONNECTION_ACL_DENIED_CATEGORY_MAX {
+        if connection_acl_default_allowed_categories[index].active && command_catalog_has_acl_category(&entry, connection_acl_default_allowed_categories[index].name[0: connection_acl_default_allowed_categories[index].name_len]) && connection_acl_default_allowed_categories[index].order > allowed_order { allowed_order = connection_acl_default_allowed_categories[index].order; }
+        if connection_acl_default_denied_categories[index].active && command_catalog_has_acl_category(&entry, connection_acl_default_denied_categories[index].name[0: connection_acl_default_denied_categories[index].name_len]) && connection_acl_default_denied_categories[index].order > denied_order { denied_order = connection_acl_default_denied_categories[index].order; }
+        index = index + 1;
+    }
+    if allowed_order == 0u32 && denied_order == 0u32 { return connection_acl_default_allcommands == false; }
+    return allowed_order <= denied_order;
 }
 
 fn connection_acl_user_clear_rules(user: &ConnectionAclUser) void {
-    var index: usize = 0;
-    while index < CONNECTION_ACL_DENIED_COMMAND_MAX {
-        user.denied_commands[index].active = false;
-        user.denied_commands[index].name_len = 0;
-        index = index + 1;
-    }
+    user.allcommands = true;
+    user.next_rule_order = 0u32;
+    connection_acl_selector_rules_clear(user.allowed_commands[0: CONNECTION_ACL_DENIED_COMMAND_MAX]);
+    connection_acl_selector_rules_clear(user.allowed_categories[0: CONNECTION_ACL_DENIED_CATEGORY_MAX]);
+    connection_acl_selector_rules_clear(user.denied_commands[0: CONNECTION_ACL_DENIED_COMMAND_MAX]);
     user.denied_command_count = 0;
-    index = 0;
-    while index < CONNECTION_ACL_DENIED_CATEGORY_MAX {
-        user.denied_categories[index].active = false;
-        user.denied_categories[index].name_len = 0;
-        index = index + 1;
-    }
+    connection_acl_selector_rules_clear(user.denied_categories[0: CONNECTION_ACL_DENIED_CATEGORY_MAX]);
     user.denied_category_count = 0;
+}
+
+fn connection_acl_user_clear_command_rules(user: &ConnectionAclUser, allcommands: bool) void {
+    connection_acl_user_clear_rules(user);
+    user.allcommands = allcommands;
 }
 
 fn connection_acl_user_denied_command_find(user: &ConnectionAclUser, name: &[byte]) i32 {
@@ -3102,32 +3171,10 @@ fn connection_acl_user_denied_command_find_free(user: &ConnectionAclUser) i32 {
 }
 
 fn connection_acl_user_denied_command_add(user: &ConnectionAclUser, name: &[byte]) !void {
-    if name.len == 0 || name.len > CONNECTION_ACL_COMMAND_NAME_MAX {
-        return error.ConnectionInputTooLarge;
-    }
-    if connection_acl_user_denied_command_find(user, name) >= 0 {
-        return;
-    }
-    const slot: i32 = connection_acl_user_denied_command_find_free(user);
-    if slot < 0 {
-        return error.ConnectionInputTooLarge;
-    }
-    const slot_index: usize = slot as usize;
-    if slot_index >= CONNECTION_ACL_DENIED_COMMAND_MAX {
-        return error.ConnectionInputTooLarge;
-    }
-    user.denied_commands[slot_index].active = true;
-    user.denied_commands[slot_index].name_len = name.len;
-    user.denied_command_count = user.denied_command_count + 1;
-    var index: usize = 0;
-    while index < name.len {
-        user.denied_commands[slot_index].name[index] = connection_ascii_lower(name.ptr[index]);
-        index = index + 1;
-    }
-    while index < CONNECTION_ACL_COMMAND_NAME_MAX {
-        user.denied_commands[slot_index].name[index] = 0 as byte;
-        index = index + 1;
-    }
+    const existed: bool = connection_acl_user_denied_command_find(user, name) >= 0;
+    user.next_rule_order = user.next_rule_order + 1u32;
+    try connection_acl_selector_rule_add(user.denied_commands[0: CONNECTION_ACL_DENIED_COMMAND_MAX], name, user.next_rule_order);
+    if existed == false { user.denied_command_count = user.denied_command_count + 1; }
 }
 
 fn connection_acl_user_denied_command_remove(user: &ConnectionAclUser, name: &[byte]) void {
@@ -3141,6 +3188,7 @@ fn connection_acl_user_denied_command_remove(user: &ConnectionAclUser, name: &[b
     }
     user.denied_commands[slot_index].active = false;
     user.denied_commands[slot_index].name_len = 0;
+    user.denied_commands[slot_index].order = 0u32;
     if user.denied_command_count > 0 {
         user.denied_command_count = user.denied_command_count - 1;
     }
@@ -3170,32 +3218,10 @@ fn connection_acl_user_denied_category_find_free(user: &ConnectionAclUser) i32 {
 }
 
 fn connection_acl_user_denied_category_add(user: &ConnectionAclUser, name: &[byte]) !void {
-    if name.len == 0 || name.len > CONNECTION_ACL_COMMAND_NAME_MAX {
-        return error.ConnectionInputTooLarge;
-    }
-    if connection_acl_user_denied_category_find(user, name) >= 0 {
-        return;
-    }
-    const slot: i32 = connection_acl_user_denied_category_find_free(user);
-    if slot < 0 {
-        return error.ConnectionInputTooLarge;
-    }
-    const slot_index: usize = slot as usize;
-    if slot_index >= CONNECTION_ACL_DENIED_CATEGORY_MAX {
-        return error.ConnectionInputTooLarge;
-    }
-    user.denied_categories[slot_index].active = true;
-    user.denied_categories[slot_index].name_len = name.len;
-    user.denied_category_count = user.denied_category_count + 1;
-    var index: usize = 0;
-    while index < name.len {
-        user.denied_categories[slot_index].name[index] = connection_ascii_lower(name.ptr[index]);
-        index = index + 1;
-    }
-    while index < CONNECTION_ACL_COMMAND_NAME_MAX {
-        user.denied_categories[slot_index].name[index] = 0 as byte;
-        index = index + 1;
-    }
+    const existed: bool = connection_acl_user_denied_category_find(user, name) >= 0;
+    user.next_rule_order = user.next_rule_order + 1u32;
+    try connection_acl_selector_rule_add(user.denied_categories[0: CONNECTION_ACL_DENIED_CATEGORY_MAX], name, user.next_rule_order);
+    if existed == false { user.denied_category_count = user.denied_category_count + 1; }
 }
 
 fn connection_acl_user_denied_category_remove(user: &ConnectionAclUser, name: &[byte]) void {
@@ -3209,30 +3235,30 @@ fn connection_acl_user_denied_category_remove(user: &ConnectionAclUser, name: &[
     }
     user.denied_categories[slot_index].active = false;
     user.denied_categories[slot_index].name_len = 0;
+    user.denied_categories[slot_index].order = 0u32;
     if user.denied_category_count > 0 {
         user.denied_category_count = user.denied_category_count - 1;
     }
 }
 
 fn connection_acl_named_user_command_denied(user: &ConnectionAclUser, name: &[byte]) bool {
-    if user.denied_command_count > 0 && connection_acl_user_denied_command_find(user, name) >= 0 {
-        return true;
+    var allowed_order: u32 = connection_acl_selector_exact_rule_order(user.allowed_commands[0: CONNECTION_ACL_DENIED_COMMAND_MAX], name);
+    const parent: &[byte] = connection_acl_parent_command_name(name);
+    if parent.len > 0 {
+        const parent_allowed_order: u32 = connection_acl_selector_exact_rule_order(user.allowed_commands[0: CONNECTION_ACL_DENIED_COMMAND_MAX], parent);
+        if parent_allowed_order > allowed_order { allowed_order = parent_allowed_order; }
     }
-    if user.denied_category_count == 0 {
-        return false;
+    const allowed_category_order: u32 = connection_acl_selector_category_rule_order(user.allowed_categories[0: CONNECTION_ACL_DENIED_CATEGORY_MAX], name);
+    if allowed_category_order > allowed_order { allowed_order = allowed_category_order; }
+    var denied_order: u32 = connection_acl_selector_exact_rule_order(user.denied_commands[0: CONNECTION_ACL_DENIED_COMMAND_MAX], name);
+    if parent.len > 0 {
+        const parent_denied_order: u32 = connection_acl_selector_exact_rule_order(user.denied_commands[0: CONNECTION_ACL_DENIED_COMMAND_MAX], parent);
+        if parent_denied_order > denied_order { denied_order = parent_denied_order; }
     }
-    const entry: CommandCatalogEntry = command_catalog_lookup(name) catch {
-        return false;
-    };
-    var index: usize = 0;
-    while index < CONNECTION_ACL_DENIED_CATEGORY_MAX {
-        if user.denied_categories[index].active &&
-            command_catalog_has_acl_category(&entry, user.denied_categories[index].name[0: user.denied_categories[index].name_len]) {
-            return true;
-        }
-        index = index + 1;
-    }
-    return false;
+    const denied_category_order: u32 = connection_acl_selector_category_rule_order(user.denied_categories[0: CONNECTION_ACL_DENIED_CATEGORY_MAX], name);
+    if denied_category_order > denied_order { denied_order = denied_category_order; }
+    if allowed_order == 0u32 && denied_order == 0u32 { return user.allcommands == false; }
+    return allowed_order <= denied_order;
 }
 
 fn connection_acl_selector_exact_rule_order(rules: &[ConnectionAclSelectorRule], name: &[byte]) u32 {
@@ -3303,21 +3329,20 @@ fn connection_acl_backup_child_name(name: &[byte]) bool {
         connection_keyword_eq(name, &"backup|status"[0: 13]);
 }
 
+fn connection_acl_parent_command_name(name: &[byte]) &[byte] {
+    if connection_keyword_eq(name, &"himport|prepare"[0: 15]) ||
+        connection_keyword_eq(name, &"himport|set"[0: 11]) ||
+        connection_keyword_eq(name, &"himport|discard"[0: 15]) ||
+        connection_keyword_eq(name, &"himport|discardall"[0: 18]) {
+        return &"himport"[0: 7];
+    }
+    if connection_acl_backup_child_name(name) { return &"backup"[0: 6]; }
+    return &""[0: 0];
+}
+
 fn connection_acl_user_command_denied(username: &[byte], name: &[byte]) bool {
     if connection_keyword_eq(username, &"default"[0: 7]) {
-        if connection_acl_default_command_denied(name) {
-            return true;
-        }
-        if connection_keyword_eq(name, &"himport|prepare"[0: 15]) ||
-            connection_keyword_eq(name, &"himport|set"[0: 11]) ||
-            connection_keyword_eq(name, &"himport|discard"[0: 15]) ||
-            connection_keyword_eq(name, &"himport|discardall"[0: 18]) {
-            return connection_acl_default_command_denied(&"himport"[0: 7]);
-        }
-        if connection_acl_backup_child_name(name) {
-            return connection_acl_default_command_denied(&"backup"[0: 6]);
-        }
-        return false;
+        return connection_acl_default_command_denied(name);
     }
     const slot: i32 = connection_acl_user_find(username);
     if slot < 0 || slot >= CONNECTION_ACL_USER_MAX as i32 {
@@ -3331,19 +3356,7 @@ fn connection_acl_user_command_denied(username: &[byte], name: &[byte]) bool {
     if !user.active {
         return false;
     }
-    if connection_acl_named_user_command_denied(user, name) {
-        return true;
-    }
-    if connection_keyword_eq(name, &"himport|prepare"[0: 15]) ||
-        connection_keyword_eq(name, &"himport|set"[0: 11]) ||
-        connection_keyword_eq(name, &"himport|discard"[0: 15]) ||
-        connection_keyword_eq(name, &"himport|discardall"[0: 18]) {
-        return connection_acl_named_user_command_denied(user, &"himport"[0: 7]);
-    }
-    if connection_acl_backup_child_name(name) {
-        return connection_acl_named_user_command_denied(user, &"backup"[0: 6]);
-    }
-    return false;
+    return connection_acl_named_user_command_denied(user, name);
 }
 
 fn connection_acl_effective_command_name(command: &Command) &[byte] {
@@ -3455,7 +3468,8 @@ fn connection_acl_user_allchannels(username: &[byte]) bool {
 }
 
 fn connection_acl_default_user_unrestricted() bool {
-    return connection_acl_default_denied_command_count == 0 &&
+    return connection_acl_default_allcommands &&
+        connection_acl_default_denied_command_count == 0 &&
         connection_acl_default_denied_category_count == 0 &&
         connection_acl_default_key_rules.allkeys &&
         connection_acl_default_channel_rules.allchannels;
@@ -3476,7 +3490,8 @@ fn connection_acl_user_unrestricted(username: &[byte]) bool {
     if !connection_acl_users[slot_index].active {
         return true;
     }
-    return connection_acl_users[slot_index].denied_command_count == 0 &&
+    return connection_acl_users[slot_index].allcommands &&
+        connection_acl_users[slot_index].denied_command_count == 0 &&
         connection_acl_users[slot_index].denied_category_count == 0 &&
         connection_acl_users[slot_index].allkeys &&
         connection_acl_users[slot_index].allchannels;
@@ -3850,42 +3865,45 @@ fn connection_acl_permission_denied_reply(name: &[byte], context: &[byte], now_m
 }
 
 fn connection_acl_append_default_command_rules(raw: &Sds) !void {
-    try sds_cat(raw, &"+@all"[0: 5]);
-    var index: usize = 0;
-    while index < CONNECTION_ACL_DENIED_COMMAND_MAX {
-        if connection_acl_default_denied_commands[index].active {
-            try sds_cat(raw, &" -"[0: 2]);
-            try sds_cat(raw, connection_acl_default_denied_commands[index].name[0: connection_acl_default_denied_commands[index].name_len]);
+    if connection_acl_default_allcommands { try sds_cat(raw, &"+@all"[0: 5]); } else { try sds_cat(raw, &"-@all"[0: 5]); }
+    var order: u32 = 1u32;
+    while order <= connection_acl_default_next_rule_order {
+        var index: usize = 0;
+        while index < CONNECTION_ACL_DENIED_COMMAND_MAX {
+            if connection_acl_default_allowed_commands[index].active && connection_acl_default_allowed_commands[index].order == order { try sds_cat(raw, &" +"[0: 2]); try sds_cat(raw, connection_acl_default_allowed_commands[index].name[0: connection_acl_default_allowed_commands[index].name_len]); }
+            if connection_acl_default_denied_commands[index].active && connection_acl_default_denied_commands[index].order == order { try sds_cat(raw, &" -"[0: 2]); try sds_cat(raw, connection_acl_default_denied_commands[index].name[0: connection_acl_default_denied_commands[index].name_len]); }
+            index = index + 1;
         }
-        index = index + 1;
-    }
-    var category_index: usize = 0;
-    while category_index < CONNECTION_ACL_DENIED_CATEGORY_MAX {
-        if connection_acl_default_denied_categories[category_index].active {
-            try sds_cat(raw, &" -@"[0: 3]);
-            try sds_cat(raw, connection_acl_default_denied_categories[category_index].name[0: connection_acl_default_denied_categories[category_index].name_len]);
+        index = 0;
+        while index < CONNECTION_ACL_DENIED_CATEGORY_MAX {
+            if connection_acl_default_allowed_categories[index].active && connection_acl_default_allowed_categories[index].order == order { try sds_cat(raw, &" +@"[0: 3]); try sds_cat(raw, connection_acl_default_allowed_categories[index].name[0: connection_acl_default_allowed_categories[index].name_len]); }
+            if connection_acl_default_denied_categories[index].active && connection_acl_default_denied_categories[index].order == order { try sds_cat(raw, &" -@"[0: 3]); try sds_cat(raw, connection_acl_default_denied_categories[index].name[0: connection_acl_default_denied_categories[index].name_len]); }
+            index = index + 1;
         }
-        category_index = category_index + 1;
+        order = order + 1u32;
     }
 }
 
 fn connection_acl_append_named_command_rules(raw: &Sds, user: &ConnectionAclUser) !void {
-    try sds_cat(raw, &"+@all"[0: 5]);
+    if user.allcommands { try sds_cat(raw, &"+@all"[0: 5]); } else { try sds_cat(raw, &"-@all"[0: 5]); }
+    var order: u32 = 1u32;
+    while order <= user.next_rule_order {
+        try connection_acl_append_ordered_rule(raw, user.allowed_commands[0: CONNECTION_ACL_DENIED_COMMAND_MAX], order, &" +"[0: 2]);
+        try connection_acl_append_ordered_rule(raw, user.denied_commands[0: CONNECTION_ACL_DENIED_COMMAND_MAX], order, &" -"[0: 2]);
+        try connection_acl_append_ordered_rule(raw, user.allowed_categories[0: CONNECTION_ACL_DENIED_CATEGORY_MAX], order, &" +@"[0: 3]);
+        try connection_acl_append_ordered_rule(raw, user.denied_categories[0: CONNECTION_ACL_DENIED_CATEGORY_MAX], order, &" -@"[0: 3]);
+        order = order + 1u32;
+    }
+}
+
+fn connection_acl_append_ordered_rule(raw: &Sds, rules: &[ConnectionAclSelectorRule], order: u32, prefix: &[byte]) !void {
     var index: usize = 0;
-    while index < CONNECTION_ACL_DENIED_COMMAND_MAX {
-        if user.denied_commands[index].active {
-            try sds_cat(raw, &" -"[0: 2]);
-            try sds_cat(raw, user.denied_commands[index].name[0: user.denied_commands[index].name_len]);
+    while index < rules.len {
+        if rules.ptr[index].active && rules.ptr[index].order == order {
+            try sds_cat(raw, prefix);
+            try sds_cat(raw, rules.ptr[index].name[0: rules.ptr[index].name_len]);
         }
         index = index + 1;
-    }
-    var category_index: usize = 0;
-    while category_index < CONNECTION_ACL_DENIED_CATEGORY_MAX {
-        if user.denied_categories[category_index].active {
-            try sds_cat(raw, &" -@"[0: 3]);
-            try sds_cat(raw, user.denied_categories[category_index].name[0: user.denied_categories[category_index].name_len]);
-        }
-        category_index = category_index + 1;
     }
 }
 
@@ -4814,9 +4832,8 @@ fn connection_acl_setuser_command_modifier(router: &CommandRouter, modifier: &[b
         return connection_acl_setuser_modifier_error(modifier, &"': Syntax error"[0: 15]);
     }
     if command_name.ptr[0] == 64 as byte {
-        if op == 43 as byte && connection_keyword_eq(command_name, &"@all"[0: 4]) {
-            connection_acl_default_denied_clear_all();
-            connection_acl_default_categories_clear_all();
+        if connection_keyword_eq(command_name, &"@all"[0: 4]) {
+            connection_acl_default_clear_command_rules(op == 43 as byte);
             return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
         }
         const category: &[byte] = command_name[1: command_name.len - 1];
@@ -4824,11 +4841,15 @@ fn connection_acl_setuser_command_modifier(router: &CommandRouter, modifier: &[b
             return connection_acl_setuser_modifier_error(modifier, &"': Unknown command or category name in ACL"[0: 42]);
         }
         if op == 45 as byte {
+            connection_acl_default_allowed_category_remove(category);
             _ = connection_acl_default_category_add(category) catch {
                 return connection_error_reply(&"ERR ACL SETUSER redis-uya partial category deny list is full"[0: 60]);
             };
         } else {
             connection_acl_default_category_remove(category);
+            _ = connection_acl_default_allowed_category_add(category) catch {
+                return connection_error_reply(&"ERR ACL SETUSER redis-uya partial category allow list is full"[0: 61]);
+            };
         }
         return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
     }
@@ -4836,11 +4857,15 @@ fn connection_acl_setuser_command_modifier(router: &CommandRouter, modifier: &[b
         return connection_acl_setuser_modifier_error(modifier, &"': Unknown command or category name in ACL"[0: 42]);
     };
     if op == 45 as byte {
+        connection_acl_default_allowed_command_remove(normalized_name);
         _ = connection_acl_default_denied_add(normalized_name) catch {
             return connection_error_reply(&"ERR ACL SETUSER redis-uya partial command deny list is full"[0: 59]);
         };
     } else {
         connection_acl_default_denied_remove(normalized_name);
+        _ = connection_acl_default_allowed_command_add(normalized_name) catch {
+            return connection_error_reply(&"ERR ACL SETUSER redis-uya partial command allow list is full"[0: 60]);
+        };
     }
     return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
 }
@@ -4851,6 +4876,7 @@ fn connection_acl_setuser_named_allows_modifier(router: &CommandRouter, modifier
         connection_acl_setuser_channel_modifier_known(modifier) ||
         connection_keyword_eq(modifier, &"ALLCOMMANDS"[0: 11]) ||
         connection_keyword_eq(modifier, &"+@all"[0: 5]) ||
+        connection_keyword_eq(modifier, &"-@all"[0: 5]) ||
         connection_keyword_eq(modifier, &"RESETCOMMANDS"[0: 13]) {
         return true;
     }
@@ -4881,16 +4907,25 @@ fn connection_acl_setuser_named_command_modifier(router: &CommandRouter, user: &
         return connection_acl_setuser_modifier_error(modifier, &"': Syntax error"[0: 15]);
     }
     if command_name.ptr[0] == 64 as byte {
+        if connection_keyword_eq(command_name, &"@all"[0: 4]) {
+            connection_acl_user_clear_command_rules(user, op == 43 as byte);
+            return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+        }
         const category: &[byte] = command_name[1: command_name.len - 1];
         if !connection_acl_category_known(category) {
             return connection_acl_setuser_modifier_error(modifier, &"': Unknown command or category name in ACL"[0: 42]);
         }
         if op == 45 as byte {
+            connection_acl_selector_rule_remove(user.allowed_categories[0: CONNECTION_ACL_DENIED_CATEGORY_MAX], category);
             _ = connection_acl_user_denied_category_add(user, category) catch {
                 return connection_error_reply(&"ERR ACL SETUSER redis-uya partial named user category deny list is full"[0: 71]);
             };
         } else {
             connection_acl_user_denied_category_remove(user, category);
+            user.next_rule_order = user.next_rule_order + 1u32;
+            _ = connection_acl_selector_rule_add(user.allowed_categories[0: CONNECTION_ACL_DENIED_CATEGORY_MAX], category, user.next_rule_order) catch {
+                return connection_error_reply(&"ERR ACL SETUSER redis-uya partial named user category allow list is full"[0: 72]);
+            };
         }
         return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
     }
@@ -4898,11 +4933,16 @@ fn connection_acl_setuser_named_command_modifier(router: &CommandRouter, user: &
         return connection_acl_setuser_modifier_error(modifier, &"': Unknown command or category name in ACL"[0: 42]);
     };
     if op == 45 as byte {
+        connection_acl_selector_rule_remove(user.allowed_commands[0: CONNECTION_ACL_DENIED_COMMAND_MAX], normalized_name);
         _ = connection_acl_user_denied_command_add(user, normalized_name) catch {
             return connection_error_reply(&"ERR ACL SETUSER redis-uya partial named user command deny list is full"[0: 70]);
         };
     } else {
         connection_acl_user_denied_command_remove(user, normalized_name);
+        user.next_rule_order = user.next_rule_order + 1u32;
+        _ = connection_acl_selector_rule_add(user.allowed_commands[0: CONNECTION_ACL_DENIED_COMMAND_MAX], normalized_name, user.next_rule_order) catch {
+            return connection_error_reply(&"ERR ACL SETUSER redis-uya partial named user command allow list is full"[0: 71]);
+        };
     }
     return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
 }
@@ -5023,7 +5063,7 @@ fn connection_acl_setuser_named(router: &CommandRouter, username: &[byte], comma
         if connection_keyword_eq(modifier, &"ALLCOMMANDS"[0: 11]) ||
             connection_keyword_eq(modifier, &"+@all"[0: 5]) ||
             connection_keyword_eq(modifier, &"RESETCOMMANDS"[0: 13]) {
-            connection_acl_user_clear_rules(&connection_acl_users[slot]);
+            connection_acl_user_clear_command_rules(&connection_acl_users[slot], true);
             index = index + 1;
             continue;
         }
@@ -5221,14 +5261,12 @@ fn connection_acl_handle_setuser(runtime: &CommandRuntimeInfo, router: &CommandR
         }
         if connection_keyword_eq(modifier, &"ALLCOMMANDS"[0: 11]) ||
             connection_keyword_eq(modifier, &"+@all"[0: 5]) {
-            connection_acl_default_denied_clear_all();
-            connection_acl_default_categories_clear_all();
+            connection_acl_default_clear_command_rules(true);
             index = index + 1;
             continue;
         }
         if connection_keyword_eq(modifier, &"RESETCOMMANDS"[0: 13]) {
-            connection_acl_default_denied_clear_all();
-            connection_acl_default_categories_clear_all();
+            connection_acl_default_clear_command_rules(true);
             index = index + 1;
             continue;
         }
@@ -6115,14 +6153,18 @@ export fn connection_acl_save_file(runtime: &CommandRuntimeInfo) !void {
 }
 
 fn connection_acl_load_snapshot(runtime: &CommandRuntimeInfo) void {
+    connection_acl_load_backup_default_allcommands = connection_acl_default_allcommands;
+    connection_acl_load_backup_default_next_rule_order = connection_acl_default_next_rule_order;
     var command_index: usize = 0;
     while command_index < CONNECTION_ACL_DENIED_COMMAND_MAX {
+        connection_acl_load_backup_default_allowed_commands[command_index] = connection_acl_default_allowed_commands[command_index];
         connection_acl_load_backup_default_denied_commands[command_index] = connection_acl_default_denied_commands[command_index];
         command_index = command_index + 1;
     }
     connection_acl_load_backup_default_denied_command_count = connection_acl_default_denied_command_count;
     var category_index: usize = 0;
     while category_index < CONNECTION_ACL_DENIED_CATEGORY_MAX {
+        connection_acl_load_backup_default_allowed_categories[category_index] = connection_acl_default_allowed_categories[category_index];
         connection_acl_load_backup_default_denied_categories[category_index] = connection_acl_default_denied_categories[category_index];
         category_index = category_index + 1;
     }
@@ -6143,14 +6185,18 @@ fn connection_acl_load_snapshot(runtime: &CommandRuntimeInfo) void {
 }
 
 fn connection_acl_load_restore(runtime: &CommandRuntimeInfo) void {
+    connection_acl_default_allcommands = connection_acl_load_backup_default_allcommands;
+    connection_acl_default_next_rule_order = connection_acl_load_backup_default_next_rule_order;
     var command_index: usize = 0;
     while command_index < CONNECTION_ACL_DENIED_COMMAND_MAX {
+        connection_acl_default_allowed_commands[command_index] = connection_acl_load_backup_default_allowed_commands[command_index];
         connection_acl_default_denied_commands[command_index] = connection_acl_load_backup_default_denied_commands[command_index];
         command_index = command_index + 1;
     }
     connection_acl_default_denied_command_count = connection_acl_load_backup_default_denied_command_count;
     var category_index: usize = 0;
     while category_index < CONNECTION_ACL_DENIED_CATEGORY_MAX {
+        connection_acl_default_allowed_categories[category_index] = connection_acl_load_backup_default_allowed_categories[category_index];
         connection_acl_default_denied_categories[category_index] = connection_acl_load_backup_default_denied_categories[category_index];
         category_index = category_index + 1;
     }
@@ -6262,8 +6308,7 @@ fn connection_acl_file_apply_default_modifier(runtime: &CommandRuntimeInfo, rout
     if connection_keyword_eq(modifier, &"ALLCOMMANDS"[0: 11]) ||
         connection_keyword_eq(modifier, &"RESETCOMMANDS"[0: 13]) ||
         connection_keyword_eq(modifier, &"+@all"[0: 5]) {
-        connection_acl_default_denied_clear_all();
-        connection_acl_default_categories_clear_all();
+        connection_acl_default_clear_command_rules(true);
         return;
     }
     if modifier.len > 1 && (modifier.ptr[0] == 43 as byte || modifier.ptr[0] == 45 as byte) {
@@ -6336,7 +6381,7 @@ fn connection_acl_file_apply_named_modifier(router: &CommandRouter, user: &Conne
     if connection_keyword_eq(modifier, &"ALLCOMMANDS"[0: 11]) ||
         connection_keyword_eq(modifier, &"RESETCOMMANDS"[0: 13]) ||
         connection_keyword_eq(modifier, &"+@all"[0: 5]) {
-        connection_acl_user_clear_rules(user);
+        connection_acl_user_clear_command_rules(user, true);
         return;
     }
     if modifier.len > 1 && (modifier.ptr[0] == 43 as byte || modifier.ptr[0] == 45 as byte) {
@@ -6435,8 +6480,7 @@ export fn connection_acl_load_file(runtime: &CommandRuntimeInfo, router: &Comman
     }
 
     connection_acl_load_snapshot(runtime);
-    connection_acl_default_denied_clear_all();
-    connection_acl_default_categories_clear_all();
+    connection_acl_default_clear_command_rules(true);
     connection_acl_default_key_patterns_reset_allkeys();
     connection_acl_default_channel_patterns_reset_allchannels();
     connection_acl_default_selectors_clear();

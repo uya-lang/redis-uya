@@ -278,6 +278,13 @@ def run_smoke() -> None:
                 raise AssertionError("failed to remove capacity test user")
             if send_command(admin, b"ACL", b"SETUSER", b"disabled", b"off", b">hidden") != "OK":
                 raise AssertionError("failed to create disabled ACL user")
+            if send_command(admin, b"ACL", b"SETUSER", b"reader", b"on", b">readerpass", b"-@all", b"+@read", b"-get", b"+get", b"~safe*") != "OK":
+                raise AssertionError("failed to create whitelist ACL user")
+            with authenticate(port, b"reader", b"readerpass") as reader:
+                if send_command(reader, b"GET", b"safe:key") != b"value":
+                    raise AssertionError("whitelist user cannot run the final allowed command")
+                expect_error(reader, "has no permissions to access one of the keys", b"GET", b"unsafe")
+                expect_error(reader, "has no permissions to run the 'set' command", b"SET", b"safe:key", b"value")
             Path(f"{acl_path}.tmp").write_text("stale")
             Path(f"{acl_path}.tmp").chmod(0o666)
             if send_command(admin, b"ACL", b"SAVE") != "OK":
@@ -288,6 +295,7 @@ def run_smoke() -> None:
                 b"user default on #" + root_hash + b" #" + root2_hash + b" ~* &* +@all",
                 b"user app on #" + secret2_hash + b" #" + secret_hash + b" ~safe* &news* +@all -del -set -publish -@admin (~safe* resetchannels -@all +set) (~reports* resetchannels -@all +get) (resetkeys &news* -@all +publish)",
                 b"user disabled off #e564b4081d7a9ea4b00dada53bdae70c99b87b6fce869f0c3dd4d2bfa1e53e1c ~* &* +@all",
+                b"user reader on #df14634a7777444be41e5bae441440f6a7d8de675a9b6c2af9ae00e33e9d114f ~safe* &* -@all +@read +get",
             }
             if set(saved.splitlines()) != expected_lines:
                 raise AssertionError(f"unexpected ACL file payload: {saved!r}")
@@ -321,6 +329,8 @@ def run_smoke() -> None:
             with authenticate(port, b"app", b"changed") as changed_app:
                 if send_command(changed_app, b"DEL", b"unsafe") != 0:
                     raise AssertionError("failed ACL LOAD changed app command permissions")
+            with authenticate(port, b"reader", b"readerpass") as rollback_reader:
+                expect_error(rollback_reader, "has no permissions to run the 'set' command", b"SET", b"safe:key", b"value")
             expect_auth_error(port, b"disabled", b"hidden")
 
             first_selector = b"(~safe* resetchannels -@all +set)"
@@ -369,6 +379,10 @@ def run_smoke() -> None:
             expect_error(app, "has no permissions to run the 'publish' command", b"PUBLISH", b"other", b"message")
         with authenticate(port, b"app", b"secret2"):
             pass
+        with authenticate(port, b"reader", b"readerpass") as restored_reader:
+            if send_command(restored_reader, b"GET", b"safe:key") != b"value":
+                raise AssertionError("restored whitelist user cannot run GET")
+            expect_error(restored_reader, "has no permissions to run the 'set' command", b"SET", b"safe:key", b"value")
         expect_auth_error(port, b"disabled", b"hidden")
     finally:
         stop_process(proc)
@@ -391,6 +405,10 @@ def run_smoke() -> None:
                 raise AssertionError("startup ACL selector cannot grant GET")
         with authenticate(restart_port, b"app", b"secret2"):
             pass
+        with authenticate(restart_port, b"reader", b"readerpass") as restarted_reader:
+            if send_command(restarted_reader, b"GET", b"safe:key") != b"restart":
+                raise AssertionError("startup ACL whitelist cannot run GET")
+            expect_error(restarted_reader, "has no permissions to run the 'set' command", b"SET", b"safe:key", b"value")
     finally:
         stop_process(restart_proc)
 

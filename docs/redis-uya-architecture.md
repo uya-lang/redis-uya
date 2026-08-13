@@ -246,6 +246,8 @@ server open
 
 ## 10. 当前限制
 
+- ACL 基础用户规则和 selector 均使用有序 allow/deny 判定；`+@all/-@all` 重置命令规则基线，exact command 与 category 取最后匹配规则。默认用户全局规则采用显式固定数组循环以规避 Uya 1.0 C 后端对复合全局数组切片的限制，named user 使用结构体内固定数组；SAVE/LOAD 快照包含基线、顺序和四类规则表
+
 - 单线程
 - `BGSAVE` / `BGREWRITEAOF` 已有最小子进程后台路径，但仍未做更细粒度的后台资源隔离与吞吐优化
 - RDB 已覆盖当前五类对象、key 绝对过期时间和 hash field TTL，但仍不是 Redis 完整二进制兼容

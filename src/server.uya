@@ -394,9 +394,15 @@ export fn server_set_requirepass(server: &RedisServer, requirepass: &[byte]) voi
     }
     config_copy_bytes(server.config.requirepass[0: 128], requirepass);
     server.config.requirepass_hash_set = false;
+    server.config.requirepass_hash_count = 0;
     i = 0;
     while i < 32 {
         server.config.requirepass_hash[i] = 0 as byte;
+        i = i + 1;
+    }
+    i = 0;
+    while i < 256 {
+        server.config.requirepass_hashes[i] = 0 as byte;
         i = i + 1;
     }
     server_runtime_info_sync_config(server);

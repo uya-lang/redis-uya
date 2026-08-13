@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import hashlib
 import socket
 import stat
 import subprocess
@@ -117,6 +118,16 @@ def config_value(sock: socket.socket, key: bytes) -> bytes:
     return reply[1]
 
 
+def acl_getuser_field(sock: socket.socket, username: bytes, field: bytes):
+    reply = send_command(sock, b"ACL", b"GETUSER", username)
+    if not isinstance(reply, list) or len(reply) % 2 != 0:
+        raise AssertionError(f"invalid ACL GETUSER {username!r} reply: {reply!r}")
+    for index in range(0, len(reply), 2):
+        if reply[index] == field:
+            return reply[index + 1]
+    raise AssertionError(f"ACL GETUSER {username!r} omitted {field!r}: {reply!r}")
+
+
 def authenticate(port: int, username: bytes, password: bytes) -> socket.socket:
     sock = connect_with_retry(port)
     try:
@@ -171,9 +182,18 @@ def run_smoke() -> None:
             if config_value(admin, b"aclfile") != str(acl_path).encode():
                 raise AssertionError("CONFIG GET aclfile mismatch")
 
-            if send_command(admin, b"ACL", b"SETUSER", b"default", b">rootpass") != "OK":
-                raise AssertionError("failed to set default ACL password")
+            if send_command(admin, b"ACL", b"SETUSER", b"default", b"resetpass", b">rootpass", b">rootpass2", b">rootpass") != "OK":
+                raise AssertionError("failed to set default ACL passwords")
+            root_hash = b"5012f5182061c46e57859cf617128c6f70eddfba4db27772bdede5a039fa7085"
+            root2_hash = b"5f707b584687d17d3564a315087d400ba2359635ef1e1f05d3d03e53f5fb97cb"
+            if acl_getuser_field(admin, b"default", b"passwords") != [root_hash, root2_hash]:
+                raise AssertionError("ACL GETUSER did not return both default password hashes")
+            with authenticate(port, b"default", b"rootpass"):
+                pass
+            with authenticate(port, b"default", b"rootpass2"):
+                pass
             secret_hash = b"2bb80d537b1da3e38bd30361aa855686bde0eacd7162fef6a25fe97bf527a25b"
+            secret2_hash = b"35224d0d3465d74e855f8d69a136e79c744ea35a675d3393360a327cbf6359a2"
             expect_error(admin, "password hash must be exactly 64 characters", b"ACL", b"SETUSER", b"app", b"#abc")
             expect_error(
                 admin,
@@ -190,6 +210,8 @@ def run_smoke() -> None:
                 b"app",
                 b"on",
                 b"#" + secret_hash,
+                b">secret2",
+                b"#" + secret_hash,
                 b"resetkeys",
                 b"~safe*",
                 b"resetchannels",
@@ -201,6 +223,11 @@ def run_smoke() -> None:
             with authenticate(port, b"app", b"secret") as hashed_app:
                 if send_command(hashed_app, b"PING") != "PONG":
                     raise AssertionError("direct password hash cannot authenticate")
+            with authenticate(port, b"app", b"secret2") as second_app:
+                if send_command(second_app, b"PING") != "PONG":
+                    raise AssertionError("second app password cannot authenticate")
+            if acl_getuser_field(admin, b"app", b"passwords") != [secret_hash, secret2_hash]:
+                raise AssertionError("ACL GETUSER did not return both password hashes in insertion order")
             expect_error(
                 admin,
                 "password you are trying to remove from the user does not exist",
@@ -212,6 +239,8 @@ def run_smoke() -> None:
             if send_command(admin, b"ACL", b"SETUSER", b"app", b"!" + secret_hash) != "OK":
                 raise AssertionError("failed to remove app password hash")
             expect_auth_error(port, b"app", b"secret")
+            with authenticate(port, b"app", b"secret2"):
+                pass
             if send_command(admin, b"ACL", b"SETUSER", b"app", b"#" + secret_hash) != "OK":
                 raise AssertionError("failed to restore app password hash")
             expect_error(
@@ -225,8 +254,18 @@ def run_smoke() -> None:
             if send_command(admin, b"ACL", b"SETUSER", b"app", b"<secret") != "OK":
                 raise AssertionError("failed to remove app password by plaintext")
             expect_auth_error(port, b"app", b"secret")
+            with authenticate(port, b"app", b"secret2"):
+                pass
             if send_command(admin, b"ACL", b"SETUSER", b"app", b"#" + secret_hash) != "OK":
                 raise AssertionError("failed to restore app password after plaintext removal")
+            capacity_passwords = tuple(f">capacity-{index}".encode() for index in range(8))
+            if send_command(admin, b"ACL", b"SETUSER", b"capacity", b"on", b"resetpass", *capacity_passwords) != "OK":
+                raise AssertionError("failed to fill ACL password capacity")
+            expect_error(admin, "password list is full", b"ACL", b"SETUSER", b"capacity", b">capacity-8")
+            with authenticate(port, b"capacity", b"capacity-7"):
+                pass
+            if send_command(admin, b"ACL", b"DELUSER", b"capacity") != 1:
+                raise AssertionError("failed to remove capacity test user")
             if send_command(admin, b"ACL", b"SETUSER", b"disabled", b"off", b">hidden") != "OK":
                 raise AssertionError("failed to create disabled ACL user")
             Path(f"{acl_path}.tmp").write_text("stale")
@@ -236,8 +275,8 @@ def run_smoke() -> None:
 
             saved = acl_path.read_bytes()
             expected_lines = {
-                b"user default on #5012f5182061c46e57859cf617128c6f70eddfba4db27772bdede5a039fa7085 ~* &* +@all",
-                b"user app on #" + secret_hash + b" ~safe* &news* +@all -del -@admin",
+                b"user default on #" + root_hash + b" #" + root2_hash + b" ~* &* +@all",
+                b"user app on #" + secret2_hash + b" #" + secret_hash + b" ~safe* &news* +@all -del -@admin",
                 b"user disabled off #e564b4081d7a9ea4b00dada53bdae70c99b87b6fce869f0c3dd4d2bfa1e53e1c ~* &* +@all",
             }
             if set(saved.splitlines()) != expected_lines:
@@ -246,7 +285,7 @@ def run_smoke() -> None:
                 raise AssertionError("ACL SAVE did not create a mode 0600 file")
             if Path(f"{acl_path}.tmp").exists():
                 raise AssertionError("ACL SAVE left its temporary file behind")
-            if any(password in saved for password in (b"rootpass", b"secret", b"hidden")):
+            if any(password in saved for password in (b"rootpass", b"rootpass2", b"secret", b"secret2", b"hidden")):
                 raise AssertionError("ACL SAVE exposed a plaintext password")
             acl_list = send_command(admin, b"ACL", b"LIST")
             if b"rootpass" in repr(acl_list).encode() or b"secret" in repr(acl_list).encode():
@@ -280,6 +319,15 @@ def run_smoke() -> None:
                 if send_command(unchanged_app, b"PING") != "PONG":
                     raise AssertionError("invalid password hash load changed app authentication")
 
+            overflow_hashes = [hashlib.sha256(f"overflow-{index}".encode()).hexdigest().encode() for index in range(9)]
+            saved_app_line = b"user app on #" + secret2_hash + b" #" + secret_hash + b" ~safe* &news* +@all -del -@admin"
+            overflow_app_line = b"user app on " + b" ".join(b"#" + item for item in overflow_hashes) + b" ~safe* &news* +@all -del -@admin"
+            acl_path.write_bytes(saved.replace(saved_app_line, overflow_app_line))
+            expect_error(admin, "Error loading the ACLs", b"ACL", b"LOAD")
+            with authenticate(port, b"app", b"changed") as capacity_rollback_app:
+                if send_command(capacity_rollback_app, b"PING") != "PONG":
+                    raise AssertionError("password capacity load failure changed app authentication")
+
             acl_path.write_bytes(saved)
             if send_command(admin, b"ACL", b"LOAD") != "OK":
                 raise AssertionError("ACL LOAD failed")
@@ -289,6 +337,8 @@ def run_smoke() -> None:
         with authenticate(port, b"default", b"rootpass") as restored_default:
             if send_command(restored_default, b"PING") != "PONG":
                 raise AssertionError("restored default user cannot run PING")
+        with authenticate(port, b"default", b"rootpass2"):
+            pass
         with authenticate(port, b"app", b"secret") as app:
             if send_command(app, b"SET", b"safe:key", b"value") != "OK":
                 raise AssertionError("restored app user cannot access an allowed key")
@@ -297,6 +347,8 @@ def run_smoke() -> None:
             if send_command(app, b"PUBLISH", b"news:one", b"message") != 0:
                 raise AssertionError("restored app user cannot publish to an allowed channel")
             expect_error(app, "no permissions to access one of the channels", b"PUBLISH", b"other", b"message")
+        with authenticate(port, b"app", b"secret2"):
+            pass
         expect_auth_error(port, b"disabled", b"hidden")
     finally:
         stop_process(proc)
@@ -309,8 +361,12 @@ def run_smoke() -> None:
         with authenticate(restart_port, b"default", b"rootpass") as restarted:
             if config_value(restarted, b"aclfile") != str(acl_path).encode():
                 raise AssertionError("startup ACL path was not retained in runtime config")
+        with authenticate(restart_port, b"default", b"rootpass2"):
+            pass
         with authenticate(restart_port, b"app", b"secret") as restarted_app:
             expect_error(restarted_app, "has no permissions to run the 'del' command", b"DEL", b"safe:key")
+        with authenticate(restart_port, b"app", b"secret2"):
+            pass
     finally:
         stop_process(restart_proc)
 

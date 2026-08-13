@@ -8,6 +8,7 @@ use src.command.executor.command_execute_at;
 use src.command.executor.command_execute_with_runtime_at;
 use src.command.executor.command_prepare_maxmemory_at;
 use src.command.executor.command_reply_cleanup;
+use src.config.ServerConfig;
 use src.command.catalog_generated_base.CommandCatalogEntry;
 use src.command.catalog.command_catalog_has_acl_category;
 use src.command.catalog.command_catalog_lookup;
@@ -268,6 +269,8 @@ const CONNECTION_ACL_USER_NAME_MAX: usize = 64;
 const CONNECTION_ACL_USER_PASSWORD_MAX: usize = 128;
 const CONNECTION_ACL_PASSWORD_HASH_BYTES: usize = 32;
 const CONNECTION_ACL_PASSWORD_HASH_HEX_BYTES: usize = 64;
+const CONNECTION_ACL_PASSWORD_HASH_MAX: usize = 8;
+const CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES: usize = 256;
 const CONNECTION_ACL_LOG_MAX: usize = 128;
 const CONNECTION_ACL_LOG_CONTEXT_MAX: usize = 16;
 const CONNECTION_ACL_FILE_MAX_BYTES: usize = 65536;
@@ -430,8 +433,8 @@ struct ConnectionAclUser {
     nopass: bool,
     name_len: usize,
     name: [byte: CONNECTION_ACL_USER_NAME_MAX],
-    password_hash_set: bool,
-    password_hash: [byte: CONNECTION_ACL_PASSWORD_HASH_BYTES],
+    password_hash_count: usize,
+    password_hashes: [byte: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES],
     denied_commands: [ConnectionAclDeniedCommand: CONNECTION_ACL_DENIED_COMMAND_MAX],
     denied_command_count: usize,
     denied_categories: [ConnectionAclDeniedCommand: CONNECTION_ACL_DENIED_CATEGORY_MAX],
@@ -2640,15 +2643,15 @@ fn connection_acl_users_clear_all() void {
         connection_acl_users[index].allkeys = true;
         connection_acl_users[index].allchannels = true;
         connection_acl_users[index].name_len = 0;
-        connection_acl_users[index].password_hash_set = false;
+        connection_acl_users[index].password_hash_count = 0;
         var i: usize = 0;
         while i < CONNECTION_ACL_USER_NAME_MAX {
             connection_acl_users[index].name[i] = 0 as byte;
             i = i + 1;
         }
         i = 0;
-        while i < CONNECTION_ACL_PASSWORD_HASH_BYTES {
-            connection_acl_users[index].password_hash[i] = 0 as byte;
+        while i < CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES {
+            connection_acl_users[index].password_hashes[i] = 0 as byte;
             i = i + 1;
         }
         connection_acl_user_clear_rules(&connection_acl_users[index]);
@@ -2712,7 +2715,7 @@ fn connection_acl_user_create_or_get(username: &[byte]) !usize {
         connection_acl_users[slot_index_new].allkeys = true;
         connection_acl_users[slot_index_new].allchannels = true;
         connection_acl_users[slot_index_new].name_len = username.len;
-        connection_acl_users[slot_index_new].password_hash_set = false;
+        connection_acl_users[slot_index_new].password_hash_count = 0;
         var i: usize = 0;
         while i < username.len {
             connection_acl_users[slot_index_new].name[i] = username.ptr[i];
@@ -2723,8 +2726,8 @@ fn connection_acl_user_create_or_get(username: &[byte]) !usize {
             i = i + 1;
         }
         i = 0;
-        while i < CONNECTION_ACL_PASSWORD_HASH_BYTES {
-            connection_acl_users[slot_index_new].password_hash[i] = 0 as byte;
+        while i < CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES {
+            connection_acl_users[slot_index_new].password_hashes[i] = 0 as byte;
             i = i + 1;
         }
         connection_acl_user_clear_rules(&connection_acl_users[slot_index_new]);
@@ -2753,10 +2756,10 @@ fn connection_acl_user_delete(username: &[byte]) bool {
     connection_acl_users[slot_index].allkeys = true;
     connection_acl_users[slot_index].allchannels = true;
     connection_acl_users[slot_index].name_len = 0;
-    connection_acl_users[slot_index].password_hash_set = false;
+    connection_acl_users[slot_index].password_hash_count = 0;
     var i: usize = 0;
-    while i < CONNECTION_ACL_PASSWORD_HASH_BYTES {
-        connection_acl_users[slot_index].password_hash[i] = 0 as byte;
+    while i < CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES {
+        connection_acl_users[slot_index].password_hashes[i] = 0 as byte;
         i = i + 1;
     }
     connection_acl_user_clear_rules(&connection_acl_users[slot_index]);
@@ -3727,10 +3730,52 @@ fn connection_acl_password_marker(password: &[byte], out: &[byte]) usize {
 }
 
 fn connection_acl_default_password_marker(runtime: &CommandRuntimeInfo, out: &[byte]) usize {
+    if runtime.config.requirepass_hash_count > 0 {
+        const hash: &[byte] = connection_acl_password_hash_slot(runtime.config.requirepass_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES], 0);
+        return connection_acl_hash_marker(hash, out);
+    }
     if runtime.config.requirepass_hash_set {
         return connection_acl_hash_marker(runtime.config.requirepass_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES], out);
     }
     return connection_acl_password_marker(connection_requirepass(runtime), out);
+}
+
+fn connection_acl_append_password_hash_rules(raw: &Sds, hashes: &[byte], count: usize) !void {
+    if count > CONNECTION_ACL_PASSWORD_HASH_MAX {
+        return error.ConnectionInputTooLarge;
+    }
+    var index: usize = 0;
+    while index < count {
+        if index > 0 {
+            try sds_cat(raw, &" "[0: 1]);
+        }
+        const hash: &[byte] = connection_acl_password_hash_slot(hashes, index);
+        var marker: [byte: CONNECTION_ACL_PASSWORD_HASH_HEX_BYTES + 1] = [];
+        const marker_len: usize = connection_acl_hash_marker(hash, marker[0: CONNECTION_ACL_PASSWORD_HASH_HEX_BYTES + 1]);
+        if marker_len == 0 {
+            return error.ConnectionInputTooLarge;
+        }
+        try sds_cat(raw, marker[0: marker_len]);
+        index = index + 1;
+    }
+}
+
+fn connection_acl_append_password_hash_resp_array(raw: &Sds, hashes: &[byte], count: usize) !void {
+    if count > CONNECTION_ACL_PASSWORD_HASH_MAX {
+        return error.ConnectionInputTooLarge;
+    }
+    try connection_sds_append_resp_array_header(raw, count);
+    var index: usize = 0;
+    while index < count {
+        const hash: &[byte] = connection_acl_password_hash_slot(hashes, index);
+        var marker: [byte: CONNECTION_ACL_PASSWORD_HASH_HEX_BYTES + 1] = [];
+        const marker_len: usize = connection_acl_hash_marker(hash, marker[0: CONNECTION_ACL_PASSWORD_HASH_HEX_BYTES + 1]);
+        if marker_len != CONNECTION_ACL_PASSWORD_HASH_HEX_BYTES + 1 {
+            return error.ConnectionInputTooLarge;
+        }
+        try connection_sds_append_resp_bulk(raw, marker[1: CONNECTION_ACL_PASSWORD_HASH_HEX_BYTES]);
+        index = index + 1;
+    }
 }
 
 fn connection_acl_hash_matches_password(hash: &[byte], password: &[byte]) bool {
@@ -3860,24 +3905,151 @@ fn connection_clear_authenticated_user(tx: &ConnectionTransaction) void {
     }
 }
 
+fn connection_acl_password_hash_slot(hashes: &[byte], index: usize) &[byte] {
+    if index >= CONNECTION_ACL_PASSWORD_HASH_MAX {
+        return connection_reply_empty_slice();
+    }
+    const offset: usize = index * CONNECTION_ACL_PASSWORD_HASH_BYTES;
+    if offset > hashes.len || hashes.len - offset < CONNECTION_ACL_PASSWORD_HASH_BYTES {
+        return connection_reply_empty_slice();
+    }
+    return hashes[offset: CONNECTION_ACL_PASSWORD_HASH_BYTES];
+}
+
+fn connection_acl_password_hash_find(hashes: &[byte], count: usize, hash: &[byte]) i32 {
+    var index: usize = 0;
+    while index < count && index < CONNECTION_ACL_PASSWORD_HASH_MAX {
+        const slot: &[byte] = connection_acl_password_hash_slot(hashes, index);
+        if connection_acl_hash_matches_hash(slot, hash) {
+            return index as i32;
+        }
+        index = index + 1;
+    }
+    return -1;
+}
+
+fn connection_acl_password_hash_add(hashes: &[byte], count: &usize, hash: &[byte]) !void {
+    if *count > CONNECTION_ACL_PASSWORD_HASH_MAX || hash.len < CONNECTION_ACL_PASSWORD_HASH_BYTES {
+        return error.ConnectionInputTooLarge;
+    }
+    if connection_acl_password_hash_find(hashes, *count, hash) >= 0 {
+        return;
+    }
+    if *count >= CONNECTION_ACL_PASSWORD_HASH_MAX {
+        return error.ConnectionInputTooLarge;
+    }
+    const slot: &[byte] = connection_acl_password_hash_slot(hashes, *count);
+    if slot.len < CONNECTION_ACL_PASSWORD_HASH_BYTES {
+        return error.ConnectionInputTooLarge;
+    }
+    var index: usize = 0;
+    while index < CONNECTION_ACL_PASSWORD_HASH_BYTES {
+        slot.ptr[index] = hash.ptr[index];
+        index = index + 1;
+    }
+    *count = *count + 1;
+}
+
+fn connection_acl_password_hash_remove(hashes: &[byte], count: &usize, hash: &[byte]) bool {
+    const found: i32 = connection_acl_password_hash_find(hashes, *count, hash);
+    if found < 0 {
+        return false;
+    }
+    const found_index: usize = found as usize;
+    if found_index >= *count || found_index >= CONNECTION_ACL_PASSWORD_HASH_MAX {
+        return false;
+    }
+    var index: usize = found_index;
+    while index + 1 < *count {
+        const dst: &[byte] = connection_acl_password_hash_slot(hashes, index);
+        const src: &[byte] = connection_acl_password_hash_slot(hashes, index + 1);
+        var byte_index: usize = 0;
+        while byte_index < CONNECTION_ACL_PASSWORD_HASH_BYTES {
+            dst.ptr[byte_index] = src.ptr[byte_index];
+            byte_index = byte_index + 1;
+        }
+        index = index + 1;
+    }
+    *count = *count - 1;
+    connection_acl_bytes_clear(connection_acl_password_hash_slot(hashes, *count));
+    return true;
+}
+
+fn connection_acl_password_hashes_clear(hashes: &[byte], count: &usize) void {
+    connection_acl_bytes_clear(hashes);
+    *count = 0;
+}
+
 fn connection_acl_named_user_set_password(user: &ConnectionAclUser, password: &[byte]) !void {
     if password.len == 0 || password.len > CONNECTION_ACL_USER_PASSWORD_MAX {
         return error.ConnectionInputTooLarge;
     }
-    connection_acl_hash_password(password, user.password_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]);
-    user.password_hash_set = true;
+    var hash: [byte: CONNECTION_ACL_PASSWORD_HASH_BYTES] = [];
+    connection_acl_hash_password(password, hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]);
+    try connection_acl_password_hash_add(user.password_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES], &user.password_hash_count, hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]);
     user.nopass = false;
 }
 
 fn connection_acl_named_user_set_password_hash(user: &ConnectionAclUser, hex: &[byte]) !void {
-    try connection_acl_hash_from_hex(hex, user.password_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]);
-    user.password_hash_set = true;
+    var hash: [byte: CONNECTION_ACL_PASSWORD_HASH_BYTES] = [];
+    try connection_acl_hash_from_hex(hex, hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]);
+    try connection_acl_password_hash_add(user.password_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES], &user.password_hash_count, hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]);
     user.nopass = false;
 }
 
 fn connection_acl_named_user_clear_password(user: &ConnectionAclUser) void {
-    user.password_hash_set = false;
-    connection_acl_bytes_clear(user.password_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]);
+    connection_acl_password_hashes_clear(user.password_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES], &user.password_hash_count);
+}
+
+fn connection_acl_default_password_hashes_sync_legacy(config: &ServerConfig) void {
+    connection_acl_bytes_clear(config.requirepass[0: 128]);
+    connection_acl_bytes_clear(config.requirepass_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]);
+    config.requirepass_hash_set = config.requirepass_hash_count > 0;
+    if config.requirepass_hash_count == 0 {
+        return;
+    }
+    const first: &[byte] = connection_acl_password_hash_slot(config.requirepass_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES], 0);
+    if first.len < CONNECTION_ACL_PASSWORD_HASH_BYTES {
+        config.requirepass_hash_set = false;
+        config.requirepass_hash_count = 0;
+        return;
+    }
+    var index: usize = 0;
+    while index < CONNECTION_ACL_PASSWORD_HASH_BYTES {
+        config.requirepass_hash[index] = first.ptr[index];
+        index = index + 1;
+    }
+}
+
+fn connection_acl_default_password_hashes_migrate(config: &ServerConfig) !void {
+    if config.requirepass_hash_count > CONNECTION_ACL_PASSWORD_HASH_MAX {
+        return error.ConnectionInputTooLarge;
+    }
+    if config.requirepass_hash_count > 0 {
+        connection_acl_default_password_hashes_sync_legacy(config);
+        return;
+    }
+    if config.requirepass_hash_set {
+        try connection_acl_password_hash_add(
+            config.requirepass_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES],
+            &config.requirepass_hash_count,
+            config.requirepass_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES],
+        );
+        connection_acl_default_password_hashes_sync_legacy(config);
+        return;
+    }
+    const password: &[byte] = connection_cstring_slice(config.requirepass[0: 128]);
+    if password.len == 0 {
+        return;
+    }
+    var hash: [byte: CONNECTION_ACL_PASSWORD_HASH_BYTES] = [];
+    connection_acl_hash_password(password, hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]);
+    try connection_acl_password_hash_add(
+        config.requirepass_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES],
+        &config.requirepass_hash_count,
+        hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES],
+    );
+    connection_acl_default_password_hashes_sync_legacy(config);
 }
 
 fn connection_acl_setuser_modifier_error(modifier: &[byte], suffix: &[byte]) CommandReply {
@@ -4223,23 +4395,26 @@ fn connection_acl_setuser_named(router: &CommandRouter, username: &[byte], comma
         if modifier.len > 1 && modifier.ptr[0] == 62 as byte {
             const password: &[byte] = modifier[1: modifier.len - 1];
             _ = connection_acl_named_user_set_password(&connection_acl_users[slot], password) catch {
-                return connection_acl_setuser_modifier_error(modifier, &"': Password is too long"[0: 23]);
+                if password.len > CONNECTION_ACL_USER_PASSWORD_MAX {
+                    return connection_acl_setuser_modifier_error(modifier, &"': Password is too long"[0: 23]);
+                }
+                return connection_error_reply(&"ERR ACL SETUSER redis-uya password list is full"[0: 47]);
             };
             index = index + 1;
             continue;
         }
         if modifier.len > 1 && modifier.ptr[0] == 35 as byte {
             _ = connection_acl_named_user_set_password_hash(&connection_acl_users[slot], modifier[1: modifier.len - 1]) catch {
-                return connection_acl_setuser_modifier_error(modifier, &"': The password hash must be exactly 64 characters and contain only lowercase hexadecimal characters"[0: 100]);
+                return connection_error_reply(&"ERR ACL SETUSER redis-uya password list is full"[0: 47]);
             };
             index = index + 1;
             continue;
         }
         if modifier.len > 1 && modifier.ptr[0] == 60 as byte {
             const remove_password: &[byte] = modifier[1: modifier.len - 1];
-            if connection_acl_users[slot].password_hash_set &&
-                connection_acl_hash_matches_password(connection_acl_users[slot].password_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES], remove_password) {
-                connection_acl_named_user_clear_password(&connection_acl_users[slot]);
+            var remove_hash: [byte: CONNECTION_ACL_PASSWORD_HASH_BYTES] = [];
+            connection_acl_hash_password(remove_password, remove_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]);
+            if connection_acl_password_hash_remove(connection_acl_users[slot].password_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES], &connection_acl_users[slot].password_hash_count, remove_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]) {
                 connection_acl_users[slot].nopass = false;
             } else {
                 return connection_acl_setuser_modifier_error(modifier, &"': The password you are trying to remove from the user does not exist"[0: 69]);
@@ -4252,9 +4427,7 @@ fn connection_acl_setuser_named(router: &CommandRouter, username: &[byte], comma
             _ = connection_acl_hash_from_hex(modifier[1: modifier.len - 1], remove_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]) catch {
                 return connection_acl_setuser_modifier_error(modifier, &"': The password hash must be exactly 64 characters and contain only lowercase hexadecimal characters"[0: 100]);
             };
-            if connection_acl_users[slot].password_hash_set &&
-                connection_acl_hash_matches_hash(connection_acl_users[slot].password_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES], remove_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]) {
-                connection_acl_named_user_clear_password(&connection_acl_users[slot]);
+            if connection_acl_password_hash_remove(connection_acl_users[slot].password_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES], &connection_acl_users[slot].password_hash_count, remove_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]) {
                 connection_acl_users[slot].nopass = false;
             } else {
                 return connection_acl_setuser_modifier_error(modifier, &"': The password you are trying to remove from the user does not exist"[0: 69]);
@@ -4288,6 +4461,9 @@ fn connection_acl_handle_setuser(runtime: &CommandRuntimeInfo, router: &CommandR
     }
 
     runtime.pending_config = runtime.config;
+    _ = connection_acl_default_password_hashes_migrate(&runtime.pending_config) catch {
+        return connection_error_reply(&"ERR ACL SETUSER redis-uya password list is invalid"[0: 50]);
+    };
     var index: usize = 3;
     while index < command.argc {
         const modifier: &[byte] = command_arg_data(command, index) catch {
@@ -4295,9 +4471,10 @@ fn connection_acl_handle_setuser(runtime: &CommandRuntimeInfo, router: &CommandR
         };
         if connection_keyword_eq(modifier, &"NOPASS"[0: 6]) ||
             connection_keyword_eq(modifier, &"RESETPASS"[0: 9]) {
-            runtime.pending_config.requirepass_hash_set = false;
-            connection_acl_bytes_clear(runtime.pending_config.requirepass[0: 128]);
-            connection_acl_bytes_clear(runtime.pending_config.requirepass_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]);
+            connection_acl_password_hashes_clear(
+                runtime.pending_config.requirepass_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES],
+                &runtime.pending_config.requirepass_hash_count,
+            );
             index = index + 1;
             continue;
         }
@@ -4306,9 +4483,15 @@ fn connection_acl_handle_setuser(runtime: &CommandRuntimeInfo, router: &CommandR
             if password.len > 127 {
                 return connection_acl_setuser_modifier_error(modifier, &"': Password is too long"[0: 23]);
             }
-            connection_acl_hash_password(password, runtime.pending_config.requirepass_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]);
-            connection_acl_bytes_clear(runtime.pending_config.requirepass[0: 128]);
-            runtime.pending_config.requirepass_hash_set = true;
+            var hash: [byte: CONNECTION_ACL_PASSWORD_HASH_BYTES] = [];
+            connection_acl_hash_password(password, hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]);
+            _ = connection_acl_password_hash_add(
+                runtime.pending_config.requirepass_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES],
+                &runtime.pending_config.requirepass_hash_count,
+                hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES],
+            ) catch {
+                return connection_error_reply(&"ERR ACL SETUSER redis-uya password list is full"[0: 47]);
+            };
             index = index + 1;
             continue;
         }
@@ -4316,26 +4499,29 @@ fn connection_acl_handle_setuser(runtime: &CommandRuntimeInfo, router: &CommandR
             if !connection_acl_hash_hex_valid(modifier[1: modifier.len - 1]) {
                 return connection_acl_setuser_modifier_error(modifier, &"': The password hash must be exactly 64 characters and contain only lowercase hexadecimal characters"[0: 100]);
             }
-            _ = connection_acl_hash_from_hex(modifier[1: modifier.len - 1], runtime.pending_config.requirepass_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]) catch {
+            var hash: [byte: CONNECTION_ACL_PASSWORD_HASH_BYTES] = [];
+            _ = connection_acl_hash_from_hex(modifier[1: modifier.len - 1], hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]) catch {
                 return connection_acl_setuser_modifier_error(modifier, &"': The password hash must be exactly 64 characters and contain only lowercase hexadecimal characters"[0: 100]);
             };
-            connection_acl_bytes_clear(runtime.pending_config.requirepass[0: 128]);
-            runtime.pending_config.requirepass_hash_set = true;
+            _ = connection_acl_password_hash_add(
+                runtime.pending_config.requirepass_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES],
+                &runtime.pending_config.requirepass_hash_count,
+                hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES],
+            ) catch {
+                return connection_error_reply(&"ERR ACL SETUSER redis-uya password list is full"[0: 47]);
+            };
             index = index + 1;
             continue;
         }
         if modifier.len > 1 && modifier.ptr[0] == 60 as byte {
             const remove_password: &[byte] = modifier[1: modifier.len - 1];
-            const current_password: &[byte] = connection_cstring_slice(runtime.pending_config.requirepass[0: 128]);
-            if connection_slice_eq(remove_password, current_password) {
-                connection_acl_bytes_clear(runtime.pending_config.requirepass[0: 128]);
-                runtime.pending_config.requirepass_hash_set = false;
-                connection_acl_bytes_clear(runtime.pending_config.requirepass_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]);
-            } else if runtime.pending_config.requirepass_hash_set &&
-                connection_acl_hash_matches_password(runtime.pending_config.requirepass_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES], remove_password) {
-                runtime.pending_config.requirepass_hash_set = false;
-                connection_acl_bytes_clear(runtime.pending_config.requirepass_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]);
-            } else {
+            var remove_hash: [byte: CONNECTION_ACL_PASSWORD_HASH_BYTES] = [];
+            connection_acl_hash_password(remove_password, remove_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]);
+            if !connection_acl_password_hash_remove(
+                runtime.pending_config.requirepass_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES],
+                &runtime.pending_config.requirepass_hash_count,
+                remove_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES],
+            ) {
                 return connection_acl_setuser_modifier_error(modifier, &"': The password you are trying to remove from the user does not exist"[0: 69]);
             }
             index = index + 1;
@@ -4349,11 +4535,11 @@ fn connection_acl_handle_setuser(runtime: &CommandRuntimeInfo, router: &CommandR
             _ = connection_acl_hash_from_hex(modifier[1: modifier.len - 1], remove_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]) catch {
                 return connection_acl_setuser_modifier_error(modifier, &"': The password hash must be exactly 64 characters and contain only lowercase hexadecimal characters"[0: 100]);
             };
-            if runtime.pending_config.requirepass_hash_set &&
-                connection_acl_hash_matches_hash(runtime.pending_config.requirepass_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES], remove_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]) {
-                runtime.pending_config.requirepass_hash_set = false;
-                connection_acl_bytes_clear(runtime.pending_config.requirepass_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]);
-            } else {
+            if !connection_acl_password_hash_remove(
+                runtime.pending_config.requirepass_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES],
+                &runtime.pending_config.requirepass_hash_count,
+                remove_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES],
+            ) {
                 return connection_acl_setuser_modifier_error(modifier, &"': The password you are trying to remove from the user does not exist"[0: 69]);
             }
             index = index + 1;
@@ -4408,6 +4594,7 @@ fn connection_acl_handle_setuser(runtime: &CommandRuntimeInfo, router: &CommandR
         }
         return connection_acl_setuser_modifier_error(modifier, &"': Syntax error"[0: 15]);
     }
+    connection_acl_default_password_hashes_sync_legacy(&runtime.pending_config);
     var reply: CommandReply = connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
     reply.request_config_set = true;
     return reply;
@@ -4515,12 +4702,10 @@ fn connection_acl_append_named_config_line(raw: &Sds, user: &ConnectionAclUser) 
     }
     if user.nopass {
         try sds_cat(raw, &"nopass"[0: 6]);
-    } else if user.password_hash_set {
-        var password_marker: [byte: CONNECTION_ACL_PASSWORD_HASH_HEX_BYTES + 1] = [];
-        const password_marker_len: usize = connection_acl_hash_marker(user.password_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES], password_marker[0: CONNECTION_ACL_PASSWORD_HASH_HEX_BYTES + 1]);
-        if password_marker_len > 0 {
-            try sds_cat(raw, password_marker[0: password_marker_len]);
-        }
+    } else if user.password_hash_count > 0 {
+        try connection_acl_append_password_hash_rules(raw, user.password_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES], user.password_hash_count);
+    } else {
+        try sds_cat(raw, &"resetpass"[0: 9]);
     }
     try sds_cat(raw, &" "[0: 1]);
     try connection_acl_append_key_rules(raw, user.allkeys, user.key_patterns[0: CONNECTION_ACL_KEY_PATTERN_MAX]);
@@ -4540,16 +4725,26 @@ fn connection_acl_handle_list(runtime: &CommandRuntimeInfo) CommandReply {
     _ = sds_cat(&line, &"user default on "[0: 16]) catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
-    var password_marker: [byte: CONNECTION_ACL_PASSWORD_HASH_HEX_BYTES + 1] = [];
-    const password_marker_len: usize = connection_acl_default_password_marker(runtime, password_marker[0: CONNECTION_ACL_PASSWORD_HASH_HEX_BYTES + 1]);
-    if password_marker_len > 0 {
-        _ = sds_cat(&line, password_marker[0: password_marker_len]) catch {
+    if runtime.config.requirepass_hash_count > 0 {
+        _ = connection_acl_append_password_hash_rules(
+            &line,
+            runtime.config.requirepass_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES],
+            runtime.config.requirepass_hash_count,
+        ) catch {
             return connection_error_reply(&"ERR out of memory"[0: 17]);
         };
     } else {
-        _ = sds_cat(&line, &"nopass"[0: 6]) catch {
-            return connection_error_reply(&"ERR out of memory"[0: 17]);
-        };
+        var password_marker: [byte: CONNECTION_ACL_PASSWORD_HASH_HEX_BYTES + 1] = [];
+        const password_marker_len: usize = connection_acl_default_password_marker(runtime, password_marker[0: CONNECTION_ACL_PASSWORD_HASH_HEX_BYTES + 1]);
+        if password_marker_len > 0 {
+            _ = sds_cat(&line, password_marker[0: password_marker_len]) catch {
+                return connection_error_reply(&"ERR out of memory"[0: 17]);
+            };
+        } else {
+            _ = sds_cat(&line, &"nopass"[0: 6]) catch {
+                return connection_error_reply(&"ERR out of memory"[0: 17]);
+            };
+        }
     }
     _ = sds_cat(&line, &" "[0: 1]) catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
@@ -4659,20 +4854,13 @@ fn connection_acl_getuser_named(user: &ConnectionAclUser) CommandReply {
     _ = connection_sds_append_resp_bulk(&raw, &"passwords"[0: 9]) catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
-    if user.password_hash_set {
-        var password_marker: [byte: CONNECTION_ACL_PASSWORD_HASH_HEX_BYTES + 1] = [];
-        const password_marker_len: usize = connection_acl_hash_marker(user.password_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES], password_marker[0: CONNECTION_ACL_PASSWORD_HASH_HEX_BYTES + 1]);
-        _ = connection_sds_append_resp_array_header(&raw, 1) catch {
-            return connection_error_reply(&"ERR out of memory"[0: 17]);
-        };
-        _ = connection_sds_append_resp_bulk(&raw, password_marker[0: password_marker_len]) catch {
-            return connection_error_reply(&"ERR out of memory"[0: 17]);
-        };
-    } else {
-        _ = connection_sds_append_resp_array_header(&raw, 0) catch {
-            return connection_error_reply(&"ERR out of memory"[0: 17]);
-        };
-    }
+    _ = connection_acl_append_password_hash_resp_array(
+        &raw,
+        user.password_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES],
+        user.password_hash_count,
+    ) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
     _ = connection_sds_append_resp_bulk(&raw, &"commands"[0: 8]) catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
@@ -4747,7 +4935,8 @@ fn connection_acl_handle_getuser(runtime: &CommandRuntimeInfo, command: &Command
     _ = connection_sds_append_resp_bulk(&raw, &"flags"[0: 5]) catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
-    if password_marker_len > 0 {
+    const default_password_count: usize = runtime.config.requirepass_hash_count;
+    if default_password_count > 0 || password_marker_len > 0 {
         _ = connection_sds_append_resp_array_header(&raw, 1) catch {
             return connection_error_reply(&"ERR out of memory"[0: 17]);
         };
@@ -4767,11 +4956,19 @@ fn connection_acl_handle_getuser(runtime: &CommandRuntimeInfo, command: &Command
     _ = connection_sds_append_resp_bulk(&raw, &"passwords"[0: 9]) catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
-    if password_marker_len > 0 {
+    if default_password_count > 0 {
+        _ = connection_acl_append_password_hash_resp_array(
+            &raw,
+            runtime.config.requirepass_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES],
+            default_password_count,
+        ) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+    } else if password_marker_len > 0 {
         _ = connection_sds_append_resp_array_header(&raw, 1) catch {
             return connection_error_reply(&"ERR out of memory"[0: 17]);
         };
-        _ = connection_sds_append_resp_bulk(&raw, password_marker[0: password_marker_len]) catch {
+        _ = connection_sds_append_resp_bulk(&raw, password_marker[1: CONNECTION_ACL_PASSWORD_HASH_HEX_BYTES]) catch {
             return connection_error_reply(&"ERR out of memory"[0: 17]);
         };
     } else {
@@ -5096,12 +5293,20 @@ fn connection_acl_append_default_file_line(raw: &Sds, runtime: &CommandRuntimeIn
         return error.ConnectionAclFileInvalid;
     }
     try sds_cat(raw, &"user default on "[0: 16]);
-    var password_marker: [byte: CONNECTION_ACL_PASSWORD_HASH_HEX_BYTES + 1] = [];
-    const password_marker_len: usize = connection_acl_default_password_marker(runtime, password_marker[0: CONNECTION_ACL_PASSWORD_HASH_HEX_BYTES + 1]);
-    if password_marker_len > 0 {
-        try sds_cat(raw, password_marker[0: password_marker_len]);
+    if runtime.config.requirepass_hash_count > 0 {
+        try connection_acl_append_password_hash_rules(
+            raw,
+            runtime.config.requirepass_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES],
+            runtime.config.requirepass_hash_count,
+        );
     } else {
-        try sds_cat(raw, &"nopass"[0: 6]);
+        var password_marker: [byte: CONNECTION_ACL_PASSWORD_HASH_HEX_BYTES + 1] = [];
+        const password_marker_len: usize = connection_acl_default_password_marker(runtime, password_marker[0: CONNECTION_ACL_PASSWORD_HASH_HEX_BYTES + 1]);
+        if password_marker_len > 0 {
+            try sds_cat(raw, password_marker[0: password_marker_len]);
+        } else {
+            try sds_cat(raw, &"nopass"[0: 6]);
+        }
     }
     try sds_cat(raw, &" "[0: 1]);
     try connection_acl_append_key_rules(raw, connection_acl_default_key_rules.allkeys, connection_acl_default_key_rules.patterns[0: CONNECTION_ACL_KEY_PATTERN_MAX]);
@@ -5127,10 +5332,8 @@ fn connection_acl_append_named_file_line(raw: &Sds, user: &ConnectionAclUser) !v
     }
     if user.nopass {
         try sds_cat(raw, &"nopass"[0: 6]);
-    } else if user.password_hash_set {
-        var password_marker: [byte: CONNECTION_ACL_PASSWORD_HASH_HEX_BYTES + 1] = [];
-        const password_marker_len: usize = connection_acl_hash_marker(user.password_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES], password_marker[0: CONNECTION_ACL_PASSWORD_HASH_HEX_BYTES + 1]);
-        try sds_cat(raw, password_marker[0: password_marker_len]);
+    } else if user.password_hash_count > 0 {
+        try connection_acl_append_password_hash_rules(raw, user.password_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES], user.password_hash_count);
     } else {
         try sds_cat(raw, &"resetpass"[0: 9]);
     }
@@ -5269,9 +5472,10 @@ fn connection_acl_file_apply_default_modifier(runtime: &CommandRuntimeInfo, rout
         return;
     }
     if connection_keyword_eq(modifier, &"NOPASS"[0: 6]) || connection_keyword_eq(modifier, &"RESETPASS"[0: 9]) {
-        connection_acl_bytes_clear(runtime.pending_config.requirepass[0: 128]);
-        runtime.pending_config.requirepass_hash_set = false;
-        connection_acl_bytes_clear(runtime.pending_config.requirepass_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]);
+        connection_acl_password_hashes_clear(
+            runtime.pending_config.requirepass_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES],
+            &runtime.pending_config.requirepass_hash_count,
+        );
         return;
     }
     if modifier.len > 1 && modifier.ptr[0] == 62 as byte {
@@ -5279,15 +5483,23 @@ fn connection_acl_file_apply_default_modifier(runtime: &CommandRuntimeInfo, rout
         if password.len > 127 {
             return error.ConnectionAclFileInvalid;
         }
-        connection_acl_hash_password(password, runtime.pending_config.requirepass_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]);
-        connection_acl_bytes_clear(runtime.pending_config.requirepass[0: 128]);
-        runtime.pending_config.requirepass_hash_set = true;
+        var hash: [byte: CONNECTION_ACL_PASSWORD_HASH_BYTES] = [];
+        connection_acl_hash_password(password, hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]);
+        try connection_acl_password_hash_add(
+            runtime.pending_config.requirepass_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES],
+            &runtime.pending_config.requirepass_hash_count,
+            hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES],
+        );
         return;
     }
     if modifier.len > 1 && modifier.ptr[0] == 35 as byte {
-        try connection_acl_hash_from_hex(modifier[1: modifier.len - 1], runtime.pending_config.requirepass_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]);
-        connection_acl_bytes_clear(runtime.pending_config.requirepass[0: 128]);
-        runtime.pending_config.requirepass_hash_set = true;
+        var hash: [byte: CONNECTION_ACL_PASSWORD_HASH_BYTES] = [];
+        try connection_acl_hash_from_hex(modifier[1: modifier.len - 1], hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]);
+        try connection_acl_password_hash_add(
+            runtime.pending_config.requirepass_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES],
+            &runtime.pending_config.requirepass_hash_count,
+            hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES],
+        );
         return;
     }
     if connection_acl_setuser_key_modifier_known(modifier) {
@@ -5485,6 +5697,8 @@ export fn connection_acl_load_file(runtime: &CommandRuntimeInfo, router: &Comman
     connection_acl_bytes_clear(runtime.pending_config.requirepass[0: 128]);
     runtime.pending_config.requirepass_hash_set = false;
     connection_acl_bytes_clear(runtime.pending_config.requirepass_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]);
+    runtime.pending_config.requirepass_hash_count = 0;
+    connection_acl_bytes_clear(runtime.pending_config.requirepass_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES]);
     var saw_default: bool = false;
     var start: usize = 0;
     var index: usize = 0;
@@ -5502,6 +5716,7 @@ export fn connection_acl_load_file(runtime: &CommandRuntimeInfo, router: &Comman
         connection_acl_load_restore(runtime);
         return error.ConnectionAclFileInvalid;
     }
+    connection_acl_default_password_hashes_sync_legacy(&runtime.pending_config);
 }
 
 fn connection_acl_file_unconfigured_reply() CommandReply {
@@ -6933,10 +7148,19 @@ fn connection_requirepass(runtime: &CommandRuntimeInfo) &[byte] {
 }
 
 fn connection_auth_required(runtime: &CommandRuntimeInfo) bool {
-    return runtime.config.requirepass[0] != 0 as byte || runtime.config.requirepass_hash_set;
+    return runtime.config.requirepass[0] != 0 as byte || runtime.config.requirepass_hash_set || runtime.config.requirepass_hash_count > 0;
 }
 
 fn connection_default_password_matches(runtime: &CommandRuntimeInfo, password: &[byte]) bool {
+    if runtime.config.requirepass_hash_count > 0 {
+        var candidate: [byte: CONNECTION_ACL_PASSWORD_HASH_BYTES] = [];
+        connection_acl_hash_password(password, candidate[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]);
+        return connection_acl_password_hash_find(
+            runtime.config.requirepass_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES],
+            runtime.config.requirepass_hash_count,
+            candidate[0: CONNECTION_ACL_PASSWORD_HASH_BYTES],
+        ) >= 0;
+    }
     if runtime.config.requirepass_hash_set {
         return connection_acl_hash_matches_password(runtime.config.requirepass_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES], password);
     }
@@ -7005,8 +7229,9 @@ fn connection_authenticate_named_user(tx: &ConnectionTransaction, username: &[by
         connection_set_authenticated_user(tx, user.name[0: user.name_len]);
         return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
     }
-    if !user.password_hash_set ||
-        !connection_acl_hash_matches_password(user.password_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES], password) {
+    var candidate: [byte: CONNECTION_ACL_PASSWORD_HASH_BYTES] = [];
+    connection_acl_hash_password(password, candidate[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]);
+    if connection_acl_password_hash_find(user.password_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES], user.password_hash_count, candidate[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]) < 0 {
         tx.authenticated = false;
         connection_clear_authenticated_user(tx);
         return connection_wrongpass_reply();
@@ -7022,7 +7247,7 @@ fn connection_handle_auth_state(tx: &ConnectionTransaction, runtime: &CommandRun
     }
 
     const requirepass: &[byte] = connection_requirepass(runtime);
-    if requirepass.len == 0 && !runtime.config.requirepass_hash_set {
+    if requirepass.len == 0 && !runtime.config.requirepass_hash_set && runtime.config.requirepass_hash_count == 0 {
         if command.argc == 3 {
             const username_no_pass: &[byte] = command_arg_data(command, 1) catch {
                 return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
@@ -7081,7 +7306,7 @@ fn connection_authenticate_username_password(tx: &ConnectionTransaction, runtime
     if !connection_keyword_eq(username, &"default"[0: 7]) {
         return connection_authenticate_named_user(tx, username, password);
     }
-    if requirepass.len == 0 && !runtime.config.requirepass_hash_set {
+    if requirepass.len == 0 && !runtime.config.requirepass_hash_set && runtime.config.requirepass_hash_count == 0 {
         tx.authenticated = true;
         connection_set_authenticated_user(tx, &"default"[0: 7]);
         return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);

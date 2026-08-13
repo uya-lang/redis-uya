@@ -52,6 +52,8 @@ export struct ServerConfig {
     requirepass: [byte: 128],
     requirepass_hash: [byte: 32],
     requirepass_hash_set: bool,
+    requirepass_hash_count: usize,
+    requirepass_hashes: [byte: 256],
     replicaof_host: [byte: 64],
     replicaof_port: i32,
     masterauth: [byte: 128],
@@ -101,6 +103,7 @@ export fn default_config() ServerConfig {
         save_seconds: 900,
         save_changes: 1,
         requirepass_hash_set: false,
+        requirepass_hash_count: 0,
     };
     copy_literal(cfg.bind[0: 64], &"0.0.0.0"[0: 7]);
     copy_literal(cfg.dir[0: 256], &"./"[0: 2]);
@@ -110,6 +113,7 @@ export fn default_config() ServerConfig {
     copy_literal(cfg.aclfile[0: 256], &""[0: 0]);
     copy_literal(cfg.requirepass[0: 128], &""[0: 0]);
     clear_bytes(cfg.requirepass_hash[0: 32]);
+    clear_bytes(cfg.requirepass_hashes[0: 256]);
     copy_literal(cfg.replicaof_host[0: 64], &""[0: 0]);
     cfg.replicaof_port = 0;
     copy_literal(cfg.masterauth[0: 128], &""[0: 0]);
@@ -277,6 +281,8 @@ export fn config_apply_runtime_set(cfg: &ServerConfig, key: &[byte], value: &[by
         copy_literal(cfg.requirepass[0: 128], value);
         cfg.requirepass_hash_set = false;
         clear_bytes(cfg.requirepass_hash[0: 32]);
+        cfg.requirepass_hash_count = 0;
+        clear_bytes(cfg.requirepass_hashes[0: 256]);
         return true;
     }
     if token_eq(key, &"replicaof"[0: 9]) {
@@ -607,6 +613,8 @@ fn parse_line(cfg: &ServerConfig, line: &[byte]) !void {
         copy_literal(cfg.requirepass[0: 128], value);
         cfg.requirepass_hash_set = false;
         clear_bytes(cfg.requirepass_hash[0: 32]);
+        cfg.requirepass_hash_count = 0;
+        clear_bytes(cfg.requirepass_hashes[0: 256]);
     } else if token_eq(key, &"replicaof"[0: 9]) {
         copy_literal(cfg.replicaof_host[0: 64], value);
         const port_token: &[byte] = next_token(line, &pos);

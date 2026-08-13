@@ -3056,7 +3056,8 @@ def run_smoke() -> None:
                 or auth_acl_getuser[2] != b"passwords"
                 or not isinstance(auth_acl_getuser[3], list)
                 or len(auth_acl_getuser[3]) != 1
-                or not auth_acl_getuser[3][0].startswith(b"#")
+                or len(auth_acl_getuser[3][0]) != 64
+                or any(ch not in b"0123456789abcdef" for ch in auth_acl_getuser[3][0])
                 or b"nopass" in auth_acl_getuser[1]
                 or auth_acl_getuser[3][0] == b"secret"
             ):

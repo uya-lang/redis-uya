@@ -1101,7 +1101,7 @@ if [[ "$ACL_SETUSER_BOB_RESULT" != "OK" ]]; then
 fi
 
 ACL_GETUSER_BOB_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl getuser bob)"
-if [[ "$ACL_GETUSER_BOB_RESULT" != *"passwords"* || "$ACL_GETUSER_BOB_RESULT" != *"#"* || "$ACL_GETUSER_BOB_RESULT" == *"secret"* || "$ACL_GETUSER_BOB_RESULT" == *"nopass"* ]]; then
+if [[ "$ACL_GETUSER_BOB_RESULT" != *"passwords"* || "$ACL_GETUSER_BOB_RESULT" != *"2bb80d537b1da3e38bd30361aa855686bde0eacd7162fef6a25fe97bf527a25b"* || "$ACL_GETUSER_BOB_RESULT" == *"#"* || "$ACL_GETUSER_BOB_RESULT" == *"secret"* || "$ACL_GETUSER_BOB_RESULT" == *"nopass"* ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ACL GETUSER bob hashed password details, got '$ACL_GETUSER_BOB_RESULT'" >&2
     exit 1
 fi
@@ -4029,7 +4029,7 @@ if [[ "$AUTH_CONFIG_RESULT" != $'requirepass\nsecret' ]]; then
 fi
 
 AUTH_ACL_GETUSER_RESULT="$(redis-cli -a secret --raw -h 127.0.0.1 -p "$AUTH_PORT" acl getuser default 2>/dev/null)"
-if [[ "$AUTH_ACL_GETUSER_RESULT" != *"passwords"* || "$AUTH_ACL_GETUSER_RESULT" != *"#"* || "$AUTH_ACL_GETUSER_RESULT" == *"nopass"* || "$AUTH_ACL_GETUSER_RESULT" == *"secret"* ]]; then
+if [[ "$AUTH_ACL_GETUSER_RESULT" != *"passwords"* || "$AUTH_ACL_GETUSER_RESULT" != *"2bb80d537b1da3e38bd30361aa855686bde0eacd7162fef6a25fe97bf527a25b"* || "$AUTH_ACL_GETUSER_RESULT" == *"#"* || "$AUTH_ACL_GETUSER_RESULT" == *"nopass"* || "$AUTH_ACL_GETUSER_RESULT" == *"secret"* ]]; then
     echo "[FAIL] integration/redis_cli_smoke: unexpected ACL GETUSER with requirepass: '$AUTH_ACL_GETUSER_RESULT'" >&2
     exit 1
 fi

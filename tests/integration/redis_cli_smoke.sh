@@ -958,6 +958,24 @@ if [[ "$ACL_DYNAMIC_FCALL_ZERO_RESULT" != "OK" ]]; then
     exit 1
 fi
 
+ACL_DYNAMIC_BLMPOP_SAFE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl dryrun dynamic blmpop 0 2 safe:a safe:b left)"
+if [[ "$ACL_DYNAMIC_BLMPOP_SAFE_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL BLMPOP safe keys OK, got '$ACL_DYNAMIC_BLMPOP_SAFE_RESULT'" >&2
+    exit 1
+fi
+
+ACL_DYNAMIC_ZINTER_UNSAFE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl dryrun dynamic zinter 2 safe:a unsafe 2>&1 || true)"
+if [[ "$ACL_DYNAMIC_ZINTER_UNSAFE_RESULT" != "NOPERM User dynamic has no permissions to access one of the keys used as arguments" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL ZINTER unsafe source denial, got '$ACL_DYNAMIC_ZINTER_UNSAFE_RESULT'" >&2
+    exit 1
+fi
+
+ACL_DYNAMIC_ZINTERSTORE_UNSAFE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl dryrun dynamic zinterstore unsafe 2 safe:a safe:b 2>&1 || true)"
+if [[ "$ACL_DYNAMIC_ZINTERSTORE_UNSAFE_RESULT" != "NOPERM User dynamic has no permissions to access one of the keys used as arguments" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL ZINTERSTORE unsafe destination denial, got '$ACL_DYNAMIC_ZINTERSTORE_UNSAFE_RESULT'" >&2
+    exit 1
+fi
+
 ACL_DYNAMIC_DELETE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl deluser dynamic)"
 if [[ "$ACL_DYNAMIC_DELETE_RESULT" != "1" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ACL dynamic user cleanup count 1, got '$ACL_DYNAMIC_DELETE_RESULT'" >&2

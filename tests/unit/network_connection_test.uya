@@ -2636,6 +2636,22 @@ export fn test_connection_process_acl_command_whitelist() !void {
     try assert_true(network_connection_contains(out[0: dynamic_fcall_unsafe.response_len], &"NOPERM"[0: 6]));
     const dynamic_fcall_zero: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*7\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$7\r\ndynamic\r\n$8\r\nFCALL_RO\r\n$7\r\nmissing\r\n$1\r\n0\r\n$3\r\narg\r\n"[0: 81], &out[0], 4096, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: dynamic_fcall_zero.response_len], &"+OK\r\n"[0: 5]));
+    const dynamic_blmpop_safe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*9\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$7\r\ndynamic\r\n$6\r\nBLMPOP\r\n$1\r\n0\r\n$1\r\n2\r\n$6\r\nsafe:a\r\n$6\r\nsafe:b\r\n$4\r\nLEFT\r\n"[0: 98], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: dynamic_blmpop_safe.response_len], &"+OK\r\n"[0: 5]));
+    const dynamic_blmpop_unsafe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*9\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$7\r\ndynamic\r\n$6\r\nBLMPOP\r\n$1\r\n0\r\n$1\r\n2\r\n$6\r\nsafe:a\r\n$6\r\nunsafe\r\n$4\r\nLEFT\r\n"[0: 98], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_contains(out[0: dynamic_blmpop_unsafe.response_len], &"NOPERM"[0: 6]));
+    const dynamic_zinter_safe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*7\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$7\r\ndynamic\r\n$6\r\nZINTER\r\n$1\r\n2\r\n$6\r\nsafe:a\r\n$6\r\nsafe:b\r\n"[0: 81], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: dynamic_zinter_safe.response_len], &"+OK\r\n"[0: 5]));
+    const dynamic_zinter_unsafe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*7\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$7\r\ndynamic\r\n$6\r\nZINTER\r\n$1\r\n2\r\n$6\r\nsafe:a\r\n$6\r\nunsafe\r\n"[0: 81], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_contains(out[0: dynamic_zinter_unsafe.response_len], &"NOPERM"[0: 6]));
+    const dynamic_zinterstore_safe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*8\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$7\r\ndynamic\r\n$11\r\nZINTERSTORE\r\n$9\r\nsafe:dest\r\n$1\r\n2\r\n$6\r\nsafe:a\r\n$6\r\nsafe:b\r\n"[0: 102], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: dynamic_zinterstore_safe.response_len], &"+OK\r\n"[0: 5]));
+    const dynamic_zinterstore_unsafe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*8\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$7\r\ndynamic\r\n$11\r\nZINTERSTORE\r\n$6\r\nunsafe\r\n$1\r\n2\r\n$6\r\nsafe:a\r\n$6\r\nsafe:b\r\n"[0: 99], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_contains(out[0: dynamic_zinterstore_unsafe.response_len], &"NOPERM"[0: 6]));
+    const dynamic_zintercard_unsafe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*7\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$7\r\ndynamic\r\n$10\r\nZINTERCARD\r\n$1\r\n2\r\n$6\r\nsafe:a\r\n$6\r\nunsafe\r\n"[0: 86], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_contains(out[0: dynamic_zintercard_unsafe.response_len], &"NOPERM"[0: 6]));
+    const dynamic_msetex_unsafe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*9\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$7\r\ndynamic\r\n$6\r\nMSETEX\r\n$1\r\n2\r\n$6\r\nsafe:a\r\n$2\r\nva\r\n$6\r\nunsafe\r\n$2\r\nvb\r\n"[0: 97], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_contains(out[0: dynamic_msetex_unsafe.response_len], &"NOPERM"[0: 6]));
 
     const dynamic_selector: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*8\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$6\r\ndynsel\r\n$2\r\non\r\n$6\r\nnopass\r\n$8\r\n-eval_ro\r\n$9\r\nresetkeys\r\n$17\r\n(~safe* +eval_ro)\r\n"[0: 111], &out[0], 4096, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: dynamic_selector.response_len], &"+OK\r\n"[0: 5]));

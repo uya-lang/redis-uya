@@ -407,6 +407,14 @@ struct ConnectionAclKeyRules {
     patterns: [ConnectionAclKeyPattern: CONNECTION_ACL_KEY_PATTERN_MAX],
 }
 
+struct ConnectionAclKeySpec {
+    dynamic: bool,
+    first_index: usize,
+    count: usize,
+    step: usize,
+    extra_index: i32,
+}
+
 struct ConnectionAclChannelPattern {
     active: bool,
     pattern_len: usize,
@@ -3557,45 +3565,129 @@ fn connection_acl_count_range_keys(info: &CommandInfo, full_argc: usize) usize {
     return (((last_index - info.first_key) / info.key_step) + 1) as usize;
 }
 
-fn connection_acl_declared_numkeys(info: &CommandInfo, command: &Command, arg_offset: usize, full_argc: usize) usize {
-    if info.cmd_type != CommandType.command_eval &&
-        info.cmd_type != CommandType.command_evalsha &&
-        info.cmd_type != CommandType.command_eval_ro &&
-        info.cmd_type != CommandType.command_evalsha_ro &&
-        info.cmd_type != CommandType.command_fcall &&
-        info.cmd_type != CommandType.command_fcall_ro {
-        return 0;
+fn connection_acl_empty_key_spec(dynamic: bool) ConnectionAclKeySpec {
+    return ConnectionAclKeySpec{
+        dynamic: dynamic,
+        first_index: 0,
+        count: 0,
+        step: 1,
+        extra_index: -1,
+    };
+}
+
+fn connection_acl_parse_numkeys(command: &Command, arg_offset: usize, full_argc: usize, numkeys_index: usize) u64 {
+    if numkeys_index >= full_argc {
+        return 0u64;
     }
-    if full_argc < 3 {
-        return 0;
-    }
-    const raw: &[byte] = command_arg_data(command, arg_offset + 2) catch {
-        return 0;
+    const raw: &[byte] = command_arg_data(command, arg_offset + numkeys_index) catch {
+        return 0u64;
     };
     if raw.len == 0 || raw.ptr[0] == 45 as byte {
-        return 0;
+        return 0u64;
     }
-    const parsed: u64 = connection_parse_u64(raw) catch {
-        return 0;
+    return connection_parse_u64(raw) catch {
+        return 0u64;
     };
-    if parsed > (full_argc - 3) as u64 {
-        return 0;
+}
+
+fn connection_acl_dynamic_key_spec(info: &CommandInfo, command: &Command, arg_offset: usize, full_argc: usize) ConnectionAclKeySpec {
+    var numkeys_index: usize = 0;
+    var first_index: usize = 0;
+    var step: usize = 1;
+    var extra_index: i32 = -1;
+    var dynamic: bool = true;
+
+    if info.cmd_type == CommandType.command_eval ||
+        info.cmd_type == CommandType.command_evalsha ||
+        info.cmd_type == CommandType.command_eval_ro ||
+        info.cmd_type == CommandType.command_evalsha_ro ||
+        info.cmd_type == CommandType.command_fcall ||
+        info.cmd_type == CommandType.command_fcall_ro {
+        numkeys_index = 2;
+        first_index = 3;
+    } else if info.cmd_type == CommandType.command_lmpop ||
+        info.cmd_type == CommandType.command_zmpop ||
+        info.cmd_type == CommandType.command_sintercard ||
+        info.cmd_type == CommandType.command_sdiffcard ||
+        info.cmd_type == CommandType.command_sunioncard ||
+        info.cmd_type == CommandType.command_zdiff ||
+        info.cmd_type == CommandType.command_zinter ||
+        info.cmd_type == CommandType.command_zunion ||
+        info.cmd_type == CommandType.command_zintercard {
+        numkeys_index = 1;
+        first_index = 2;
+    } else if info.cmd_type == CommandType.command_blmpop ||
+        info.cmd_type == CommandType.command_bzmpop {
+        numkeys_index = 2;
+        first_index = 3;
+    } else if info.cmd_type == CommandType.command_msetex {
+        numkeys_index = 1;
+        first_index = 2;
+        step = 2;
+    } else if info.cmd_type == CommandType.command_zdiffstore ||
+        info.cmd_type == CommandType.command_zinterstore ||
+        info.cmd_type == CommandType.command_zunionstore {
+        numkeys_index = 2;
+        first_index = 3;
+        extra_index = 1;
+    } else {
+        dynamic = false;
     }
-    return parsed as usize;
+
+    if !dynamic {
+        return connection_acl_empty_key_spec(false);
+    }
+    const parsed: u64 = connection_acl_parse_numkeys(command, arg_offset, full_argc, numkeys_index);
+    if parsed == 0u64 {
+        return connection_acl_empty_key_spec(true);
+    }
+    if first_index >= full_argc {
+        return connection_acl_empty_key_spec(true);
+    }
+    const available: usize = ((full_argc - 1 - first_index) / step) + 1;
+    if parsed > available as u64 {
+        return connection_acl_empty_key_spec(true);
+    }
+    return ConnectionAclKeySpec{
+        dynamic: true,
+        first_index: first_index,
+        count: parsed as usize,
+        step: step,
+        extra_index: extra_index,
+    };
+}
+
+fn connection_acl_key_spec_count(spec: &ConnectionAclKeySpec) usize {
+    if spec.extra_index >= 0 {
+        return spec.count + 1;
+    }
+    return spec.count;
+}
+
+fn connection_acl_key_spec_index(spec: &ConnectionAclKeySpec, ordinal: usize) usize {
+    if ordinal < spec.count {
+        return spec.first_index + ordinal * spec.step;
+    }
+    return spec.extra_index as usize;
 }
 
 fn connection_acl_user_command_key_denied(username: &[byte], info: &CommandInfo, command: &Command, arg_offset: usize, full_argc: usize) bool {
-    const declared_numkeys: usize = connection_acl_declared_numkeys(info, command, arg_offset, full_argc);
-    if declared_numkeys > 0 && !connection_acl_user_allkeys(username) {
-        var declared_key_index: usize = 0;
-        while declared_key_index < declared_numkeys {
-            const declared_key: &[byte] = command_arg_data(command, arg_offset + 3 + declared_key_index) catch {
+    const dynamic_spec: ConnectionAclKeySpec = connection_acl_dynamic_key_spec(info, command, arg_offset, full_argc);
+    if dynamic_spec.dynamic {
+        if connection_acl_user_allkeys(username) {
+            return false;
+        }
+        const dynamic_key_count: usize = connection_acl_key_spec_count(&dynamic_spec);
+        var dynamic_key_ordinal: usize = 0;
+        while dynamic_key_ordinal < dynamic_key_count {
+            const dynamic_key_index: usize = connection_acl_key_spec_index(&dynamic_spec, dynamic_key_ordinal);
+            const dynamic_key: &[byte] = command_arg_data(command, arg_offset + dynamic_key_index) catch {
                 return false;
             };
-            if !connection_acl_user_key_allowed(username, declared_key) {
+            if !connection_acl_user_key_allowed(username, dynamic_key) {
                 return true;
             }
-            declared_key_index = declared_key_index + 1;
+            dynamic_key_ordinal = dynamic_key_ordinal + 1;
         }
         return false;
     }
@@ -3640,17 +3732,22 @@ fn connection_acl_user_command_key_denied(username: &[byte], info: &CommandInfo,
 }
 
 fn connection_acl_selector_command_key_denied(selector: &ConnectionAclSelector, info: &CommandInfo, command: &Command, arg_offset: usize, full_argc: usize) bool {
-    const declared_numkeys: usize = connection_acl_declared_numkeys(info, command, arg_offset, full_argc);
-    if declared_numkeys > 0 && !selector.allkeys {
-        var declared_key_index: usize = 0;
-        while declared_key_index < declared_numkeys {
-            const declared_key: &[byte] = command_arg_data(command, arg_offset + 3 + declared_key_index) catch {
+    const dynamic_spec: ConnectionAclKeySpec = connection_acl_dynamic_key_spec(info, command, arg_offset, full_argc);
+    if dynamic_spec.dynamic {
+        if selector.allkeys {
+            return false;
+        }
+        const dynamic_key_count: usize = connection_acl_key_spec_count(&dynamic_spec);
+        var dynamic_key_ordinal: usize = 0;
+        while dynamic_key_ordinal < dynamic_key_count {
+            const dynamic_key_index: usize = connection_acl_key_spec_index(&dynamic_spec, dynamic_key_ordinal);
+            const dynamic_key: &[byte] = command_arg_data(command, arg_offset + dynamic_key_index) catch {
                 return false;
             };
-            if !connection_acl_key_allowed_by_patterns(selector.allkeys, selector.key_patterns[0: CONNECTION_ACL_SELECTOR_PATTERN_MAX], declared_key) {
+            if !connection_acl_key_allowed_by_patterns(selector.allkeys, selector.key_patterns[0: CONNECTION_ACL_SELECTOR_PATTERN_MAX], dynamic_key) {
                 return true;
             }
-            declared_key_index = declared_key_index + 1;
+            dynamic_key_ordinal = dynamic_key_ordinal + 1;
         }
         return false;
     }

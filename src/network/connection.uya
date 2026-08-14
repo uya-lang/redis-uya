@@ -3815,6 +3815,37 @@ fn connection_acl_streams_key_spec(command: &Command, arg_offset: usize, full_ar
     return connection_acl_empty_key_spec(true);
 }
 
+fn connection_acl_stream_container_key_spec(command: &Command, arg_offset: usize, full_argc: usize, group_command: bool) ConnectionAclKeySpec {
+    if full_argc < 2 {
+        return connection_acl_empty_key_spec(true);
+    }
+    const subcommand: &[byte] = command_arg_data(command, arg_offset + 1) catch {
+        return connection_acl_empty_key_spec(true);
+    };
+    var uses_key: bool = false;
+    if group_command {
+        uses_key = connection_keyword_eq(subcommand, &"CREATE"[0: 6]) ||
+            connection_keyword_eq(subcommand, &"CREATECONSUMER"[0: 14]) ||
+            connection_keyword_eq(subcommand, &"DELCONSUMER"[0: 11]) ||
+            connection_keyword_eq(subcommand, &"DESTROY"[0: 7]) ||
+            connection_keyword_eq(subcommand, &"SETID"[0: 5]);
+    } else {
+        uses_key = connection_keyword_eq(subcommand, &"STREAM"[0: 6]) ||
+            connection_keyword_eq(subcommand, &"GROUPS"[0: 6]) ||
+            connection_keyword_eq(subcommand, &"CONSUMERS"[0: 9]);
+    }
+    if !uses_key || full_argc < 3 {
+        return connection_acl_empty_key_spec(true);
+    }
+    return ConnectionAclKeySpec{
+        dynamic: true,
+        first_index: 2,
+        count: 1,
+        step: 1,
+        extra_index: -1,
+    };
+}
+
 fn connection_acl_dynamic_key_spec(info: &CommandInfo, command: &Command, arg_offset: usize, full_argc: usize) ConnectionAclKeySpec {
     var numkeys_index: usize = 0;
     var first_index: usize = 0;
@@ -3843,6 +3874,12 @@ fn connection_acl_dynamic_key_spec(info: &CommandInfo, command: &Command, arg_of
     }
     if info.cmd_type == CommandType.command_xreadgroup {
         return connection_acl_streams_key_spec(command, arg_offset, full_argc, true);
+    }
+    if info.cmd_type == CommandType.command_xgroup {
+        return connection_acl_stream_container_key_spec(command, arg_offset, full_argc, true);
+    }
+    if info.cmd_type == CommandType.command_xinfo {
+        return connection_acl_stream_container_key_spec(command, arg_offset, full_argc, false);
     }
 
     if info.cmd_type == CommandType.command_eval ||

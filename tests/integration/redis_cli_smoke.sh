@@ -1036,6 +1036,18 @@ if [[ "$ACL_DYNAMIC_XREADGROUP_UNSAFE_RESULT" != "NOPERM User dynamic has no per
     exit 1
 fi
 
+ACL_DYNAMIC_XGROUP_UNSAFE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl dryrun dynamic xgroup destroy unsafe g 2>&1 || true)"
+if [[ "$ACL_DYNAMIC_XGROUP_UNSAFE_RESULT" != "NOPERM User dynamic has no permissions to access one of the keys used as arguments" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL XGROUP unsafe stream denial, got '$ACL_DYNAMIC_XGROUP_UNSAFE_RESULT'" >&2
+    exit 1
+fi
+
+ACL_DYNAMIC_XINFO_UNSAFE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl dryrun dynamic xinfo stream unsafe full count 1 2>&1 || true)"
+if [[ "$ACL_DYNAMIC_XINFO_UNSAFE_RESULT" != "NOPERM User dynamic has no permissions to access one of the keys used as arguments" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL XINFO unsafe stream denial, got '$ACL_DYNAMIC_XINFO_UNSAFE_RESULT'" >&2
+    exit 1
+fi
+
 ACL_DYNAMIC_DELETE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl deluser dynamic)"
 if [[ "$ACL_DYNAMIC_DELETE_RESULT" != "1" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ACL dynamic user cleanup count 1, got '$ACL_DYNAMIC_DELETE_RESULT'" >&2

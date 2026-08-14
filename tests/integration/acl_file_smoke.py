@@ -220,6 +220,7 @@ def run_smoke() -> None:
                 b"-set",
                 b"-publish",
                 b"-@admin",
+                b"+ping",
                 b"(~safe* +set)",
                 b"(~reports* +get)",
                 b"(&news* +publish)",
@@ -293,9 +294,9 @@ def run_smoke() -> None:
             saved = acl_path.read_bytes()
             expected_lines = {
                 b"user default on #" + root_hash + b" #" + root2_hash + b" ~* &* +@all",
-                b"user app on #" + secret2_hash + b" #" + secret_hash + b" ~safe* &news* +@all -del -set -publish -@admin (~safe* resetchannels -@all +set) (~reports* resetchannels -@all +get) (resetkeys &news* -@all +publish)",
-                b"user disabled off #e564b4081d7a9ea4b00dada53bdae70c99b87b6fce869f0c3dd4d2bfa1e53e1c ~* &* +@all",
-                b"user reader on #df14634a7777444be41e5bae441440f6a7d8de675a9b6c2af9ae00e33e9d114f ~safe* &* -@all +@read +get",
+                b"user app on #" + secret2_hash + b" #" + secret_hash + b" ~safe* &news* -@all -del -set -publish -@admin +ping (~safe* resetchannels -@all +set) (~reports* resetchannels -@all +get) (resetkeys &news* -@all +publish)",
+                b"user disabled off #e564b4081d7a9ea4b00dada53bdae70c99b87b6fce869f0c3dd4d2bfa1e53e1c resetkeys resetchannels -@all",
+                b"user reader on #df14634a7777444be41e5bae441440f6a7d8de675a9b6c2af9ae00e33e9d114f ~safe* resetchannels -@all +@read +get",
             }
             if set(saved.splitlines()) != expected_lines:
                 raise AssertionError(f"unexpected ACL file payload: {saved!r}")
@@ -313,6 +314,28 @@ def run_smoke() -> None:
                 for entry in acl_list
             ):
                 raise AssertionError(f"ACL LIST did not expose canonical SHA-256 markers: {acl_list!r}")
+
+            acl_path.write_bytes(
+                saved
+                + b"user resetload on >temporary ~* &* +@all reset\n"
+                + b"user noload on nopass ~* &* nocommands\n"
+            )
+            if send_command(admin, b"ACL", b"LOAD") != "OK":
+                raise AssertionError("ACL LOAD rejected named reset/nocommands modifiers")
+            if acl_getuser_field(admin, b"resetload", b"flags") != [b"off"]:
+                raise AssertionError("ACL file reset did not disable the named user")
+            if acl_getuser_field(admin, b"resetload", b"passwords") != []:
+                raise AssertionError("ACL file reset did not clear named user passwords")
+            if acl_getuser_field(admin, b"resetload", b"commands") != b"-@all":
+                raise AssertionError("ACL file reset did not restore nocommands")
+            if acl_getuser_field(admin, b"resetload", b"keys") != b"resetkeys":
+                raise AssertionError("ACL file reset did not clear key patterns")
+            if acl_getuser_field(admin, b"resetload", b"channels") != b"resetchannels":
+                raise AssertionError("ACL file reset did not clear channel patterns")
+            expect_error(admin, "has no permissions to run the 'ping' command", b"ACL", b"DRYRUN", b"noload", b"PING")
+            acl_path.write_bytes(saved)
+            if send_command(admin, b"ACL", b"LOAD") != "OK":
+                raise AssertionError("ACL LOAD failed to restore the canonical test state")
 
             if send_command(admin, b"ACL", b"SETUSER", b"default", b">changedroot") != "OK":
                 raise AssertionError("failed to mutate default password")
@@ -347,8 +370,8 @@ def run_smoke() -> None:
                     raise AssertionError("invalid password hash load changed app authentication")
 
             overflow_hashes = [hashlib.sha256(f"overflow-{index}".encode()).hexdigest().encode() for index in range(9)]
-            saved_app_line = b"user app on #" + secret2_hash + b" #" + secret_hash + b" ~safe* &news* +@all -del -set -publish -@admin (~safe* resetchannels -@all +set) (~reports* resetchannels -@all +get) (resetkeys &news* -@all +publish)"
-            overflow_app_line = b"user app on " + b" ".join(b"#" + item for item in overflow_hashes) + b" ~safe* &news* +@all -del -@admin"
+            saved_app_line = b"user app on #" + secret2_hash + b" #" + secret_hash + b" ~safe* &news* -@all -del -set -publish -@admin +ping (~safe* resetchannels -@all +set) (~reports* resetchannels -@all +get) (resetkeys &news* -@all +publish)"
+            overflow_app_line = b"user app on " + b" ".join(b"#" + item for item in overflow_hashes) + b" ~safe* &news* -@all -del -@admin +ping"
             acl_path.write_bytes(saved.replace(saved_app_line, overflow_app_line))
             expect_error(admin, "Error loading the ACLs", b"ACL", b"LOAD")
             with authenticate(port, b"app", b"changed") as capacity_rollback_app:

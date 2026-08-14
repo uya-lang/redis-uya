@@ -157,7 +157,7 @@ server open
 - `FUNCTION` 与 `FCALL/FCALL_RO` 的最小 library 平面由 `connection.uya` 接管：固定容量进程内表保存 library 名、函数名、bounded description、`no-writes` flag、原始代码和规范化单条调用体，`LOAD/LIST/STATS/DELETE/FLUSH` 反映真实状态，`LIST LIBRARYNAME <pattern>` 支持 `*` / `?` glob 并回显函数 description/flags，`FCALL*` 复用脚本内部命令的 ACL、只读校验、AOF 及 replication backlog 实际数据效果传播；`DUMP` 按 Redis 7 `FUNCTION2` opcode、RDB length、version 10 和 CRC64 输出 library code，`RESTORE` 同时读取非压缩和 Redis LZF 字符串编码，以独立 staging 表完成全量解析、冲突检查和对象分配后再执行 `APPEND/REPLACE/FLUSH` 原子提交；`no-writes` 和 `FCALL_RO` 共用执行前写命令拒绝路径。每库最多 8 个位置参数或 table 形式 `redis.register_function(... return redis.call(...) end)` 子集，其他 flags 和 library 元数据 RDB/AOF/复制持久化尚未支持
 - `HIMPORT` 由 `connection.uya` 维护连接级 fieldset：`PREPARE` 以 hash 去重后保存原始 field 顺序，`SET` 先构造完整新 hash，再原子替换目标并清理旧 TTL；`DISCARD/DISCARDALL` 只清 fieldset。由于 fieldset 不属于数据库状态，AOF、rewrite 增量缓冲和 master replication backlog 统一追加由项目内 RDB payload 构造的 `RESTORE key 0 payload REPLACE`，副本与重启回放不依赖原连接的 `PREPARE`
 - `BACKUP` 状态由 `RedisServer` 持有并通过 `CommandRuntimeInfo` 暴露；`START/SEAL/ABORT/CLEANUP/STATUS/LIST/HELP` 在执行器处理，普通、事务、脚本和 `HIMPORT` 写传播点同时捕获规范化增量。增量 SDS 属于服务器维护开销，从 maxmemory 数据预算中排除；捕获分配失败会把备份转为 `failed`，不会静默封存不完整备份
-- `ACL CAT/GENPASS/HELP/WHOAMI` 的无状态兼容面仍可由 `command/executor.uya` 执行；真实连接上的 ACL 状态与门禁由 `connection.uya` 管理。默认用户和每个 named user 使用固定容量模型：最多 8 个 SHA-256 口令摘要和 8 个 selector；每个 selector 独立保存 command/category allow/deny、key pattern 与 channel pattern。基础用户规则与各 selector 做 OR，但 selector 内要求命令、全部 key 和全部 channel 同时满足，不能跨 selector 拼接权限。普通命令、事务排队、EXEC 重放、脚本内部调用和 DRYRUN 都收敛到统一权限结果函数，并按 command/key/channel 原因记录 ACL LOG 和返回 `NOPERM`。完全开放用户仍保留零 selector 扫描的快速路径
+- `ACL CAT/GENPASS/HELP/WHOAMI` 的无状态兼容面仍可由 `command/executor.uya` 执行；真实连接上的 ACL 状态与门禁由 `connection.uya` 管理。默认用户和每个 named user 使用固定容量模型：最多 8 个 SHA-256 口令摘要和 8 个 selector；每个 selector 独立保存 command/category allow/deny、key pattern 与 channel pattern。named user 槽位创建、删除和全表清理统一采用 `off/resetpass/resetkeys/resetchannels/-@all` 安全状态，named `reset` 通过单一 helper 原子清除口令、规则、pattern 与 selector。基础用户规则与各 selector 做 OR，但 selector 内要求命令、全部 key 和全部 channel 同时满足，不能跨 selector 拼接权限。普通命令、事务排队、EXEC 重放、脚本内部调用和 DRYRUN 都收敛到统一权限结果函数，并按 command/key/channel 原因记录 ACL LOG 和返回 `NOPERM`。完全开放用户仍保留零 selector 扫描的快速路径
 - `ACL GETUSER` 输出 selector 的 `commands/keys/channels` 视图，`ACL LIST/SAVE` 输出括号规则。`ACL LOAD` 的 tokenizer 把括号内空白作为单个 modifier，默认 selector 与 named user selector 都进入全状态快照；任何语法、容量或文件错误均恢复加载前状态。SAVE 对无法由当前空白分隔格式无损表示的 selector pattern 拒绝写出。ACL 键检查使用无分配 `first/count/step/extra` 布局，覆盖固定 key range、脚本/函数声明键、`LMPOP/ZMPOP/BLMPOP/BZMPOP`、set cardinality、`MSETEX`、zset 聚合及 store 目标键；`SORT` 复用执行器选项步进识别源键和最终 `STORE` 目标，`MEMORY` 仅对合法 `USAGE [SAMPLES count]` 形状提取键。其他动态 key spec / movablekeys 随命令实现继续审计
 - `COMMAND` 由 `command/executor.uya` 执行，当前覆盖 `COMMAND`、`COUNT`、`LIST`、`INFO`、`DOCS`，运行时数据统一来自 `catalog_generated*`
 - `COMMAND DOCS` 已支持命令名定向查询和无参数全量 docs 查询；连接/服务端当前使用扩大的输出缓冲完成 RESP2/RESP3 大响应发送第一批闭环
@@ -246,7 +246,7 @@ server open
 
 ## 10. 当前限制
 
-- ACL 基础用户规则和 selector 均使用有序 allow/deny 判定；`+@all/-@all` 重置命令规则基线，exact command 与 category 取最后匹配规则。默认用户全局规则采用显式固定数组循环以规避 Uya 1.0 C 后端对复合全局数组切片的限制，named user 使用结构体内固定数组；SAVE/LOAD 快照包含基线、顺序和四类规则表
+- ACL 基础用户规则和 selector 均使用有序 allow/deny 判定；`allcommands/nocommands` 与 `+@all/-@all` 重置命令规则基线，exact command 与 category 取最后匹配规则。默认用户全局规则采用显式固定数组循环以规避 Uya 1.0 C 后端对复合全局数组切片的限制，named user 使用结构体内固定数组；SAVE/LOAD 快照包含基线、顺序和四类规则表。named user 已支持 Redis 安全初始状态和整体 `reset`，默认用户整体 `reset` 因独立 enabled/off 状态尚未建模而保持显式未支持
 
 - 单线程
 - `BGSAVE` / `BGREWRITEAOF` 已有最小子进程后台路径，但仍未做更细粒度的后台资源隔离与吞吐优化

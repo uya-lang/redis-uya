@@ -2793,9 +2793,9 @@ fn connection_acl_users_clear_all() void {
     while index < CONNECTION_ACL_USER_MAX {
         connection_acl_users[index].active = false;
         connection_acl_users[index].enabled = false;
-        connection_acl_users[index].nopass = true;
-        connection_acl_users[index].allkeys = true;
-        connection_acl_users[index].allchannels = true;
+        connection_acl_users[index].nopass = false;
+        connection_acl_users[index].allkeys = false;
+        connection_acl_users[index].allchannels = false;
         connection_acl_users[index].name_len = 0;
         connection_acl_users[index].password_hash_count = 0;
         var i: usize = 0;
@@ -2808,7 +2808,7 @@ fn connection_acl_users_clear_all() void {
             connection_acl_users[index].password_hashes[i] = 0 as byte;
             i = i + 1;
         }
-        connection_acl_user_clear_rules(&connection_acl_users[index]);
+        connection_acl_user_clear_command_rules(&connection_acl_users[index], false);
         connection_acl_key_patterns_clear(connection_acl_users[index].key_patterns[0: CONNECTION_ACL_KEY_PATTERN_MAX]);
         connection_acl_channel_patterns_clear(connection_acl_users[index].channel_patterns[0: CONNECTION_ACL_CHANNEL_PATTERN_MAX]);
         connection_acl_selectors_clear(connection_acl_users[index].selectors[0: CONNECTION_ACL_SELECTOR_MAX]);
@@ -2866,9 +2866,9 @@ fn connection_acl_user_create_or_get(username: &[byte]) !usize {
         }
         connection_acl_users[slot_index_new].active = true;
         connection_acl_users[slot_index_new].enabled = false;
-        connection_acl_users[slot_index_new].nopass = true;
-        connection_acl_users[slot_index_new].allkeys = true;
-        connection_acl_users[slot_index_new].allchannels = true;
+        connection_acl_users[slot_index_new].nopass = false;
+        connection_acl_users[slot_index_new].allkeys = false;
+        connection_acl_users[slot_index_new].allchannels = false;
         connection_acl_users[slot_index_new].name_len = username.len;
         connection_acl_users[slot_index_new].password_hash_count = 0;
         var i: usize = 0;
@@ -2885,7 +2885,7 @@ fn connection_acl_user_create_or_get(username: &[byte]) !usize {
             connection_acl_users[slot_index_new].password_hashes[i] = 0 as byte;
             i = i + 1;
         }
-        connection_acl_user_clear_rules(&connection_acl_users[slot_index_new]);
+        connection_acl_user_clear_command_rules(&connection_acl_users[slot_index_new], false);
         connection_acl_key_patterns_clear(connection_acl_users[slot_index_new].key_patterns[0: CONNECTION_ACL_KEY_PATTERN_MAX]);
         connection_acl_channel_patterns_clear(connection_acl_users[slot_index_new].channel_patterns[0: CONNECTION_ACL_CHANNEL_PATTERN_MAX]);
         connection_acl_selectors_clear(connection_acl_users[slot_index_new].selectors[0: CONNECTION_ACL_SELECTOR_MAX]);
@@ -2908,9 +2908,9 @@ fn connection_acl_user_delete(username: &[byte]) bool {
     }
     connection_acl_users[slot_index].active = false;
     connection_acl_users[slot_index].enabled = false;
-    connection_acl_users[slot_index].nopass = true;
-    connection_acl_users[slot_index].allkeys = true;
-    connection_acl_users[slot_index].allchannels = true;
+    connection_acl_users[slot_index].nopass = false;
+    connection_acl_users[slot_index].allkeys = false;
+    connection_acl_users[slot_index].allchannels = false;
     connection_acl_users[slot_index].name_len = 0;
     connection_acl_users[slot_index].password_hash_count = 0;
     var i: usize = 0;
@@ -2918,7 +2918,7 @@ fn connection_acl_user_delete(username: &[byte]) bool {
         connection_acl_users[slot_index].password_hashes[i] = 0 as byte;
         i = i + 1;
     }
-    connection_acl_user_clear_rules(&connection_acl_users[slot_index]);
+    connection_acl_user_clear_command_rules(&connection_acl_users[slot_index], false);
     connection_acl_key_patterns_clear(connection_acl_users[slot_index].key_patterns[0: CONNECTION_ACL_KEY_PATTERN_MAX]);
     connection_acl_channel_patterns_clear(connection_acl_users[slot_index].channel_patterns[0: CONNECTION_ACL_CHANNEL_PATTERN_MAX]);
     connection_acl_selectors_clear(connection_acl_users[slot_index].selectors[0: CONNECTION_ACL_SELECTOR_MAX]);
@@ -4761,6 +4761,18 @@ fn connection_acl_named_user_clear_password(user: &ConnectionAclUser) void {
     connection_acl_password_hashes_clear(user.password_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES], &user.password_hash_count);
 }
 
+fn connection_acl_named_user_reset(user: &ConnectionAclUser) void {
+    user.enabled = false;
+    user.nopass = false;
+    connection_acl_named_user_clear_password(user);
+    connection_acl_user_clear_command_rules(user, false);
+    user.allkeys = false;
+    connection_acl_key_patterns_clear(user.key_patterns[0: CONNECTION_ACL_KEY_PATTERN_MAX]);
+    user.allchannels = false;
+    connection_acl_channel_patterns_clear(user.channel_patterns[0: CONNECTION_ACL_CHANNEL_PATTERN_MAX]);
+    connection_acl_selectors_clear(user.selectors[0: CONNECTION_ACL_SELECTOR_MAX]);
+}
+
 fn connection_acl_default_password_hashes_sync_legacy(config: &ServerConfig) void {
     connection_acl_bytes_clear(config.requirepass[0: 128]);
     connection_acl_bytes_clear(config.requirepass_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]);
@@ -4955,6 +4967,16 @@ fn connection_acl_selector_parse(router: &CommandRouter, modifier: &[byte], sele
             command_reply_cleanup(&reply);
             continue;
         }
+        if connection_keyword_eq(token, &"ALLCOMMANDS"[0: 11]) ||
+            connection_keyword_eq(token, &"NOCOMMANDS"[0: 10]) {
+            connection_acl_selector_rules_clear(selector.allowed_commands[0: CONNECTION_ACL_SELECTOR_COMMAND_MAX]);
+            connection_acl_selector_rules_clear(selector.allowed_categories[0: CONNECTION_ACL_SELECTOR_CATEGORY_MAX]);
+            connection_acl_selector_rules_clear(selector.denied_commands[0: CONNECTION_ACL_SELECTOR_COMMAND_MAX]);
+            connection_acl_selector_rules_clear(selector.denied_categories[0: CONNECTION_ACL_SELECTOR_CATEGORY_MAX]);
+            selector.allcommands = connection_keyword_eq(token, &"ALLCOMMANDS"[0: 11]);
+            selector.next_rule_order = 0u32;
+            continue;
+        }
         try connection_acl_selector_command_modifier(router, selector, token);
     }
 }
@@ -5144,6 +5166,7 @@ fn connection_acl_setuser_named_allows_modifier(router: &CommandRouter, modifier
         connection_acl_setuser_key_modifier_known(modifier) ||
         connection_acl_setuser_channel_modifier_known(modifier) ||
         connection_keyword_eq(modifier, &"ALLCOMMANDS"[0: 11]) ||
+        connection_keyword_eq(modifier, &"NOCOMMANDS"[0: 10]) ||
         connection_keyword_eq(modifier, &"+@all"[0: 5]) ||
         connection_keyword_eq(modifier, &"-@all"[0: 5]) ||
         connection_keyword_eq(modifier, &"RESETCOMMANDS"[0: 13]) {
@@ -5224,6 +5247,7 @@ fn connection_acl_setuser_named(router: &CommandRouter, username: &[byte], comma
         };
         if connection_keyword_eq(validate_modifier, &"ON"[0: 2]) ||
             connection_keyword_eq(validate_modifier, &"OFF"[0: 3]) ||
+            connection_keyword_eq(validate_modifier, &"RESET"[0: 5]) ||
             connection_keyword_eq(validate_modifier, &"NOPASS"[0: 6]) ||
             connection_keyword_eq(validate_modifier, &"RESETPASS"[0: 9]) ||
             connection_acl_setuser_named_allows_modifier(router, validate_modifier) {
@@ -5282,6 +5306,11 @@ fn connection_acl_setuser_named(router: &CommandRouter, username: &[byte], comma
             index = index + 1;
             continue;
         }
+        if connection_keyword_eq(modifier, &"RESET"[0: 5]) {
+            connection_acl_named_user_reset(&connection_acl_users[slot]);
+            index = index + 1;
+            continue;
+        }
         if connection_keyword_eq(modifier, &"NOPASS"[0: 6]) {
             connection_acl_users[slot].nopass = true;
             connection_acl_named_user_clear_password(&connection_acl_users[slot]);
@@ -5333,6 +5362,11 @@ fn connection_acl_setuser_named(router: &CommandRouter, username: &[byte], comma
             connection_keyword_eq(modifier, &"+@all"[0: 5]) ||
             connection_keyword_eq(modifier, &"RESETCOMMANDS"[0: 13]) {
             connection_acl_user_clear_command_rules(&connection_acl_users[slot], true);
+            index = index + 1;
+            continue;
+        }
+        if connection_keyword_eq(modifier, &"NOCOMMANDS"[0: 10]) {
+            connection_acl_user_clear_command_rules(&connection_acl_users[slot], false);
             index = index + 1;
             continue;
         }
@@ -5531,6 +5565,11 @@ fn connection_acl_handle_setuser(runtime: &CommandRuntimeInfo, router: &CommandR
         if connection_keyword_eq(modifier, &"ALLCOMMANDS"[0: 11]) ||
             connection_keyword_eq(modifier, &"+@all"[0: 5]) {
             connection_acl_default_clear_command_rules(true);
+            index = index + 1;
+            continue;
+        }
+        if connection_keyword_eq(modifier, &"NOCOMMANDS"[0: 10]) {
+            connection_acl_default_clear_command_rules(false);
             index = index + 1;
             continue;
         }
@@ -6580,6 +6619,10 @@ fn connection_acl_file_apply_default_modifier(runtime: &CommandRuntimeInfo, rout
         connection_acl_default_clear_command_rules(true);
         return;
     }
+    if connection_keyword_eq(modifier, &"NOCOMMANDS"[0: 10]) {
+        connection_acl_default_clear_command_rules(false);
+        return;
+    }
     if modifier.len > 1 && (modifier.ptr[0] == 43 as byte || modifier.ptr[0] == 45 as byte) {
         const reply: CommandReply = connection_acl_setuser_command_modifier(router, modifier);
         if reply.typ == CommandReplyType.reply_error {
@@ -6599,6 +6642,10 @@ fn connection_acl_file_apply_named_modifier(router: &CommandRouter, user: &Conne
     }
     if connection_keyword_eq(modifier, &"OFF"[0: 3]) {
         user.enabled = false;
+        return;
+    }
+    if connection_keyword_eq(modifier, &"RESET"[0: 5]) {
+        connection_acl_named_user_reset(user);
         return;
     }
     if connection_keyword_eq(modifier, &"NOPASS"[0: 6]) {
@@ -6651,6 +6698,10 @@ fn connection_acl_file_apply_named_modifier(router: &CommandRouter, user: &Conne
         connection_keyword_eq(modifier, &"RESETCOMMANDS"[0: 13]) ||
         connection_keyword_eq(modifier, &"+@all"[0: 5]) {
         connection_acl_user_clear_command_rules(user, true);
+        return;
+    }
+    if connection_keyword_eq(modifier, &"NOCOMMANDS"[0: 10]) {
+        connection_acl_user_clear_command_rules(user, false);
         return;
     }
     if modifier.len > 1 && (modifier.ptr[0] == 43 as byte || modifier.ptr[0] == 45 as byte) {

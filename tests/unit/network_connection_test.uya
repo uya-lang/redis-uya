@@ -2335,6 +2335,28 @@ export fn test_connection_process_acl_named_user_metadata() !void {
     }
     var out: [byte: 4096] = [];
 
+    const create_virgin: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$6\r\nvirgin\r\n"[0: 38], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: create_virgin.response_len], &"+OK\r\n"[0: 5]));
+    const getuser_virgin: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$7\r\nGETUSER\r\n$6\r\nvirgin\r\n"[0: 38], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_contains(out[0: getuser_virgin.response_len], &"$3\r\noff\r\n"[0: 9]));
+    try assert_true(!network_connection_contains(out[0: getuser_virgin.response_len], &"$6\r\nnopass\r\n"[0: 12]));
+    try assert_true(network_connection_contains(out[0: getuser_virgin.response_len], &"$5\r\n-@all\r\n"[0: 11]));
+    try assert_true(network_connection_contains(out[0: getuser_virgin.response_len], &"$9\r\nresetkeys\r\n"[0: 15]));
+    try assert_true(network_connection_contains(out[0: getuser_virgin.response_len], &"$13\r\nresetchannels\r\n"[0: 20]));
+    const modify_virgin: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*9\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$6\r\nvirgin\r\n$2\r\non\r\n$6\r\nnopass\r\n$7\r\nallkeys\r\n$11\r\nallchannels\r\n$11\r\nallcommands\r\n$13\r\n(~safe* +get)\r\n"[0: 127], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: modify_virgin.response_len], &"+OK\r\n"[0: 5]));
+    const reset_virgin: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$6\r\nvirgin\r\n$5\r\nreset\r\n"[0: 49], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: reset_virgin.response_len], &"+OK\r\n"[0: 5]));
+    const getuser_reset_virgin: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$7\r\nGETUSER\r\n$6\r\nvirgin\r\n"[0: 38], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_contains(out[0: getuser_reset_virgin.response_len], &"$3\r\noff\r\n"[0: 9]));
+    try assert_true(!network_connection_contains(out[0: getuser_reset_virgin.response_len], &"$6\r\nnopass\r\n"[0: 12]));
+    try assert_true(network_connection_contains(out[0: getuser_reset_virgin.response_len], &"$5\r\n-@all\r\n"[0: 11]));
+    try assert_true(network_connection_contains(out[0: getuser_reset_virgin.response_len], &"$9\r\nresetkeys\r\n"[0: 15]));
+    try assert_true(network_connection_contains(out[0: getuser_reset_virgin.response_len], &"$13\r\nresetchannels\r\n"[0: 20]));
+    try assert_true(network_connection_contains(out[0: getuser_reset_virgin.response_len], &"$9\r\nselectors\r\n*0\r\n"[0: 19]));
+    const del_virgin: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$7\r\nDELUSER\r\n$6\r\nvirgin\r\n"[0: 38], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: del_virgin.response_len], &":1\r\n"[0: 4]));
+
     const set_alice: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*8\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$5\r\nalice\r\n$2\r\non\r\n$6\r\nnopass\r\n$2\r\n~*\r\n$2\r\n&*\r\n$5\r\n+@all\r\n"[0: 84], &out[0], 4096, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: set_alice.response_len], &"+OK\r\n"[0: 5]));
 
@@ -2354,6 +2376,12 @@ export fn test_connection_process_acl_named_user_metadata() !void {
 
     const dryrun_alice: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*5\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$5\r\nalice\r\n$3\r\nGET\r\n$1\r\nk\r\n"[0: 52], &out[0], 4096, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: dryrun_alice.response_len], &"+OK\r\n"[0: 5]));
+    const alice_nocommands: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$5\r\nalice\r\n$10\r\nnocommands\r\n"[0: 54], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: alice_nocommands.response_len], &"+OK\r\n"[0: 5]));
+    const alice_ping_denied: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$5\r\nalice\r\n$4\r\nPING\r\n"[0: 46], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_contains(out[0: alice_ping_denied.response_len], &"NOPERM"[0: 6]));
+    const alice_allcommands: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$5\r\nalice\r\n$11\r\nallcommands\r\n"[0: 55], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: alice_allcommands.response_len], &"+OK\r\n"[0: 5]));
 
     const set_alice_off: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$5\r\nalice\r\n$3\r\noff\r\n"[0: 46], &out[0], 4096, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: set_alice_off.response_len], &"+OK\r\n"[0: 5]));
@@ -2370,7 +2398,7 @@ export fn test_connection_process_acl_named_user_metadata() !void {
     const users_after_del: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$3\r\nACL\r\n$5\r\nUSERS\r\n"[0: 24], &out[0], 4096, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: users_after_del.response_len], &"*1\r\n$7\r\ndefault\r\n"[0: 17]));
 
-    const set_bob_password: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*7\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$3\r\nbob\r\n$2\r\non\r\n$7\r\n>secret\r\n$8\r\n>secret2\r\n$7\r\n>secret\r\n"[0: 83], &out[0], 4096, 1000u64);
+    const set_bob_password: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*10\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$3\r\nbob\r\n$2\r\non\r\n$7\r\n>secret\r\n$8\r\n>secret2\r\n$7\r\n>secret\r\n$2\r\n~*\r\n$2\r\n&*\r\n$5\r\n+@all\r\n"[0: 111], &out[0], 4096, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: set_bob_password.response_len], &"+OK\r\n"[0: 5]));
     try assert_eq_i32(connection_acl_denied_command_count_for_test(&"bob"[0: 3]) as i32, 0);
 
@@ -2626,7 +2654,7 @@ export fn test_connection_process_acl_command_whitelist() !void {
     const named_allow_get: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*5\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$11\r\nwhite-allow\r\n$3\r\nGET\r\n$1\r\nk\r\n"[0: 59], &out[0], 4096, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: named_allow_get.response_len], &"+OK\r\n"[0: 5]));
 
-    const dynamic_user: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*7\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$7\r\ndynamic\r\n$2\r\non\r\n$6\r\nnopass\r\n$9\r\nresetkeys\r\n$6\r\n~safe*\r\n"[0: 86], &out[0], 4096, 1000u64);
+    const dynamic_user: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*8\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$7\r\ndynamic\r\n$2\r\non\r\n$6\r\nnopass\r\n$9\r\nresetkeys\r\n$6\r\n~safe*\r\n$5\r\n+@all\r\n"[0: 97], &out[0], 4096, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: dynamic_user.response_len], &"+OK\r\n"[0: 5]));
     const dynamic_eval_unsafe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*7\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$7\r\ndynamic\r\n$7\r\nEVAL_RO\r\n$32\r\nreturn redis.call('GET',KEYS[1])\r\n$1\r\n1\r\n$6\r\nunsafe\r\n"[0: 109], &out[0], 4096, 1000u64);
     try assert_true(network_connection_contains(out[0: dynamic_eval_unsafe.response_len], &"NOPERM"[0: 6]));
@@ -2652,26 +2680,26 @@ export fn test_connection_process_acl_command_whitelist() !void {
     try assert_true(network_connection_contains(out[0: dynamic_zintercard_unsafe.response_len], &"NOPERM"[0: 6]));
     const dynamic_msetex_unsafe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*9\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$7\r\ndynamic\r\n$6\r\nMSETEX\r\n$1\r\n2\r\n$6\r\nsafe:a\r\n$2\r\nva\r\n$6\r\nunsafe\r\n$2\r\nvb\r\n"[0: 97], &out[0], 4096, 1000u64);
     try assert_true(network_connection_contains(out[0: dynamic_msetex_unsafe.response_len], &"NOPERM"[0: 6]));
-    const dynamic_sort_store_safe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*7\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$7\r\ndynamic\r\n$4\r\nSORT\r\n$6\r\nsafe:a\r\n$5\r\nSTORE\r\n$9\r\nsafe:dest\r\n"[0: 116], &out[0], 4096, 1000u64);
+    const dynamic_sort_store_safe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*7\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$7\r\ndynamic\r\n$4\r\nSORT\r\n$6\r\nsafe:a\r\n$5\r\nSTORE\r\n$9\r\nsafe:dest\r\n"[0: 86], &out[0], 4096, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: dynamic_sort_store_safe.response_len], &"+OK\r\n"[0: 5]));
-    const dynamic_sort_store_unsafe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*7\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$7\r\ndynamic\r\n$4\r\nSORT\r\n$6\r\nsafe:a\r\n$5\r\nSTORE\r\n$6\r\nunsafe\r\n"[0: 113], &out[0], 4096, 1000u64);
+    const dynamic_sort_store_unsafe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*7\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$7\r\ndynamic\r\n$4\r\nSORT\r\n$6\r\nsafe:a\r\n$5\r\nSTORE\r\n$6\r\nunsafe\r\n"[0: 83], &out[0], 4096, 1000u64);
     try assert_true(network_connection_contains(out[0: dynamic_sort_store_unsafe.response_len], &"NOPERM"[0: 6]));
-    const dynamic_memory_usage_safe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*6\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$7\r\ndynamic\r\n$6\r\nMEMORY\r\n$5\r\nUSAGE\r\n$6\r\nsafe:a\r\n"[0: 99], &out[0], 4096, 1000u64);
+    const dynamic_memory_usage_safe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*6\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$7\r\ndynamic\r\n$6\r\nMEMORY\r\n$5\r\nUSAGE\r\n$6\r\nsafe:a\r\n"[0: 73], &out[0], 4096, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: dynamic_memory_usage_safe.response_len], &"+OK\r\n"[0: 5]));
-    const dynamic_memory_usage_unsafe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*6\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$7\r\ndynamic\r\n$6\r\nMEMORY\r\n$5\r\nUSAGE\r\n$6\r\nunsafe\r\n"[0: 99], &out[0], 4096, 1000u64);
+    const dynamic_memory_usage_unsafe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*6\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$7\r\ndynamic\r\n$6\r\nMEMORY\r\n$5\r\nUSAGE\r\n$6\r\nunsafe\r\n"[0: 73], &out[0], 4096, 1000u64);
     try assert_true(network_connection_contains(out[0: dynamic_memory_usage_unsafe.response_len], &"NOPERM"[0: 6]));
-    const dynamic_memory_usage_negative_zero: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*8\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$7\r\ndynamic\r\n$6\r\nMEMORY\r\n$5\r\nUSAGE\r\n$6\r\nunsafe\r\n$7\r\nSAMPLES\r\n$2\r\n-0\r\n"[0: 128], &out[0], 4096, 1000u64);
+    const dynamic_memory_usage_negative_zero: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*8\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$7\r\ndynamic\r\n$6\r\nMEMORY\r\n$5\r\nUSAGE\r\n$6\r\nunsafe\r\n$7\r\nSAMPLES\r\n$2\r\n-0\r\n"[0: 94], &out[0], 4096, 1000u64);
     try assert_true(network_connection_contains(out[0: dynamic_memory_usage_negative_zero.response_len], &"NOPERM"[0: 6]));
 
-    const dynamic_selector: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*8\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$6\r\ndynsel\r\n$2\r\non\r\n$6\r\nnopass\r\n$8\r\n-eval_ro\r\n$9\r\nresetkeys\r\n$31\r\n(~safe* +eval_ro +sort +memory)\r\n"[0: 159], &out[0], 4096, 1000u64);
+    const dynamic_selector: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*8\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$6\r\ndynsel\r\n$2\r\non\r\n$6\r\nnopass\r\n$8\r\n-eval_ro\r\n$9\r\nresetkeys\r\n$31\r\n(~safe* +eval_ro +sort +memory)\r\n"[0: 125], &out[0], 4096, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: dynamic_selector.response_len], &"+OK\r\n"[0: 5]));
     const dynamic_selector_unsafe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*7\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$6\r\ndynsel\r\n$7\r\nEVAL_RO\r\n$32\r\nreturn redis.call('GET',KEYS[1])\r\n$1\r\n1\r\n$6\r\nunsafe\r\n"[0: 108], &out[0], 4096, 1000u64);
     try assert_true(network_connection_contains(out[0: dynamic_selector_unsafe.response_len], &"NOPERM"[0: 6]));
     const dynamic_selector_safe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*7\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$6\r\ndynsel\r\n$7\r\nEVAL_RO\r\n$32\r\nreturn redis.call('GET',KEYS[1])\r\n$1\r\n1\r\n$8\r\nsafe:key\r\n"[0: 110], &out[0], 4096, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: dynamic_selector_safe.response_len], &"+OK\r\n"[0: 5]));
-    const dynamic_selector_sort_safe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*7\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$6\r\ndynsel\r\n$4\r\nSORT\r\n$6\r\nsafe:a\r\n$5\r\nSTORE\r\n$9\r\nsafe:dest\r\n"[0: 115], &out[0], 4096, 1000u64);
+    const dynamic_selector_sort_safe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*7\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$6\r\ndynsel\r\n$4\r\nSORT\r\n$6\r\nsafe:a\r\n$5\r\nSTORE\r\n$9\r\nsafe:dest\r\n"[0: 85], &out[0], 4096, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: dynamic_selector_sort_safe.response_len], &"+OK\r\n"[0: 5]));
-    const dynamic_selector_sort_unsafe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*7\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$6\r\ndynsel\r\n$4\r\nSORT\r\n$6\r\nsafe:a\r\n$5\r\nSTORE\r\n$6\r\nunsafe\r\n"[0: 112], &out[0], 4096, 1000u64);
+    const dynamic_selector_sort_unsafe: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*7\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$6\r\ndynsel\r\n$4\r\nSORT\r\n$6\r\nsafe:a\r\n$5\r\nSTORE\r\n$6\r\nunsafe\r\n"[0: 82], &out[0], 4096, 1000u64);
     try assert_true(network_connection_contains(out[0: dynamic_selector_sort_unsafe.response_len], &"NOPERM"[0: 6]));
 
     const named_getuser: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*3\r\n$3\r\nACL\r\n$7\r\nGETUSER\r\n$11\r\nwhite-allow\r\n"[0: 44], &out[0], 4096, 1000u64);
@@ -2821,7 +2849,7 @@ export fn test_connection_process_auth_requirepass_shutdown() !void {
     try assert_true(!network_connection_contains(out[0: acl_auth_list.response_len], &"nopass"[0: 6]));
     try assert_true(!network_connection_contains(out[0: acl_auth_list.response_len], &"secret"[0: 6]));
 
-    const requirepass_set_bob: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*5\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$3\r\nbob\r\n$2\r\non\r\n$7\r\n>secret\r\n"[0: 56], &out[0], 512, 1000u64);
+    const requirepass_set_bob: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*6\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$3\r\nbob\r\n$2\r\non\r\n$7\r\n>secret\r\n$4\r\n+acl\r\n"[0: 66], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: requirepass_set_bob.response_len], &"+OK\r\n"[0: 5]));
 
     var requirepass_bob_tx: ConnectionTransaction = connection_transaction_new();

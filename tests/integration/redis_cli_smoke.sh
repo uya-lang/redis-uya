@@ -928,7 +928,7 @@ if [[ "$ACL_DRYRUN_MISSING_RESULT" != "ERR User 'missing' not found" ]]; then
     exit 1
 fi
 
-ACL_DYNAMIC_USER_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser dynamic on nopass resetkeys '~safe*')"
+ACL_DYNAMIC_USER_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser dynamic on nopass resetkeys '~safe*' '+@all')"
 if [[ "$ACL_DYNAMIC_USER_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ACL dynamic user setup OK, got '$ACL_DYNAMIC_USER_RESULT'" >&2
     exit 1
@@ -1142,6 +1142,54 @@ if [[ "$ACL_SETUSER_INVALID_RESULT" != "ERR Error in ACL SETUSER modifier 'inval
     exit 1
 fi
 
+ACL_SETUSER_VIRGIN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser virgin)"
+if [[ "$ACL_SETUSER_VIRGIN_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected fresh named user creation OK, got '$ACL_SETUSER_VIRGIN_RESULT'" >&2
+    exit 1
+fi
+
+ACL_GETUSER_VIRGIN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl getuser virgin)"
+if [[ "$ACL_GETUSER_VIRGIN_RESULT" != *"off"* || "$ACL_GETUSER_VIRGIN_RESULT" != *"-@all"* || "$ACL_GETUSER_VIRGIN_RESULT" != *"resetkeys"* || "$ACL_GETUSER_VIRGIN_RESULT" != *"resetchannels"* || "$ACL_GETUSER_VIRGIN_RESULT" == *"nopass"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected secure fresh named user defaults, got '$ACL_GETUSER_VIRGIN_RESULT'" >&2
+    exit 1
+fi
+
+ACL_MODIFY_VIRGIN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser virgin on nopass allkeys allchannels nocommands '(allcommands nocommands ~safe* +get)')"
+if [[ "$ACL_MODIFY_VIRGIN_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected named user mutation OK, got '$ACL_MODIFY_VIRGIN_RESULT'" >&2
+    exit 1
+fi
+
+ACL_SELECTOR_SAFE_GET_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl dryrun virgin get safe:key)"
+if [[ "$ACL_SELECTOR_SAFE_GET_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected selector nocommands/+get path OK, got '$ACL_SELECTOR_SAFE_GET_RESULT'" >&2
+    exit 1
+fi
+
+ACL_SELECTOR_PING_DENIED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl dryrun virgin ping 2>&1 || true)"
+if [[ "$ACL_SELECTOR_PING_DENIED_RESULT" != "NOPERM User virgin has no permissions to run the 'ping' command" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected selector nocommands to keep PING denied, got '$ACL_SELECTOR_PING_DENIED_RESULT'" >&2
+    exit 1
+fi
+
+ACL_RESET_VIRGIN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser virgin reset)"
+if [[ "$ACL_RESET_VIRGIN_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected named user reset OK, got '$ACL_RESET_VIRGIN_RESULT'" >&2
+    exit 1
+fi
+
+ACL_GETUSER_RESET_VIRGIN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl getuser virgin)"
+if [[ "$ACL_GETUSER_RESET_VIRGIN_RESULT" != *"off"* || "$ACL_GETUSER_RESET_VIRGIN_RESULT" != *"-@all"* || "$ACL_GETUSER_RESET_VIRGIN_RESULT" != *"resetkeys"* || "$ACL_GETUSER_RESET_VIRGIN_RESULT" != *"resetchannels"* || "$ACL_GETUSER_RESET_VIRGIN_RESULT" == *"nopass"* || "$ACL_GETUSER_RESET_VIRGIN_RESULT" == *"safe*"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected named reset to clear all ACL state, got '$ACL_GETUSER_RESET_VIRGIN_RESULT'" >&2
+    exit 1
+fi
+
+ACL_DELUSER_VIRGIN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl deluser virgin)"
+if [[ "$ACL_DELUSER_VIRGIN_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected virgin cleanup count 1, got '$ACL_DELUSER_VIRGIN_RESULT'" >&2
+    exit 1
+fi
+
 ACL_SETUSER_ALICE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser alice on nopass '~*' '&*' '+@all')"
 if [[ "$ACL_SETUSER_ALICE_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ACL SETUSER alice OK, got '$ACL_SETUSER_ALICE_RESULT'" >&2
@@ -1172,7 +1220,25 @@ if [[ "$ACL_DRYRUN_ALICE_RESULT" != "OK" ]]; then
     exit 1
 fi
 
-ACL_SETUSER_BOB_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser bob on '>secret')"
+ACL_NOCOMMANDS_ALICE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser alice nocommands)"
+if [[ "$ACL_NOCOMMANDS_ALICE_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL SETUSER alice nocommands OK, got '$ACL_NOCOMMANDS_ALICE_RESULT'" >&2
+    exit 1
+fi
+
+ACL_NOCOMMANDS_DRYRUN_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl dryrun alice ping 2>&1 || true)"
+if [[ "$ACL_NOCOMMANDS_DRYRUN_RESULT" != "NOPERM User alice has no permissions to run the 'ping' command" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected alice nocommands denial, got '$ACL_NOCOMMANDS_DRYRUN_RESULT'" >&2
+    exit 1
+fi
+
+ACL_ALLCOMMANDS_ALICE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser alice allcommands)"
+if [[ "$ACL_ALLCOMMANDS_ALICE_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL SETUSER alice allcommands OK, got '$ACL_ALLCOMMANDS_ALICE_RESULT'" >&2
+    exit 1
+fi
+
+ACL_SETUSER_BOB_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser bob on '>secret' '+acl')"
 if [[ "$ACL_SETUSER_BOB_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ACL SETUSER bob password OK, got '$ACL_SETUSER_BOB_RESULT'" >&2
     exit 1

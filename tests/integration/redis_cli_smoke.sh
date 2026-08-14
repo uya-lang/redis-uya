@@ -928,6 +928,42 @@ if [[ "$ACL_DRYRUN_MISSING_RESULT" != "ERR User 'missing' not found" ]]; then
     exit 1
 fi
 
+ACL_DYNAMIC_USER_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser dynamic on nopass resetkeys '~safe*')"
+if [[ "$ACL_DYNAMIC_USER_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL dynamic user setup OK, got '$ACL_DYNAMIC_USER_RESULT'" >&2
+    exit 1
+fi
+
+ACL_DYNAMIC_EVAL_SAFE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl dryrun dynamic eval_ro "return redis.call('GET',KEYS[1])" 1 safe:key)"
+if [[ "$ACL_DYNAMIC_EVAL_SAFE_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL EVAL_RO safe key OK, got '$ACL_DYNAMIC_EVAL_SAFE_RESULT'" >&2
+    exit 1
+fi
+
+ACL_DYNAMIC_EVAL_UNSAFE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl dryrun dynamic eval_ro "return redis.call('GET',KEYS[1])" 1 unsafe 2>&1 || true)"
+if [[ "$ACL_DYNAMIC_EVAL_UNSAFE_RESULT" != "NOPERM User dynamic has no permissions to access one of the keys used as arguments" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL EVAL_RO unsafe key denial, got '$ACL_DYNAMIC_EVAL_UNSAFE_RESULT'" >&2
+    exit 1
+fi
+
+ACL_DYNAMIC_FCALL_UNSAFE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl dryrun dynamic fcall_ro missing 2 safe:a unsafe arg 2>&1 || true)"
+if [[ "$ACL_DYNAMIC_FCALL_UNSAFE_RESULT" != "NOPERM User dynamic has no permissions to access one of the keys used as arguments" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL FCALL_RO unsafe key denial, got '$ACL_DYNAMIC_FCALL_UNSAFE_RESULT'" >&2
+    exit 1
+fi
+
+ACL_DYNAMIC_FCALL_ZERO_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl dryrun dynamic fcall_ro missing 0 arg)"
+if [[ "$ACL_DYNAMIC_FCALL_ZERO_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL FCALL_RO zero keys OK, got '$ACL_DYNAMIC_FCALL_ZERO_RESULT'" >&2
+    exit 1
+fi
+
+ACL_DYNAMIC_DELETE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl deluser dynamic)"
+if [[ "$ACL_DYNAMIC_DELETE_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL dynamic user cleanup count 1, got '$ACL_DYNAMIC_DELETE_RESULT'" >&2
+    exit 1
+fi
+
 ACL_SETUSER_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser default on nopass '~*' '&*' '+@all')"
 if [[ "$ACL_SETUSER_RESULT" != "OK" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ACL SETUSER default to return OK, got '$ACL_SETUSER_RESULT'" >&2

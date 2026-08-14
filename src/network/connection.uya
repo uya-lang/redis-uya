@@ -3557,7 +3557,48 @@ fn connection_acl_count_range_keys(info: &CommandInfo, full_argc: usize) usize {
     return (((last_index - info.first_key) / info.key_step) + 1) as usize;
 }
 
+fn connection_acl_declared_numkeys(info: &CommandInfo, command: &Command, arg_offset: usize, full_argc: usize) usize {
+    if info.cmd_type != CommandType.command_eval &&
+        info.cmd_type != CommandType.command_evalsha &&
+        info.cmd_type != CommandType.command_eval_ro &&
+        info.cmd_type != CommandType.command_evalsha_ro &&
+        info.cmd_type != CommandType.command_fcall &&
+        info.cmd_type != CommandType.command_fcall_ro {
+        return 0;
+    }
+    if full_argc < 3 {
+        return 0;
+    }
+    const raw: &[byte] = command_arg_data(command, arg_offset + 2) catch {
+        return 0;
+    };
+    if raw.len == 0 || raw.ptr[0] == 45 as byte {
+        return 0;
+    }
+    const parsed: u64 = connection_parse_u64(raw) catch {
+        return 0;
+    };
+    if parsed > (full_argc - 3) as u64 {
+        return 0;
+    }
+    return parsed as usize;
+}
+
 fn connection_acl_user_command_key_denied(username: &[byte], info: &CommandInfo, command: &Command, arg_offset: usize, full_argc: usize) bool {
+    const declared_numkeys: usize = connection_acl_declared_numkeys(info, command, arg_offset, full_argc);
+    if declared_numkeys > 0 && !connection_acl_user_allkeys(username) {
+        var declared_key_index: usize = 0;
+        while declared_key_index < declared_numkeys {
+            const declared_key: &[byte] = command_arg_data(command, arg_offset + 3 + declared_key_index) catch {
+                return false;
+            };
+            if !connection_acl_user_key_allowed(username, declared_key) {
+                return true;
+            }
+            declared_key_index = declared_key_index + 1;
+        }
+        return false;
+    }
     if info.cmd_type == CommandType.command_himport {
         if connection_acl_user_allkeys(username) || full_argc < 3 {
             return false;
@@ -3599,6 +3640,20 @@ fn connection_acl_user_command_key_denied(username: &[byte], info: &CommandInfo,
 }
 
 fn connection_acl_selector_command_key_denied(selector: &ConnectionAclSelector, info: &CommandInfo, command: &Command, arg_offset: usize, full_argc: usize) bool {
+    const declared_numkeys: usize = connection_acl_declared_numkeys(info, command, arg_offset, full_argc);
+    if declared_numkeys > 0 && !selector.allkeys {
+        var declared_key_index: usize = 0;
+        while declared_key_index < declared_numkeys {
+            const declared_key: &[byte] = command_arg_data(command, arg_offset + 3 + declared_key_index) catch {
+                return false;
+            };
+            if !connection_acl_key_allowed_by_patterns(selector.allkeys, selector.key_patterns[0: CONNECTION_ACL_SELECTOR_PATTERN_MAX], declared_key) {
+                return true;
+            }
+            declared_key_index = declared_key_index + 1;
+        }
+        return false;
+    }
     if info.cmd_type == CommandType.command_himport {
         if selector.allkeys || full_argc < 3 {
             return false;

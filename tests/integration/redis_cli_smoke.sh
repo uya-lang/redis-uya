@@ -976,6 +976,30 @@ if [[ "$ACL_DYNAMIC_ZINTERSTORE_UNSAFE_RESULT" != "NOPERM User dynamic has no pe
     exit 1
 fi
 
+ACL_DYNAMIC_SORT_SAFE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl dryrun dynamic sort safe:a by 'weight:*' limit 0 10 get '#' desc alpha store safe:dest)"
+if [[ "$ACL_DYNAMIC_SORT_SAFE_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL SORT safe source and destination OK, got '$ACL_DYNAMIC_SORT_SAFE_RESULT'" >&2
+    exit 1
+fi
+
+ACL_DYNAMIC_SORT_UNSAFE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl dryrun dynamic sort safe:a store unsafe 2>&1 || true)"
+if [[ "$ACL_DYNAMIC_SORT_UNSAFE_RESULT" != "NOPERM User dynamic has no permissions to access one of the keys used as arguments" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL SORT unsafe destination denial, got '$ACL_DYNAMIC_SORT_UNSAFE_RESULT'" >&2
+    exit 1
+fi
+
+ACL_DYNAMIC_MEMORY_SAFE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl dryrun dynamic memory usage safe:a samples 0)"
+if [[ "$ACL_DYNAMIC_MEMORY_SAFE_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL MEMORY USAGE safe key OK, got '$ACL_DYNAMIC_MEMORY_SAFE_RESULT'" >&2
+    exit 1
+fi
+
+ACL_DYNAMIC_MEMORY_UNSAFE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl dryrun dynamic memory usage unsafe 2>&1 || true)"
+if [[ "$ACL_DYNAMIC_MEMORY_UNSAFE_RESULT" != "NOPERM User dynamic has no permissions to access one of the keys used as arguments" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL MEMORY USAGE unsafe key denial, got '$ACL_DYNAMIC_MEMORY_UNSAFE_RESULT'" >&2
+    exit 1
+fi
+
 ACL_DYNAMIC_DELETE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl deluser dynamic)"
 if [[ "$ACL_DYNAMIC_DELETE_RESULT" != "1" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ACL dynamic user cleanup count 1, got '$ACL_DYNAMIC_DELETE_RESULT'" >&2

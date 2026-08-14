@@ -3590,12 +3590,129 @@ fn connection_acl_parse_numkeys(command: &Command, arg_offset: usize, full_argc:
     };
 }
 
+fn connection_acl_sort_key_spec(command: &Command, arg_offset: usize, full_argc: usize) ConnectionAclKeySpec {
+    if full_argc < 2 {
+        return connection_acl_empty_key_spec(true);
+    }
+    var index: usize = 2;
+    var store_index: i32 = -1;
+    while index < full_argc {
+        const token: &[byte] = command_arg_data(command, arg_offset + index) catch {
+            return connection_acl_empty_key_spec(true);
+        };
+        if connection_keyword_eq(token, &"ASC"[0: 3]) ||
+            connection_keyword_eq(token, &"DESC"[0: 4]) ||
+            connection_keyword_eq(token, &"ALPHA"[0: 5]) {
+            index = index + 1;
+            continue;
+        }
+        if connection_keyword_eq(token, &"BY"[0: 2]) ||
+            connection_keyword_eq(token, &"GET"[0: 3]) {
+            if index + 1 >= full_argc {
+                return connection_acl_empty_key_spec(true);
+            }
+            index = index + 2;
+            continue;
+        }
+        if connection_keyword_eq(token, &"LIMIT"[0: 5]) {
+            if index + 2 >= full_argc {
+                return connection_acl_empty_key_spec(true);
+            }
+            index = index + 3;
+            continue;
+        }
+        if connection_keyword_eq(token, &"STORE"[0: 5]) {
+            if index + 1 >= full_argc {
+                return connection_acl_empty_key_spec(true);
+            }
+            store_index = (index + 1) as i32;
+            index = index + 2;
+            continue;
+        }
+        return connection_acl_empty_key_spec(true);
+    }
+    return ConnectionAclKeySpec{
+        dynamic: true,
+        first_index: 1,
+        count: 1,
+        step: 1,
+        extra_index: store_index,
+    };
+}
+
+fn connection_acl_memory_key_spec(command: &Command, arg_offset: usize, full_argc: usize) ConnectionAclKeySpec {
+    if full_argc < 2 {
+        return connection_acl_empty_key_spec(false);
+    }
+    const subcommand: &[byte] = command_arg_data(command, arg_offset + 1) catch {
+        return connection_acl_empty_key_spec(false);
+    };
+    if !connection_keyword_eq(subcommand, &"USAGE"[0: 5]) {
+        return connection_acl_empty_key_spec(false);
+    }
+    if full_argc != 3 && full_argc != 5 {
+        return connection_acl_empty_key_spec(true);
+    }
+    if full_argc == 5 {
+        const token: &[byte] = command_arg_data(command, arg_offset + 3) catch {
+            return connection_acl_empty_key_spec(true);
+        };
+        if !connection_keyword_eq(token, &"SAMPLES"[0: 7]) {
+            return connection_acl_empty_key_spec(true);
+        }
+        const samples: &[byte] = command_arg_data(command, arg_offset + 4) catch {
+            return connection_acl_empty_key_spec(true);
+        };
+        if samples.len == 0 {
+            return connection_acl_empty_key_spec(true);
+        }
+        var sample_index: usize = 0;
+        var sample_negative: bool = false;
+        if samples.ptr[0] == 45 as byte {
+            sample_negative = true;
+            sample_index = 1;
+            if samples.len == 1 {
+                return connection_acl_empty_key_spec(true);
+            }
+        }
+        if samples.len - sample_index > 18 {
+            return connection_acl_empty_key_spec(true);
+        }
+        var sample_value: u64 = 0u64;
+        while sample_index < samples.len {
+            const ch: byte = samples.ptr[sample_index];
+            if ch < 48 as byte || ch > 57 as byte {
+                return connection_acl_empty_key_spec(true);
+            }
+            sample_value = sample_value * 10u64 + ((ch - 48 as byte) as u64);
+            sample_index = sample_index + 1;
+        }
+        if sample_negative && sample_value > 0u64 {
+            return connection_acl_empty_key_spec(true);
+        }
+    }
+    return ConnectionAclKeySpec{
+        dynamic: true,
+        first_index: 2,
+        count: 1,
+        step: 1,
+        extra_index: -1,
+    };
+}
+
 fn connection_acl_dynamic_key_spec(info: &CommandInfo, command: &Command, arg_offset: usize, full_argc: usize) ConnectionAclKeySpec {
     var numkeys_index: usize = 0;
     var first_index: usize = 0;
     var step: usize = 1;
     var extra_index: i32 = -1;
     var dynamic: bool = true;
+
+    if info.cmd_type == CommandType.command_sort {
+        return connection_acl_sort_key_spec(command, arg_offset, full_argc);
+    }
+    if info.cmd_type == CommandType.command_memory {
+        return connection_acl_memory_key_spec(command, arg_offset, full_argc);
+    }
 
     if info.cmd_type == CommandType.command_eval ||
         info.cmd_type == CommandType.command_evalsha ||

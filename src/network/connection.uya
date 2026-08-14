@@ -3713,6 +3713,60 @@ fn connection_acl_store_pair_key_spec(full_argc: usize) ConnectionAclKeySpec {
     };
 }
 
+fn connection_acl_georadius_key_spec(command: &Command, arg_offset: usize, full_argc: usize, bymember: bool) ConnectionAclKeySpec {
+    const option_start: usize = if bymember { 5usize } else { 6usize };
+    if full_argc < option_start {
+        return connection_acl_empty_key_spec(true);
+    }
+    var index: usize = option_start;
+    var store_index: i32 = -1;
+    while index < full_argc {
+        const token: &[byte] = command_arg_data(command, arg_offset + index) catch {
+            return connection_acl_empty_key_spec(true);
+        };
+        if connection_keyword_eq(token, &"ASC"[0: 3]) ||
+            connection_keyword_eq(token, &"DESC"[0: 4]) ||
+            connection_keyword_eq(token, &"WITHCOORD"[0: 9]) ||
+            connection_keyword_eq(token, &"WITHDIST"[0: 8]) ||
+            connection_keyword_eq(token, &"WITHHASH"[0: 8]) {
+            index = index + 1;
+            continue;
+        }
+        if connection_keyword_eq(token, &"COUNT"[0: 5]) {
+            if index + 1 >= full_argc {
+                return connection_acl_empty_key_spec(true);
+            }
+            index = index + 2;
+            if index < full_argc {
+                const any_token: &[byte] = command_arg_data(command, arg_offset + index) catch {
+                    return connection_acl_empty_key_spec(true);
+                };
+                if connection_keyword_eq(any_token, &"ANY"[0: 3]) {
+                    index = index + 1;
+                }
+            }
+            continue;
+        }
+        if connection_keyword_eq(token, &"STORE"[0: 5]) ||
+            connection_keyword_eq(token, &"STOREDIST"[0: 9]) {
+            if store_index >= 0 || index + 1 >= full_argc {
+                return connection_acl_empty_key_spec(true);
+            }
+            store_index = (index + 1) as i32;
+            index = index + 2;
+            continue;
+        }
+        return connection_acl_empty_key_spec(true);
+    }
+    return ConnectionAclKeySpec{
+        dynamic: true,
+        first_index: 1,
+        count: 1,
+        step: 1,
+        extra_index: store_index,
+    };
+}
+
 fn connection_acl_streams_key_spec(command: &Command, arg_offset: usize, full_argc: usize, grouped: bool) ConnectionAclKeySpec {
     var index: usize = 1;
     if grouped {
@@ -3777,6 +3831,12 @@ fn connection_acl_dynamic_key_spec(info: &CommandInfo, command: &Command, arg_of
     if info.cmd_type == CommandType.command_geosearchstore ||
         info.cmd_type == CommandType.command_zrangestore {
         return connection_acl_store_pair_key_spec(full_argc);
+    }
+    if info.cmd_type == CommandType.command_georadius {
+        return connection_acl_georadius_key_spec(command, arg_offset, full_argc, false);
+    }
+    if info.cmd_type == CommandType.command_georadiusbymember {
+        return connection_acl_georadius_key_spec(command, arg_offset, full_argc, true);
     }
     if info.cmd_type == CommandType.command_xread {
         return connection_acl_streams_key_spec(command, arg_offset, full_argc, false);

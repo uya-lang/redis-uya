@@ -3700,6 +3700,67 @@ fn connection_acl_memory_key_spec(command: &Command, arg_offset: usize, full_arg
     };
 }
 
+fn connection_acl_store_pair_key_spec(full_argc: usize) ConnectionAclKeySpec {
+    if full_argc < 3 {
+        return connection_acl_empty_key_spec(true);
+    }
+    return ConnectionAclKeySpec{
+        dynamic: true,
+        first_index: 2,
+        count: 1,
+        step: 1,
+        extra_index: 1,
+    };
+}
+
+fn connection_acl_streams_key_spec(command: &Command, arg_offset: usize, full_argc: usize, grouped: bool) ConnectionAclKeySpec {
+    var index: usize = 1;
+    if grouped {
+        if full_argc < 7 {
+            return connection_acl_empty_key_spec(true);
+        }
+        const group_token: &[byte] = command_arg_data(command, arg_offset + 1) catch {
+            return connection_acl_empty_key_spec(true);
+        };
+        if !connection_keyword_eq(group_token, &"GROUP"[0: 5]) {
+            return connection_acl_empty_key_spec(true);
+        }
+        index = 4;
+    }
+    while index < full_argc {
+        const token: &[byte] = command_arg_data(command, arg_offset + index) catch {
+            return connection_acl_empty_key_spec(true);
+        };
+        if connection_keyword_eq(token, &"STREAMS"[0: 7]) {
+            const remaining: usize = full_argc - index - 1;
+            if remaining == 0 || remaining % 2usize != 0usize {
+                return connection_acl_empty_key_spec(true);
+            }
+            return ConnectionAclKeySpec{
+                dynamic: true,
+                first_index: index + 1,
+                count: remaining / 2usize,
+                step: 1,
+                extra_index: -1,
+            };
+        }
+        if connection_keyword_eq(token, &"COUNT"[0: 5]) ||
+            connection_keyword_eq(token, &"BLOCK"[0: 5]) {
+            if index + 1 >= full_argc {
+                return connection_acl_empty_key_spec(true);
+            }
+            index = index + 2;
+            continue;
+        }
+        if grouped && connection_keyword_eq(token, &"NOACK"[0: 5]) {
+            index = index + 1;
+            continue;
+        }
+        return connection_acl_empty_key_spec(true);
+    }
+    return connection_acl_empty_key_spec(true);
+}
+
 fn connection_acl_dynamic_key_spec(info: &CommandInfo, command: &Command, arg_offset: usize, full_argc: usize) ConnectionAclKeySpec {
     var numkeys_index: usize = 0;
     var first_index: usize = 0;
@@ -3712,6 +3773,16 @@ fn connection_acl_dynamic_key_spec(info: &CommandInfo, command: &Command, arg_of
     }
     if info.cmd_type == CommandType.command_memory {
         return connection_acl_memory_key_spec(command, arg_offset, full_argc);
+    }
+    if info.cmd_type == CommandType.command_geosearchstore ||
+        info.cmd_type == CommandType.command_zrangestore {
+        return connection_acl_store_pair_key_spec(full_argc);
+    }
+    if info.cmd_type == CommandType.command_xread {
+        return connection_acl_streams_key_spec(command, arg_offset, full_argc, false);
+    }
+    if info.cmd_type == CommandType.command_xreadgroup {
+        return connection_acl_streams_key_spec(command, arg_offset, full_argc, true);
     }
 
     if info.cmd_type == CommandType.command_eval ||

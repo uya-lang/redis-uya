@@ -1000,6 +1000,30 @@ if [[ "$ACL_DYNAMIC_MEMORY_UNSAFE_RESULT" != "NOPERM User dynamic has no permiss
     exit 1
 fi
 
+ACL_DYNAMIC_GEOSEARCHSTORE_UNSAFE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl dryrun dynamic geosearchstore unsafe safe:source frommember m byradius 1 km 2>&1 || true)"
+if [[ "$ACL_DYNAMIC_GEOSEARCHSTORE_UNSAFE_RESULT" != "NOPERM User dynamic has no permissions to access one of the keys used as arguments" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL GEOSEARCHSTORE unsafe destination denial, got '$ACL_DYNAMIC_GEOSEARCHSTORE_UNSAFE_RESULT'" >&2
+    exit 1
+fi
+
+ACL_DYNAMIC_ZRANGESTORE_UNSAFE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl dryrun dynamic zrangestore unsafe safe:source 0 -1 2>&1 || true)"
+if [[ "$ACL_DYNAMIC_ZRANGESTORE_UNSAFE_RESULT" != "NOPERM User dynamic has no permissions to access one of the keys used as arguments" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL ZRANGESTORE unsafe destination denial, got '$ACL_DYNAMIC_ZRANGESTORE_UNSAFE_RESULT'" >&2
+    exit 1
+fi
+
+ACL_DYNAMIC_XREAD_UNSAFE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl dryrun dynamic xread count 1 streams safe:a unsafe 0-0 0-0 2>&1 || true)"
+if [[ "$ACL_DYNAMIC_XREAD_UNSAFE_RESULT" != "NOPERM User dynamic has no permissions to access one of the keys used as arguments" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL XREAD unsafe stream denial, got '$ACL_DYNAMIC_XREAD_UNSAFE_RESULT'" >&2
+    exit 1
+fi
+
+ACL_DYNAMIC_XREADGROUP_UNSAFE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl dryrun dynamic xreadgroup group g c noack streams safe:a unsafe '>' '>' 2>&1 || true)"
+if [[ "$ACL_DYNAMIC_XREADGROUP_UNSAFE_RESULT" != "NOPERM User dynamic has no permissions to access one of the keys used as arguments" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL XREADGROUP unsafe stream denial, got '$ACL_DYNAMIC_XREADGROUP_UNSAFE_RESULT'" >&2
+    exit 1
+fi
+
 ACL_DYNAMIC_DELETE_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl deluser dynamic)"
 if [[ "$ACL_DYNAMIC_DELETE_RESULT" != "1" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ACL dynamic user cleanup count 1, got '$ACL_DYNAMIC_DELETE_RESULT'" >&2

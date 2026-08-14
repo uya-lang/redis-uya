@@ -3800,7 +3800,7 @@ LATENCY GRAPH event
 - `LATEST`：返回 latest event 数组；当前记录 `command` 事件
 - `HISTORY`：返回指定 event 的历史数组；当前支持 `command` 事件
 - `RESET`：返回已清除 event 数；无参数时清空全部事件，也可按 event 名清理
-- `DOCTOR`：返回 minimal 诊断文本 Bulk String
+- `DOCTOR`：返回 minimal 诊断文本 Bulk String；无事件时明确说明命令采样与直方图已经可用，并提示通过 `latency-monitor-threshold` 开启事件历史；已有事件时返回当前进程内采样状态
 - `HISTOGRAM [command ...]`：返回命令延迟直方图数组；当前按普通命令名或容器子命令名记录 `calls` 与 `histogram_usec` 累计桶，可按命令名过滤
 - `GRAPH`：返回指定 event 的 ASCII graph 文本；当前对有历史的 `command` 事件返回最小文本说明
 

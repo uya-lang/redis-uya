@@ -10322,6 +10322,15 @@ export fn test_command_latency() !void {
     command_reply_cleanup(&latest_reply);
     resp_value_free(&latest_parsed.value);
 
+    var empty_doctor_parsed: RespParseResult = try parse_resp2(&"*2\r\n$7\r\nLATENCY\r\n$6\r\nDOCTOR\r\n"[0: 29]);
+    const empty_doctor_command: Command = try command_executor_test_command(&router, &empty_doctor_parsed);
+    var empty_doctor_reply: CommandReply = command_execute_at(&engine, &empty_doctor_command, 1000u64);
+    try assert_eq_i32(empty_doctor_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
+    try assert_true(command_executor_test_contains(empty_doctor_reply.data, &"per-command histograms are active"[0: 33]));
+    try assert_true(!command_executor_test_contains(empty_doctor_reply.data, &"planned after"[0: 13]));
+    command_reply_cleanup(&empty_doctor_reply);
+    resp_value_free(&empty_doctor_parsed.value);
+
     var latency_runtime: CommandRuntimeInfo = command_runtime_default();
     latency_runtime.config.latency_monitor_threshold = 1;
     var seed_set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$5\r\nlat-k\r\n$1\r\n1\r\n"[0: 31]);

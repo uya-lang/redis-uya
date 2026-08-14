@@ -10749,7 +10749,7 @@ fn command_executor_latency_graph(event: &[byte]) CommandReply {
 
 fn command_executor_latency_doctor() CommandReply {
     if !latency_command_is_active() {
-        return command_executor_owned_bulk_copy(&"No latency events are available yet. redis-uya currently exposes a minimal LATENCY compatibility surface; event sampling and histograms are planned after the v0.9.2 command gap pass."[0: 182]);
+        return command_executor_owned_bulk_copy(&"No latency events are available yet. Command latency sampling and per-command histograms are active; set latency-monitor-threshold above zero to record LATENCY event history."[0: 174]);
     }
     return command_executor_owned_bulk_copy(&"Latency monitor has recorded command events. redis-uya currently samples command execution duration with millisecond-granularity runtime time and keeps an in-process command event history."[0: 174]);
 }

@@ -67,6 +67,7 @@ use src.command.router.CommandRouter;
 use src.command.router.Command;
 use src.command.router.CommandType;
 use src.command.router.command_arg_data;
+use src.command.router.command_flag_write;
 use src.command.router.command_router_lookup;
 use src.command.router.command_router_new;
 use src.command.router.command_validate_arity;
@@ -20803,7 +20804,7 @@ fn command_executor_command_sort_store_index(command: &Command) !i32 {
     return store_index;
 }
 
-fn command_executor_command_key_flags(info: &CommandInfo, key_ordinal: usize) &[byte] {
+export fn command_executor_command_key_flags(info: &CommandInfo, key_ordinal: usize) &[byte] {
     if info.cmd_type == CommandType.command_type ||
         info.cmd_type == CommandType.command_exists ||
         info.cmd_type == CommandType.command_object ||
@@ -20876,6 +20877,12 @@ fn command_executor_command_key_flags(info: &CommandInfo, key_ordinal: usize) &[
         }
         return &"RO|access"[0: 9];
     }
+    if info.cmd_type == CommandType.command_smove {
+        if key_ordinal == 0 {
+            return &"RW|access|delete"[0: 16];
+        }
+        return &"RW|insert"[0: 9];
+    }
     if info.cmd_type == CommandType.command_getdel ||
         info.cmd_type == CommandType.command_hgetdel ||
         info.cmd_type == CommandType.command_move ||
@@ -20898,6 +20905,7 @@ fn command_executor_command_key_flags(info: &CommandInfo, key_ordinal: usize) &[
         info.cmd_type == CommandType.command_decrby ||
         info.cmd_type == CommandType.command_increx ||
         info.cmd_type == CommandType.command_incrbyfloat ||
+        info.cmd_type == CommandType.command_hgetex ||
         info.cmd_type == CommandType.command_hexpire ||
         info.cmd_type == CommandType.command_hexpireat ||
         info.cmd_type == CommandType.command_hpexpire ||
@@ -20909,6 +20917,7 @@ fn command_executor_command_key_flags(info: &CommandInfo, key_ordinal: usize) &[
     }
     if info.cmd_type == CommandType.command_append ||
         info.cmd_type == CommandType.command_setbit ||
+        info.cmd_type == CommandType.command_pfadd ||
         info.cmd_type == CommandType.command_lpush ||
         info.cmd_type == CommandType.command_rpush ||
         info.cmd_type == CommandType.command_linsert ||
@@ -20929,7 +20938,11 @@ fn command_executor_command_key_flags(info: &CommandInfo, key_ordinal: usize) &[
         info.cmd_type == CommandType.command_zrem ||
         info.cmd_type == CommandType.command_zremrangebylex ||
         info.cmd_type == CommandType.command_zremrangebyrank ||
-        info.cmd_type == CommandType.command_zremrangebyscore {
+        info.cmd_type == CommandType.command_zremrangebyscore ||
+        info.cmd_type == CommandType.command_xautoclaim ||
+        info.cmd_type == CommandType.command_xdel ||
+        info.cmd_type == CommandType.command_xdelex ||
+        info.cmd_type == CommandType.command_xtrim {
         return &"RW|delete"[0: 9];
     }
     if info.cmd_type == CommandType.command_expire ||
@@ -20939,8 +20952,19 @@ fn command_executor_command_key_flags(info: &CommandInfo, key_ordinal: usize) &[
         info.cmd_type == CommandType.command_pexpireat ||
         info.cmd_type == CommandType.command_lset ||
         info.cmd_type == CommandType.command_hset ||
+        info.cmd_type == CommandType.command_hsetex ||
         info.cmd_type == CommandType.command_hmset ||
-        info.cmd_type == CommandType.command_zadd {
+        info.cmd_type == CommandType.command_hpersist ||
+        info.cmd_type == CommandType.command_zadd ||
+        info.cmd_type == CommandType.command_geoadd ||
+        info.cmd_type == CommandType.command_xack ||
+        info.cmd_type == CommandType.command_xackdel ||
+        info.cmd_type == CommandType.command_xadd ||
+        info.cmd_type == CommandType.command_xcfgset ||
+        info.cmd_type == CommandType.command_xclaim ||
+        info.cmd_type == CommandType.command_xidmprecord ||
+        info.cmd_type == CommandType.command_xnack ||
+        info.cmd_type == CommandType.command_xsetid {
         return &"RW|update"[0: 9];
     }
     if info.cmd_type == CommandType.command_set ||
@@ -20955,6 +20979,9 @@ fn command_executor_command_key_flags(info: &CommandInfo, key_ordinal: usize) &[
     }
     if info.flags == 0u64 {
         return command_executor_empty_slice();
+    }
+    if (info.flags & command_flag_write()) != 0u64 {
+        return &"RW|access|update"[0: 16];
     }
     return &"RO|access"[0: 9];
 }

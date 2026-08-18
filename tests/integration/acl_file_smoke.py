@@ -286,6 +286,26 @@ def run_smoke() -> None:
                     raise AssertionError("whitelist user cannot run the final allowed command")
                 expect_error(reader, "has no permissions to access one of the keys", b"GET", b"unsafe")
                 expect_error(reader, "has no permissions to run the 'set' command", b"SET", b"safe:key", b"value")
+            if send_command(admin, b"ACL", b"SETUSER", b"directional", b"on", b">directionpass", b"+@all", b"resetkeys", b"%R~read:*", b"%W~write:*", b"~both:*") != "OK":
+                raise AssertionError("failed to create directional ACL user")
+            if send_command(admin, b"SET", b"read:source", b"seed") != "OK":
+                raise AssertionError("failed to seed directional source key")
+            with authenticate(port, b"directional", b"directionpass") as directional:
+                if send_command(directional, b"GET", b"read:source") != b"seed":
+                    raise AssertionError("read pattern cannot read its key")
+                expect_error(directional, "has no permissions to access one of the keys", b"SET", b"read:source", b"changed")
+                if send_command(directional, b"SET", b"write:target", b"value") != "OK":
+                    raise AssertionError("write pattern cannot write its key")
+                expect_error(directional, "has no permissions to access one of the keys", b"GET", b"write:target")
+                if send_command(directional, b"COPY", b"read:source", b"write:copy") != 1:
+                    raise AssertionError("directional COPY source/destination permissions failed")
+                expect_error(directional, "has no permissions to access one of the keys", b"GETSET", b"write:target", b"next")
+                if send_command(directional, b"SET", b"both:key", b"before") != "OK":
+                    raise AssertionError("read-write pattern cannot write its key")
+                if send_command(directional, b"GETSET", b"both:key", b"after") != b"before":
+                    raise AssertionError("GETSET did not require and accept read-write permission")
+            if acl_getuser_field(admin, b"directional", b"keys") != b"%R~read:* %W~write:* ~both:*":
+                raise AssertionError("ACL GETUSER did not preserve directional key patterns")
             Path(f"{acl_path}.tmp").write_text("stale")
             Path(f"{acl_path}.tmp").chmod(0o666)
             if send_command(admin, b"ACL", b"SAVE") != "OK":
@@ -297,6 +317,7 @@ def run_smoke() -> None:
                 b"user app on #" + secret2_hash + b" #" + secret_hash + b" ~safe* &news* -@all -del -set -publish -@admin +ping (~safe* resetchannels -@all +set) (~reports* resetchannels -@all +get) (resetkeys &news* -@all +publish)",
                 b"user disabled off #e564b4081d7a9ea4b00dada53bdae70c99b87b6fce869f0c3dd4d2bfa1e53e1c resetkeys resetchannels -@all",
                 b"user reader on #df14634a7777444be41e5bae441440f6a7d8de675a9b6c2af9ae00e33e9d114f ~safe* resetchannels -@all +@read +get",
+                b"user directional on #4b43ff2cd4be774e13fcd1ed3036afe6bbca166ba16d45036a3c9372af754e04 %R~read:* %W~write:* ~both:* resetchannels +@all",
             }
             if set(saved.splitlines()) != expected_lines:
                 raise AssertionError(f"unexpected ACL file payload: {saved!r}")
@@ -406,6 +427,10 @@ def run_smoke() -> None:
             if send_command(restored_reader, b"GET", b"safe:key") != b"value":
                 raise AssertionError("restored whitelist user cannot run GET")
             expect_error(restored_reader, "has no permissions to run the 'set' command", b"SET", b"safe:key", b"value")
+        with authenticate(port, b"directional", b"directionpass") as restored_directional:
+            if send_command(restored_directional, b"GET", b"read:source") != b"seed":
+                raise AssertionError("restored directional user cannot read its key")
+            expect_error(restored_directional, "has no permissions to access one of the keys", b"GET", b"write:target")
         expect_auth_error(port, b"disabled", b"hidden")
     finally:
         stop_process(proc)
@@ -432,6 +457,12 @@ def run_smoke() -> None:
             if send_command(restarted_reader, b"GET", b"safe:key") != b"restart":
                 raise AssertionError("startup ACL whitelist cannot run GET")
             expect_error(restarted_reader, "has no permissions to run the 'set' command", b"SET", b"safe:key", b"value")
+        with authenticate(restart_port, b"directional", b"directionpass") as restarted_directional:
+            if send_command(restarted_directional, b"GET", b"read:missing") is not None:
+                raise AssertionError("startup ACL directional user cannot read its key")
+            expect_error(restarted_directional, "has no permissions to access one of the keys", b"SET", b"read:source", b"changed")
+            if send_command(restarted_directional, b"SET", b"write:startup", b"value") != "OK":
+                raise AssertionError("startup ACL directional user cannot write its key")
     finally:
         stop_process(restart_proc)
 

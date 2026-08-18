@@ -1352,6 +1352,42 @@ if [[ "$ACL_DELUSER_ALICE_AGAIN_RESULT" != "0" ]]; then
     exit 1
 fi
 
+ACL_SETUSER_DIRECTIONAL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl setuser directional on nopass '+@all' resetkeys '%R~read:*' '%W~write:*' '~both:*')"
+if [[ "$ACL_SETUSER_DIRECTIONAL_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected directional ACL SETUSER OK, got '$ACL_SETUSER_DIRECTIONAL_RESULT'" >&2
+    exit 1
+fi
+
+ACL_DIRECTIONAL_READ_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl dryrun directional get read:key)"
+if [[ "$ACL_DIRECTIONAL_READ_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected directional GET permission, got '$ACL_DIRECTIONAL_READ_RESULT'" >&2
+    exit 1
+fi
+
+ACL_DIRECTIONAL_WRITE_DENIED_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl dryrun directional set read:key value 2>&1 || true)"
+if [[ "$ACL_DIRECTIONAL_WRITE_DENIED_RESULT" != "NOPERM User directional has no permissions to access one of the keys used as arguments" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected directional SET key denial, got '$ACL_DIRECTIONAL_WRITE_DENIED_RESULT'" >&2
+    exit 1
+fi
+
+ACL_DIRECTIONAL_COPY_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl dryrun directional copy read:key write:key)"
+if [[ "$ACL_DIRECTIONAL_COPY_RESULT" != "OK" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected directional COPY permission, got '$ACL_DIRECTIONAL_COPY_RESULT'" >&2
+    exit 1
+fi
+
+ACL_GETUSER_DIRECTIONAL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl getuser directional)"
+if [[ "$ACL_GETUSER_DIRECTIONAL_RESULT" != *"%R~read:* %W~write:* ~both:*"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected canonical directional key patterns, got '$ACL_GETUSER_DIRECTIONAL_RESULT'" >&2
+    exit 1
+fi
+
+ACL_DELUSER_DIRECTIONAL_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl deluser directional)"
+if [[ "$ACL_DELUSER_DIRECTIONAL_RESULT" != "1" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected directional user cleanup count 1, got '$ACL_DELUSER_DIRECTIONAL_RESULT'" >&2
+    exit 1
+fi
+
 ACL_USERS_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl users)"
 if [[ "$ACL_USERS_RESULT" != "default" ]]; then
     echo "[FAIL] integration/redis_cli_smoke: expected ACL USERS default, got '$ACL_USERS_RESULT'" >&2

@@ -8,6 +8,7 @@ use src.command.executor.command_execute_at;
 use src.command.executor.command_execute_with_runtime_at;
 use src.command.executor.command_prepare_maxmemory_at;
 use src.command.executor.command_reply_cleanup;
+use src.command.executor.command_executor_command_key_flags;
 use src.config.ServerConfig;
 use src.command.catalog_generated_base.CommandCatalogEntry;
 use src.command.catalog.command_catalog_has_acl_category;
@@ -262,6 +263,9 @@ const CONNECTION_ACL_DENIED_CATEGORY_MAX: usize = 32;
 const CONNECTION_ACL_COMMAND_NAME_MAX: usize = 64;
 const CONNECTION_ACL_KEY_PATTERN_MAX: usize = 32;
 const CONNECTION_ACL_KEY_PATTERN_BYTES_MAX: usize = 128;
+const CONNECTION_ACL_KEY_PERMISSION_READ: u8 = 1u8;
+const CONNECTION_ACL_KEY_PERMISSION_WRITE: u8 = 2u8;
+const CONNECTION_ACL_KEY_PERMISSION_BOTH: u8 = 3u8;
 const CONNECTION_ACL_CHANNEL_PATTERN_MAX: usize = 32;
 const CONNECTION_ACL_CHANNEL_PATTERN_BYTES_MAX: usize = 128;
 const CONNECTION_ACL_USER_MAX: usize = 32;
@@ -398,6 +402,7 @@ var connection_function_restore_staging: [ConnectionFunctionLibraryEntry: CONNEC
 
 struct ConnectionAclKeyPattern {
     active: bool,
+    permissions: u8,
     pattern_len: usize,
     pattern: [byte: CONNECTION_ACL_KEY_PATTERN_BYTES_MAX],
 }
@@ -2465,6 +2470,7 @@ fn connection_acl_key_patterns_clear(patterns: &[ConnectionAclKeyPattern]) void 
     var index: usize = 0;
     while index < patterns.len {
         patterns.ptr[index].active = false;
+        patterns.ptr[index].permissions = 0u8;
         patterns.ptr[index].pattern_len = 0;
         index = index + 1;
     }
@@ -2676,11 +2682,14 @@ fn connection_acl_key_pattern_find_free(patterns: &[ConnectionAclKeyPattern]) i3
     return -1;
 }
 
-fn connection_acl_key_pattern_add(patterns: &[ConnectionAclKeyPattern], pattern: &[byte]) !void {
-    if pattern.len == 0 || pattern.len > CONNECTION_ACL_KEY_PATTERN_BYTES_MAX {
+fn connection_acl_key_pattern_add(patterns: &[ConnectionAclKeyPattern], pattern: &[byte], permissions: u8) !void {
+    if pattern.len > CONNECTION_ACL_KEY_PATTERN_BYTES_MAX || permissions == 0u8 || permissions > CONNECTION_ACL_KEY_PERMISSION_BOTH {
         return error.ConnectionInputTooLarge;
     }
-    if connection_acl_key_pattern_find(patterns, pattern) >= 0 {
+    const existing: i32 = connection_acl_key_pattern_find(patterns, pattern);
+    if existing >= 0 {
+        const existing_index: usize = existing as usize;
+        patterns.ptr[existing_index].permissions = patterns.ptr[existing_index].permissions | permissions;
         return;
     }
     const slot: i32 = connection_acl_key_pattern_find_free(patterns);
@@ -2692,6 +2701,7 @@ fn connection_acl_key_pattern_add(patterns: &[ConnectionAclKeyPattern], pattern:
         return error.ConnectionInputTooLarge;
     }
     patterns.ptr[slot_index].active = true;
+    patterns.ptr[slot_index].permissions = permissions;
     patterns.ptr[slot_index].pattern_len = pattern.len;
     var i: usize = 0;
     while i < pattern.len {
@@ -2738,13 +2748,15 @@ fn connection_acl_glob_match(pattern: &[byte], pattern_index: usize, value: &[by
     return current == value.ptr[value_index] && connection_acl_glob_match(pattern, pattern_index + 1, value, value_index + 1);
 }
 
-fn connection_acl_key_allowed_by_patterns(allkeys: bool, patterns: &[ConnectionAclKeyPattern], key: &[byte]) bool {
+fn connection_acl_key_allowed_by_patterns(allkeys: bool, patterns: &[ConnectionAclKeyPattern], key: &[byte], required_permissions: u8) bool {
     if allkeys {
         return true;
     }
     var index: usize = 0;
     while index < patterns.len {
-        if patterns.ptr[index].active && connection_acl_glob_match(patterns.ptr[index].pattern[0: patterns.ptr[index].pattern_len], 0, key, 0) {
+        if patterns.ptr[index].active &&
+            (required_permissions == 0u8 || (patterns.ptr[index].permissions & required_permissions) == required_permissions) &&
+            connection_acl_glob_match(patterns.ptr[index].pattern[0: patterns.ptr[index].pattern_len], 0, key, 0) {
             return true;
         }
         index = index + 1;
@@ -3409,9 +3421,9 @@ export fn connection_acl_denied_command_count_for_test(username: &[byte]) usize 
     return 0;
 }
 
-fn connection_acl_user_key_allowed(username: &[byte], key: &[byte]) bool {
+fn connection_acl_user_key_allowed(username: &[byte], key: &[byte], required_permissions: u8) bool {
     if connection_keyword_eq(username, &"default"[0: 7]) {
-        return connection_acl_key_allowed_by_patterns(connection_acl_default_key_rules.allkeys, connection_acl_default_key_rules.patterns[0: CONNECTION_ACL_KEY_PATTERN_MAX], key);
+        return connection_acl_key_allowed_by_patterns(connection_acl_default_key_rules.allkeys, connection_acl_default_key_rules.patterns[0: CONNECTION_ACL_KEY_PATTERN_MAX], key, required_permissions);
     }
     const slot: i32 = connection_acl_user_find(username);
     if slot < 0 || slot >= CONNECTION_ACL_USER_MAX as i32 {
@@ -3421,7 +3433,7 @@ fn connection_acl_user_key_allowed(username: &[byte], key: &[byte]) bool {
     if slot_index >= CONNECTION_ACL_USER_MAX || !connection_acl_users[slot_index].active {
         return true;
     }
-    return connection_acl_key_allowed_by_patterns(connection_acl_users[slot_index].allkeys, connection_acl_users[slot_index].key_patterns[0: CONNECTION_ACL_KEY_PATTERN_MAX], key);
+    return connection_acl_key_allowed_by_patterns(connection_acl_users[slot_index].allkeys, connection_acl_users[slot_index].key_patterns[0: CONNECTION_ACL_KEY_PATTERN_MAX], key, required_permissions);
 }
 
 fn connection_acl_user_allkeys(username: &[byte]) bool {
@@ -3956,6 +3968,124 @@ fn connection_acl_key_spec_index(spec: &ConnectionAclKeySpec, ordinal: usize) us
     return spec.extra_index as usize;
 }
 
+fn connection_acl_key_flag_has_tag(tags: &[byte], expected: &[byte]) bool {
+    var start: usize = 0;
+    while start <= tags.len {
+        var end: usize = start;
+        while end < tags.len && tags.ptr[end] != 124 as byte {
+            end = end + 1;
+        }
+        if connection_slice_eq(tags[start: end - start], expected) {
+            return true;
+        }
+        if end == tags.len {
+            break;
+        }
+        start = end + 1;
+    }
+    return false;
+}
+
+fn connection_acl_key_permissions_from_flags(flags: &[byte]) u8 {
+    var permissions: u8 = 0u8;
+    if connection_acl_key_flag_has_tag(flags, &"access"[0: 6]) {
+        permissions = permissions | CONNECTION_ACL_KEY_PERMISSION_READ;
+    }
+    if connection_acl_key_flag_has_tag(flags, &"update"[0: 6]) ||
+        connection_acl_key_flag_has_tag(flags, &"insert"[0: 6]) ||
+        connection_acl_key_flag_has_tag(flags, &"delete"[0: 6]) {
+        permissions = permissions | CONNECTION_ACL_KEY_PERMISSION_WRITE;
+    }
+    return permissions;
+}
+
+fn connection_acl_static_key_permissions(info: &CommandInfo, command: &Command, arg_offset: usize, full_argc: usize, key_ordinal: usize) u8 {
+    var permissions: u8 = connection_acl_key_permissions_from_flags(command_executor_command_key_flags(info, key_ordinal));
+    if info.cmd_type == CommandType.command_set && permissions == CONNECTION_ACL_KEY_PERMISSION_WRITE {
+        var index: usize = 3;
+        while index < full_argc {
+            const token: &[byte] = command_arg_data(command, arg_offset + index) catch {
+                return permissions;
+            };
+            if connection_keyword_eq(token, &"GET"[0: 3]) {
+                return CONNECTION_ACL_KEY_PERMISSION_BOTH;
+            }
+            index = index + 1;
+        }
+    }
+    if info.cmd_type == CommandType.command_hgetex {
+        var index: usize = 2;
+        while index < full_argc {
+            const token: &[byte] = command_arg_data(command, arg_offset + index) catch {
+                return permissions;
+            };
+            if connection_keyword_eq(token, &"FIELDS"[0: 6]) {
+                return CONNECTION_ACL_KEY_PERMISSION_READ;
+            }
+            if connection_keyword_eq(token, &"EX"[0: 2]) ||
+                connection_keyword_eq(token, &"PX"[0: 2]) ||
+                connection_keyword_eq(token, &"EXAT"[0: 4]) ||
+                connection_keyword_eq(token, &"PXAT"[0: 4]) ||
+                connection_keyword_eq(token, &"PERSIST"[0: 7]) {
+                return CONNECTION_ACL_KEY_PERMISSION_BOTH;
+            }
+            index = index + 1;
+        }
+    }
+    return permissions;
+}
+
+fn connection_acl_dynamic_key_permissions(info: &CommandInfo, spec: &ConnectionAclKeySpec, key_ordinal: usize) u8 {
+    if info.cmd_type == CommandType.command_sort ||
+        info.cmd_type == CommandType.command_geosearchstore ||
+        info.cmd_type == CommandType.command_zrangestore ||
+        info.cmd_type == CommandType.command_georadius ||
+        info.cmd_type == CommandType.command_georadiusbymember {
+        if key_ordinal < spec.count {
+            return CONNECTION_ACL_KEY_PERMISSION_READ;
+        }
+        return CONNECTION_ACL_KEY_PERMISSION_WRITE;
+    }
+    if info.cmd_type == CommandType.command_zdiffstore ||
+        info.cmd_type == CommandType.command_zinterstore ||
+        info.cmd_type == CommandType.command_zunionstore {
+        if key_ordinal < spec.count {
+            return CONNECTION_ACL_KEY_PERMISSION_READ;
+        }
+        return CONNECTION_ACL_KEY_PERMISSION_WRITE;
+    }
+    if info.cmd_type == CommandType.command_eval_ro ||
+        info.cmd_type == CommandType.command_evalsha_ro ||
+        info.cmd_type == CommandType.command_fcall_ro ||
+        info.cmd_type == CommandType.command_sintercard ||
+        info.cmd_type == CommandType.command_sdiffcard ||
+        info.cmd_type == CommandType.command_sunioncard ||
+        info.cmd_type == CommandType.command_zdiff ||
+        info.cmd_type == CommandType.command_zinter ||
+        info.cmd_type == CommandType.command_zunion ||
+        info.cmd_type == CommandType.command_zintercard ||
+        info.cmd_type == CommandType.command_xread ||
+        info.cmd_type == CommandType.command_xreadgroup ||
+        info.cmd_type == CommandType.command_xinfo ||
+        info.cmd_type == CommandType.command_memory {
+        return CONNECTION_ACL_KEY_PERMISSION_READ;
+    }
+    if info.cmd_type == CommandType.command_msetex ||
+        info.cmd_type == CommandType.command_xgroup {
+        return CONNECTION_ACL_KEY_PERMISSION_WRITE;
+    }
+    if info.cmd_type == CommandType.command_eval ||
+        info.cmd_type == CommandType.command_evalsha ||
+        info.cmd_type == CommandType.command_fcall ||
+        info.cmd_type == CommandType.command_lmpop ||
+        info.cmd_type == CommandType.command_blmpop ||
+        info.cmd_type == CommandType.command_zmpop ||
+        info.cmd_type == CommandType.command_bzmpop {
+        return CONNECTION_ACL_KEY_PERMISSION_BOTH;
+    }
+    return connection_acl_key_permissions_from_flags(command_executor_command_key_flags(info, key_ordinal));
+}
+
 fn connection_acl_user_command_key_denied(username: &[byte], info: &CommandInfo, command: &Command, arg_offset: usize, full_argc: usize) bool {
     const dynamic_spec: ConnectionAclKeySpec = connection_acl_dynamic_key_spec(info, command, arg_offset, full_argc);
     if dynamic_spec.dynamic {
@@ -3969,7 +4099,8 @@ fn connection_acl_user_command_key_denied(username: &[byte], info: &CommandInfo,
             const dynamic_key: &[byte] = command_arg_data(command, arg_offset + dynamic_key_index) catch {
                 return false;
             };
-            if !connection_acl_user_key_allowed(username, dynamic_key) {
+            const required_permissions: u8 = connection_acl_dynamic_key_permissions(info, &dynamic_spec, dynamic_key_ordinal);
+            if !connection_acl_user_key_allowed(username, dynamic_key, required_permissions) {
                 return true;
             }
             dynamic_key_ordinal = dynamic_key_ordinal + 1;
@@ -3989,7 +4120,7 @@ fn connection_acl_user_command_key_denied(username: &[byte], info: &CommandInfo,
         const key: &[byte] = command_arg_data(command, arg_offset + 2) catch {
             return false;
         };
-        return !connection_acl_user_key_allowed(username, key);
+        return !connection_acl_user_key_allowed(username, key, CONNECTION_ACL_KEY_PERMISSION_WRITE);
     }
     const key_count: usize = connection_acl_count_range_keys(info, full_argc);
     if key_count == 0 {
@@ -4003,14 +4134,17 @@ fn connection_acl_user_command_key_denied(username: &[byte], info: &CommandInfo,
         last_index = full_argc as i32 + info.last_key;
     }
     var key_index: i32 = info.first_key;
+    var key_ordinal: usize = 0;
     while key_index <= last_index {
         const actual_index: usize = arg_offset + key_index as usize;
         const key: &[byte] = command_arg_data(command, actual_index) catch {
             return false;
         };
-        if !connection_acl_user_key_allowed(username, key) {
+        const required_permissions: u8 = connection_acl_static_key_permissions(info, command, arg_offset, full_argc, key_ordinal);
+        if !connection_acl_user_key_allowed(username, key, required_permissions) {
             return true;
         }
+        key_ordinal = key_ordinal + 1;
         key_index = key_index + info.key_step;
     }
     return false;
@@ -4029,7 +4163,8 @@ fn connection_acl_selector_command_key_denied(selector: &ConnectionAclSelector, 
             const dynamic_key: &[byte] = command_arg_data(command, arg_offset + dynamic_key_index) catch {
                 return false;
             };
-            if !connection_acl_key_allowed_by_patterns(selector.allkeys, selector.key_patterns[0: CONNECTION_ACL_SELECTOR_PATTERN_MAX], dynamic_key) {
+            const required_permissions: u8 = connection_acl_dynamic_key_permissions(info, &dynamic_spec, dynamic_key_ordinal);
+            if !connection_acl_key_allowed_by_patterns(selector.allkeys, selector.key_patterns[0: CONNECTION_ACL_SELECTOR_PATTERN_MAX], dynamic_key, required_permissions) {
                 return true;
             }
             dynamic_key_ordinal = dynamic_key_ordinal + 1;
@@ -4049,7 +4184,7 @@ fn connection_acl_selector_command_key_denied(selector: &ConnectionAclSelector, 
         const key: &[byte] = command_arg_data(command, arg_offset + 2) catch {
             return false;
         };
-        return !connection_acl_key_allowed_by_patterns(selector.allkeys, selector.key_patterns[0: CONNECTION_ACL_SELECTOR_PATTERN_MAX], key);
+        return !connection_acl_key_allowed_by_patterns(selector.allkeys, selector.key_patterns[0: CONNECTION_ACL_SELECTOR_PATTERN_MAX], key, CONNECTION_ACL_KEY_PERMISSION_WRITE);
     }
     const key_count: usize = connection_acl_count_range_keys(info, full_argc);
     if key_count == 0 || selector.allkeys {
@@ -4060,13 +4195,16 @@ fn connection_acl_selector_command_key_denied(selector: &ConnectionAclSelector, 
         last_index = full_argc as i32 + info.last_key;
     }
     var key_index: i32 = info.first_key;
+    var key_ordinal: usize = 0;
     while key_index <= last_index {
         const key: &[byte] = command_arg_data(command, arg_offset + key_index as usize) catch {
             return false;
         };
-        if !connection_acl_key_allowed_by_patterns(selector.allkeys, selector.key_patterns[0: CONNECTION_ACL_SELECTOR_PATTERN_MAX], key) {
+        const required_permissions: u8 = connection_acl_static_key_permissions(info, command, arg_offset, full_argc, key_ordinal);
+        if !connection_acl_key_allowed_by_patterns(selector.allkeys, selector.key_patterns[0: CONNECTION_ACL_SELECTOR_PATTERN_MAX], key, required_permissions) {
             return true;
         }
+        key_ordinal = key_ordinal + 1;
         key_index = key_index + info.key_step;
     }
     return false;
@@ -4367,7 +4505,13 @@ fn connection_acl_append_key_rules(raw: &Sds, allkeys: bool, patterns: &[Connect
             if first == false {
                 try sds_cat(raw, &" "[0: 1]);
             }
-            try sds_cat(raw, &"~"[0: 1]);
+            if patterns.ptr[index].permissions == CONNECTION_ACL_KEY_PERMISSION_READ {
+                try sds_cat(raw, &"%R~"[0: 3]);
+            } else if patterns.ptr[index].permissions == CONNECTION_ACL_KEY_PERMISSION_WRITE {
+                try sds_cat(raw, &"%W~"[0: 3]);
+            } else {
+                try sds_cat(raw, &"~"[0: 1]);
+            }
             try sds_cat(raw, patterns.ptr[index].pattern[0: patterns.ptr[index].pattern_len]);
             first = false;
         }
@@ -5023,7 +5167,7 @@ fn connection_acl_setuser_key_modifier_known(modifier: &[byte]) bool {
         connection_keyword_eq(modifier, &"RESETKEYS"[0: 9]) {
         return true;
     }
-    return modifier.len > 1 && modifier.ptr[0] == 126 as byte;
+    return modifier.len > 0 && (modifier.ptr[0] == 126 as byte || modifier.ptr[0] == 37 as byte);
 }
 
 fn connection_acl_setuser_channel_modifier_known(modifier: &[byte]) bool {
@@ -5192,20 +5336,40 @@ fn connection_acl_key_patterns_apply_modifier(allkeys: &bool, patterns: &[Connec
         connection_acl_key_patterns_clear(patterns);
         return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
     }
-    if modifier.len <= 1 || modifier.ptr[0] != 126 as byte {
+    if modifier.len == 0 {
         return connection_acl_setuser_modifier_error(modifier, &"': Syntax error"[0: 15]);
     }
-    const pattern: &[byte] = modifier[1: modifier.len - 1];
-    if pattern.len == 0 {
+    var permissions: u8 = CONNECTION_ACL_KEY_PERMISSION_BOTH;
+    var pattern_start: usize = 1;
+    if modifier.ptr[0] == 37 as byte {
+        permissions = 0u8;
+        var index: usize = 1;
+        while index < modifier.len && modifier.ptr[index] != 126 as byte {
+            const direction: byte = connection_ascii_lower(modifier.ptr[index]);
+            if direction == 114 as byte {
+                permissions = permissions | CONNECTION_ACL_KEY_PERMISSION_READ;
+            } else if direction == 119 as byte {
+                permissions = permissions | CONNECTION_ACL_KEY_PERMISSION_WRITE;
+            } else {
+                return connection_acl_setuser_modifier_error(modifier, &"': Syntax error"[0: 15]);
+            }
+            index = index + 1;
+        }
+        if permissions == 0u8 || index >= modifier.len || modifier.ptr[index] != 126 as byte {
+            return connection_acl_setuser_modifier_error(modifier, &"': Syntax error"[0: 15]);
+        }
+        pattern_start = index + 1;
+    } else if modifier.ptr[0] != 126 as byte {
         return connection_acl_setuser_modifier_error(modifier, &"': Syntax error"[0: 15]);
     }
-    if connection_slice_eq(pattern, &"*"[0: 1]) {
+    const pattern: &[byte] = modifier[pattern_start: modifier.len - pattern_start];
+    if permissions == CONNECTION_ACL_KEY_PERMISSION_BOTH && connection_slice_eq(pattern, &"*"[0: 1]) {
         *allkeys = true;
         connection_acl_key_patterns_clear(patterns);
         return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
     }
     *allkeys = false;
-    _ = connection_acl_key_pattern_add(patterns, pattern) catch {
+    _ = connection_acl_key_pattern_add(patterns, pattern, permissions) catch {
         return connection_error_reply(&"ERR ACL SETUSER redis-uya partial key pattern list is full"[0: 58]);
     };
     return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);

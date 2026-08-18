@@ -2055,8 +2055,9 @@ def run_smoke() -> None:
                 not isinstance(hgetex_getkeysandflags, list)
                 or len(hgetex_getkeysandflags) != 1
                 or hgetex_getkeysandflags[0][0] != b"hash"
-                or b"RO" not in hgetex_getkeysandflags[0][1]
+                or b"RW" not in hgetex_getkeysandflags[0][1]
                 or b"access" not in hgetex_getkeysandflags[0][1]
+                or b"update" not in hgetex_getkeysandflags[0][1]
             ):
                 raise AssertionError(f"unexpected COMMAND GETKEYSANDFLAGS HGETEX keys: {hgetex_getkeysandflags!r}")
 

@@ -459,6 +459,8 @@ enum ConnectionAclPermissionResult {
     connection_acl_permission_channel_denied,
 }
 
+var connection_acl_default_enabled: bool = true;
+var connection_acl_default_nopass: bool = true;
 var connection_acl_default_allcommands: bool = true;
 var connection_acl_default_next_rule_order: u32 = 0u32;
 var connection_acl_default_allowed_commands: [ConnectionAclSelectorRule: CONNECTION_ACL_DENIED_COMMAND_MAX] = [];
@@ -495,6 +497,8 @@ struct ConnectionAclUser {
 }
 
 var connection_acl_users: [ConnectionAclUser: CONNECTION_ACL_USER_MAX] = [];
+var connection_acl_load_backup_default_enabled: bool = true;
+var connection_acl_load_backup_default_nopass: bool = true;
 var connection_acl_load_backup_default_allcommands: bool = true;
 var connection_acl_load_backup_default_next_rule_order: u32 = 0u32;
 var connection_acl_load_backup_default_allowed_commands: [ConnectionAclSelectorRule: CONNECTION_ACL_DENIED_COMMAND_MAX] = [];
@@ -2938,6 +2942,8 @@ fn connection_acl_user_delete(username: &[byte]) bool {
 }
 
 export fn connection_acl_reset_for_test() void {
+    connection_acl_default_enabled = true;
+    connection_acl_default_nopass = true;
     connection_acl_default_clear_command_rules(true);
     connection_acl_default_key_patterns_reset_allkeys();
     connection_acl_default_channel_patterns_reset_allchannels();
@@ -5136,6 +5142,29 @@ fn connection_acl_default_password_hashes_migrate(config: &ServerConfig) !void {
     connection_acl_default_password_hashes_sync_legacy(config);
 }
 
+fn connection_acl_default_password_configured(config: &ServerConfig) bool {
+    return config.requirepass[0] != 0 as byte || config.requirepass_hash_set || config.requirepass_hash_count > 0;
+}
+
+fn connection_acl_default_effective_nopass(runtime: &CommandRuntimeInfo) bool {
+    return connection_acl_default_nopass && !connection_acl_default_password_configured(&runtime.config);
+}
+
+fn connection_acl_default_reset(config: &ServerConfig) void {
+    connection_acl_default_enabled = false;
+    connection_acl_default_nopass = false;
+    connection_acl_password_hashes_clear(
+        config.requirepass_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES],
+        &config.requirepass_hash_count,
+    );
+    connection_acl_default_password_hashes_sync_legacy(config);
+    connection_acl_default_clear_command_rules(false);
+    connection_acl_default_key_patterns_resetkeys();
+    connection_acl_default_channel_rules.allchannels = false;
+    connection_acl_channel_patterns_clear(connection_acl_default_channel_rules.patterns[0: CONNECTION_ACL_CHANNEL_PATTERN_MAX]);
+    connection_acl_default_selectors_clear();
+}
+
 fn connection_acl_setuser_modifier_error(modifier: &[byte], suffix: &[byte]) CommandReply {
     var err: Sds = sds_empty() catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
@@ -5779,8 +5808,32 @@ fn connection_acl_handle_setuser(runtime: &CommandRuntimeInfo, router: &CommandR
         const modifier: &[byte] = command_arg_data(command, index) catch {
             return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
         };
-        if connection_keyword_eq(modifier, &"NOPASS"[0: 6]) ||
-            connection_keyword_eq(modifier, &"RESETPASS"[0: 9]) {
+        if connection_keyword_eq(modifier, &"ON"[0: 2]) {
+            connection_acl_default_enabled = true;
+            index = index + 1;
+            continue;
+        }
+        if connection_keyword_eq(modifier, &"OFF"[0: 3]) {
+            connection_acl_default_enabled = false;
+            index = index + 1;
+            continue;
+        }
+        if connection_keyword_eq(modifier, &"RESET"[0: 5]) {
+            connection_acl_default_reset(&runtime.pending_config);
+            index = index + 1;
+            continue;
+        }
+        if connection_keyword_eq(modifier, &"NOPASS"[0: 6]) {
+            connection_acl_default_nopass = true;
+            connection_acl_password_hashes_clear(
+                runtime.pending_config.requirepass_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES],
+                &runtime.pending_config.requirepass_hash_count,
+            );
+            index = index + 1;
+            continue;
+        }
+        if connection_keyword_eq(modifier, &"RESETPASS"[0: 9]) {
+            connection_acl_default_nopass = false;
             connection_acl_password_hashes_clear(
                 runtime.pending_config.requirepass_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES],
                 &runtime.pending_config.requirepass_hash_count,
@@ -5819,6 +5872,7 @@ fn connection_acl_handle_setuser(runtime: &CommandRuntimeInfo, router: &CommandR
             ) catch {
                 return connection_error_reply(&"ERR ACL SETUSER redis-uya password list is full"[0: 47]);
             };
+            connection_acl_default_nopass = false;
             index = index + 1;
             continue;
         }
@@ -5837,6 +5891,7 @@ fn connection_acl_handle_setuser(runtime: &CommandRuntimeInfo, router: &CommandR
             ) catch {
                 return connection_error_reply(&"ERR ACL SETUSER redis-uya password list is full"[0: 47]);
             };
+            connection_acl_default_nopass = false;
             index = index + 1;
             continue;
         }
@@ -5851,6 +5906,7 @@ fn connection_acl_handle_setuser(runtime: &CommandRuntimeInfo, router: &CommandR
             ) {
                 return connection_acl_setuser_modifier_error(modifier, &"': The password you are trying to remove from the user does not exist"[0: 69]);
             }
+            connection_acl_default_nopass = false;
             index = index + 1;
             continue;
         }
@@ -5869,6 +5925,7 @@ fn connection_acl_handle_setuser(runtime: &CommandRuntimeInfo, router: &CommandR
             ) {
                 return connection_acl_setuser_modifier_error(modifier, &"': The password you are trying to remove from the user does not exist"[0: 69]);
             }
+            connection_acl_default_nopass = false;
             index = index + 1;
             continue;
         }
@@ -6045,9 +6102,18 @@ fn connection_acl_handle_list(runtime: &CommandRuntimeInfo) CommandReply {
     defer {
         sds_free(&line);
     }
-    _ = sds_cat(&line, &"user default on "[0: 16]) catch {
+    _ = sds_cat(&line, &"user default "[0: 13]) catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
+    if connection_acl_default_enabled {
+        _ = sds_cat(&line, &"on "[0: 3]) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+    } else {
+        _ = sds_cat(&line, &"off "[0: 4]) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+    }
     if runtime.config.requirepass_hash_count > 0 {
         _ = connection_acl_append_password_hash_rules(
             &line,
@@ -6063,8 +6129,12 @@ fn connection_acl_handle_list(runtime: &CommandRuntimeInfo) CommandReply {
             _ = sds_cat(&line, password_marker[0: password_marker_len]) catch {
                 return connection_error_reply(&"ERR out of memory"[0: 17]);
             };
-        } else {
+        } else if connection_acl_default_effective_nopass(runtime) {
             _ = sds_cat(&line, &"nopass"[0: 6]) catch {
+                return connection_error_reply(&"ERR out of memory"[0: 17]);
+            };
+        } else {
+            _ = sds_cat(&line, &"resetpass"[0: 9]) catch {
                 return connection_error_reply(&"ERR out of memory"[0: 17]);
             };
         }
@@ -6262,7 +6332,8 @@ fn connection_acl_handle_getuser(runtime: &CommandRuntimeInfo, command: &Command
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
     const default_password_count: usize = runtime.config.requirepass_hash_count;
-    if default_password_count > 0 || password_marker_len > 0 {
+    const default_nopass: bool = connection_acl_default_effective_nopass(runtime);
+    if !default_nopass {
         _ = connection_sds_append_resp_array_header(&raw, 1) catch {
             return connection_error_reply(&"ERR out of memory"[0: 17]);
         };
@@ -6271,10 +6342,16 @@ fn connection_acl_handle_getuser(runtime: &CommandRuntimeInfo, command: &Command
             return connection_error_reply(&"ERR out of memory"[0: 17]);
         };
     }
-    _ = connection_sds_append_resp_bulk(&raw, &"on"[0: 2]) catch {
-        return connection_error_reply(&"ERR out of memory"[0: 17]);
-    };
-    if password_marker_len == 0 {
+    if connection_acl_default_enabled {
+        _ = connection_sds_append_resp_bulk(&raw, &"on"[0: 2]) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+    } else {
+        _ = connection_sds_append_resp_bulk(&raw, &"off"[0: 3]) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+    }
+    if default_nopass {
         _ = connection_sds_append_resp_bulk(&raw, &"nopass"[0: 6]) catch {
             return connection_error_reply(&"ERR out of memory"[0: 17]);
         };
@@ -6677,7 +6754,12 @@ fn connection_acl_append_default_file_line(raw: &Sds, runtime: &CommandRuntimeIn
         !connection_acl_file_default_selectors_safe() {
         return error.ConnectionAclFileInvalid;
     }
-    try sds_cat(raw, &"user default on "[0: 16]);
+    try sds_cat(raw, &"user default "[0: 13]);
+    if connection_acl_default_enabled {
+        try sds_cat(raw, &"on "[0: 3]);
+    } else {
+        try sds_cat(raw, &"off "[0: 4]);
+    }
     if runtime.config.requirepass_hash_count > 0 {
         try connection_acl_append_password_hash_rules(
             raw,
@@ -6689,8 +6771,10 @@ fn connection_acl_append_default_file_line(raw: &Sds, runtime: &CommandRuntimeIn
         const password_marker_len: usize = connection_acl_default_password_marker(runtime, password_marker[0: CONNECTION_ACL_PASSWORD_HASH_HEX_BYTES + 1]);
         if password_marker_len > 0 {
             try sds_cat(raw, password_marker[0: password_marker_len]);
-        } else {
+        } else if connection_acl_default_effective_nopass(runtime) {
             try sds_cat(raw, &"nopass"[0: 6]);
+        } else {
+            try sds_cat(raw, &"resetpass"[0: 9]);
         }
     }
     try sds_cat(raw, &" "[0: 1]);
@@ -6793,6 +6877,8 @@ export fn connection_acl_save_file(runtime: &CommandRuntimeInfo) !void {
 }
 
 fn connection_acl_load_snapshot(runtime: &CommandRuntimeInfo) void {
+    connection_acl_load_backup_default_enabled = connection_acl_default_enabled;
+    connection_acl_load_backup_default_nopass = connection_acl_default_nopass;
     connection_acl_load_backup_default_allcommands = connection_acl_default_allcommands;
     connection_acl_load_backup_default_next_rule_order = connection_acl_default_next_rule_order;
     var command_index: usize = 0;
@@ -6825,6 +6911,8 @@ fn connection_acl_load_snapshot(runtime: &CommandRuntimeInfo) void {
 }
 
 fn connection_acl_load_restore(runtime: &CommandRuntimeInfo) void {
+    connection_acl_default_enabled = connection_acl_load_backup_default_enabled;
+    connection_acl_default_nopass = connection_acl_load_backup_default_nopass;
     connection_acl_default_allcommands = connection_acl_load_backup_default_allcommands;
     connection_acl_default_next_rule_order = connection_acl_load_backup_default_next_rule_order;
     var command_index: usize = 0;
@@ -6883,6 +6971,15 @@ fn connection_acl_file_next_token(line: &[byte], pos: &usize) &[byte] {
 
 fn connection_acl_file_apply_default_modifier(runtime: &CommandRuntimeInfo, router: &CommandRouter, modifier: &[byte]) !void {
     if connection_keyword_eq(modifier, &"ON"[0: 2]) {
+        connection_acl_default_enabled = true;
+        return;
+    }
+    if connection_keyword_eq(modifier, &"OFF"[0: 3]) {
+        connection_acl_default_enabled = false;
+        return;
+    }
+    if connection_keyword_eq(modifier, &"RESET"[0: 5]) {
+        connection_acl_default_reset(&runtime.pending_config);
         return;
     }
     if connection_keyword_eq(modifier, &"CLEARSELECTORS"[0: 14]) ||
@@ -6896,7 +6993,16 @@ fn connection_acl_file_apply_default_modifier(runtime: &CommandRuntimeInfo, rout
         try connection_acl_default_selector_add(&selector);
         return;
     }
-    if connection_keyword_eq(modifier, &"NOPASS"[0: 6]) || connection_keyword_eq(modifier, &"RESETPASS"[0: 9]) {
+    if connection_keyword_eq(modifier, &"NOPASS"[0: 6]) {
+        connection_acl_default_nopass = true;
+        connection_acl_password_hashes_clear(
+            runtime.pending_config.requirepass_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES],
+            &runtime.pending_config.requirepass_hash_count,
+        );
+        return;
+    }
+    if connection_keyword_eq(modifier, &"RESETPASS"[0: 9]) {
+        connection_acl_default_nopass = false;
         connection_acl_password_hashes_clear(
             runtime.pending_config.requirepass_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES],
             &runtime.pending_config.requirepass_hash_count,
@@ -6915,6 +7021,7 @@ fn connection_acl_file_apply_default_modifier(runtime: &CommandRuntimeInfo, rout
             &runtime.pending_config.requirepass_hash_count,
             hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES],
         );
+        connection_acl_default_nopass = false;
         return;
     }
     if modifier.len > 1 && modifier.ptr[0] == 35 as byte {
@@ -6925,6 +7032,7 @@ fn connection_acl_file_apply_default_modifier(runtime: &CommandRuntimeInfo, rout
             &runtime.pending_config.requirepass_hash_count,
             hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES],
         );
+        connection_acl_default_nopass = false;
         return;
     }
     if connection_acl_setuser_key_modifier_known(modifier) {
@@ -7132,16 +7240,8 @@ export fn connection_acl_load_file(runtime: &CommandRuntimeInfo, router: &Comman
     }
 
     connection_acl_load_snapshot(runtime);
-    connection_acl_default_clear_command_rules(true);
-    connection_acl_default_key_patterns_reset_allkeys();
-    connection_acl_default_channel_patterns_reset_allchannels();
-    connection_acl_default_selectors_clear();
+    connection_acl_default_reset(&runtime.pending_config);
     connection_acl_users_clear_all();
-    connection_acl_bytes_clear(runtime.pending_config.requirepass[0: 128]);
-    runtime.pending_config.requirepass_hash_set = false;
-    connection_acl_bytes_clear(runtime.pending_config.requirepass_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES]);
-    runtime.pending_config.requirepass_hash_count = 0;
-    connection_acl_bytes_clear(runtime.pending_config.requirepass_hashes[0: CONNECTION_ACL_PASSWORD_HASH_STORAGE_BYTES]);
     var saw_default: bool = false;
     var start: usize = 0;
     var index: usize = 0;
@@ -8591,7 +8691,7 @@ fn connection_requirepass(runtime: &CommandRuntimeInfo) &[byte] {
 }
 
 fn connection_auth_required(runtime: &CommandRuntimeInfo) bool {
-    return runtime.config.requirepass[0] != 0 as byte || runtime.config.requirepass_hash_set || runtime.config.requirepass_hash_count > 0;
+    return !connection_acl_default_enabled || !connection_acl_default_effective_nopass(runtime);
 }
 
 fn connection_default_password_matches(runtime: &CommandRuntimeInfo, password: &[byte]) bool {
@@ -8631,9 +8731,23 @@ fn connection_authenticated_named_user_valid(tx: &ConnectionTransaction) bool {
 
 fn connection_auth_ok(tx: &ConnectionTransaction, runtime: &CommandRuntimeInfo) bool {
     if !connection_auth_required(runtime) {
+        if tx != null && !tx.authenticated {
+            tx.authenticated = true;
+            connection_clear_authenticated_user(tx);
+        }
         return true;
     }
     return tx != null && tx.authenticated && connection_authenticated_named_user_valid(tx);
+}
+
+export fn connection_transaction_initialize_auth(tx: &ConnectionTransaction, runtime: &CommandRuntimeInfo) void {
+    if tx == null {
+        return;
+    }
+    if !connection_auth_required(runtime) {
+        tx.authenticated = true;
+        connection_clear_authenticated_user(tx);
+    }
 }
 
 fn connection_noauth_reply() CommandReply {
@@ -8701,9 +8815,19 @@ fn connection_handle_auth_state(tx: &ConnectionTransaction, runtime: &CommandRun
                 };
                 return connection_authenticate_named_user(tx, username_no_pass, named_password_no_pass);
             }
+            if !connection_acl_default_enabled || !connection_acl_default_nopass {
+                tx.authenticated = false;
+                connection_clear_authenticated_user(tx);
+                return connection_wrongpass_reply();
+            }
             tx.authenticated = true;
             connection_set_authenticated_user(tx, &"default"[0: 7]);
             return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
+        }
+        if !connection_acl_default_enabled || !connection_acl_default_nopass {
+            tx.authenticated = false;
+            connection_clear_authenticated_user(tx);
+            return connection_wrongpass_reply();
         }
         return connection_auth_no_password_reply();
     }
@@ -8728,7 +8852,7 @@ fn connection_handle_auth_state(tx: &ConnectionTransaction, runtime: &CommandRun
         };
     }
 
-    if !connection_default_password_matches(runtime, password) {
+    if !connection_acl_default_enabled || !connection_default_password_matches(runtime, password) {
         tx.authenticated = false;
         connection_clear_authenticated_user(tx);
         return connection_wrongpass_reply();
@@ -8749,7 +8873,17 @@ fn connection_authenticate_username_password(tx: &ConnectionTransaction, runtime
     if !connection_keyword_eq(username, &"default"[0: 7]) {
         return connection_authenticate_named_user(tx, username, password);
     }
+    if !connection_acl_default_enabled {
+        tx.authenticated = false;
+        connection_clear_authenticated_user(tx);
+        return connection_wrongpass_reply();
+    }
     if requirepass.len == 0 && !runtime.config.requirepass_hash_set && runtime.config.requirepass_hash_count == 0 {
+        if !connection_acl_default_nopass {
+            tx.authenticated = false;
+            connection_clear_authenticated_user(tx);
+            return connection_wrongpass_reply();
+        }
         tx.authenticated = true;
         connection_set_authenticated_user(tx, &"default"[0: 7]);
         return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);

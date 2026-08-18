@@ -182,6 +182,7 @@ def run_smoke() -> None:
             if config_value(admin, b"aclfile") != str(acl_path).encode():
                 raise AssertionError("CONFIG GET aclfile mismatch")
 
+            idle_default = connect_with_retry(port)
             if send_command(admin, b"ACL", b"SETUSER", b"default", b"resetpass", b">rootpass", b">rootpass2", b">rootpass") != "OK":
                 raise AssertionError("failed to set default ACL passwords")
             root_hash = b"5012f5182061c46e57859cf617128c6f70eddfba4db27772bdede5a039fa7085"
@@ -306,6 +307,77 @@ def run_smoke() -> None:
                     raise AssertionError("GETSET did not require and accept read-write permission")
             if acl_getuser_field(admin, b"directional", b"keys") != b"%R~read:* %W~write:* ~both:*":
                 raise AssertionError("ACL GETUSER did not preserve directional key patterns")
+
+            if send_command(admin, b"ACL", b"SETUSER", b"operator", b"on", b"nopass", b"+@all", b"allkeys", b"allchannels") != "OK":
+                raise AssertionError("failed to create default-state test operator")
+            try:
+                with authenticate(port, b"operator", b"ignored") as operator:
+                    if send_command(operator, b"ACL", b"SETUSER", b"default", b"off") != "OK":
+                        raise AssertionError("failed to disable the default user")
+                    if send_command(admin, b"PING") != "PONG":
+                        raise AssertionError("disabling the default user invalidated an active connection")
+                    if send_command(idle_default, b"PING") != "PONG":
+                        raise AssertionError("disabling the default user invalidated a pre-existing idle connection")
+                    expect_auth_error(port, b"default", b"rootpass")
+                    if acl_getuser_field(operator, b"default", b"flags") != [b"off"]:
+                        raise AssertionError("ACL GETUSER did not expose the disabled default user")
+
+                    if send_command(operator, b"ACL", b"SETUSER", b"default", b"on") != "OK":
+                        raise AssertionError("failed to re-enable the default user")
+                    with authenticate(port, b"default", b"rootpass"):
+                        pass
+                    if send_command(operator, b"ACL", b"SETUSER", b"default", b"(~temporary* +get)") != "OK":
+                        raise AssertionError("failed to add the default reset selector")
+
+                    if send_command(operator, b"ACL", b"SETUSER", b"default", b"reset") != "OK":
+                        raise AssertionError("failed to reset the default user")
+                    if acl_getuser_field(operator, b"default", b"flags") != [b"off"]:
+                        raise AssertionError("default reset did not disable the user")
+                    if acl_getuser_field(operator, b"default", b"passwords") != []:
+                        raise AssertionError("default reset did not clear passwords")
+                    if acl_getuser_field(operator, b"default", b"commands") != b"-@all":
+                        raise AssertionError("default reset did not clear command permissions")
+                    if acl_getuser_field(operator, b"default", b"keys") != b"resetkeys":
+                        raise AssertionError("default reset did not clear key patterns")
+                    if acl_getuser_field(operator, b"default", b"channels") != b"resetchannels":
+                        raise AssertionError("default reset did not clear channel patterns")
+                    if acl_getuser_field(operator, b"default", b"selectors") != []:
+                        raise AssertionError("default reset did not clear selectors")
+                    expect_auth_error(port, b"default", b"rootpass")
+
+                    if send_command(operator, b"ACL", b"SAVE") != "OK":
+                        raise AssertionError("failed to save the reset default user")
+                    reset_saved = acl_path.read_bytes()
+                    if b"user default off resetpass resetkeys resetchannels -@all\n" not in reset_saved:
+                        raise AssertionError(f"ACL SAVE omitted the reset default state: {reset_saved!r}")
+                    if send_command(operator, b"ACL", b"SETUSER", b"default", b"on", b"nopass", b"allkeys", b"allchannels", b"+@all") != "OK":
+                        raise AssertionError("failed to mutate the default user before reset-state load")
+                    if send_command(operator, b"ACL", b"LOAD") != "OK":
+                        raise AssertionError("failed to load the reset default user")
+                    if acl_getuser_field(operator, b"default", b"flags") != [b"off"]:
+                        raise AssertionError("ACL LOAD did not restore the default enabled state")
+                    if acl_getuser_field(operator, b"default", b"commands") != b"-@all":
+                        raise AssertionError("ACL LOAD did not restore default command permissions")
+
+                    if send_command(
+                        operator,
+                        b"ACL",
+                        b"SETUSER",
+                        b"default",
+                        b"on",
+                        b"resetpass",
+                        b"#" + root_hash,
+                        b"#" + root2_hash,
+                        b"allkeys",
+                        b"allchannels",
+                        b"+@all",
+                    ) != "OK":
+                        raise AssertionError("failed to restore the default user after reset-state load")
+            finally:
+                idle_default.close()
+            if send_command(admin, b"ACL", b"DELUSER", b"operator") != 1:
+                raise AssertionError("failed to remove default-state test operator")
+
             Path(f"{acl_path}.tmp").write_text("stale")
             Path(f"{acl_path}.tmp").chmod(0o666)
             if send_command(admin, b"ACL", b"SAVE") != "OK":
@@ -358,7 +430,7 @@ def run_smoke() -> None:
             if send_command(admin, b"ACL", b"LOAD") != "OK":
                 raise AssertionError("ACL LOAD failed to restore the canonical test state")
 
-            if send_command(admin, b"ACL", b"SETUSER", b"default", b">changedroot") != "OK":
+            if send_command(admin, b"ACL", b"SETUSER", b"default", b"off", b">changedroot") != "OK":
                 raise AssertionError("failed to mutate default password")
             if send_command(admin, b"ACL", b"SETUSER", b"app", b">changed", b"allkeys", b"allchannels", b"+del", b"+set", b"+publish", b"+@admin", b"clearselectors") != "OK":
                 raise AssertionError("failed to mutate app user")
@@ -367,6 +439,11 @@ def run_smoke() -> None:
 
             acl_path.write_bytes(saved + b"user app on >duplicate ~* &* +@all\n")
             expect_error(admin, "Error loading the ACLs", b"ACL", b"LOAD")
+            if acl_getuser_field(admin, b"default", b"flags") != [b"off"]:
+                raise AssertionError("failed ACL LOAD changed the default enabled state")
+            expect_auth_error(port, b"default", b"changedroot")
+            if send_command(admin, b"ACL", b"SETUSER", b"default", b"on") != "OK":
+                raise AssertionError("failed to re-enable the rolled-back default user")
             with authenticate(port, b"default", b"changedroot") as changed_default:
                 if send_command(changed_default, b"PING") != "PONG":
                     raise AssertionError("failed ACL LOAD changed the default user")

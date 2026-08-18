@@ -75,7 +75,7 @@ AUTH username password
 
 说明：
 
-- 当前安全基线支持默认用户 `default` 的 `requirepass` 认证，以及通过 `ACL SETUSER <name> on >password` 创建的 named user 进程内口令认证；named user 认证成功后 `ACL WHOAMI` 返回该用户名
+- 当前安全基线支持默认用户 `default` 的 `requirepass`/多摘要认证和 `on/off/reset` 生命周期，以及通过 `ACL SETUSER <name> on >password` 创建的 named user 进程内口令认证；named user 认证成功后 `ACL WHOAMI` 返回该用户名
 - 启用 `requirepass` 后，除 `AUTH` / `QUIT` / `RESET` 外的普通命令在认证前返回 `-NOAUTH Authentication required.`
 
 ### `ACL`
@@ -104,14 +104,14 @@ ACL WHOAMI
 - `ACL DELUSER missing` 当前返回 `0`；删除已创建的 named user 返回删除数量；尝试删除 `default` 会返回 Redis 兼容错误
 - `ACL DRYRUN username command [arg ...]` 当前会检查用户存在性、命令存在性、arity、基础命令 whitelist/deny 规则、固定 key range、脚本/函数声明键、MPOP、set cardinality、MSETEX、zset 聚合/store、`GEOSEARCHSTORE`、`GEORADIUS[BYMEMBER] STORE/STOREDIST`、`ZRANGESTORE`、`XREAD/XREADGROUP`、`XGROUP/XINFO` key 子命令、`SORT [STORE]` 与 `MEMORY USAGE` 动态键，以及 Pub/Sub channel pattern；基础规则和 selector 都要求请求中的全部键匹配同一授权路径，未知用户和未知命令返回 Redis 兼容错误，被当前用户命令、key pattern 或 channel pattern 规则禁用的命令返回 `NOPERM`
 - `ACL GENPASS` 返回 256-bit 口径的 64 字符十六进制口令；`ACL GENPASS bits` 返回 `ceil(bits / 4)` 个十六进制字符，`bits` 取值范围为 `1..4096`
-- `ACL GETUSER default` 返回当前默认用户详情，并在 `commands`、`keys`、`channels` 与 `selectors` 字段中反映当前有序命令/分类 allow/deny、key/channel pattern 和 selector 规则；启用 `requirepass` 或 ACL 哈希口令时 `flags` 不再包含 `nopass`，`passwords` 按插入顺序返回不带 `#` 的 64 位小写十六进制 SHA-256 数组而不暴露明文；已创建 named user 返回同样的 `flags/passwords/commands/keys/channels/selectors` 元数据视图，selector 数组中的每项按 `commands/keys/channels` 六元素键值序列输出；未知用户名返回 null
+- `ACL GETUSER default` 返回当前默认用户详情，`flags` 反映 `on/off` 和有效 `nopass`，`commands`、`keys`、`channels` 与 `selectors` 字段反映当前有序命令/分类 allow/deny、key/channel pattern 和 selector 规则；启用 `requirepass` 或 ACL 哈希口令时 `flags` 不再包含 `nopass`，`passwords` 按插入顺序返回不带 `#` 的 64 位小写十六进制 SHA-256 数组而不暴露明文；已创建 named user 返回同样的元数据视图，selector 数组中的每项按 `commands/keys/channels` 六元素键值序列输出；未知用户名返回 null
 - `ACL HELP` 返回 Redis 兼容的 ACL 子命令帮助数组
 - `ACL LIST` 返回当前默认用户和已创建 named user 的 config file 格式描述；默认是 `user default on nopass ~* &* +@all`，基础命令/key/channel 规则之后按插入顺序追加括号包围的 selector，例如 `(~safe* &news* -@all +get +publish)`
-- `ACL LOAD` 从 `aclfile` 指定文件原子加载默认用户、named user、每用户最多 8 个并存口令、基础命令 whitelist/deny 规则、key/channel pattern 和 selector；named user 行支持 `reset`，默认用户、named user 与 selector 均支持 `allcommands/nocommands`。括号内含空白的 selector 作为单个 modifier 解析。重复摘要去重并保留首次插入顺序，文件不可读、超过 64 KiB、容量超限、括号不完整、缺少或重复 `default`、重复 named user、包含未支持 modifier 时返回错误并完整恢复加载前状态
+- `ACL LOAD` 从 `aclfile` 指定文件原子加载默认用户、named user、默认 enabled/nopass、每用户最多 8 个并存口令、基础命令 whitelist/deny 规则、key/channel pattern 和 selector；两类用户行均支持 `on/off/reset`，默认用户、named user 与 selector 均支持 `allcommands/nocommands`。括号内含空白的 selector 作为单个 modifier 解析。重复摘要去重并保留首次插入顺序，文件不可读、超过 64 KiB、容量超限、括号不完整、缺少或重复 `default`、重复 named user、包含未支持 modifier 时返回错误并完整恢复加载前状态
 - `ACL LOG [count]` 当前返回命令权限、key pattern 权限和 channel pattern 权限拒绝的进程内 ring 日志，覆盖 `ACL DRYRUN`、真实命令、事务队列前置拒绝和脚本内部命令拒绝产生的 `NOPERM`，字段包含 `reason/context/object/username/age-seconds/client-info/entry-id/timestamp-created/timestamp-last-updated/count`，其中 `client-info` 会记录拒绝发生时的真实连接 `id/addr/laddr`；`ACL LOG RESET` 会清空该日志
 - `ACL SAVE` 把当前支持的 ACL 状态规范化写到 `aclfile`：口令只保存为 `#` 加 64 位小写十六进制 SHA-256；临时文件以 `0600` 排他创建，完整写入并关闭后再原子 rename；保存失败会保留原文件并清理临时文件。未配置 `aclfile` 时返回 Redis 兼容错误
-- `ACL SETUSER default [attribute ...]` 当前支持 `on`、`nopass`、`resetpass`、`>password`、`<password`、`#hash`、`!hash`、`allcommands/nocommands`、基础命令/分类/key/channel 规则、`clearselectors` / `resetselectors`，以及括号 selector；默认用户最多保存 8 个并存 SHA-256 摘要和 8 个 selector。当前默认用户不支持整体 `reset`，因为其独立 enabled/off 状态尚未建模
-- `ACL SETUSER <named-user> [attribute ...]` 支持同样的口令、基础规则和 selector，并额外支持 `off` 与整体 `reset`。首次创建的 named user 采用 Redis 安全初始状态：`off`、无口令且非 `nopass`、`-@all`、`resetkeys`、`resetchannels`、无 selector；`reset` 原子恢复同一状态。基础命令规则支持 `allcommands/nocommands`、`+@all/-@all`、`+cmd/-cmd`、`+@category/-@category`，按最后匹配规则判定，因此 `-@all +get` 是 whitelist，`-@all +@read -get` 允许其他 read 命令但拒绝 GET；项目既有 `resetcommands` 兼容语义继续恢复 `+@all`。selector 内初始为 `-@all resetkeys resetchannels`，并支持 `allcommands/nocommands`、同样的有序命令规则及 key/channel pattern；一次请求只有在基础用户规则完整允许，或某一个 selector 同时允许命令及该请求的全部 key/channel 时才允许。普通命令、事务、脚本和 `ACL DRYRUN` 共用这一判定
+- `ACL SETUSER default [attribute ...]` 支持 `on/off/reset`、`nopass/resetpass`、`>password`、`<password`、`#hash`、`!hash`、`allcommands/nocommands`、基础命令/分类/key/channel 规则、`clearselectors` / `resetselectors`，以及括号 selector；默认用户最多保存 8 个并存 SHA-256 摘要和 8 个 selector。`reset` 原子恢复 `off`、无口令且非 `nopass`、`-@all`、`resetkeys`、`resetchannels`、无 selector；`off/reset` 后新连接返回 NOAUTH，默认用户 AUTH 返回 WRONGPASS，执行状态切换前已经建立并获得默认免密会话的连接不会被追溯注销，但继续受重置后的实时命令/key/channel 规则限制
+- `ACL SETUSER <named-user> [attribute ...]` 支持同样的生命周期、口令、基础规则和 selector。首次创建的 named user 采用 Redis 安全初始状态：`off`、无口令且非 `nopass`、`-@all`、`resetkeys`、`resetchannels`、无 selector；`reset` 原子恢复同一状态。基础命令规则支持 `allcommands/nocommands`、`+@all/-@all`、`+cmd/-cmd`、`+@category/-@category`，按最后匹配规则判定，因此 `-@all +get` 是 whitelist，`-@all +@read -get` 允许其他 read 命令但拒绝 GET；项目既有 `resetcommands` 兼容语义继续恢复 `+@all`。selector 内初始为 `-@all resetkeys resetchannels`，并支持 `allcommands/nocommands`、同样的有序命令规则及 key/channel pattern；一次请求只有在基础用户规则完整允许，或某一个 selector 同时允许命令及该请求的全部 key/channel 时才允许。普通命令、事务、脚本和 `ACL DRYRUN` 共用这一判定
 - key pattern 支持普通读写规则 `~pattern` 和方向规则 `%R~pattern`、`%W~pattern`、`%RW~pattern`；方向字母大小写和 `RW/WR` 顺序均兼容，输出统一规范化为 `%R~`、`%W~` 或 `~`。同一 glob 分别添加读写方向后合并为 `~pattern`，空 pattern 表示精确匹配空 key。权限需求由 key operation 标签推导：`access` 需要读，`update/insert/delete` 需要写，同时出现则需要读写；无 operation 标签的 key 可由任一方向模式授权。固定键、参数驱动动态键、基础规则和 selector 共用该判定，`SET ... GET`、`GETSET`、`SMOVE`、`COPY`、store 类命令和 Streams 容器命令均按各 key 实际方向检查
 - `ACL USERS` 返回当前已知用户名数组；默认包含 `default`，并追加通过 `ACL SETUSER` 创建且尚未 `ACL DELUSER` 删除的 named user
 - `ACL WHOAMI` 返回当前连接用户名；未进行 named user 认证时为 `default`，`AUTH username password` 或 `HELLO ... AUTH username password` 成功后返回对应 named user
@@ -122,7 +122,7 @@ ACL WHOAMI
 - `COMMAND INFO/LIST/DOCS` 会暴露 `ACL`、`ACL|CAT`、`ACL|DELUSER`、`ACL|DRYRUN`、`ACL|GENPASS`、`ACL|GETUSER`、`ACL|HELP`、`ACL|LIST`、`ACL|LOAD`、`ACL|LOG`、`ACL|SAVE`、`ACL|SETUSER`、`ACL|USERS` 与 `ACL|WHOAMI`
 - `aclfile` 可通过配置文本、`CONFIG GET/SET/REWRITE` 或第八个启动参数设置；不含 `/` 的文件名相对当前 `dir` 解析，含 `/` 的路径按原值使用。启动时指定文件会在进入事件循环前加载，加载失败则启动失败
 - 当前 ACL 文件规范输出每个用户按插入顺序排列的 SHA-256 `#hash` 和 selector，不会保存明文；加载器同时接受多个 `#hash` 和旧版 `>plaintext` token，旧 token 在加载时立即转成摘要。每用户上限为 8 个唯一摘要和 8 个 selector；每个 selector 的 command allow/deny 表各 16 条、category allow/deny 表各 8 条，另有 8 个 key pattern 与 8 个 channel pattern。selector pattern 含空白或括号时 `ACL SAVE` 会拒绝写出，避免产生无法无损加载的文件
-- 当前剩余 ACL 边界包括默认用户整体 `reset` / enabled 状态，以及后续新增命令的动态 key spec / movablekeys 与 operation 标签审计。ACL LOG 仍是进程内状态，不写入 ACL 文件、RDB 或 AOF
+- 当前剩余 ACL 边界包括后续新增命令的动态 key spec / movablekeys 与 operation 标签审计。ACL LOG 仍是进程内状态，不写入 ACL 文件、RDB 或 AOF
 
 ### `COMMAND`
 

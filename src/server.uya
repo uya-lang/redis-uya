@@ -40,6 +40,7 @@ use src.network.connection.connection_client_registry_unregister_tx;
 use src.network.connection.connection_input_contains_write_command;
 use src.network.connection.connection_shift_buffer;
 use src.network.connection.connection_transaction_new;
+use src.network.connection.connection_transaction_initialize_auth;
 use src.network.connection.connection_transaction_reset;
 use src.network.connection.connection_pubsub_unregister_fd;
 use src.network.connection.connection_monitor_unregister_fd;
@@ -2289,6 +2290,7 @@ export fn server_accept_once(server: &RedisServer) !void {
     server.clients[slot].last_interaction_ms = server.event_time_ms;
     server.clients[slot].transaction = connection_transaction_new();
     server.clients[slot].transaction.client_fd = fd;
+    connection_transaction_initialize_auth(&server.clients[slot].transaction, server_runtime_info(server));
     connection_transaction_set_memory_base(
         &server.clients[slot].transaction,
         (@size_of(RedisClient) as usize) + SERVER_OUTPUT_CAP,

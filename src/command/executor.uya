@@ -11174,7 +11174,7 @@ fn command_executor_acl_setuser(command: &Command) CommandReply {
     const username: &[byte] = command_executor_arg(command, 2) catch {
         return command_executor_wrong_arity();
     };
-    if !command_executor_keyword_eq(username, &"default"[0: 7]) {
+    if !command_executor_slice_eq(username, &"default"[0: 7]) {
         return command_executor_owned_error(&"ERR ACL SETUSER redis-uya partial only supports the default user"[0: 64]);
     }
 
@@ -11207,7 +11207,7 @@ fn command_executor_acl_deluser(command: &Command) CommandReply {
         const username: &[byte] = command_executor_arg(command, index) catch {
             return command_executor_wrong_arity();
         };
-        if command_executor_keyword_eq(username, &"default"[0: 7]) {
+        if command_executor_slice_eq(username, &"default"[0: 7]) {
             return command_executor_owned_error(&"ERR The 'default' user cannot be removed"[0: 40]);
         }
         index = index + 1;

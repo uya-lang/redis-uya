@@ -1248,6 +1248,14 @@ export fn test_command_acl_help() !void {
     command_reply_cleanup(&deluser_default_reply);
     resp_value_free(&deluser_default_parsed.value);
 
+    var deluser_uppercase_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nACL\r\n$7\r\nDELUSER\r\n$7\r\nDEFAULT\r\n"[0: 39]);
+    const deluser_uppercase_command: Command = try command_executor_test_command(&router, &deluser_uppercase_parsed);
+    var deluser_uppercase_reply: CommandReply = command_execute_at(&engine, &deluser_uppercase_command, 1000u64);
+    try assert_eq_i32(deluser_uppercase_reply.typ as i32, CommandReplyType.reply_integer as i32);
+    try assert_eq_i32(deluser_uppercase_reply.integer as i32, 0);
+    command_reply_cleanup(&deluser_uppercase_reply);
+    resp_value_free(&deluser_uppercase_parsed.value);
+
     var dryrun_short_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$7\r\ndefault\r\n"[0: 38]);
     const dryrun_short_command: Command = try command_executor_test_command(&router, &dryrun_short_parsed);
     var dryrun_short_reply: CommandReply = command_execute_at(&engine, &dryrun_short_command, 1000u64);
@@ -1327,6 +1335,14 @@ export fn test_command_acl_help() !void {
     try assert_true(command_executor_test_slice_eq(setuser_other_reply.data, &"ERR ACL SETUSER redis-uya partial only supports the default user"[0: 64]));
     command_reply_cleanup(&setuser_other_reply);
     resp_value_free(&setuser_other_parsed.value);
+
+    var setuser_uppercase_parsed: RespParseResult = try parse_resp2(&"*5\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$7\r\nDEFAULT\r\n$2\r\non\r\n$6\r\nnopass\r\n"[0: 59]);
+    const setuser_uppercase_command: Command = try command_executor_test_command(&router, &setuser_uppercase_parsed);
+    var setuser_uppercase_reply: CommandReply = command_execute_at(&engine, &setuser_uppercase_command, 1000u64);
+    try assert_eq_i32(setuser_uppercase_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(setuser_uppercase_reply.data, &"ERR ACL SETUSER redis-uya partial only supports the default user"[0: 64]));
+    command_reply_cleanup(&setuser_uppercase_reply);
+    resp_value_free(&setuser_uppercase_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

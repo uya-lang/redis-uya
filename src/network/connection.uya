@@ -3370,7 +3370,7 @@ fn connection_acl_parent_command_name(name: &[byte]) &[byte] {
 }
 
 fn connection_acl_user_command_denied(username: &[byte], name: &[byte]) bool {
-    if connection_keyword_eq(username, &"default"[0: 7]) {
+    if connection_slice_eq(username, &"default"[0: 7]) {
         return connection_acl_default_command_denied(name);
     }
     const slot: i32 = connection_acl_user_find(username);
@@ -3414,7 +3414,7 @@ fn connection_acl_effective_command_name(command: &Command) &[byte] {
 }
 
 export fn connection_acl_denied_command_count_for_test(username: &[byte]) usize {
-    if connection_keyword_eq(username, &"default"[0: 7]) {
+    if connection_slice_eq(username, &"default"[0: 7]) {
         return connection_acl_default_denied_command_count;
     }
     const slot: i32 = connection_acl_user_find(username);
@@ -3431,7 +3431,7 @@ export fn connection_acl_denied_command_count_for_test(username: &[byte]) usize 
 }
 
 fn connection_acl_user_key_allowed(username: &[byte], key: &[byte], required_permissions: u8) bool {
-    if connection_keyword_eq(username, &"default"[0: 7]) {
+    if connection_slice_eq(username, &"default"[0: 7]) {
         return connection_acl_key_allowed_by_patterns(connection_acl_default_key_rules.allkeys, connection_acl_default_key_rules.patterns[0: CONNECTION_ACL_KEY_PATTERN_MAX], key, required_permissions);
     }
     const slot: i32 = connection_acl_user_find(username);
@@ -3446,7 +3446,7 @@ fn connection_acl_user_key_allowed(username: &[byte], key: &[byte], required_per
 }
 
 fn connection_acl_user_allkeys(username: &[byte]) bool {
-    if connection_keyword_eq(username, &"default"[0: 7]) {
+    if connection_slice_eq(username, &"default"[0: 7]) {
         return connection_acl_default_key_rules.allkeys;
     }
     const slot: i32 = connection_acl_user_find(username);
@@ -3464,7 +3464,7 @@ fn connection_acl_user_allkeys(username: &[byte]) bool {
 }
 
 fn connection_acl_user_channel_allowed(username: &[byte], channel: &[byte]) bool {
-    if connection_keyword_eq(username, &"default"[0: 7]) {
+    if connection_slice_eq(username, &"default"[0: 7]) {
         return connection_acl_channel_allowed_by_patterns(connection_acl_default_channel_rules.allchannels, connection_acl_default_channel_rules.patterns[0: CONNECTION_ACL_CHANNEL_PATTERN_MAX], channel);
     }
     const slot: i32 = connection_acl_user_find(username);
@@ -3479,7 +3479,7 @@ fn connection_acl_user_channel_allowed(username: &[byte], channel: &[byte]) bool
 }
 
 fn connection_acl_user_allchannels(username: &[byte]) bool {
-    if connection_keyword_eq(username, &"default"[0: 7]) {
+    if connection_slice_eq(username, &"default"[0: 7]) {
         return connection_acl_default_channel_rules.allchannels;
     }
     const slot: i32 = connection_acl_user_find(username);
@@ -3505,7 +3505,7 @@ fn connection_acl_default_user_unrestricted() bool {
 }
 
 fn connection_acl_user_unrestricted(username: &[byte]) bool {
-    if connection_keyword_eq(username, &"default"[0: 7]) {
+    if connection_slice_eq(username, &"default"[0: 7]) {
         return connection_acl_default_user_unrestricted();
     }
     const slot: i32 = connection_acl_user_find(username);
@@ -4276,7 +4276,7 @@ fn connection_acl_permission_result(username: &[byte], name: &[byte], info: &Com
     if !command_denied && !key_denied && !channel_denied {
         return ConnectionAclPermissionResult.connection_acl_permission_allowed;
     }
-    if connection_keyword_eq(username, &"default"[0: 7]) {
+    if connection_slice_eq(username, &"default"[0: 7]) {
         if connection_acl_default_selectors_allow(name, info, command, arg_offset, full_argc) {
             return ConnectionAclPermissionResult.connection_acl_permission_allowed;
         }
@@ -4971,7 +4971,7 @@ export fn connection_transaction_client_age_at_least(tx: &ConnectionTransaction,
 }
 
 fn connection_current_user_is_default(tx: &ConnectionTransaction) bool {
-    return connection_keyword_eq(connection_current_username(tx), &"default"[0: 7]);
+    return connection_slice_eq(connection_current_username(tx), &"default"[0: 7]);
 }
 
 fn connection_clear_authenticated_user(tx: &ConnectionTransaction) void {
@@ -5989,7 +5989,7 @@ fn connection_acl_handle_setuser(runtime: &CommandRuntimeInfo, router: &CommandR
     };
 
     connection_acl_load_snapshot(runtime);
-    var reply: CommandReply = if connection_keyword_eq(username, &"default"[0: 7]) {
+    var reply: CommandReply = if connection_slice_eq(username, &"default"[0: 7]) {
         connection_acl_setuser_default(runtime, router, command)
     } else {
         connection_acl_setuser_named(router, username, command)
@@ -6064,7 +6064,7 @@ fn connection_acl_handle_dryrun(router: &CommandRouter, command: &Command, now_m
     const username: &[byte] = command_arg_data(command, 2) catch {
         return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
     };
-    const is_default_user: bool = connection_keyword_eq(username, &"default"[0: 7]);
+    const is_default_user: bool = connection_slice_eq(username, &"default"[0: 7]);
     if !is_default_user && connection_acl_user_find(username) < 0 {
         return connection_acl_dryrun_user_missing(username);
     }
@@ -6304,7 +6304,7 @@ fn connection_acl_handle_getuser(runtime: &CommandRuntimeInfo, command: &Command
     const username: &[byte] = command_arg_data(command, 2) catch {
         return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
     };
-    if !connection_keyword_eq(username, &"default"[0: 7]) {
+    if !connection_slice_eq(username, &"default"[0: 7]) {
         const slot: i32 = connection_acl_user_find(username);
         if slot >= 0 {
             return connection_acl_getuser_named(&connection_acl_users[slot as usize]);
@@ -6498,7 +6498,7 @@ fn connection_acl_loaded_removed_clients_prepare(tx: &ConnectionTransaction) boo
         const username: &[byte] = connection_client_registry[registry_index].username[0: connection_client_registry[registry_index].username_len];
         if connection_client_registry[registry_index].active &&
             username.len > 0 &&
-            !connection_keyword_eq(username, &"default"[0: 7]) &&
+            !connection_slice_eq(username, &"default"[0: 7]) &&
             connection_acl_user_find(username) < 0 {
             if connection_acl_removed_client_count < CONNECTION_CLIENT_REGISTRY_MAX {
                 const client_id: i64 = connection_client_registry[registry_index].client_id;
@@ -6543,7 +6543,7 @@ fn connection_acl_handle_deluser(tx: &ConnectionTransaction, command: &Command) 
         const username_scan: &[byte] = command_arg_data(command, scan_index) catch {
             return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
         };
-        if connection_keyword_eq(username_scan, &"default"[0: 7]) {
+        if connection_slice_eq(username_scan, &"default"[0: 7]) {
             return connection_error_reply(&"ERR The 'default' user cannot be removed"[0: 40]);
         }
         scan_index = scan_index + 1;
@@ -7278,7 +7278,7 @@ fn connection_acl_file_apply_line(runtime: &CommandRuntimeInfo, router: &Command
     if username.len == 0 || !connection_acl_file_token_safe(username) {
         return error.ConnectionAclFileInvalid;
     }
-    const is_default: bool = connection_keyword_eq(username, &"default"[0: 7]);
+    const is_default: bool = connection_slice_eq(username, &"default"[0: 7]);
     var user: &ConnectionAclUser = null as &ConnectionAclUser;
     if is_default {
         if *saw_default {
@@ -8832,7 +8832,7 @@ fn connection_authenticated_named_user_valid(tx: &ConnectionTransaction) bool {
     if tx == null || tx.username_len == 0 {
         return true;
     }
-    if connection_keyword_eq(tx.username[0: tx.username_len], &"default"[0: 7]) {
+    if connection_slice_eq(tx.username[0: tx.username_len], &"default"[0: 7]) {
         return true;
     }
     const slot: i32 = connection_acl_user_find(tx.username[0: tx.username_len]);
@@ -8926,7 +8926,7 @@ fn connection_handle_auth_state(tx: &ConnectionTransaction, runtime: &CommandRun
             const username_no_pass: &[byte] = command_arg_data(command, 1) catch {
                 return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
             };
-            if !connection_keyword_eq(username_no_pass, &"default"[0: 7]) {
+            if !connection_slice_eq(username_no_pass, &"default"[0: 7]) {
                 const named_password_no_pass: &[byte] = command_arg_data(command, 2) catch {
                     return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
                 };
@@ -8958,7 +8958,7 @@ fn connection_handle_auth_state(tx: &ConnectionTransaction, runtime: &CommandRun
         const username: &[byte] = command_arg_data(command, 1) catch {
             return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
         };
-        if !connection_keyword_eq(username, &"default"[0: 7]) {
+        if !connection_slice_eq(username, &"default"[0: 7]) {
             const named_password: &[byte] = command_arg_data(command, 2) catch {
                 return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
             };
@@ -8987,7 +8987,7 @@ fn connection_handle_auth(tx: &ConnectionTransaction, runtime: &CommandRuntimeIn
 
 fn connection_authenticate_username_password(tx: &ConnectionTransaction, runtime: &CommandRuntimeInfo, username: &[byte], password: &[byte]) CommandReply {
     const requirepass: &[byte] = connection_requirepass(runtime);
-    if !connection_keyword_eq(username, &"default"[0: 7]) {
+    if !connection_slice_eq(username, &"default"[0: 7]) {
         return connection_authenticate_named_user(tx, username, password);
     }
     if !connection_acl_default_enabled {

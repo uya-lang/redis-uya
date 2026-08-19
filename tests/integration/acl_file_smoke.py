@@ -191,6 +191,38 @@ def run_smoke() -> None:
             if config_value(admin, b"aclfile") != str(acl_path).encode():
                 raise AssertionError("CONFIG GET aclfile mismatch")
 
+            if send_command(admin, b"ACL", b"SETUSER", b"DEFAULT", b"on", b"nopass", b"+ping", b"+acl") != "OK":
+                raise AssertionError("failed to create case-sensitive DEFAULT named user")
+            if acl_getuser_field(admin, b"DEFAULT", b"commands") != b"-@all +ping +acl":
+                raise AssertionError("ACL GETUSER routed DEFAULT to the default user")
+            if send_command(admin, b"ACL", b"GETUSER", b"Default") is not None:
+                raise AssertionError("ACL GETUSER matched a differently cased username")
+            case_user = authenticate(port, b"DEFAULT", b"ignored")
+            try:
+                if send_command(case_user, b"ACL", b"WHOAMI") != b"DEFAULT":
+                    raise AssertionError("ACL WHOAMI did not preserve username case")
+                if send_command(case_user, b"PING") != "PONG":
+                    raise AssertionError("case-sensitive DEFAULT named user cannot run PING")
+                expect_auth_error(port, b"Default", b"ignored")
+                if send_command(admin, b"ACL", b"SAVE") != "OK":
+                    raise AssertionError("failed to save case-sensitive DEFAULT named user")
+                case_saved = acl_path.read_bytes()
+                if not any(line.startswith(b"user DEFAULT on nopass ") for line in case_saved.splitlines()):
+                    raise AssertionError(f"ACL SAVE did not preserve DEFAULT username case: {case_saved!r}")
+                if send_command(admin, b"ACL", b"SETUSER", b"DEFAULT", b"+set") != "OK":
+                    raise AssertionError("failed to mutate case-sensitive DEFAULT named user")
+                if send_command(admin, b"ACL", b"LOAD") != "OK":
+                    raise AssertionError("failed to reload case-sensitive DEFAULT named user")
+                if acl_getuser_field(admin, b"DEFAULT", b"commands") != b"-@all +ping +acl":
+                    raise AssertionError("ACL LOAD did not preserve DEFAULT named user rules")
+                if send_command(admin, b"ACL", b"DELUSER", b"DeFaUlT") != 0:
+                    raise AssertionError("ACL DELUSER matched a differently cased username")
+                if send_command(admin, b"ACL", b"DELUSER", b"DEFAULT") != 1:
+                    raise AssertionError("ACL DELUSER could not remove DEFAULT named user")
+                expect_connection_closed(case_user, "case-sensitive DEFAULT DELUSER")
+            finally:
+                case_user.close()
+
             expect_error(admin, "modifier 'bogus': Syntax error", b"ACL", b"SETUSER", b"default", b"off", b"resetpass", b"bogus")
             if acl_getuser_field(admin, b"default", b"flags") != [b"on", b"nopass"]:
                 raise AssertionError("failed ACL SETUSER changed default user state")

@@ -2283,6 +2283,7 @@ export fn test_connection_process_acl_permission_denial() !void {
     const grouped_auth_log: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$3\r\nLOG\r\n$2\r\n10\r\n"[0: 30], &out[0], 2048, 6000u64);
     try assert_true(network_connection_contains(out[0: grouped_auth_log.response_len], &"*1\r\n"[0: 4]));
     try assert_true(network_connection_contains(out[0: grouped_auth_log.response_len], &"$5\r\ncount\r\n:2\r\n"[0: 15]));
+    try assert_true(network_connection_contains(out[0: grouped_auth_log.response_len], &"$11\r\nage-seconds\r\n$5\r\n0.999\r\n"[0: 29]));
     try assert_true(network_connection_contains(out[0: grouped_auth_log.response_len], &"$17\r\ntimestamp-created\r\n:4000\r\n"[0: 31]));
     try assert_true(network_connection_contains(out[0: grouped_auth_log.response_len], &"$22\r\ntimestamp-last-updated\r\n:5001\r\n"[0: 36]));
     const expired_group_auth: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$4\r\nAUTH\r\n$11\r\nMissingUser\r\n$5\r\nwrong\r\n"[0: 43], &out[0], 2048, 65002u64);

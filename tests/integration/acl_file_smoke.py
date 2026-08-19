@@ -203,6 +203,19 @@ def run_smoke() -> None:
                     raise AssertionError("ACL WHOAMI did not preserve username case")
                 if send_command(case_user, b"PING") != "PONG":
                     raise AssertionError("case-sensitive DEFAULT named user cannot run PING")
+                expect_error(case_user, "NOPERM User DEFAULT", b"GET", b"missing")
+                case_log = send_command(admin, b"ACL", b"LOG", b"1")
+                if not isinstance(case_log, list) or len(case_log) != 1 or not isinstance(case_log[0], list):
+                    raise AssertionError(f"ACL LOG omitted DEFAULT denial entry: {case_log!r}")
+                case_log_username = None
+                for index in range(0, len(case_log[0]), 2):
+                    if case_log[0][index] == b"username":
+                        case_log_username = case_log[0][index + 1]
+                        break
+                if case_log_username != b"DEFAULT":
+                    raise AssertionError(f"ACL LOG did not preserve username case: {case_log!r}")
+                if send_command(admin, b"ACL", b"LOG", b"RESET") != "OK":
+                    raise AssertionError("failed to reset ACL LOG after username-case check")
                 expect_auth_error(port, b"Default", b"ignored")
                 if send_command(admin, b"ACL", b"SAVE") != "OK":
                     raise AssertionError("failed to save case-sensitive DEFAULT named user")

@@ -4308,6 +4308,15 @@ fn connection_acl_log_copy_lower(dst: &[byte], src: &[byte]) usize {
     return written;
 }
 
+fn connection_acl_log_copy_exact(dst: &[byte], src: &[byte]) usize {
+    var written: usize = 0;
+    while written < dst.len && written < src.len {
+        dst.ptr[written] = src.ptr[written];
+        written = written + 1;
+    }
+    return written;
+}
+
 fn connection_acl_log_append_command_denied(name: &[byte], context: &[byte], username: &[byte], now_ms: u64, client_id: i64) void {
     if name.len == 0 || context.len == 0 {
         return;
@@ -4322,7 +4331,7 @@ fn connection_acl_log_append_command_denied(name: &[byte], context: &[byte], use
         connection_acl_log_entries[slot].sequence = connection_acl_log_next_sequence;
         connection_acl_log_entries[slot].created_ms = now_ms;
         connection_acl_log_entries[slot].client_id = client_id;
-        connection_acl_log_entries[slot].username_len = connection_acl_log_copy_lower(connection_acl_log_entries[slot].username[0: CONNECTION_ACL_USER_NAME_MAX], username);
+        connection_acl_log_entries[slot].username_len = connection_acl_log_copy_exact(connection_acl_log_entries[slot].username[0: CONNECTION_ACL_USER_NAME_MAX], username);
         connection_acl_log_entries[slot].client_addr_len = 0;
         connection_acl_log_entries[slot].client_local_addr_len = 0;
         const client_slot_idx: i32 = connection_client_registry_find_client_id_slot(client_id);

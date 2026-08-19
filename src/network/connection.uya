@@ -5788,17 +5788,7 @@ fn connection_acl_setuser_named(router: &CommandRouter, username: &[byte], comma
     return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
 }
 
-fn connection_acl_handle_setuser(runtime: &CommandRuntimeInfo, router: &CommandRouter, command: &Command) CommandReply {
-    if command.argc < 3 {
-        return connection_error_reply(&"ERR wrong number of arguments for 'acl|setuser' command"[0: 55]);
-    }
-    const username: &[byte] = command_arg_data(command, 2) catch {
-        return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
-    };
-    if !connection_keyword_eq(username, &"default"[0: 7]) {
-        return connection_acl_setuser_named(router, username, command);
-    }
-
+fn connection_acl_setuser_default(runtime: &CommandRuntimeInfo, router: &CommandRouter, command: &Command) CommandReply {
     runtime.pending_config = runtime.config;
     _ = connection_acl_default_password_hashes_migrate(&runtime.pending_config) catch {
         return connection_error_reply(&"ERR ACL SETUSER redis-uya password list is invalid"[0: 50]);
@@ -5984,6 +5974,26 @@ fn connection_acl_handle_setuser(runtime: &CommandRuntimeInfo, router: &CommandR
     connection_acl_default_password_hashes_sync_legacy(&runtime.pending_config);
     var reply: CommandReply = connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
     reply.request_config_set = true;
+    return reply;
+}
+
+fn connection_acl_handle_setuser(runtime: &CommandRuntimeInfo, router: &CommandRouter, command: &Command) CommandReply {
+    if command.argc < 3 {
+        return connection_error_reply(&"ERR wrong number of arguments for 'acl|setuser' command"[0: 55]);
+    }
+    const username: &[byte] = command_arg_data(command, 2) catch {
+        return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+    };
+
+    connection_acl_load_snapshot(runtime);
+    var reply: CommandReply = if connection_keyword_eq(username, &"default"[0: 7]) {
+        connection_acl_setuser_default(runtime, router, command)
+    } else {
+        connection_acl_setuser_named(router, username, command)
+    };
+    if reply.typ == CommandReplyType.reply_error {
+        connection_acl_load_restore(runtime);
+    }
     return reply;
 }
 

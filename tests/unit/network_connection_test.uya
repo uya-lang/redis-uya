@@ -2903,6 +2903,47 @@ export fn test_connection_process_acl_default_user_state() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_connection_process_acl_setuser_atomic() !void {
+    reset_memory_stats_for_test();
+    connection_acl_reset_for_test();
+    defer { connection_acl_reset_for_test(); }
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var runtime: CommandRuntimeInfo = command_runtime_default();
+    var default_tx: ConnectionTransaction = connection_transaction_new();
+    var operator_tx: ConnectionTransaction = connection_transaction_new();
+    defer {
+        connection_transaction_reset(&default_tx);
+        connection_transaction_reset(&operator_tx);
+    }
+    var out: [byte: 4096] = [];
+
+    const create_operator: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &default_tx, &"*8\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$8\r\noperator\r\n$2\r\non\r\n$6\r\nnopass\r\n$5\r\n+@all\r\n$7\r\nallkeys\r\n$11\r\nallchannels\r\n"[0: 102], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: create_operator.response_len], &"+OK\r\n"[0: 5]));
+    const auth_operator: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &operator_tx, &"*3\r\n$4\r\nAUTH\r\n$8\r\noperator\r\n$1\r\nx\r\n"[0: 35], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: auth_operator.response_len], &"+OK\r\n"[0: 5]));
+
+    const default_error: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &operator_tx, &"*6\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$7\r\ndefault\r\n$3\r\noff\r\n$9\r\nresetpass\r\n$5\r\nbogus\r\n"[0: 74], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_contains(out[0: default_error.response_len], &"modifier 'bogus': Syntax error"[0: 30]));
+    const default_ping: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &default_tx, &"*1\r\n$4\r\nPING\r\n"[0: 14], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: default_ping.response_len], &"+PONG\r\n"[0: 7]));
+    const default_user: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &operator_tx, &"*3\r\n$3\r\nACL\r\n$7\r\nGETUSER\r\n$7\r\ndefault\r\n"[0: 39], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_contains(out[0: default_user.response_len], &"*2\r\n$2\r\non\r\n$6\r\nnopass\r\n"[0: 24]));
+    try assert_true(network_connection_contains(out[0: default_user.response_len], &"$5\r\n+@all\r\n"[0: 11]));
+
+    const create_atomic: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &operator_tx, &"*9\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$6\r\natomic\r\n$5\r\nreset\r\n$2\r\non\r\n$6\r\nnopass\r\n$4\r\n+set\r\n$7\r\nallkeys\r\n$11\r\nallchannels\r\n"[0: 110], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: create_atomic.response_len], &"+OK\r\n"[0: 5]));
+    const named_error: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &operator_tx, &"*6\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$6\r\natomic\r\n$3\r\noff\r\n$4\r\n+get\r\n$8\r\n<missing\r\n"[0: 71], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_contains(out[0: named_error.response_len], &"password you are trying to remove"[0: 33]));
+    const named_user: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &operator_tx, &"*3\r\n$3\r\nACL\r\n$7\r\nGETUSER\r\n$6\r\natomic\r\n"[0: 38], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_contains(out[0: named_user.response_len], &"*2\r\n$2\r\non\r\n$6\r\nnopass\r\n"[0: 24]));
+    try assert_true(network_connection_contains(out[0: named_user.response_len], &"$10\r\n-@all +set\r\n"[0: 17]));
+    try assert_true(!network_connection_contains(out[0: named_user.response_len], &"+get"[0: 4]));
+
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_connection_process_command_docs_all_large_reply() !void {
     reset_memory_stats_for_test();
     const router: CommandRouter = command_router_new();

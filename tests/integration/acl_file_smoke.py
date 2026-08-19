@@ -182,6 +182,19 @@ def run_smoke() -> None:
             if config_value(admin, b"aclfile") != str(acl_path).encode():
                 raise AssertionError("CONFIG GET aclfile mismatch")
 
+            expect_error(admin, "modifier 'bogus': Syntax error", b"ACL", b"SETUSER", b"default", b"off", b"resetpass", b"bogus")
+            if acl_getuser_field(admin, b"default", b"flags") != [b"on", b"nopass"]:
+                raise AssertionError("failed ACL SETUSER changed default user state")
+            if send_command(admin, b"ACL", b"SETUSER", b"atomic", b"reset", b"on", b"nopass", b"+set", b"allkeys", b"allchannels") != "OK":
+                raise AssertionError("failed to create ACL SETUSER rollback user")
+            expect_error(admin, "password you are trying to remove", b"ACL", b"SETUSER", b"atomic", b"off", b"+get", b"<missing")
+            if acl_getuser_field(admin, b"atomic", b"flags") != [b"on", b"nopass"]:
+                raise AssertionError("failed ACL SETUSER changed named user flags")
+            if acl_getuser_field(admin, b"atomic", b"commands") != b"-@all +set":
+                raise AssertionError("failed ACL SETUSER changed named user commands")
+            if send_command(admin, b"ACL", b"DELUSER", b"atomic") != 1:
+                raise AssertionError("failed to remove ACL SETUSER rollback user")
+
             idle_default = connect_with_retry(port)
             if send_command(admin, b"ACL", b"SETUSER", b"default", b"resetpass", b">rootpass", b">rootpass2", b">rootpass") != "OK":
                 raise AssertionError("failed to set default ACL passwords")

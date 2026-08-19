@@ -325,8 +325,8 @@ struct ConnectionClientRegistryEntry {
 
 var connection_client_registry: [ConnectionClientRegistryEntry: CONNECTION_CLIENT_REGISTRY_MAX] = [];
 var connection_client_registry_next_id: i64 = 1;
-var connection_acl_deleted_client_ids: [i64: CONNECTION_CLIENT_REGISTRY_MAX] = [];
-var connection_acl_deleted_client_count: usize = 0;
+var connection_acl_removed_client_ids: [i64: CONNECTION_CLIENT_REGISTRY_MAX] = [];
+var connection_acl_removed_client_count: usize = 0;
 
 struct ConnectionMonitorClient {
     active: bool,
@@ -2944,7 +2944,7 @@ fn connection_acl_user_delete(username: &[byte]) bool {
 }
 
 export fn connection_acl_reset_for_test() void {
-    connection_acl_deleted_clients_clear();
+    connection_acl_removed_clients_clear();
     connection_acl_default_enabled = true;
     connection_acl_default_nopass = true;
     connection_acl_default_clear_command_rules(true);
@@ -6445,17 +6445,17 @@ fn connection_acl_handle_users(command: &Command) CommandReply {
     return connection_array_reply_owned(reply_list, count);
 }
 
-fn connection_acl_deleted_clients_clear() void {
+fn connection_acl_removed_clients_clear() void {
     var index: usize = 0;
-    while index < connection_acl_deleted_client_count {
-        connection_acl_deleted_client_ids[index] = 0;
+    while index < connection_acl_removed_client_count {
+        connection_acl_removed_client_ids[index] = 0;
         index = index + 1;
     }
-    connection_acl_deleted_client_count = 0;
+    connection_acl_removed_client_count = 0;
 }
 
 fn connection_acl_deleted_clients_prepare(tx: &ConnectionTransaction, command: &Command) bool {
-    connection_acl_deleted_clients_clear();
+    connection_acl_removed_clients_clear();
     const current_client_id: i64 = connection_client_registry_client_id(tx);
     var matched_self: bool = false;
     var registry_index: usize = 0;
@@ -6471,10 +6471,10 @@ fn connection_acl_deleted_clients_prepare(tx: &ConnectionTransaction, command: &
                         connection_client_registry[registry_index].username[0: connection_client_registry[registry_index].username_len],
                         username,
                     ) {
-                    if connection_acl_deleted_client_count < CONNECTION_CLIENT_REGISTRY_MAX {
+                    if connection_acl_removed_client_count < CONNECTION_CLIENT_REGISTRY_MAX {
                         const client_id: i64 = connection_client_registry[registry_index].client_id;
-                        connection_acl_deleted_client_ids[connection_acl_deleted_client_count] = client_id;
-                        connection_acl_deleted_client_count = connection_acl_deleted_client_count + 1;
+                        connection_acl_removed_client_ids[connection_acl_removed_client_count] = client_id;
+                        connection_acl_removed_client_count = connection_acl_removed_client_count + 1;
                         if client_id == current_client_id {
                             matched_self = true;
                         }
@@ -6489,14 +6489,39 @@ fn connection_acl_deleted_clients_prepare(tx: &ConnectionTransaction, command: &
     return matched_self;
 }
 
-export fn connection_acl_deleted_client_matches(tx: &ConnectionTransaction) bool {
+fn connection_acl_loaded_removed_clients_prepare(tx: &ConnectionTransaction) bool {
+    connection_acl_removed_clients_clear();
+    const current_client_id: i64 = connection_client_registry_client_id(tx);
+    var matched_self: bool = false;
+    var registry_index: usize = 0;
+    while registry_index < CONNECTION_CLIENT_REGISTRY_MAX {
+        const username: &[byte] = connection_client_registry[registry_index].username[0: connection_client_registry[registry_index].username_len];
+        if connection_client_registry[registry_index].active &&
+            username.len > 0 &&
+            !connection_keyword_eq(username, &"default"[0: 7]) &&
+            connection_acl_user_find(username) < 0 {
+            if connection_acl_removed_client_count < CONNECTION_CLIENT_REGISTRY_MAX {
+                const client_id: i64 = connection_client_registry[registry_index].client_id;
+                connection_acl_removed_client_ids[connection_acl_removed_client_count] = client_id;
+                connection_acl_removed_client_count = connection_acl_removed_client_count + 1;
+                if client_id == current_client_id {
+                    matched_self = true;
+                }
+            }
+        }
+        registry_index = registry_index + 1;
+    }
+    return matched_self;
+}
+
+export fn connection_acl_removed_client_matches(tx: &ConnectionTransaction) bool {
     const client_id: i64 = connection_client_registry_client_id(tx);
     if client_id <= 0 {
         return false;
     }
     var index: usize = 0;
-    while index < connection_acl_deleted_client_count {
-        if connection_acl_deleted_client_ids[index] == client_id {
+    while index < connection_acl_removed_client_count {
+        if connection_acl_removed_client_ids[index] == client_id {
             return true;
         }
         index = index + 1;
@@ -6504,12 +6529,12 @@ export fn connection_acl_deleted_client_matches(tx: &ConnectionTransaction) bool
     return false;
 }
 
-export fn connection_acl_deleted_clients_clear_pending() void {
-    connection_acl_deleted_clients_clear();
+export fn connection_acl_removed_clients_clear_pending() void {
+    connection_acl_removed_clients_clear();
 }
 
 fn connection_acl_handle_deluser(tx: &ConnectionTransaction, command: &Command) CommandReply {
-    connection_acl_deleted_clients_clear();
+    connection_acl_removed_clients_clear();
     if command.argc < 3 {
         return connection_error_reply(&"ERR wrong number of arguments for 'acl|deluser' command"[0: 55]);
     }
@@ -6537,7 +6562,7 @@ fn connection_acl_handle_deluser(tx: &ConnectionTransaction, command: &Command) 
         index = index + 1;
     }
     var reply: CommandReply = connection_make_reply(CommandReplyType.reply_integer, connection_reply_empty_slice(), deleted);
-    if deleted > 0 && connection_acl_deleted_client_count > 0 {
+    if deleted > 0 && connection_acl_removed_client_count > 0 {
         reply.request_client_kill = true;
         reply.client_pause_timeout_ms = 2u64;
         reply.client_kill_self = matched_self;
@@ -7363,7 +7388,8 @@ fn connection_acl_handle_save(runtime: &CommandRuntimeInfo, command: &Command) C
     return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
 }
 
-fn connection_acl_handle_load(runtime: &CommandRuntimeInfo, router: &CommandRouter, command: &Command) CommandReply {
+fn connection_acl_handle_load(runtime: &CommandRuntimeInfo, router: &CommandRouter, tx: &ConnectionTransaction, command: &Command) CommandReply {
+    connection_acl_removed_clients_clear();
     if command.argc != 2 {
         return connection_error_reply(&"ERR wrong number of arguments for 'acl|load' command"[0: 52]);
     }
@@ -7375,6 +7401,12 @@ fn connection_acl_handle_load(runtime: &CommandRuntimeInfo, router: &CommandRout
     };
     var reply: CommandReply = connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
     reply.request_config_set = true;
+    const matched_self: bool = connection_acl_loaded_removed_clients_prepare(tx);
+    if connection_acl_removed_client_count > 0 {
+        reply.request_client_kill = true;
+        reply.client_pause_timeout_ms = 2u64;
+        reply.client_kill_self = matched_self;
+    }
     return reply;
 }
 
@@ -7400,7 +7432,7 @@ fn connection_handle_acl(
         return connection_acl_handle_save(runtime, command);
     }
     if connection_keyword_eq(subcommand, &"LOAD"[0: 4]) {
-        return connection_acl_handle_load(runtime, router, command);
+        return connection_acl_handle_load(runtime, router, tx, command);
     }
     if connection_keyword_eq(subcommand, &"DRYRUN"[0: 6]) {
         return connection_acl_handle_dryrun(router, command, now_ms, client_id);
@@ -8628,7 +8660,7 @@ export fn connection_client_registry_unregister_tx(tx: &ConnectionTransaction) v
 }
 
 export fn connection_client_registry_reset_for_test() void {
-    connection_acl_deleted_clients_clear();
+    connection_acl_removed_clients_clear();
     var i: usize = 0;
     while i < CONNECTION_CLIENT_REGISTRY_MAX {
         connection_client_registry_clear_slot(&connection_client_registry[i]);

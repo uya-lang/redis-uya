@@ -242,6 +242,39 @@ def run_smoke() -> None:
             finally:
                 delete_self.close()
 
+            for username in (b"load-removed", b"load-self", b"load-disabled"):
+                rules = (b"+acl",) if username == b"load-self" else (b"+ping",)
+                if send_command(admin, b"ACL", b"SETUSER", username, b"on", b"nopass", *rules) != "OK":
+                    raise AssertionError(f"failed to create ACL LOAD lifecycle user {username!r}")
+            if send_command(admin, b"ACL", b"SAVE") != "OK":
+                raise AssertionError("failed to save ACL LOAD lifecycle users")
+            load_file_lines = []
+            for line in acl_path.read_bytes().splitlines():
+                if line.startswith((b"user load-removed ", b"user load-self ")):
+                    continue
+                if line.startswith(b"user load-disabled on "):
+                    line = line.replace(b"user load-disabled on ", b"user load-disabled off ", 1)
+                load_file_lines.append(line)
+            acl_path.write_bytes(b"\n".join(load_file_lines) + b"\n")
+            load_removed = authenticate(port, b"load-removed", b"ignored")
+            load_self = authenticate(port, b"load-self", b"ignored")
+            load_disabled = authenticate(port, b"load-disabled", b"ignored")
+            try:
+                if send_command(load_self, b"ACL", b"LOAD") != "OK":
+                    raise AssertionError("ACL LOAD self-removal did not return OK")
+                expect_connection_closed(load_removed, "ACL LOAD removed user")
+                expect_connection_closed(load_self, "ACL LOAD self-removal")
+                if send_command(load_disabled, b"PING") != "PONG":
+                    raise AssertionError("ACL LOAD disabled an existing named-user connection")
+                expect_auth_error(port, b"load-disabled", b"ignored")
+                if send_command(admin, b"ACL", b"DELUSER", b"load-disabled") != 1:
+                    raise AssertionError("failed to remove ACL LOAD disabled lifecycle user")
+                expect_connection_closed(load_disabled, "ACL DELUSER after ACL LOAD disabled user")
+            finally:
+                load_removed.close()
+                load_self.close()
+                load_disabled.close()
+
             idle_default = connect_with_retry(port)
             if send_command(admin, b"ACL", b"SETUSER", b"default", b"resetpass", b">rootpass", b">rootpass2", b">rootpass") != "OK":
                 raise AssertionError("failed to set default ACL passwords")

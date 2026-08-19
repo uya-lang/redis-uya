@@ -101,7 +101,7 @@ ACL WHOAMI
 返回：
 
 - `ACL CAT` 返回 Redis 兼容的 ACL category 列表；`ACL CAT category` 返回当前可见命令目录中匹配该 category 的命令名
-- `ACL DELUSER missing` 当前返回 `0`；删除已创建的 named user 返回删除数量；尝试删除 `default` 会返回 Redis 兼容错误
+- `ACL DELUSER missing` 当前返回 `0`；删除已创建的一个或多个 named user 返回删除数量，并在回复发出前主动关闭这些用户的其他已认证连接；用户删除自身时先返回删除数量再关闭当前连接。尝试删除 `default` 会返回 Redis 兼容错误且不删除同一请求中的其他用户
 - `ACL DRYRUN username command [arg ...]` 当前会检查用户存在性、命令存在性、arity、基础命令 whitelist/deny 规则、固定 key range、脚本/函数声明键、MPOP、set cardinality、MSETEX、zset 聚合/store、`GEOSEARCHSTORE`、`GEORADIUS[BYMEMBER] STORE/STOREDIST`、`ZRANGESTORE`、`XREAD/XREADGROUP`、`XGROUP/XINFO` key 子命令、`SORT [STORE]` 与 `MEMORY USAGE` 动态键，以及 Pub/Sub channel pattern；基础规则和 selector 都要求请求中的全部键匹配同一授权路径，未知用户和未知命令返回 Redis 兼容错误，被当前用户命令、key pattern 或 channel pattern 规则禁用的命令返回 `NOPERM`
 - `ACL GENPASS` 返回 256-bit 口径的 64 字符十六进制口令；`ACL GENPASS bits` 返回 `ceil(bits / 4)` 个十六进制字符，`bits` 取值范围为 `1..4096`
 - `ACL GETUSER default` 返回当前默认用户详情，`flags` 反映 `on/off` 和有效 `nopass`，`commands`、`keys`、`channels` 与 `selectors` 字段反映当前有序命令/分类 allow/deny、key/channel pattern 和 selector 规则；启用 `requirepass` 或 ACL 哈希口令时 `flags` 不再包含 `nopass`，`passwords` 按插入顺序返回不带 `#` 的 64 位小写十六进制 SHA-256 数组而不暴露明文；已创建 named user 返回同样的元数据视图，selector 数组中的每项按 `commands/keys/channels` 六元素键值序列输出；未知用户名返回 null
@@ -122,7 +122,7 @@ ACL WHOAMI
 - `COMMAND INFO/LIST/DOCS` 会暴露 `ACL`、`ACL|CAT`、`ACL|DELUSER`、`ACL|DRYRUN`、`ACL|GENPASS`、`ACL|GETUSER`、`ACL|HELP`、`ACL|LIST`、`ACL|LOAD`、`ACL|LOG`、`ACL|SAVE`、`ACL|SETUSER`、`ACL|USERS` 与 `ACL|WHOAMI`
 - `aclfile` 可通过配置文本、`CONFIG GET/SET/REWRITE` 或第八个启动参数设置；不含 `/` 的文件名相对当前 `dir` 解析，含 `/` 的路径按原值使用。启动时指定文件会在进入事件循环前加载，加载失败则启动失败
 - 当前 ACL 文件规范输出每个用户按插入顺序排列的 SHA-256 `#hash` 和 selector，不会保存明文；加载器同时接受多个 `#hash` 和旧版 `>plaintext` token，旧 token 在加载时立即转成摘要。每用户上限为 8 个唯一摘要和 8 个 selector；每个 selector 的 command allow/deny 表各 16 条、category allow/deny 表各 8 条，另有 8 个 key pattern 与 8 个 channel pattern。selector pattern 含空白或括号时 `ACL SAVE` 会拒绝写出，避免产生无法无损加载的文件
-- 当前剩余 ACL 边界包括后续新增命令的动态 key spec / movablekeys 与 operation 标签审计；`ACL DELUSER` 后已认证连接在下一条命令返回 NOAUTH，尚未像 Redis 一样主动关闭 socket。ACL LOG 仍是进程内状态，不写入 ACL 文件、RDB 或 AOF
+- 当前剩余 ACL 边界包括后续新增命令的动态 key spec / movablekeys 与 operation 标签审计。ACL LOG 仍是进程内状态，不写入 ACL 文件、RDB 或 AOF
 
 ### `COMMAND`
 

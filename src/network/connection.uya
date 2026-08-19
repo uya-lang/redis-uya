@@ -325,6 +325,8 @@ struct ConnectionClientRegistryEntry {
 
 var connection_client_registry: [ConnectionClientRegistryEntry: CONNECTION_CLIENT_REGISTRY_MAX] = [];
 var connection_client_registry_next_id: i64 = 1;
+var connection_acl_deleted_client_ids: [i64: CONNECTION_CLIENT_REGISTRY_MAX] = [];
+var connection_acl_deleted_client_count: usize = 0;
 
 struct ConnectionMonitorClient {
     active: bool,
@@ -2942,6 +2944,7 @@ fn connection_acl_user_delete(username: &[byte]) bool {
 }
 
 export fn connection_acl_reset_for_test() void {
+    connection_acl_deleted_clients_clear();
     connection_acl_default_enabled = true;
     connection_acl_default_nopass = true;
     connection_acl_default_clear_command_rules(true);
@@ -6442,7 +6445,71 @@ fn connection_acl_handle_users(command: &Command) CommandReply {
     return connection_array_reply_owned(reply_list, count);
 }
 
-fn connection_acl_handle_deluser(command: &Command) CommandReply {
+fn connection_acl_deleted_clients_clear() void {
+    var index: usize = 0;
+    while index < connection_acl_deleted_client_count {
+        connection_acl_deleted_client_ids[index] = 0;
+        index = index + 1;
+    }
+    connection_acl_deleted_client_count = 0;
+}
+
+fn connection_acl_deleted_clients_prepare(tx: &ConnectionTransaction, command: &Command) bool {
+    connection_acl_deleted_clients_clear();
+    const current_client_id: i64 = connection_client_registry_client_id(tx);
+    var matched_self: bool = false;
+    var registry_index: usize = 0;
+    while registry_index < CONNECTION_CLIENT_REGISTRY_MAX {
+        if connection_client_registry[registry_index].active {
+            var username_index: usize = 2;
+            while username_index < command.argc {
+                const username: &[byte] = command_arg_data(command, username_index) catch {
+                    return matched_self;
+                };
+                if connection_acl_user_find(username) >= 0 &&
+                    connection_slice_eq(
+                        connection_client_registry[registry_index].username[0: connection_client_registry[registry_index].username_len],
+                        username,
+                    ) {
+                    if connection_acl_deleted_client_count < CONNECTION_CLIENT_REGISTRY_MAX {
+                        const client_id: i64 = connection_client_registry[registry_index].client_id;
+                        connection_acl_deleted_client_ids[connection_acl_deleted_client_count] = client_id;
+                        connection_acl_deleted_client_count = connection_acl_deleted_client_count + 1;
+                        if client_id == current_client_id {
+                            matched_self = true;
+                        }
+                    }
+                    break;
+                }
+                username_index = username_index + 1;
+            }
+        }
+        registry_index = registry_index + 1;
+    }
+    return matched_self;
+}
+
+export fn connection_acl_deleted_client_matches(tx: &ConnectionTransaction) bool {
+    const client_id: i64 = connection_client_registry_client_id(tx);
+    if client_id <= 0 {
+        return false;
+    }
+    var index: usize = 0;
+    while index < connection_acl_deleted_client_count {
+        if connection_acl_deleted_client_ids[index] == client_id {
+            return true;
+        }
+        index = index + 1;
+    }
+    return false;
+}
+
+export fn connection_acl_deleted_clients_clear_pending() void {
+    connection_acl_deleted_clients_clear();
+}
+
+fn connection_acl_handle_deluser(tx: &ConnectionTransaction, command: &Command) CommandReply {
+    connection_acl_deleted_clients_clear();
     if command.argc < 3 {
         return connection_error_reply(&"ERR wrong number of arguments for 'acl|deluser' command"[0: 55]);
     }
@@ -6457,6 +6524,7 @@ fn connection_acl_handle_deluser(command: &Command) CommandReply {
         scan_index = scan_index + 1;
     }
 
+    const matched_self: bool = connection_acl_deleted_clients_prepare(tx, command);
     var deleted: i64 = 0;
     var index: usize = 2;
     while index < command.argc {
@@ -6468,7 +6536,13 @@ fn connection_acl_handle_deluser(command: &Command) CommandReply {
         }
         index = index + 1;
     }
-    return connection_make_reply(CommandReplyType.reply_integer, connection_reply_empty_slice(), deleted);
+    var reply: CommandReply = connection_make_reply(CommandReplyType.reply_integer, connection_reply_empty_slice(), deleted);
+    if deleted > 0 && connection_acl_deleted_client_count > 0 {
+        reply.request_client_kill = true;
+        reply.client_pause_timeout_ms = 2u64;
+        reply.client_kill_self = matched_self;
+    }
+    return reply;
 }
 
 fn connection_acl_log_requested_count(command: &Command) !usize {
@@ -7344,7 +7418,7 @@ fn connection_handle_acl(
         return connection_acl_handle_users(command);
     }
     if connection_keyword_eq(subcommand, &"DELUSER"[0: 7]) {
-        return connection_acl_handle_deluser(command);
+        return connection_acl_handle_deluser(tx, command);
     }
     if connection_keyword_eq(subcommand, &"LOG"[0: 3]) {
         return connection_acl_handle_log(command, now_ms);
@@ -8554,6 +8628,7 @@ export fn connection_client_registry_unregister_tx(tx: &ConnectionTransaction) v
 }
 
 export fn connection_client_registry_reset_for_test() void {
+    connection_acl_deleted_clients_clear();
     var i: usize = 0;
     while i < CONNECTION_CLIENT_REGISTRY_MAX {
         connection_client_registry_clear_slot(&connection_client_registry[i]);

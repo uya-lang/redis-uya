@@ -37,6 +37,8 @@ use src.network.connection.connection_acl_load_file;
 use src.network.connection.connection_encode_client_unblock_error_reply;
 use src.network.connection.connection_encode_client_unblock_timeout_reply;
 use src.network.connection.connection_client_registry_unregister_tx;
+use src.network.connection.connection_acl_deleted_client_matches;
+use src.network.connection.connection_acl_deleted_clients_clear_pending;
 use src.network.connection.connection_input_contains_write_command;
 use src.network.connection.connection_shift_buffer;
 use src.network.connection.connection_transaction_new;
@@ -1213,6 +1215,18 @@ fn server_kill_clients_matching(server: &RedisServer, current_slot: usize, clien
     }
 }
 
+fn server_kill_acl_deleted_clients(server: &RedisServer, current_slot: usize) void {
+    var index: usize = 0;
+    while index < SERVER_MAX_CLIENTS {
+        if index != current_slot && server.clients[index].fd >= 0 &&
+            connection_acl_deleted_client_matches(&server.clients[index].transaction) {
+            server_close_client_slot(server, index);
+        }
+        index = index + 1;
+    }
+    connection_acl_deleted_clients_clear_pending();
+}
+
 fn server_has_pending_client_output(server: &RedisServer) bool {
     var i: usize = 0;
     while i < SERVER_MAX_CLIENTS {
@@ -1737,6 +1751,8 @@ fn server_async_writev_all_future(
                         client.output[3] = 10 as byte;
                         response_len = 4;
                     }
+                } else if result.client_pause_timeout_ms == 2u64 {
+                    server_kill_acl_deleted_clients(server, slot);
                 } else {
                     server_kill_clients_matching(
                         server,

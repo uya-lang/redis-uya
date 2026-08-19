@@ -144,6 +144,15 @@ def expect_auth_error(port: int, username: bytes, password: bytes) -> None:
         expect_error(sock, "WRONGPASS", b"AUTH", username, password)
 
 
+def expect_connection_closed(sock: socket.socket, context: str) -> None:
+    try:
+        data = sock.recv(1)
+    except OSError:
+        return
+    if data != b"":
+        raise AssertionError(f"{context} left unexpected data on the connection: {data!r}")
+
+
 def start_server(port: int, aof_path: Path, acl_path: Path | None = None) -> subprocess.Popen[str]:
     args = [str(BIN), str(port), "8", str(aof_path)]
     if acl_path is not None:
@@ -208,6 +217,30 @@ def run_smoke() -> None:
                 session.close()
             if send_command(admin, b"ACL", b"DELUSER", b"session") != 1:
                 raise AssertionError("failed to remove ACL session lifecycle user")
+
+            for username in (b"delete-one", b"delete-two"):
+                if send_command(admin, b"ACL", b"SETUSER", username, b"on", b"nopass", b"+ping") != "OK":
+                    raise AssertionError(f"failed to create ACL delete lifecycle user {username!r}")
+            delete_one = authenticate(port, b"delete-one", b"ignored")
+            delete_two = authenticate(port, b"delete-two", b"ignored")
+            try:
+                if send_command(admin, b"ACL", b"DELUSER", b"delete-one", b"delete-two") != 2:
+                    raise AssertionError("ACL DELUSER did not delete both lifecycle users")
+                expect_connection_closed(delete_one, "ACL DELUSER delete-one")
+                expect_connection_closed(delete_two, "ACL DELUSER delete-two")
+            finally:
+                delete_one.close()
+                delete_two.close()
+
+            if send_command(admin, b"ACL", b"SETUSER", b"delete-self", b"on", b"nopass", b"+acl") != "OK":
+                raise AssertionError("failed to create ACL self-delete lifecycle user")
+            delete_self = authenticate(port, b"delete-self", b"ignored")
+            try:
+                if send_command(delete_self, b"ACL", b"DELUSER", b"delete-self") != 1:
+                    raise AssertionError("ACL DELUSER self-delete returned the wrong count")
+                expect_connection_closed(delete_self, "ACL DELUSER self-delete")
+            finally:
+                delete_self.close()
 
             idle_default = connect_with_retry(port)
             if send_command(admin, b"ACL", b"SETUSER", b"default", b"resetpass", b">rootpass", b">rootpass2", b">rootpass") != "OK":

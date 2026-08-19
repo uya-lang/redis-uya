@@ -229,6 +229,16 @@ def run_smoke() -> None:
                 if send_command(admin, b"ACL", b"LOG", b"RESET") != "OK":
                     raise AssertionError("failed to reset ACL LOG after username-case check")
                 expect_auth_error(port, b"Default", b"ignored")
+                auth_log = send_command(admin, b"ACL", b"LOG", b"1")
+                if not isinstance(auth_log, list) or len(auth_log) != 1 or not isinstance(auth_log[0], list):
+                    raise AssertionError(f"ACL LOG omitted failed authentication: {auth_log!r}")
+                auth_fields = dict(zip(auth_log[0][::2], auth_log[0][1::2]))
+                if auth_fields.get(b"reason") != b"auth" or auth_fields.get(b"context") != b"toplevel":
+                    raise AssertionError(f"ACL LOG used wrong failed-auth metadata: {auth_log!r}")
+                if auth_fields.get(b"object") != b"AUTH" or auth_fields.get(b"username") != b"Default":
+                    raise AssertionError(f"ACL LOG lost failed-auth username/object: {auth_log!r}")
+                if send_command(admin, b"ACL", b"LOG", b"RESET") != "OK":
+                    raise AssertionError("failed to reset ACL LOG after authentication check")
                 if send_command(admin, b"ACL", b"SAVE") != "OK":
                     raise AssertionError("failed to save case-sensitive DEFAULT named user")
                 case_saved = acl_path.read_bytes()

@@ -281,6 +281,7 @@ const CONNECTION_ACL_SELECTOR_CATEGORY_MAX: usize = 8;
 const CONNECTION_ACL_SELECTOR_PATTERN_MAX: usize = 8;
 const CONNECTION_ACL_LOG_MAX: usize = 128;
 const CONNECTION_ACL_LOG_CONTEXT_MAX: usize = 16;
+const CONNECTION_ACL_LOG_REASON_MAX: usize = 16;
 const CONNECTION_ACL_FILE_MAX_BYTES: usize = 65536;
 const CONNECTION_ACL_FILE_PATH_MAX: usize = 512;
 
@@ -526,6 +527,8 @@ struct ConnectionAclLogEntry {
     client_local_addr_len: usize,
     client_local_addr: [byte: CONNECTION_CLIENT_ADDR_MAX],
     count: u64,
+    reason_len: usize,
+    reason: [byte: CONNECTION_ACL_LOG_REASON_MAX],
     command_len: usize,
     command: [byte: CONNECTION_ACL_COMMAND_NAME_MAX],
     context_len: usize,
@@ -2795,6 +2798,7 @@ fn connection_acl_log_clear_all() void {
         connection_acl_log_entries[index].client_addr_len = 0;
         connection_acl_log_entries[index].client_local_addr_len = 0;
         connection_acl_log_entries[index].count = 0u64;
+        connection_acl_log_entries[index].reason_len = 0;
         connection_acl_log_entries[index].command_len = 0;
         connection_acl_log_entries[index].context_len = 0;
         connection_client_registry_copy_bytes(connection_acl_log_entries[index].client_addr[0: CONNECTION_CLIENT_ADDR_MAX], connection_reply_empty_slice(), 0);
@@ -4335,7 +4339,7 @@ fn connection_acl_log_copy_exact(dst: &[byte], src: &[byte]) usize {
     return written;
 }
 
-fn connection_acl_log_append_command_denied(name: &[byte], context: &[byte], username: &[byte], now_ms: u64, client_id: i64) void {
+fn connection_acl_log_append(name: &[byte], reason: &[byte], context: &[byte], username: &[byte], now_ms: u64, client_id: i64, lowercase_name: bool) void {
     if name.len == 0 || context.len == 0 {
         return;
     }
@@ -4363,7 +4367,12 @@ fn connection_acl_log_append_command_denied(name: &[byte], context: &[byte], use
             }
         }
         connection_acl_log_entries[slot].count = 1u64;
-        connection_acl_log_entries[slot].command_len = connection_acl_log_copy_lower(connection_acl_log_entries[slot].command[0: CONNECTION_ACL_COMMAND_NAME_MAX], name);
+        connection_acl_log_entries[slot].reason_len = connection_acl_log_copy_lower(connection_acl_log_entries[slot].reason[0: CONNECTION_ACL_LOG_REASON_MAX], reason);
+        if lowercase_name {
+            connection_acl_log_entries[slot].command_len = connection_acl_log_copy_lower(connection_acl_log_entries[slot].command[0: CONNECTION_ACL_COMMAND_NAME_MAX], name);
+        } else {
+            connection_acl_log_entries[slot].command_len = connection_acl_log_copy_exact(connection_acl_log_entries[slot].command[0: CONNECTION_ACL_COMMAND_NAME_MAX], name);
+        }
         connection_acl_log_entries[slot].context_len = connection_acl_log_copy_lower(connection_acl_log_entries[slot].context[0: CONNECTION_ACL_LOG_CONTEXT_MAX], context);
     } else {
         return;
@@ -4377,6 +4386,14 @@ fn connection_acl_log_append_command_denied(name: &[byte], context: &[byte], use
     if connection_acl_log_count < CONNECTION_ACL_LOG_MAX {
         connection_acl_log_count = connection_acl_log_count + 1;
     }
+}
+
+fn connection_acl_log_append_command_denied(name: &[byte], context: &[byte], username: &[byte], now_ms: u64, client_id: i64) void {
+    connection_acl_log_append(name, &"command"[0: 7], context, username, now_ms, client_id, true);
+}
+
+fn connection_acl_log_append_auth_failed(username: &[byte], now_ms: u64, client_id: i64) void {
+    connection_acl_log_append(&"AUTH"[0: 4], &"auth"[0: 4], &"toplevel"[0: 8], username, now_ms, client_id, false);
 }
 
 fn connection_acl_permission_error_for_user(name: &[byte], username: &[byte]) CommandReply {
@@ -6649,7 +6666,7 @@ fn connection_acl_log_append_entry(raw: &Sds, entry: &ConnectionAclLogEntry, now
     const timestamp_seconds: u64 = entry.created_ms / 1000u64;
     try connection_sds_append_resp_array_header(raw, 20);
     try connection_sds_append_resp_bulk(raw, &"reason"[0: 6]);
-    try connection_sds_append_resp_bulk(raw, &"command"[0: 7]);
+    try connection_sds_append_resp_bulk(raw, entry.reason[0: entry.reason_len]);
     try connection_sds_append_resp_bulk(raw, &"context"[0: 7]);
     try connection_sds_append_resp_bulk(raw, entry.context[0: entry.context_len]);
     try connection_sds_append_resp_bulk(raw, &"object"[0: 6]);
@@ -9009,9 +9026,18 @@ fn connection_handle_auth_state(tx: &ConnectionTransaction, runtime: &CommandRun
     return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
 }
 
-fn connection_handle_auth(tx: &ConnectionTransaction, runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
+fn connection_handle_auth(tx: &ConnectionTransaction, runtime: &CommandRuntimeInfo, command: &Command, now_ms: u64, client_id: i64) CommandReply {
     const reply: CommandReply = connection_handle_auth_state(tx, runtime, command);
     connection_client_registry_sync(tx);
+    if reply.typ == CommandReplyType.reply_error && connection_slice_eq(reply.data, &"WRONGPASS invalid username-password pair or user is disabled."[0: 61]) {
+        var username: &[byte] = &"default"[0: 7];
+        if command.argc == 3 {
+            username = command_arg_data(command, 1) catch {
+                return reply;
+            };
+        }
+        connection_acl_log_append_auth_failed(username, now_ms, client_id);
+    }
     return reply;
 }
 
@@ -12624,7 +12650,7 @@ fn connection_transaction_execute_at(
                 command.info.cmd_type == CommandType.command_eval_ro || command.info.cmd_type == CommandType.command_evalsha_ro,
             );
         } else if command.info.cmd_type == CommandType.command_auth {
-            reply = connection_handle_auth(tx, runtime, &command);
+            reply = connection_handle_auth(tx, runtime, &command, now_ms, connection_acl_log_client_id(tx));
         } else if transaction_permission != ConnectionAclPermissionResult.connection_acl_permission_allowed {
             reply = connection_acl_permission_result_reply(transaction_permission, transaction_command_name, &"transaction"[0: 11], transaction_username, now_ms, connection_acl_log_client_id(tx));
         } else if command.info.cmd_type == CommandType.command_himport {
@@ -12961,7 +12987,7 @@ fn connection_hello_reply(protocol_version: i32) CommandReply {
     return connection_raw_reply_owned(raw.buf[0: raw.len]);
 }
 
-fn connection_handle_hello(tx: &ConnectionTransaction, runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
+fn connection_handle_hello(tx: &ConnectionTransaction, runtime: &CommandRuntimeInfo, command: &Command, now_ms: u64, client_id: i64) CommandReply {
     if command.argc == 1 {
         if !connection_auth_ok(tx, runtime) {
             return connection_noauth_reply();
@@ -13020,6 +13046,9 @@ fn connection_handle_hello(tx: &ConnectionTransaction, runtime: &CommandRuntimeI
         var auth_reply: CommandReply = connection_authenticate_username_password(tx, runtime, auth_username, auth_password);
         connection_client_registry_sync(tx);
         if auth_reply.typ != CommandReplyType.reply_simple_string {
+            if auth_reply.typ == CommandReplyType.reply_error && connection_slice_eq(auth_reply.data, &"WRONGPASS invalid username-password pair or user is disabled."[0: 61]) {
+                connection_acl_log_append_auth_failed(auth_username, now_ms, client_id);
+            }
             return auth_reply;
         }
         command_reply_cleanup(&auth_reply);
@@ -14070,7 +14099,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
     }
 
     if command.info.cmd_type == CommandType.command_auth {
-        const auth_reply: CommandReply = connection_handle_auth(tx, runtime, &command);
+        const auth_reply: CommandReply = connection_handle_auth(tx, runtime, &command, now_ms, connection_acl_log_client_id(tx));
         const auth_n: usize = try connection_encode_reply_for_command(tx, &command, &auth_reply, out, out_cap, reply_off_before, reply_skip_before);
         resp_parse_value_free(&parsed.value, parsed.elements_owned);
         return ConnectionProcessResult{ response_len: auth_n, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
@@ -14225,7 +14254,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
     }
 
     if command.info.cmd_type == CommandType.command_hello {
-        var hello_reply: CommandReply = connection_handle_hello(tx, runtime, &command);
+        var hello_reply: CommandReply = connection_handle_hello(tx, runtime, &command, now_ms, connection_acl_log_client_id(tx));
         const hello_n: usize = try connection_encode_reply_for_command(tx, &command, &hello_reply, out, out_cap, reply_off_before, reply_skip_before);
         command_reply_cleanup(&hello_reply);
         resp_parse_value_free(&parsed.value, parsed.elements_owned);

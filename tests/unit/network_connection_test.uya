@@ -3096,8 +3096,15 @@ export fn test_connection_process_auth_requirepass_shutdown() !void {
     const requirepass_bob_off: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$3\r\nbob\r\n$3\r\noff\r\n"[0: 44], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: requirepass_bob_off.response_len], &"+OK\r\n"[0: 5]));
 
-    const requirepass_bob_after_off: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &requirepass_bob_tx, &"*1\r\n$4\r\nPING\r\n"[0: 14], &out[0], 512, 1000u64);
-    try assert_true(network_connection_slice_eq(out[0: requirepass_bob_after_off.response_len], &"-NOAUTH Authentication required.\r\n"[0: 34]));
+    const requirepass_bob_after_off: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &requirepass_bob_tx, &"*2\r\n$3\r\nACL\r\n$6\r\nWHOAMI\r\n"[0: 25], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: requirepass_bob_after_off.response_len], &"$3\r\nbob\r\n"[0: 9]));
+
+    var requirepass_bob_new_tx: ConnectionTransaction = connection_transaction_new();
+    defer {
+        connection_transaction_reset(&requirepass_bob_new_tx);
+    }
+    const requirepass_bob_auth_after_off: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &requirepass_bob_new_tx, &"*3\r\n$4\r\nAUTH\r\n$3\r\nbob\r\n$6\r\nsecret\r\n"[0: 35], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: requirepass_bob_auth_after_off.response_len], &"-WRONGPASS invalid username-password pair or user is disabled.\r\n"[0: 64]));
 
     const multi_auth: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*1\r\n$5\r\nMULTI\r\n"[0: 15], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: multi_auth.response_len], &"+OK\r\n"[0: 5]));

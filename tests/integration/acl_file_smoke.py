@@ -195,6 +195,20 @@ def run_smoke() -> None:
             if send_command(admin, b"ACL", b"DELUSER", b"atomic") != 1:
                 raise AssertionError("failed to remove ACL SETUSER rollback user")
 
+            if send_command(admin, b"ACL", b"SETUSER", b"session", b"on", b"nopass", b"+ping") != "OK":
+                raise AssertionError("failed to create ACL session lifecycle user")
+            session = authenticate(port, b"session", b"ignored")
+            try:
+                if send_command(admin, b"ACL", b"SETUSER", b"session", b"off") != "OK":
+                    raise AssertionError("failed to disable ACL session lifecycle user")
+                if send_command(session, b"PING") != "PONG":
+                    raise AssertionError("disabling named user invalidated an existing connection")
+                expect_auth_error(port, b"session", b"ignored")
+            finally:
+                session.close()
+            if send_command(admin, b"ACL", b"DELUSER", b"session") != 1:
+                raise AssertionError("failed to remove ACL session lifecycle user")
+
             idle_default = connect_with_retry(port)
             if send_command(admin, b"ACL", b"SETUSER", b"default", b"resetpass", b">rootpass", b">rootpass2", b">rootpass") != "OK":
                 raise AssertionError("failed to set default ACL passwords")

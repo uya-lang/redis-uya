@@ -8736,7 +8736,7 @@ fn connection_authenticated_named_user_valid(tx: &ConnectionTransaction) bool {
     if slot_index >= CONNECTION_ACL_USER_MAX {
         return false;
     }
-    return connection_acl_users[slot_index].active && connection_acl_users[slot_index].enabled;
+    return connection_acl_users[slot_index].active;
 }
 
 fn connection_auth_ok(tx: &ConnectionTransaction, runtime: &CommandRuntimeInfo) bool {

@@ -282,6 +282,7 @@ const CONNECTION_ACL_SELECTOR_PATTERN_MAX: usize = 8;
 const CONNECTION_ACL_LOG_MAX: usize = 128;
 const CONNECTION_ACL_LOG_CONTEXT_MAX: usize = 16;
 const CONNECTION_ACL_LOG_REASON_MAX: usize = 16;
+const CONNECTION_ACL_LOG_GROUPING_MAX_TIME_DELTA_MS: u64 = 60000u64;
 const CONNECTION_ACL_FILE_MAX_BYTES: usize = 65536;
 const CONNECTION_ACL_FILE_PATH_MAX: usize = 512;
 
@@ -518,7 +519,9 @@ var connection_acl_load_backup_users: [ConnectionAclUser: CONNECTION_ACL_USER_MA
 struct ConnectionAclLogEntry {
     active: bool,
     sequence: u64,
+    order: u64,
     created_ms: u64,
+    updated_ms: u64,
     client_id: i64,
     username_len: usize,
     username: [byte: CONNECTION_ACL_USER_NAME_MAX],
@@ -539,6 +542,7 @@ var connection_acl_log_entries: [ConnectionAclLogEntry: CONNECTION_ACL_LOG_MAX] 
 var connection_acl_log_next_index: usize = 0;
 var connection_acl_log_count: usize = 0;
 var connection_acl_log_next_sequence: u64 = 1u64;
+var connection_acl_log_next_order: u64 = 1u64;
 
 enum ConnectionClientReplyBehavior {
     connection_client_reply_behavior_normal,
@@ -2792,7 +2796,9 @@ fn connection_acl_log_clear_all() void {
     while index < CONNECTION_ACL_LOG_MAX {
         connection_acl_log_entries[index].active = false;
         connection_acl_log_entries[index].sequence = 0u64;
+        connection_acl_log_entries[index].order = 0u64;
         connection_acl_log_entries[index].created_ms = 0u64;
+        connection_acl_log_entries[index].updated_ms = 0u64;
         connection_acl_log_entries[index].client_id = 0;
         connection_acl_log_entries[index].username_len = 0;
         connection_acl_log_entries[index].client_addr_len = 0;
@@ -2808,6 +2814,7 @@ fn connection_acl_log_clear_all() void {
     connection_acl_log_next_index = 0;
     connection_acl_log_count = 0;
     connection_acl_log_next_sequence = 1u64;
+    connection_acl_log_next_order = 1u64;
 }
 
 fn connection_acl_users_clear_all() void {
@@ -4339,51 +4346,154 @@ fn connection_acl_log_copy_exact(dst: &[byte], src: &[byte]) usize {
     return written;
 }
 
-fn connection_acl_log_append(name: &[byte], reason: &[byte], context: &[byte], username: &[byte], now_ms: u64, client_id: i64, lowercase_name: bool) void {
-    if name.len == 0 || context.len == 0 {
+fn connection_acl_log_capture_client(entry: &ConnectionAclLogEntry, client_id: i64) void {
+    entry.client_id = client_id;
+    entry.client_addr_len = 0;
+    entry.client_local_addr_len = 0;
+    const client_slot_idx: i32 = connection_client_registry_find_client_id_slot(client_id);
+    if client_slot_idx < 0 || client_slot_idx >= CONNECTION_CLIENT_REGISTRY_MAX as i32 {
         return;
     }
-    var slot: usize = connection_acl_log_next_index;
-    if slot >= CONNECTION_ACL_LOG_MAX {
-        slot = 0;
-        connection_acl_log_next_index = 0;
+    const client_slot_usize: usize = client_slot_idx as usize;
+    if client_slot_usize >= CONNECTION_CLIENT_REGISTRY_MAX {
+        return;
     }
-    if slot < CONNECTION_ACL_LOG_MAX {
-        connection_acl_log_entries[slot].active = true;
-        connection_acl_log_entries[slot].sequence = connection_acl_log_next_sequence;
-        connection_acl_log_entries[slot].created_ms = now_ms;
-        connection_acl_log_entries[slot].client_id = client_id;
-        connection_acl_log_entries[slot].username_len = connection_acl_log_copy_exact(connection_acl_log_entries[slot].username[0: CONNECTION_ACL_USER_NAME_MAX], username);
-        connection_acl_log_entries[slot].client_addr_len = 0;
-        connection_acl_log_entries[slot].client_local_addr_len = 0;
-        const client_slot_idx: i32 = connection_client_registry_find_client_id_slot(client_id);
-        if client_slot_idx >= 0 && client_slot_idx < CONNECTION_CLIENT_REGISTRY_MAX as i32 {
-            const client_slot_usize: usize = client_slot_idx as usize;
-            if client_slot_usize < CONNECTION_CLIENT_REGISTRY_MAX {
-                connection_acl_log_entries[slot].client_addr_len = connection_client_registry[client_slot_usize].client_addr_len;
-                connection_acl_log_entries[slot].client_local_addr_len = connection_client_registry[client_slot_usize].client_local_addr_len;
-                connection_client_registry_copy_bytes(connection_acl_log_entries[slot].client_addr[0: CONNECTION_CLIENT_ADDR_MAX], connection_client_registry[client_slot_usize].client_addr[0: CONNECTION_CLIENT_ADDR_MAX], connection_acl_log_entries[slot].client_addr_len);
-                connection_client_registry_copy_bytes(connection_acl_log_entries[slot].client_local_addr[0: CONNECTION_CLIENT_ADDR_MAX], connection_client_registry[client_slot_usize].client_local_addr[0: CONNECTION_CLIENT_ADDR_MAX], connection_acl_log_entries[slot].client_local_addr_len);
-            }
-        }
-        connection_acl_log_entries[slot].count = 1u64;
-        connection_acl_log_entries[slot].reason_len = connection_acl_log_copy_lower(connection_acl_log_entries[slot].reason[0: CONNECTION_ACL_LOG_REASON_MAX], reason);
-        if lowercase_name {
-            connection_acl_log_entries[slot].command_len = connection_acl_log_copy_lower(connection_acl_log_entries[slot].command[0: CONNECTION_ACL_COMMAND_NAME_MAX], name);
-        } else {
-            connection_acl_log_entries[slot].command_len = connection_acl_log_copy_exact(connection_acl_log_entries[slot].command[0: CONNECTION_ACL_COMMAND_NAME_MAX], name);
-        }
-        connection_acl_log_entries[slot].context_len = connection_acl_log_copy_lower(connection_acl_log_entries[slot].context[0: CONNECTION_ACL_LOG_CONTEXT_MAX], context);
+    entry.client_addr_len = connection_client_registry[client_slot_usize].client_addr_len;
+    entry.client_local_addr_len = connection_client_registry[client_slot_usize].client_local_addr_len;
+    connection_client_registry_copy_bytes(entry.client_addr[0: CONNECTION_CLIENT_ADDR_MAX], connection_client_registry[client_slot_usize].client_addr[0: CONNECTION_CLIENT_ADDR_MAX], entry.client_addr_len);
+    connection_client_registry_copy_bytes(entry.client_local_addr[0: CONNECTION_CLIENT_ADDR_MAX], connection_client_registry[client_slot_usize].client_local_addr[0: CONNECTION_CLIENT_ADDR_MAX], entry.client_local_addr_len);
+}
+
+fn connection_acl_log_entry_matches(entry: &ConnectionAclLogEntry, name: &[byte], reason: &[byte], context: &[byte], username: &[byte], now_ms: u64, lowercase_name: bool) bool {
+    if !entry.active || !connection_keyword_eq(entry.reason[0: entry.reason_len], reason) ||
+        !connection_keyword_eq(entry.context[0: entry.context_len], context) ||
+        !connection_slice_eq(entry.username[0: entry.username_len], username) {
+        return false;
+    }
+    var delta_ms: u64 = 0u64;
+    if now_ms >= entry.updated_ms {
+        delta_ms = now_ms - entry.updated_ms;
     } else {
+        delta_ms = entry.updated_ms - now_ms;
+    }
+    if delta_ms > CONNECTION_ACL_LOG_GROUPING_MAX_TIME_DELTA_MS {
+        return false;
+    }
+    if lowercase_name {
+        return connection_keyword_eq(entry.command[0: entry.command_len], name);
+    }
+    return connection_slice_eq(entry.command[0: entry.command_len], name);
+}
+
+fn connection_acl_log_find_recent_match(name: &[byte], reason: &[byte], context: &[byte], username: &[byte], now_ms: u64, lowercase_name: bool) i32 {
+    var upper_order: u64 = connection_acl_log_next_order;
+    var scanned: usize = 0;
+    while scanned < 10 {
+        var best_slot: i32 = -1;
+        var best_order: u64 = 0u64;
+        var index: usize = 0;
+        while index < CONNECTION_ACL_LOG_MAX {
+            const order: u64 = connection_acl_log_entries[index].order;
+            if connection_acl_log_entries[index].active && order < upper_order && (best_slot < 0 || order > best_order) {
+                best_slot = index as i32;
+                best_order = order;
+            }
+            index = index + 1;
+        }
+        if best_slot < 0 || best_slot >= CONNECTION_ACL_LOG_MAX as i32 {
+            return -1;
+        }
+        const slot: usize = best_slot as usize;
+        if slot >= CONNECTION_ACL_LOG_MAX {
+            return -1;
+        }
+        if connection_acl_log_entry_matches(&connection_acl_log_entries[slot], name, reason, context, username, now_ms, lowercase_name) {
+            return best_slot;
+        }
+        upper_order = best_order;
+        scanned = scanned + 1;
+    }
+    return -1;
+}
+
+fn connection_acl_log_new_slot() usize {
+    if connection_acl_log_count < CONNECTION_ACL_LOG_MAX {
+        var offset: usize = 0;
+        while offset < CONNECTION_ACL_LOG_MAX {
+            var slot: usize = connection_acl_log_next_index + offset;
+            if slot >= CONNECTION_ACL_LOG_MAX {
+                slot = slot - CONNECTION_ACL_LOG_MAX;
+            }
+            if slot >= CONNECTION_ACL_LOG_MAX {
+                slot = 0;
+            }
+            if slot < CONNECTION_ACL_LOG_MAX {
+                if !connection_acl_log_entries[slot].active {
+                    return slot;
+                }
+            }
+            offset = offset + 1;
+        }
+    }
+    var oldest_slot: usize = 0;
+    var oldest_order: u64 = connection_acl_log_entries[0].order;
+    var index: usize = 1;
+    while index < CONNECTION_ACL_LOG_MAX {
+        if connection_acl_log_entries[index].order < oldest_order {
+            oldest_slot = index;
+            oldest_order = connection_acl_log_entries[index].order;
+        }
+        index = index + 1;
+    }
+    return oldest_slot;
+}
+
+fn connection_acl_log_append(name: &[byte], reason: &[byte], context: &[byte], username: &[byte], now_ms: u64, client_id: i64, lowercase_name: bool) void {
+    if name.len == 0 || reason.len == 0 || context.len == 0 {
+        return;
+    }
+    const match_slot: i32 = connection_acl_log_find_recent_match(name, reason, context, username, now_ms, lowercase_name);
+    if match_slot >= 0 && match_slot < CONNECTION_ACL_LOG_MAX as i32 {
+        const slot: usize = match_slot as usize;
+        if slot >= CONNECTION_ACL_LOG_MAX {
+            return;
+        }
+        connection_acl_log_entries[slot].count = connection_acl_log_entries[slot].count + 1u64;
+        connection_acl_log_entries[slot].updated_ms = now_ms;
+        connection_acl_log_entries[slot].order = connection_acl_log_next_order;
+        connection_acl_log_capture_client(&connection_acl_log_entries[slot], client_id);
+        connection_acl_log_next_order = connection_acl_log_next_order + 1u64;
         return;
     }
 
+    const slot: usize = connection_acl_log_new_slot();
+    if slot >= CONNECTION_ACL_LOG_MAX {
+        return;
+    }
+    const replacing_active: bool = connection_acl_log_entries[slot].active;
+    connection_acl_log_entries[slot].active = true;
+    connection_acl_log_entries[slot].sequence = connection_acl_log_next_sequence;
+    connection_acl_log_entries[slot].order = connection_acl_log_next_order;
+    connection_acl_log_entries[slot].created_ms = now_ms;
+    connection_acl_log_entries[slot].updated_ms = now_ms;
+    connection_acl_log_entries[slot].username_len = connection_acl_log_copy_exact(connection_acl_log_entries[slot].username[0: CONNECTION_ACL_USER_NAME_MAX], username);
+    connection_acl_log_capture_client(&connection_acl_log_entries[slot], client_id);
+    connection_acl_log_entries[slot].count = 1u64;
+    connection_acl_log_entries[slot].reason_len = connection_acl_log_copy_lower(connection_acl_log_entries[slot].reason[0: CONNECTION_ACL_LOG_REASON_MAX], reason);
+    if lowercase_name {
+        connection_acl_log_entries[slot].command_len = connection_acl_log_copy_lower(connection_acl_log_entries[slot].command[0: CONNECTION_ACL_COMMAND_NAME_MAX], name);
+    } else {
+        connection_acl_log_entries[slot].command_len = connection_acl_log_copy_exact(connection_acl_log_entries[slot].command[0: CONNECTION_ACL_COMMAND_NAME_MAX], name);
+    }
+    connection_acl_log_entries[slot].context_len = connection_acl_log_copy_lower(connection_acl_log_entries[slot].context[0: CONNECTION_ACL_LOG_CONTEXT_MAX], context);
+
     connection_acl_log_next_sequence = connection_acl_log_next_sequence + 1u64;
-    connection_acl_log_next_index = connection_acl_log_next_index + 1;
+    connection_acl_log_next_order = connection_acl_log_next_order + 1u64;
+    connection_acl_log_next_index = slot + 1;
     if connection_acl_log_next_index >= CONNECTION_ACL_LOG_MAX {
         connection_acl_log_next_index = 0;
     }
-    if connection_acl_log_count < CONNECTION_ACL_LOG_MAX {
+    if !replacing_active && connection_acl_log_count < CONNECTION_ACL_LOG_MAX {
         connection_acl_log_count = connection_acl_log_count + 1;
     }
 }
@@ -6660,10 +6770,9 @@ fn connection_acl_log_append_client_info(raw: &Sds, entry: &ConnectionAclLogEntr
 
 fn connection_acl_log_append_entry(raw: &Sds, entry: &ConnectionAclLogEntry, now_ms: u64) !void {
     var age_seconds: u64 = 0u64;
-    if now_ms >= entry.created_ms {
-        age_seconds = (now_ms - entry.created_ms) / 1000u64;
+    if now_ms >= entry.updated_ms {
+        age_seconds = (now_ms - entry.updated_ms) / 1000u64;
     }
-    const timestamp_seconds: u64 = entry.created_ms / 1000u64;
     try connection_sds_append_resp_array_header(raw, 20);
     try connection_sds_append_resp_bulk(raw, &"reason"[0: 6]);
     try connection_sds_append_resp_bulk(raw, entry.reason[0: entry.reason_len]);
@@ -6684,9 +6793,9 @@ fn connection_acl_log_append_entry(raw: &Sds, entry: &ConnectionAclLogEntry, now
     try connection_sds_append_resp_bulk(raw, &"entry-id"[0: 8]);
     try connection_sds_append_resp_integer(raw, entry.sequence as i64);
     try connection_sds_append_resp_bulk(raw, &"timestamp-created"[0: 17]);
-    try connection_sds_append_resp_integer(raw, timestamp_seconds as i64);
+    try connection_sds_append_resp_integer(raw, entry.created_ms as i64);
     try connection_sds_append_resp_bulk(raw, &"timestamp-last-updated"[0: 22]);
-    try connection_sds_append_resp_integer(raw, timestamp_seconds as i64);
+    try connection_sds_append_resp_integer(raw, entry.updated_ms as i64);
     try connection_sds_append_resp_bulk(raw, &"count"[0: 5]);
     try connection_sds_append_resp_integer(raw, entry.count as i64);
 }
@@ -6722,26 +6831,32 @@ fn connection_acl_handle_log(command: &Command, now_ms: u64) CommandReply {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
     var emitted: usize = 0;
-    var scanned: usize = 0;
-    var slot_index: usize = 0;
-    if connection_acl_log_next_index == 0 {
-        slot_index = CONNECTION_ACL_LOG_MAX - 1;
-    } else {
-        slot_index = connection_acl_log_next_index - 1;
-    }
-    while emitted < limit && scanned < CONNECTION_ACL_LOG_MAX {
-        if connection_acl_log_entries[slot_index].active {
-            _ = connection_acl_log_append_entry(&raw, &connection_acl_log_entries[slot_index], now_ms) catch {
+    var upper_order: u64 = connection_acl_log_next_order;
+    while emitted < limit {
+        var best_slot: i32 = -1;
+        var best_order: u64 = 0u64;
+        var index: usize = 0;
+        while index < CONNECTION_ACL_LOG_MAX {
+            const order: u64 = connection_acl_log_entries[index].order;
+            if connection_acl_log_entries[index].active && order < upper_order && (best_slot < 0 || order > best_order) {
+                best_slot = index as i32;
+                best_order = order;
+            }
+            index = index + 1;
+        }
+        if best_slot < 0 || best_slot >= CONNECTION_ACL_LOG_MAX as i32 {
+            break;
+        }
+        const slot: usize = best_slot as usize;
+        if slot < CONNECTION_ACL_LOG_MAX {
+            _ = connection_acl_log_append_entry(&raw, &connection_acl_log_entries[slot], now_ms) catch {
                 return connection_error_reply(&"ERR out of memory"[0: 17]);
             };
-            emitted = emitted + 1;
-        }
-        scanned = scanned + 1;
-        if slot_index == 0 {
-            slot_index = CONNECTION_ACL_LOG_MAX - 1;
         } else {
-            slot_index = slot_index - 1;
+            break;
         }
+        upper_order = best_order;
+        emitted = emitted + 1;
     }
     return connection_raw_reply_owned(raw.buf[0: raw.len]);
 }

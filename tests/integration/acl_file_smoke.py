@@ -229,6 +229,7 @@ def run_smoke() -> None:
                 if send_command(admin, b"ACL", b"LOG", b"RESET") != "OK":
                     raise AssertionError("failed to reset ACL LOG after username-case check")
                 expect_auth_error(port, b"Default", b"ignored")
+                expect_auth_error(port, b"Default", b"ignored")
                 auth_log = send_command(admin, b"ACL", b"LOG", b"1")
                 if not isinstance(auth_log, list) or len(auth_log) != 1 or not isinstance(auth_log[0], list):
                     raise AssertionError(f"ACL LOG omitted failed authentication: {auth_log!r}")
@@ -237,6 +238,8 @@ def run_smoke() -> None:
                     raise AssertionError(f"ACL LOG used wrong failed-auth metadata: {auth_log!r}")
                 if auth_fields.get(b"object") != b"AUTH" or auth_fields.get(b"username") != b"Default":
                     raise AssertionError(f"ACL LOG lost failed-auth username/object: {auth_log!r}")
+                if auth_fields.get(b"count") != 2:
+                    raise AssertionError(f"ACL LOG did not group repeated authentication failures: {auth_log!r}")
                 if send_command(admin, b"ACL", b"LOG", b"RESET") != "OK":
                     raise AssertionError("failed to reset ACL LOG after authentication check")
                 if send_command(admin, b"ACL", b"SAVE") != "OK":

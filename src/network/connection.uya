@@ -2846,6 +2846,24 @@ fn connection_acl_user_find(username: &[byte]) i32 {
     return -1;
 }
 
+fn connection_acl_username_has_invalid_space(username: &[byte]) bool {
+    var index: usize = 0;
+    while index < username.len {
+        const ch: byte = username.ptr[index];
+        if ch == 0 as byte || ch == 32 as byte || (ch >= 9 as byte && ch <= 13 as byte) {
+            return true;
+        }
+        index = index + 1;
+    }
+    return false;
+}
+
+fn connection_acl_username_valid(username: &[byte]) bool {
+    return username.len > 0 &&
+        username.len <= CONNECTION_ACL_USER_NAME_MAX &&
+        !connection_acl_username_has_invalid_space(username);
+}
+
 fn connection_acl_user_selector(username: &[byte]) i32 {
     if connection_slice_eq(username, &"default"[0: 7]) {
         return CONNECTION_CLIENT_KILL_USER_DEFAULT;
@@ -2869,7 +2887,7 @@ fn connection_acl_user_find_free() i32 {
 }
 
 fn connection_acl_user_create_or_get(username: &[byte]) !usize {
-    if username.len == 0 || username.len > CONNECTION_ACL_USER_NAME_MAX {
+    if !connection_acl_username_valid(username) {
         return error.ConnectionInputTooLarge;
     }
     var slot: i32 = connection_acl_user_find(username);
@@ -5996,6 +6014,9 @@ fn connection_acl_handle_setuser(runtime: &CommandRuntimeInfo, router: &CommandR
     const username: &[byte] = command_arg_data(command, 2) catch {
         return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
     };
+    if connection_acl_username_has_invalid_space(username) {
+        return connection_error_reply(&"ERR Usernames can't contain spaces or null characters"[0: 53]);
+    }
 
     connection_acl_load_snapshot(runtime);
     var reply: CommandReply = if connection_slice_eq(username, &"default"[0: 7]) {
@@ -6906,7 +6927,7 @@ fn connection_acl_append_default_file_line(raw: &Sds, runtime: &CommandRuntimeIn
 }
 
 fn connection_acl_append_named_file_line(raw: &Sds, user: &ConnectionAclUser) !void {
-    if !connection_acl_file_token_safe(user.name[0: user.name_len]) ||
+    if !connection_acl_username_valid(user.name[0: user.name_len]) ||
         !connection_acl_file_key_rules_safe(user.key_patterns[0: CONNECTION_ACL_KEY_PATTERN_MAX]) ||
         !connection_acl_file_channel_rules_safe(user.channel_patterns[0: CONNECTION_ACL_CHANNEL_PATTERN_MAX]) ||
         !connection_acl_file_selectors_safe(user.selectors[0: CONNECTION_ACL_SELECTOR_MAX]) {
@@ -7284,7 +7305,7 @@ fn connection_acl_file_apply_line(runtime: &CommandRuntimeInfo, router: &Command
         return error.ConnectionAclFileInvalid;
     }
     const username: &[byte] = connection_acl_file_next_token(line, &pos);
-    if username.len == 0 || !connection_acl_file_token_safe(username) {
+    if !connection_acl_username_valid(username) {
         return error.ConnectionAclFileInvalid;
     }
     const is_default: bool = connection_slice_eq(username, &"default"[0: 7]);

@@ -191,6 +191,18 @@ def run_smoke() -> None:
             if config_value(admin, b"aclfile") != str(acl_path).encode():
                 raise AssertionError("CONFIG GET aclfile mismatch")
 
+            for invalid_username in (b"bad user", b"bad\tuser", b"bad\nuser", b"bad\x00user"):
+                expect_error(
+                    admin,
+                    "Usernames can't contain spaces or null characters",
+                    b"ACL",
+                    b"SETUSER",
+                    invalid_username,
+                    b"on",
+                )
+                if send_command(admin, b"ACL", b"GETUSER", invalid_username) is not None:
+                    raise AssertionError(f"invalid ACL username was created: {invalid_username!r}")
+
             if send_command(admin, b"ACL", b"SETUSER", b"DEFAULT", b"on", b"nopass", b"+ping", b"+acl") != "OK":
                 raise AssertionError("failed to create case-sensitive DEFAULT named user")
             if acl_getuser_field(admin, b"DEFAULT", b"commands") != b"-@all +ping +acl":

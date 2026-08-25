@@ -4564,26 +4564,87 @@ fn connection_acl_key_permission_error_for_user(username: &[byte]) CommandReply 
     return connection_owned_error(raw.buf[0: raw.len]);
 }
 
-fn connection_acl_log_first_key_index(info: &CommandInfo, command: &Command, arg_offset: usize, full_argc: usize) i32 {
+fn connection_acl_log_denied_key_index(username: &[byte], info: &CommandInfo, command: &Command, arg_offset: usize, full_argc: usize) i32 {
     const dynamic_spec: ConnectionAclKeySpec = connection_acl_dynamic_key_spec(info, command, arg_offset, full_argc);
-    if dynamic_spec.dynamic && connection_acl_key_spec_count(&dynamic_spec) > 0 {
-        const key_index: usize = connection_acl_key_spec_index(&dynamic_spec, 0);
-        return key_index as i32;
+    if dynamic_spec.dynamic {
+        if connection_acl_user_allkeys(username) {
+            return -1;
+        }
+        const key_count: usize = connection_acl_key_spec_count(&dynamic_spec);
+        var ordinal: usize = 0;
+        while ordinal < key_count {
+            const key_index: usize = connection_acl_key_spec_index(&dynamic_spec, ordinal);
+            const key: &[byte] = command_arg_data(command, arg_offset + key_index) catch {
+                return -1;
+            };
+            const required_permissions: u8 = connection_acl_dynamic_key_permissions(info, &dynamic_spec, ordinal);
+            if !connection_acl_user_key_allowed(username, key, required_permissions) {
+                return key_index as i32;
+            }
+            ordinal = ordinal + 1;
+        }
+        return -1;
     }
     if info.cmd_type == CommandType.command_himport && full_argc >= 3 {
-        return 2;
+        if connection_acl_user_allkeys(username) {
+            return -1;
+        }
+        const subcommand: &[byte] = command_arg_data(command, arg_offset + 1) catch {
+            return -1;
+        };
+        if !connection_keyword_eq(subcommand, &"SET"[0: 3]) {
+            return -1;
+        }
+        const key: &[byte] = command_arg_data(command, arg_offset + 2) catch {
+            return -1;
+        };
+        if !connection_acl_user_key_allowed(username, key, CONNECTION_ACL_KEY_PERMISSION_WRITE) {
+            return 2;
+        }
+        return -1;
     }
-    if connection_acl_count_range_keys(info, full_argc) > 0 && info.first_key > 0 {
-        return info.first_key;
+    if connection_acl_user_allkeys(username) || connection_acl_count_range_keys(info, full_argc) == 0 || info.first_key <= 0 {
+        return -1;
+    }
+    var last_index: i32 = info.last_key;
+    if info.last_key < 0 {
+        last_index = full_argc as i32 + info.last_key;
+    }
+    var key_index: i32 = info.first_key;
+    var ordinal: usize = 0;
+    while key_index <= last_index {
+        const key: &[byte] = command_arg_data(command, arg_offset + key_index as usize) catch {
+            return -1;
+        };
+        const required_permissions: u8 = connection_acl_static_key_permissions(info, command, arg_offset, full_argc, ordinal);
+        if !connection_acl_user_key_allowed(username, key, required_permissions) {
+            return key_index;
+        }
+        ordinal = ordinal + 1;
+        key_index = key_index + info.key_step;
     }
     return -1;
 }
 
-fn connection_acl_log_first_channel_index(full_argc: usize) i32 {
-    if full_argc <= 1 {
+fn connection_acl_log_denied_channel_index(username: &[byte], info: &CommandInfo, command: &Command, arg_offset: usize, full_argc: usize) i32 {
+    if connection_acl_user_allchannels(username) || !connection_acl_command_uses_channels(info.cmd_type) || full_argc <= 1 {
         return -1;
     }
-    return 1;
+    var end_index: usize = full_argc;
+    if info.cmd_type == CommandType.command_publish || info.cmd_type == CommandType.command_spublish {
+        end_index = 2;
+    }
+    var index: usize = 1;
+    while index < end_index {
+        const channel: &[byte] = command_arg_data(command, arg_offset + index) catch {
+            return -1;
+        };
+        if !connection_acl_user_channel_allowed(username, channel) {
+            return index as i32;
+        }
+        index = index + 1;
+    }
+    return -1;
 }
 
 fn connection_acl_log_argument_or(command: &Command, index: usize, fallback: &[byte]) &[byte] {
@@ -4593,7 +4654,7 @@ fn connection_acl_log_argument_or(command: &Command, index: usize, fallback: &[b
 }
 
 fn connection_acl_key_permission_denied_reply_for_user(name: &[byte], info: &CommandInfo, command: &Command, arg_offset: usize, full_argc: usize, context: &[byte], username: &[byte], now_ms: u64, client_id: i64) CommandReply {
-    const key_index: i32 = connection_acl_log_first_key_index(info, command, arg_offset, full_argc);
+    const key_index: i32 = connection_acl_log_denied_key_index(username, info, command, arg_offset, full_argc);
     var object: &[byte] = name;
     if key_index >= 0 {
         object = connection_acl_log_argument_or(command, arg_offset + key_index as usize, name);
@@ -4621,8 +4682,8 @@ fn connection_acl_channel_permission_error_for_user(username: &[byte]) CommandRe
     return connection_owned_error(raw.buf[0: raw.len]);
 }
 
-fn connection_acl_channel_permission_denied_reply_for_user(name: &[byte], command: &Command, arg_offset: usize, full_argc: usize, context: &[byte], username: &[byte], now_ms: u64, client_id: i64) CommandReply {
-    const channel_index: i32 = connection_acl_log_first_channel_index(full_argc);
+fn connection_acl_channel_permission_denied_reply_for_user(name: &[byte], info: &CommandInfo, command: &Command, arg_offset: usize, full_argc: usize, context: &[byte], username: &[byte], now_ms: u64, client_id: i64) CommandReply {
+    const channel_index: i32 = connection_acl_log_denied_channel_index(username, info, command, arg_offset, full_argc);
     var object: &[byte] = name;
     if channel_index >= 0 {
         object = connection_acl_log_argument_or(command, arg_offset + channel_index as usize, name);
@@ -4636,7 +4697,7 @@ fn connection_acl_permission_result_reply(result: ConnectionAclPermissionResult,
         return connection_acl_key_permission_denied_reply_for_user(name, info, command, arg_offset, full_argc, context, username, now_ms, client_id);
     }
     if result == ConnectionAclPermissionResult.connection_acl_permission_channel_denied {
-        return connection_acl_channel_permission_denied_reply_for_user(name, command, arg_offset, full_argc, context, username, now_ms, client_id);
+        return connection_acl_channel_permission_denied_reply_for_user(name, info, command, arg_offset, full_argc, context, username, now_ms, client_id);
     }
     return connection_acl_permission_denied_reply_for_user(name, context, username, now_ms, client_id);
 }

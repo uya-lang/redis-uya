@@ -261,18 +261,18 @@ def run_smoke() -> None:
             finally:
                 case_user.close()
 
-            if send_command(admin, b"ACL", b"SETUSER", b"audit-object", b"on", b"nopass", b"+get", b"+publish") != "OK":
+            if send_command(admin, b"ACL", b"SETUSER", b"audit-object", b"on", b"nopass", b"+mget", b"+subscribe", b"~AllowedKey", b"&AllowedChannel") != "OK":
                 raise AssertionError("failed to create ACL audit object user")
             audit_user = authenticate(port, b"audit-object", b"ignored")
             try:
-                expect_error(audit_user, "permissions to access one of the keys", b"GET", b"AuditKey")
+                expect_error(audit_user, "permissions to access one of the keys", b"MGET", b"AllowedKey", b"AuditKey")
                 key_audit_log = send_command(admin, b"ACL", b"LOG", b"1")
                 key_audit_fields = dict(zip(key_audit_log[0][::2], key_audit_log[0][1::2]))
                 if key_audit_fields.get(b"reason") != b"key" or key_audit_fields.get(b"object") != b"AuditKey":
                     raise AssertionError(f"ACL LOG lost denied key object: {key_audit_log!r}")
                 if send_command(admin, b"ACL", b"LOG", b"RESET") != "OK":
                     raise AssertionError("failed to reset ACL LOG after key object check")
-                expect_error(audit_user, "permissions to access one of the channels", b"PUBLISH", b"AuditChannel", b"payload")
+                expect_error(audit_user, "permissions to access one of the channels", b"SUBSCRIBE", b"AllowedChannel", b"AuditChannel")
                 channel_audit_log = send_command(admin, b"ACL", b"LOG", b"1")
                 channel_audit_fields = dict(zip(channel_audit_log[0][::2], channel_audit_log[0][1::2]))
                 if channel_audit_fields.get(b"reason") != b"channel" or channel_audit_fields.get(b"object") != b"AuditChannel":

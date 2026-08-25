@@ -2406,6 +2406,21 @@ export fn test_connection_process_acl_named_user_metadata() !void {
     const del_virgin: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$7\r\nDELUSER\r\n$6\r\nvirgin\r\n"[0: 38], &out[0], 4096, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: del_virgin.response_len], &":1\r\n"[0: 4]));
 
+    const set_subacl: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*6\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$6\r\nsubacl\r\n$2\r\non\r\n$6\r\nnopass\r\n$11\r\n+acl|whoami\r\n"[0: 76], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: set_subacl.response_len], &"+OK\r\n"[0: 5]));
+    var subacl_tx: ConnectionTransaction = connection_transaction_new();
+    defer {
+        connection_transaction_reset(&subacl_tx);
+    }
+    const auth_subacl: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &subacl_tx, &"*3\r\n$4\r\nAUTH\r\n$6\r\nsubacl\r\n$7\r\nignored\r\n"[0: 39], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: auth_subacl.response_len], &"+OK\r\n"[0: 5]));
+    const subacl_whoami: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &subacl_tx, &"*2\r\n$3\r\nACL\r\n$6\r\nWHOAMI\r\n"[0: 25], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: subacl_whoami.response_len], &"$6\r\nsubacl\r\n"[0: 12]));
+    const subacl_users_denied: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &subacl_tx, &"*2\r\n$3\r\nACL\r\n$5\r\nUSERS\r\n"[0: 24], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_contains(out[0: subacl_users_denied.response_len], &"NOPERM"[0: 6]));
+    const del_subacl: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$7\r\nDELUSER\r\n$6\r\nsubacl\r\n"[0: 38], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: del_subacl.response_len], &":1\r\n"[0: 4]));
+
     const set_alice: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*8\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$5\r\nalice\r\n$2\r\non\r\n$6\r\nnopass\r\n$2\r\n~*\r\n$2\r\n&*\r\n$5\r\n+@all\r\n"[0: 84], &out[0], 4096, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: set_alice.response_len], &"+OK\r\n"[0: 5]));
 

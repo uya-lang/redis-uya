@@ -285,6 +285,28 @@ def run_smoke() -> None:
             finally:
                 audit_user.close()
 
+            if send_command(admin, b"ACL", b"SETUSER", b"subacl", b"on", b"nopass", b"+acl|whoami") != "OK":
+                raise AssertionError("failed to create ACL child-command user")
+            if acl_getuser_field(admin, b"subacl", b"commands") != b"-@all +acl|whoami":
+                raise AssertionError("ACL GETUSER lost child-command rule")
+            subacl = authenticate(port, b"subacl", b"ignored")
+            try:
+                if send_command(subacl, b"ACL", b"WHOAMI") != b"subacl":
+                    raise AssertionError("ACL child-command rule did not allow WHOAMI")
+                expect_error(subacl, "NOPERM", b"ACL", b"USERS")
+                if send_command(admin, b"ACL", b"SAVE") != "OK":
+                    raise AssertionError("failed to save ACL child-command rule")
+                if send_command(admin, b"ACL", b"SETUSER", b"subacl", b"+acl|users") != "OK":
+                    raise AssertionError("failed to mutate ACL child-command rule")
+                if send_command(admin, b"ACL", b"LOAD") != "OK":
+                    raise AssertionError("failed to reload ACL child-command rule")
+                expect_error(subacl, "NOPERM", b"ACL", b"USERS")
+                if send_command(admin, b"ACL", b"DELUSER", b"subacl") != 1:
+                    raise AssertionError("failed to remove ACL child-command user")
+                expect_connection_closed(subacl, "ACL child-command DELUSER")
+            finally:
+                subacl.close()
+
             expect_error(admin, "modifier 'bogus': Syntax error", b"ACL", b"SETUSER", b"default", b"off", b"resetpass", b"bogus")
             if acl_getuser_field(admin, b"default", b"flags") != [b"on", b"nopass"]:
                 raise AssertionError("failed ACL SETUSER changed default user state")

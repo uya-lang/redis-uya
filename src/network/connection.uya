@@ -12,7 +12,9 @@ use src.command.executor.command_executor_command_key_flags;
 use src.config.ServerConfig;
 use src.command.catalog_generated_base.CommandCatalogEntry;
 use src.command.catalog.command_catalog_has_acl_category;
+use src.command.catalog.command_catalog_entry;
 use src.command.catalog.command_catalog_lookup;
+use src.command.catalog.command_catalog_total_count;
 use src.command.router.Command;
 use src.command.router.CommandInfo;
 use src.command.router.CommandRouter;
@@ -3366,14 +3368,9 @@ fn connection_acl_selector_command_allowed(selector: &ConnectionAclSelector, nam
     if connection_acl_selector_command_direct_allowed(selector, name) {
         return true;
     }
-    if connection_keyword_eq(name, &"himport|prepare"[0: 15]) ||
-        connection_keyword_eq(name, &"himport|set"[0: 11]) ||
-        connection_keyword_eq(name, &"himport|discard"[0: 15]) ||
-        connection_keyword_eq(name, &"himport|discardall"[0: 18]) {
-        return connection_acl_selector_command_direct_allowed(selector, &"himport"[0: 7]);
-    }
-    if connection_acl_backup_child_name(name) {
-        return connection_acl_selector_command_direct_allowed(selector, &"backup"[0: 6]);
+    const parent: &[byte] = connection_acl_parent_command_name(name);
+    if parent.len > 0 {
+        return connection_acl_selector_command_direct_allowed(selector, parent);
     }
     return false;
 }
@@ -3389,14 +3386,31 @@ fn connection_acl_backup_child_name(name: &[byte]) bool {
 }
 
 fn connection_acl_parent_command_name(name: &[byte]) &[byte] {
-    if connection_keyword_eq(name, &"himport|prepare"[0: 15]) ||
-        connection_keyword_eq(name, &"himport|set"[0: 11]) ||
-        connection_keyword_eq(name, &"himport|discard"[0: 15]) ||
-        connection_keyword_eq(name, &"himport|discardall"[0: 18]) {
-        return &"himport"[0: 7];
+    var index: usize = 0;
+    while index < name.len {
+        if name.ptr[index] == 124 as byte {
+            return name[0: index];
+        }
+        index = index + 1;
     }
-    if connection_acl_backup_child_name(name) { return &"backup"[0: 6]; }
     return &""[0: 0];
+}
+
+fn connection_acl_catalog_child_name(parent: &[byte], child: &[byte]) &[byte] {
+    const expected_len: usize = parent.len + 1 + child.len;
+    var index: usize = 0;
+    while index < command_catalog_total_count() {
+        const entry: CommandCatalogEntry = command_catalog_entry(index) catch {
+            return connection_reply_empty_slice();
+        };
+        if entry.name.len == expected_len && entry.name.ptr[parent.len] == 124 as byte &&
+            connection_keyword_eq(entry.name[0: parent.len], parent) &&
+            connection_keyword_eq(entry.name[parent.len + 1: child.len], child) {
+            return entry.name;
+        }
+        index = index + 1;
+    }
+    return connection_reply_empty_slice();
 }
 
 fn connection_acl_user_command_denied(username: &[byte], name: &[byte]) bool {
@@ -3425,6 +3439,12 @@ fn connection_acl_effective_command_name(command: &Command) &[byte] {
     const subcommand: &[byte] = command_arg_data(command, 1) catch {
         return command.info.name;
     };
+    if command.info.cmd_type == CommandType.command_acl {
+        const child_name: &[byte] = connection_acl_catalog_child_name(command.info.name, subcommand);
+        if child_name.len > 0 {
+            return child_name;
+        }
+    }
     if command.info.cmd_type == CommandType.command_himport {
         if connection_keyword_eq(subcommand, &"PREPARE"[0: 7]) { return &"himport|prepare"[0: 15]; }
         if connection_keyword_eq(subcommand, &"SET"[0: 3]) { return &"himport|set"[0: 11]; }
@@ -5715,22 +5735,25 @@ fn connection_acl_setuser_mutating_modifier(modifier: &[byte]) bool {
 
 fn connection_acl_rule_command_name(router: &CommandRouter, name: &[byte]) !&[byte] {
     const info: CommandInfo = command_router_lookup(router, name) catch {
-        if connection_keyword_eq(name, &"himport|prepare"[0: 15]) {
-            return &"himport|prepare"[0: 15];
-        }
-        if connection_keyword_eq(name, &"himport|set"[0: 11]) {
-            return &"himport|set"[0: 11];
-        }
-        if connection_keyword_eq(name, &"himport|discard"[0: 15]) {
-            return &"himport|discard"[0: 15];
-        }
-        if connection_keyword_eq(name, &"himport|discardall"[0: 18]) {
-            return &"himport|discardall"[0: 18];
-        }
-        if connection_acl_backup_child_name(name) {
-            return name;
-        }
-        return error.CommandUnknown;
+        const catalog_entry: CommandCatalogEntry = command_catalog_lookup(name) catch {
+            if connection_keyword_eq(name, &"himport|prepare"[0: 15]) {
+                return &"himport|prepare"[0: 15];
+            }
+            if connection_keyword_eq(name, &"himport|set"[0: 11]) {
+                return &"himport|set"[0: 11];
+            }
+            if connection_keyword_eq(name, &"himport|discard"[0: 15]) {
+                return &"himport|discard"[0: 15];
+            }
+            if connection_keyword_eq(name, &"himport|discardall"[0: 18]) {
+                return &"himport|discardall"[0: 18];
+            }
+            if connection_acl_backup_child_name(name) {
+                return name;
+            }
+            return error.CommandUnknown;
+        };
+        return catalog_entry.name;
     };
     return info.name;
 }

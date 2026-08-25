@@ -6974,7 +6974,9 @@ fn connection_acl_handle_log(command: &Command, now_ms: u64) CommandReply {
             return connection_error_reply(&"ERR unknown subcommand or wrong number of arguments for 'log'. Try ACL HELP."[0: 76]);
         };
         if connection_keyword_eq(arg, &"RESET"[0: 5]) {
+            const next_sequence: u64 = connection_acl_log_next_sequence;
             connection_acl_log_clear_all();
+            connection_acl_log_next_sequence = next_sequence;
             return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
         }
     }

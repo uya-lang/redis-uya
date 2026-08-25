@@ -285,15 +285,18 @@ def run_smoke() -> None:
             finally:
                 audit_user.close()
 
-            if send_command(admin, b"ACL", b"SETUSER", b"subacl", b"on", b"nopass", b"+acl|whoami") != "OK":
+            if send_command(admin, b"ACL", b"SETUSER", b"subacl", b"on", b"nopass", b"+acl|whoami", b"+client|getname") != "OK":
                 raise AssertionError("failed to create ACL child-command user")
-            if acl_getuser_field(admin, b"subacl", b"commands") != b"-@all +acl|whoami":
+            if acl_getuser_field(admin, b"subacl", b"commands") != b"-@all +acl|whoami +client|getname":
                 raise AssertionError("ACL GETUSER lost child-command rule")
             subacl = authenticate(port, b"subacl", b"ignored")
             try:
                 if send_command(subacl, b"ACL", b"WHOAMI") != b"subacl":
                     raise AssertionError("ACL child-command rule did not allow WHOAMI")
                 expect_error(subacl, "NOPERM", b"ACL", b"USERS")
+                if send_command(subacl, b"CLIENT", b"GETNAME") is not None:
+                    raise AssertionError("CLIENT GETNAME returned a name for child-command user")
+                expect_error(subacl, "NOPERM", b"CLIENT", b"ID")
                 if send_command(admin, b"ACL", b"SAVE") != "OK":
                     raise AssertionError("failed to save ACL child-command rule")
                 if send_command(admin, b"ACL", b"SETUSER", b"subacl", b"+acl|users") != "OK":
@@ -301,6 +304,8 @@ def run_smoke() -> None:
                 if send_command(admin, b"ACL", b"LOAD") != "OK":
                     raise AssertionError("failed to reload ACL child-command rule")
                 expect_error(subacl, "NOPERM", b"ACL", b"USERS")
+                if send_command(subacl, b"CLIENT", b"GETNAME") is not None:
+                    raise AssertionError("ACL LOAD lost CLIENT child-command rule")
                 if send_command(admin, b"ACL", b"DELUSER", b"subacl") != 1:
                     raise AssertionError("failed to remove ACL child-command user")
                 expect_connection_closed(subacl, "ACL child-command DELUSER")

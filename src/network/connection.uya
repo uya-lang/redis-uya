@@ -3439,7 +3439,8 @@ fn connection_acl_effective_command_name(command: &Command) &[byte] {
     const subcommand: &[byte] = command_arg_data(command, 1) catch {
         return command.info.name;
     };
-    if command.info.cmd_type == CommandType.command_acl {
+    if (command.info.first_key == 0 || command.info.cmd_type == CommandType.command_object) &&
+        connection_client_command_uses_subcommand(command.info.cmd_type) {
         const child_name: &[byte] = connection_acl_catalog_child_name(command.info.name, subcommand);
         if child_name.len > 0 {
             return child_name;

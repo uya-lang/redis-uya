@@ -289,6 +289,12 @@ def run_smoke() -> None:
                 raise AssertionError("failed to create ACL child-command user")
             if acl_getuser_field(admin, b"subacl", b"commands") != b"-@all +acl|whoami +client|getname":
                 raise AssertionError("ACL GETUSER lost child-command rule")
+            if send_command(admin, b"ACL", b"DRYRUN", b"subacl", b"ACL", b"WHOAMI") != "OK":
+                raise AssertionError("ACL DRYRUN did not allow ACL child command")
+            expect_error(admin, "NOPERM", b"ACL", b"DRYRUN", b"subacl", b"ACL", b"USERS")
+            if send_command(admin, b"ACL", b"DRYRUN", b"subacl", b"CLIENT", b"GETNAME") != "OK":
+                raise AssertionError("ACL DRYRUN did not allow CLIENT child command")
+            expect_error(admin, "NOPERM", b"ACL", b"DRYRUN", b"subacl", b"CLIENT", b"ID")
             subacl = authenticate(port, b"subacl", b"ignored")
             try:
                 if send_command(subacl, b"ACL", b"WHOAMI") != b"subacl":

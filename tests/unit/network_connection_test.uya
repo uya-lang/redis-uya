@@ -2408,6 +2408,10 @@ export fn test_connection_process_acl_named_user_metadata() !void {
 
     const set_subacl: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*6\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$6\r\nsubacl\r\n$2\r\non\r\n$6\r\nnopass\r\n$11\r\n+acl|whoami\r\n"[0: 76], &out[0], 4096, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: set_subacl.response_len], &"+OK\r\n"[0: 5]));
+    const dryrun_subacl_whoami: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*5\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$6\r\nsubacl\r\n$3\r\nACL\r\n$6\r\nWHOAMI\r\n"[0: 58], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: dryrun_subacl_whoami.response_len], &"+OK\r\n"[0: 5]));
+    const dryrun_subacl_users: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*5\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$6\r\nsubacl\r\n$3\r\nACL\r\n$5\r\nUSERS\r\n"[0: 57], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_contains(out[0: dryrun_subacl_users.response_len], &"NOPERM"[0: 6]));
     var subacl_tx: ConnectionTransaction = connection_transaction_new();
     defer {
         connection_transaction_reset(&subacl_tx);

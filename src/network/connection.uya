@@ -3432,27 +3432,27 @@ fn connection_acl_user_command_denied(username: &[byte], name: &[byte]) bool {
     return connection_acl_named_user_command_denied(user, name);
 }
 
-fn connection_acl_effective_command_name(command: &Command) &[byte] {
-    if command.argc < 2 {
-        return command.info.name;
+fn connection_acl_effective_command_name_at(info: &CommandInfo, command: &Command, arg_offset: usize, full_argc: usize) &[byte] {
+    if full_argc < 2 {
+        return info.name;
     }
-    const subcommand: &[byte] = command_arg_data(command, 1) catch {
-        return command.info.name;
+    const subcommand: &[byte] = command_arg_data(command, arg_offset + 1) catch {
+        return info.name;
     };
-    if (command.info.first_key == 0 || command.info.cmd_type == CommandType.command_object) &&
-        connection_client_command_uses_subcommand(command.info.cmd_type) {
-        const child_name: &[byte] = connection_acl_catalog_child_name(command.info.name, subcommand);
+    if (info.first_key == 0 || info.cmd_type == CommandType.command_object) &&
+        connection_client_command_uses_subcommand(info.cmd_type) {
+        const child_name: &[byte] = connection_acl_catalog_child_name(info.name, subcommand);
         if child_name.len > 0 {
             return child_name;
         }
     }
-    if command.info.cmd_type == CommandType.command_himport {
+    if info.cmd_type == CommandType.command_himport {
         if connection_keyword_eq(subcommand, &"PREPARE"[0: 7]) { return &"himport|prepare"[0: 15]; }
         if connection_keyword_eq(subcommand, &"SET"[0: 3]) { return &"himport|set"[0: 11]; }
         if connection_keyword_eq(subcommand, &"DISCARD"[0: 7]) { return &"himport|discard"[0: 15]; }
         if connection_keyword_eq(subcommand, &"DISCARDALL"[0: 10]) { return &"himport|discardall"[0: 18]; }
     }
-    if command.info.cmd_type == CommandType.command_backup {
+    if info.cmd_type == CommandType.command_backup {
         if connection_keyword_eq(subcommand, &"ABORT"[0: 5]) { return &"backup|abort"[0: 12]; }
         if connection_keyword_eq(subcommand, &"CLEANUP"[0: 7]) { return &"backup|cleanup"[0: 14]; }
         if connection_keyword_eq(subcommand, &"HELP"[0: 4]) { return &"backup|help"[0: 11]; }
@@ -3461,7 +3461,11 @@ fn connection_acl_effective_command_name(command: &Command) &[byte] {
         if connection_keyword_eq(subcommand, &"START"[0: 5]) { return &"backup|start"[0: 12]; }
         if connection_keyword_eq(subcommand, &"STATUS"[0: 6]) { return &"backup|status"[0: 13]; }
     }
-    return command.info.name;
+    return info.name;
+}
+
+fn connection_acl_effective_command_name(command: &Command) &[byte] {
+    return connection_acl_effective_command_name_at(&command.info, command, 0, command.argc);
 }
 
 export fn connection_acl_denied_command_count_for_test(username: &[byte]) usize {
@@ -6362,9 +6366,10 @@ fn connection_acl_handle_dryrun(router: &CommandRouter, command: &Command, now_m
     _ = command_validate_arity(&dry_info, command.argc - 3) catch {
         return connection_acl_dryrun_arity_error(dry_info.name);
     };
-    const permission: ConnectionAclPermissionResult = connection_acl_permission_result(username, dry_info.name, &dry_info, command, 3, command.argc - 3);
+    const dry_effective_name: &[byte] = connection_acl_effective_command_name_at(&dry_info, command, 3, command.argc - 3);
+    const permission: ConnectionAclPermissionResult = connection_acl_permission_result(username, dry_effective_name, &dry_info, command, 3, command.argc - 3);
     if permission != ConnectionAclPermissionResult.connection_acl_permission_allowed {
-        return connection_acl_permission_result_reply(permission, dry_info.name, &dry_info, command, 3, command.argc - 3, &"dryrun"[0: 6], username, now_ms, client_id);
+        return connection_acl_permission_result_reply(permission, dry_effective_name, &dry_info, command, 3, command.argc - 3, &"dryrun"[0: 6], username, now_ms, client_id);
     }
     return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
 }

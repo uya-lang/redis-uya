@@ -220,12 +220,16 @@ def run_smoke() -> None:
                 if not isinstance(case_log, list) or len(case_log) != 1 or not isinstance(case_log[0], list):
                     raise AssertionError(f"ACL LOG omitted DEFAULT denial entry: {case_log!r}")
                 case_log_username = None
+                case_log_context = None
                 for index in range(0, len(case_log[0]), 2):
                     if case_log[0][index] == b"username":
                         case_log_username = case_log[0][index + 1]
-                        break
+                    if case_log[0][index] == b"context":
+                        case_log_context = case_log[0][index + 1]
                 if case_log_username != b"DEFAULT":
                     raise AssertionError(f"ACL LOG did not preserve username case: {case_log!r}")
+                if case_log_context != b"toplevel":
+                    raise AssertionError(f"ACL LOG used wrong top-level context: {case_log!r}")
                 if send_command(admin, b"ACL", b"LOG", b"RESET") != "OK":
                     raise AssertionError("failed to reset ACL LOG after username-case check")
                 expect_auth_error(port, b"Default", b"ignored")
@@ -295,6 +299,8 @@ def run_smoke() -> None:
             if send_command(admin, b"ACL", b"DRYRUN", b"subacl", b"CLIENT", b"GETNAME") != "OK":
                 raise AssertionError("ACL DRYRUN did not allow CLIENT child command")
             expect_error(admin, "NOPERM", b"ACL", b"DRYRUN", b"subacl", b"CLIENT", b"ID")
+            if send_command(admin, b"ACL", b"LOG", b"1") != []:
+                raise AssertionError("ACL DRYRUN unexpectedly wrote an audit entry")
             subacl = authenticate(port, b"subacl", b"ignored")
             try:
                 if send_command(subacl, b"ACL", b"WHOAMI") != b"subacl":

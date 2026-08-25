@@ -2257,6 +2257,7 @@ export fn test_connection_process_acl_permission_denial() !void {
     try assert_true(network_connection_slice_eq(out[0: get_denied.response_len], &"-NOPERM User default has no permissions to run the 'get' command\r\n"[0: 66]));
 
     const acl_log_two: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$3\r\nLOG\r\n$1\r\n2\r\n"[0: 29], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: 24], &"*1\r\n*20\r\n$5\r\ncount\r\n:1\r\n"[0: 24]));
     try assert_true(network_connection_contains(out[0: acl_log_two.response_len], &"*1\r\n"[0: 4]));
     try assert_true(network_connection_contains(out[0: acl_log_two.response_len], &"$7\r\ncontext\r\n$8\r\ntoplevel\r\n"[0: 27]));
     try assert_true(network_connection_contains(out[0: acl_log_two.response_len], &"$6\r\nobject\r\n$3\r\nget\r\n"[0: 21]));

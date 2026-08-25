@@ -6942,6 +6942,8 @@ fn connection_acl_log_append_age_seconds(raw: &Sds, now_ms: u64, updated_ms: u64
 
 fn connection_acl_log_append_entry(raw: &Sds, entry: &ConnectionAclLogEntry, now_ms: u64) !void {
     try connection_sds_append_resp_array_header(raw, 20);
+    try connection_sds_append_resp_bulk(raw, &"count"[0: 5]);
+    try connection_sds_append_resp_integer(raw, entry.count as i64);
     try connection_sds_append_resp_bulk(raw, &"reason"[0: 6]);
     try connection_sds_append_resp_bulk(raw, entry.reason[0: entry.reason_len]);
     try connection_sds_append_resp_bulk(raw, &"context"[0: 7]);
@@ -6964,8 +6966,6 @@ fn connection_acl_log_append_entry(raw: &Sds, entry: &ConnectionAclLogEntry, now
     try connection_sds_append_resp_integer(raw, entry.created_ms as i64);
     try connection_sds_append_resp_bulk(raw, &"timestamp-last-updated"[0: 22]);
     try connection_sds_append_resp_integer(raw, entry.updated_ms as i64);
-    try connection_sds_append_resp_bulk(raw, &"count"[0: 5]);
-    try connection_sds_append_resp_integer(raw, entry.count as i64);
 }
 
 fn connection_acl_handle_log(command: &Command, now_ms: u64) CommandReply {

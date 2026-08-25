@@ -282,6 +282,7 @@ const CONNECTION_ACL_SELECTOR_PATTERN_MAX: usize = 8;
 const CONNECTION_ACL_LOG_MAX: usize = 128;
 const CONNECTION_ACL_LOG_CONTEXT_MAX: usize = 16;
 const CONNECTION_ACL_LOG_REASON_MAX: usize = 16;
+const CONNECTION_ACL_LOG_OBJECT_MAX: usize = 128;
 const CONNECTION_ACL_LOG_GROUPING_MAX_TIME_DELTA_MS: u64 = 60000u64;
 const CONNECTION_ACL_FILE_MAX_BYTES: usize = 65536;
 const CONNECTION_ACL_FILE_PATH_MAX: usize = 512;
@@ -533,7 +534,7 @@ struct ConnectionAclLogEntry {
     reason_len: usize,
     reason: [byte: CONNECTION_ACL_LOG_REASON_MAX],
     command_len: usize,
-    command: [byte: CONNECTION_ACL_COMMAND_NAME_MAX],
+    command: [byte: CONNECTION_ACL_LOG_OBJECT_MAX],
     context_len: usize,
     context: [byte: CONNECTION_ACL_LOG_CONTEXT_MAX],
 }
@@ -4449,7 +4450,7 @@ fn connection_acl_log_new_slot() usize {
 }
 
 fn connection_acl_log_append(name: &[byte], reason: &[byte], context: &[byte], username: &[byte], now_ms: u64, client_id: i64, lowercase_name: bool) void {
-    if name.len == 0 || reason.len == 0 || context.len == 0 {
+    if reason.len == 0 || context.len == 0 {
         return;
     }
     const match_slot: i32 = connection_acl_log_find_recent_match(name, reason, context, username, now_ms, lowercase_name);
@@ -4481,9 +4482,9 @@ fn connection_acl_log_append(name: &[byte], reason: &[byte], context: &[byte], u
     connection_acl_log_entries[slot].count = 1u64;
     connection_acl_log_entries[slot].reason_len = connection_acl_log_copy_lower(connection_acl_log_entries[slot].reason[0: CONNECTION_ACL_LOG_REASON_MAX], reason);
     if lowercase_name {
-        connection_acl_log_entries[slot].command_len = connection_acl_log_copy_lower(connection_acl_log_entries[slot].command[0: CONNECTION_ACL_COMMAND_NAME_MAX], name);
+        connection_acl_log_entries[slot].command_len = connection_acl_log_copy_lower(connection_acl_log_entries[slot].command[0: CONNECTION_ACL_LOG_OBJECT_MAX], name);
     } else {
-        connection_acl_log_entries[slot].command_len = connection_acl_log_copy_exact(connection_acl_log_entries[slot].command[0: CONNECTION_ACL_COMMAND_NAME_MAX], name);
+        connection_acl_log_entries[slot].command_len = connection_acl_log_copy_exact(connection_acl_log_entries[slot].command[0: CONNECTION_ACL_LOG_OBJECT_MAX], name);
     }
     connection_acl_log_entries[slot].context_len = connection_acl_log_copy_lower(connection_acl_log_entries[slot].context[0: CONNECTION_ACL_LOG_CONTEXT_MAX], context);
 
@@ -4500,6 +4501,10 @@ fn connection_acl_log_append(name: &[byte], reason: &[byte], context: &[byte], u
 
 fn connection_acl_log_append_command_denied(name: &[byte], context: &[byte], username: &[byte], now_ms: u64, client_id: i64) void {
     connection_acl_log_append(name, &"command"[0: 7], context, username, now_ms, client_id, true);
+}
+
+fn connection_acl_log_append_object_denied(object: &[byte], reason: &[byte], context: &[byte], username: &[byte], now_ms: u64, client_id: i64) void {
+    connection_acl_log_append(object, reason, context, username, now_ms, client_id, false);
 }
 
 fn connection_acl_log_append_auth_failed(username: &[byte], now_ms: u64, client_id: i64) void {
@@ -4559,8 +4564,41 @@ fn connection_acl_key_permission_error_for_user(username: &[byte]) CommandReply 
     return connection_owned_error(raw.buf[0: raw.len]);
 }
 
-fn connection_acl_key_permission_denied_reply_for_user(name: &[byte], context: &[byte], username: &[byte], now_ms: u64, client_id: i64) CommandReply {
-    connection_acl_log_append_command_denied(name, context, username, now_ms, client_id);
+fn connection_acl_log_first_key_index(info: &CommandInfo, command: &Command, arg_offset: usize, full_argc: usize) i32 {
+    const dynamic_spec: ConnectionAclKeySpec = connection_acl_dynamic_key_spec(info, command, arg_offset, full_argc);
+    if dynamic_spec.dynamic && connection_acl_key_spec_count(&dynamic_spec) > 0 {
+        const key_index: usize = connection_acl_key_spec_index(&dynamic_spec, 0);
+        return key_index as i32;
+    }
+    if info.cmd_type == CommandType.command_himport && full_argc >= 3 {
+        return 2;
+    }
+    if connection_acl_count_range_keys(info, full_argc) > 0 && info.first_key > 0 {
+        return info.first_key;
+    }
+    return -1;
+}
+
+fn connection_acl_log_first_channel_index(full_argc: usize) i32 {
+    if full_argc <= 1 {
+        return -1;
+    }
+    return 1;
+}
+
+fn connection_acl_log_argument_or(command: &Command, index: usize, fallback: &[byte]) &[byte] {
+    return command_arg_data(command, index) catch {
+        return fallback;
+    };
+}
+
+fn connection_acl_key_permission_denied_reply_for_user(name: &[byte], info: &CommandInfo, command: &Command, arg_offset: usize, full_argc: usize, context: &[byte], username: &[byte], now_ms: u64, client_id: i64) CommandReply {
+    const key_index: i32 = connection_acl_log_first_key_index(info, command, arg_offset, full_argc);
+    var object: &[byte] = name;
+    if key_index >= 0 {
+        object = connection_acl_log_argument_or(command, arg_offset + key_index as usize, name);
+    }
+    connection_acl_log_append_object_denied(object, &"key"[0: 3], context, username, now_ms, client_id);
     return connection_acl_key_permission_error_for_user(username);
 }
 
@@ -4583,17 +4621,22 @@ fn connection_acl_channel_permission_error_for_user(username: &[byte]) CommandRe
     return connection_owned_error(raw.buf[0: raw.len]);
 }
 
-fn connection_acl_channel_permission_denied_reply_for_user(name: &[byte], context: &[byte], username: &[byte], now_ms: u64, client_id: i64) CommandReply {
-    connection_acl_log_append_command_denied(name, context, username, now_ms, client_id);
+fn connection_acl_channel_permission_denied_reply_for_user(name: &[byte], command: &Command, arg_offset: usize, full_argc: usize, context: &[byte], username: &[byte], now_ms: u64, client_id: i64) CommandReply {
+    const channel_index: i32 = connection_acl_log_first_channel_index(full_argc);
+    var object: &[byte] = name;
+    if channel_index >= 0 {
+        object = connection_acl_log_argument_or(command, arg_offset + channel_index as usize, name);
+    }
+    connection_acl_log_append_object_denied(object, &"channel"[0: 7], context, username, now_ms, client_id);
     return connection_acl_channel_permission_error_for_user(username);
 }
 
-fn connection_acl_permission_result_reply(result: ConnectionAclPermissionResult, name: &[byte], context: &[byte], username: &[byte], now_ms: u64, client_id: i64) CommandReply {
+fn connection_acl_permission_result_reply(result: ConnectionAclPermissionResult, name: &[byte], info: &CommandInfo, command: &Command, arg_offset: usize, full_argc: usize, context: &[byte], username: &[byte], now_ms: u64, client_id: i64) CommandReply {
     if result == ConnectionAclPermissionResult.connection_acl_permission_key_denied {
-        return connection_acl_key_permission_denied_reply_for_user(name, context, username, now_ms, client_id);
+        return connection_acl_key_permission_denied_reply_for_user(name, info, command, arg_offset, full_argc, context, username, now_ms, client_id);
     }
     if result == ConnectionAclPermissionResult.connection_acl_permission_channel_denied {
-        return connection_acl_channel_permission_denied_reply_for_user(name, context, username, now_ms, client_id);
+        return connection_acl_channel_permission_denied_reply_for_user(name, command, arg_offset, full_argc, context, username, now_ms, client_id);
     }
     return connection_acl_permission_denied_reply_for_user(name, context, username, now_ms, client_id);
 }
@@ -6236,7 +6279,7 @@ fn connection_acl_handle_dryrun(router: &CommandRouter, command: &Command, now_m
     };
     const permission: ConnectionAclPermissionResult = connection_acl_permission_result(username, dry_info.name, &dry_info, command, 3, command.argc - 3);
     if permission != ConnectionAclPermissionResult.connection_acl_permission_allowed {
-        return connection_acl_permission_result_reply(permission, dry_info.name, &"dryrun"[0: 6], username, now_ms, client_id);
+        return connection_acl_permission_result_reply(permission, dry_info.name, &dry_info, command, 3, command.argc - 3, &"dryrun"[0: 6], username, now_ms, client_id);
     }
     return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
 }
@@ -11806,7 +11849,7 @@ fn connection_execute_script_effect_at(
     if script_permission != ConnectionAclPermissionResult.connection_acl_permission_allowed {
         resp_parse_value_free(&parsed.value, parsed.elements_owned);
         object_free(raw_obj);
-        return connection_acl_permission_result_reply(script_permission, inner_command.info.name, &"script"[0: 6], username, now_ms, client_id);
+        return connection_acl_permission_result_reply(script_permission, inner_command.info.name, &inner_command.info, &inner_command, 0, inner_command.argc, &"script"[0: 6], username, now_ms, client_id);
     }
 
     var reply: CommandReply = command_execute_with_runtime_at(engine, runtime, &inner_command, now_ms);
@@ -12792,7 +12835,7 @@ fn connection_transaction_execute_at(
         } else if command.info.cmd_type == CommandType.command_auth {
             reply = connection_handle_auth(tx, runtime, &command, now_ms, connection_acl_log_client_id(tx));
         } else if transaction_permission != ConnectionAclPermissionResult.connection_acl_permission_allowed {
-            reply = connection_acl_permission_result_reply(transaction_permission, transaction_command_name, &"transaction"[0: 11], transaction_username, now_ms, connection_acl_log_client_id(tx));
+            reply = connection_acl_permission_result_reply(transaction_permission, transaction_command_name, &command.info, &command, 0, command.argc, &"transaction"[0: 11], transaction_username, now_ms, connection_acl_log_client_id(tx));
         } else if command.info.cmd_type == CommandType.command_himport {
             reply = connection_handle_himport_at(engine, runtime, aof, rewrite_buf, backlog, tx, &command, now_ms, rewrite_failed);
         } else if command.info.cmd_type == CommandType.command_acl {
@@ -14167,7 +14210,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
         const queued_command_name: &[byte] = connection_acl_effective_command_name(&command);
         const queued_permission: ConnectionAclPermissionResult = connection_acl_permission_result(queued_username, queued_command_name, &command.info, &command, 0, command.argc);
         if queued_permission != ConnectionAclPermissionResult.connection_acl_permission_allowed {
-            const acl_tx_reply: CommandReply = connection_acl_permission_result_reply(queued_permission, queued_command_name, &"transaction"[0: 11], queued_username, now_ms, connection_acl_log_client_id(tx));
+            const acl_tx_reply: CommandReply = connection_acl_permission_result_reply(queued_permission, queued_command_name, &command.info, &command, 0, command.argc, &"transaction"[0: 11], queued_username, now_ms, connection_acl_log_client_id(tx));
             const acl_tx_n: usize = try connection_encode_reply_for_command(tx, &command, &acl_tx_reply, out, out_cap, reply_off_before, reply_skip_before);
             command_reply_cleanup(&acl_tx_reply);
             resp_parse_value_free(&parsed.value, parsed.elements_owned);
@@ -14273,7 +14316,7 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
         const command_name: &[byte] = connection_acl_effective_command_name(&command);
         const permission: ConnectionAclPermissionResult = connection_acl_permission_result(username, command_name, &command.info, &command, 0, command.argc);
         if permission != ConnectionAclPermissionResult.connection_acl_permission_allowed {
-            const acl_reply: CommandReply = connection_acl_permission_result_reply(permission, command_name, &"command"[0: 7], username, now_ms, connection_acl_log_client_id(tx));
+            const acl_reply: CommandReply = connection_acl_permission_result_reply(permission, command_name, &command.info, &command, 0, command.argc, &"command"[0: 7], username, now_ms, connection_acl_log_client_id(tx));
             const acl_n: usize = try connection_encode_reply_for_command(tx, &command, &acl_reply, out, out_cap, reply_off_before, reply_skip_before);
             command_reply_cleanup(&acl_reply);
             resp_parse_value_free(&parsed.value, parsed.elements_owned);

@@ -261,6 +261,30 @@ def run_smoke() -> None:
             finally:
                 case_user.close()
 
+            if send_command(admin, b"ACL", b"SETUSER", b"audit-object", b"on", b"nopass", b"+get", b"+publish") != "OK":
+                raise AssertionError("failed to create ACL audit object user")
+            audit_user = authenticate(port, b"audit-object", b"ignored")
+            try:
+                expect_error(audit_user, "permissions to access one of the keys", b"GET", b"AuditKey")
+                key_audit_log = send_command(admin, b"ACL", b"LOG", b"1")
+                key_audit_fields = dict(zip(key_audit_log[0][::2], key_audit_log[0][1::2]))
+                if key_audit_fields.get(b"reason") != b"key" or key_audit_fields.get(b"object") != b"AuditKey":
+                    raise AssertionError(f"ACL LOG lost denied key object: {key_audit_log!r}")
+                if send_command(admin, b"ACL", b"LOG", b"RESET") != "OK":
+                    raise AssertionError("failed to reset ACL LOG after key object check")
+                expect_error(audit_user, "permissions to access one of the channels", b"PUBLISH", b"AuditChannel", b"payload")
+                channel_audit_log = send_command(admin, b"ACL", b"LOG", b"1")
+                channel_audit_fields = dict(zip(channel_audit_log[0][::2], channel_audit_log[0][1::2]))
+                if channel_audit_fields.get(b"reason") != b"channel" or channel_audit_fields.get(b"object") != b"AuditChannel":
+                    raise AssertionError(f"ACL LOG lost denied channel object: {channel_audit_log!r}")
+                if send_command(admin, b"ACL", b"LOG", b"RESET") != "OK":
+                    raise AssertionError("failed to reset ACL LOG after channel object check")
+                if send_command(admin, b"ACL", b"DELUSER", b"audit-object") != 1:
+                    raise AssertionError("failed to remove ACL audit object user")
+                expect_connection_closed(audit_user, "ACL audit object DELUSER")
+            finally:
+                audit_user.close()
+
             expect_error(admin, "modifier 'bogus': Syntax error", b"ACL", b"SETUSER", b"default", b"off", b"resetpass", b"bogus")
             if acl_getuser_field(admin, b"default", b"flags") != [b"on", b"nopass"]:
                 raise AssertionError("failed ACL SETUSER changed default user state")

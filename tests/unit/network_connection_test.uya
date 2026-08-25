@@ -2192,6 +2192,18 @@ export fn test_connection_process_acl_permission_denial() !void {
     const dryrun_before: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*5\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$7\r\ndefault\r\n$3\r\nGET\r\n$7\r\nmissing\r\n"[0: 60], &out[0], 2048, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: dryrun_before.response_len], &"+OK\r\n"[0: 5]));
 
+    const restrict_default_keys: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$7\r\ndefault\r\n$9\r\nresetkeys\r\n"[0: 54], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: restrict_default_keys.response_len], &"+OK\r\n"[0: 5]));
+    const key_denied_for_log: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$3\r\nGET\r\n$7\r\nmissing\r\n"[0: 26], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: key_denied_for_log.response_len], &"-NOPERM User default has no permissions to access one of the keys used as arguments\r\n"[0: 85]));
+    const key_log: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$3\r\nLOG\r\n$1\r\n1\r\n"[0: 29], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_contains(out[0: key_log.response_len], &"$6\r\nreason\r\n$3\r\nkey\r\n"[0: 21]));
+    try assert_true(network_connection_contains(out[0: key_log.response_len], &"$6\r\nobject\r\n$7\r\nmissing\r\n"[0: 25]));
+    const reset_key_log: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$3\r\nLOG\r\n$5\r\nRESET\r\n"[0: 33], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: reset_key_log.response_len], &"+OK\r\n"[0: 5]));
+    const restore_default_keys: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$7\r\ndefault\r\n$7\r\nallkeys\r\n"[0: 52], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: restore_default_keys.response_len], &"+OK\r\n"[0: 5]));
+
     const deny_get: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$7\r\ndefault\r\n$4\r\n-get\r\n"[0: 49], &out[0], 2048, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: deny_get.response_len], &"+OK\r\n"[0: 5]));
     try assert_eq_i32(connection_acl_denied_command_count_for_test(&"default"[0: 7]) as i32, 1);
@@ -2210,6 +2222,11 @@ export fn test_connection_process_acl_permission_denial() !void {
 
     const publish_other_channel_denied: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$7\r\nPUBLISH\r\n$5\r\nother\r\n$5\r\nhello\r\n"[0: 39], &out[0], 2048, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: publish_other_channel_denied.response_len], &"-NOPERM User default has no permissions to access one of the channels used as arguments\r\n"[0: 89]));
+    const channel_log: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$3\r\nLOG\r\n$1\r\n1\r\n"[0: 29], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_contains(out[0: channel_log.response_len], &"$6\r\nreason\r\n$7\r\nchannel\r\n"[0: 25]));
+    try assert_true(network_connection_contains(out[0: channel_log.response_len], &"$6\r\nobject\r\n$5\r\nother\r\n"[0: 23]));
+    const reset_channel_log: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$3\r\nLOG\r\n$5\r\nRESET\r\n"[0: 33], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: reset_channel_log.response_len], &"+OK\r\n"[0: 5]));
 
     const ping_with_channels_restricted: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$4\r\nPING\r\n"[0: 14], &out[0], 2048, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: ping_with_channels_restricted.response_len], &"+PONG\r\n"[0: 7]));

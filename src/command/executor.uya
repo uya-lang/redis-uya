@@ -98,6 +98,7 @@ use src.persistence.backup.backup_file_at;
 use src.replication.state.ReplicationRole;
 use src.replication.state.ReplicationState;
 use src.replication.state.replication_role_name;
+use tls.base.entropy.fill_entropy;
 use src.replication.state.replication_state_name;
 use src.storage.dict.DictEntry;
 use src.storage.dict.DictIterator;
@@ -11025,25 +11026,12 @@ fn command_executor_acl_log(command: &Command) CommandReply {
     return command_executor_owned_error(&"ERR unknown subcommand or wrong number of arguments for 'log'. Try ACL HELP."[0: 76]);
 }
 
-var command_executor_acl_genpass_counter: u64 = 0u64;
-
 fn command_executor_acl_genpass_hex_nibble(value: u64) byte {
     const nibble: byte = (value & 15u64) as byte;
     if nibble < 10 as byte {
         return (48 as byte) + nibble;
     }
     return (97 as byte) + (nibble - 10 as byte);
-}
-
-fn command_executor_acl_genpass_next(state: u64) u64 {
-    var value: u64 = state;
-    value = value ^ (value << 13);
-    value = value ^ (value >> 7);
-    value = value ^ (value << 17);
-    if value == 0u64 {
-        return 0x9e3779b97f4a7c15u64;
-    }
-    return value;
 }
 
 fn command_executor_acl_genpass(command: &Command, now_ms: u64) CommandReply {
@@ -11075,22 +11063,25 @@ fn command_executor_acl_genpass(command: &Command, now_ms: u64) CommandReply {
         return command_executor_oom();
     };
 
-    command_executor_acl_genpass_counter = command_executor_acl_genpass_counter + 1u64;
-    var state: u64 = now_ms ^
-        ((bits as u64) << 32) ^
-        (command_executor_acl_genpass_counter * 0x9e3779b97f4a7c15u64);
-    if state == 0u64 {
-        state = 0x6a09e667f3bcc909u64;
-    }
+    var entropy: [byte: 512] = [];
+    const entropy_len: usize = (hex_len + 1) / 2;
+    _ = fill_entropy(&entropy[0], entropy_len) catch {
+        return command_executor_owned_error(&"ERR ACL GENPASS failed to obtain secure randomness"[0: 50]);
+    };
 
     var i: usize = 0;
     while i < hex_len {
-        state = command_executor_acl_genpass_next(state + i as u64);
-        password.buf.ptr[i] = command_executor_acl_genpass_hex_nibble(state);
+        const source: byte = entropy[i / 2];
+        var nibble: byte = source & (15 as byte);
+        if i % 2usize == 0usize {
+            nibble = source >> 4;
+        }
+        password.buf.ptr[i] = command_executor_acl_genpass_hex_nibble(nibble as u64);
         i = i + 1;
     }
     password.len = hex_len;
     password.buf.ptr[password.len] = 0 as byte;
+    _ = now_ms;
     return command_executor_owned_bulk_copy(password.buf[0: password.len]);
 }
 

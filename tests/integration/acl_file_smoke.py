@@ -191,6 +191,10 @@ def run_smoke() -> None:
     proc = start_server(port, aof_path)
     try:
         with connect_with_retry(port) as admin:
+            genpass_one = send_command(admin, b"ACL", b"GENPASS")
+            genpass_two = send_command(admin, b"ACL", b"GENPASS")
+            if not isinstance(genpass_one, bytes) or len(genpass_one) != 64 or genpass_one == genpass_two:
+                raise AssertionError("ACL GENPASS did not return independent 256-bit passwords")
             expect_error(admin, "not configured to use an ACL file", b"ACL", b"SAVE")
             expect_error(admin, "not configured to use an ACL file", b"ACL", b"LOAD")
             if config_value(admin, b"aclfile") != b"":

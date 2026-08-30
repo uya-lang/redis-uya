@@ -103,7 +103,7 @@ ACL WHOAMI
 - `ACL CAT` 返回 Redis 兼容的 ACL category 列表；`ACL CAT category` 返回当前可见命令目录中匹配该 category 的命令名
 - `ACL DELUSER missing` 当前返回 `0`；删除已创建的一个或多个 named user 返回删除数量，并在回复发出前主动关闭这些用户的其他已认证连接；用户删除自身时先返回删除数量再关闭当前连接。尝试删除 `default` 会返回 Redis 兼容错误且不删除同一请求中的其他用户
 - `ACL DRYRUN username command [arg ...]` 当前会检查用户存在性、命令存在性、arity、基础命令 whitelist/deny 规则、固定 key range、脚本/函数声明键、MPOP、set cardinality、MSETEX、zset 聚合/store、`GEOSEARCHSTORE`、`GEORADIUS[BYMEMBER] STORE/STOREDIST`、`ZRANGESTORE`、`XREAD/XREADGROUP`、`XGROUP/XINFO` key 子命令、`SORT [STORE]` 与 `MEMORY USAGE` 动态键，以及 Pub/Sub channel pattern；基础规则和 selector 都要求请求中的全部键匹配同一授权路径，未知用户和未知命令返回 Redis 兼容错误，被当前用户命令、key pattern 或 channel pattern 规则禁用的命令返回 `NOPERM`
-- `ACL GENPASS` 返回 256-bit 口径的 64 字符十六进制口令；`ACL GENPASS bits` 返回 `ceil(bits / 4)` 个十六进制字符，`bits` 取值范围为 `1..4096`
+- `ACL GENPASS` 从操作系统安全随机源生成 256-bit 口径的 64 字符十六进制口令；`ACL GENPASS bits` 返回 `ceil(bits / 4)` 个十六进制字符，`bits` 取值范围为 `1..4096`，熵源不可用时显式报错而不降级到可预测 PRNG
 - `ACL GETUSER default` 返回当前默认用户详情，`flags` 反映 `on/off` 和有效 `nopass`，`commands`、`keys`、`channels` 与 `selectors` 字段反映当前有序命令/分类 allow/deny、key/channel pattern 和 selector 规则；启用 `requirepass` 或 ACL 哈希口令时 `flags` 不再包含 `nopass`，`passwords` 按插入顺序返回不带 `#` 的 64 位小写十六进制 SHA-256 数组而不暴露明文；已创建 named user 返回同样的元数据视图，selector 数组中的每项按 `commands/keys/channels` 六元素键值序列输出；未知用户名返回 null
 - ACL 用户名按字节区分大小写，只有精确小写 `default` 指向内建默认用户；例如 `DEFAULT` 可作为独立 named user，并在 SETUSER/GETUSER/AUTH/DRYRUN/WHOAMI/LIST/SAVE/LOAD/DELUSER、ACL LOG 与连接关闭链中保持原始大小写。当前用户名长度保持 1–64 字节约束，`ACL SETUSER` 拒绝 NUL 与 ASCII 空白字符，SAVE/LOAD 复用相同校验，避免生成或接受无法无损解析的 ACL 文件
 - `ACL HELP` 返回 Redis 兼容的 ACL 子命令帮助数组

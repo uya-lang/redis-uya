@@ -329,6 +329,22 @@ def run_smoke() -> None:
             finally:
                 subacl.close()
 
+            if send_command(admin, b"ACL", b"SETUSER", b"selector-child", b"on", b"nopass", b"clearselectors", b"(-acl +acl|whoami)") != "OK":
+                raise AssertionError("failed to create ACL selector child-rule user")
+            selector_child = authenticate(port, b"selector-child", b"ignored")
+            try:
+                if send_command(selector_child, b"ACL", b"WHOAMI") != b"selector-child":
+                    raise AssertionError("later selector child allow did not override parent deny")
+                expect_error(selector_child, "NOPERM", b"ACL", b"USERS")
+                if send_command(admin, b"ACL", b"SETUSER", b"selector-child", b"clearselectors", b"(+acl|whoami -acl)") != "OK":
+                    raise AssertionError("failed to reverse ACL selector child-rule order")
+                expect_error(selector_child, "NOPERM", b"ACL", b"WHOAMI")
+                if send_command(admin, b"ACL", b"DELUSER", b"selector-child") != 1:
+                    raise AssertionError("failed to remove ACL selector child-rule user")
+                expect_connection_closed(selector_child, "ACL selector child-rule DELUSER")
+            finally:
+                selector_child.close()
+
             expect_error(admin, "modifier 'bogus': Syntax error", b"ACL", b"SETUSER", b"default", b"off", b"resetpass", b"bogus")
             if acl_getuser_field(admin, b"default", b"flags") != [b"on", b"nopass"]:
                 raise AssertionError("failed ACL SETUSER changed default user state")

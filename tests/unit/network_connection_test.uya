@@ -2686,6 +2686,18 @@ export fn test_connection_process_acl_selectors() !void {
     const ordered_allow_get: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*5\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$13\r\nordered-allow\r\n$3\r\nGET\r\n$1\r\nk\r\n"[0: 61], &out[0], 4096, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: ordered_allow_get.response_len], &"+OK\r\n"[0: 5]));
 
+    const child_parent_deny: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*7\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$10\r\nchild-deny\r\n$2\r\non\r\n$6\r\nnopass\r\n$14\r\nclearselectors\r\n$18\r\n(+acl|whoami -acl)\r\n"[0: 109], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: child_parent_deny.response_len], &"+OK\r\n"[0: 5]));
+    const child_parent_deny_whoami: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*5\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$10\r\nchild-deny\r\n$3\r\nACL\r\n$6\r\nWHOAMI\r\n"[0: 63], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_contains(out[0: child_parent_deny_whoami.response_len], &"NOPERM"[0: 6]));
+
+    const child_exact_allow: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*7\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$11\r\nchild-allow\r\n$2\r\non\r\n$6\r\nnopass\r\n$14\r\nclearselectors\r\n$18\r\n(-acl +acl|whoami)\r\n"[0: 110], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: child_exact_allow.response_len], &"+OK\r\n"[0: 5]));
+    const child_exact_allow_whoami: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*5\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$11\r\nchild-allow\r\n$3\r\nACL\r\n$6\r\nWHOAMI\r\n"[0: 64], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: child_exact_allow_whoami.response_len], &"+OK\r\n"[0: 5]));
+    const child_exact_allow_users: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &admin_tx, &"*5\r\n$3\r\nACL\r\n$6\r\nDRYRUN\r\n$11\r\nchild-allow\r\n$3\r\nACL\r\n$5\r\nUSERS\r\n"[0: 63], &out[0], 4096, 1000u64);
+    try assert_true(network_connection_contains(out[0: child_exact_allow_users.response_len], &"NOPERM"[0: 6]));
+
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);
 }

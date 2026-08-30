@@ -3347,13 +3347,26 @@ fn connection_acl_selector_category_rule_order(rules: &[ConnectionAclSelectorRul
     return latest;
 }
 
-fn connection_acl_selector_command_direct_allowed(selector: &ConnectionAclSelector, name: &[byte]) bool {
+fn connection_acl_selector_command_allowed(selector: &ConnectionAclSelector, name: &[byte]) bool {
     var allowed_order: u32 = connection_acl_selector_exact_rule_order(selector.allowed_commands[0: CONNECTION_ACL_SELECTOR_COMMAND_MAX], name);
+    const parent: &[byte] = connection_acl_parent_command_name(name);
+    if parent.len > 0 {
+        const parent_allowed_order: u32 = connection_acl_selector_exact_rule_order(selector.allowed_commands[0: CONNECTION_ACL_SELECTOR_COMMAND_MAX], parent);
+        if parent_allowed_order > allowed_order {
+            allowed_order = parent_allowed_order;
+        }
+    }
     const allowed_category_order: u32 = connection_acl_selector_category_rule_order(selector.allowed_categories[0: CONNECTION_ACL_SELECTOR_CATEGORY_MAX], name);
     if allowed_category_order > allowed_order {
         allowed_order = allowed_category_order;
     }
     var denied_order: u32 = connection_acl_selector_exact_rule_order(selector.denied_commands[0: CONNECTION_ACL_SELECTOR_COMMAND_MAX], name);
+    if parent.len > 0 {
+        const parent_denied_order: u32 = connection_acl_selector_exact_rule_order(selector.denied_commands[0: CONNECTION_ACL_SELECTOR_COMMAND_MAX], parent);
+        if parent_denied_order > denied_order {
+            denied_order = parent_denied_order;
+        }
+    }
     const denied_category_order: u32 = connection_acl_selector_category_rule_order(selector.denied_categories[0: CONNECTION_ACL_SELECTOR_CATEGORY_MAX], name);
     if denied_category_order > denied_order {
         denied_order = denied_category_order;
@@ -3362,17 +3375,6 @@ fn connection_acl_selector_command_direct_allowed(selector: &ConnectionAclSelect
         return selector.allcommands;
     }
     return allowed_order > denied_order;
-}
-
-fn connection_acl_selector_command_allowed(selector: &ConnectionAclSelector, name: &[byte]) bool {
-    if connection_acl_selector_command_direct_allowed(selector, name) {
-        return true;
-    }
-    const parent: &[byte] = connection_acl_parent_command_name(name);
-    if parent.len > 0 {
-        return connection_acl_selector_command_direct_allowed(selector, parent);
-    }
-    return false;
 }
 
 fn connection_acl_backup_child_name(name: &[byte]) bool {

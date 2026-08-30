@@ -121,6 +121,7 @@ ACL WHOAMI
 说明：
 
 - ACL command 规则接受命令目录中的 `parent|child` 子命令名，例如 `+acl|whoami` 只授权 `ACL WHOAMI`、`+client|getname` 只授权 `CLIENT GETNAME`；父规则 `+acl` / `+client` 仍授权各自已实现子命令。父规则与精确 child 规则共同参与全局顺序比较，因此 `-acl +acl|whoami` 允许 WHOAMI，而 `+acl|whoami -acl` 拒绝它。生成目录为 full/partial/standalone-error/deferred 命令统一保留 ACL category 元数据，使 `+@connection` 等分类可直接匹配已实现 child。子命令规则按原顺序进入 GETUSER/LIST/SAVE/LOAD，基础用户规则与 selector 使用同一匹配语义
+- child 映射同样覆盖带 key spec 的容器命令，例如 `+xgroup|destroy` 可单独授权 `XGROUP DESTROY key group`，并继续按该 child 的 stream key 进行 key pattern / 方向权限检查
 - `ACL LOG` 在 RESP2 下把每条记录编码为 20 元素键值数组，`age-seconds` 为 bulk 数字字符串；RESP3 下记录编码为 10 字段 map，`age-seconds` 为 double。外层始终为按新到旧排列的记录数组
 - ACL LOG 的 command/auth object 均可完整容纳当前命令名，key/channel object 固定保留前 1024 字节；真实进程测试覆盖超过旧 128 字节边界的 key/channel 不被截断
 - ACL LOG 当前固定保留最近 128 个聚合后条目；达到容量后按最近更新时间顺序淘汰最旧项，请求 count 大于 128 时按 128 截断

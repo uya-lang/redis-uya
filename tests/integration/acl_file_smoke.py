@@ -238,6 +238,11 @@ def run_smoke() -> None:
                     raise AssertionError(f"ACL LOG did not preserve username case: {case_log!r}")
                 if case_log_context != b"toplevel":
                     raise AssertionError(f"ACL LOG used wrong top-level context: {case_log!r}")
+                plus_count_log = send_command(admin, b"ACL", b"LOG", b"+1")
+                if not isinstance(plus_count_log, list) or len(plus_count_log) != 1:
+                    raise AssertionError(f"ACL LOG rejected signed positive count: {plus_count_log!r}")
+                expect_error(admin, "not an integer or out of range", b"ACL", b"LOG", b"9223372036854775808")
+                expect_error(admin, "not an integer or out of range", b"ACL", b"LOG", b"18446744073709551616")
                 if send_command(admin, b"ACL", b"LOG", b"RESET") != "OK":
                     raise AssertionError("failed to reset ACL LOG after username-case check")
                 resp3_case = authenticate(port, b"DEFAULT", b"ignored")

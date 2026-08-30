@@ -1035,12 +1035,23 @@ fn connection_parse_u64(data: &[byte]) !u64 {
     }
     var value: u64 = 0u64;
     var i: usize = 0;
+    if data.ptr[0] == 43 as byte {
+        i = 1;
+        if i >= data.len {
+            return error.ConnectionIoFailed;
+        }
+    }
     while i < data.len {
         const ch: byte = data.ptr[i];
         if ch < 48 as byte || ch > 57 as byte {
             return error.ConnectionIoFailed;
         }
-        value = value * 10u64 + ((ch - 48 as byte) as u64);
+        const digit: u64 = (ch - 48 as byte) as u64;
+        if value > 1844674407370955161u64 ||
+            (value == 1844674407370955161u64 && digit > 5u64) {
+            return error.ConnectionIoFailed;
+        }
+        value = value * 10u64 + digit;
         i = i + 1;
     }
     return value;
@@ -6901,6 +6912,9 @@ fn connection_acl_log_requested_count(command: &Command) !usize {
     const parsed: u64 = connection_parse_u64(arg) catch {
         return error.ConnectionInputTooLarge;
     };
+    if parsed > 9223372036854775807u64 {
+        return error.ConnectionInputTooLarge;
+    }
     if parsed > CONNECTION_ACL_LOG_MAX as u64 {
         return CONNECTION_ACL_LOG_MAX;
     }

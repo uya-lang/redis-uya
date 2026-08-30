@@ -1119,8 +1119,8 @@ if [[ "$ACL_LOG_ONE_RESULT" == *"id=0"* || "$ACL_LOG_ONE_RESULT" == *"addr=unkno
 fi
 
 ACL_LOG_TWO_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" acl log 2)"
-if [[ "$ACL_LOG_TWO_RESULT" != *"dryrun"* ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected ACL LOG 2 to include dryrun entry, got '$ACL_LOG_TWO_RESULT'" >&2
+if [[ "$ACL_LOG_TWO_RESULT" == *"dryrun"* || "$ACL_LOG_TWO_RESULT" != *"toplevel"* || "$ACL_LOG_TWO_RESULT" != *"get"* ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected ACL DRYRUN to avoid audit side effects, got '$ACL_LOG_TWO_RESULT'" >&2
     exit 1
 fi
 

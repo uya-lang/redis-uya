@@ -120,7 +120,7 @@ ACL WHOAMI
 说明：
 
 - ACL command 规则接受命令目录中的 `parent|child` 子命令名，例如 `+acl|whoami` 只授权 `ACL WHOAMI`、`+client|getname` 只授权 `CLIENT GETNAME`；父规则 `+acl` / `+client` 仍授权各自已实现子命令。父规则与精确 child 规则共同参与全局顺序比较，因此 `-acl +acl|whoami` 允许 WHOAMI，而 `+acl|whoami -acl` 拒绝它。生成目录为 full/partial/standalone-error/deferred 命令统一保留 ACL category 元数据，使 `+@connection` 等分类可直接匹配已实现 child。子命令规则按原顺序进入 GETUSER/LIST/SAVE/LOAD，基础用户规则与 selector 使用同一匹配语义
-- `ACL LOG` 在 RESP2 下把每条记录编码为 20 元素键值数组，在 RESP3 下编码为 10 字段 map；外层始终为按新到旧排列的记录数组
+- `ACL LOG` 在 RESP2 下把每条记录编码为 20 元素键值数组，`age-seconds` 为 bulk 数字字符串；RESP3 下记录编码为 10 字段 map，`age-seconds` 为 double。外层始终为按新到旧排列的记录数组
 - `ACL GETUSER` 在 RESP2 下返回 12 元素用户键值数组、selector 为 6 元素键值数组；RESP3 下顶层用户详情为 6 字段 map，每个 selector 为 3 字段 map，flags/passwords/selectors 容器仍为数组
 - 当前实现为 partial，仅暴露 `ACL CAT`、`ACL DELUSER`、`ACL DRYRUN`、`ACL GENPASS`、`ACL GETUSER`、`ACL HELP`、`ACL LIST`、`ACL LOAD`、`ACL LOG`、`ACL SAVE`、`ACL SETUSER`、`ACL USERS`、`ACL WHOAMI` 和 `COMMAND*` 可见面
 - `COMMAND INFO/LIST/DOCS` 会暴露 `ACL`、`ACL|CAT`、`ACL|DELUSER`、`ACL|DRYRUN`、`ACL|GENPASS`、`ACL|GETUSER`、`ACL|HELP`、`ACL|LIST`、`ACL|LOAD`、`ACL|LOG`、`ACL|SAVE`、`ACL|SETUSER`、`ACL|USERS` 与 `ACL|WHOAMI`

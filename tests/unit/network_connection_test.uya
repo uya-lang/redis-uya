@@ -2259,6 +2259,7 @@ export fn test_connection_process_acl_permission_denial() !void {
     tx.protocol_version = 3;
     const acl_log_resp3: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$3\r\nLOG\r\n$1\r\n1\r\n"[0: 29], &out[0], 2048, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: 9], &"*1\r\n%10\r\n"[0: 9]));
+    try assert_true(network_connection_contains(out[0: acl_log_resp3.response_len], &"$11\r\nage-seconds\r\n,0\r\n"[0: 22]));
     tx.protocol_version = 2;
 
     const acl_log_two: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$3\r\nLOG\r\n$1\r\n2\r\n"[0: 29], &out[0], 2048, 1000u64);

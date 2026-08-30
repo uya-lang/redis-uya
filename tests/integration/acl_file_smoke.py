@@ -75,6 +75,8 @@ def read_resp(sock: socket.socket):
         raise RespError(read_line(sock).decode())
     if prefix == b":":
         return int(read_line(sock))
+    if prefix == b",":
+        return float(read_line(sock))
     if prefix == b"$":
         length = int(read_line(sock))
         if length < 0:

@@ -6929,7 +6929,7 @@ fn connection_acl_log_append_client_info(raw: &Sds, entry: &ConnectionAclLogEntr
     try connection_sds_append_resp_bulk(raw, client_info.buf[0: client_info.len]);
 }
 
-fn connection_acl_log_append_age_seconds(raw: &Sds, now_ms: u64, updated_ms: u64) !void {
+fn connection_acl_log_append_age_seconds(raw: &Sds, now_ms: u64, updated_ms: u64, protocol_version: i32) !void {
     var age_ms: u64 = 0u64;
     if now_ms >= updated_ms {
         age_ms = now_ms - updated_ms;
@@ -6955,7 +6955,13 @@ fn connection_acl_log_append_age_seconds(raw: &Sds, now_ms: u64, updated_ms: u64
         }
         try sds_cat(&age, digits[0: digit_count]);
     }
-    try connection_sds_append_resp_bulk(raw, age.buf[0: age.len]);
+    if protocol_version == 3 {
+        try sds_cat(raw, &","[0: 1]);
+        try sds_cat(raw, age.buf[0: age.len]);
+        try sds_cat(raw, &"\r\n"[0: 2]);
+    } else {
+        try connection_sds_append_resp_bulk(raw, age.buf[0: age.len]);
+    }
 }
 
 fn connection_acl_log_append_entry(raw: &Sds, entry: &ConnectionAclLogEntry, now_ms: u64, protocol_version: i32) !void {
@@ -6979,7 +6985,7 @@ fn connection_acl_log_append_entry(raw: &Sds, entry: &ConnectionAclLogEntry, now
         try connection_sds_append_resp_bulk(raw, &"default"[0: 7]);
     }
     try connection_sds_append_resp_bulk(raw, &"age-seconds"[0: 11]);
-    try connection_acl_log_append_age_seconds(raw, now_ms, entry.updated_ms);
+    try connection_acl_log_append_age_seconds(raw, now_ms, entry.updated_ms, protocol_version);
     try connection_sds_append_resp_bulk(raw, &"client-info"[0: 11]);
     try connection_acl_log_append_client_info(raw, entry);
     try connection_sds_append_resp_bulk(raw, &"entry-id"[0: 8]);

@@ -426,6 +426,21 @@ def run_smoke() -> None:
                 raise AssertionError(f"ACL LOG did not evict its two oldest entries: {capacity_log[-1]!r}")
             if newest_capacity_fields.get(b"entry-id", 0) <= oldest_capacity_fields.get(b"entry-id", 0):
                 raise AssertionError("ACL LOG capacity order did not follow entry ids")
+            expect_auth_error(port, b"missing-120", b"wrong")
+            refreshed_log = send_command(admin, b"ACL", b"LOG", b"1")
+            refreshed_fields = dict(zip(refreshed_log[0][::2], refreshed_log[0][1::2]))
+            if refreshed_fields.get(b"username") != b"missing-120" or refreshed_fields.get(b"count") != 2:
+                raise AssertionError(f"ACL LOG did not refresh a recent matching entry: {refreshed_log!r}")
+            expect_auth_error(port, b"missing-130", b"wrong")
+            refreshed_capacity_log = send_command(admin, b"ACL", b"LOG", b"200")
+            refreshed_second = dict(zip(refreshed_capacity_log[1][::2], refreshed_capacity_log[1][1::2]))
+            refreshed_oldest = dict(zip(refreshed_capacity_log[-1][::2], refreshed_capacity_log[-1][1::2]))
+            if len(refreshed_capacity_log) != 128 or dict(zip(refreshed_capacity_log[0][::2], refreshed_capacity_log[0][1::2])).get(b"username") != b"missing-130":
+                raise AssertionError("ACL LOG full-capacity insertion order is wrong")
+            if refreshed_second.get(b"username") != b"missing-120" or refreshed_second.get(b"count") != 2:
+                raise AssertionError("ACL LOG refreshed entry was not kept near the head")
+            if refreshed_oldest.get(b"username") != b"missing-3":
+                raise AssertionError(f"ACL LOG evicted the wrong entry after refresh: {refreshed_oldest!r}")
             if send_command(admin, b"ACL", b"LOG", b"RESET") != "OK":
                 raise AssertionError("failed to reset ACL LOG after capacity check")
 

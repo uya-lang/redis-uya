@@ -440,11 +440,17 @@ def run_smoke() -> None:
             finally:
                 category_child.close()
 
-            if send_command(admin, b"ACL", b"SETUSER", b"stream-child", b"on", b"nopass", b"+xgroup|destroy", b"allkeys") != "OK":
+            if send_command(admin, b"ACL", b"SETUSER", b"stream-child", b"on", b"nopass", b"+xgroup|destroy", b"+xinfo|stream", b"+object|encoding", b"allkeys") != "OK":
                 raise AssertionError("failed to create key-bearing child-command user")
             if send_command(admin, b"ACL", b"DRYRUN", b"stream-child", b"XGROUP", b"DESTROY", b"stream-key", b"group") != "OK":
                 raise AssertionError("ACL child rule did not allow XGROUP DESTROY")
             expect_error(admin, "NOPERM", b"ACL", b"DRYRUN", b"stream-child", b"XGROUP", b"SETID", b"stream-key", b"0-0")
+            if send_command(admin, b"ACL", b"DRYRUN", b"stream-child", b"XINFO", b"STREAM", b"stream-key") != "OK":
+                raise AssertionError("ACL child rule did not allow XINFO STREAM")
+            expect_error(admin, "NOPERM", b"ACL", b"DRYRUN", b"stream-child", b"XINFO", b"GROUPS", b"stream-key")
+            if send_command(admin, b"ACL", b"DRYRUN", b"stream-child", b"OBJECT", b"ENCODING", b"stream-key") != "OK":
+                raise AssertionError("ACL child rule did not allow OBJECT ENCODING")
+            expect_error(admin, "NOPERM", b"ACL", b"DRYRUN", b"stream-child", b"OBJECT", b"IDLETIME", b"stream-key")
             if send_command(admin, b"ACL", b"DELUSER", b"stream-child") != 1:
                 raise AssertionError("failed to remove key-bearing child-command user")
 

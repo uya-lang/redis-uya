@@ -5323,14 +5323,15 @@ fn connection_acl_password_hash_slot(hashes: &[byte], index: usize) &[byte] {
 
 fn connection_acl_password_hash_find(hashes: &[byte], count: usize, hash: &[byte]) i32 {
     var index: usize = 0;
+    var found: i32 = -1;
     while index < count && index < CONNECTION_ACL_PASSWORD_HASH_MAX {
         const slot: &[byte] = connection_acl_password_hash_slot(hashes, index);
-        if connection_acl_hash_matches_hash(slot, hash) {
-            return index as i32;
+        if connection_acl_hash_matches_hash(slot, hash) && found < 0 {
+            found = index as i32;
         }
         index = index + 1;
     }
-    return -1;
+    return found;
 }
 
 fn connection_acl_password_hash_add(hashes: &[byte], count: &usize, hash: &[byte]) !void {

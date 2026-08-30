@@ -76,7 +76,7 @@ AUTH username password
 说明：
 
 - 当前安全基线支持默认用户 `default` 的 `requirepass`/多摘要认证和 `on/off/reset` 生命周期，以及通过 `ACL SETUSER <name> on >password` 创建的 named user 进程内口令认证；named user 认证成功后 `ACL WHOAMI` 返回该用户名
-- 默认用户 legacy 明文 `requirepass` 在等长输入上使用常量时间字节比较；ACL SHA-256 摘要和候选摘要同样通过固定 32 字节差异归约比较，不按首个不匹配字节提前返回
+- 默认用户 legacy 明文 `requirepass` 在等长输入上使用常量时间字节比较；ACL SHA-256 摘要和候选摘要同样通过固定 32 字节差异归约比较，不按首个不匹配字节提前返回，多摘要查找会扫描全部有效槽位而不在首个命中处早退
 - 启用 `requirepass` 后，除 `AUTH` / `QUIT` / `RESET` 外的普通命令在认证前返回 `-NOAUTH Authentication required.`
 
 ### `ACL`

@@ -6942,8 +6942,12 @@ fn connection_acl_log_append_age_seconds(raw: &Sds, now_ms: u64, updated_ms: u64
     try connection_sds_append_resp_bulk(raw, age.buf[0: age.len]);
 }
 
-fn connection_acl_log_append_entry(raw: &Sds, entry: &ConnectionAclLogEntry, now_ms: u64) !void {
-    try connection_sds_append_resp_array_header(raw, 20);
+fn connection_acl_log_append_entry(raw: &Sds, entry: &ConnectionAclLogEntry, now_ms: u64, protocol_version: i32) !void {
+    if protocol_version == 3 {
+        try connection_sds_append_resp_map_header(raw, 10);
+    } else {
+        try connection_sds_append_resp_array_header(raw, 20);
+    }
     try connection_sds_append_resp_bulk(raw, &"count"[0: 5]);
     try connection_sds_append_resp_integer(raw, entry.count as i64);
     try connection_sds_append_resp_bulk(raw, &"reason"[0: 6]);
@@ -6970,7 +6974,7 @@ fn connection_acl_log_append_entry(raw: &Sds, entry: &ConnectionAclLogEntry, now
     try connection_sds_append_resp_integer(raw, entry.updated_ms as i64);
 }
 
-fn connection_acl_handle_log(command: &Command, now_ms: u64) CommandReply {
+fn connection_acl_handle_log(command: &Command, now_ms: u64, protocol_version: i32) CommandReply {
     if command.argc == 3 {
         const arg: &[byte] = command_arg_data(command, 2) catch {
             return connection_error_reply(&"ERR unknown subcommand or wrong number of arguments for 'log'. Try ACL HELP."[0: 76]);
@@ -7021,7 +7025,7 @@ fn connection_acl_handle_log(command: &Command, now_ms: u64) CommandReply {
         }
         const slot: usize = best_slot as usize;
         if slot < CONNECTION_ACL_LOG_MAX {
-            _ = connection_acl_log_append_entry(&raw, &connection_acl_log_entries[slot], now_ms) catch {
+            _ = connection_acl_log_append_entry(&raw, &connection_acl_log_entries[slot], now_ms, protocol_version) catch {
                 return connection_error_reply(&"ERR out of memory"[0: 17]);
             };
         } else {
@@ -7787,7 +7791,7 @@ fn connection_handle_acl(
         return connection_acl_handle_deluser(tx, command);
     }
     if connection_keyword_eq(subcommand, &"LOG"[0: 3]) {
-        return connection_acl_handle_log(command, now_ms);
+        return connection_acl_handle_log(command, now_ms, runtime.protocol_version);
     }
     if connection_keyword_eq(subcommand, &"WHOAMI"[0: 6]) {
         if command.argc != 2 {

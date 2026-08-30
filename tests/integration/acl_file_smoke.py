@@ -88,6 +88,9 @@ def read_resp(sock: socket.socket):
         if count < 0:
             return None
         return [read_resp(sock) for _ in range(count)]
+    if prefix == b"%":
+        count = int(read_line(sock))
+        return {read_resp(sock): read_resp(sock) for _ in range(count)}
     raise RuntimeError(f"unsupported RESP prefix: {prefix!r}")
 
 
@@ -203,9 +206,9 @@ def run_smoke() -> None:
                 if send_command(admin, b"ACL", b"GETUSER", invalid_username) is not None:
                     raise AssertionError(f"invalid ACL username was created: {invalid_username!r}")
 
-            if send_command(admin, b"ACL", b"SETUSER", b"DEFAULT", b"on", b"nopass", b"+ping", b"+acl") != "OK":
+            if send_command(admin, b"ACL", b"SETUSER", b"DEFAULT", b"on", b"nopass", b"+ping", b"+acl", b"+hello") != "OK":
                 raise AssertionError("failed to create case-sensitive DEFAULT named user")
-            if acl_getuser_field(admin, b"DEFAULT", b"commands") != b"-@all +ping +acl":
+            if acl_getuser_field(admin, b"DEFAULT", b"commands") != b"-@all +ping +acl +hello":
                 raise AssertionError("ACL GETUSER routed DEFAULT to the default user")
             if send_command(admin, b"ACL", b"GETUSER", b"Default") is not None:
                 raise AssertionError("ACL GETUSER matched a differently cased username")
@@ -235,6 +238,21 @@ def run_smoke() -> None:
                     raise AssertionError(f"ACL LOG used wrong top-level context: {case_log!r}")
                 if send_command(admin, b"ACL", b"LOG", b"RESET") != "OK":
                     raise AssertionError("failed to reset ACL LOG after username-case check")
+                resp3_case = authenticate(port, b"DEFAULT", b"ignored")
+                try:
+                    hello_reply = send_command(resp3_case, b"HELLO", b"3")
+                    if not isinstance(hello_reply, dict) or hello_reply.get(b"proto") != 3:
+                        raise AssertionError(f"HELLO 3 did not return a RESP3 map: {hello_reply!r}")
+                    expect_error(resp3_case, "NOPERM User DEFAULT", b"GET", b"resp3-key")
+                    resp3_log = send_command(resp3_case, b"ACL", b"LOG", b"1")
+                    if not isinstance(resp3_log, list) or len(resp3_log) != 1 or not isinstance(resp3_log[0], dict):
+                        raise AssertionError(f"ACL LOG did not return RESP3 entry map: {resp3_log!r}")
+                    if resp3_log[0].get(b"object") != b"get" or resp3_log[0].get(b"username") != b"DEFAULT":
+                        raise AssertionError(f"ACL LOG RESP3 map lost fields: {resp3_log!r}")
+                finally:
+                    resp3_case.close()
+                if send_command(admin, b"ACL", b"LOG", b"RESET") != "OK":
+                    raise AssertionError("failed to reset ACL LOG after RESP3 check")
                 expect_auth_error(port, b"Default", b"ignored")
                 expect_auth_error(port, b"Default", b"ignored")
                 auth_log = send_command(admin, b"ACL", b"LOG", b"1")
@@ -268,7 +286,7 @@ def run_smoke() -> None:
                     raise AssertionError("failed to mutate case-sensitive DEFAULT named user")
                 if send_command(admin, b"ACL", b"LOAD") != "OK":
                     raise AssertionError("failed to reload case-sensitive DEFAULT named user")
-                if acl_getuser_field(admin, b"DEFAULT", b"commands") != b"-@all +ping +acl":
+                if acl_getuser_field(admin, b"DEFAULT", b"commands") != b"-@all +ping +acl +hello":
                     raise AssertionError("ACL LOAD did not preserve DEFAULT named user rules")
                 if send_command(admin, b"ACL", b"DELUSER", b"DeFaUlT") != 0:
                     raise AssertionError("ACL DELUSER matched a differently cased username")

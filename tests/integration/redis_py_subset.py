@@ -1918,8 +1918,10 @@ def run_smoke() -> None:
             ):
                 raise AssertionError(f"expected ACL LOG to include denied GET command entry, got {acl_log_one!r}")
             acl_log_two = client.acl_log(b"2")
-            if len(acl_log_two) != 2 or b"dryrun" not in acl_log_two[1]:
-                raise AssertionError(f"expected ACL LOG count to include dryrun entry, got {acl_log_two!r}")
+            if len(acl_log_two) != 2 or any(b"dryrun" in entry for entry in acl_log_two):
+                raise AssertionError(f"expected ACL DRYRUN to avoid audit side effects, got {acl_log_two!r}")
+            if b"key" not in acl_log_two[1] or b"other" not in acl_log_two[1]:
+                raise AssertionError(f"expected prior denied-key audit entry, got {acl_log_two!r}")
             if client.acl_log(b"RESET") != "OK" or client.acl_log() != []:
                 raise AssertionError("expected ACL LOG RESET to clear denied entries")
             if client.acl_setuser(b"default", b"+get") != "OK":

@@ -345,6 +345,19 @@ def run_smoke() -> None:
             finally:
                 selector_child.close()
 
+            if send_command(admin, b"ACL", b"SETUSER", b"category-child", b"on", b"nopass", b"+@connection") != "OK":
+                raise AssertionError("failed to create ACL child-category user")
+            category_child = authenticate(port, b"category-child", b"ignored")
+            try:
+                if send_command(category_child, b"CLIENT", b"GETNAME") is not None:
+                    raise AssertionError("CLIENT GETNAME returned a name for category user")
+                expect_error(category_child, "NOPERM", b"ACL", b"WHOAMI")
+                if send_command(admin, b"ACL", b"DELUSER", b"category-child") != 1:
+                    raise AssertionError("failed to remove ACL child-category user")
+                expect_connection_closed(category_child, "ACL child-category DELUSER")
+            finally:
+                category_child.close()
+
             expect_error(admin, "modifier 'bogus': Syntax error", b"ACL", b"SETUSER", b"default", b"off", b"resetpass", b"bogus")
             if acl_getuser_field(admin, b"default", b"flags") != [b"on", b"nopass"]:
                 raise AssertionError("failed ACL SETUSER changed default user state")

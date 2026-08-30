@@ -119,7 +119,7 @@ ACL WHOAMI
 
 说明：
 
-- ACL command 规则接受命令目录中的 `parent|child` 子命令名，例如 `+acl|whoami` 只授权 `ACL WHOAMI`、`+client|getname` 只授权 `CLIENT GETNAME`；父规则 `+acl` / `+client` 仍授权各自已实现子命令。父规则与精确 child 规则共同参与全局顺序比较，因此 `-acl +acl|whoami` 允许 WHOAMI，而 `+acl|whoami -acl` 拒绝它。子命令规则按原顺序进入 GETUSER/LIST/SAVE/LOAD，基础用户规则与 selector 使用同一匹配语义
+- ACL command 规则接受命令目录中的 `parent|child` 子命令名，例如 `+acl|whoami` 只授权 `ACL WHOAMI`、`+client|getname` 只授权 `CLIENT GETNAME`；父规则 `+acl` / `+client` 仍授权各自已实现子命令。父规则与精确 child 规则共同参与全局顺序比较，因此 `-acl +acl|whoami` 允许 WHOAMI，而 `+acl|whoami -acl` 拒绝它。生成目录为 full/partial/standalone-error/deferred 命令统一保留 ACL category 元数据，使 `+@connection` 等分类可直接匹配已实现 child。子命令规则按原顺序进入 GETUSER/LIST/SAVE/LOAD，基础用户规则与 selector 使用同一匹配语义
 - 当前实现为 partial，仅暴露 `ACL CAT`、`ACL DELUSER`、`ACL DRYRUN`、`ACL GENPASS`、`ACL GETUSER`、`ACL HELP`、`ACL LIST`、`ACL LOAD`、`ACL LOG`、`ACL SAVE`、`ACL SETUSER`、`ACL USERS`、`ACL WHOAMI` 和 `COMMAND*` 可见面
 - `COMMAND INFO/LIST/DOCS` 会暴露 `ACL`、`ACL|CAT`、`ACL|DELUSER`、`ACL|DRYRUN`、`ACL|GENPASS`、`ACL|GETUSER`、`ACL|HELP`、`ACL|LIST`、`ACL|LOAD`、`ACL|LOG`、`ACL|SAVE`、`ACL|SETUSER`、`ACL|USERS` 与 `ACL|WHOAMI`
 - `aclfile` 可通过配置文本、`CONFIG GET/SET/REWRITE` 或第八个启动参数设置；不含 `/` 的文件名相对当前 `dir` 解析，含 `/` 的路径按原值使用。启动时指定文件会在进入事件循环前加载，加载失败则启动失败

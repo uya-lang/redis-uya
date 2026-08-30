@@ -195,6 +195,14 @@ def run_smoke() -> None:
             genpass_two = send_command(admin, b"ACL", b"GENPASS")
             if not isinstance(genpass_one, bytes) or len(genpass_one) != 64 or genpass_one == genpass_two:
                 raise AssertionError("ACL GENPASS did not return independent 256-bit passwords")
+            genpass_min = send_command(admin, b"ACL", b"GENPASS", b"1")
+            genpass_max = send_command(admin, b"ACL", b"GENPASS", b"4096")
+            if not isinstance(genpass_min, bytes) or len(genpass_min) != 1:
+                raise AssertionError(f"ACL GENPASS 1 returned wrong length: {genpass_min!r}")
+            if not isinstance(genpass_max, bytes) or len(genpass_max) != 1024:
+                raise AssertionError(f"ACL GENPASS 4096 returned wrong length: {genpass_max!r}")
+            if any(ch not in b"0123456789abcdef" for ch in genpass_min + genpass_max):
+                raise AssertionError("ACL GENPASS boundary output was not lowercase hexadecimal")
             connection_category = send_command(admin, b"ACL", b"CAT", b"connection")
             if not isinstance(connection_category, list) or b"client|getname" not in connection_category:
                 raise AssertionError(f"ACL CAT omitted partial child command tags: {connection_category!r}")

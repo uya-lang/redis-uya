@@ -8015,10 +8015,10 @@ fn connection_script_eval_numkeys(command: &Command) !usize {
     const numkeys_u64: u64 = connection_parse_u64(numkeys_data) catch {
         return error.ConnectionScriptInvalidNumkeys;
     };
-    const numkeys: usize = numkeys_u64 as usize;
-    if command.argc < 3 + numkeys {
+    if command.argc < 3 || numkeys_u64 > (command.argc - 3) as u64 {
         return error.ConnectionScriptTooManyKeys;
     }
+    const numkeys: usize = numkeys_u64 as usize;
     return numkeys;
 }
 
@@ -10142,6 +10142,9 @@ fn connection_handle_client_tracking(tx: &ConnectionTransaction, command: &Comma
             const redirect_id_u64: u64 = connection_parse_u64(id_arg) catch {
                 return connection_error_reply(&"ERR invalid client ID"[0: 21]);
             };
+            if redirect_id_u64 > 9223372036854775807u64 {
+                return connection_error_reply(&"ERR invalid client ID"[0: 21]);
+            }
             tracking_redirect_id = redirect_id_u64 as i64;
             if tracking_redirect_id > 0 && !connection_client_registry_has_client_id(tracking_redirect_id) {
                 return connection_error_reply(&"ERR invalid client ID"[0: 21]);
@@ -10586,6 +10589,9 @@ fn connection_handle_client(tx: &ConnectionTransaction, command: &Command, now_m
         const target_id_u64: u64 = connection_parse_u64(id_arg) catch {
             return connection_error_reply(&"ERR invalid client ID"[0: 21]);
         };
+        if target_id_u64 > 9223372036854775807u64 {
+            return connection_error_reply(&"ERR invalid client ID"[0: 21]);
+        }
         var unblock_error: bool = false;
         if command.argc == 4 {
             const mode: &[byte] = command_arg_data(command, 3) catch {
@@ -10620,6 +10626,9 @@ fn connection_handle_client(tx: &ConnectionTransaction, command: &Command, now_m
         const timeout_ms: u64 = connection_parse_u64(timeout_arg) catch {
             return connection_error_reply(&"ERR timeout is not an integer or out of range"[0: 45]);
         };
+        if timeout_ms > 9223372036854775807u64 {
+            return connection_error_reply(&"ERR timeout is not an integer or out of range"[0: 45]);
+        }
         var write_only: bool = false;
         if command.argc == 4 {
             const mode: &[byte] = command_arg_data(command, 3) catch {

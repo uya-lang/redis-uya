@@ -3970,11 +3970,11 @@ CLIENT HELP
 - `CLIENT LIST [TYPE NORMAL|MASTER|REPLICA|PUBSUB]` / `CLIENT LIST ID id ...`：无过滤时返回全部活跃连接的信息行快照；`TYPE NORMAL/PUBSUB` 按实时订阅计数分类；当前 standalone 服务没有复制连接，因此 `MASTER/REPLICA` 及 Redis 兼容别名 `SLAVE` 返回空 Bulk String；`ID` 接受一个或多个客户端 ID 并按请求顺序输出匹配项，重复 ID 会重复输出，缺失 ID 被跳过；当前 TYPE 与 ID 模式互斥，每行包含真实 `id/addr/laddr/fd/age/idle/db/user/flags/cmd/redir/events/io-thread/tot-net-in` 以及 `name/resp/multi/watch/sub/psub/ssub/qbuf/qbuf-free/argv-mem/multi-mem/rbs/rbp/obl/oll/omem/tot-mem/lib-name/lib-ver`
 - `CLIENT KILL ip:port`：按注册表中的远端地址精确关闭单个活跃连接，成功返回 `OK`，地址不存在返回 `ERR No such client`
 - `CLIENT KILL [ID id] [ADDR ip:port] [LADDR ip:port] [USER username] [TYPE normal|master|replica|pubsub] [MAXAGE seconds] [SKIPME yes|no]`：`ID` 与远端 `ADDR` 定位单个连接，`LADDR` 按服务端本地监听地址匹配一个或多个活跃连接，`USER` 按 ACL 用户名匹配，`TYPE NORMAL/PUBSUB` 按实时订阅状态分类，standalone 下 `MASTER/REPLICA` 及兼容别名 `SLAVE` 不匹配连接并返回 `0`；`MAXAGE` 接受有符号 64 位正整数秒，按命令时间快照与 accept 时间之差的整秒值匹配 `age >= MAXAGE` 的连接，非整数/越界与非正值分别返回 Redis 兼容错误；多个不同类型 selector 取交集，重复 selector 合法且末值生效，已知用户无连接、地址/目标缺失或条件不相交返回 `0`，未知用户返回 `ERR No such user '<username>'`，未知类型返回 `ERR Unknown client type '<type>'`；默认 `SKIPME yes` 不关闭当前连接，显式 `SKIPME no` 可把当前连接计入关闭结果，返回实际匹配数量
-- `CLIENT UNBLOCK id [TIMEOUT|ERROR]`：解除处于阻塞 pop 等待中的其他连接；默认 `TIMEOUT` 向目标连接返回对应阻塞命令的空结果，`ERROR` 向目标连接返回 `UNBLOCKED` 错误，当前命令返回整数 `0/1`
+- `CLIENT UNBLOCK id [TIMEOUT|ERROR]`：解除处于阻塞 pop 等待中的其他连接；ID 必须位于非负有符号 64 位范围，默认 `TIMEOUT` 向目标连接返回对应阻塞命令的空结果，`ERROR` 向目标连接返回 `UNBLOCKED` 错误，当前命令返回整数 `0/1`
 - `CLIENT PAUSE timeout-ms [WRITE|ALL]`：暂停其他连接的命令处理；`ALL` 阻塞后续命令，`WRITE` 只阻塞写命令并允许读命令继续执行，返回 `+OK`
 - `CLIENT PAUSE` 的 timeout 不是非负整数或超出范围时，返回完整 `ERR timeout is not an integer or out of range`
 - `CLIENT UNPAUSE`：提前解除当前 pause 状态，返回 `+OK`
-- `CLIENT TRACKING`：当前支持连接级 `ON/OFF`、`REDIRECT`、`BCAST`、`PREFIX`、`OPTIN`、`OPTOUT`、`NOLOOP` 状态存储，返回 `+OK`；`PREFIX` 仅在 `BCAST` 模式下接受
+- `CLIENT TRACKING`：当前支持连接级 `ON/OFF`、`REDIRECT`、`BCAST`、`PREFIX`、`OPTIN`、`OPTOUT`、`NOLOOP` 状态存储，返回 `+OK`；`REDIRECT` ID 必须位于非负有符号 64 位范围，`PREFIX` 仅在 `BCAST` 模式下接受
 - `CLIENT TRACKINGINFO`：RESP2 下返回 flatten array，RESP3 下返回 map，暴露当前连接的 tracking flags、redirect 和 prefixes
 - `CLIENT SETINFO`：保存客户端库名/版本元数据，成功返回 `+OK`
 - `CLIENT HELP`：返回当前支持的 CLIENT 子命令列表，包含精确的 `CLIENT REPLY <ON|OFF|SKIP>` 条目

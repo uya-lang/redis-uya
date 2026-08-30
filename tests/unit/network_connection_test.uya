@@ -405,6 +405,8 @@ export fn test_connection_process_ping_set_get_quit() !void {
 
     const eval_too_many_keys_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$4\r\nEVAL\r\n$8\r\nreturn 1\r\n$1\r\n1\r\n"[0: 35], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: eval_too_many_keys_result.response_len], &"-ERR Number of keys can't be greater than number of args\r\n"[0: 58]));
+    const eval_huge_numkeys_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$4\r\nEVAL\r\n$8\r\nreturn 1\r\n$20\r\n18446744073709551615\r\n"[0: 55], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: eval_huge_numkeys_result.response_len], &"-ERR Number of keys can't be greater than number of args\r\n"[0: 58]));
 
     const eval_unknown_inner_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$4\r\nEVAL\r\n$28\r\nreturn redis.call('MISSING')\r\n$1\r\n0\r\n"[0: 56], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: eval_unknown_inner_result.response_len], &"-ERR unknown command in script\r\n"[0: 32]));
@@ -1856,6 +1858,9 @@ export fn test_connection_process_client_commands() !void {
     const tracking_off: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$6\r\nCLIENT\r\n$8\r\nTRACKING\r\n$3\r\nOFF\r\n"[0: 39], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: tracking_off.response_len], &"+OK\r\n"[0: 5]));
 
+    const tracking_redirect_overflow: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*5\r\n$6\r\nCLIENT\r\n$8\r\nTRACKING\r\n$2\r\nON\r\n$8\r\nREDIRECT\r\n$19\r\n9223372036854775808\r\n"[0: 78], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: tracking_redirect_overflow.response_len], &"-ERR invalid client ID\r\n"[0: 24]));
+
     const getredir_off: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*2\r\n$6\r\nCLIENT\r\n$8\r\nGETREDIR\r\n"[0: 30], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: getredir_off.response_len], &":-1\r\n"[0: 5]));
 
@@ -2028,6 +2033,9 @@ export fn test_connection_process_client_commands() !void {
     const client_unblock_bad: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$7\r\nUNBLOCK\r\n$1\r\n2\r\n$3\r\nBAD\r\n"[0: 45], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: client_unblock_bad.response_len], &"-ERR syntax error\r\n"[0: 19]));
 
+    const client_unblock_overflow: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$6\r\nCLIENT\r\n$7\r\nUNBLOCK\r\n$19\r\n9223372036854775808\r\n"[0: 55], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_unblock_overflow.response_len], &"-ERR invalid client ID\r\n"[0: 24]));
+
     const client_pause: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$5\r\nPAUSE\r\n$3\r\n250\r\n$3\r\nALL\r\n"[0: 45], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: client_pause.response_len], &"+OK\r\n"[0: 5]));
     try assert_eq_i32(client_pause.request_client_pause as i32, 1);
@@ -2036,6 +2044,9 @@ export fn test_connection_process_client_commands() !void {
 
     const client_pause_bad_timeout: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$6\r\nCLIENT\r\n$5\r\nPAUSE\r\n$3\r\nbad\r\n"[0: 36], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: client_pause_bad_timeout.response_len], &"-ERR timeout is not an integer or out of range\r\n"[0: 48]));
+
+    const client_pause_overflow: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$6\r\nCLIENT\r\n$5\r\nPAUSE\r\n$19\r\n9223372036854775808\r\n"[0: 53], &out[0], 512, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: client_pause_overflow.response_len], &"-ERR timeout is not an integer or out of range\r\n"[0: 48]));
 
     const client_pause_write: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$6\r\nCLIENT\r\n$5\r\nPAUSE\r\n$3\r\n250\r\n$5\r\nWRITE\r\n"[0: 47], &out[0], 512, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: client_pause_write.response_len], &"+OK\r\n"[0: 5]));

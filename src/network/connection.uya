@@ -1511,6 +1511,20 @@ fn connection_slice_eq(a: &[byte], b: &[byte]) bool {
     return true;
 }
 
+fn connection_constant_time_eq(a: &[byte], b: &[byte]) bool {
+    if a.len != b.len {
+        return false;
+    }
+    var difference: byte = 0 as byte;
+    var index: usize = 0;
+    while index < a.len {
+        const mismatch: byte = a.ptr[index] ^ b.ptr[index];
+        difference = difference | mismatch;
+        index = index + 1;
+    }
+    return difference == 0 as byte;
+}
+
 fn connection_sds_append_ascii_lower(buf: &Sds, data: &[byte]) !void {
     var tmp: [byte: 1] = [];
     var i: usize = 0;
@@ -9199,7 +9213,7 @@ fn connection_default_password_matches(runtime: &CommandRuntimeInfo, password: &
         return connection_acl_hash_matches_password(runtime.config.requirepass_hash[0: CONNECTION_ACL_PASSWORD_HASH_BYTES], password);
     }
     const requirepass: &[byte] = connection_requirepass(runtime);
-    return password.len == requirepass.len && connection_slice_eq(password, requirepass);
+    return connection_constant_time_eq(password, requirepass);
 }
 
 fn connection_authenticated_named_user_valid(tx: &ConnectionTransaction) bool {

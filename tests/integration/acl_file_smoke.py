@@ -196,12 +196,15 @@ def run_smoke() -> None:
             if not isinstance(genpass_one, bytes) or len(genpass_one) != 64 or genpass_one == genpass_two:
                 raise AssertionError("ACL GENPASS did not return independent 256-bit passwords")
             genpass_min = send_command(admin, b"ACL", b"GENPASS", b"1")
+            genpass_plus = send_command(admin, b"ACL", b"GENPASS", b"+8")
             genpass_max = send_command(admin, b"ACL", b"GENPASS", b"4096")
             if not isinstance(genpass_min, bytes) or len(genpass_min) != 1:
                 raise AssertionError(f"ACL GENPASS 1 returned wrong length: {genpass_min!r}")
             if not isinstance(genpass_max, bytes) or len(genpass_max) != 1024:
                 raise AssertionError(f"ACL GENPASS 4096 returned wrong length: {genpass_max!r}")
-            if any(ch not in b"0123456789abcdef" for ch in genpass_min + genpass_max):
+            if not isinstance(genpass_plus, bytes) or len(genpass_plus) != 2:
+                raise AssertionError(f"ACL GENPASS +8 returned wrong length: {genpass_plus!r}")
+            if any(ch not in b"0123456789abcdef" for ch in genpass_min + genpass_plus + genpass_max):
                 raise AssertionError("ACL GENPASS boundary output was not lowercase hexadecimal")
             connection_category = send_command(admin, b"ACL", b"CAT", b"connection")
             if not isinstance(connection_category, list) or b"client|getname" not in connection_category:
@@ -555,6 +558,8 @@ def run_smoke() -> None:
                 load_disabled.close()
 
             idle_default = connect_with_retry(port)
+            if send_command(idle_default, b"PING") != "PONG":
+                raise AssertionError("failed to establish idle default session before password change")
             if send_command(admin, b"ACL", b"SETUSER", b"default", b"resetpass", b">rootpass", b">rootpass2", b">rootpass") != "OK":
                 raise AssertionError("failed to set default ACL passwords")
             root_hash = b"5012f5182061c46e57859cf617128c6f70eddfba4db27772bdede5a039fa7085"

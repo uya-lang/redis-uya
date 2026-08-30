@@ -2809,6 +2809,24 @@ export fn test_command_set_get_del_exists() !void {
     try assert_eq_i32(incrby_reply.integer as i32, 5);
     resp_value_free(&incrby_parsed.value);
 
+    var incrby_i64_max_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nINCRBY\r\n$10\r\nmaxcounter\r\n$19\r\n9223372036854775807\r\n"[0: 59]);
+    const incrby_i64_max_command: Command = try command_executor_test_command(&router, &incrby_i64_max_parsed);
+    const incrby_i64_max_reply: CommandReply = command_execute_at(&engine, &incrby_i64_max_command, 1000u64);
+    try assert_true(incrby_i64_max_reply.integer == 9223372036854775807i64);
+    resp_value_free(&incrby_i64_max_parsed.value);
+
+    var incrby_i64_min_parsed: RespParseResult = try parse_resp2(&"*3\r\n$6\r\nINCRBY\r\n$10\r\nmincounter\r\n$20\r\n-9223372036854775808\r\n"[0: 60]);
+    const incrby_i64_min_command: Command = try command_executor_test_command(&router, &incrby_i64_min_parsed);
+    const incrby_i64_min_reply: CommandReply = command_execute_at(&engine, &incrby_i64_min_command, 1000u64);
+    try assert_true(incrby_i64_min_reply.integer == (-9223372036854775807i64 - 1i64));
+    resp_value_free(&incrby_i64_min_parsed.value);
+
+    var incrby_bounds_cleanup_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nDEL\r\n$10\r\nmaxcounter\r\n$10\r\nmincounter\r\n"[0: 47]);
+    const incrby_bounds_cleanup_command: Command = try command_executor_test_command(&router, &incrby_bounds_cleanup_parsed);
+    const incrby_bounds_cleanup_reply: CommandReply = command_execute_at(&engine, &incrby_bounds_cleanup_command, 1000u64);
+    try assert_eq_i32(incrby_bounds_cleanup_reply.integer as i32, 2);
+    resp_value_free(&incrby_bounds_cleanup_parsed.value);
+
     var increx_default_parsed: RespParseResult = try parse_resp2(&"*2\r\n$6\r\nINCREX\r\n$9\r\nexcounter\r\n"[0: 31]);
     const increx_default_command: Command = try command_executor_test_command(&router, &increx_default_parsed);
     var increx_default_reply: CommandReply = command_execute_at(&engine, &increx_default_command, 1000u64);

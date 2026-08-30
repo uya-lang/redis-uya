@@ -477,38 +477,7 @@ fn command_executor_syntax_error() CommandReply {
 }
 
 fn command_executor_parse_i64(data: &[byte]) !i64 {
-    if data.len == 0 {
-        return error.CommandInvalidInteger;
-    }
-
-    var negative: bool = false;
-    var index: usize = 0;
-    if data.ptr[0] == 45 as byte {
-        negative = true;
-        index = 1;
-        if data.len == 1 {
-            return error.CommandInvalidInteger;
-        }
-    }
-
-    if data.len - index > 18 {
-        return error.CommandInvalidInteger;
-    }
-
-    var value: i64 = 0;
-    while index < data.len {
-        const ch: byte = data.ptr[index];
-        if ch < 48 as byte || ch > 57 as byte {
-            return error.CommandInvalidInteger;
-        }
-        value = value * 10 + ((ch - 48 as byte) as i64);
-        index = index + 1;
-    }
-
-    if negative {
-        value = 0 - value;
-    }
-    return value;
+    return command_executor_parse_i64_full(data);
 }
 
 fn command_executor_arg(command: &Command, index: usize) !&[byte] {
@@ -2203,8 +2172,8 @@ fn command_executor_parse_i64_full(data: &[byte]) !i64 {
 
     var negative: bool = false;
     var index: usize = 0;
-    if data.ptr[0] == 45 as byte {
-        negative = true;
+    if data.ptr[0] == 43 as byte || data.ptr[0] == 45 as byte {
+        negative = data.ptr[0] == 45 as byte;
         index = 1;
         if data.len == 1 {
             return error.CommandInvalidInteger;

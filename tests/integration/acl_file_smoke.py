@@ -262,6 +262,9 @@ def run_smoke() -> None:
                 plus_count_log = send_command(admin, b"ACL", b"LOG", b"+1")
                 if not isinstance(plus_count_log, list) or len(plus_count_log) != 1:
                     raise AssertionError(f"ACL LOG rejected signed positive count: {plus_count_log!r}")
+                if send_command(admin, b"ACL", b"LOG", b"0") != []:
+                    raise AssertionError("ACL LOG 0 did not return an empty array")
+                expect_error(admin, "not an integer or out of range", b"ACL", b"LOG", b"-1")
                 expect_error(admin, "not an integer or out of range", b"ACL", b"LOG", b"9223372036854775808")
                 expect_error(admin, "not an integer or out of range", b"ACL", b"LOG", b"18446744073709551616")
                 if send_command(admin, b"ACL", b"LOG", b"RESET") != "OK":

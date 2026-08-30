@@ -4961,7 +4961,7 @@ fn connection_acl_append_default_selectors_config(raw: &Sds) !void {
     }
 }
 
-fn connection_acl_append_selector_resp_entry(raw: &Sds, selector: &ConnectionAclSelector) !void {
+fn connection_acl_append_selector_resp_entry(raw: &Sds, selector: &ConnectionAclSelector, protocol_version: i32) !void {
     var commands: Sds = try connection_acl_selector_command_rules_sds(selector);
     defer {
         sds_free(&commands);
@@ -4974,7 +4974,11 @@ fn connection_acl_append_selector_resp_entry(raw: &Sds, selector: &ConnectionAcl
     defer {
         sds_free(&channels);
     }
-    try connection_sds_append_resp_array_header(raw, 6);
+    if protocol_version == 3 {
+        try connection_sds_append_resp_map_header(raw, 3);
+    } else {
+        try connection_sds_append_resp_array_header(raw, 6);
+    }
     try connection_sds_append_resp_bulk(raw, &"commands"[0: 8]);
     try connection_sds_append_resp_bulk(raw, commands.buf[0: commands.len]);
     try connection_sds_append_resp_bulk(raw, &"keys"[0: 4]);
@@ -4983,7 +4987,7 @@ fn connection_acl_append_selector_resp_entry(raw: &Sds, selector: &ConnectionAcl
     try connection_sds_append_resp_bulk(raw, channels.buf[0: channels.len]);
 }
 
-fn connection_acl_append_selectors_resp_array(raw: &Sds, selectors: &[ConnectionAclSelector]) !void {
+fn connection_acl_append_selectors_resp_array(raw: &Sds, selectors: &[ConnectionAclSelector], protocol_version: i32) !void {
     var count: usize = 0;
     var index: usize = 0;
     while index < selectors.len {
@@ -4996,13 +5000,13 @@ fn connection_acl_append_selectors_resp_array(raw: &Sds, selectors: &[Connection
     index = 0;
     while index < selectors.len {
         if selectors.ptr[index].active {
-            try connection_acl_append_selector_resp_entry(raw, &selectors.ptr[index]);
+            try connection_acl_append_selector_resp_entry(raw, &selectors.ptr[index], protocol_version);
         }
         index = index + 1;
     }
 }
 
-fn connection_acl_append_default_selectors_resp_array(raw: &Sds) !void {
+fn connection_acl_append_default_selectors_resp_array(raw: &Sds, protocol_version: i32) !void {
     var count: usize = 0;
     var index: usize = 0;
     while index < CONNECTION_ACL_SELECTOR_MAX {
@@ -5015,7 +5019,7 @@ fn connection_acl_append_default_selectors_resp_array(raw: &Sds) !void {
     index = 0;
     while index < CONNECTION_ACL_SELECTOR_MAX {
         if connection_acl_default_selectors[index].active {
-            try connection_acl_append_selector_resp_entry(raw, &connection_acl_default_selectors[index]);
+            try connection_acl_append_selector_resp_entry(raw, &connection_acl_default_selectors[index], protocol_version);
         }
         index = index + 1;
     }
@@ -6508,7 +6512,7 @@ fn connection_acl_handle_list(runtime: &CommandRuntimeInfo) CommandReply {
     return connection_array_reply_owned(reply_list, count);
 }
 
-fn connection_acl_getuser_named(user: &ConnectionAclUser) CommandReply {
+fn connection_acl_getuser_named(user: &ConnectionAclUser, protocol_version: i32) CommandReply {
     var rules: Sds = connection_acl_named_command_rules_sds(user) catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
@@ -6533,9 +6537,15 @@ fn connection_acl_getuser_named(user: &ConnectionAclUser) CommandReply {
     defer {
         sds_free(&raw);
     }
-    _ = connection_sds_append_resp_array_header(&raw, 12) catch {
-        return connection_error_reply(&"ERR out of memory"[0: 17]);
-    };
+    if protocol_version == 3 {
+        _ = connection_sds_append_resp_map_header(&raw, 6) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+    } else {
+        _ = connection_sds_append_resp_array_header(&raw, 12) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+    }
     _ = connection_sds_append_resp_bulk(&raw, &"flags"[0: 5]) catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
@@ -6593,7 +6603,7 @@ fn connection_acl_getuser_named(user: &ConnectionAclUser) CommandReply {
     _ = connection_sds_append_resp_bulk(&raw, &"selectors"[0: 9]) catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
-    _ = connection_acl_append_selectors_resp_array(&raw, user.selectors[0: CONNECTION_ACL_SELECTOR_MAX]) catch {
+    _ = connection_acl_append_selectors_resp_array(&raw, user.selectors[0: CONNECTION_ACL_SELECTOR_MAX], protocol_version) catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
     return connection_raw_reply_owned(raw.buf[0: raw.len]);
@@ -6609,7 +6619,7 @@ fn connection_acl_handle_getuser(runtime: &CommandRuntimeInfo, command: &Command
     if !connection_slice_eq(username, &"default"[0: 7]) {
         const slot: i32 = connection_acl_user_find(username);
         if slot >= 0 {
-            return connection_acl_getuser_named(&connection_acl_users[slot as usize]);
+            return connection_acl_getuser_named(&connection_acl_users[slot as usize], runtime.protocol_version);
         }
         return connection_make_reply(CommandReplyType.reply_null_bulk, connection_reply_empty_slice(), 0);
     }
@@ -6640,9 +6650,15 @@ fn connection_acl_handle_getuser(runtime: &CommandRuntimeInfo, command: &Command
     }
     var password_marker: [byte: CONNECTION_ACL_PASSWORD_HASH_HEX_BYTES + 1] = [];
     const password_marker_len: usize = connection_acl_default_password_marker(runtime, password_marker[0: CONNECTION_ACL_PASSWORD_HASH_HEX_BYTES + 1]);
-    _ = connection_sds_append_resp_array_header(&raw, 12) catch {
-        return connection_error_reply(&"ERR out of memory"[0: 17]);
-    };
+    if runtime.protocol_version == 3 {
+        _ = connection_sds_append_resp_map_header(&raw, 6) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+    } else {
+        _ = connection_sds_append_resp_array_header(&raw, 12) catch {
+            return connection_error_reply(&"ERR out of memory"[0: 17]);
+        };
+    }
     _ = connection_sds_append_resp_bulk(&raw, &"flags"[0: 5]) catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
@@ -6715,7 +6731,7 @@ fn connection_acl_handle_getuser(runtime: &CommandRuntimeInfo, command: &Command
     _ = connection_sds_append_resp_bulk(&raw, &"selectors"[0: 9]) catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
-    _ = connection_acl_append_default_selectors_resp_array(&raw) catch {
+    _ = connection_acl_append_default_selectors_resp_array(&raw, runtime.protocol_version) catch {
         return connection_error_reply(&"ERR out of memory"[0: 17]);
     };
     return connection_raw_reply_owned(raw.buf[0: raw.len]);

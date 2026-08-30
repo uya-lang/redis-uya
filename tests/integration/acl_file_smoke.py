@@ -243,6 +243,17 @@ def run_smoke() -> None:
                     hello_reply = send_command(resp3_case, b"HELLO", b"3")
                     if not isinstance(hello_reply, dict) or hello_reply.get(b"proto") != 3:
                         raise AssertionError(f"HELLO 3 did not return a RESP3 map: {hello_reply!r}")
+                    if send_command(admin, b"ACL", b"SETUSER", b"resp3-meta", b"on", b"nopass", b"(+ping)") != "OK":
+                        raise AssertionError("failed to create RESP3 ACL metadata user")
+                    resp3_getuser = send_command(resp3_case, b"ACL", b"GETUSER", b"resp3-meta")
+                    if not isinstance(resp3_getuser, dict) or not isinstance(resp3_getuser.get(b"selectors"), list):
+                        raise AssertionError(f"ACL GETUSER did not return a RESP3 map: {resp3_getuser!r}")
+                    if len(resp3_getuser[b"selectors"]) != 1 or not isinstance(resp3_getuser[b"selectors"][0], dict):
+                        raise AssertionError(f"ACL GETUSER selector was not a RESP3 map: {resp3_getuser!r}")
+                    if resp3_getuser[b"selectors"][0].get(b"commands") != b"-@all +ping":
+                        raise AssertionError(f"ACL GETUSER selector map lost commands: {resp3_getuser!r}")
+                    if send_command(admin, b"ACL", b"DELUSER", b"resp3-meta") != 1:
+                        raise AssertionError("failed to remove RESP3 ACL metadata user")
                     expect_error(resp3_case, "NOPERM User DEFAULT", b"GET", b"resp3-key")
                     resp3_log = send_command(resp3_case, b"ACL", b"LOG", b"1")
                     if not isinstance(resp3_log, list) or len(resp3_log) != 1 or not isinstance(resp3_log[0], dict):

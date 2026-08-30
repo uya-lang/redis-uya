@@ -544,7 +544,7 @@ struct ConnectionAclLogEntry {
 var connection_acl_log_entries: [ConnectionAclLogEntry: CONNECTION_ACL_LOG_MAX] = [];
 var connection_acl_log_next_index: usize = 0;
 var connection_acl_log_count: usize = 0;
-var connection_acl_log_next_sequence: u64 = 1u64;
+var connection_acl_log_next_sequence: u64 = 0u64;
 var connection_acl_log_next_order: u64 = 1u64;
 
 enum ConnectionClientReplyBehavior {
@@ -2827,7 +2827,7 @@ fn connection_acl_log_clear_all() void {
     }
     connection_acl_log_next_index = 0;
     connection_acl_log_count = 0;
-    connection_acl_log_next_sequence = 1u64;
+    connection_acl_log_next_sequence = 0u64;
     connection_acl_log_next_order = 1u64;
 }
 

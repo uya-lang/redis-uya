@@ -238,6 +238,8 @@ def run_smoke() -> None:
                     raise AssertionError(f"ACL LOG did not preserve username case: {case_log!r}")
                 if case_log_context != b"toplevel":
                     raise AssertionError(f"ACL LOG used wrong top-level context: {case_log!r}")
+                if case_log_entry_id != 0:
+                    raise AssertionError(f"ACL LOG first entry id did not start at zero: {case_log!r}")
                 plus_count_log = send_command(admin, b"ACL", b"LOG", b"+1")
                 if not isinstance(plus_count_log, list) or len(plus_count_log) != 1:
                     raise AssertionError(f"ACL LOG rejected signed positive count: {plus_count_log!r}")

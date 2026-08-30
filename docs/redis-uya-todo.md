@@ -375,6 +375,8 @@
 - [x] 专用对象池与布局优化
 - [x] Redis 对照差距报告与后续优化队列
 
+- [x] ACL 兼容性收口：用户名与会话生命周期、`parent|child`/category/selector 有序规则、DRYRUN/事务/脚本权限语义、ACL LOG reason/object/context/聚合/容量/时间/entry-id/RESP3、GETUSER RESP3、GENPASS 系统熵源、requirepass/摘要常量时间比较及数值边界均已补齐；完整单元、完整集成、redis-cli 与 DoD 链通过
+
 验收项：
 
 - `PING/GET/SET` 热路径吞吐和 p99 延迟较 `v0.7.0` 不退化

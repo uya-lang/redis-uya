@@ -313,17 +313,19 @@ def run_smoke() -> None:
                 raise AssertionError("failed to create ACL audit object user")
             audit_user = authenticate(port, b"audit-object", b"ignored")
             try:
-                expect_error(audit_user, "permissions to access one of the keys", b"MGET", b"AllowedKey", b"AuditKey")
+                long_audit_key = b"K" * 256
+                expect_error(audit_user, "permissions to access one of the keys", b"MGET", b"AllowedKey", long_audit_key)
                 key_audit_log = send_command(admin, b"ACL", b"LOG", b"1")
                 key_audit_fields = dict(zip(key_audit_log[0][::2], key_audit_log[0][1::2]))
-                if key_audit_fields.get(b"reason") != b"key" or key_audit_fields.get(b"object") != b"AuditKey":
+                if key_audit_fields.get(b"reason") != b"key" or key_audit_fields.get(b"object") != long_audit_key:
                     raise AssertionError(f"ACL LOG lost denied key object: {key_audit_log!r}")
                 if send_command(admin, b"ACL", b"LOG", b"RESET") != "OK":
                     raise AssertionError("failed to reset ACL LOG after key object check")
-                expect_error(audit_user, "permissions to access one of the channels", b"SUBSCRIBE", b"AllowedChannel", b"AuditChannel")
+                long_audit_channel = b"C" * 256
+                expect_error(audit_user, "permissions to access one of the channels", b"SUBSCRIBE", b"AllowedChannel", long_audit_channel)
                 channel_audit_log = send_command(admin, b"ACL", b"LOG", b"1")
                 channel_audit_fields = dict(zip(channel_audit_log[0][::2], channel_audit_log[0][1::2]))
-                if channel_audit_fields.get(b"reason") != b"channel" or channel_audit_fields.get(b"object") != b"AuditChannel":
+                if channel_audit_fields.get(b"reason") != b"channel" or channel_audit_fields.get(b"object") != long_audit_channel:
                     raise AssertionError(f"ACL LOG lost denied channel object: {channel_audit_log!r}")
                 if send_command(admin, b"ACL", b"LOG", b"RESET") != "OK":
                     raise AssertionError("failed to reset ACL LOG after channel object check")

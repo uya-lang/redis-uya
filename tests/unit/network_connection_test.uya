@@ -2314,6 +2314,20 @@ export fn test_connection_process_acl_permission_denial() !void {
     const expired_group_log: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$3\r\nLOG\r\n$2\r\n10\r\n"[0: 30], &out[0], 2048, 65002u64);
     try assert_true(network_connection_contains(out[0: expired_group_log.response_len], &"*2\r\n"[0: 4]));
 
+    const reset_before_multi_auth: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$3\r\nLOG\r\n$5\r\nRESET\r\n"[0: 33], &out[0], 2048, 65002u64);
+    try assert_true(network_connection_slice_eq(out[0: reset_before_multi_auth.response_len], &"+OK\r\n"[0: 5]));
+    const multi_auth_start: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$5\r\nMULTI\r\n"[0: 15], &out[0], 2048, 66000u64);
+    try assert_true(network_connection_slice_eq(out[0: multi_auth_start.response_len], &"+OK\r\n"[0: 5]));
+    const multi_auth_queued: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$4\r\nAUTH\r\n$11\r\nMissingUser\r\n$5\r\nwrong\r\n"[0: 43], &out[0], 2048, 66000u64);
+    try assert_true(network_connection_slice_eq(out[0: multi_auth_queued.response_len], &"+QUEUED\r\n"[0: 9]));
+    const multi_auth_exec: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*1\r\n$4\r\nEXEC\r\n"[0: 14], &out[0], 2048, 66000u64);
+    try assert_true(network_connection_contains(out[0: multi_auth_exec.response_len], &"WRONGPASS"[0: 9]));
+    const multi_auth_log: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$3\r\nLOG\r\n$1\r\n1\r\n"[0: 29], &out[0], 2048, 67000u64);
+    try assert_true(network_connection_contains(out[0: multi_auth_log.response_len], &"$7\r\ncontext\r\n$5\r\nmulti\r\n"[0: 24]));
+    try assert_true(network_connection_contains(out[0: multi_auth_log.response_len], &"$6\r\nobject\r\n$4\r\nAUTH\r\n"[0: 22]));
+    const reset_after_multi_auth: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$3\r\nLOG\r\n$5\r\nRESET\r\n"[0: 33], &out[0], 2048, 67000u64);
+    try assert_true(network_connection_slice_eq(out[0: reset_after_multi_auth.response_len], &"+OK\r\n"[0: 5]));
+
     const allow_get: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*4\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$7\r\ndefault\r\n$4\r\n+get\r\n"[0: 49], &out[0], 2048, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: allow_get.response_len], &"+OK\r\n"[0: 5]));
     try assert_eq_i32(connection_acl_denied_command_count_for_test(&"default"[0: 7]) as i32, 0);

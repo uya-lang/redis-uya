@@ -4534,8 +4534,8 @@ fn connection_acl_log_append_object_denied(object: &[byte], reason: &[byte], con
     connection_acl_log_append(object, reason, context, username, now_ms, client_id, false);
 }
 
-fn connection_acl_log_append_auth_failed(username: &[byte], context: &[byte], now_ms: u64, client_id: i64) void {
-    connection_acl_log_append(&"AUTH"[0: 4], &"auth"[0: 4], context, username, now_ms, client_id, false);
+fn connection_acl_log_append_auth_failed(username: &[byte], object: &[byte], context: &[byte], now_ms: u64, client_id: i64) void {
+    connection_acl_log_append(object, &"auth"[0: 4], context, username, now_ms, client_id, false);
 }
 
 fn connection_acl_permission_error_for_user(name: &[byte], username: &[byte]) CommandReply {
@@ -9323,7 +9323,8 @@ fn connection_handle_auth(tx: &ConnectionTransaction, runtime: &CommandRuntimeIn
                 return reply;
             };
         }
-        connection_acl_log_append_auth_failed(username, context, now_ms, client_id);
+        const object: &[byte] = connection_acl_log_argument_or(command, 0, &"AUTH"[0: 4]);
+        connection_acl_log_append_auth_failed(username, object, context, now_ms, client_id);
     }
     return reply;
 }
@@ -13334,7 +13335,8 @@ fn connection_handle_hello(tx: &ConnectionTransaction, runtime: &CommandRuntimeI
         connection_client_registry_sync(tx);
         if auth_reply.typ != CommandReplyType.reply_simple_string {
             if auth_reply.typ == CommandReplyType.reply_error && connection_slice_eq(auth_reply.data, &"WRONGPASS invalid username-password pair or user is disabled."[0: 61]) {
-                connection_acl_log_append_auth_failed(auth_username, &"toplevel"[0: 8], now_ms, client_id);
+                const object: &[byte] = connection_acl_log_argument_or(command, 0, &"HELLO"[0: 5]);
+                connection_acl_log_append_auth_failed(auth_username, object, &"toplevel"[0: 8], now_ms, client_id);
             }
             return auth_reply;
         }

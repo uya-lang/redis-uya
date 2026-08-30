@@ -251,6 +251,14 @@ def run_smoke() -> None:
                     raise AssertionError(f"ACL LOG did not group repeated authentication failures: {auth_log!r}")
                 if send_command(admin, b"ACL", b"LOG", b"RESET") != "OK":
                     raise AssertionError("failed to reset ACL LOG after authentication check")
+                with connect_with_retry(port) as hello_auth:
+                    expect_error(hello_auth, "WRONGPASS", b"HELLO", b"3", b"AUTH", b"Default", b"ignored")
+                hello_auth_log = send_command(admin, b"ACL", b"LOG", b"1")
+                hello_auth_fields = dict(zip(hello_auth_log[0][::2], hello_auth_log[0][1::2]))
+                if hello_auth_fields.get(b"reason") != b"auth" or hello_auth_fields.get(b"object") != b"HELLO":
+                    raise AssertionError(f"ACL LOG did not preserve HELLO auth object: {hello_auth_log!r}")
+                if send_command(admin, b"ACL", b"LOG", b"RESET") != "OK":
+                    raise AssertionError("failed to reset ACL LOG after HELLO authentication check")
                 if send_command(admin, b"ACL", b"SAVE") != "OK":
                     raise AssertionError("failed to save case-sensitive DEFAULT named user")
                 case_saved = acl_path.read_bytes()

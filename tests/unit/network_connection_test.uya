@@ -2299,8 +2299,9 @@ export fn test_connection_process_acl_permission_denial() !void {
     try assert_true(network_connection_slice_eq(out[0: failed_hello_auth.response_len], &"-WRONGPASS invalid username-password pair or user is disabled.\r\n"[0: 64]));
     const hello_auth_log: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$3\r\nLOG\r\n$1\r\n1\r\n"[0: 29], &out[0], 2048, 5000u64);
     try assert_true(network_connection_contains(out[0: hello_auth_log.response_len], &"$6\r\nreason\r\n$4\r\nauth\r\n"[0: 22]));
+    try assert_true(network_connection_contains(out[0: hello_auth_log.response_len], &"$6\r\nobject\r\n$5\r\nHELLO\r\n"[0: 23]));
     try assert_true(network_connection_contains(out[0: hello_auth_log.response_len], &"$8\r\nusername\r\n$11\r\nMissingUser\r\n"[0: 32]));
-    const repeated_auth: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$4\r\nAUTH\r\n$11\r\nMissingUser\r\n$5\r\nwrong\r\n"[0: 43], &out[0], 2048, 5001u64);
+    const repeated_auth: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*5\r\n$5\r\nHELLO\r\n$1\r\n3\r\n$4\r\nAUTH\r\n$11\r\nMissingUser\r\n$5\r\nwrong\r\n"[0: 61], &out[0], 2048, 5001u64);
     try assert_true(network_connection_slice_eq(out[0: repeated_auth.response_len], &"-WRONGPASS invalid username-password pair or user is disabled.\r\n"[0: 64]));
     const grouped_auth_log: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$3\r\nLOG\r\n$2\r\n10\r\n"[0: 30], &out[0], 2048, 6000u64);
     try assert_true(network_connection_contains(out[0: grouped_auth_log.response_len], &"*1\r\n"[0: 4]));
@@ -2308,7 +2309,7 @@ export fn test_connection_process_acl_permission_denial() !void {
     try assert_true(network_connection_contains(out[0: grouped_auth_log.response_len], &"$11\r\nage-seconds\r\n$5\r\n0.999\r\n"[0: 29]));
     try assert_true(network_connection_contains(out[0: grouped_auth_log.response_len], &"$17\r\ntimestamp-created\r\n:4000\r\n"[0: 31]));
     try assert_true(network_connection_contains(out[0: grouped_auth_log.response_len], &"$22\r\ntimestamp-last-updated\r\n:5001\r\n"[0: 36]));
-    const expired_group_auth: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$4\r\nAUTH\r\n$11\r\nMissingUser\r\n$5\r\nwrong\r\n"[0: 43], &out[0], 2048, 65002u64);
+    const expired_group_auth: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*5\r\n$5\r\nHELLO\r\n$1\r\n3\r\n$4\r\nAUTH\r\n$11\r\nMissingUser\r\n$5\r\nwrong\r\n"[0: 61], &out[0], 2048, 65002u64);
     try assert_true(network_connection_slice_eq(out[0: expired_group_auth.response_len], &"-WRONGPASS invalid username-password pair or user is disabled.\r\n"[0: 64]));
     const expired_group_log: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &tx, &"*3\r\n$3\r\nACL\r\n$3\r\nLOG\r\n$2\r\n10\r\n"[0: 30], &out[0], 2048, 65002u64);
     try assert_true(network_connection_contains(out[0: expired_group_log.response_len], &"*2\r\n"[0: 4]));

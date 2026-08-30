@@ -77,6 +77,10 @@ def read_resp(sock: socket.socket):
         return int(read_line(sock))
     if prefix == b",":
         return float(read_line(sock))
+    if prefix == b"_":
+        if read_line(sock) != b"":
+            raise RuntimeError("invalid RESP3 null")
+        return None
     if prefix == b"$":
         length = int(read_line(sock))
         if length < 0:
@@ -261,6 +265,8 @@ def run_smoke() -> None:
                         raise AssertionError(f"ACL GETUSER selector was not a RESP3 map: {resp3_getuser!r}")
                     if resp3_getuser[b"selectors"][0].get(b"commands") != b"-@all +ping":
                         raise AssertionError(f"ACL GETUSER selector map lost commands: {resp3_getuser!r}")
+                    if send_command(resp3_case, b"ACL", b"GETUSER", b"resp3-missing") is not None:
+                        raise AssertionError("ACL GETUSER missing user did not return RESP3 null")
                     if send_command(admin, b"ACL", b"DELUSER", b"resp3-meta") != 1:
                         raise AssertionError("failed to remove RESP3 ACL metadata user")
                     expect_error(resp3_case, "NOPERM User DEFAULT", b"GET", b"resp3-key")

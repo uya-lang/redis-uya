@@ -195,6 +195,9 @@ def run_smoke() -> None:
             genpass_two = send_command(admin, b"ACL", b"GENPASS")
             if not isinstance(genpass_one, bytes) or len(genpass_one) != 64 or genpass_one == genpass_two:
                 raise AssertionError("ACL GENPASS did not return independent 256-bit passwords")
+            connection_category = send_command(admin, b"ACL", b"CAT", b"connection")
+            if not isinstance(connection_category, list) or b"client|getname" not in connection_category:
+                raise AssertionError(f"ACL CAT omitted partial child command tags: {connection_category!r}")
             expect_error(admin, "not configured to use an ACL file", b"ACL", b"SAVE")
             expect_error(admin, "not configured to use an ACL file", b"ACL", b"LOAD")
             if config_value(admin, b"aclfile") != b"":

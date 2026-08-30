@@ -411,6 +411,24 @@ def run_smoke() -> None:
             finally:
                 category_child.close()
 
+            if send_command(admin, b"ACL", b"LOG", b"RESET") != "OK":
+                raise AssertionError("failed to reset ACL LOG before capacity check")
+            for audit_index in range(130):
+                expect_auth_error(port, f"missing-{audit_index}".encode(), b"wrong")
+            capacity_log = send_command(admin, b"ACL", b"LOG", b"200")
+            if not isinstance(capacity_log, list) or len(capacity_log) != 128:
+                raise AssertionError(f"ACL LOG did not retain exactly 128 entries: {capacity_log!r}")
+            newest_capacity_fields = dict(zip(capacity_log[0][::2], capacity_log[0][1::2]))
+            oldest_capacity_fields = dict(zip(capacity_log[-1][::2], capacity_log[-1][1::2]))
+            if newest_capacity_fields.get(b"username") != b"missing-129":
+                raise AssertionError(f"ACL LOG newest capacity entry is wrong: {capacity_log[0]!r}")
+            if oldest_capacity_fields.get(b"username") != b"missing-2":
+                raise AssertionError(f"ACL LOG did not evict its two oldest entries: {capacity_log[-1]!r}")
+            if newest_capacity_fields.get(b"entry-id", 0) <= oldest_capacity_fields.get(b"entry-id", 0):
+                raise AssertionError("ACL LOG capacity order did not follow entry ids")
+            if send_command(admin, b"ACL", b"LOG", b"RESET") != "OK":
+                raise AssertionError("failed to reset ACL LOG after capacity check")
+
             expect_error(admin, "modifier 'bogus': Syntax error", b"ACL", b"SETUSER", b"default", b"off", b"resetpass", b"bogus")
             if acl_getuser_field(admin, b"default", b"flags") != [b"on", b"nopass"]:
                 raise AssertionError("failed ACL SETUSER changed default user state")

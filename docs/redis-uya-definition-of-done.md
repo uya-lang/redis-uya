@@ -1,8 +1,8 @@
 # redis-uya Definition of Done
 
 > 版本: v0.9.3-dev
-> 日期: 2026-08-11
-> 状态: 下列条目保留历史里程碑证据；当前 Uya 1.0 规范回退后的构建、完整单测、完整集成、redis-cli、release 构建和性能 guard 通过，主线处于 `v0.9.3` 核心缺口补齐、性能收敛与运维第一批
+> 日期: 2026-09-01
+> 状态: 下列条目保留历史里程碑证据；2026-09-01 当前 `HEAD` 的源码契约、完整单测、36 项当前集成、redis-cli、release 构建和正式 50K 性能 guard 通过，主线处于 `v0.9.3` 核心缺口补齐、性能收敛与运维第一批
 
 ## 1. 目标
 
@@ -15,12 +15,13 @@
 | 上游 `1.0` 分支工具链按源码重新构建并成套同步：`bin/uya` 静态启动器与 `bin/cmd/build` 实际编译器均返回 `v0.9.9`，哈希和尺寸已固化 | `uya/bin/uya`、`uya/bin/cmd/build`、`docs/redis-uya-uya-sync-2026-07-22.md` |
 | 上游 `1.0` 分支已直接回退到 `f54bd7bf`，与 `origin/1.0` 一致；违反导出全局裸 C ABI 规范的两个未推送提交已从分支历史移除 | `git -C ../uya rev-parse HEAD`、`git -C ../uya rev-list --count origin/1.0..HEAD` |
 | redis-uya 不再用 `export const/var` 表达项目内部模块 API；内部全局量保持私有，跨模块访问统一通过导出函数，并由源码契约检查防止回归 | `make verify-uya-source-contract`、`src/cluster/`、`src/command/`、`src/memory/allocator.uya`、`src/util/log.uya` |
-| 当前项目完成无警告 debug 构建、完整单测、完整集成、redis-cli smoke、release 构建与性能回归 guard | `make build`、`make test`、`make test-integration`、`make test-redis-cli`、`make benchmark-v0.9.3-release` |
+| 当前项目完成 debug/release 构建、完整单测、36 项当前集成、redis-cli smoke 与正式 50K 性能回归 guard | `make build`、`make test`、`make test-integration`、`make test-redis-cli`、`REDIS_UYA_BENCH_ITERS=50000 REDIS_UYA_BENCH_WARMUP=2000 make benchmark-v0.9.3-release` |
 
 重要说明：
 
 - 本页下方的 `v0.1.0` ~ `v0.9.1` 条目首先是“历史阶段曾经落地过什么”的证据索引。
 - 它们不能自动等价为“当前 `HEAD` 已重新验证通过”。
+- 历史条目中的“33 项集成”、20K/50K/100K/200K 样本量和当时的 Redis 比值保留为对应提交的原始证据；当前 `HEAD` 的现行口径以本页“当前 HEAD 复核状态”为准。
 - 当前 `HEAD` 的真实性状态先看 [审计报告（2026-05-16）](./redis-uya-audit-2026-05-16.md)。
 
 基础一键验证入口：
@@ -35,7 +36,9 @@ bash scripts/verify_definition_of_done.sh
 - `benchmarks/v0.1.0.md` 记录同机 Redis 基线与 `floor/target/stretch` 判定
 - `benchmarks/v0.8.0-performance.md` 记录 `PING/SET/GET` 热路径矩阵、同机 Redis 对照与回归阈值基线
 - `benchmarks/v0.8.0-gap-report.md` 记录 v0.8.0 相对 Redis 的差距矩阵与后续优化队列
-- `benchmarks/v0.8.1-performance.md` 保留历史 `v0.8.1` guard 输出；当前 HEAD 的性能验收使用 `benchmarks/v0.9.3-release-performance.md` 和对应不可变基线
+- `benchmarks/v0.8.1-performance.md` 保留历史 `v0.8.1` guard 输出；`benchmarks/v0.9.3-release-performance.md` 保留为当前 release guard 的历史基线
+- `make benchmark-v0.9.3-release` 默认 5K iterations / 200 warmup，用于快速 release 回归；正式验收显式指定 50K iterations / 2000 warmup
+- 当前 `HEAD` 的正式 50K 证据为 `benchmarks/v0.9.3-release-performance-2026-09-01-current-50k.md`；历史 `benchmarks/v0.9.3-release-performance.md` 继续作为 guard 基线，不再被称为当前 `HEAD` 结果
 - `benchmarks/v0.9.3-performance.md` 记录 2026-07-11 当前 `HEAD` 的性能复测；报告已生成，但 guard miss，不能作为当前性能绿态证据
 - `docs/redis-uya-release-v0.8.0.md` 与 `docs/redis-uya-test-report-v0.8.0.md` 固化 v0.8.0 封版边界和实际验证结果
 - `docs/redis-uya-release-v0.8.1.md` 与 `docs/redis-uya-test-report-v0.8.1.md` 固化 v0.8.1 封版边界和实际验证结果
@@ -43,16 +46,18 @@ bash scripts/verify_definition_of_done.sh
 - 一键验证脚本包含 `git diff --check`，用于检查本次工作区差异的基础格式问题
 - 本页同时记录 `v0.1.0` 发布证据，以及后续 `v0.2.0+` 已在主线落地的能力证据
 
-## 2. 当前 HEAD 复核状态（2026-07-31）
+## 2. 当前 HEAD 复核状态（2026-09-01）
 
 | 项目 | 当前结果 | 说明 |
 |------|----------|------|
-| `make test` | `PASS` | 单元层仍可作为基础回归入口 |
-| `make test-integration` | `PASS` | `maxmemory` / 压力 / 淘汰策略相关回归已按当前实现重新校准 |
-| `make benchmark-v0.9.3-release` | `PASS` | 使用 release 构建的 50K 基线；零拷贝 writev 首次直写后的不可变与 current 五项绝对吞吐、normalized 和 p99 guard 全部通过；当前 Redis 比值为 `0.95x/1.24x/0.99x/1.26x/1.14x`，GET 1KiB 达到本轮 1.10x 吞吐与 p99 门槛，PING 与 GET 16B 仍未达到 |
-| `bash scripts/verify_definition_of_done.sh` | `PASS` | 当前一键验证执行 release benchmark，不再用历史 debug 基线判定当前 HEAD |
-| `COMMAND*` 真实性 | `PASS` | 运行时 `COMMAND*` 已按真实执行面隐藏未实现命令，并补齐当前 `CLIENT/CONFIG` 已实现子命令的矩阵状态 |
+| `make test` | `PASS` | 源码契约、命令范围门禁、6 个门禁负例和完整 Uya 单元套件通过 |
+| `make test-integration` | `PASS` | Makefile 当前注册 36 项 Python 集成用例，全部通过 |
+| `make test-redis-cli` | `PASS` | redis-cli 真实进程 smoke 通过 |
+| 正式 50K release benchmark | `PASS` | `REDIS_UYA_BENCH_ITERS=50000 REDIS_UYA_BENCH_WARMUP=2000` 复测；五项 Redis 比值为 `0.99x/1.14x/1.04x/1.31x/0.98x`，绝对吞吐和 p99 guard 全部通过，`SET 16B` 与 `GET 1KiB` normalized guard miss，RSS 为 Redis 的 `1.68x`；报告见 `benchmarks/v0.9.3-release-performance-2026-09-01-current-50k.md` |
+| `bash scripts/verify_definition_of_done.sh` | `PASS` | 一键验证执行默认 5K release 快速回归；正式 50K 证据由上述显式命令独立生成 |
+| `COMMAND*` 真实性 | `PASS` | 当前跟踪 574 个官方命令名和 420 个 top-level 命令；Tier A 为 `full=152/partial=220/standalone-error=7/alias=3/deferred=0`，运行时 `COMMAND*` 只暴露真实执行面 |
 | 版本号一致性 | `PASS` | banner、`HELLO`、`INFO server`、README、DoD 和相关测试断言已统一到 `v0.9.3-dev` |
+| README / TODO / DoD 当前口径 | `PASS` | 已统一命令数量、当前集成数量、Sharded Pub/Sub、Hash field TTL、Streams 选项和 5K/50K benchmark 分层；历史 A/B 数据明确不代替当前 `HEAD` 证据，`scripts/verify_doc_truth.py` 已接入 `make test` |
 
 后续历史章节从这里开始顺延，保留原编号不代表当前 `HEAD` 已重新验收。
 
@@ -232,11 +237,11 @@ bash scripts/verify_definition_of_done.sh
 
 | DoD 项 | 证据 |
 |--------|------|
-| 官方命令全集矩阵可追踪：基于 Redis 8.6 命令页生成 `531` 个官方命令名、状态、目标版本与基础元数据，并落盘为命令矩阵文档 | `scripts/generate_command_catalog.py`、`docs/redis-uya-command-matrix.md` |
+| 官方命令全集矩阵可追踪：`v0.9.1` 首批基于 Redis 8.6 命令页生成 `531` 个官方命令名、状态、目标版本与基础元数据；当前矩阵已扩展为 574 项 | `scripts/generate_command_catalog.py`、`docs/redis-uya-command-matrix.md` |
 | 命令范围封版门禁可用：从已提交矩阵校验命令名唯一、Tier 分组完整、状态与目标版本合法，并强制 Tier A 单机核心和 Tier B 模式命令保持零 `deferred`；正例读取当前 574 项矩阵，负例覆盖 Tier A/Tier B 回退和 deferred 缺目标版本 | `scripts/verify_command_scope.py`、`tests/scripts/test_verify_command_scope.py`、`make verify-command-scope`、`make test-command-scope`、`make test`、`scripts/verify_definition_of_done.sh` |
 | 运行时共享目录可用：`src/command/catalog_generated*` 提供统一命令目录，`COMMAND` 家族与文档矩阵不再各维护一份命令名清单 | `src/command/catalog.uya`、`src/command/catalog_generated_base.uya`、`src/command/catalog_generated.uya`、`src/command/catalog_generated_part_*.uya` |
 | `COMMAND` 控制面第一批可用：`COMMAND`、`COMMAND COUNT`、`COMMAND LIST`、`COMMAND INFO`、`COMMAND DOCS` 覆盖 RESP2/RESP3 基础返回、`LIST FILTERBY PATTERN/ACLCAT/MODULE`、`INFO` 未知命令占位和 `DOCS` 未知命令忽略边界 | `src/command/router.uya`、`src/command/executor.uya`、`tests/unit/command_router_test.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/test_runner.uya`、`tests/integration/command_introspection.py` |
-| `COMMAND DOCS` 无参数全量输出可用：覆盖 `531` 个目录项的 RESP2/RESP3 全量 docs 返回，以及服务端大响应发送第一批闭环 | `src/command/executor.uya`、`src/network/connection.uya`、`src/server.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/network_connection_test.uya`、`tests/unit/test_runner.uya`、`tests/integration/command_introspection.py` |
+| `COMMAND DOCS` 无参数全量输出可用：首批验收覆盖当时 `531` 个目录项的 RESP2/RESP3 全量 docs 返回与服务端大响应发送闭环；当前执行面随 574 项矩阵继续由 introspection 回归校验 | `src/command/executor.uya`、`src/network/connection.uya`、`src/server.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/network_connection_test.uya`、`tests/unit/test_runner.uya`、`tests/integration/command_introspection.py` |
 | `COMMAND GETKEYS` / `COMMAND GETKEYSANDFLAGS` 当前命令表支持可用：覆盖 range key spec、多 key/成对 key、`RENAME` 双 key、`SORT ... STORE` / `BLMPOP` / `ZMPOP` / `BZMPOP` movablekeys、`RO/OW/RW/RM` 与 `access/update/insert/delete` 基础 flags 组合 | `src/command/executor.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/test_runner.uya`、`tests/integration/command_introspection.py` |
 | 单次读入批量执行可用：连接层会在一次读入中消费多个完整 RESP 顶层帧，覆盖 `MULTI/SET/GET/EXEC` 管线与 `redis-cli` stdin/pipeline 客户端路径 | `src/network/protocol.uya`、`src/network/connection.uya`、`tests/unit/network_connection_test.uya`、`tests/unit/test_runner.uya`、`tests/integration/redis_cli_smoke.sh` |
 
@@ -248,7 +253,7 @@ bash scripts/verify_definition_of_done.sh
 | `CONFIG REWRITE` 对应第二批核心字段落盘可用：运行时改写后的 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`requirepass`、`masterauth`、`maxclients`、`databases`、`timeout`、`latency-tracking`、`latency-monitor-threshold`、`slowlog-log-slower-than`、`slowlog-max-len` 与内存策略可写回到重写配置文件 | `src/config.uya`、`src/command/executor.uya`、`src/server.uya`、`tests/unit/config_test.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/test_runner.uya`、`tests/integration/client_config_smoke.py` |
 | String/Generic TTL 扩展可用：`GETEX`、`PSETEX`、`EXPIREAT`、`EXPIRETIME`、`PEXPIRETIME` 覆盖 key 提取 flags、绝对时间/相对时间 TTL 语义、AOF 绝对过期重放，以及 TCP/redis-py/redis-cli smoke | `src/command/router.uya`、`src/command/executor.uya`、`src/network/connection.uya`、`src/persistence/aof.uya`、`tests/unit/command_router_test.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/network_connection_test.uya`、`tests/unit/persistence_aof_test.uya`、`tests/integration/smoke_tcp.py`、`tests/integration/redis_py_subset.py`、`tests/integration/redis_cli_smoke.sh` |
 | Hash 字段基础扩展可用：`HDEL`、`HGETDEL`、`HEXISTS`、`HLEN`、`HMGET`、`HMSET`、`HSETNX`、`HSTRLEN` 覆盖 object helper、nullable array 回复、多 field legacy 写入、字段读取后删除、空 hash 删除与 AOF replay，以及 TCP/redis-py/redis-cli smoke | `src/storage/object.uya`、`src/command/router.uya`、`src/command/executor.uya`、`tests/unit/storage_object_test.uya`、`tests/unit/command_router_test.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/network_connection_test.uya`、`tests/unit/persistence_aof_test.uya`、`tests/integration/command_introspection.py`、`tests/integration/redis_py_subset.py`、`tests/integration/redis_cli_smoke.sh` |
-| Hash field TTL 语义和持久化可用：`HGETEX`、`HSETEX`、`HEXPIRE`、`HPEXPIRE`、`HEXPIREAT`、`HPEXPIREAT`、`HTTL`、`HPTTL`、`HEXPIRETIME`、`HPEXPIRETIME`、`HPERSIST` 覆盖 `FIELDS numfields ...` 解析、field 级绝对毫秒过期元数据、`HGETEX` nullable bulk array 回复和 TTL 写入/清理、`HSETEX` field 写入与 `FNX/FXX/KEEPTTL`、`HEXPIRE/HPEXPIRE/HEXPIREAT/HPEXPIREAT` 的 `NX/XX/GT/LT` 条件、已到期时间删除、TTL option 语法和整数校验、整数数组回复、field/key 缺失 `-2` 或 Null Bulk、存在但无 field TTL `-1`、`HTTL/HPTTL/HEXPIRETIME/HPEXPIRETIME` 正 TTL/时间戳、`HPERSIST` 返回 `1`、普通 hash 访问 lazy expire、普通 hash 写入清理目标 field TTL、RDB save/load 与 DUMP/RESTORE bytes 保存 field TTL、AOF rewrite 通过 `HPEXPIREAT` 重建 field TTL、错类型/语法/整数错误、`COMMAND INFO/LIST/DOCS` 可见面和 TCP/redis-py/redis-cli smoke；当前不支持复制传播 field TTL | `src/storage/object.uya`、`src/command/router.uya`、`src/command/executor.uya`、`src/persistence/rdb.uya`、`src/persistence/rewrite.uya`、`src/command/catalog_generated_part_o.uya`、`src/command/catalog_generated_part_p.uya`、`src/command/catalog_generated_part_q.uya`、`tests/unit/command_router_test.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/persistence_rdb_test.uya`、`tests/unit/persistence_rewrite_test.uya`、`tests/unit/test_runner.uya`、`tests/integration/redis_py_subset.py`、`tests/integration/redis_cli_smoke.sh`、`make test`、`make test-integration` |
+| Hash field TTL 语义、持久化和复制传播可用：`HGETEX`、`HSETEX`、`HEXPIRE`、`HPEXPIRE`、`HEXPIREAT`、`HPEXPIREAT`、`HTTL`、`HPTTL`、`HEXPIRETIME`、`HPEXPIRETIME`、`HPERSIST` 覆盖 `FIELDS numfields ...` 解析、field 级绝对毫秒过期元数据、`HGETEX` nullable bulk array 回复和 TTL 写入/清理、`HSETEX` field 写入与 `FNX/FXX/KEEPTTL`、`HEXPIRE/HPEXPIRE/HEXPIREAT/HPEXPIREAT` 的 `NX/XX/GT/LT` 条件、已到期时间删除、TTL option 语法和整数校验、整数数组回复、field/key 缺失 `-2` 或 Null Bulk、存在但无 field TTL `-1`、`HTTL/HPTTL/HEXPIRETIME/HPEXPIRETIME` 正 TTL/时间戳、`HPERSIST` 返回 `1`、普通 hash 访问 lazy expire、普通 hash 写入清理目标 field TTL、RDB save/load 与 DUMP/RESTORE bytes 保存 field TTL、AOF append/rewrite 通过绝对 `HPEXPIREAT` 重建 field TTL，replication backlog 传播相同规范化命令，并覆盖错类型/语法/整数错误、`COMMAND INFO/LIST/DOCS` 可见面和 TCP/redis-py/redis-cli smoke | `src/storage/object.uya`、`src/command/router.uya`、`src/command/executor.uya`、`src/persistence/aof.uya`、`src/persistence/rdb.uya`、`src/persistence/rewrite.uya`、`src/replication/backlog.uya`、`src/command/catalog_generated_part_o.uya`、`src/command/catalog_generated_part_p.uya`、`src/command/catalog_generated_part_q.uya`、`tests/unit/command_router_test.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/persistence_rdb_test.uya`、`tests/unit/persistence_rewrite_test.uya`、`tests/unit/replication_backlog_test.uya`、`tests/unit/test_runner.uya`、`tests/integration/redis_py_subset.py`、`tests/integration/redis_cli_smoke.sh`、`make test`、`make test-integration` |
 | Hash 会话 fieldset 导入可用：`HIMPORT PREPARE/SET/DISCARD/DISCARDALL` 覆盖连接隔离、同名 fieldset 替换、重复 field 拒绝、value 数量校验、按 PREPARE 顺序映射、完整 hash 替换、旧 TTL 清理、错类型优先级、`MULTI/EXEC/DISCARD/RESET` 生命周期、maxmemory、ACL write category/`himport|set`/key pattern、`COMMAND*` 动态 key 与 `OW|update` flags；AOF、rewrite 增量缓冲和 replication backlog 统一传播独立 `RESTORE ... REPLACE`，重启无需连接级 PREPARE 即可恢复 | `src/command/router.uya`、`src/command/executor.uya`、`src/network/connection.uya`、`src/replication/backlog.uya`、`src/command/catalog_generated_part_p.uya`、`tests/unit/command_router_test.uya`、`tests/unit/network_connection_test.uya`、`tests/unit/replication_backlog_test.uya`、`tests/unit/test_runner.uya`、`tests/integration/himport_smoke.py`、`tests/integration/command_introspection.py`、`tests/integration/redis_py_subset.py`、`tests/integration/redis_cli_smoke.sh`、`make test`、`make test-integration` |
 | 单机 `BACKUP` partial 可用：`START` 同步生成 base RDB 并开始捕获规范化增量，`SEAL` 写出 incremental AOF 与 `redis-uya-backup-v1` manifest，`STATUS/LIST/ABORT/CLEANUP/HELP` 覆盖状态、绝对路径和产物生命周期；`backupdirname` 接入 CONFIG GET/SET/REWRITE，ACL 支持 parent/child 规则，普通、事务、脚本与 HIMPORT 写路径均进入增量，捕获失败转为 failed 且增量内存不计入 maxmemory 数据预算；独立恢复实例验证 base RDB + incremental AOF 可恢复删除、事务、脚本和 HIMPORT 数据效果。当前不实现 Redis 异步 snapshotting、多段 AOF 文件复用或硬链接，因此保持 `partial` | `src/persistence/backup.uya`、`src/config.uya`、`src/server.uya`、`src/command/router.uya`、`src/command/executor.uya`、`src/network/connection.uya`、`scripts/generate_command_catalog.py`、`tests/unit/command_router_test.uya`、`tests/integration/backup_smoke.py`、`tests/integration/command_introspection.py`、`make test`、`make test-integration` |
 | Set 读路径扩展可用：`SCARD`、`SISMEMBER`、`SMISMEMBER`、`SSCAN` 覆盖成员计数、单成员命中、多成员顺序返回、scan cursor/COUNT 与 TCP/redis-py/redis-cli smoke | `src/command/router.uya`、`src/command/executor.uya`、`tests/unit/command_router_test.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/network_connection_test.uya`、`tests/unit/test_runner.uya`、`tests/integration/smoke_tcp.py`、`tests/integration/redis_py_subset.py`、`tests/integration/redis_cli_smoke.sh` |

@@ -12,7 +12,7 @@ TEST_WORKSPACE ?= $(BUILD_DIR)/test_workspace
 RELEASE_UYA_OPT ?= -O1
 RELEASE_CFLAGS ?= -std=c99 -O3 -DNDEBUG -fno-builtin -fomit-frame-pointer
 
-.PHONY: all prepare-app-workspace build build-release run verify-uya-source-contract verify-command-scope test-command-scope test test-integration test-redis-cli test-long-run benchmark-v0.1.0 benchmark-persistence-v0.3.0 benchmark-replication-v0.4.0 benchmark-v0.8.0 benchmark-v0.8.1 benchmark-v0.9.3-release report-v0.8.0-gaps evaluate-io-uring-v0.8.0 test-all clean version dirs
+.PHONY: all prepare-app-workspace build build-release run verify-uya-source-contract verify-command-scope verify-doc-truth test-command-scope test test-integration test-redis-cli test-long-run benchmark-v0.1.0 benchmark-persistence-v0.3.0 benchmark-replication-v0.4.0 benchmark-v0.8.0 benchmark-v0.8.1 benchmark-v0.9.3-release report-v0.8.0-gaps evaluate-io-uring-v0.8.0 test-all clean version dirs
 
 all: build
 
@@ -45,10 +45,13 @@ verify-uya-source-contract:
 verify-command-scope:
 	python3 scripts/verify_command_scope.py
 
+verify-doc-truth:
+	python3 scripts/verify_doc_truth.py
+
 test-command-scope:
 	python3 -m unittest tests/scripts/test_verify_command_scope.py
 
-test: verify-uya-source-contract verify-command-scope test-command-scope
+test: verify-uya-source-contract verify-command-scope verify-doc-truth test-command-scope
 	@echo "=== redis-uya unit tests ==="
 	@mkdir -p $(TEST_WORKSPACE)
 	@rm -rf $(TEST_WORKSPACE)/src $(TEST_WORKSPACE)/tests $(TEST_WORKSPACE)/main.uya

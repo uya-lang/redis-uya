@@ -4,7 +4,7 @@
 > 零 GC 路线 · 显式错误处理 · 可测试演进 · 长期性能目标超过 Redis
 
 > 版本: v0.9.3-dev
-> 日期: 2026-07-23
+> 日期: 2026-09-01
 
 ## 简介
 
@@ -12,7 +12,7 @@
 
 `v1.0.0` 的版本目标不是提前兑现“全面超过 Redis”，而是先把单机核心做真、做稳、做快：功能边界真实、兼容语义真实、测试和 benchmark 结果真实，并在这一前提下持续缩小与 Redis 的性能差距。长期性能目标仍然是超过 Redis，但那是 `v1.0.0` 之后继续迭代的方向，不是拿来包装当前完成度的口号。
 
-历史上，项目已经完成 `v0.9.0` 单机核心命令补齐和 `v0.9.1` 审计真实性收口，当前主线推进 `v0.9.3` 的 Redis Open Source 单机核心缺口与性能优化。当前 `HEAD` 的完整单测、完整集成、redis-cli smoke、release benchmark guard 与 `bash scripts/verify_definition_of_done.sh` 均保持绿态；`COMMAND*` 真值、版本号口径和命令完成度统计分层已收口。
+历史上，项目已经完成 `v0.9.0` 单机核心命令补齐和 `v0.9.1` 审计真实性收口，当前主线推进 `v0.9.3` 的 Redis Open Source 单机核心缺口与性能优化。2026-09-01 对当前 `HEAD` 复核时，完整单测、Makefile 注册的 36 项集成、redis-cli smoke 和正式 50K release benchmark guard 均通过；`COMMAND*` 真值、版本号口径和命令完成度统计分层已收口。
 
 ## 核心目标
 
@@ -27,13 +27,14 @@
 
 ## 当前状态
 
-截至 2026-07-23，当前状态应理解为：
+截至 2026-09-01，当前状态应理解为：
 
-- `make test`、`make test-integration`、`make test-redis-cli`、`make benchmark-v0.9.3-release` 与 `bash scripts/verify_definition_of_done.sh` 当前均通过。
-- release benchmark guard 使用“绝对基线 + 同机 Redis 归一化兜底”；小对象 arena 优化后的同条件 20K 五项矩阵相对 Redis 为 `1.08x/1.29x/1.00x/1.34x/1.09x`，严格 1.10x 全场景超越仍待继续优化。
+- `make test`、`make test-integration` 和 `make test-redis-cli` 当前通过；`make test-integration` 当前注册 36 项 Python 集成用例。
+- 2026-09-01 正式 50K release 复测的五项吞吐相对 Redis 为 `0.99x/1.14x/1.04x/1.31x/0.98x`；五项绝对吞吐和 p99 guard 均通过，`SET 16B` 的 normalized guard 因相对历史基线回落而 miss，`GET 1KiB` 的 normalized guard 仍 miss，严格 1.10x 全场景超越仍待继续优化；RSS 为同机 Redis 的 `1.68x`。
+- 当前命令矩阵跟踪 574 个官方命令名；Tier A 单机核心为 382 项，其中 `full=152`、`partial=220`、`standalone-error=7`、`alias=3`、`deferred=0`。
 - `COMMAND*` 真值、版本号一致性与命令完成度统计分层已收口；`v0.9.1` 审计整改主线现已完成，当前主线推进 `v0.9.3` 的 Redis Open Source 单机核心缺口补齐。
 - `v1.0.0` 的封版门槛先收敛 Redis Open Source 单机核心，不再把模块命令数量当作当前完成度包装。
-- 16B 到 1032B Slab class 已统一按接近 64KiB 的 arena 页批量补充；同条件 20K 父提交对比中 `SET 16B` 吞吐提升 33.0%、p99 降低 55.5%、RSS 降低 17.1%。
+- 历史小对象 arena A/B 证据保留：16B 到 1032B Slab class 按接近 64KiB 的 arena 页批量补充后，同条件 20K 父提交对比中 `SET 16B` 吞吐提升 33.0%、p99 降低 55.5%、RSS 降低 17.1%；该数据是历史优化对比，不代替上述当前 50K 正式复测。
 
 下方列表记录历史里程碑沉淀与当前代码库已落地模块；具体边界仍以命令矩阵、TODO、DoD 和当前测试证据为准。
 
@@ -79,11 +80,11 @@
 - 主从一致性：当前五类对象已有 full sync + incremental smoke
 - 事务控制最小子集：连接级 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`，支持 `QUEUED`、`EXEC` 数组回复、观察键变更后的 Null Array 中止和 `DISCARD` 丢弃
 - Pub/Sub 第一批子集：`SUBSCRIBE/UNSUBSCRIBE` 直连订阅、`PSUBSCRIBE/PUNSUBSCRIBE` pattern 订阅、`PUBLISH` 跨连接推送 `message/pmessage` 并返回匹配接收者数量，连接关闭后会清理订阅项
-- Pub/Sub 管理面第一批：`PUBSUB HELP/CHANNELS/NUMPAT/NUMSUB` 可用；`PUBSUB SHARDCHANNELS/SHARDNUMSUB` 在未实现 `SSUBSCRIBE/SPUBLISH` 前返回空数组或 `0` 计数，固定当前 shard 边界
+- Pub/Sub 管理面与 Sharded Pub/Sub standalone partial：`PUBSUB HELP/CHANNELS/NUMPAT/NUMSUB/SHARDCHANNELS/SHARDNUMSUB`、`SSUBSCRIBE`、`SUNSUBSCRIBE`、`SPUBLISH` 当前可用，shard 订阅与发布复用单机连接级订阅注册表，不承诺 Redis Cluster 跨槽 shard 路由语义
 - Pub/Sub 订阅态兼容边界：RESP2 订阅态下只允许 `SUBSCRIBE/PSUBSCRIBE/UNSUBSCRIBE/PUNSUBSCRIBE/PING/QUIT/RESET`，RESP3 订阅态可继续执行非 Pub/Sub 命令
 - 控制面兼容子集：`CLIENT ID/GETNAME/GETREDIR/REPLY/UNBLOCK/CACHING/SETNAME/NO-EVICT/NO-TOUCH/INFO/LIST/SETINFO/HELP/KILL/PAUSE/UNPAUSE/TRACKING/TRACKINGINFO`、`HELLO SETNAME`、`RESET`、`CONFIG GET/HELP/RESETSTAT/SET/REWRITE`
 - 安全基线：`requirepass`、`AUTH`、`SHUTDOWN`
-- `v0.9.1` 命令全集矩阵第一批：基于 Redis 8.6 官方命令页生成 `531` 个官方命令名目录，落地 `docs/redis-uya-command-matrix.md` 与 `src/command/catalog_generated*`
+- 命令全集矩阵：基于 Redis 8.6 官方命令页生成并持续更新，当前跟踪 `574` 个官方命令名和 `420` 个 top-level 命令，落地 `docs/redis-uya-command-matrix.md` 与 `src/command/catalog_generated*`
 - `COMMAND` 控制面第一批已收口：`COMMAND`、`COMMAND COUNT`、`COMMAND LIST`、`COMMAND INFO`、`COMMAND DOCS`、`COMMAND GETKEYS`、`COMMAND GETKEYSANDFLAGS` 共用同一份运行时目录；`COMMAND DOCS` 无参数时已支持全量 docs 输出，并打通 RESP2/RESP3 大响应发送第一批闭环，`GETKEYS*` 当前也已覆盖 `BLMPOP` / `ZMPOP` / `BZMPOP` 的 movablekeys 提取
 - v0.5 兼容性回归：覆盖 RESP3 Null、WATCH 中止、事务内控制命令错误、RESP3 Pub/Sub Push、CLIENT/CONFIG 组合路径
 - `maxmemory` noeviction 基线：启动参数可设置最大内存，超预算增量写命令返回 OOM 且不落库
@@ -144,7 +145,7 @@ TCP 集成 smoke：
 make test-integration
 ```
 
-`make test-integration` 当前覆盖基础 TCP smoke、blocking list/zset、Streams 第一批、空闲连接不阻塞其他客户端、持久化/复制/事务/Pub/Sub/MONITOR/控制面兼容路径，`maxmemory` / 淘汰策略 / 内存统计 / 压力回归，以及历史集群基础 smoke。当前 `HEAD` 该目标已恢复为全绿；当前主线已进入 `v0.9.3` 的 Streams、Functions/Script、ACL 与运维面缺口补齐，详见 `docs/redis-uya-todo.md`。
+`make test-integration` 当前注册 36 项 Python 集成用例，覆盖基础 TCP smoke、blocking list/zset、Streams、空闲连接不阻塞其他客户端、持久化/复制/事务/Pub/Sub/MONITOR/控制面兼容路径，`maxmemory` / 淘汰策略 / 内存统计 / 压力回归，以及历史集群基础 smoke。2026-09-01 当前 `HEAD` 复核为全绿；当前主线继续推进 `v0.9.3` 的 Functions/Script、ACL、运维面和复制/持久化深化，详见 `docs/redis-uya-todo.md`。
 
 v0.8.0 核心性能基线：
 
@@ -158,7 +159,16 @@ v0.8.1 写路径性能回归验证：
 make benchmark-v0.8.1
 ```
 
-`make benchmark-v0.8.1` 与 `benchmarks/v0.8.1-performance.md` 保留为历史写路径回归入口。当前 HEAD 的 DoD 使用 `make benchmark-v0.9.3-release`、release 构建和不可变基线，throughput guard 同时参考绝对历史基线与同机 Redis 归一化比例，避免用旧 debug 短样本判定当前版本。
+`make benchmark-v0.8.1` 与 `benchmarks/v0.8.1-performance.md` 保留为历史写路径回归入口。`make benchmark-v0.9.3-release` 当前默认执行 5K iterations / 200 warmup，用于快速 release 回归；正式 50K 验收需显式指定样本量：
+
+```bash
+REDIS_UYA_BENCH_ITERS=50000 REDIS_UYA_BENCH_WARMUP=2000 \
+  REDIS_UYA_BENCH_OUT=benchmarks/v0.9.3-release-performance-2026-09-01-current-50k.md \
+  REDIS_UYA_BENCH_BASELINE=benchmarks/v0.9.3-release-performance.md \
+  make benchmark-v0.9.3-release
+```
+
+当前 HEAD 的正式证据见 `benchmarks/v0.9.3-release-performance-2026-09-01-current-50k.md`。throughput guard 同时记录绝对历史基线与同机 Redis 归一化比例；“回归 guard 通过”只表示没有超出当前容忍线，不等于严格 1.10x 全场景性能目标已达成。
 
 v0.8.0 Redis 对照差距报告：
 
@@ -267,7 +277,7 @@ build/redis-uya 6380 1
 
 ## 当前主线能力边界
 
-当前仓库主线已完成 `v0.8.1`，已经包含：
+当前仓库主线为 `v0.9.3-dev`；下列为历史能力与当前已落地 partial 的汇总，具体语义以命令矩阵、API、TODO 和 DoD 为准：
 
 - 单节点、单进程服务模型
 - RESP2 子集
@@ -292,7 +302,7 @@ build/redis-uya 6380 1
 - Scripting 第一批 partial：`EVAL`、`EVALSHA`、`EVAL_RO`、`EVALSHA_RO`、`SCRIPT DEBUG/LOAD/EXISTS/FLUSH/KILL` 当前可用，但只支持单条 `return redis.call(...)` 脚本子集；`*_RO` 会拒绝内部写命令和 `SORT ... STORE` 等参数驱动写路径，`SCRIPT DEBUG` 是 no-op 兼容面，`SCRIPT KILL` 只覆盖无运行脚本 `NOTBUSY` 错误面；AOF/复制传播的是脚本内部实际执行的命令效果，而不是原始 `EVAL*`
 - Functions 第一批 partial：`FUNCTION LOAD/LIST/STATS/DELETE/FLUSH` 维护固定容量进程内 library，`FCALL/FCALL_RO` 执行最多 8 个 single-call 注册函数；`FUNCTION DUMP` 输出 Redis 7 `FUNCTION2`、RDB length、version 10 和 CRC64 格式的非压缩 payload，`FUNCTION RESTORE` 接受该格式及 Redis 默认 LZF 编码，支持默认 `APPEND`、`REPLACE`、`FLUSH`，并在 staging 全量校验/分配成功后原子替换。当前仍不支持完整 Lua engine、其他 flags，以及 library 元数据的 RDB/AOF/复制持久化
 - Hash legacy alias：`HMSET` 当前可用，支持多 field 写入、返回 `OK`、错类型错误面和 `COMMAND*` 可见面
-- Hash field TTL partial：`HGETEX`、`HSETEX`、`HEXPIRE`、`HPEXPIRE`、`HEXPIREAT`、`HPEXPIREAT`、`HTTL`、`HPTTL`、`HEXPIRETIME`、`HPEXPIRETIME` 与 `HPERSIST` 当前可用，支持 `FIELDS numfields ...` 解析、`HGETEX` nullable bulk array 回复、`HSETEX` field 写入与 `FNX/FXX` 条件、`HEXPIRE/HPEXPIRE/HEXPIREAT/HPEXPIREAT` 条件校验和已到期时间删除、TTL option 语法和整数校验、整数数组回复、field 缺失返回 `-2` 或 Null Bulk、field 存在但无 TTL 返回 `-1`、key 缺失和错类型错误面、`COMMAND*` 可见面与 TCP/redis-py/redis-cli smoke；当前尚未存储真实 field TTL 元数据，因此不支持 `HEXPIRE/HPEXPIRE/HEXPIREAT/HPEXPIREAT/HSETEX` 的真实未来 TTL 写入语义，也不做 field 级过期扫描、AOF/RDB field TTL 持久化或复制传播
+- Hash field TTL partial：`HGETEX`、`HSETEX`、`HEXPIRE`、`HPEXPIRE`、`HEXPIREAT`、`HPEXPIREAT`、`HTTL`、`HPTTL`、`HEXPIRETIME`、`HPEXPIRETIME` 与 `HPERSIST` 当前可用，已存储 field 级绝对毫秒过期元数据，覆盖 `NX/XX/GT/LT`、`KEEPTTL/PERSIST`、到期 field lazy expire、普通 hash 写入清理目标 field TTL、RDB save/load、DUMP/RESTORE、AOF append/rewrite 与 replication backlog 传播；仍以 partial 标记跟踪 Redis 完整 field-expiry 兼容边界。
 - ACL 第一批 partial：`ACL CAT`、`ACL DELUSER`、`ACL DRYRUN`、`ACL GENPASS`、`ACL GETUSER`、`ACL HELP`、`ACL LIST`、`ACL LOAD`、`ACL LOG`、`ACL SAVE`、`ACL SETUSER`、`ACL USERS`、`ACL WHOAMI` 当前可用，覆盖 default/named user 生命周期、named user 的 Redis 安全初始状态与整体 `reset`、`allcommands/nocommands`、每用户最多 8 个 SHA-256 口令、基础有序命令/分类 whitelist/deny、每用户最多 8 个 selector、key/channel pattern、真实连接与脚本/事务权限拒绝、审计日志和 `COMMAND*` 可见面。key pattern 支持 `~`、`%R~`、`%W~`、`%RW~`，按命令 key operation 区分读、写和读写需求，同一 glob 的读写规则合并为规范 `~pattern`。`>password` 会立即转为摘要，`#hash` / `!hash` / `<password` 可用；`aclfile` 已接入配置文件、`CONFIG GET/SET/REWRITE` 和第七个可选业务启动参数，`ACL SAVE` 只写 64 位小写 SHA-256 并以 mode 0600 临时文件完整写入后原子替换，`ACL LOAD` 兼容 `#hash` 与旧 `>plaintext` 输入，对唯一 default/named user、64 KiB 上限和 modifier 子集做校验，失败会恢复全部 ACL 状态，启动指定文件时加载失败会拒绝启动。动态键已覆盖脚本/函数、MPOP、set cardinality、MSETEX、zset 聚合/store、`GEOSEARCHSTORE`、`GEORADIUS[BYMEMBER] STORE/STOREDIST`、`ZRANGESTORE`、`XREAD/XREADGROUP`、`XGROUP/XINFO` key 子命令、`SORT [STORE]` 与 `MEMORY USAGE`；默认用户整体 `reset` / enabled 状态和其余动态 key spec / movablekeys 随后续批次继续收口
 - Client reply/unblock/pause/flags partial：`CLIENT REPLY ON|OFF|SKIP`、`CLIENT UNBLOCK id [TIMEOUT|ERROR]`、`CLIENT PAUSE timeout [WRITE|ALL]`、`CLIENT TRACKING ON BCAST PREFIX ...`、`CLIENT CACHING YES|NO`、`CLIENT NO-EVICT ON|OFF` 与 `CLIENT NO-TOUCH ON|OFF` 当前可用；`REPLY` 会维护连接级回复抑制状态，`UNBLOCK` 可解除阻塞 pop 等待客户端并返回 timeout 空结果或 `UNBLOCKED` 错误，`PAUSE WRITE` 只阻塞写命令，均进入 `CLIENT HELP` 与 `COMMAND*` 可见面；`CLIENT INFO/LIST` 暴露 Redis 7.4+ `watch` 观察 key 数量、Redis 8.0 `io-thread=0` 单事件循环真值及 `tot-net-in` 实际 socket 累计输入字节，并对 tracking BCAST、WATCH dirty-CAS、NO-EVICT、NO-TOUCH 分别暴露 `B/d/e/T` 标志，NO-TOUCH 已抑制普通命令和阻塞 pop 预检查对象访问路径的 LRU/LFU touch；尚未提供 server-assisted client-side caching invalidation，也未接入 `maxmemory` 淘汰候选保护，`REPLY` 也不改变 Pub/Sub push 或 `MONITOR` 推送
 - Module 第一批 partial：`MODULE HELP`、`MODULE LIST` 当前可用；`LIST` 固定返回空数组并进入 `COMMAND*` 可见面，暂不支持 module 加载、卸载或模块 API
@@ -300,7 +310,7 @@ build/redis-uya 6380 1
 - Slowlog 第一批 partial：`SLOWLOG HELP`、`SLOWLOG LEN`、`SLOWLOG GET`、`SLOWLOG RESET` 当前可用；slowlog 当前是 redis-uya 进程内固定容量 ring，记录执行命令与 runtime-measured `duration_us`，`CONFIG SET slowlog-log-slower-than <microseconds>` 可控制后续采样门限，`0` 记录全部普通命令，`-1` 禁用采样，`CONFIG SET slowlog-max-len <count>` 可裁剪保留条数；耗时精度受当前毫秒级时间源限制，尚不含 Redis 原生客户端端点/名称真值，当前内部最多保留 `128` 条
 - Latency 第一批 partial：`LATENCY HELP`、`LATENCY LATEST`、`LATENCY HISTORY`、`LATENCY RESET`、`LATENCY DOCTOR`、`LATENCY HISTOGRAM`、`LATENCY GRAPH` 当前可用；当前按 `CONFIG SET latency-monitor-threshold <milliseconds>` 采样 `command` 事件的运行时耗时并保留进程内历史，`0` 禁用事件采样，`HISTOGRAM [command ...]` 按普通命令名或 `parent|subcommand` 容器子命令名返回累计微秒桶并可由 `CONFIG RESETSTAT` 清理，`CONFIG SET latency-tracking yes|no` 可控制后续直方图采样，耗时精度受毫秒级时间源限制
 - Monitor 第一批 partial：`MONITOR` 当前可让连接进入流式观测模式，并向 monitor 客户端推送后续成功执行的普通命令；当前监控行使用 redis-uya 占位端点，不包含 Redis 原生客户端地址、DB 切换真值或微秒精度时间
-- Streams partial：`XACK`、`XACKDEL`、`XADD`、`XAUTOCLAIM`、`XCFGSET`、`XCLAIM`、`XDEL`、`XDELEX`、`XGROUP CREATE`、`XGROUP CREATECONSUMER`、`XGROUP DELCONSUMER`、`XGROUP DESTROY`、`XGROUP HELP`、`XGROUP SETID`、`XIDMPRECORD`、`XINFO HELP`、`XINFO GROUPS`、`XINFO CONSUMERS`、`XINFO STREAM`、`XLEN`、`XNACK`、`XPENDING`、`XRANGE`、`XREVRANGE`、`XREAD`、`XREADGROUP`、`XSETID`、`XTRIM` 当前可用；当前只支持基础追加、精确 ID 删除、`XCFGSET IDMP-DURATION/IDMP-MAXSIZE` no-op 校验面、`XIDMPRECORD pid/iid/entry` no-op 校验面、`XDELEX KEEPREF/DELREF/ACKED IDS` per-id 删除状态兼容面、XGROUP/XINFO 帮助兼容面、无 group 时的 `XACK` / `XACKDEL` / `XNACK` / `XAUTOCLAIM` / `XCLAIM` / `XREADGROUP` / `XPENDING` `NOGROUP` 错误、`XGROUP CREATE` key/type 校验与明确未支持错误、`XGROUP CREATECONSUMER` / `XGROUP DELCONSUMER` 无 group 时的 `NOGROUP` 错误、`XGROUP DESTROY` 空状态返回 `0`、`XGROUP SETID` 无 group 时的 `NOGROUP` 错误、`XSETID` key/type/ID 校验与明确未支持错误、基础 stream 元数据、`XINFO STREAM FULL [COUNT count]` entry 明细、空 consumer group 列表、无 group 时的 `XINFO CONSUMERS` `NOGROUP` 错误、长度、范围读取、非阻塞读取和 `XTRIM MAXLEN [=|~] count` 头部裁剪，尚不支持 `XADD` trim / `NOMKSTREAM` 等选项、真实 consumer group 状态、IDMP 元数据和 Redis 原生 radix-tree/listpack 编码。项目内 RDB 与 AOF rewrite 会保存显式 stream ID；普通 AOF append 仍记录原始请求，因此 `XADD *` 回放会重新生成 ID，只承诺恢复条目内容与顺序；当前 `XIDMPRECORD` no-op 校验面不进入普通 AOF/复制传播
+- Streams partial：`XACK`、`XACKDEL`、`XADD`、`XAUTOCLAIM`、`XCFGSET`、`XCLAIM`、`XDEL`、`XDELEX`、`XGROUP CREATE`、`XGROUP CREATECONSUMER`、`XGROUP DELCONSUMER`、`XGROUP DESTROY`、`XGROUP HELP`、`XGROUP SETID`、`XIDMPRECORD`、`XINFO HELP`、`XINFO GROUPS`、`XINFO CONSUMERS`、`XINFO STREAM`、`XLEN`、`XNACK`、`XPENDING`、`XRANGE`、`XREVRANGE`、`XREAD`、`XREADGROUP`、`XSETID`、`XTRIM` 当前可用；`XADD` 支持 `NOMKSTREAM` 和 `MAXLEN|MINID [=|~] threshold [LIMIT count]`，`XTRIM` 支持同类基础裁剪，RDB 与 AOF rewrite 保存显式 stream ID。当前仍未实现真实 consumer group/PEL、IDMP 元数据和 Redis 原生 radix-tree/listpack 编码；普通 AOF append 对 `XADD *` 仍回放原始请求并重新生成 ID，只承诺恢复条目内容与顺序；`XCFGSET`、`XIDMPRECORD`、`XACKDEL`、`XNACK`、`XDELEX` 等仍只提供当前文档明确的 partial/错误面。
 - Hash 第一批数值：`HINCRBY`、`HINCRBYFLOAT`
 - Hash 第二批视图：`HKEYS`、`HVALS`、`HGETALL`、`HRANDFIELD`
 - Hash 第三批扫描：`HSCAN`

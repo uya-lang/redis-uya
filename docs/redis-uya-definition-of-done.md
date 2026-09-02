@@ -1,8 +1,8 @@
 # redis-uya Definition of Done
 
 > 版本: v0.9.3-dev
-> 日期: 2026-09-01
-> 状态: 下列条目保留历史里程碑证据；2026-09-01 当前 `HEAD` 的源码契约、完整单测、36 项当前集成、redis-cli、release 构建和正式 50K 性能 guard 通过，主线处于 `v0.9.3` 核心缺口补齐、性能收敛与运维第一批
+> 日期: 2026-09-02
+> 状态: 下列条目保留历史里程碑证据；当前 `HEAD` 的源码契约、完整单测、36 项当前集成、redis-cli、release 构建和 2026-09-01 正式 50K 性能 guard 通过，README / TODO / DoD / API / Architecture / Quickstart / Design 已接入真值检查，主线处于 `v0.9.3` 核心缺口补齐、性能收敛与运维第一批
 
 ## 1. 目标
 
@@ -46,7 +46,7 @@ bash scripts/verify_definition_of_done.sh
 - 一键验证脚本包含 `git diff --check`，用于检查本次工作区差异的基础格式问题
 - 本页同时记录 `v0.1.0` 发布证据，以及后续 `v0.2.0+` 已在主线落地的能力证据
 
-## 2. 当前 HEAD 复核状态（2026-09-01）
+## 2. 当前 HEAD 复核状态（2026-09-02）
 
 | 项目 | 当前结果 | 说明 |
 |------|----------|------|
@@ -57,7 +57,7 @@ bash scripts/verify_definition_of_done.sh
 | `bash scripts/verify_definition_of_done.sh` | `PASS` | 一键验证执行默认 5K release 快速回归；正式 50K 证据由上述显式命令独立生成 |
 | `COMMAND*` 真实性 | `PASS` | 当前跟踪 574 个官方命令名和 420 个 top-level 命令；Tier A 为 `full=152/partial=220/standalone-error=7/alias=3/deferred=0`，运行时 `COMMAND*` 只暴露真实执行面 |
 | 版本号一致性 | `PASS` | banner、`HELLO`、`INFO server`、README、DoD 和相关测试断言已统一到 `v0.9.3-dev` |
-| README / TODO / DoD 当前口径 | `PASS` | 已统一命令数量、当前集成数量、Sharded Pub/Sub、Hash field TTL、Streams 选项和 5K/50K benchmark 分层；历史 A/B 数据明确不代替当前 `HEAD` 证据，`scripts/verify_doc_truth.py` 已接入 `make test` |
+| 当前文档真值口径 | `PASS` | README / TODO / DoD 已统一命令数量、当前集成数量、Sharded Pub/Sub、Hash field TTL、Streams 选项和 5K/50K benchmark 分层；API / Architecture / Quickstart / Design 已接入版本、命令数量、快速入口和关键能力边界检查，`scripts/verify_doc_truth.py` 已接入 `make test` |
 
 后续历史章节从这里开始顺延，保留原编号不代表当前 `HEAD` 已重新验收。
 

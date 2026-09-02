@@ -1,7 +1,8 @@
 # redis-uya 详细设计文档
 
-> 版本: v0.9.0-planning
-> 日期: 2026-04-30
+> 版本: v0.9.3-dev
+> 日期: 2026-09-02
+> 文档定位: 当前设计基线与历史方案汇总；可执行真值以 Architecture、API、Command Matrix 和 DoD 为准
 > 当前开发工具链: Uya `1.0` 分支 `f54bd7bf` 同步副本（内置启动器与编译器均返回 `v0.9.9`）
 > 目标平台: Linux x86_64 / ARM64
 
@@ -32,6 +33,8 @@
 `redis-uya` 是一个使用 **Uya 编程语言** 从零实现的生产级高性能内存数据库系统，目标兼容 Redis Open Source，长期在核心场景上超过 Redis。
 
 规划更新：`v0.9.0` 起后续主线只迭代单机版，优先补齐 Redis Open Source 单机核心命令、功能、兼容性、性能和稳定性；模块命令继续追踪，但不与当前单机封版门槛混算。`v0.9.4` 用于性能与稳定性收敛，`v0.9.5` 是首个单机封版候选，未达标时继续 `v0.9.6` 等 patch 版本。集群版在 `v1.0.0` 之后重新规划，`v0.7.0` 已有集群基础作为历史能力保留。
+
+当前命令矩阵跟踪 574 个官方命令名和 420 个 top-level 命令；Tier A 单机核心为 `full=152/partial=220/standalone-error=7/alias=3/deferred=0`。该数据用于描述当前实现深度，不以总命令数代替 `v1.0.0` 封版判定。
 
 这里的目标分两层理解：
 
@@ -1104,7 +1107,7 @@ AofState : IAof {
 
 ### 6.3 后台保存 (BGSAVE / BGREWRITEAOF)
 
-由于 uya 目前不支持直接 fork()（COW 语义），采用以下策略：
+当前 BGSAVE/BGREWRITEAOF 已通过 libc `fork()` 调用与 OS COW 实现真实后台子进程路径，设计策略如下：
 
 1. **C 层 fork 封装**: 通过 `extern` 调用 libc fork，在子进程中执行只读遍历和写入
 2. **写时复制安全**: 父进程继续服务，子进程拥有独立的内存快照视图（依赖 OS COW）
@@ -1967,24 +1970,24 @@ fn internal_lookup(db: &RedisDb, key: Sds) ?&RedisObject { ... }
 | Redis 特性 | redis-uya 支持 | 版本目标 |
 |-----------|---------------|---------|
 | RESP2 | 首版子集 | v0.1.0 |
-| RESP3 | 后续版本 | v0.2.0 及后续 |
-| String | 首版子集：`PING/GET/SET/DEL/EXISTS` 为主 | v0.1.0 |
-| Hash | 后续版本 | v0.2.0 及后续 |
-| List | 后续版本 | v0.2.0 及后续 |
-| Set | 后续版本 | v0.2.0 及后续 |
-| ZSet | 后续版本 | v0.2.0 及后续 |
-| Key | 首版子集：`DEL/EXPIRE/TTL/EXISTS/INFO` | v0.1.0 |
-| Transaction | 后续版本 | v0.2.0 及后续 |
-| Pub/Sub | ⚠️ PUBLISH/SUBSCRIBE (基础) | v0.2.0 |
-| Persistence | ✅ RDB + AOF + BGSAVE + BGREWRITEAOF | v0.1.0 |
-| Replication | ⚠️ 主从同步 (PSYNC1) | v0.2.0 |
-| Sentinel | ❌ 不支持 | - |
-| Cluster | ❌ 不支持 | v0.3.0 |
-| Lua | ❌ 不支持 | - |
-| ACL | ⚠️ default/named user、权限规则与 ACL 文件 partial | v0.9.3 |
-| Streams | ❌ 不支持 | - |
-| Functions | ❌ 不支持 | - |
+| RESP3 | ⚠️ `HELLO 3`、常用输入类型、Null/Map/Push 回复 partial | v0.9.x |
+| String | ⚠️ 核心命令已落地，差异以 Command Matrix/API 为准 | v0.9.x |
+| Hash | ⚠️ 核心命令、field TTL 和 HIMPORT partial | v0.9.x |
+| List | ⚠️ 基础、blocking 和搬移命令 partial | v0.9.x |
+| Set | ⚠️ 基础、集合运算和 cardinality partial | v0.9.x |
+| ZSet | ⚠️ 基础、范围、聚合和 blocking 命令 partial | v0.9.x |
+| Key | ⚠️ 过期、排序、复制、恢复与单 DB 边界 partial | v0.9.x |
+| Transaction | ⚠️ MULTI/EXEC/DISCARD/WATCH/UNWATCH partial | v0.9.x |
+| Pub/Sub | ⚠️ 普通、pattern 和 Sharded Pub/Sub standalone partial | v0.9.x |
+| Persistence | ⚠️ 项目内 RDB + AOF + BGSAVE + BGREWRITEAOF + BACKUP partial | v0.9.x |
+| Replication | ⚠️ PSYNC/backlog、full/incremental sync 与心跳 partial | v0.9.x |
+| Sentinel | ⚠️ 非当前单机主线，以模式命令矩阵状态为准 | v1.0.0+ |
+| Cluster | ⚠️ 历史单节点拓扑与重定向基础，完整语义冻结 | v1.0.0+ |
+| Lua | ⚠️ `EVAL*` 与 `SCRIPT` single-call 子集 partial | v0.9.x |
+| ACL | ⚠️ default/named user、selector、方向键、审计与 ACL 文件 partial | v0.9.x |
+| Streams | ⚠️ 基础 entry、trim、范围和容器错误面 partial，consumer group/PEL 未完成 | v0.9.x |
+| Functions | ⚠️ 固定容量 library、FCALL 与 DUMP/RESTORE partial | v0.9.x |
 
 ---
 
-> 文档结束。本设计文档为 redis-uya 的 v0.1.0 初始版本，后续迭代将在各子模块实现后更新。
+> 文档结束。本文档保留早期设计与当前设计基线；实际可执行命令、语义边界和验收状态以 Architecture、API、Command Matrix、TODO 和 DoD 为准。

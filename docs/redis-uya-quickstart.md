@@ -1,7 +1,8 @@
 # redis-uya QUICKSTART
 
-> 版本: v0.7.0
-> 日期: 2026-04-29
+> 版本: v0.9.3-dev
+> 日期: 2026-09-02
+> 当前主线口径: 本文只提供构建、运行、验证和常用命令入口；完整命令面与 partial 边界以 `redis-uya-command-matrix.md` 和 `redis-uya-api.md` 为准
 
 ## 1. 前置条件
 
@@ -60,6 +61,8 @@ Python 集成 smoke：
 make test-integration
 ```
 
+`make test-integration` 当前注册 36 项 Python 集成用例。
+
 如果本机已安装 `redis-cli`：
 
 ```bash
@@ -72,7 +75,24 @@ make test-redis-cli
 REDIS_UYA_LONG_RUN_SECONDS=1800 python3 tests/integration/long_run_smoke.py
 ```
 
-## 4. 当前支持命令
+release 快速性能回归（5K iterations / 200 warmup）：
+
+```bash
+make benchmark-v0.9.3-release
+```
+
+正式 50K 性能验收（50K iterations / 2000 warmup）：
+
+```bash
+REDIS_UYA_BENCH_ITERS=50000 REDIS_UYA_BENCH_WARMUP=2000 \
+  REDIS_UYA_BENCH_OUT=benchmarks/v0.9.3-release-performance-2026-09-01-current-50k.md \
+  REDIS_UYA_BENCH_BASELINE=benchmarks/v0.9.3-release-performance.md \
+  make benchmark-v0.9.3-release
+```
+
+## 4. 常用命令示例
+
+下列只是快速上手示例，不是当前全量命令清单。当前命令矩阵跟踪 574 个官方命令名和 420 个 top-level 命令。
 
 - `PING [message]`
 - `GET key`
@@ -111,6 +131,14 @@ REDIS_UYA_LONG_RUN_SECONDS=1800 python3 tests/integration/long_run_smoke.py
 - `SUBSCRIBE channel [channel ...]`
 - `UNSUBSCRIBE [channel ...]`
 - `PUBLISH channel message`
+- `SSUBSCRIBE shardchannel [shardchannel ...]`
+- `SUNSUBSCRIBE [shardchannel ...]`
+- `SPUBLISH shardchannel message`
+- `XADD key [NOMKSTREAM] [MAXLEN|MINID [=|~] threshold [LIMIT count]] id field value [field value ...]`
+- `XRANGE key start end [COUNT count]`
+- `EVAL script numkeys [key ...] [arg ...]`
+- `ACL WHOAMI`
+- `ACL GETUSER username`
 - `SAVE`
 - `BGSAVE`
 - `BGREWRITEAOF`
@@ -134,5 +162,8 @@ REDIS_UYA_LONG_RUN_SECONDS=1800 python3 tests/integration/long_run_smoke.py
 - replica 当前已支持定时拉取式增量同步与心跳
 - `maxmemory` 当前已支持 noeviction、allkeys-lru、allkeys-lfu、volatile-lru、volatile-lfu、volatile-ttl 基线
 - `INFO memory` 当前可观测 allocator 与 Slab 统计
-- 事务、Pub/Sub、CLIENT / CONFIG 仍是最小兼容子集
-- 不支持 master 主动流式推送复制、完整集群 gossip/failover、Lua、Redis 模块
+- 事务、Pub/Sub/Sharded Pub/Sub、CLIENT / CONFIG 均已有当前文档明确的 standalone partial，不等于 Redis 全量语义
+- Streams 已支持基础追加、范围读取、`NOMKSTREAM`、`MAXLEN|MINID` 裁剪和项目内持久化 partial；真实 consumer group/PEL 仍未完成
+- Lua/Functions 已有 single-call 脚本子集和固定容量 library partial，不是完整 Lua/Redis Functions 引擎
+- ACL 已支持 default/named user、selector、命令/category 规则、方向性 key pattern、aclfile 和审计 partial
+- 尚未完成 master 主动流式复制、完整集群 gossip/failover、完整 Lua/Functions 和 Redis 模块语义

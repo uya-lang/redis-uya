@@ -1,7 +1,8 @@
 # redis-uya ARCHITECTURE
 
 > 版本: v0.9.3-dev
-> 日期: 2026-07-31
+> 日期: 2026-09-02
+> 当前主线口径: 本文记录 `v0.9.3-dev` 当前实现架构；命令数量与状态以 `redis-uya-command-matrix.md` 为准，具体命令语义以 `redis-uya-api.md` 为准
 
 ## 1. 总体结构
 

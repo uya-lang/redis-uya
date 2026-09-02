@@ -2,7 +2,7 @@
 # redis-uya 开发 TODO 文档
 
 > 版本: v0.9.3-dev
-> 日期: 2026-09-01
+> 日期: 2026-09-02
 > 配套设计文档: `redis-uya-design.md`
 > 配套评审文档: `redis-uya-review.md`
 > 审计基线: `redis-uya-audit-2026-05-16.md`
@@ -96,6 +96,7 @@
 - [x] GET AOF 判定门控：普通顶层 GET 在 AOF writer 存在时直接按 `command_get` 跳过完整 AOF 决策 helper，脚本、事务、写命令与 `SORT ... STORE` 保持原路径；单测断言 GET 不增长 AOF buffer，并验证连接层 RPUSH + SORT STORE 可回放。8 轮反向固定 CPU 200K 墙钟吞吐提升 2.48%、p99 下降 7.63%，`perf stat` instructions/branches 下降 0.64%/0.68%，零丢样 11K profile 中目标 helper 消失，不可变/current 50K 三类 guard 全部通过
 - [x] 零拷贝 writev 首次直写：大 bulk GET 先直接运行共享非阻塞 writev 进度 helper，完整首写不再构造 Future，部分写/EAGAIN 才携带精确 head/body/tail offset 进入 async continuation；8 轮反向固定 CPU 200K 吞吐提升 1.51%、p99 下降 4.01%，cycles/instructions/branches 下降 1.25%/2.94%/3.62%，慢读 EAGAIN 集成与不可变/current 50K 三类 guard 全部通过
 - [x] 2026-09-01 文档真值收口：README / TODO / DoD 统一到 574 个官方命令名、36 项当前集成、Sharded Pub/Sub standalone partial、Hash field TTL 持久化/复制传播、Streams `NOMKSTREAM`/trim 当前边界和“5K 快速回归 + 50K 正式验收”性能口径；新增当前 HEAD 50K release 证据报告，并把 `scripts/verify_doc_truth.py` 接入 `make test` 防止回归
+- [x] 2026-09-02 文档真值门禁扩展：API / Architecture / Quickstart / Design 统一到 `v0.9.3-dev`，API 与 Design 记录 574/420 命令数量，Quickstart 记录 36 项集成与 5K/50K 性能入口，Design 更新 RESP3、基础类型、持久化、复制、Lua/Functions、ACL、Streams 与 Cluster 当前边界；`verify_doc_truth.py` 已阻止四文档回退到旧版本和旧能力描述
 - [ ] `v0.9.3` 起：在真实性问题收敛后，继续补 Redis Open Source 单机核心缺口，而不是先扩模块命令
 
 ## 3. 全版本路线图

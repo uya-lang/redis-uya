@@ -1,7 +1,7 @@
 # redis-uya API
 
 > 版本: v0.9.3-dev
-> 日期: 2026-05-09
+> 日期: 2026-09-02
 > 当前主线口径: 本文只承诺已在 `v0.9.3-dev` 主线落地并有测试证据的语义；未在对应命令章节明确写出的高级数据、运维、安全与可观测能力，不视为当前可用
 
 ## 1. 协议
@@ -156,7 +156,7 @@ COMMAND DOCS [command-name [command-name ...]]
 说明：
 
 - 当前 `COMMAND` 家族与 `docs/redis-uya-command-matrix.md` 共用 `src/command/catalog_generated*` 生成目录
-- 目录基线当前覆盖 Redis 8.6 官方命令页中的 `531` 个官方命令名
+- 目录基线当前覆盖 Redis 8.6 官方命令页中的 `574` 个官方命令名和 `420` 个 top-level 命令
 - `COMMAND DOCS` 当前命令名定向查询和无参数全量 docs 查询都可用；全量返回使用当前扩大的连接输出缓冲完成 RESP2/RESP3 大响应发送第一批闭环
 - `COMMAND GETKEYS` 当前支持当前运行时命令表里的 key 提取，覆盖多 key、成对 key、`RENAME` 双 key、`SORT ... STORE` / `BLMPOP` / `ZMPOP` / `BZMPOP` movablekeys 和错误路径
 - `COMMAND GETKEYSANDFLAGS` 当前支持当前运行时命令表里的 key/flag 提取，覆盖 `RO/OW/RW/RM` 及 `access/update/insert/delete` 基础组合

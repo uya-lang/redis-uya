@@ -2,6 +2,7 @@
 
 > 版本口径: `v0.9.3-dev`
 > 审核日期: 2026-09-01
+> 最近修订: 2026-09-02
 > 代码基线: `f411fcd638a683abacbc8f4baf664ee9ba5c0fba`
 > 文档状态: 整体审核报告与后续执行计划
 > 适用范围: `v0.9.3-dev` 到 `v1.0.0` 单机版封版
@@ -201,10 +202,11 @@ RSS 比值为 `1.68x`。
 - benchmark 统一区分 5K 快速回归和 50K 正式验收。
 - 历史 A/B 数据明确不代替当前 HEAD 证据。
 - `scripts/verify_doc_truth.py` 已接入 `make test`。
+- API、Architecture、Quickstart 和 Design 已于 2026-09-02 接入真值门禁：校验当前版本、命令数量、集成/性能入口和 Sharded Pub/Sub、Hash field TTL、Streams、Lua/Functions、后台 `fork()` 等关键能力边界。
 
 ### 7.2 文档管理剩余问题
 
-- API、Architecture、Quickstart、Design 也应逐步接入真值检查。
+- 后续应继续扩展至 release/test-report、部署、安全、迁移和已知限制文档，并避免将不同职责的文档强制为完全相同内容。
 - 超长 TODO 同时承担历史记录和当前执行计划，查阅成本较高。
 - `partial` 命令的目标版本、差异索引和验收证据还需结构化。
 - 正式发布前需补当前版本 release/test/benchmark 报告和 Changelog。

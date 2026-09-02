@@ -8,6 +8,10 @@ ROOT = Path(__file__).resolve().parents[1]
 README = ROOT / "readme.md"
 TODO = ROOT / "docs" / "redis-uya-todo.md"
 DOD = ROOT / "docs" / "redis-uya-definition-of-done.md"
+API = ROOT / "docs" / "redis-uya-api.md"
+ARCHITECTURE = ROOT / "docs" / "redis-uya-architecture.md"
+QUICKSTART = ROOT / "docs" / "redis-uya-quickstart.md"
+DESIGN = ROOT / "docs" / "redis-uya-design.md"
 MATRIX = ROOT / "docs" / "redis-uya-command-matrix.md"
 MAKEFILE = ROOT / "Makefile"
 BENCH_SCRIPT = ROOT / "scripts" / "benchmark_v0_8_0.py"
@@ -67,6 +71,10 @@ def main() -> int:
         readme = README.read_text()
         todo = TODO.read_text()
         dod = DOD.read_text()
+        api = API.read_text()
+        architecture = ARCHITECTURE.read_text()
+        quickstart = QUICKSTART.read_text()
+        design = DESIGN.read_text()
         matrix = MATRIX.read_text()
         makefile = MAKEFILE.read_text()
         bench_script = BENCH_SCRIPT.read_text()
@@ -85,10 +93,19 @@ def main() -> int:
         bench_iters = int(require_match(r'REDIS_UYA_BENCH_ITERS", "([0-9]+)"', bench_script, "benchmark iterations default").group(1))
         bench_warmup = int(require_match(r'REDIS_UYA_BENCH_WARMUP", "([0-9]+)"', bench_script, "benchmark warmup default").group(1))
 
-        texts = (("README", readme), ("TODO", todo), ("DoD", dod))
-        for label, text in texts:
+        status_texts = (("README", readme), ("TODO", todo), ("DoD", dod))
+        semantic_texts = (
+            ("API", api),
+            ("Architecture", architecture),
+            ("Quickstart", quickstart),
+            ("Design", design),
+        )
+        all_current_texts = (*status_texts, *semantic_texts)
+        for label, text in all_current_texts:
             if version not in text[:1000]:
                 errors.append(f"{label} does not declare current version {version}")
+
+        for label, text in status_texts:
             if str(official) not in text or str(top_level) not in text:
                 errors.append(f"{label} does not record current command counts {official}/{top_level}")
             plain_text = text.replace("`", "")
@@ -108,6 +125,28 @@ def main() -> int:
             if "50K" not in text or "2000" not in text:
                 errors.append(f"{label} does not record formal benchmark size 50000/2000")
 
+        for label, text in (("API", api), ("Quickstart", quickstart), ("Design", design)):
+            if str(official) not in text or str(top_level) not in text:
+                errors.append(f"{label} does not record current command counts {official}/{top_level}")
+
+        design_plain = design.replace("`", "")
+        tier_a_pairs = (
+            ("full", tier_a[1]),
+            ("partial", tier_a[2]),
+            ("standalone-error", tier_a[3]),
+            ("alias", tier_a[4]),
+            ("deferred", tier_a[5]),
+        )
+        if any(f"{status}={count}" not in design_plain for status, count in tier_a_pairs):
+            errors.append("Design does not record current Tier A counts")
+
+        if f"{integration_count} \u9879" not in quickstart:
+            errors.append(f"Quickstart does not record current integration count {integration_count}")
+        if f"{bench_iters // 1000}K" not in quickstart or str(bench_warmup) not in quickstart:
+            errors.append(f"Quickstart does not record quick benchmark defaults {bench_iters}/{bench_warmup}")
+        if "50K" not in quickstart or "2000" not in quickstart:
+            errors.append("Quickstart does not record formal benchmark size 50000/2000")
+
         report_path = current_report_path([readme, todo, dod])
         if not report_path.exists():
             errors.append(f"current 50K report does not exist: {report_path.relative_to(ROOT)}")
@@ -119,11 +158,15 @@ def main() -> int:
             if absolute_throughput_passes != 5 or report.count("p99_status=pass") != 5:
                 errors.append("current report absolute throughput/p99 guard is not fully green")
             ratios, rss_ratio = report_ratios(report)
-            for label, text in texts:
+            for label, text in status_texts:
                 if ratios not in text:
                     errors.append(f"{label} does not match current Redis ratios {ratios}")
                 if rss_ratio not in text:
                     errors.append(f"{label} does not match current RSS ratio {rss_ratio}")
+
+            report_reference = str(report_path.relative_to(ROOT))
+            if report_reference not in quickstart:
+                errors.append(f"Quickstart does not reference current 50K report {report_reference}")
 
         stale_readme_phrases = (
             "未实现 `SSUBSCRIBE/SPUBLISH`",
@@ -135,6 +178,45 @@ def main() -> int:
         for phrase in stale_readme_phrases:
             if phrase in readme:
                 errors.append(f"README retains stale capability statement: {phrase}")
+
+        required_capability_markers = {
+            "API": ("`SSUBSCRIBE`", "`NOMKSTREAM`", "field TTL", "\u590d\u5236 backlog"),
+            "Architecture": ("`SSUBSCRIBE`", "NOMKSTREAM", "field TTL", "replication backlog"),
+            "Quickstart": ("`SSUBSCRIBE", "`NOMKSTREAM`", "Lua/Functions", "consumer group/PEL"),
+            "Design": ("Sharded Pub/Sub", "`EVAL*`", "consumer group/PEL", "libc `fork()`"),
+        }
+        semantic_map = {
+            "API": api,
+            "Architecture": architecture,
+            "Quickstart": quickstart,
+            "Design": design,
+        }
+        for label, markers in required_capability_markers.items():
+            text = semantic_map[label]
+            for marker in markers:
+                if marker not in text:
+                    errors.append(f"{label} is missing current capability marker: {marker}")
+
+        stale_semantic_phrases = {
+            "API": ("`531` \u4e2a\u5b98\u65b9\u547d\u4ee4\u540d",),
+            "Quickstart": (
+                "> \u7248\u672c: v0.7.0",
+                "\u4e0d\u652f\u6301 master \u4e3b\u52a8\u6d41\u5f0f\u63a8\u9001\u590d\u5236\u3001\u5b8c\u6574\u96c6\u7fa4 gossip/failover\u3001Lua\u3001Redis \u6a21\u5757",
+            ),
+            "Design": (
+                "> \u7248\u672c: v0.9.0-planning",
+                "| Lua | \u274c \u4e0d\u652f\u6301",
+                "| Streams | \u274c \u4e0d\u652f\u6301",
+                "| Functions | \u274c \u4e0d\u652f\u6301",
+                "\u7531\u4e8e uya \u76ee\u524d\u4e0d\u652f\u6301\u76f4\u63a5 fork()",
+                "v0.1.0 \u521d\u59cb\u7248\u672c",
+            ),
+        }
+        for label, phrases in stale_semantic_phrases.items():
+            text = semantic_map[label]
+            for phrase in phrases:
+                if phrase in text:
+                    errors.append(f"{label} retains stale statement: {phrase}")
     except (OSError, RuntimeError, ValueError) as exc:
         errors.append(str(exc))
 

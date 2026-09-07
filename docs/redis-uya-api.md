@@ -4356,23 +4356,29 @@ SLAVEOF NO ONE
 
 - 成功：`+OK`
 - `SLAVEOF` 当前作为 `REPLICAOF` alias 进入同一执行路径
-- 当前已完成复制角色切换、`PSYNC` 全量同步、轮询式增量同步和基础心跳；仍不支持 Redis 原生长连接流式增量推送、真实 ACK/GETACK 等完整复制协议
+- 当前已完成复制角色切换、`PSYNC` 全量同步、轮询式增量同步、基础心跳和连接级 ACK/GETACK wire 语义；仍不支持 Redis 原生长连接流式增量推送、master 主动 GETACK 与 ACK 驱动等待等完整复制协议
 
 ### `REPLCONF`
 
 格式：
 
 ```text
-REPLCONF [option [value ...]]
+REPLCONF [option value]
 ```
 
 返回：
 
-- 当前 partial 对任意参数形态返回 `+OK`
+- 空参数和常见握手参数（如 `CAPA psync2`）：`+OK`
+- `REPLCONF ACK offset`：不发送普通命令回复
+- replica 角色收到 `REPLCONF GETACK *`：写回 `REPLCONF ACK <current-upstream-offset>` RESP 命令
+- `ACK` offset 非整数：`-ERR value is not an integer or out of range`
+- `GETACK` 参数不是 `*`：`-ERR syntax error`
 
 说明：
 
-- 用作复制握手兼容面；当前不记录 replica 端口、能力、ACK offset，也不触发 `GETACK` 推送
+- `ACK` 将当前连接标记为复制连接，记录单调前移的 ACK offset 和最近 ACK 时间；较旧 ACK 不回退 offset，但仍刷新 ACK 时间
+- replica 的 GETACK 回复使用运行时当前上游 master offset，而不是本地禁用 backlog 的 offset
+- 当前仍不持久化 replica 端口/能力，不由 master 周期性下发 GETACK，也不把 ACK 状态接入 `WAIT/WAITAOF`
 - 不进入 AOF 或 replication backlog
 
 ### `FAILOVER`

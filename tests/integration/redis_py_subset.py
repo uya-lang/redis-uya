@@ -85,13 +85,16 @@ class RedisPySubsetClient:
             return [self._read_resp() for _ in range(count)]
         raise RuntimeError(f"unsupported RESP prefix: {prefix!r}")
 
-    def _request(self, *parts: bytes):
+    def _send_request(self, *parts: bytes) -> None:
         buf = [f"*{len(parts)}\r\n".encode()]
         for part in parts:
             buf.append(f"${len(part)}\r\n".encode())
             buf.append(part)
             buf.append(b"\r\n")
         self._sock.sendall(b"".join(buf))
+
+    def _request(self, *parts: bytes):
+        self._send_request(*parts)
         return self._read_resp()
 
     def ping(self) -> bool:
@@ -594,6 +597,10 @@ class RedisPySubsetClient:
 
     def replconf(self, *args: bytes) -> bool:
         return self._request(b"REPLCONF", *args) == "OK"
+
+    def replconf_ack(self, offset: int) -> bool:
+        self._send_request(b"REPLCONF", b"ACK", str(offset).encode())
+        return self.ping()
 
     def select(self, db: int) -> bool:
         return self._request(b"SELECT", str(db).encode()) == "OK"
@@ -1563,8 +1570,8 @@ def run_smoke() -> None:
                 raise AssertionError("expected REPLCONF with no args to return OK")
             if not client.replconf(b"CAPA", b"psync2"):
                 raise AssertionError("expected REPLCONF CAPA psync2 to return OK")
-            if not client.replconf(b"ACK", b"0"):
-                raise AssertionError("expected REPLCONF ACK 0 to return OK")
+            if not client.replconf_ack(0):
+                raise AssertionError("expected REPLCONF ACK 0 to suppress its reply and keep the stream aligned")
             assert client.set("key", "value")
             assert client.randomkey() == b"key"
             assert client.get("key") == b"value"

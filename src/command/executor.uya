@@ -232,6 +232,8 @@ export struct CommandReply {
     replicaof_promote: bool,
     replicaof_host: [byte: 64],
     replicaof_port: i32,
+    request_replconf_ack: bool,
+    replconf_ack_offset: i64,
     request_bgsave: bool,
     request_aof_rewrite: bool,
     request_config_set: bool,
@@ -386,6 +388,8 @@ fn command_executor_reply(typ: CommandReplyType, data: &[byte], integer: i64) Co
         replicaof_promote: false,
         replicaof_host: [],
         replicaof_port: 0,
+        request_replconf_ack: false,
+        replconf_ack_offset: 0,
         request_bgsave: false,
         request_aof_rewrite: false,
         request_config_set: false,
@@ -19409,8 +19413,62 @@ fn command_executor_sync(engine: &Engine, runtime: &CommandRuntimeInfo, command:
 }
 
 fn command_executor_replconf(runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
-    _ = runtime;
-    _ = command;
+    if command.argc == 1 {
+        return command_executor_simple(&"OK"[0: 2]);
+    }
+    if command.argc != 3 {
+        return command_executor_wrong_arity();
+    }
+
+    const option: &[byte] = command_executor_arg(command, 1) catch {
+        return command_executor_wrong_arity();
+    };
+    const value: &[byte] = command_executor_arg(command, 2) catch {
+        return command_executor_wrong_arity();
+    };
+
+    if command_executor_keyword_eq(option, &"ACK"[0: 3]) {
+        const offset: i64 = command_executor_parse_i64(value) catch {
+            return command_executor_invalid_integer();
+        };
+        var reply: CommandReply = command_executor_reply(CommandReplyType.reply_raw_bytes, command_executor_empty_slice(), 0);
+        reply.request_replconf_ack = true;
+        reply.replconf_ack_offset = offset;
+        return reply;
+    }
+
+    if command_executor_keyword_eq(option, &"GETACK"[0: 6]) {
+        if value.len != 1 || value.ptr[0] != 42 as byte {
+            return command_executor_syntax_error();
+        }
+        if runtime.replication_role != ReplicationRole.role_replica {
+            return command_executor_reply(CommandReplyType.reply_raw_bytes, command_executor_empty_slice(), 0);
+        }
+
+        var raw: Sds = sds_empty() catch {
+            return command_executor_oom();
+        };
+        defer {
+            sds_free(&raw);
+        }
+        var offset: Sds = sds_empty() catch {
+            return command_executor_oom();
+        };
+        defer {
+            sds_free(&offset);
+        }
+        var args: [SdsFmtArg: 1] = [];
+        args[0] = sds_fmt_u64(runtime.replication_master_offset);
+        _ = sds_cat_fmt(&offset, &"%u"[0: 2], args[0: 1]) catch {
+            return command_executor_oom();
+        };
+        _ = command_executor_resp_append_array_header(&raw, 3) catch { return command_executor_oom(); };
+        _ = command_executor_resp_append_bulk(&raw, &"REPLCONF"[0: 8]) catch { return command_executor_oom(); };
+        _ = command_executor_resp_append_bulk(&raw, &"ACK"[0: 3]) catch { return command_executor_oom(); };
+        _ = command_executor_resp_append_bulk(&raw, offset.buf[0: offset.len]) catch { return command_executor_oom(); };
+        return command_executor_owned_raw(raw.buf[0: raw.len]);
+    }
+
     return command_executor_simple(&"OK"[0: 2]);
 }
 

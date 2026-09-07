@@ -91,9 +91,12 @@ if [[ "$REPLCONF_CAPA_RESULT" != "OK" ]]; then
     exit 1
 fi
 
-REPLCONF_ACK_RESULT="$(redis-cli --raw -h 127.0.0.1 -p "$PORT" replconf ack 0)"
-if [[ "$REPLCONF_ACK_RESULT" != "OK" ]]; then
-    echo "[FAIL] integration/redis_cli_smoke: expected REPLCONF ACK 0 OK, got '$REPLCONF_ACK_RESULT'" >&2
+set +e
+REPLCONF_ACK_RESULT="$(timeout 1 redis-cli --raw -h 127.0.0.1 -p "$PORT" replconf ack 0 2>&1)"
+REPLCONF_ACK_STATUS=$?
+set -e
+if [[ "$REPLCONF_ACK_STATUS" -ne 124 || -n "$REPLCONF_ACK_RESULT" ]]; then
+    echo "[FAIL] integration/redis_cli_smoke: expected REPLCONF ACK 0 to suppress its reply, status=$REPLCONF_ACK_STATUS output='$REPLCONF_ACK_RESULT'" >&2
     exit 1
 fi
 

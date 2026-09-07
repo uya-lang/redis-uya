@@ -2349,10 +2349,29 @@ export fn test_command_replconf() !void {
     var ack_parsed: RespParseResult = try parse_resp2(&"*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n"[0: 34]);
     const ack_command: Command = try command_executor_test_command(&router, &ack_parsed);
     const ack_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &ack_command, 1000u64);
-    try assert_eq_i32(ack_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
-    try assert_true(command_executor_test_slice_eq(ack_reply.data, &"OK"[0: 2]));
+    try assert_eq_i32(ack_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    try assert_eq_i32(ack_reply.data.len as i32, 0);
+    try assert_eq_i32(ack_reply.request_replconf_ack as i32, 1);
+    try assert_eq_i32(ack_reply.replconf_ack_offset as i32, 0);
     try assert_eq_i32(ack_reply.request_replicaof as i32, 0);
     resp_value_free(&ack_parsed.value);
+
+    var bad_ack_parsed: RespParseResult = try parse_resp2(&"*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$3\r\nbad\r\n"[0: 36]);
+    const bad_ack_command: Command = try command_executor_test_command(&router, &bad_ack_parsed);
+    const bad_ack_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &bad_ack_command, 1000u64);
+    try assert_eq_i32(bad_ack_reply.typ as i32, CommandReplyType.reply_error as i32);
+    try assert_true(command_executor_test_slice_eq(bad_ack_reply.data, &"ERR value is not an integer or out of range"[0: 43]));
+    resp_value_free(&bad_ack_parsed.value);
+
+    runtime.replication_role = ReplicationRole.role_replica;
+    runtime.replication_master_offset = 128u64;
+    var getack_parsed: RespParseResult = try parse_resp2(&"*3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n"[0: 37]);
+    const getack_command: Command = try command_executor_test_command(&router, &getack_parsed);
+    var getack_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &getack_command, 1000u64);
+    try assert_eq_i32(getack_reply.typ as i32, CommandReplyType.reply_raw_bytes as i32);
+    try assert_true(command_executor_test_slice_eq(getack_reply.data, &"*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$3\r\n128\r\n"[0: 36]));
+    command_reply_cleanup(&getack_reply);
+    resp_value_free(&getack_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

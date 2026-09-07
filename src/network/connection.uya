@@ -227,6 +227,9 @@ export struct ConnectionTransaction {
     blocking_active: bool,
     blocking_deadline_ms: u64,
     monitoring: bool,
+    replication_client: bool,
+    replication_ack_offset: i64,
+    replication_ack_time_ms: u64,
 }
 
 struct ConnectionSendProgress {
@@ -602,6 +605,9 @@ fn connection_transaction_empty() ConnectionTransaction {
         blocking_active: false,
         blocking_deadline_ms: 0u64,
         monitoring: false,
+        replication_client: false,
+        replication_ack_offset: -1,
+        replication_ack_time_ms: 0u64,
     };
 }
 
@@ -638,6 +644,9 @@ export fn connection_transaction_reset(tx: &ConnectionTransaction) void {
     tx.blocking_active = false;
     tx.blocking_deadline_ms = 0u64;
     tx.monitoring = false;
+    tx.replication_client = false;
+    tx.replication_ack_offset = -1;
+    tx.replication_ack_time_ms = 0u64;
 }
 
 fn connection_transaction_clear_queue(tx: &ConnectionTransaction) void {
@@ -13219,6 +13228,13 @@ fn connection_execute_standard_command_at(
     const request_client_unpause: bool = reply.request_client_unpause;
     const request_maxclients_set: bool = reply.request_maxclients_set;
     const maxclients_after: i32 = reply.maxclients_after;
+    if reply.request_replconf_ack {
+        if !tx.replication_client || reply.replconf_ack_offset > tx.replication_ack_offset {
+            tx.replication_ack_offset = reply.replconf_ack_offset;
+        }
+        tx.replication_client = true;
+        tx.replication_ack_time_ms = now_ms;
+    }
     if request_bgsave && bgsave_requested != null {
         *bgsave_requested = true;
     }
@@ -13236,6 +13252,9 @@ fn connection_execute_standard_command_at(
             psync_reply = connection_build_continue_reply(backlog, reply.integer as u64);
             use_psync_reply = true;
         }
+    }
+    if use_psync_reply {
+        tx.replication_client = true;
     }
     if use_psync_reply {
         n = try connection_encode_reply_with_protocol(&psync_reply, out, out_cap, tx.protocol_version);

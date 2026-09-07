@@ -337,7 +337,7 @@ P0 表示会阻止进入封版候选或可能造成数据错误、安全问题�
 
 | ID | 优先级 | 任务 | 验收标准 |
 |----|----------|------|----------|
-| F-REPL-01 | P0 | 实现 `REPLCONF ACK/GETACK` | master 记录 replica ACK offset，GETACK 可触发回复 |
+| F-REPL-01 | P0 | 实现 `REPLCONF ACK/GETACK`（2026-09-06 已完成连接级 partial） | master 连接上下文记录 replica ACK offset/时间，GETACK 可按 replica 当前 upstream offset 触发 ACK wire 回复；主动 GETACK 与等待聚合由 F-REPL-02/03 继续收口 |
 | F-REPL-02 | P0 | 实现真实 `WAIT` | 按副本数和 timeout 阻塞/返回，无副本、部分 ACK、超时有回归 |
 | F-REPL-03 | P0 | 实现真实 `WAITAOF` | 本地 AOF 与副本 AOF ACK 按参数收敛 |
 | F-REPL-04 | P0 | 副本只读限制 | replica 写命令拒绝、配置切换和内部回放语义正确 |

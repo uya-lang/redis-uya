@@ -8,6 +8,7 @@ use src.command.executor.CommandRuntimeInfo;
 use src.command.executor.command_runtime_default;
 use src.command.router.CommandRouter;
 use src.command.router.command_router_new;
+use src.replication.state.ReplicationRole;
 use src.network.connection.ConnectionProcessResult;
 use src.network.connection.ConnectionTransaction;
 use src.network.connection.connection_encode_reply;
@@ -926,6 +927,25 @@ export fn test_connection_process_ping_set_get_quit() !void {
     const replconf_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$8\r\nREPLCONF\r\n$4\r\nCAPA\r\n$6\r\npsync2\r\n"[0: 40], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: replconf_result.response_len], &"+OK\r\n"[0: 5]));
     try assert_eq_i32(replconf_result.request_replicaof as i32, 0);
+
+    var replconf_tx: ConnectionTransaction = connection_transaction_new();
+    defer { connection_transaction_reset(&replconf_tx); }
+    const replconf_ack_result: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &replconf_tx, &"*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$3\r\n128\r\n"[0: 36], &out[0], 256, 1000u64);
+    try assert_eq_i32(replconf_ack_result.response_len as i32, 0);
+    try assert_eq_i32(replconf_tx.replication_client as i32, 1);
+    try assert_eq_i32(replconf_tx.replication_ack_offset as i32, 128);
+    try assert_eq_i32(replconf_tx.replication_ack_time_ms as i32, 1000);
+
+    const replconf_stale_ack_result: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &replconf_tx, &"*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$2\r\n64\r\n"[0: 35], &out[0], 256, 1100u64);
+    try assert_eq_i32(replconf_stale_ack_result.response_len as i32, 0);
+    try assert_eq_i32(replconf_tx.replication_ack_offset as i32, 128);
+    try assert_eq_i32(replconf_tx.replication_ack_time_ms as i32, 1100);
+
+    var replica_runtime: CommandRuntimeInfo = command_runtime_default();
+    replica_runtime.replication_role = ReplicationRole.role_replica;
+    replica_runtime.replication_master_offset = 128u64;
+    const replconf_getack_result: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &replica_runtime, &router, &replconf_tx, &"*3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n"[0: 37], &out[0], 256, 1200u64);
+    try assert_true(network_connection_slice_eq(out[0: replconf_getack_result.response_len], &"*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$3\r\n128\r\n"[0: 36]));
 
     const config_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$6\r\nCONFIG\r\n$3\r\nGET\r\n$4\r\nport\r\n"[0: 35], &out[0], 256, 1000u64);
     try assert_eq_i32(config_result.response_len as i32, 24);

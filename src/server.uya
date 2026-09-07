@@ -479,7 +479,11 @@ fn server_runtime_info(server: &RedisServer) &CommandRuntimeInfo {
     info.start_ms = server.start_ms;
     info.replication_role = server.replication_role;
     info.replication_state = server.replication_state;
-    info.replication_master_offset = server.repl_backlog.master_offset;
+    if server.replication_role == ReplicationRole.role_replica {
+        info.replication_master_offset = server.replication_master_offset;
+    } else {
+        info.replication_master_offset = server.repl_backlog.master_offset;
+    }
     info.replication_backlog_first_offset = backlog_first_offset;
     info.replication_backlog_histlen = backlog_histlen;
     info.replication_backlog_active = server.repl_backlog.active;

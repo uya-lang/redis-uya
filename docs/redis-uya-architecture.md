@@ -134,7 +134,7 @@ server open
 - `SWAPDB` 当前由执行层按单 DB 模型处理；`0 0` 是 no-op partial，任一非 `0` DB 返回越界错误，真实多 DB 数据交换保留到多 DB 模型落地后再补
 - `LOLWUT` 当前由执行层返回固定 bulk 文本 partial，只校验 `VERSION` 的整数参数，不读取或修改存储状态
 - `MIGRATE` 当前由执行层作为单机安全 profile 的 `standalone-error` 处理；命令可见但不会建立远端连接、不会执行跨实例迁移，也不进入 AOF/复制传播
-- `WAIT` / `WAITAOF` 由执行层提供当前复制/持久化等待兼容面；`WAIT` 在无副本 ACK 收敛路径下返回 `0`，`WAITAOF` 返回 `[local, replicas]`，其中本地确认按 `numlocal` 归一到 `0/1`，副本 AOF ACK 当前固定为 `0`
+- `WAIT` 由连接层维护调用客户端最后传播写入 offset，并通过客户端注册表聚合已建立 `PSYNC` 复制连接的 ACK；ACK 未达标时连接进入 server-side blocked 状态，server 向复制连接按需发送一次 `REPLCONF GETACK *`，随后重放原请求直至达标或 timeout。`WAITAOF` 仍由执行层返回 `[local, replicas]` 兼容面，其中本地确认按 `numlocal` 归一到 `0/1`，副本 AOF ACK 当前固定为 `0`
 - 空闲客户端不再阻塞活跃客户端
 - `v0.8.0` 已新增 `io_uring` 主机能力评估报告，但生产事件循环仍绑定在 epoll 路径；后续只有在独立原型和 benchmark 证明收益后才考虑切换
 
@@ -255,7 +255,7 @@ server open
 - 单线程
 - `BGSAVE` / `BGREWRITEAOF` 已有最小子进程后台路径，但仍未做更细粒度的后台资源隔离与吞吐优化
 - RDB 已覆盖当前五类对象、key 绝对过期时间和 hash field TTL，但仍不是 Redis 完整二进制兼容
-- 复制当前已覆盖角色与状态机、`PSYNC / backlog`、replica 侧全量同步、定时拉取式增量同步与心跳；`REPLCONF ACK` 在 `ConnectionTransaction` 保存复制连接标志、单调前移的 ACK offset 和最近 ACK 时间并抑制普通回复，replica 的 `GETACK *` 使用 `RedisServer.replication_master_offset` 经 runtime info 写回 `REPLCONF ACK` 命令。backlog 使用逻辑起点丢弃过期前缀，累计废弃前缀达到阈值后在既有 SDS 容量内原地前移有效窗口，不再为每次物理压缩分配/释放新缓冲，`histlen`、first offset 与连续 PSYNC slice 保持不变；达到高水位后的容量保留到 backlog reset/free，并继续通过 `mem_not_counted_for_evict` 纳入排除量观测；master 主动 GETACK、ACK 聚合等待和长连接流式推送仍未实现，`FAILOVER` 当前为无副本/未支持 controlled failover 的 `standalone-error`
+- 复制当前已覆盖角色与状态机、`PSYNC / backlog`、replica 侧全量同步、定时拉取式增量同步与心跳；成功 `PSYNC` 的连接会在 `ConnectionTransaction` 保存复制连接标志、单调前移的 ACK offset 和最近 ACK 时间并抑制普通 ACK 回复，普通客户端发送 ACK 不会进入复制连接集合，replica 的 `GETACK *` 使用 `RedisServer.replication_master_offset` 经 runtime info 写回 `REPLCONF ACK` 命令。每个普通客户端同时记录最后一次成功传播写入的 backlog offset，`WAIT` 按该 offset 统计在线复制连接 ACK，未达标时触发一次 GETACK 并阻塞到达标或 timeout。backlog 使用逻辑起点丢弃过期前缀，累计废弃前缀达到阈值后在既有 SDS 容量内原地前移有效窗口，不再为每次物理压缩分配/释放新缓冲，`histlen`、first offset 与连续 PSYNC slice 保持不变；达到高水位后的容量保留到 backlog reset/free，并继续通过 `mem_not_counted_for_evict` 纳入排除量观测；周期性 GETACK、`WAITAOF` 副本 AOF ACK 聚合和 Redis 原生长连接流式推送仍未实现，`FAILOVER` 当前为无副本/未支持 controlled failover 的 `standalone-error`
 - 集群当前已有槽位模型、节点元数据、最小拓扑模型、`CLUSTER` 最小命令接口和 `MOVED/ASK` 基础重定向；`v1.0.0` 前不继续扩展完整多节点握手、gossip、故障检测、failover 和 resharding
 - 事务当前已覆盖连接级最小 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`，但仍没有更完整的 Redis 事务中止传播、脚本联动和控制面扩展
 - `RESET` 当前由 `connection.uya` 直接处理，重置连接级协议版本、事务/观察键、Pub/Sub、tracking 和认证状态，作为连接重连语义的最小闭环

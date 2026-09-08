@@ -340,6 +340,20 @@ fn server_send_all_immediate(fd: i32, data: &const byte, len: usize) bool {
     return true;
 }
 
+fn server_replication_request_acks(server: &RedisServer, requester_slot: usize) void {
+    const getack: &[byte] = &"*3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n"[0: 37];
+    var slot: usize = 0;
+    while slot < SERVER_MAX_CLIENTS {
+        if slot != requester_slot {
+            const client: &RedisClient = &server.clients[slot];
+            if client.fd >= 0 && client.transaction.replication_client && !server_client_pending_write(server, slot) {
+                _ = server_send_all_immediate(client.fd, getack.ptr as &const byte, getack.len);
+            }
+        }
+        slot = slot + 1;
+    }
+}
+
 fn server_send_zero_copy_immediate(fd: i32, head: &const byte, head_len: usize, body: &[byte], tail_len: usize) bool {
     const tail: &[byte] = &"\r\n"[0: 2];
     if head_len > 0 && !server_send_all_immediate(fd, head, head_len) {
@@ -1708,6 +1722,10 @@ fn server_async_writev_all_future(
             const response_head_len: usize = result.response_head_len;
             const zero_copy_body: &[byte] = result.zero_copy_body;
             const zero_copy_tail_len: usize = result.zero_copy_tail_len;
+            if client.transaction.replication_getack_requested {
+                server_replication_request_acks(server, slot);
+                client.transaction.replication_getack_requested = false;
+            }
             if client.transaction.blocking_active {
                 if !server_client_store_blocked_request(client, client.input[0: result.consumed]) {
                     return error.ConnectionInputTooLarge;

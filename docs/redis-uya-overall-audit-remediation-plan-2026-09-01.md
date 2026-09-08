@@ -110,7 +110,7 @@ TODO 中包含 `v0.1.0` 到当前主线的历史条目，因此总勾选率不�
 | Functions / Script 收口 | 进行中 | 单调用 Lua 子集与固定容量 Functions partial |
 | ACL 收口 | 进行中 | 核心用户、selector、方向键和审计已落地，仍需随命令补动态 key spec |
 | 运维与诊断 | 进行中 | CLIENT/CONFIG/MEMORY/SLOWLOG/LATENCY/MONITOR 存在 partial 边界 |
-| 复制/持久化深化 | 进行中 | ACK/WAIT、只读副本、RDB 兼容和重连仍需收口 |
+| 复制/持久化深化 | 进行中 | WAITAOF、副本只读、RDB 兼容和重连仍需收口；ACK/WAIT 已完成连接级收敛 |
 
 ## 5. 技术实现与可维护性审核
 
@@ -337,8 +337,8 @@ P0 表示会阻止进入封版候选或可能造成数据错误、安全问题�
 
 | ID | 优先级 | 任务 | 验收标准 |
 |----|----------|------|----------|
-| F-REPL-01 | P0 | 实现 `REPLCONF ACK/GETACK`（2026-09-06 已完成连接级 partial） | master 连接上下文记录 replica ACK offset/时间，GETACK 可按 replica 当前 upstream offset 触发 ACK wire 回复；主动 GETACK 与等待聚合由 F-REPL-02/03 继续收口 |
-| F-REPL-02 | P0 | 实现真实 `WAIT` | 按副本数和 timeout 阻塞/返回，无副本、部分 ACK、超时有回归 |
+| F-REPL-01 | P0 | 实现 `REPLCONF ACK/GETACK`（2026-09-06 已完成连接级 partial） | master 连接上下文只为已建立 `PSYNC` 的 replica 记录 ACK offset/时间，GETACK 可按 replica 当前 upstream offset 触发 ACK wire 回复；WAIT 按需 GETACK 与等待聚合已由 F-REPL-02 收口，周期性 GETACK 留待后续 |
+| F-REPL-02 | P0 | 实现真实 `WAIT`（2026-09-08 已完成连接级 ACK 驱动等待） | 按调用连接最后传播写入 offset、在线副本数和 timeout 阻塞/返回；多副本立即命中、ACK 唤醒、超时与普通客户端 ACK 防伪均有回归 |
 | F-REPL-03 | P0 | 实现真实 `WAITAOF` | 本地 AOF 与副本 AOF ACK 按参数收敛 |
 | F-REPL-04 | P0 | 副本只读限制 | replica 写命令拒绝、配置切换和内部回放语义正确 |
 | F-REPL-05 | P0 | 断线重连和 partial resync 强化 | backlog 窗口内 CONTINUE，超出窗口 FULLRESYNC，数据一致 |

@@ -73,7 +73,7 @@
 - AOF TTL 语义：`EXPIRE`、`EXPIREAT`、`PEXPIRE`、`SETEX`、`PSETEX` 追加时会规范化为绝对 `PEXPIREAT`；`GETEX` 在带 TTL/PERSIST 选项时只落对应状态变更，回放保持绝对过期时间
 - `BGREWRITEAOF`：真实子进程后台 rewrite + 父进程增量缓冲合并，可把当前内存态规范化重写为可回放 AOF
 - 复制角色与状态机：支持 master/slave 角色切换、`REPLICAOF` 控制入口、`INFO replication` 与复制配置可观测
-- `PSYNC / backlog`：master 维护复制积压缓冲区，支持 `FULLRESYNC` / `CONTINUE` 最小握手判断；`REPLCONF ACK` 会在复制连接上下文记录单调前移的 ACK offset 和最近 ACK 时间且不发送普通回复，replica 对 `REPLCONF GETACK *` 会写回当前上游 offset 的 `REPLCONF ACK` 命令
+- `PSYNC / backlog`：master 维护复制积压缓冲区，支持 `FULLRESYNC` / `CONTINUE` 最小握手判断；`REPLCONF ACK` 仅由已完成 `PSYNC` 的复制连接记录单调前移的 ACK offset 和最近 ACK 时间且不发送普通回复，replica 对 `REPLCONF GETACK *` 会写回当前上游 offset 的 `REPLCONF ACK` 命令；`WAIT` 会按当前连接最后一次传播写入的 offset 聚合 ACK，并在未满足时主动请求一次 `GETACK`
 - 全量同步：replica 可通过 `REPLICAOF -> PSYNC ? -1` 拉取 master 当前 RDB 快照并落库
 - 增量同步：replica 在 connected 状态下周期性 `PSYNC replid offset` 拉取 backlog delta 并回放
 - 复制心跳：replica 周期性 `PING` master，链路失败时回到 `configured` 并等待重同步
@@ -294,8 +294,8 @@ build/redis-uya 6380 1
 - Key 复制/恢复 partial：`COPY source destination [DB 0] [REPLACE]` 当前可用，支持当前单 DB 内深拷贝对象、保留 source TTL、已存在目标的 `REPLACE` 覆盖和 `COMMAND GETKEYS*` 可见面；`RESTORE-ASKING key ttl serialized-value` 当前复用 `RESTORE` 的单 DB RDB payload 写入路径；非 `0` DB 按当前单 DB 模型返回 `ERR DB index is out of range`
 - Key 单库 DB 管理 partial：`SWAPDB 0 0` 当前作为 no-op 返回 `OK`；任一 DB 参数非 `0` 返回 `ERR DB index is out of range`，暂不支持真实多 DB 数据交换
 - Server 趣味/诊断 partial：`LOLWUT [VERSION version]` 当前返回固定 bulk 文本和 redis-uya 版本，`VERSION` 的非整数参数返回 Redis 兼容整数错误，暂不生成 Redis 原版动态图形
-- Key 复制等待 partial：`WAIT` 当前在无副本 ACK 收敛路径下返回 `0`；`WAITAOF numlocal numreplicas timeout` 当前返回 `[local, replicas]`，`numlocal > 0` 时本地确认返回 `1`，副本 AOF 确认固定返回 `0`，暂不做真实阻塞等待或副本 AOF ACK 收敛
-- Server 复制握手 partial：`REPLCONF [option ...]` 的常见握手参数返回 `OK`；`ACK offset` 校验整数、抑制普通回复并在连接上下文记录单调前移 offset/最近 ACK 时间，`GETACK *` 在 replica 角色下写回携带当前上游 offset 的 `REPLCONF ACK`。当前 master 尚未周期性下发 GETACK，`WAIT/WAITAOF` 也尚未消费这些 ACK 状态
+- Key 复制等待 partial：`WAIT numreplicas timeout` 会以调用连接最后一次成功传播写入的 master offset 为目标，统计已完成 `PSYNC` 且 ACK offset 达标的在线复制连接；未满足时向这些复制连接发送一次 `REPLCONF GETACK *` 并阻塞到达标或超时，返回实际达标数量。`WAITAOF numlocal numreplicas timeout` 当前仍只返回 `[local, replicas]`，`numlocal > 0` 时本地确认返回 `1`，副本 AOF 确认固定返回 `0`，暂不做真实阻塞等待或副本 AOF ACK 收敛
+- Server 复制握手 partial：`REPLCONF [option ...]` 的常见握手参数返回 `OK`；`ACK offset` 校验整数、抑制普通回复，且只有已完成 `PSYNC` 的复制连接会记录单调前移 offset/最近 ACK 时间，普通客户端不能用 ACK 进入复制连接集合；`GETACK *` 在 replica 角色下写回携带当前上游 offset 的 `REPLCONF ACK`。master 当前只在未满足的 `WAIT` 上按需下发一次 GETACK，尚未周期性下发；`WAITAOF` 仍未消费副本 AOF ACK
 - Bitmap / Bitfield 第一批：`GETBIT`、`SETBIT`、`BITCOUNT`、`BITPOS`、`BITOP`、`BITFIELD`、`BITFIELD_RO`
 - HyperLogLog 第一批 partial：`PFADD`、`PFCOUNT`、`PFMERGE`、`PFSELFTEST` 当前可用，但内部暂以 exact set-backed cardinality 近似 Redis 语义，`PFSELFTEST` 是 no-op self-test 兼容面，`PFDEBUG` 当前作为安全 profile 的 standalone-error 暴露，不开放 Redis 内部 HLL 调试输出，尚未落地 Redis 原生 dense/sparse HLL 字符串编码
 - Geo 第一批 partial：`GEOADD`、`GEODIST`、`GEOHASH`、`GEOPOS`、`GEOSEARCH`、`GEOSEARCHSTORE`、`GEORADIUS`、`GEORADIUS_RO`、`GEORADIUSBYMEMBER`、`GEORADIUSBYMEMBER_RO` 当前可用，但内部暂以 exact zset-backed packed coordinate score 实现，`GEOSEARCHSTORE` 支持目标写入和 `STOREDIST` 整数距离 score，暂不保存 Redis 原生浮点距离，legacy radius 命令复用 `GEOSEARCH ... BYRADIUS` 路径且不支持 `STORE/STOREDIST`，`GEOPOS` 和 `WITHCOORD` 返回当前 packed score 解码后的 `1e-6` 量化坐标，`GEOHASH` 基于当前解码坐标生成 Redis 兼容 geohash 字符串，`WITHHASH` 返回当前 packed score，而不是 Redis 原生 geohash 整数

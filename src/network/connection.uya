@@ -230,6 +230,9 @@ export struct ConnectionTransaction {
     replication_client: bool,
     replication_ack_offset: i64,
     replication_ack_time_ms: u64,
+    replication_write_offset: u64,
+    replication_getack_requested: bool,
+    replication_getack_sent: bool,
 }
 
 struct ConnectionSendProgress {
@@ -608,6 +611,9 @@ fn connection_transaction_empty() ConnectionTransaction {
         replication_client: false,
         replication_ack_offset: -1,
         replication_ack_time_ms: 0u64,
+        replication_write_offset: 0u64,
+        replication_getack_requested: false,
+        replication_getack_sent: false,
     };
 }
 
@@ -647,6 +653,9 @@ export fn connection_transaction_reset(tx: &ConnectionTransaction) void {
     tx.replication_client = false;
     tx.replication_ack_offset = -1;
     tx.replication_ack_time_ms = 0u64;
+    tx.replication_write_offset = 0u64;
+    tx.replication_getack_requested = false;
+    tx.replication_getack_sent = false;
 }
 
 fn connection_transaction_clear_queue(tx: &ConnectionTransaction) void {
@@ -1066,6 +1075,45 @@ fn connection_parse_u64(data: &[byte]) !u64 {
     return value;
 }
 
+fn connection_parse_i64(data: &[byte]) !i64 {
+    if data.len == 0 {
+        return error.ConnectionIoFailed;
+    }
+    var negative: bool = false;
+    var index: usize = 0;
+    if data.ptr[0] == 43 as byte || data.ptr[0] == 45 as byte {
+        negative = data.ptr[0] == 45 as byte;
+        index = 1;
+        if index >= data.len {
+            return error.ConnectionIoFailed;
+        }
+    }
+    var value: u64 = 0u64;
+    var limit: u64 = 9223372036854775807u64;
+    if negative {
+        limit = 9223372036854775808u64;
+    }
+    while index < data.len {
+        const ch: byte = data.ptr[index];
+        if ch < 48 as byte || ch > 57 as byte {
+            return error.ConnectionIoFailed;
+        }
+        const digit: u64 = (ch - 48 as byte) as u64;
+        if value > limit / 10u64 || (value == limit / 10u64 && digit > limit % 10u64) {
+            return error.ConnectionIoFailed;
+        }
+        value = value * 10u64 + digit;
+        index = index + 1;
+    }
+    if negative {
+        if value == 9223372036854775808u64 {
+            return (-9223372036854775807i64) - 1i64;
+        }
+        return -(value as i64);
+    }
+    return value as i64;
+}
+
 fn connection_parse_client_maxage(data: &[byte]) !u64 {
     if data.len == 0 {
         return error.ConnectionIoFailed;
@@ -1179,7 +1227,121 @@ fn connection_parse_blocking_timeout_ms(data: &[byte]) !u64 {
 fn connection_blocking_clear(tx: &ConnectionTransaction) void {
     tx.blocking_active = false;
     tx.blocking_deadline_ms = 0u64;
+    tx.replication_getack_requested = false;
+    tx.replication_getack_sent = false;
     connection_client_registry_sync(tx);
+}
+
+fn connection_replication_ack_count(target_offset: u64) i64 {
+    var count: i64 = 0;
+    var index: usize = 0;
+    while index < CONNECTION_CLIENT_REGISTRY_MAX {
+        if connection_client_registry[index].active && connection_client_registry[index].tx_addr != 0 as usize {
+            const replica: &ConnectionTransaction = @ptr_from_usize(connection_client_registry[index].tx_addr) as &ConnectionTransaction;
+            if replica != null &&
+                replica.replication_client &&
+                replica.replication_ack_offset >= 0 &&
+                (replica.replication_ack_offset as u64) >= target_offset {
+                count = count + 1;
+            }
+        }
+        index = index + 1;
+    }
+    return count;
+}
+
+fn connection_wait_options(command: &Command, replicas: &i64, timeout_ms: &i64) !void {
+    if command.argc != 3 {
+        return error.CommandWrongArity;
+    }
+    const replicas_data: &[byte] = command_arg_data(command, 1) catch {
+        return error.CommandWrongArity;
+    };
+    const timeout_data: &[byte] = command_arg_data(command, 2) catch {
+        return error.CommandWrongArity;
+    };
+    *replicas = try connection_parse_i64(replicas_data);
+    *timeout_ms = try connection_parse_i64(timeout_data);
+}
+
+fn connection_wait_current_reply(tx: &ConnectionTransaction, command: &Command) CommandReply {
+    var replicas: i64 = 0;
+    var timeout_ms: i64 = 0;
+    _ = connection_wait_options(command, &replicas, &timeout_ms) catch |err| {
+        if err == error.CommandWrongArity {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        }
+        return connection_error_reply(&"ERR value is not an integer or out of range"[0: 43]);
+    };
+    if timeout_ms < 0 {
+        return connection_error_reply(&"ERR timeout is negative"[0: 23]);
+    }
+    if replicas <= 0 {
+        return connection_make_reply(CommandReplyType.reply_integer, connection_reply_empty_slice(), 0);
+    }
+    return connection_make_reply(CommandReplyType.reply_integer, connection_reply_empty_slice(), connection_replication_ack_count(tx.replication_write_offset));
+}
+
+fn connection_execute_wait_command_at(
+    tx: &ConnectionTransaction,
+    parsed: &RespParseResult,
+    command: &Command,
+    out: &byte,
+    out_cap: usize,
+    now_ms: u64,
+) !ConnectionProcessResult {
+    const reply_off_before: bool = tx.reply_off_enabled;
+    const reply_skip_before: bool = tx.reply_skip_next;
+    var replicas: i64 = 0;
+    var timeout_ms: i64 = 0;
+    const options_result: !void = connection_wait_options(command, &replicas, &timeout_ms);
+    if options_result.error_id != 0 || timeout_ms < 0 {
+        var error_reply: CommandReply = connection_error_reply(&"ERR value is not an integer or out of range"[0: 43]);
+        if options_result.error_id == @error_id(error.CommandWrongArity) {
+            error_reply = connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        } else if options_result.error_id == 0 && timeout_ms < 0 {
+            error_reply = connection_error_reply(&"ERR timeout is negative"[0: 23]);
+        }
+        const error_len: usize = try connection_encode_reply_for_command(tx, command, &error_reply, out, out_cap, reply_off_before, reply_skip_before);
+        resp_parse_value_free(&parsed.value, parsed.elements_owned);
+        return ConnectionProcessResult{ response_len: error_len, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
+    }
+
+    const acknowledged: i64 = connection_replication_ack_count(tx.replication_write_offset);
+    const timed_out: bool = tx.blocking_deadline_ms != 0u64 && now_ms >= tx.blocking_deadline_ms;
+    if replicas <= 0 || acknowledged >= replicas || timed_out {
+        connection_blocking_clear(tx);
+        const result_count: i64 = if replicas <= 0 { 0i64 } else { acknowledged };
+        const reply: CommandReply = connection_make_reply(CommandReplyType.reply_integer, connection_reply_empty_slice(), result_count);
+        connection_monitor_broadcast(command, tx.client_fd, now_ms);
+        const response_len: usize = try connection_encode_reply_for_command(tx, command, &reply, out, out_cap, reply_off_before, reply_skip_before);
+        resp_parse_value_free(&parsed.value, parsed.elements_owned);
+        return ConnectionProcessResult{ response_len: response_len, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
+    }
+
+    tx.blocking_active = true;
+    if timeout_ms > 0 && tx.blocking_deadline_ms == 0u64 {
+        tx.blocking_deadline_ms = now_ms + (timeout_ms as u64);
+    }
+    if !tx.replication_getack_sent {
+        tx.replication_getack_requested = true;
+        tx.replication_getack_sent = true;
+    }
+    connection_client_registry_sync(tx);
+    resp_parse_value_free(&parsed.value, parsed.elements_owned);
+    return ConnectionProcessResult{
+        response_len: 0,
+        response_head_len: 0,
+        zero_copy_body: connection_reply_empty_slice(),
+        zero_copy_tail_len: 0,
+        consumed: parsed.consumed,
+        close_after: false,
+        request_replicaof: false,
+        replicaof_promote: false,
+        request_bgsave: false,
+        request_aof_rewrite: false,
+        request_shutdown: false,
+    };
 }
 
 fn connection_command_is_blocking_pop(cmd_type: CommandType) bool {
@@ -8244,6 +8406,12 @@ fn connection_reset_state(tx: &ConnectionTransaction) void {
     tx.no_touch_enabled = false;
     tx.blocking_active = false;
     tx.blocking_deadline_ms = 0u64;
+    tx.replication_client = false;
+    tx.replication_ack_offset = -1;
+    tx.replication_ack_time_ms = 0u64;
+    tx.replication_write_offset = 0u64;
+    tx.replication_getack_requested = false;
+    tx.replication_getack_sent = false;
     connection_client_registry_sync(tx);
 }
 
@@ -9737,9 +9905,13 @@ fn connection_himport_set(
     hash_owned = false;
     _ = clear_key_expire(engine, key);
     if needs_propagation {
+        const replication_offset_before: u64 = if backlog != null { backlog.master_offset } else { 0u64 };
         _ = connection_himport_propagate(runtime, aof, rewrite_buf, backlog, &restore_raw, rewrite_failed) catch {
             return connection_error_reply(&"ERR AOF append failed"[0: 21]);
         };
+        if backlog != null && backlog.master_offset > replication_offset_before {
+            tx.replication_write_offset = backlog.master_offset;
+        }
     }
     return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
 }
@@ -11851,6 +12023,10 @@ export fn connection_encode_client_unblock_timeout_reply(
         const bulk_reply: CommandReply = connection_make_reply(CommandReplyType.reply_null_bulk, connection_reply_empty_slice(), 0);
         return connection_encode_reply_with_protocol(&bulk_reply, out, out_cap, tx.protocol_version);
     }
+    if command.info.cmd_type == CommandType.command_wait {
+        const wait_reply: CommandReply = connection_wait_current_reply(tx, &command);
+        return connection_encode_reply_with_protocol(&wait_reply, out, out_cap, tx.protocol_version);
+    }
     const array_reply: CommandReply = connection_make_reply(CommandReplyType.reply_null_array, connection_reply_empty_slice(), 0);
     return connection_encode_reply_with_protocol(&array_reply, out, out_cap, tx.protocol_version);
 }
@@ -12845,6 +13021,7 @@ fn connection_execute_script_command_at(
     const reply_off_before: bool = tx.reply_off_enabled;
     const reply_skip_before: bool = tx.reply_skip_next;
     var reply: CommandReply = connection_empty_reply();
+    const replication_offset_before: u64 = if backlog != null { backlog.master_offset } else { 0u64 };
     if command.info.cmd_type == CommandType.command_script {
         reply = connection_handle_script(command);
     } else if command.info.cmd_type == CommandType.command_function {
@@ -12880,6 +13057,9 @@ fn connection_execute_script_command_at(
             command.info.cmd_type == CommandType.command_evalsha || command.info.cmd_type == CommandType.command_evalsha_ro,
             command.info.cmd_type == CommandType.command_eval_ro || command.info.cmd_type == CommandType.command_evalsha_ro,
         );
+    }
+    if backlog != null && backlog.master_offset > replication_offset_before {
+        tx.replication_write_offset = backlog.master_offset;
     }
     const response_len: usize = try connection_encode_reply_for_command(tx, command, &reply, out, out_cap, reply_off_before, reply_skip_before);
     command_reply_cleanup(&reply);
@@ -12970,11 +13150,14 @@ fn connection_transaction_execute_at(
         const transaction_username: &[byte] = connection_current_username(tx);
         const transaction_command_name: &[byte] = connection_acl_effective_command_name(&command);
         const transaction_permission: ConnectionAclPermissionResult = connection_acl_permission_result(transaction_username, transaction_command_name, &command.info, &command, 0, command.argc);
+        const command_replication_offset_before: u64 = if backlog != null { backlog.master_offset } else { 0u64 };
         var reply: CommandReply = connection_empty_reply();
         if command.info.cmd_type == CommandType.command_script {
             reply = connection_handle_script(&command);
         } else if command.info.cmd_type == CommandType.command_function {
             reply = connection_handle_function(engine, runtime, &command, now_ms);
+        } else if command.info.cmd_type == CommandType.command_wait {
+            reply = connection_wait_current_reply(tx, &command);
         } else if command.info.cmd_type == CommandType.command_fcall ||
             command.info.cmd_type == CommandType.command_fcall_ro {
             reply = connection_handle_fcall_at(
@@ -13055,6 +13238,9 @@ fn connection_transaction_execute_at(
             if backlog != null && runtime.replication_role == ReplicationRole.role_master && reply.typ != CommandReplyType.reply_error {
                 _ = replication_backlog_append_command_result_at(backlog, &command, raw_cmd, now_ms, &reply) catch {};
             }
+        }
+        if backlog != null && backlog.master_offset > command_replication_offset_before {
+            tx.replication_write_offset = backlog.master_offset;
         }
 
         if reply.request_replicaof {
@@ -13199,7 +13385,11 @@ fn connection_execute_standard_command_at(
             };
         }
         if backlog != null && runtime.replication_role == ReplicationRole.role_master {
+            const offset_before: u64 = backlog.master_offset;
             _ = replication_backlog_append_command_result_at(backlog, command, input[0: parsed.consumed], now_ms, &reply) catch {};
+            if backlog.master_offset > offset_before {
+                tx.replication_write_offset = backlog.master_offset;
+            }
         }
     }
     const request_replicaof: bool = reply.request_replicaof;
@@ -13228,11 +13418,10 @@ fn connection_execute_standard_command_at(
     const request_client_unpause: bool = reply.request_client_unpause;
     const request_maxclients_set: bool = reply.request_maxclients_set;
     const maxclients_after: i32 = reply.maxclients_after;
-    if reply.request_replconf_ack {
-        if !tx.replication_client || reply.replconf_ack_offset > tx.replication_ack_offset {
+    if reply.request_replconf_ack && tx.replication_client {
+        if reply.replconf_ack_offset > tx.replication_ack_offset {
             tx.replication_ack_offset = reply.replconf_ack_offset;
         }
-        tx.replication_client = true;
         tx.replication_ack_time_ms = now_ms;
     }
     if request_bgsave && bgsave_requested != null {
@@ -14573,6 +14762,9 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
             rewrite_failed,
             zero_copy_bulk,
         );
+    }
+    if command.info.cmd_type == CommandType.command_wait {
+        return connection_execute_wait_command_at(tx, &parsed, &command, out, out_cap, now_ms);
     }
     if command.info.cmd_type == CommandType.command_ping ||
         command.info.cmd_type == CommandType.command_get ||

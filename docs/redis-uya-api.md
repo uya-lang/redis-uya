@@ -2191,7 +2191,10 @@ WAIT numreplicas timeout
 
 说明：
 
-- 当前单机实现下尚未引入副本 ACK 收敛路径，因此在参数合法时返回 `:0`
+- 目标 offset 是当前客户端最后一次成功传播到 replication backlog 的写入 offset；当前客户端尚无传播写入时目标为 `0`
+- 只统计已完成 `PSYNC`、连接仍在线且 `REPLCONF ACK` offset 不小于目标 offset 的复制连接
+- 已满足时立即返回实际达标数量；未满足时向在线复制连接发送一次 `REPLCONF GETACK *`，阻塞到达标或 timeout 后返回实际达标数量；`timeout = 0` 表示不设超时
+- 在 `MULTI/EXEC` 内执行时不会阻塞，只返回执行时刻的实际达标数量
 - `numreplicas <= 0` 时也直接返回 `:0`
 
 ### `WAITAOF`
@@ -4356,7 +4359,7 @@ SLAVEOF NO ONE
 
 - 成功：`+OK`
 - `SLAVEOF` 当前作为 `REPLICAOF` alias 进入同一执行路径
-- 当前已完成复制角色切换、`PSYNC` 全量同步、轮询式增量同步、基础心跳和连接级 ACK/GETACK wire 语义；仍不支持 Redis 原生长连接流式增量推送、master 主动 GETACK 与 ACK 驱动等待等完整复制协议
+- 当前已完成复制角色切换、`PSYNC` 全量同步、轮询式增量同步、基础心跳、连接级 ACK/GETACK wire 语义和 `WAIT` 按需 GETACK/ACK 聚合等待；仍不支持 Redis 原生长连接流式增量推送、周期性 GETACK 与副本 AOF ACK 等完整复制协议
 
 ### `REPLCONF`
 
@@ -4376,9 +4379,9 @@ REPLCONF [option value]
 
 说明：
 
-- `ACK` 将当前连接标记为复制连接，记录单调前移的 ACK offset 和最近 ACK 时间；较旧 ACK 不回退 offset，但仍刷新 ACK 时间
+- 只有已成功执行 `PSYNC` 的连接会记录 ACK；普通客户端发送的 ACK 同样不产生普通回复，但不会被标记或计入复制连接。复制连接记录单调前移的 ACK offset 和最近 ACK 时间；较旧 ACK 不回退 offset，但仍刷新 ACK 时间
 - replica 的 GETACK 回复使用运行时当前上游 master offset，而不是本地禁用 backlog 的 offset
-- 当前仍不持久化 replica 端口/能力，不由 master 周期性下发 GETACK，也不把 ACK 状态接入 `WAIT/WAITAOF`
+- master 会在未满足的 `WAIT` 上向在线复制连接按需发送一次 GETACK，并用 ACK 状态唤醒等待；当前仍不持久化 replica 端口/能力，不周期性下发 GETACK，`WAITAOF` 也尚未聚合副本 AOF ACK
 - 不进入 AOF 或 replication backlog
 
 ### `FAILOVER`

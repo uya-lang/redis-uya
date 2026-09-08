@@ -20,6 +20,7 @@ use src.network.connection.connection_process_input_with_transaction_at;
 use src.network.connection.connection_acl_reset_for_test;
 use src.network.connection.connection_acl_denied_command_count_for_test;
 use src.network.connection.connection_client_registry_reset_for_test;
+use src.network.connection.connection_client_registry_sync;
 use src.network.connection.connection_transaction_new;
 use src.network.connection.connection_transaction_reset;
 use src.network.connection.connection_transaction_set_client_addresses;
@@ -932,7 +933,13 @@ export fn test_connection_process_ping_set_get_quit() !void {
     defer { connection_transaction_reset(&replconf_tx); }
     const replconf_ack_result: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &replconf_tx, &"*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$3\r\n128\r\n"[0: 36], &out[0], 256, 1000u64);
     try assert_eq_i32(replconf_ack_result.response_len as i32, 0);
-    try assert_eq_i32(replconf_tx.replication_client as i32, 1);
+    try assert_eq_i32(replconf_tx.replication_client as i32, 0);
+    try assert_eq_i32(replconf_tx.replication_ack_offset as i32, -1);
+    try assert_eq_i32(replconf_tx.replication_ack_time_ms as i32, 0);
+
+    replconf_tx.replication_client = true;
+    const replconf_replica_ack_result: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &replconf_tx, &"*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$3\r\n128\r\n"[0: 36], &out[0], 256, 1000u64);
+    try assert_eq_i32(replconf_replica_ack_result.response_len as i32, 0);
     try assert_eq_i32(replconf_tx.replication_ack_offset as i32, 128);
     try assert_eq_i32(replconf_tx.replication_ack_time_ms as i32, 1000);
 
@@ -959,6 +966,74 @@ export fn test_connection_process_ping_set_get_quit() !void {
     try assert_true(network_connection_slice_eq(out[0: quit.response_len], &"+OK\r\n"[0: 5]));
     try assert_eq_i32(quit.close_after as i32, 1);
 
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_connection_process_wait_ack() !void {
+    reset_memory_stats_for_test();
+    connection_client_registry_reset_for_test();
+    const router: CommandRouter = command_router_new();
+    var engine: Engine = engine_new();
+    var out: [byte: 256] = [];
+
+    var replica_tx: ConnectionTransaction = connection_transaction_new();
+    replica_tx.client_fd = 101;
+    replica_tx.replication_client = true;
+    replica_tx.replication_ack_offset = 128;
+    replica_tx.replication_ack_time_ms = 900u64;
+    connection_client_registry_sync(&replica_tx);
+
+    var replica_two_tx: ConnectionTransaction = connection_transaction_new();
+    replica_two_tx.client_fd = 103;
+    replica_two_tx.replication_client = true;
+    replica_two_tx.replication_ack_offset = 128;
+    replica_two_tx.replication_ack_time_ms = 950u64;
+    connection_client_registry_sync(&replica_two_tx);
+
+    var writer_tx: ConnectionTransaction = connection_transaction_new();
+    writer_tx.client_fd = 102;
+    writer_tx.replication_write_offset = 128u64;
+    connection_client_registry_sync(&writer_tx);
+
+    const immediate: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &writer_tx, &"*3\r\n$4\r\nWAIT\r\n$1\r\n1\r\n$3\r\n100\r\n"[0: 30], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: immediate.response_len], &":2\r\n"[0: 4]));
+    try assert_eq_i32(writer_tx.blocking_active as i32, 0);
+
+    const immediate_two: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &writer_tx, &"*3\r\n$4\r\nWAIT\r\n$1\r\n2\r\n$3\r\n100\r\n"[0: 30], &out[0], 256, 1000u64);
+    try assert_true(network_connection_slice_eq(out[0: immediate_two.response_len], &":2\r\n"[0: 4]));
+    try assert_eq_i32(writer_tx.blocking_active as i32, 0);
+
+    replica_tx.replication_ack_offset = 127;
+    replica_two_tx.replication_ack_offset = 127;
+    const blocked: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &writer_tx, &"*3\r\n$4\r\nWAIT\r\n$1\r\n1\r\n$3\r\n100\r\n"[0: 30], &out[0], 256, 1100u64);
+    try assert_eq_i32(blocked.response_len as i32, 0);
+    try assert_eq_i32(writer_tx.blocking_active as i32, 1);
+    try assert_eq_i32(writer_tx.blocking_deadline_ms as i32, 1200);
+    try assert_eq_i32(writer_tx.replication_getack_requested as i32, 1);
+
+    writer_tx.replication_getack_requested = false;
+    writer_tx.blocking_active = false;
+    replica_tx.replication_ack_offset = 128;
+    const awakened: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &writer_tx, &"*3\r\n$4\r\nWAIT\r\n$1\r\n1\r\n$3\r\n100\r\n"[0: 30], &out[0], 256, 1150u64);
+    try assert_true(network_connection_slice_eq(out[0: awakened.response_len], &":1\r\n"[0: 4]));
+    try assert_eq_i32(writer_tx.blocking_active as i32, 0);
+    try assert_eq_i32(writer_tx.blocking_deadline_ms as i32, 0);
+
+    replica_tx.replication_ack_offset = 127;
+    const timeout_start: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &writer_tx, &"*3\r\n$4\r\nWAIT\r\n$1\r\n1\r\n$2\r\n50\r\n"[0: 29], &out[0], 256, 1200u64);
+    try assert_eq_i32(timeout_start.response_len as i32, 0);
+    writer_tx.replication_getack_requested = false;
+    writer_tx.blocking_active = false;
+    const timed_out: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &writer_tx, &"*3\r\n$4\r\nWAIT\r\n$1\r\n1\r\n$2\r\n50\r\n"[0: 29], &out[0], 256, 1250u64);
+    try assert_true(network_connection_slice_eq(out[0: timed_out.response_len], &":0\r\n"[0: 4]));
+    try assert_eq_i32(writer_tx.blocking_active as i32, 0);
+    try assert_eq_i32(writer_tx.blocking_deadline_ms as i32, 0);
+
+    connection_client_registry_reset_for_test();
+    connection_transaction_reset(&writer_tx);
+    connection_transaction_reset(&replica_two_tx);
+    connection_transaction_reset(&replica_tx);
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);
 }

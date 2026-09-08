@@ -177,6 +177,7 @@ use tests.unit.command_executor_test.test_command_error_paths;
 use tests.unit.network_connection_test.test_connection_encode_resp_replies;
 use tests.unit.network_connection_test.test_connection_ping_parse_uses_borrowed_storage;
 use tests.unit.network_connection_test.test_connection_process_ping_set_get_quit;
+use tests.unit.network_connection_test.test_connection_process_wait_ack;
 use tests.unit.network_connection_test.test_connection_process_slowlog;
 use tests.unit.network_connection_test.test_connection_process_latency;
 use tests.unit.network_connection_test.test_connection_process_monitor;
@@ -950,6 +951,10 @@ export fn main() i32 {
     const before_conn_process: i32 = failed;
     _ = test_connection_process_ping_set_get_quit() catch { printf("[FAIL] network_connection/process\n" as *byte); failed = failed + 1; };
     if failed == before_conn_process { printf("[PASS] network_connection/process\n" as *byte); }
+
+    const before_conn_wait_ack: i32 = failed;
+    _ = test_connection_process_wait_ack() catch { printf("[FAIL] network_connection/wait_ack\n" as *byte); failed = failed + 1; };
+    if failed == before_conn_wait_ack { printf("[PASS] network_connection/wait_ack\n" as *byte); }
 
     const before_conn_slowlog: i32 = failed;
     _ = test_connection_process_slowlog() catch { printf("[FAIL] network_connection/slowlog\n" as *byte); failed = failed + 1; };

@@ -68,7 +68,7 @@
 - 服务运行循环：单线程 epoll 多连接、100ms cron 主动过期采样循环、空闲连接不阻塞其他客户端
 - RDB 当前类型闭环：项目内 RDB 子集已覆盖 String/Hash/List/Set/ZSet + 绝对过期时间 save/load、`SAVE`
 - `BGSAVE`：真实 `fork/waitpid` 子进程落盘，支持去掉 AOF 后仅靠 RDB 恢复
-- AOF 最小闭环：写命令追加、启动回放、截断损坏安全失败、SET/DEL 重启恢复 smoke
+- AOF 最小闭环：写命令追加、启动回放、截断损坏安全失败、SET/DEL 重启恢复 smoke；writer 记录单调的 appended/flushed/synced offset，并提供显式 `fsync` 原语，为 `WAITAOF` 的本地持久化确认提供真实状态
 - 启动恢复顺序：先加载最小 RDB，再回放 AOF
 - AOF TTL 语义：`EXPIRE`、`EXPIREAT`、`PEXPIRE`、`SETEX`、`PSETEX` 追加时会规范化为绝对 `PEXPIREAT`；`GETEX` 在带 TTL/PERSIST 选项时只落对应状态变更，回放保持绝对过期时间
 - `BGREWRITEAOF`：真实子进程后台 rewrite + 父进程增量缓冲合并，可把当前内存态规范化重写为可回放 AOF

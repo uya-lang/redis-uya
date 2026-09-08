@@ -225,11 +225,11 @@ server open
 
 ## 8. AOF 语义
 
-- 写命令追加 RESP2 原始请求；不超过 64KiB 的追加批次统一进入 AOF 写缓冲，由缓冲容量、100ms server cron、连接关闭或显式 flush 落盘，超过 64KiB 的聚合批次先 flush 既有缓冲再直接写
+- 写命令追加 RESP2 原始请求；不超过 64KiB 的追加批次统一进入 AOF 写缓冲，由缓冲容量、100ms server cron、连接关闭或显式 flush 写入内核，超过 64KiB 的聚合批次先 flush 既有缓冲再直接写。`AofWriter` 分别维护 appended/flushed/synced 逻辑 offset：普通 flush 只推进 flushed，显式 `aof_sync` 会先 flush、调用 `fsync(2)`，成功后才推进 synced；BGREWRITEAOF 切换新文件时保留逻辑 appended/flushed offset 并把 synced 重置为 `0`
 - `EXPIRE`、`EXPIREAT`、`PEXPIRE`、`SETEX`、`PSETEX` 会在 AOF 里规范化为绝对时间 `PEXPIREAT`
 - `GETEX` 在带 TTL / `PERSIST` 选项时只把状态变更写入 AOF；相对 TTL 选项同样折算成绝对 `PEXPIREAT`
 - `HGETEX` 在带 TTL / `PERSIST` 选项时只写入 field TTL 状态变更；`HSETEX` 只在条件成功时写入；hash field 相对 TTL 会折算成绝对 `HPEXPIREAT` / `PXAT`，复制 backlog 复用同一编码
-- `WAITAOF` 当前只读取本地兼容状态并返回确认数组，不触发 AOF flush/fsync，也不追加到 AOF 或 replication backlog
+- `WAITAOF` 当前仍只读取本地兼容状态并返回确认数组，尚未调用已经具备的显式 AOF sync 原语，也不追加到 AOF 或 replication backlog
 - 回放按流式解析逐条执行
 - `BGREWRITEAOF` 使用子进程写出规范化 AOF 快照，父进程继续追加旧 AOF 并记录 rewrite 增量缓冲，子进程结束后合并并原子替换
 - 截断、非法协议、非法命令、执行错误都会安全失败

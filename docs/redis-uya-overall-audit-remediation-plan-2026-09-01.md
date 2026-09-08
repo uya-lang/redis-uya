@@ -353,7 +353,7 @@ P0 表示会阻止进入封版候选或可能造成数据错误、安全问题�
 | F-PERSIST-02 | P0 | RDB 二进制兼容深化 | 明确支持版本、编码、checksum、未知 opcode 和拒绝边界 |
 | F-PERSIST-03 | P0 | AOF rewrite 并发压测 | rewrite 期间持续写入、增量合并、失败回退和重启一致 |
 | F-PERSIST-04 | P0 | 磁盘故障矩阵 | ENOSPC、部分写、rename/fsync 失败、权限失败均不静默成功 |
-| F-PERSIST-05 | P1 | 明确 AOF fsync 策略 | no/always/everysec 当前支持边界和性能/持久性取舍可配置、可测试 |
+| F-PERSIST-05 | P1 | 明确 AOF fsync 策略（2026-09-08 已完成 offset/sync 原语 partial） | writer 已区分 appended/flushed/synced 并提供真实 `fsync(2)`；后续补 no/always/everysec 配置、调度、故障与性能取舍测试 |
 | F-PERSIST-06 | P1 | BACKUP partial 收口 | 快照与增量一致、manifest 验证、清理和从备份恢复可自动测试 |
 
 ### 12.6 ACL、认证与安全

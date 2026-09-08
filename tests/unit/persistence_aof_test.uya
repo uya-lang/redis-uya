@@ -10,6 +10,7 @@ use src.persistence.aof.aof_open_truncate;
 use src.persistence.aof.aof_close;
 use src.persistence.aof.aof_append_raw;
 use src.persistence.aof.aof_flush;
+use src.persistence.aof.aof_sync;
 use src.persistence.aof.aof_replay_file_at;
 use src.persistence.rdb.rdb_dump_object_at;
 use src.storage.engine.Engine;
@@ -831,8 +832,27 @@ export fn test_aof_flush_persists_buffer_without_close() !void {
     _ = unlink(path);
 
     var writer: AofWriter = try aof_open_truncate(path);
+    try assert_eq_i32(writer.appended_offset as i32, 0);
+    try assert_eq_i32(writer.flushed_offset as i32, 0);
+    try assert_eq_i32(writer.synced_offset as i32, 0);
     try aof_append_raw(&writer, &"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 33]);
+    try assert_eq_i32(writer.appended_offset as i32, 33);
+    try assert_eq_i32(writer.flushed_offset as i32, 0);
+    try assert_eq_i32(writer.synced_offset as i32, 0);
     try aof_flush(&writer);
+    try assert_eq_i32(writer.appended_offset as i32, 33);
+    try assert_eq_i32(writer.flushed_offset as i32, 33);
+    try assert_eq_i32(writer.synced_offset as i32, 0);
+    try aof_sync(&writer);
+    try assert_eq_i32(writer.synced_offset as i32, 33);
+
+    try aof_append_raw(&writer, &"*1\r\n$4\r\nPING\r\n"[0: 14]);
+    try assert_eq_i32(writer.appended_offset as i32, 47);
+    try assert_eq_i32(writer.flushed_offset as i32, 33);
+    try assert_eq_i32(writer.synced_offset as i32, 33);
+    try aof_sync(&writer);
+    try assert_eq_i32(writer.flushed_offset as i32, 47);
+    try assert_eq_i32(writer.synced_offset as i32, 47);
 
     const router: CommandRouter = command_router_new();
     var engine: Engine = engine_new();
@@ -858,6 +878,9 @@ export fn test_aof_large_append_uses_buffer() !void {
 
     var writer: AofWriter = try aof_open_truncate(path);
     try aof_append_raw(&writer, raw[0: raw_len]);
+    try assert_eq_i32(writer.appended_offset as i32, raw_len as i32);
+    try assert_eq_i32(writer.flushed_offset as i32, 0);
+    try assert_eq_i32(writer.synced_offset as i32, 0);
 
     const router: CommandRouter = command_router_new();
     var before_flush_engine: Engine = engine_new();
@@ -892,6 +915,9 @@ export fn test_aof_oversized_append_bypasses_buffer() !void {
 
     var writer: AofWriter = try aof_open_truncate(path);
     try aof_append_raw(&writer, raw[0: raw_len]);
+    try assert_eq_i32(writer.appended_offset as i32, raw_len as i32);
+    try assert_eq_i32(writer.flushed_offset as i32, raw_len as i32);
+    try assert_eq_i32(writer.synced_offset as i32, 0);
 
     const router: CommandRouter = command_router_new();
     var engine: Engine = engine_new();

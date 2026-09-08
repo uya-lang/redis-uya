@@ -30,9 +30,12 @@ use src.storage.sds.sds_new;
 use src.storage.sds.sds_free;
 use src.storage.sds.sds_cat;
 
+extern "libc" fn fsync(fd: i32) i32;
+
 export error AofOpenFailed;
 export error AofReadFailed;
 export error AofWriteFailed;
+export error AofSyncFailed;
 export error AofFileTooLarge;
 export error AofInvalidFormat;
 export error AofTruncated;
@@ -48,6 +51,9 @@ export struct AofWriter {
     enabled: bool,
     buffer: [byte: AOF_WRITE_BUFFER_BYTES],
     buffer_len: usize,
+    appended_offset: u64,
+    flushed_offset: u64,
+    synced_offset: u64,
 }
 
 export fn aof_disabled() AofWriter {
@@ -56,6 +62,9 @@ export fn aof_disabled() AofWriter {
         enabled: false,
         buffer: [],
         buffer_len: 0,
+        appended_offset: 0u64,
+        flushed_offset: 0u64,
+        synced_offset: 0u64,
     };
 }
 
@@ -64,7 +73,15 @@ fn aof_open_with_flags(path: &const byte, flags: i32) !AofWriter {
     const file: File = file_open(path, flags, mode) catch {
         return error.AofOpenFailed;
     };
-    return AofWriter{ file: file, enabled: true, buffer: [], buffer_len: 0 };
+    return AofWriter{
+        file: file,
+        enabled: true,
+        buffer: [],
+        buffer_len: 0,
+        appended_offset: 0u64,
+        flushed_offset: 0u64,
+        synced_offset: 0u64,
+    };
 }
 
 export fn aof_open_append(path: &const byte) !AofWriter {
@@ -106,8 +123,21 @@ export fn aof_flush(aof: &AofWriter) !void {
     if aof == null || !aof.enabled || aof.buffer_len == 0 {
         return;
     }
-    try aof_write_direct(aof, aof.buffer[0: aof.buffer_len]);
+    const flush_len: usize = aof.buffer_len;
+    try aof_write_direct(aof, aof.buffer[0: flush_len]);
     aof.buffer_len = 0;
+    aof.flushed_offset = aof.flushed_offset + (flush_len as u64);
+}
+
+export fn aof_sync(aof: &AofWriter) !void {
+    if aof == null || !aof.enabled {
+        return;
+    }
+    try aof_flush(aof);
+    if fsync(aof.file.fd) != 0 {
+        return error.AofSyncFailed;
+    }
+    aof.synced_offset = aof.flushed_offset;
 }
 
 fn aof_buffer_copy(aof: &AofWriter, data: &[byte]) void {
@@ -126,12 +156,15 @@ export fn aof_append_raw(aof: &AofWriter, data: &[byte]) !void {
     if data.len > AOF_WRITE_BUFFER_BYTES {
         try aof_flush(aof);
         try aof_write_direct(aof, data);
+        aof.appended_offset = aof.appended_offset + (data.len as u64);
+        aof.flushed_offset = aof.flushed_offset + (data.len as u64);
         return;
     }
     if aof.buffer_len + data.len > AOF_WRITE_BUFFER_BYTES {
         try aof_flush(aof);
     }
     aof_buffer_copy(aof, data);
+    aof.appended_offset = aof.appended_offset + (data.len as u64);
 }
 
 fn aof_sds_append(s: &Sds, data: &[byte]) !void {

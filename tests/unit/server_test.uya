@@ -363,6 +363,9 @@ export fn test_server_runs_pending_aof_rewrite() !void {
         aof_rewrite_in_progress: false,
         aof_rewrite_count: 0u64,
     };
+    server.aof.appended_offset = 77u64;
+    server.aof.flushed_offset = 77u64;
+    server.aof.synced_offset = 77u64;
     server.config.appendfilename[0] = 98 as byte;   // b
     server.config.appendfilename[1] = 117 as byte;  // u
     server.config.appendfilename[2] = 105 as byte;  // i
@@ -413,6 +416,9 @@ export fn test_server_runs_pending_aof_rewrite() !void {
     try assert_eq_i32(server.aof_rewrite_requested as i32, 0);
     try assert_eq_i32(server.aof_rewrite_in_progress as i32, 0);
     try assert_eq_i32(server.aof_rewrite_count as i32, 1);
+    try assert_eq_i32(server.aof.appended_offset as i32, 77);
+    try assert_eq_i32(server.aof.flushed_offset as i32, 77);
+    try assert_eq_i32(server.aof.synced_offset as i32, 0);
 
     aof_close(&server.aof);
     engine_free(&server.engine);

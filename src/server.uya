@@ -2208,7 +2208,11 @@ export fn server_run_pending_aof_rewrite_at(server: &RedisServer, now_ms: u64) !
             server_reset_rewrite_state(server);
             return error.ServerAofRewriteFailed;
         };
+        const logical_aof_offset: u64 = server.aof.appended_offset;
         aof_close(&server.aof);
+        new_aof.appended_offset = logical_aof_offset;
+        new_aof.flushed_offset = logical_aof_offset;
+        new_aof.synced_offset = 0u64;
         server.aof = new_aof;
         server.aof_rewrite_count = server.aof_rewrite_count + 1u64;
         server_reset_rewrite_state(server);

@@ -41,6 +41,8 @@ use src.network.protocol.resp_parse_value_free;
 use src.persistence.aof.AofWriter;
 use src.persistence.aof.aof_append_command_result_at;
 use src.persistence.aof.aof_append_command_result_to_sds_at;
+use src.persistence.aof.aof_mark_replication_offset;
+use src.persistence.aof.aof_sync;
 use src.persistence.backup.backup_is_incrementing;
 use src.persistence.backup.backup_capture_failed_at;
 use src.persistence.aof.aof_append_raw;
@@ -229,6 +231,7 @@ export struct ConnectionTransaction {
     monitoring: bool,
     replication_client: bool,
     replication_ack_offset: i64,
+    replication_aof_ack_offset: i64,
     replication_ack_time_ms: u64,
     replication_write_offset: u64,
     replication_getack_requested: bool,
@@ -610,6 +613,7 @@ fn connection_transaction_empty() ConnectionTransaction {
         monitoring: false,
         replication_client: false,
         replication_ack_offset: -1,
+        replication_aof_ack_offset: -1,
         replication_ack_time_ms: 0u64,
         replication_write_offset: 0u64,
         replication_getack_requested: false,
@@ -652,6 +656,7 @@ export fn connection_transaction_reset(tx: &ConnectionTransaction) void {
     tx.monitoring = false;
     tx.replication_client = false;
     tx.replication_ack_offset = -1;
+    tx.replication_aof_ack_offset = -1;
     tx.replication_ack_time_ms = 0u64;
     tx.replication_write_offset = 0u64;
     tx.replication_getack_requested = false;
@@ -1250,6 +1255,24 @@ fn connection_replication_ack_count(target_offset: u64) i64 {
     return count;
 }
 
+fn connection_replication_aof_ack_count(target_offset: u64) i64 {
+    var count: i64 = 0;
+    var index: usize = 0;
+    while index < CONNECTION_CLIENT_REGISTRY_MAX {
+        if connection_client_registry[index].active && connection_client_registry[index].tx_addr != 0 as usize {
+            const replica: &ConnectionTransaction = @ptr_from_usize(connection_client_registry[index].tx_addr) as &ConnectionTransaction;
+            if replica != null &&
+                replica.replication_client &&
+                replica.replication_aof_ack_offset >= 0 &&
+                (replica.replication_aof_ack_offset as u64) >= target_offset {
+                count = count + 1;
+            }
+        }
+        index = index + 1;
+    }
+    return count;
+}
+
 fn connection_wait_options(command: &Command, replicas: &i64, timeout_ms: &i64) !void {
     if command.argc != 3 {
         return error.CommandWrongArity;
@@ -1262,6 +1285,157 @@ fn connection_wait_options(command: &Command, replicas: &i64, timeout_ms: &i64) 
     };
     *replicas = try connection_parse_i64(replicas_data);
     *timeout_ms = try connection_parse_i64(timeout_data);
+}
+
+fn connection_waitaof_options(command: &Command, local: &i64, replicas: &i64, timeout_ms: &i64) !void {
+    if command.argc != 4 {
+        return error.CommandWrongArity;
+    }
+    const local_data: &[byte] = command_arg_data(command, 1) catch {
+        return error.CommandWrongArity;
+    };
+    const replicas_data: &[byte] = command_arg_data(command, 2) catch {
+        return error.CommandWrongArity;
+    };
+    const timeout_data: &[byte] = command_arg_data(command, 3) catch {
+        return error.CommandWrongArity;
+    };
+    *local = try connection_parse_i64(local_data);
+    *replicas = try connection_parse_i64(replicas_data);
+    *timeout_ms = try connection_parse_i64(timeout_data);
+    if *local < 0 || *local > 1 || *replicas < 0 {
+        return error.ConnectionIoFailed;
+    }
+}
+
+fn connection_waitaof_reply(local: i64, replicas: i64) CommandReply {
+    var raw: Sds = sds_empty() catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    defer {
+        sds_free(&raw);
+    }
+    _ = connection_sds_append_resp_array_header(&raw, 2) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = connection_sds_append_resp_integer(&raw, local) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    _ = connection_sds_append_resp_integer(&raw, replicas) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
+    return connection_raw_reply_owned(raw.buf[0: raw.len]);
+}
+
+fn connection_waitaof_current_reply(
+    tx: &ConnectionTransaction,
+    runtime: &CommandRuntimeInfo,
+    aof: &AofWriter,
+    command: &Command,
+) CommandReply {
+    var local: i64 = 0;
+    var replicas: i64 = 0;
+    var timeout_ms: i64 = 0;
+    _ = connection_waitaof_options(command, &local, &replicas, &timeout_ms) catch |err| {
+        if err == error.CommandWrongArity {
+            return connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        }
+        return connection_error_reply(&"ERR value is not an integer or out of range"[0: 43]);
+    };
+    if timeout_ms < 0 {
+        return connection_error_reply(&"ERR timeout is negative"[0: 23]);
+    }
+    if runtime.replication_role == ReplicationRole.role_replica {
+        return connection_error_reply(&"ERR WAITAOF cannot be used with replica instances"[0: 49]);
+    }
+    if local > 0 && (aof == null || !aof.enabled) {
+        return connection_error_reply(&"ERR WAITAOF requires appendonly for numlocal"[0: 44]);
+    }
+    const local_ack: i64 = if aof != null && aof.enabled && aof.synced_replication_offset >= tx.replication_write_offset { 1i64 } else { 0i64 };
+    return connection_waitaof_reply(local_ack, connection_replication_aof_ack_count(tx.replication_write_offset));
+}
+
+fn connection_execute_waitaof_command_at(
+    tx: &ConnectionTransaction,
+    runtime: &CommandRuntimeInfo,
+    aof: &AofWriter,
+    parsed: &RespParseResult,
+    command: &Command,
+    out: &byte,
+    out_cap: usize,
+    now_ms: u64,
+) !ConnectionProcessResult {
+    const reply_off_before: bool = tx.reply_off_enabled;
+    const reply_skip_before: bool = tx.reply_skip_next;
+    var local: i64 = 0;
+    var replicas: i64 = 0;
+    var timeout_ms: i64 = 0;
+    const options_result: !void = connection_waitaof_options(command, &local, &replicas, &timeout_ms);
+    var validation_reply: CommandReply = connection_empty_reply();
+    if options_result.error_id != 0 {
+        if options_result.error_id == @error_id(error.CommandWrongArity) {
+            validation_reply = connection_error_reply(&"ERR wrong number of arguments"[0: 29]);
+        } else {
+            validation_reply = connection_error_reply(&"ERR value is not an integer or out of range"[0: 43]);
+        }
+    } else if timeout_ms < 0 {
+        validation_reply = connection_error_reply(&"ERR timeout is negative"[0: 23]);
+    } else if runtime.replication_role == ReplicationRole.role_replica {
+        validation_reply = connection_error_reply(&"ERR WAITAOF cannot be used with replica instances"[0: 49]);
+    } else if local > 0 && (aof == null || !aof.enabled) {
+        validation_reply = connection_error_reply(&"ERR WAITAOF requires appendonly for numlocal"[0: 44]);
+    }
+    if validation_reply.typ == CommandReplyType.reply_error {
+        const error_len: usize = try connection_encode_reply_for_command(tx, command, &validation_reply, out, out_cap, reply_off_before, reply_skip_before);
+        resp_parse_value_free(&parsed.value, parsed.elements_owned);
+        return ConnectionProcessResult{ response_len: error_len, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
+    }
+
+    if local > 0 && aof.synced_replication_offset < tx.replication_write_offset {
+        _ = aof_sync(aof) catch {
+            const sync_reply: CommandReply = connection_error_reply(&"ERR AOF sync failed"[0: 19]);
+            const sync_error_len: usize = try connection_encode_reply_for_command(tx, command, &sync_reply, out, out_cap, reply_off_before, reply_skip_before);
+            resp_parse_value_free(&parsed.value, parsed.elements_owned);
+            return ConnectionProcessResult{ response_len: sync_error_len, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
+        };
+    }
+
+    const local_ack: i64 = if aof != null && aof.enabled && aof.synced_replication_offset >= tx.replication_write_offset { 1i64 } else { 0i64 };
+    const replica_acks: i64 = connection_replication_aof_ack_count(tx.replication_write_offset);
+    const timed_out: bool = tx.blocking_deadline_ms != 0u64 && now_ms >= tx.blocking_deadline_ms;
+    if (local_ack >= local && replica_acks >= replicas) || timed_out {
+        connection_blocking_clear(tx);
+        var reply: CommandReply = connection_waitaof_reply(local_ack, replica_acks);
+        connection_monitor_broadcast(command, tx.client_fd, now_ms);
+        const response_len: usize = try connection_encode_reply_for_command(tx, command, &reply, out, out_cap, reply_off_before, reply_skip_before);
+        command_reply_cleanup(&reply);
+        resp_parse_value_free(&parsed.value, parsed.elements_owned);
+        return ConnectionProcessResult{ response_len: response_len, consumed: parsed.consumed, close_after: false, request_replicaof: false, replicaof_promote: false, request_bgsave: false, request_aof_rewrite: false, request_shutdown: false };
+    }
+
+    tx.blocking_active = true;
+    if timeout_ms > 0 && tx.blocking_deadline_ms == 0u64 {
+        tx.blocking_deadline_ms = now_ms + (timeout_ms as u64);
+    }
+    if replicas > replica_acks && !tx.replication_getack_sent {
+        tx.replication_getack_requested = true;
+        tx.replication_getack_sent = true;
+    }
+    connection_client_registry_sync(tx);
+    resp_parse_value_free(&parsed.value, parsed.elements_owned);
+    return ConnectionProcessResult{
+        response_len: 0,
+        response_head_len: 0,
+        zero_copy_body: connection_reply_empty_slice(),
+        zero_copy_tail_len: 0,
+        consumed: parsed.consumed,
+        close_after: false,
+        request_replicaof: false,
+        replicaof_promote: false,
+        request_bgsave: false,
+        request_aof_rewrite: false,
+        request_shutdown: false,
+    };
 }
 
 fn connection_wait_current_reply(tx: &ConnectionTransaction, command: &Command) CommandReply {
@@ -8408,6 +8582,7 @@ fn connection_reset_state(tx: &ConnectionTransaction) void {
     tx.blocking_deadline_ms = 0u64;
     tx.replication_client = false;
     tx.replication_ack_offset = -1;
+    tx.replication_aof_ack_offset = -1;
     tx.replication_ack_time_ms = 0u64;
     tx.replication_write_offset = 0u64;
     tx.replication_getack_requested = false;
@@ -9911,6 +10086,7 @@ fn connection_himport_set(
         };
         if backlog != null && backlog.master_offset > replication_offset_before {
             tx.replication_write_offset = backlog.master_offset;
+            aof_mark_replication_offset(aof, backlog.master_offset);
         }
     }
     return connection_make_reply(CommandReplyType.reply_simple_string, &"OK"[0: 2], 0);
@@ -12000,6 +12176,8 @@ export fn connection_encode_reply(reply: &CommandReply, out: &byte, out_cap: usi
 export fn connection_encode_client_unblock_timeout_reply(
     router: &CommandRouter,
     tx: &ConnectionTransaction,
+    runtime: &CommandRuntimeInfo,
+    aof: &AofWriter,
     input: &[byte],
     out: &byte,
     out_cap: usize,
@@ -12026,6 +12204,12 @@ export fn connection_encode_client_unblock_timeout_reply(
     if command.info.cmd_type == CommandType.command_wait {
         const wait_reply: CommandReply = connection_wait_current_reply(tx, &command);
         return connection_encode_reply_with_protocol(&wait_reply, out, out_cap, tx.protocol_version);
+    }
+    if command.info.cmd_type == CommandType.command_waitaof {
+        var waitaof_reply: CommandReply = connection_waitaof_current_reply(tx, runtime, aof, &command);
+        const waitaof_len: usize = try connection_encode_reply_with_protocol(&waitaof_reply, out, out_cap, tx.protocol_version);
+        command_reply_cleanup(&waitaof_reply);
+        return waitaof_len;
     }
     const array_reply: CommandReply = connection_make_reply(CommandReplyType.reply_null_array, connection_reply_empty_slice(), 0);
     return connection_encode_reply_with_protocol(&array_reply, out, out_cap, tx.protocol_version);
@@ -13060,6 +13244,7 @@ fn connection_execute_script_command_at(
     }
     if backlog != null && backlog.master_offset > replication_offset_before {
         tx.replication_write_offset = backlog.master_offset;
+        aof_mark_replication_offset(aof, backlog.master_offset);
     }
     const response_len: usize = try connection_encode_reply_for_command(tx, command, &reply, out, out_cap, reply_off_before, reply_skip_before);
     command_reply_cleanup(&reply);
@@ -13158,6 +13343,8 @@ fn connection_transaction_execute_at(
             reply = connection_handle_function(engine, runtime, &command, now_ms);
         } else if command.info.cmd_type == CommandType.command_wait {
             reply = connection_wait_current_reply(tx, &command);
+        } else if command.info.cmd_type == CommandType.command_waitaof {
+            reply = connection_waitaof_current_reply(tx, runtime, aof, &command);
         } else if command.info.cmd_type == CommandType.command_fcall ||
             command.info.cmd_type == CommandType.command_fcall_ro {
             reply = connection_handle_fcall_at(
@@ -13241,6 +13428,7 @@ fn connection_transaction_execute_at(
         }
         if backlog != null && backlog.master_offset > command_replication_offset_before {
             tx.replication_write_offset = backlog.master_offset;
+            aof_mark_replication_offset(aof, backlog.master_offset);
         }
 
         if reply.request_replicaof {
@@ -13389,6 +13577,7 @@ fn connection_execute_standard_command_at(
             _ = replication_backlog_append_command_result_at(backlog, command, input[0: parsed.consumed], now_ms, &reply) catch {};
             if backlog.master_offset > offset_before {
                 tx.replication_write_offset = backlog.master_offset;
+                aof_mark_replication_offset(aof, backlog.master_offset);
             }
         }
     }
@@ -13421,6 +13610,9 @@ fn connection_execute_standard_command_at(
     if reply.request_replconf_ack && tx.replication_client {
         if reply.replconf_ack_offset > tx.replication_ack_offset {
             tx.replication_ack_offset = reply.replconf_ack_offset;
+        }
+        if reply.request_replconf_fack && reply.replconf_fack_offset > tx.replication_aof_ack_offset {
+            tx.replication_aof_ack_offset = reply.replconf_fack_offset;
         }
         tx.replication_ack_time_ms = now_ms;
     }
@@ -14765,6 +14957,9 @@ fn connection_process_input_with_runtime_with_aof_and_rewrite_and_transaction_si
     }
     if command.info.cmd_type == CommandType.command_wait {
         return connection_execute_wait_command_at(tx, &parsed, &command, out, out_cap, now_ms);
+    }
+    if command.info.cmd_type == CommandType.command_waitaof {
+        return connection_execute_waitaof_command_at(tx, runtime, aof, &parsed, &command, out, out_cap, now_ms);
     }
     if command.info.cmd_type == CommandType.command_ping ||
         command.info.cmd_type == CommandType.command_get ||

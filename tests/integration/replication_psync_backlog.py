@@ -238,6 +238,21 @@ def run_smoke() -> None:
                 if recv_line(writer) != b":1":
                     raise AssertionError("expected WAIT to wake with one acknowledged replica")
 
+                send_raw_request(writer, b"WAITAOF", b"1", b"1", b"2000")
+                waitaof_getack = recv_exact(sock, len(encode_request(b"REPLCONF", b"GETACK", b"*")))
+                if waitaof_getack != encode_request(b"REPLCONF", b"GETACK", b"*"):
+                    raise AssertionError(f"expected WAITAOF GETACK request, got {waitaof_getack!r}")
+                send_raw_request(
+                    sock,
+                    b"REPLCONF",
+                    b"ACK",
+                    str(wait_target_offset).encode(),
+                    b"FACK",
+                    str(wait_target_offset).encode(),
+                )
+                if recv_exact(writer, len(b"*2\r\n:1\r\n:1\r\n")) != b"*2\r\n:1\r\n:1\r\n":
+                    raise AssertionError("expected WAITAOF to report local and replica fsync acknowledgements")
+
                 timeout_set = encode_request(b"SET", b"wait-key", b"newer")
                 if send_command(writer, b"SET", b"wait-key", b"newer") != b"+OK\r\n":
                     raise AssertionError("expected WAIT timeout setup SET to succeed")

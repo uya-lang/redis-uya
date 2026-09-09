@@ -2523,8 +2523,8 @@ def run_smoke() -> None:
                     raise AssertionError(f"unexpected WAIT timeout error: {exc}") from exc
             if client.waitaof(1, 0, 0) != [1, 0]:
                 raise AssertionError("expected WAITAOF 1 0 0 to return [1, 0]")
-            if client.waitaof(0, 0, 0) != [0, 0]:
-                raise AssertionError("expected WAITAOF 0 0 0 to return [0, 0]")
+            if client.waitaof(0, 0, 0) != [1, 0]:
+                raise AssertionError("expected WAITAOF 0 0 0 to report the already-synced local AOF")
             if client.waitaof(1, 1, 10) != [1, 0]:
                 raise AssertionError("expected WAITAOF 1 1 10 to return [1, 0] without replicas")
             try:

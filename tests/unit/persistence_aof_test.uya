@@ -11,6 +11,7 @@ use src.persistence.aof.aof_close;
 use src.persistence.aof.aof_append_raw;
 use src.persistence.aof.aof_flush;
 use src.persistence.aof.aof_sync;
+use src.persistence.aof.aof_mark_replication_offset;
 use src.persistence.aof.aof_replay_file_at;
 use src.persistence.rdb.rdb_dump_object_at;
 use src.storage.engine.Engine;
@@ -835,7 +836,10 @@ export fn test_aof_flush_persists_buffer_without_close() !void {
     try assert_eq_i32(writer.appended_offset as i32, 0);
     try assert_eq_i32(writer.flushed_offset as i32, 0);
     try assert_eq_i32(writer.synced_offset as i32, 0);
+    try assert_eq_i32(writer.appended_replication_offset as i32, 0);
+    try assert_eq_i32(writer.synced_replication_offset as i32, 0);
     try aof_append_raw(&writer, &"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 33]);
+    aof_mark_replication_offset(&writer, 128u64);
     try assert_eq_i32(writer.appended_offset as i32, 33);
     try assert_eq_i32(writer.flushed_offset as i32, 0);
     try assert_eq_i32(writer.synced_offset as i32, 0);
@@ -843,16 +847,21 @@ export fn test_aof_flush_persists_buffer_without_close() !void {
     try assert_eq_i32(writer.appended_offset as i32, 33);
     try assert_eq_i32(writer.flushed_offset as i32, 33);
     try assert_eq_i32(writer.synced_offset as i32, 0);
+    try assert_eq_i32(writer.appended_replication_offset as i32, 128);
+    try assert_eq_i32(writer.synced_replication_offset as i32, 0);
     try aof_sync(&writer);
     try assert_eq_i32(writer.synced_offset as i32, 33);
+    try assert_eq_i32(writer.synced_replication_offset as i32, 128);
 
     try aof_append_raw(&writer, &"*1\r\n$4\r\nPING\r\n"[0: 14]);
+    aof_mark_replication_offset(&writer, 256u64);
     try assert_eq_i32(writer.appended_offset as i32, 47);
     try assert_eq_i32(writer.flushed_offset as i32, 33);
     try assert_eq_i32(writer.synced_offset as i32, 33);
     try aof_sync(&writer);
     try assert_eq_i32(writer.flushed_offset as i32, 47);
     try assert_eq_i32(writer.synced_offset as i32, 47);
+    try assert_eq_i32(writer.synced_replication_offset as i32, 256);
 
     const router: CommandRouter = command_router_new();
     var engine: Engine = engine_new();

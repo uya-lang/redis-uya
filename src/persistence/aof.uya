@@ -29,8 +29,7 @@ use src.storage.sds.Sds;
 use src.storage.sds.sds_new;
 use src.storage.sds.sds_free;
 use src.storage.sds.sds_cat;
-
-extern "libc" fn fsync(fd: i32) i32;
+use libc.fsync;
 
 export error AofOpenFailed;
 export error AofReadFailed;
@@ -54,6 +53,8 @@ export struct AofWriter {
     appended_offset: u64,
     flushed_offset: u64,
     synced_offset: u64,
+    appended_replication_offset: u64,
+    synced_replication_offset: u64,
 }
 
 export fn aof_disabled() AofWriter {
@@ -65,6 +66,8 @@ export fn aof_disabled() AofWriter {
         appended_offset: 0u64,
         flushed_offset: 0u64,
         synced_offset: 0u64,
+        appended_replication_offset: 0u64,
+        synced_replication_offset: 0u64,
     };
 }
 
@@ -81,6 +84,8 @@ fn aof_open_with_flags(path: &const byte, flags: i32) !AofWriter {
         appended_offset: 0u64,
         flushed_offset: 0u64,
         synced_offset: 0u64,
+        appended_replication_offset: 0u64,
+        synced_replication_offset: 0u64,
     };
 }
 
@@ -138,6 +143,16 @@ export fn aof_sync(aof: &AofWriter) !void {
         return error.AofSyncFailed;
     }
     aof.synced_offset = aof.flushed_offset;
+    aof.synced_replication_offset = aof.appended_replication_offset;
+}
+
+export fn aof_mark_replication_offset(aof: &AofWriter, offset: u64) void {
+    if aof == null || !aof.enabled {
+        return;
+    }
+    if offset > aof.appended_replication_offset {
+        aof.appended_replication_offset = offset;
+    }
 }
 
 fn aof_buffer_copy(aof: &AofWriter, data: &[byte]) void {

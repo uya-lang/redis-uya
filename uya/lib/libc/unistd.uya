@@ -109,6 +109,25 @@ export const SEEK_CUR: i32 = 1;
 export const SEEK_END: i32 = 2;
 })
 
+std.cfg(std.target_os == .tos_linux, {
+export fn fsync(fd: i32) i32 {
+    std.cfg(std.target_arch == .ta_x86_64, {
+        const result: !i32 = @syscall(74i64, fd as i64) as! i32;
+        return result catch { return 0 - 1; };
+    }, {
+        std.cfg(std.target_arch == .ta_arm, {
+            const result: !i32 = @syscall(118i64, fd as i64) as! i32;
+            return result catch { return 0 - 1; };
+        }, {
+            const result: !i32 = @syscall(82i64, fd as i64) as! i32;
+            return result catch { return 0 - 1; };
+        })
+    })
+}
+}, {
+export extern "libc" fn fsync(fd: i32) i32;
+})
+
 // ============================================================
 // 进程控制函数
 // ============================================================

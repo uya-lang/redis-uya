@@ -2356,6 +2356,15 @@ export fn test_command_replconf() !void {
     try assert_eq_i32(ack_reply.request_replicaof as i32, 0);
     resp_value_free(&ack_parsed.value);
 
+    var fack_parsed: RespParseResult = try parse_resp2(&"*5\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$3\r\n128\r\n$4\r\nFACK\r\n$3\r\n120\r\n"[0: 55]);
+    const fack_command: Command = try command_executor_test_command(&router, &fack_parsed);
+    const fack_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &fack_command, 1000u64);
+    try assert_eq_i32(fack_reply.request_replconf_ack as i32, 1);
+    try assert_eq_i32(fack_reply.replconf_ack_offset as i32, 128);
+    try assert_eq_i32(fack_reply.request_replconf_fack as i32, 1);
+    try assert_eq_i32(fack_reply.replconf_fack_offset as i32, 120);
+    resp_value_free(&fack_parsed.value);
+
     var bad_ack_parsed: RespParseResult = try parse_resp2(&"*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$3\r\nbad\r\n"[0: 36]);
     const bad_ack_command: Command = try command_executor_test_command(&router, &bad_ack_parsed);
     const bad_ack_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &bad_ack_command, 1000u64);
@@ -2372,6 +2381,15 @@ export fn test_command_replconf() !void {
     try assert_true(command_executor_test_slice_eq(getack_reply.data, &"*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$3\r\n128\r\n"[0: 36]));
     command_reply_cleanup(&getack_reply);
     resp_value_free(&getack_parsed.value);
+
+    runtime.aof_enabled = true;
+    runtime.aof_synced_replication_offset = 120u64;
+    var getack_fack_parsed: RespParseResult = try parse_resp2(&"*3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n"[0: 37]);
+    const getack_fack_command: Command = try command_executor_test_command(&router, &getack_fack_parsed);
+    var getack_fack_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &getack_fack_command, 1000u64);
+    try assert_true(command_executor_test_slice_eq(getack_fack_reply.data, &"*5\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$3\r\n128\r\n$4\r\nFACK\r\n$3\r\n120\r\n"[0: 55]));
+    command_reply_cleanup(&getack_fack_reply);
+    resp_value_free(&getack_fack_parsed.value);
 
     engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);

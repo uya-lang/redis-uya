@@ -657,10 +657,18 @@ export fn test_connection_process_ping_set_get_quit() !void {
     try assert_true(network_connection_contains(out[0: wait_negative_result.response_len], &"timeout is negative"[0: 19]));
 
     const waitaof_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$7\r\nWAITAOF\r\n$1\r\n1\r\n$1\r\n0\r\n$1\r\n0\r\n"[0: 38], &out[0], 256, 1000u64);
-    try assert_true(network_connection_slice_eq(out[0: waitaof_result.response_len], &"*2\r\n:1\r\n:0\r\n"[0: 12]));
+    try assert_true(network_connection_contains(out[0: waitaof_result.response_len], &"WAITAOF requires appendonly"[0: 27]));
 
     const waitaof_negative_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$7\r\nWAITAOF\r\n$1\r\n1\r\n$1\r\n0\r\n$2\r\n-1\r\n"[0: 39], &out[0], 256, 1000u64);
     try assert_true(network_connection_contains(out[0: waitaof_negative_result.response_len], &"timeout is negative"[0: 19]));
+
+    const waitaof_local_range_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*4\r\n$7\r\nWAITAOF\r\n$1\r\n2\r\n$1\r\n0\r\n$1\r\n0\r\n"[0: 38], &out[0], 256, 1000u64);
+    try assert_true(network_connection_contains(out[0: waitaof_local_range_result.response_len], &"value is not an integer or out of range"[0: 39]));
+
+    var waitaof_replica_runtime: CommandRuntimeInfo = command_runtime_default();
+    waitaof_replica_runtime.replication_role = ReplicationRole.role_replica;
+    const waitaof_replica_result: ConnectionProcessResult = try connection_process_input_with_runtime_at(&engine, &waitaof_replica_runtime, &router, &"*4\r\n$7\r\nWAITAOF\r\n$1\r\n0\r\n$1\r\n0\r\n$1\r\n0\r\n"[0: 38], &out[0], 256, 1000u64);
+    try assert_true(network_connection_contains(out[0: waitaof_replica_result.response_len], &"WAITAOF cannot be used with replica instances"[0: 45]));
 
     const sort_seed_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*5\r\n$5\r\nRPUSH\r\n$7\r\nsortnet\r\n$1\r\n3\r\n$1\r\n1\r\n$1\r\n2\r\n"[0: 49], &out[0], 256, 1000u64);
     try assert_true(network_connection_slice_eq(out[0: sort_seed_result.response_len], &":3\r\n"[0: 4]));
@@ -943,16 +951,28 @@ export fn test_connection_process_ping_set_get_quit() !void {
     try assert_eq_i32(replconf_tx.replication_ack_offset as i32, 128);
     try assert_eq_i32(replconf_tx.replication_ack_time_ms as i32, 1000);
 
+    const replconf_fack_result: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &replconf_tx, &"*5\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$3\r\n128\r\n$4\r\nFACK\r\n$3\r\n120\r\n"[0: 55], &out[0], 256, 1050u64);
+    try assert_eq_i32(replconf_fack_result.response_len as i32, 0);
+    try assert_eq_i32(replconf_tx.replication_aof_ack_offset as i32, 120);
+
+    const replconf_stale_fack_result: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &replconf_tx, &"*5\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$3\r\n129\r\n$4\r\nFACK\r\n$3\r\n100\r\n"[0: 55], &out[0], 256, 1075u64);
+    try assert_eq_i32(replconf_stale_fack_result.response_len as i32, 0);
+    try assert_eq_i32(replconf_tx.replication_ack_offset as i32, 129);
+    try assert_eq_i32(replconf_tx.replication_aof_ack_offset as i32, 120);
+
     const replconf_stale_ack_result: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &replconf_tx, &"*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$2\r\n64\r\n"[0: 35], &out[0], 256, 1100u64);
     try assert_eq_i32(replconf_stale_ack_result.response_len as i32, 0);
-    try assert_eq_i32(replconf_tx.replication_ack_offset as i32, 128);
+    try assert_eq_i32(replconf_tx.replication_ack_offset as i32, 129);
+    try assert_eq_i32(replconf_tx.replication_aof_ack_offset as i32, 120);
     try assert_eq_i32(replconf_tx.replication_ack_time_ms as i32, 1100);
 
     var replica_runtime: CommandRuntimeInfo = command_runtime_default();
     replica_runtime.replication_role = ReplicationRole.role_replica;
     replica_runtime.replication_master_offset = 128u64;
+    replica_runtime.aof_enabled = true;
+    replica_runtime.aof_synced_replication_offset = 120u64;
     const replconf_getack_result: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &replica_runtime, &router, &replconf_tx, &"*3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n"[0: 37], &out[0], 256, 1200u64);
-    try assert_true(network_connection_slice_eq(out[0: replconf_getack_result.response_len], &"*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$3\r\n128\r\n"[0: 36]));
+    try assert_true(network_connection_slice_eq(out[0: replconf_getack_result.response_len], &"*5\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$3\r\n128\r\n$4\r\nFACK\r\n$3\r\n120\r\n"[0: 55]));
 
     const config_result: ConnectionProcessResult = try connection_process_input_at(&engine, &router, &"*3\r\n$6\r\nCONFIG\r\n$3\r\nGET\r\n$4\r\nport\r\n"[0: 35], &out[0], 256, 1000u64);
     try assert_eq_i32(config_result.response_len as i32, 24);
@@ -1029,6 +1049,19 @@ export fn test_connection_process_wait_ack() !void {
     try assert_true(network_connection_slice_eq(out[0: timed_out.response_len], &":0\r\n"[0: 4]));
     try assert_eq_i32(writer_tx.blocking_active as i32, 0);
     try assert_eq_i32(writer_tx.blocking_deadline_ms as i32, 0);
+
+    replica_tx.replication_aof_ack_offset = 128;
+    replica_two_tx.replication_aof_ack_offset = 128;
+    const waitaof_two: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &writer_tx, &"*4\r\n$7\r\nWAITAOF\r\n$1\r\n0\r\n$1\r\n2\r\n$3\r\n100\r\n"[0: 40], &out[0], 256, 1300u64);
+    try assert_true(network_connection_slice_eq(out[0: waitaof_two.response_len], &"*2\r\n:0\r\n:2\r\n"[0: 12]));
+
+    replica_two_tx.replication_aof_ack_offset = 127;
+    const waitaof_timeout_start: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &writer_tx, &"*4\r\n$7\r\nWAITAOF\r\n$1\r\n0\r\n$1\r\n2\r\n$2\r\n50\r\n"[0: 39], &out[0], 256, 1350u64);
+    try assert_eq_i32(waitaof_timeout_start.response_len as i32, 0);
+    writer_tx.replication_getack_requested = false;
+    writer_tx.blocking_active = false;
+    const waitaof_timed_out: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &writer_tx, &"*4\r\n$7\r\nWAITAOF\r\n$1\r\n0\r\n$1\r\n2\r\n$2\r\n50\r\n"[0: 39], &out[0], 256, 1400u64);
+    try assert_true(network_connection_slice_eq(out[0: waitaof_timed_out.response_len], &"*2\r\n:0\r\n:1\r\n"[0: 12]));
 
     connection_client_registry_reset_for_test();
     connection_transaction_reset(&writer_tx);

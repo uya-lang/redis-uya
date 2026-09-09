@@ -2209,13 +2209,19 @@ WAITAOF numlocal numreplicas timeout
 
 - 成功：返回 `[local, replicas]` 两元素 Array
 - `numlocal` / `numreplicas` / `timeout` 非整数：`-ERR value is not an integer or out of range`
+- `numlocal` 不在 `0..1` 或 `numreplicas < 0`：`-ERR value is not an integer or out of range`
 - `timeout < 0`：`-ERR timeout is negative`
+- replica 角色执行：`-ERR WAITAOF cannot be used with replica instances`
+- `numlocal = 1` 但 AOF 未启用：`-ERR WAITAOF requires appendonly for numlocal`
 
 说明：
 
-- 当前 partial 不执行真实阻塞等待，也不等待副本 AOF ACK
-- `numlocal > 0` 时返回本地确认 `1`，`numlocal <= 0` 时返回 `0`
-- 副本确认当前固定返回 `0`
+- 目标 offset 与 `WAIT` 一致，是当前客户端最后一次成功传播写入的 replication offset
+- 本地 synced replication offset 未达目标且 `numlocal = 1` 时，会同步 flush AOF 并执行 `fsync(2)`；只有成功后本地确认才为 `1`，失败返回 `-ERR AOF sync failed`
+- 副本通过 `REPLCONF ACK <offset> FACK <fsynced-offset>` 报告 AOF fsync 位置；只统计已完成 `PSYNC`、在线且 FACK 达标的连接
+- 约束未满足时按需发送一次 `REPLCONF GETACK *` 并阻塞到 ACK/FACK 达标或 timeout；`timeout = 0` 表示不设超时
+- 返回数组报告实际状态，因此即使 `numlocal = 0`，此前已 fsync 到目标时 `local` 仍可为 `1`
+- 在 `MULTI/EXEC` 内不会阻塞或主动 fsync，只返回执行时刻的实际确认数量
 
 ### `SORT`
 
@@ -4359,7 +4365,7 @@ SLAVEOF NO ONE
 
 - 成功：`+OK`
 - `SLAVEOF` 当前作为 `REPLICAOF` alias 进入同一执行路径
-- 当前已完成复制角色切换、`PSYNC` 全量同步、轮询式增量同步、基础心跳、连接级 ACK/GETACK wire 语义和 `WAIT` 按需 GETACK/ACK 聚合等待；仍不支持 Redis 原生长连接流式增量推送、周期性 GETACK 与副本 AOF ACK 等完整复制协议
+- 当前已完成复制角色切换、`PSYNC` 全量同步、轮询式增量同步、基础心跳、连接级 ACK/FACK/GETACK wire 语义，以及 `WAIT/WAITAOF` 按需 GETACK 与聚合等待；仍不支持 Redis 原生长连接流式增量推送和周期性 GETACK，配置型 pull replica 也尚未把回放增量写入本地 AOF，因此真实 FACK 收敛当前主要覆盖保持在线的 PSYNC 复制连接
 
 ### `REPLCONF`
 
@@ -4373,15 +4379,16 @@ REPLCONF [option value]
 
 - 空参数和常见握手参数（如 `CAPA psync2`）：`+OK`
 - `REPLCONF ACK offset`：不发送普通命令回复
-- replica 角色收到 `REPLCONF GETACK *`：写回 `REPLCONF ACK <current-upstream-offset>` RESP 命令
+- `REPLCONF ACK offset FACK fsynced-offset`：同时更新复制连接的普通 ACK 与 AOF fsync ACK，不发送普通命令回复
+- replica 角色收到 `REPLCONF GETACK *`：写回 `REPLCONF ACK <current-upstream-offset>` RESP 命令；AOF 启用时追加 `FACK <synced-replication-offset>`，数组长度为 `5`
 - `ACK` offset 非整数：`-ERR value is not an integer or out of range`
 - `GETACK` 参数不是 `*`：`-ERR syntax error`
 
 说明：
 
-- 只有已成功执行 `PSYNC` 的连接会记录 ACK；普通客户端发送的 ACK 同样不产生普通回复，但不会被标记或计入复制连接。复制连接记录单调前移的 ACK offset 和最近 ACK 时间；较旧 ACK 不回退 offset，但仍刷新 ACK 时间
+- 只有已成功执行 `PSYNC` 的连接会记录 ACK/FACK；普通客户端发送的 ACK 同样不产生普通回复，但不会被标记或计入复制连接。复制连接分别记录单调前移的 ACK、FACK offset 和最近 ACK 时间；较旧值不回退 offset，但仍刷新 ACK 时间
 - replica 的 GETACK 回复使用运行时当前上游 master offset，而不是本地禁用 backlog 的 offset
-- master 会在未满足的 `WAIT` 上向在线复制连接按需发送一次 GETACK，并用 ACK 状态唤醒等待；当前仍不持久化 replica 端口/能力，不周期性下发 GETACK，`WAITAOF` 也尚未聚合副本 AOF ACK
+- master 会在未满足的 `WAIT/WAITAOF` 上向在线复制连接按需发送一次 GETACK，并分别用 ACK/FACK 状态唤醒等待；当前仍不持久化 replica 端口/能力，也不周期性下发 GETACK
 - 不进入 AOF 或 replication backlog
 
 ### `FAILOVER`

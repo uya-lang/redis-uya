@@ -251,7 +251,7 @@ def run_smoke() -> None:
             if wait_negative_reply != b"-ERR timeout is negative\r\n":
                 raise AssertionError(f"unexpected WAIT negative reply: {wait_negative_reply!r}")
             roundtrip(sock, b"*4\r\n$7\r\nWAITAOF\r\n$1\r\n1\r\n$1\r\n0\r\n$1\r\n0\r\n", b"*2\r\n:1\r\n:0\r\n")
-            roundtrip(sock, b"*4\r\n$7\r\nWAITAOF\r\n$1\r\n0\r\n$1\r\n0\r\n$1\r\n0\r\n", b"*2\r\n:0\r\n:0\r\n")
+            roundtrip(sock, b"*4\r\n$7\r\nWAITAOF\r\n$1\r\n0\r\n$1\r\n0\r\n$1\r\n0\r\n", b"*2\r\n:1\r\n:0\r\n")
             roundtrip(sock, b"*4\r\n$7\r\nWAITAOF\r\n$1\r\n1\r\n$1\r\n1\r\n$2\r\n10\r\n", b"*2\r\n:1\r\n:0\r\n")
             sock.sendall(b"*4\r\n$7\r\nWAITAOF\r\n$1\r\n1\r\n$1\r\n0\r\n$2\r\n-1\r\n")
             waitaof_negative_reply = recv_line(sock)

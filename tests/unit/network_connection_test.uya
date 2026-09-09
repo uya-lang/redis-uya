@@ -1071,6 +1071,44 @@ export fn test_connection_process_wait_ack() !void {
     try assert_eq_i32(used_memory() as i32, 0);
 }
 
+export fn test_connection_replica_read_only() !void {
+    var engine: Engine = engine_new();
+    const router: CommandRouter = command_router_new();
+    var runtime: CommandRuntimeInfo = command_runtime_default();
+    runtime.replication_role = ReplicationRole.role_replica;
+    var tx: ConnectionTransaction = connection_transaction_new();
+    var out: [byte: 512] = [];
+
+    const denied_set: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*3\r\n$3\r\nSET\r\n$6\r\nro-key\r\n$5\r\nvalue\r\n"[0: 36], &out[0], 512, 1000u64);
+    try assert_true(network_connection_contains(out[0: denied_set.response_len], &"READONLY You can't write against a read only replica."[0: 53]));
+
+    const missing_get: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*2\r\n$3\r\nGET\r\n$6\r\nro-key\r\n"[0: 25], &out[0], 512, 1001u64);
+    try assert_true(network_connection_slice_eq(out[0: missing_get.response_len], &"$-1\r\n"[0: 5]));
+
+    const multi_result: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*1\r\n$5\r\nMULTI\r\n"[0: 15], &out[0], 512, 1002u64);
+    try assert_true(network_connection_slice_eq(out[0: multi_result.response_len], &"+OK\r\n"[0: 5]));
+    const denied_queued_set: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*3\r\n$3\r\nSET\r\n$6\r\nro-key\r\n$5\r\nvalue\r\n"[0: 36], &out[0], 512, 1003u64);
+    try assert_true(network_connection_contains(out[0: denied_queued_set.response_len], &"READONLY You can't write against a read only replica."[0: 53]));
+    const exec_result: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*1\r\n$4\r\nEXEC\r\n"[0: 14], &out[0], 512, 1004u64);
+    try assert_true(network_connection_slice_eq(out[0: exec_result.response_len], &"*0\r\n"[0: 4]));
+
+    runtime.config.replica_read_only = false;
+    const writable_set: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*3\r\n$3\r\nSET\r\n$6\r\nro-key\r\n$5\r\nvalue\r\n"[0: 36], &out[0], 512, 1005u64);
+    try assert_true(network_connection_slice_eq(out[0: writable_set.response_len], &"+OK\r\n"[0: 5]));
+    const seed_list: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*4\r\n$5\r\nRPUSH\r\n$7\r\nsort-ro\r\n$1\r\n2\r\n$1\r\n1\r\n"[0: 42], &out[0], 512, 1006u64);
+    try assert_true(network_connection_slice_eq(out[0: seed_list.response_len], &":2\r\n"[0: 4]));
+
+    runtime.config.replica_read_only = true;
+    const readable_sort: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*2\r\n$4\r\nSORT\r\n$7\r\nsort-ro\r\n"[0: 27], &out[0], 512, 1007u64);
+    try assert_true(network_connection_slice_eq(out[0: readable_sort.response_len], &"*2\r\n$1\r\n1\r\n$1\r\n2\r\n"[0: 18]));
+    const denied_sort_store: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*4\r\n$4\r\nSORT\r\n$7\r\nsort-ro\r\n$5\r\nSTORE\r\n$8\r\nsort-out\r\n"[0: 52], &out[0], 512, 1008u64);
+    try assert_true(network_connection_contains(out[0: denied_sort_store.response_len], &"READONLY You can't write against a read only replica."[0: 53]));
+
+    connection_transaction_reset(&tx);
+    engine_free(&engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
 export fn test_connection_process_slowlog() !void {
     reset_memory_stats_for_test();
     slowlog_reset();

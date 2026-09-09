@@ -3930,9 +3930,9 @@ CONFIG RESETSTAT
 返回：
 
 - 返回 RESP Array，按 `name`、`value` 成对展开
-- 当前支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`aclfile`、`requirepass`、`replicaof`、`masterauth`、`maxmemory`、`maxmemory-policy`、`maxclients`、`databases`、`timeout`、`save`、`latency-tracking`、`latency-monitor-threshold`、`slowlog-log-slower-than`、`slowlog-max-len`
+- 当前支持 `port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`aclfile`、`requirepass`、`replicaof`、`masterauth`、`replica-read-only`、`maxmemory`、`maxmemory-policy`、`maxclients`、`databases`、`timeout`、`save`、`latency-tracking`、`latency-monitor-threshold`、`slowlog-log-slower-than`、`slowlog-max-len`
 - 支持最小 `*` 通配模式
-- `CONFIG SET` 当前支持运行时子集：`port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`aclfile`、`requirepass`、`replicaof`、`masterauth`、`maxmemory`、`maxmemory-policy`、`maxclients`、`databases`、`timeout`、`save`、`latency-tracking`、`latency-monitor-threshold`、`slowlog-log-slower-than`、`slowlog-max-len`
+- `CONFIG SET` 当前支持运行时子集：`port`、`bind`、`dir`、`dbfilename`、`appendfilename`、`aclfile`、`requirepass`、`replicaof`、`masterauth`、`replica-read-only`（兼容配置别名 `slave-read-only`）、`maxmemory`、`maxmemory-policy`、`maxclients`、`databases`、`timeout`、`save`、`latency-tracking`、`latency-monitor-threshold`、`slowlog-log-slower-than`、`slowlog-max-len`
 - `CONFIG REWRITE` 当前会把运行时有效配置写到 `<appendfilename>.conf`，成功返回 `+OK`；当前已覆盖 `maxclients`、`databases` 等第二批运行时字段的落盘
 - `CONFIG HELP` 返回当前支持的 CONFIG 子命令列表
 - `CONFIG RESETSTAT` 当前返回 `+OK`，并清理 `LATENCY HISTOGRAM` 的命令直方图状态
@@ -4365,6 +4365,8 @@ SLAVEOF NO ONE
 
 - 成功：`+OK`
 - `SLAVEOF` 当前作为 `REPLICAOF` alias 进入同一执行路径
+- replica 默认启用 `replica-read-only yes`：客户端数据写命令返回 `-READONLY You can't write against a read only replica.`；只读命令、复制握手和配置控制命令仍可执行，`CONFIG SET replica-read-only no|yes` 可运行时切换
+- `SORT ... STORE`、`HIMPORT SET` 等参数驱动写路径同样受副本只读门禁；full/incremental 复制回放走内部应用路径，不会被客户端门禁阻止；提升为 master 后不再拒绝写入
 - 当前已完成复制角色切换、`PSYNC` 全量同步、轮询式增量同步、基础心跳、连接级 ACK/FACK/GETACK wire 语义，以及 `WAIT/WAITAOF` 按需 GETACK 与聚合等待；仍不支持 Redis 原生长连接流式增量推送和周期性 GETACK，配置型 pull replica 也尚未把回放增量写入本地 AOF，因此真实 FACK 收敛当前主要覆盖保持在线的 PSYNC 复制连接
 
 ### `REPLCONF`

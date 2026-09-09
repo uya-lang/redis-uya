@@ -41,6 +41,7 @@ export fn test_config_defaults() !void {
     try assert_eq_i32(cfg.latency_monitor_threshold as i32, 0);
     try assert_eq_i32(cfg.slowlog_log_slower_than as i32, 10000);
     try assert_eq_i32(cfg.slowlog_max_len as i32, 128);
+    try assert_eq_i32(cfg.replica_read_only as i32, 1);
     try assert_eq_i32(cfg.replicaof_port, 0);
     try assert_true(cstr_eq(cfg.bind[0: 64], &"0.0.0.0"[0: 7]));
     try assert_true(cstr_eq(cfg.dbfilename[0: 128], &"dump.rdb"[0: 8]));
@@ -83,6 +84,8 @@ export fn test_config_parse_core_fields() !void {
     try assert_eq_i32(slowlog_cfg.slowlog_log_slower_than as i32, -1);
     const slowlog_max_cfg: ServerConfig = try parse_config_text(&"slowlog-max-len 4\n"[0: 18]);
     try assert_eq_i32(slowlog_max_cfg.slowlog_max_len as i32, 4);
+    const replica_writable_cfg: ServerConfig = try parse_config_text(&"replica-read-only no\n"[0: 21]);
+    try assert_eq_i32(replica_writable_cfg.replica_read_only as i32, 0);
 }
 
 export fn test_config_parse_memory_units() !void {

@@ -1335,6 +1335,7 @@ def run_smoke() -> None:
                     "save 60 10",
                     "requirepass runtime-secret",
                     "masterauth upstream-pass",
+                    "replica-read-only yes",
                 ):
                     if needle not in rewritten:
                         raise AssertionError(f"missing {needle!r} in rewritten config: {rewritten!r}")

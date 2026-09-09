@@ -127,13 +127,33 @@ def run_smoke() -> None:
                 raise AssertionError(f"expected +OK on REPLICAOF, got {replicaof_ok!r}")
 
             replica_info = send_command(sock, b"INFO", b"replication")
-            if b"role:slave" not in replica_info or b"master_host:127.0.0.1" not in replica_info or b"master_port:6381" not in replica_info:
+            if b"role:slave" not in replica_info or b"master_host:127.0.0.1" not in replica_info or b"master_port:6381" not in replica_info or b"slave_read_only:1" not in replica_info:
                 raise AssertionError(f"unexpected replica info: {replica_info!r}")
 
             config_replicaof = send_command(sock, b"CONFIG", b"GET", b"replicaof")
             expected_replicaof = b"*2\r\n$9\r\nreplicaof\r\n$14\r\n127.0.0.1 6381\r\n"
             if config_replicaof != expected_replicaof:
                 raise AssertionError(f"unexpected CONFIG GET replicaof: {config_replicaof!r}")
+
+            read_only_config = send_command(sock, b"CONFIG", b"GET", b"replica-read-only")
+            expected_read_only_config = b"*2\r\n$17\r\nreplica-read-only\r\n$3\r\nyes\r\n"
+            if read_only_config != expected_read_only_config:
+                raise AssertionError(f"unexpected replica-read-only default: {read_only_config!r}")
+
+            denied_write = send_command(sock, b"SET", b"replica-key", b"blocked")
+            expected_denied_write = b"-READONLY You can't write against a read only replica.\r\n"
+            if denied_write != expected_denied_write:
+                raise AssertionError(f"expected replica write rejection, got {denied_write!r}")
+
+            if send_command(sock, b"CONFIG", b"SET", b"replica-read-only", b"no") != b"+OK\r\n":
+                raise AssertionError("expected CONFIG SET replica-read-only no to succeed")
+            writable_replica_info = send_command(sock, b"INFO", b"replication")
+            if b"slave_read_only:0" not in writable_replica_info:
+                raise AssertionError(f"expected writable replica info state, got {writable_replica_info!r}")
+            if send_command(sock, b"SET", b"replica-key", b"allowed") != b"+OK\r\n":
+                raise AssertionError("expected writable replica override to permit SET")
+            if send_command(sock, b"CONFIG", b"SET", b"replica-read-only", b"yes") != b"+OK\r\n":
+                raise AssertionError("expected CONFIG SET replica-read-only yes to succeed")
 
             promote_ok = send_command(sock, b"REPLICAOF", b"NO", b"ONE")
             if promote_ok != b"+OK\r\n":
@@ -142,6 +162,8 @@ def run_smoke() -> None:
             back_to_master = send_command(sock, b"INFO", b"replication")
             if b"role:master" not in back_to_master:
                 raise AssertionError(f"expected master role after promotion, got {back_to_master!r}")
+            if send_command(sock, b"SET", b"replica-key", b"promoted") != b"+OK\r\n":
+                raise AssertionError("expected promoted master to accept SET")
 
             slaveof_ok = send_command(sock, b"SLAVEOF", b"127.0.0.1", b"6382")
             if slaveof_ok != b"+OK\r\n":

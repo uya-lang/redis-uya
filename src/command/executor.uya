@@ -19619,7 +19619,7 @@ fn command_executor_info(engine: &Engine, runtime: &CommandRuntimeInfo, command:
             _ = command_executor_info_append_i64(&buf, &"master_port:%i\r\n"[0: 16], runtime.config.replicaof_port as i64) catch { return command_executor_oom(); };
             _ = command_executor_info_append_bytes(&buf, &"master_link_status:%s\r\n"[0: 23], master_link_status) catch { return command_executor_oom(); };
             _ = command_executor_info_append_i64(&buf, &"master_sync_in_progress:%i\r\n"[0: 28], master_sync_in_progress) catch { return command_executor_oom(); };
-            _ = command_executor_info_append_i64(&buf, &"slave_read_only:%i\r\n"[0: 20], 1) catch { return command_executor_oom(); };
+            _ = command_executor_info_append_i64(&buf, &"slave_read_only:%i\r\n"[0: 20], if runtime.config.replica_read_only { 1i64 } else { 0i64 }) catch { return command_executor_oom(); };
             _ = command_executor_info_append_bytes(&buf, &"replication_state:%s\r\n\r\n"[0: 24], replication_state_name(runtime.replication_state)) catch { return command_executor_oom(); };
         }
     }
@@ -19797,6 +19797,12 @@ fn command_executor_config(runtime: &CommandRuntimeInfo, command: &Command) Comm
     }
     if command_executor_keyword_match(pattern, &"masterauth"[0: 10]) {
         _ = command_executor_config_append_pair(reply_list, &"masterauth"[0: 10], command_executor_cstring_slice(runtime.config.masterauth[0: 128])) catch {
+            object_free(reply_list);
+            return command_executor_oom();
+        };
+    }
+    if command_executor_keyword_match(pattern, &"replica-read-only"[0: 17]) {
+        _ = command_executor_config_append_pair(reply_list, &"replica-read-only"[0: 17], config_bool_name(runtime.config.replica_read_only)) catch {
             object_free(reply_list);
             return command_executor_oom();
         };

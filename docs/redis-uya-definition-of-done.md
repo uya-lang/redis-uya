@@ -138,6 +138,7 @@ bash scripts/verify_definition_of_done.sh
 | replica 侧增量同步可用：connected 状态下可周期性拉取 backlog delta 并回放到本地库 | `tests/integration/replication_incremental_sync.py` |
 | 复制心跳可用：replica 会周期性 `PING` master，掉线后回退到 `configured` 并在 master 恢复后重新同步 | `tests/integration/replication_heartbeat.py` |
 | 主从一致性 smoke 覆盖当前五类对象的 full sync + incremental 复制 | `tests/integration/replication_consistency.py` |
+| replica 客户端只读语义可用：`replica-read-only` 默认开启，写标记命令及 `SORT ... STORE` 等动态写路径返回 Redis 兼容 `READONLY`；支持配置文件、`CONFIG GET/SET/REWRITE`、`INFO replication slave_read_only`，事务入队/执行复核角色与配置，提升 master 后恢复写入，内部 full/incremental 复制回放保持可写 | `src/config.uya`、`src/command/executor.uya`、`src/network/connection.uya`、`tests/unit/config_test.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/network_connection_test.uya`、`tests/integration/replication_role_state.py`、`tests/integration/replication_full_sync.py`、`tests/integration/replication_incremental_sync.py`、`tests/integration/client_config_smoke.py`、`make test`、`make test-integration` |
 | 复制 benchmark 可生成并落盘 | `scripts/benchmark_replication_v0_4_0.py`、`benchmarks/v0.4.0-replication.md` |
 
 ## 9. `v0.5.0`

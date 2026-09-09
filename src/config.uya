@@ -56,6 +56,7 @@ export struct ServerConfig {
     requirepass_hashes: [byte: 256],
     replicaof_host: [byte: 64],
     replicaof_port: i32,
+    replica_read_only: bool,
     masterauth: [byte: 128],
     maxmemory: usize,
     maxmemory_policy: MaxmemoryPolicy,
@@ -102,6 +103,7 @@ export fn default_config() ServerConfig {
         slowlog_max_len: 128,
         save_seconds: 900,
         save_changes: 1,
+        replica_read_only: true,
         requirepass_hash_set: false,
         requirepass_hash_count: 0,
     };
@@ -307,6 +309,10 @@ export fn config_apply_runtime_set(cfg: &ServerConfig, key: &[byte], value: &[by
     }
     if token_eq(key, &"masterauth"[0: 10]) {
         copy_literal(cfg.masterauth[0: 128], value);
+        return true;
+    }
+    if token_eq(key, &"replica-read-only"[0: 17]) || token_eq(key, &"slave-read-only"[0: 15]) {
+        cfg.replica_read_only = try parse_bool_token(value);
         return true;
     }
     if token_eq(key, &"maxmemory"[0: 9]) {
@@ -546,6 +552,7 @@ fn config_rewrite_payload(cfg: &ServerConfig) !Sds {
     if masterauth.len > 0 {
         try config_append_line(&buf, &"masterauth"[0: 10], masterauth);
     }
+    try config_append_line(&buf, &"replica-read-only"[0: 17], config_bool_name(cfg.replica_read_only));
     return buf;
 }
 
@@ -621,6 +628,8 @@ fn parse_line(cfg: &ServerConfig, line: &[byte]) !void {
         cfg.replicaof_port = try parse_i32_token(port_token);
     } else if token_eq(key, &"masterauth"[0: 10]) {
         copy_literal(cfg.masterauth[0: 128], value);
+    } else if token_eq(key, &"replica-read-only"[0: 17]) || token_eq(key, &"slave-read-only"[0: 15]) {
+        cfg.replica_read_only = try parse_bool_token(value);
     } else if token_eq(key, &"maxmemory"[0: 9]) {
         cfg.maxmemory = try parse_memory_token(value);
     } else if token_eq(key, &"maxclients"[0: 10]) {

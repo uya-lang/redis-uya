@@ -73,6 +73,7 @@
 - AOF TTL 语义：`EXPIRE`、`EXPIREAT`、`PEXPIRE`、`SETEX`、`PSETEX` 追加时会规范化为绝对 `PEXPIREAT`；`GETEX` 在带 TTL/PERSIST 选项时只落对应状态变更，回放保持绝对过期时间
 - `BGREWRITEAOF`：真实子进程后台 rewrite + 父进程增量缓冲合并，可把当前内存态规范化重写为可回放 AOF
 - 复制角色与状态机：支持 master/slave 角色切换、`REPLICAOF` 控制入口、`INFO replication` 与复制配置可观测
+- 副本只读：`replica-read-only` 默认 `yes`，客户端数据写命令在 replica 角色返回 Redis 兼容 `READONLY` 错误；支持运行时 `CONFIG SET` 切换，内部 full/incremental 复制回放不经过客户端门禁
 - `PSYNC / backlog`：master 维护复制积压缓冲区，支持 `FULLRESYNC` / `CONTINUE` 最小握手判断；`REPLCONF ACK [FACK]` 仅由已完成 `PSYNC` 的复制连接记录单调前移的普通/AOF fsync offset 和最近 ACK 时间且不发送普通回复，replica 对 `REPLCONF GETACK *` 会写回当前 upstream ACK，AOF 启用时同时携带 synced replication offset 的 FACK；`WAIT/WAITAOF` 会按当前连接最后一次传播写入的 offset 聚合确认，并在未满足时主动请求一次 `GETACK`
 - 全量同步：replica 可通过 `REPLICAOF -> PSYNC ? -1` 拉取 master 当前 RDB 快照并落库
 - 增量同步：replica 在 connected 状态下周期性 `PSYNC replid offset` 拉取 backlog delta 并回放
@@ -296,6 +297,7 @@ build/redis-uya 6380 1
 - Server 趣味/诊断 partial：`LOLWUT [VERSION version]` 当前返回固定 bulk 文本和 redis-uya 版本，`VERSION` 的非整数参数返回 Redis 兼容整数错误，暂不生成 Redis 原版动态图形
 - Key 复制等待 partial：`WAIT numreplicas timeout` 会以调用连接最后一次成功传播写入的 master offset 为目标，统计已完成 `PSYNC` 且 ACK offset 达标的在线复制连接；未满足时向这些复制连接发送一次 `REPLCONF GETACK *` 并阻塞到达标或超时，返回实际达标数量。`WAITAOF numlocal numreplicas timeout` 复用同一目标 offset：本地约束会真实 flush + `fsync(2)` 并按 synced replication offset 确认，副本约束统计 FACK 达标的在线复制连接，未满足时同样按需 GETACK、阻塞并在 ACK/FACK 或 timeout 后返回 `[actual-local, actual-replicas]`
 - Server 复制握手 partial：`REPLCONF [option ...]` 的常见握手参数返回 `OK`；`ACK offset [FACK fsynced-offset]` 校验整数、抑制普通回复，且只有已完成 `PSYNC` 的复制连接会记录单调前移 ACK/FACK offset 和最近 ACK 时间，普通客户端不能用 ACK 进入复制连接集合；`GETACK *` 在 replica 角色下写回当前上游 offset 的 ACK，AOF 启用时同时携带本地 synced replication offset 的 FACK。master 当前只在未满足的 `WAIT/WAITAOF` 上按需下发一次 GETACK，尚未周期性下发
+- Server 副本只读：replica 默认拒绝带写标记的客户端命令以及 `SORT ... STORE`、`HIMPORT SET` 等参数驱动写路径，返回 `READONLY You can't write against a read only replica.`；`CONFIG SET replica-read-only no|yes` 可运行时切换，`INFO replication` 的 `slave_read_only` 与当前配置一致，角色提升为 master 后不再受该门禁限制
 - Bitmap / Bitfield 第一批：`GETBIT`、`SETBIT`、`BITCOUNT`、`BITPOS`、`BITOP`、`BITFIELD`、`BITFIELD_RO`
 - HyperLogLog 第一批 partial：`PFADD`、`PFCOUNT`、`PFMERGE`、`PFSELFTEST` 当前可用，但内部暂以 exact set-backed cardinality 近似 Redis 语义，`PFSELFTEST` 是 no-op self-test 兼容面，`PFDEBUG` 当前作为安全 profile 的 standalone-error 暴露，不开放 Redis 内部 HLL 调试输出，尚未落地 Redis 原生 dense/sparse HLL 字符串编码
 - Geo 第一批 partial：`GEOADD`、`GEODIST`、`GEOHASH`、`GEOPOS`、`GEOSEARCH`、`GEOSEARCHSTORE`、`GEORADIUS`、`GEORADIUS_RO`、`GEORADIUSBYMEMBER`、`GEORADIUSBYMEMBER_RO` 当前可用，但内部暂以 exact zset-backed packed coordinate score 实现，`GEOSEARCHSTORE` 支持目标写入和 `STOREDIST` 整数距离 score，暂不保存 Redis 原生浮点距离，legacy radius 命令复用 `GEOSEARCH ... BYRADIUS` 路径且不支持 `STORE/STOREDIST`，`GEOPOS` 和 `WITHCOORD` 返回当前 packed score 解码后的 `1e-6` 量化坐标，`GEOHASH` 基于当前解码坐标生成 Redis 兼容 geohash 字符串，`WITHHASH` 返回当前 packed score，而不是 Redis 原生 geohash 整数

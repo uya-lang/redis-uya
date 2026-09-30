@@ -1384,6 +1384,8 @@ export fn test_command_function_help() !void {
     try assert_true(command_executor_test_contains(out[0: help_len], &"FUNCTION DUMP"[0: 13]));
     try assert_true(command_executor_test_contains(out[0: help_len], &"FUNCTION RESTORE"[0: 16]));
     try assert_true(command_executor_test_contains(out[0: help_len], &"FUNCTION KILL"[0: 13]));
+    try assert_true(!command_executor_test_contains(out[0: help_len], &"function storage is not implemented"[0: 38]));
+    try assert_true(!command_executor_test_contains(out[0: help_len], &"Currently unsupported"[0: 21]));
     command_reply_cleanup(&help_reply);
     resp_value_free(&help_parsed.value);
 

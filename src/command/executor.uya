@@ -10826,21 +10826,21 @@ fn command_executor_function_help() CommandReply {
     _ = list_object_push_tail(reply_list, &"FUNCTION HELP"[0: 13]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"    Prints this help."[0: 21]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"FUNCTION LIST [LIBRARYNAME <pattern>] [WITHCODE]"[0: 48]) catch { object_free(reply_list); return command_executor_oom(); };
-    _ = list_object_push_tail(reply_list, &"    Return loaded functions. Currently empty until Redis Functions execution lands."[0: 83]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Return loaded functions."[0: 28]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"FUNCTION STATS"[0: 14]) catch { object_free(reply_list); return command_executor_oom(); };
-    _ = list_object_push_tail(reply_list, &"    Return function runtime stats. Currently empty until Redis Functions execution lands."[0: 89]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Return function runtime stats."[0: 34]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"FUNCTION FLUSH [ASYNC|SYNC]"[0: 27]) catch { object_free(reply_list); return command_executor_oom(); };
-    _ = list_object_push_tail(reply_list, &"    Flush loaded functions. Currently a no-op because function storage is not implemented."[0: 90]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Flush loaded functions."[0: 27]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"FUNCTION DELETE <library-name>"[0: 30]) catch { object_free(reply_list); return command_executor_oom(); };
-    _ = list_object_push_tail(reply_list, &"    Delete a function library. Currently returns Library not found because function storage is not implemented."[0: 111]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Delete a function library."[0: 30]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"FUNCTION LOAD [REPLACE] <function-code>"[0: 39]) catch { object_free(reply_list); return command_executor_oom(); };
-    _ = list_object_push_tail(reply_list, &"    Load a function library. Currently unsupported."[0: 51]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Load a function library."[0: 28]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"FUNCTION DUMP"[0: 13]) catch { object_free(reply_list); return command_executor_oom(); };
-    _ = list_object_push_tail(reply_list, &"    Return a serialized payload of loaded libraries. Currently returns the Redis-compatible empty-library dump."[0: 111]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Return a serialized payload of loaded libraries."[0: 52]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"FUNCTION RESTORE <serialized-value> [FLUSH|APPEND|REPLACE]"[0: 58]) catch { object_free(reply_list); return command_executor_oom(); };
-    _ = list_object_push_tail(reply_list, &"    Restore loaded functions. Currently accepts only the empty-library dump."[0: 76]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Restore loaded functions."[0: 29]) catch { object_free(reply_list); return command_executor_oom(); };
     _ = list_object_push_tail(reply_list, &"FUNCTION KILL"[0: 13]) catch { object_free(reply_list); return command_executor_oom(); };
-    _ = list_object_push_tail(reply_list, &"    Kill the currently executing function. Currently returns NOTBUSY because no function execution is implemented."[0: 114]) catch { object_free(reply_list); return command_executor_oom(); };
+    _ = list_object_push_tail(reply_list, &"    Kill the currently executing function."[0: 42]) catch { object_free(reply_list); return command_executor_oom(); };
     return command_executor_owned_array(reply_list);
 }
 

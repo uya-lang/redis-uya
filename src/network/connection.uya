@@ -11806,6 +11806,23 @@ fn connection_command_requests_write(command: &Command) bool {
     if command == null {
         return false;
     }
+    if command.info.cmd_type == CommandType.command_xgroup {
+        // XGROUP has a read-only HELP subcommand, but every stateful
+        // subcommand mutates stream/group metadata. The catalog entry is
+        // intentionally shared by the container command, so classify the
+        // subcommand here before the replica read-only gate.
+        if command.argc < 2 {
+            return false;
+        }
+        const subcommand: &[byte] = command_arg_data(command, 1) catch {
+            return false;
+        };
+        return connection_keyword_eq(subcommand, &"CREATE"[0: 6]) ||
+            connection_keyword_eq(subcommand, &"CREATECONSUMER"[0: 14]) ||
+            connection_keyword_eq(subcommand, &"DELCONSUMER"[0: 11]) ||
+            connection_keyword_eq(subcommand, &"DESTROY"[0: 7]) ||
+            connection_keyword_eq(subcommand, &"SETID"[0: 5]);
+    }
     if command.info.cmd_type == CommandType.command_himport && command.argc >= 2 {
         const subcommand: &[byte] = command_arg_data(command, 1) catch {
             return false;

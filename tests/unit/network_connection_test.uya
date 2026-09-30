@@ -1077,10 +1077,16 @@ export fn test_connection_replica_read_only() !void {
     var runtime: CommandRuntimeInfo = command_runtime_default();
     runtime.replication_role = ReplicationRole.role_replica;
     var tx: ConnectionTransaction = connection_transaction_new();
-    var out: [byte: 512] = [];
+    var out: [byte: 2048] = [];
 
     const denied_set: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*3\r\n$3\r\nSET\r\n$6\r\nro-key\r\n$5\r\nvalue\r\n"[0: 36], &out[0], 512, 1000u64);
     try assert_true(network_connection_contains(out[0: denied_set.response_len], &"READONLY You can't write against a read only replica."[0: 53]));
+
+    const denied_xgroup_create: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*5\r\n$6\r\nXGROUP\r\n$6\r\nCREATE\r\n$6\r\nstream\r\n$1\r\ng\r\n$1\r\n$\r\n"[0: 54], &out[0], 512, 1000u64);
+    try assert_true(network_connection_contains(out[0: denied_xgroup_create.response_len], &"READONLY You can't write against a read only replica."[0: 53]));
+
+    const xgroup_help: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*2\r\n$6\r\nXGROUP\r\n$4\r\nHELP\r\n"[0: 26], &out[0], 2048, 1000u64);
+    try assert_true(network_connection_contains(out[0: xgroup_help.response_len], &"XGROUP HELP"[0: 11]));
 
     const missing_get: ConnectionProcessResult = try connection_process_input_with_runtime_with_transaction_at(&engine, &runtime, &router, &tx, &"*2\r\n$3\r\nGET\r\n$6\r\nro-key\r\n"[0: 25], &out[0], 512, 1001u64);
     try assert_true(network_connection_slice_eq(out[0: missing_get.response_len], &"$-1\r\n"[0: 5]));

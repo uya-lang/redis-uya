@@ -145,6 +145,14 @@ def run_smoke() -> None:
             if denied_write != expected_denied_write:
                 raise AssertionError(f"expected replica write rejection, got {denied_write!r}")
 
+            denied_xgroup = send_command(sock, b"XGROUP", b"CREATE", b"replica-stream", b"group", b"$")
+            if denied_xgroup != expected_denied_write:
+                raise AssertionError(f"expected XGROUP CREATE rejection on replica, got {denied_xgroup!r}")
+
+            xgroup_help = send_command(sock, b"XGROUP", b"HELP")
+            if b"XGROUP HELP" not in xgroup_help or xgroup_help.startswith(b"-READONLY"):
+                raise AssertionError(f"XGROUP HELP should remain readable on replica, got {xgroup_help!r}")
+
             if send_command(sock, b"CONFIG", b"SET", b"replica-read-only", b"no") != b"+OK\r\n":
                 raise AssertionError("expected CONFIG SET replica-read-only no to succeed")
             writable_replica_info = send_command(sock, b"INFO", b"replication")

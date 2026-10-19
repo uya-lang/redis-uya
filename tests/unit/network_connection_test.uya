@@ -939,6 +939,9 @@ export fn test_connection_process_ping_set_get_quit() !void {
 
     var replconf_tx: ConnectionTransaction = connection_transaction_new();
     defer { connection_transaction_reset(&replconf_tx); }
+    const replconf_listen_result: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &replconf_tx, &"*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n6380\r\n"[0: 49], &out[0], 256, 975u64);
+    try assert_true(network_connection_slice_eq(out[0: replconf_listen_result.response_len], &"+OK\r\n"[0: 5]));
+    try assert_eq_i32(replconf_tx.replication_listening_port as i32, 6380);
     const replconf_ack_result: ConnectionProcessResult = try connection_process_input_with_transaction_at(&engine, &router, &replconf_tx, &"*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$3\r\n128\r\n"[0: 36], &out[0], 256, 1000u64);
     try assert_eq_i32(replconf_ack_result.response_len as i32, 0);
     try assert_eq_i32(replconf_tx.replication_client as i32, 0);

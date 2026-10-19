@@ -49,7 +49,7 @@
 | 命令范围门禁 | `PASS` |
 | 命令门禁负例 | 6 项全部 `PASS` |
 | 完整单元测试 | `PASS` |
-| Makefile 当前集成测试 | 38 项全部 `PASS` |
+| Makefile 当前集成测试 | 39 项全部 `PASS` |
 | redis-cli smoke | `PASS` |
 | DoD 一键验证 | `PASS` |
 | 文档真值门禁 | `PASS` |
@@ -72,7 +72,7 @@
 | 项目范围 | 基本符合 | 单机核心优先，模块和集群不与当前封版门槛混算 |
 | 功能广度 | 较高 | Tier A 无 `deferred`，但 `partial` 仍占主体 |
 | 功能完整度 | 收敛中 | Streams、Script/Functions、复制、持久化、运维仍有关键语义缺口 |
-| 正确性回归 | 当前通过 | 完整单元、38 项集成和 redis-cli 当前为绿 |
+| 正确性回归 | 当前通过 | 完整单元、39 项集成和 redis-cli 当前为绿 |
 | 性能回归 | 当前通过 | 绝对吞吐和 p99 guard 通过 |
 | Redis 对标性能 | 未完成 | 严格全场景稳定超越目标尚未达到 |
 | 文档真实性 | 已完成一轮整改 | README/TODO/DoD 已统一，并新增自动门禁 |
@@ -343,7 +343,7 @@ P0 表示会阻止进入封版候选或可能造成数据错误、安全问题�
 | F-REPL-04 | P0 | 副本只读限制（2026-09-09 已完成） | `replica-read-only` 默认开启，客户端静态/动态写路径与事务返回 READONLY；CONFIG/INFO 状态切换正确，提升 master 和内部 full/incremental 回放有回归 |
 | F-REPL-05 | P0 | 断线重连和 partial resync 强化（2026-10-19 已完成） | backlog 窗口内 CONTINUE，超出窗口 FULLRESYNC；快照、引擎和本地 AOF 成功后提交 replid/offset，数据与 offset 收敛 |
 | F-REPL-06 | P1 | 强化 full sync 传输和损坏处理（2026-10-19 已完成） | `FULLRESYNC` 可选 CRC64，replica 在加载/提交前校验并兼容旧 master；半快照中断、协议/校验/加载/AOF 失败有稳定错误码，失败后 500ms 退避，`master_sync_*` 暴露尝试、失败、重试、传输/读取字节和最近错误；专项集成验证旧状态不替换及成功恢复 |
-| F-REPL-07 | P1 | 复制状态可观测 | `INFO replication`、ROLE 与真实连接/offset/ACK 状态一致 |
+| F-REPL-07 | P1 | 复制状态可观测（2026-10-19 已完成） | `INFO replication` 只统计在线 `PSYNC` 副本并暴露 `connected_slaves` 与 `slaveN` 的地址、监听端口、ACK/FACK offset、lag；`ROLE` 第三项返回真实副本三元组；`REPLCONF listening-port` 优先于 TCP 源端口，断连自动清理，普通 ACK 与短连接 pull replica 不计入，专项集成覆盖双副本和断连生命周期 |
 
 ### 12.5 持久化与恢复
 
@@ -427,7 +427,7 @@ P0 表示会阻止进入封版候选或可能造成数据错误、安全问题�
 完成项：
 
 - README/TODO/DoD 口径统一。
-- 38 项当前集成数量固化。
+- 39 项当前集成数量固化。
 - 574/420 命令数量固化。
 - 关键能力边界统一。
 - 5K/50K 性能口径分层。

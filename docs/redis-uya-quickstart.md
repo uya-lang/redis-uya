@@ -61,7 +61,7 @@ Python 集成 smoke：
 make test-integration
 ```
 
-`make test-integration` 当前注册 38 项 Python 集成用例。
+`make test-integration` 当前注册 39 项 Python 集成用例。
 
 如果本机已安装 `redis-cli`：
 

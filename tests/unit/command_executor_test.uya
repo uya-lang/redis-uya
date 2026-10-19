@@ -207,6 +207,13 @@ export fn test_command_info_and_config() !void {
     runtime.replication_master_offset = 128u64;
     runtime.replication_backlog_first_offset = 64u64;
     runtime.replication_backlog_histlen = 64;
+    runtime.replication_connected_slaves = 1;
+    runtime.replication_replicas[0].host_len = 9;
+    config_copy_bytes(runtime.replication_replicas[0].host[0: 32], &"127.0.0.1"[0: 9]);
+    runtime.replication_replicas[0].port = 6380;
+    runtime.replication_replicas[0].ack_offset = 128;
+    runtime.replication_replicas[0].aof_ack_offset = 120;
+    runtime.replication_replicas[0].ack_time_ms = 4000u64;
 
     var set_parsed: RespParseResult = try parse_resp2(&"*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"[0: 33]);
     const set_command: Command = try command_executor_test_command(&router, &set_parsed);
@@ -269,6 +276,8 @@ export fn test_command_info_and_config() !void {
     var info_repl_master_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &info_repl_master_command, 5000u64);
     try assert_eq_i32(info_repl_master_reply.typ as i32, CommandReplyType.reply_bulk_string as i32);
     try assert_true(command_executor_test_contains(info_repl_master_reply.data, &"role:master\r\n"[0: 13]));
+    try assert_true(command_executor_test_contains(info_repl_master_reply.data, &"connected_slaves:1\r\n"[0: 20]));
+    try assert_true(command_executor_test_contains(info_repl_master_reply.data, &"slave0:ip=127.0.0.1,port=6380,state=online,offset=128,lag=1,fack_offset=120\r\n"[0: 77]));
     command_reply_cleanup(&info_repl_master_reply);
     resp_value_free(&info_repl_master_parsed.value);
 
@@ -2365,6 +2374,8 @@ export fn test_command_replconf() !void {
     try assert_eq_i32(port_reply.typ as i32, CommandReplyType.reply_simple_string as i32);
     try assert_true(command_executor_test_slice_eq(port_reply.data, &"OK"[0: 2]));
     try assert_eq_i32(port_reply.request_replicaof as i32, 0);
+    try assert_eq_i32(port_reply.request_replconf_listening_port as i32, 1);
+    try assert_eq_i32(port_reply.replconf_listening_port as i32, 6380);
     resp_value_free(&port_parsed.value);
 
     var ack_parsed: RespParseResult = try parse_resp2(&"*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n"[0: 34]);
@@ -9120,9 +9131,14 @@ export fn test_command_role() !void {
 
     var role_master_parsed: RespParseResult = try parse_resp2(&"*1\r\n$4\r\nROLE\r\n"[0: 14]);
     const role_master_command: Command = try command_executor_test_command(&router, &role_master_parsed);
+    runtime.replication_connected_slaves = 1;
+    runtime.replication_replicas[0].host_len = 9;
+    config_copy_bytes(runtime.replication_replicas[0].host[0: 32], &"127.0.0.1"[0: 9]);
+    runtime.replication_replicas[0].port = 6380;
+    runtime.replication_replicas[0].ack_offset = 128;
     var role_master_reply: CommandReply = command_execute_with_runtime_at(&engine, &runtime, &role_master_command, 1000u64);
     const role_master_len: usize = try connection_encode_reply(&role_master_reply, &out[0], 256);
-    try assert_true(command_executor_test_slice_eq(out[0: role_master_len], &"*3\r\n$6\r\nmaster\r\n:0\r\n*0\r\n"[0: 24]));
+    try assert_true(command_executor_test_slice_eq(out[0: role_master_len], &"*3\r\n$6\r\nmaster\r\n:0\r\n*1\r\n*3\r\n$9\r\n127.0.0.1\r\n:6380\r\n:128\r\n"[0: 56]));
     command_reply_cleanup(&role_master_reply);
     resp_value_free(&role_master_parsed.value);
 

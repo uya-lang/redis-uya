@@ -23,9 +23,9 @@
 - 最小迭代默认递增版本号最后一位：`v0.9.0`、`v0.9.1`、`v0.9.2` 依次推进；不为普通小阶段抬高第二位版本号。
 - `v0.9.0` 起后续主线只迭代单机版：补齐 Redis Open Source 单机功能、兼容性、性能和稳定性。
 - 当前 `HEAD` 的真实性高于历史报告：`README`、`DoD`、`COMMAND*`、测试结果和 benchmark 结果必须互相一致。
-- 2026-10-19 当前 `HEAD`：源码契约、完整单元、Makefile 注册的 38 项集成和 redis-cli smoke 已通过。命令矩阵当前跟踪 574 个官方命令名和 420 个 top-level 命令；Tier A 为 `full=152/partial=220/standalone-error=7/alias=3/deferred=0`。2026-09-01 正式 50K release 复测的五项 Redis 比值为 `0.99x/1.14x/1.04x/1.31x/0.98x`，五项绝对吞吐和 p99 guard 均通过，`SET 16B` 与 `GET 1KiB` normalized guard miss，RSS 为 Redis 的 `1.68x`；严格稳定 1.10x 全场景超越要求仍未达到。
+- 2026-10-19 当前 `HEAD`：源码契约、完整单元、Makefile 注册的 39 项集成和 redis-cli smoke 已通过。命令矩阵当前跟踪 574 个官方命令名和 420 个 top-level 命令；Tier A 为 `full=152/partial=220/standalone-error=7/alias=3/deferred=0`。2026-09-01 正式 50K release 复测的五项 Redis 比值为 `0.99x/1.14x/1.04x/1.31x/0.98x`，五项绝对吞吐和 p99 guard 均通过，`SET 16B` 与 `GET 1KiB` normalized guard miss，RSS 为 Redis 的 `1.68x`；严格稳定 1.10x 全场景超越要求仍未达到。
 - benchmark 口径分层：`make benchmark-v0.9.3-release` 默认 5K iterations / 200 warmup，用于快速 release 回归；正式验收显式使用 `REDIS_UYA_BENCH_ITERS=50000 REDIS_UYA_BENCH_WARMUP=2000`。当前正式证据为 `benchmarks/v0.9.3-release-performance-2026-09-01-current-50k.md`。
-- 本页下方性能优化条目中的 20K/50K/100K/200K 与“33 项集成”都是对应提交当时的历史 A/B 证据，不代替上述当前 `HEAD` 的 38 项集成和正式 50K 复核口径。
+- 本页下方性能优化条目中的 20K/50K/100K/200K 与“33 项集成”都是对应提交当时的历史 A/B 证据，不代替上述当前 `HEAD` 的 39 项集成和正式 50K 复核口径。
 - 2026-07-23 已将 `../uya` `1.0` 分支直接回退到与远端一致的 `f54bd7bf`，删除未推送且违反 `export const/var` 裸 C ABI 规范的两个本地提交；redis-uya 将内部全局量改为私有并通过 `export fn` 跨模块访问，构建、完整单测、完整集成、redis-cli、release 和性能 guard 均通过。
 - `v0.9.4` 用于性能与稳定性收敛；`v0.9.5` 是首个单机封版候选，如未达到 `v1.0.0` 封版条件，继续使用 `v0.9.6` 等 patch 版本顺序迭代。
 - 单机版必须先覆盖 Redis Open Source 单机核心命令面；模块命令可以继续追踪，但不能与 `v1.0.0` 单机封版门槛混算。命令全集、状态定义和封版标准见 `redis-uya-command-scope.md`。
@@ -98,6 +98,7 @@
 - [x] 2026-10-19 配置型 pull replica AOF/FACK 闭环：full sync 先用 master RDB 快照原子重写并 `fsync` 本地 AOF，成功后才替换内存态和 upstream offset；incremental sync 回放 delta 后追加同一批原始字节到本地 AOF、标记并 `fsync` 目标 offset，成功后才推进 offset/FACK，失败回到 `configured`。`aof_rewrite_file_at` 在 rename 前同步临时文件；专项集成覆盖陈旧 AOF 清理、`SET/COPY/HSET/EVAL/RPUSH/SADD/ZADD/XADD` 增量传播、ACK/FACK 对齐、master 停止后仅靠副本 AOF 重启恢复。配置型 pull replica 使用短时轮询连接，不进入 master 侧持续在线 `PSYNC`/`WAITAOF` 计数
 - [x] 2026-10-19 复制重连/partial resync 强化：replica 在 backlog 窗口内通过 `PSYNC replid offset` 取得 `CONTINUE` 并回放 delta；超窗 `FULLRESYNC` 统一走快照、引擎和本地 AOF 全部成功后原子切换的路径，replid/offset 最后提交，失败回到 `configured`。专项集成覆盖停写期间的窗口内增量、backlog 超窗后的全量回退、旧键收敛、offset 对齐及 FULLRESYNC 后继续增量
 - [x] 2026-10-19 full sync 传输与损坏恢复强化：master 的 `FULLRESYNC` 头增加可选 CRC64，replica 在 RDB 加载、AOF rewrite/fsync 和 replid/offset 提交前校验快照，兼容无校验和的旧 master；中断、协议错误、校验失败、快照加载和本地 AOF 失败分别记录 `snapshot_read`、`fullresync_protocol`、`snapshot_checksum`、`snapshot_load`、`snapshot_aof` 等稳定错误码。`INFO replication` 暴露 `master_sync_attempts/failures/retry_count/last_error/total_bytes/read_bytes`，失败后 500ms 退避重试，成功恢复后保留最近错误；专项集成覆盖半快照断流、部分读取进度、损坏快照、本地旧状态不替换、重试和合法快照恢复
+- [x] 2026-10-19 复制状态可观测：master 的 `INFO replication` 只统计已完成 `PSYNC` 且仍在线的复制连接，`connected_slaves` 与 `slaveN` 的 `ip/port/state/offset/lag/fack_offset` 来自连接级 ACK/FACK 与最近 ACK 时间；`ROLE` 第三项返回每个在线副本真实的 `[ip, listening-port, ack-offset]` 三元组，优先使用 `REPLCONF listening-port`，否则回退 TCP 源端口。连接断开后快照自动移除，普通客户端 ACK 与配置型短连接 pull replica 不计入；单元覆盖 `INFO`/`ROLE` 快照和 `REPLCONF listening-port` 解析，专项集成覆盖双副本、ACK/FACK 更新、断连清理及 pull replica 排除
 - [x] 2026-09-01 文档真值收口：README / TODO / DoD 统一到 574 个官方命令名、36 项当前集成、Sharded Pub/Sub standalone partial、Hash field TTL 持久化/复制传播、Streams `NOMKSTREAM`/trim 当前边界和“5K 快速回归 + 50K 正式验收”性能口径；新增当前 HEAD 50K release 证据报告，并把 `scripts/verify_doc_truth.py` 接入 `make test` 防止回归
 - [x] 2026-09-02 文档真值门禁扩展：API / Architecture / Quickstart / Design 统一到 `v0.9.3-dev`，API 与 Design 记录 574/420 命令数量，Quickstart 记录 36 项集成与 5K/50K 性能入口，Design 更新 RESP3、基础类型、持久化、复制、Lua/Functions、ACL、Streams 与 Cluster 当前边界；`verify_doc_truth.py` 已阻止四文档回退到旧版本和旧能力描述
 - [ ] `v0.9.3` 起：在真实性问题收敛后，继续补 Redis Open Source 单机核心缺口，而不是先扩模块命令

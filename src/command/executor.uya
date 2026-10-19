@@ -206,6 +206,18 @@ use libc.snprintf;
 use libc.isnan;
 use libc.isinf;
 
+const COMMAND_REPLICA_INFO_MAX: usize = 64;
+const COMMAND_REPLICA_INFO_HOST_MAX: usize = 32;
+
+export struct CommandReplicaInfo {
+    host_len: usize,
+    host: [byte: COMMAND_REPLICA_INFO_HOST_MAX],
+    port: i32,
+    ack_offset: i64,
+    aof_ack_offset: i64,
+    ack_time_ms: u64,
+}
+
 export enum CommandReplyType {
     reply_simple_string,
     reply_error,
@@ -236,6 +248,8 @@ export struct CommandReply {
     replconf_ack_offset: i64,
     request_replconf_fack: bool,
     replconf_fack_offset: i64,
+    request_replconf_listening_port: bool,
+    replconf_listening_port: i32,
     request_bgsave: bool,
     request_aof_rewrite: bool,
     request_config_set: bool,
@@ -277,6 +291,8 @@ export struct CommandRuntimeInfo {
     replication_backlog_first_offset: u64,
     replication_backlog_histlen: usize,
     replication_backlog_active: bool,
+    replication_connected_slaves: i32,
+    replication_replicas: [CommandReplicaInfo: COMMAND_REPLICA_INFO_MAX],
     maxmemory_excluded_bytes: usize,
     bgsave_requested: bool,
     bgsave_in_progress: bool,
@@ -364,6 +380,8 @@ export fn command_runtime_default() CommandRuntimeInfo {
         replication_backlog_first_offset: 0u64,
         replication_backlog_histlen: 0,
         replication_backlog_active: false,
+        replication_connected_slaves: 0,
+        replication_replicas: [],
         maxmemory_excluded_bytes: 0,
         bgsave_requested: false,
         bgsave_in_progress: false,
@@ -410,6 +428,8 @@ fn command_executor_reply(typ: CommandReplyType, data: &[byte], integer: i64) Co
         replconf_ack_offset: 0,
         request_replconf_fack: false,
         replconf_fack_offset: 0,
+        request_replconf_listening_port: false,
+        replconf_listening_port: 0,
         request_bgsave: false,
         request_aof_rewrite: false,
         request_config_set: false,
@@ -18735,6 +18755,66 @@ fn command_executor_time(command: &Command, now_ms: u64) CommandReply {
     return command_executor_owned_raw(raw.buf[0: raw.len]);
 }
 
+fn command_executor_replica_count(runtime: &CommandRuntimeInfo) usize {
+    if runtime.replication_connected_slaves <= 0 {
+        return 0;
+    }
+    var count: usize = runtime.replication_connected_slaves as usize;
+    if count > COMMAND_REPLICA_INFO_MAX {
+        count = COMMAND_REPLICA_INFO_MAX;
+    }
+    return count;
+}
+
+fn command_executor_replica_ack_offset(replica: &CommandReplicaInfo) i64 {
+    if replica.ack_offset < 0 {
+        return 0;
+    }
+    return replica.ack_offset;
+}
+
+fn command_executor_replica_aof_ack_offset(replica: &CommandReplicaInfo) i64 {
+    if replica.aof_ack_offset < 0 {
+        return 0;
+    }
+    return replica.aof_ack_offset;
+}
+
+fn command_executor_info_append_replica(buf: &Sds, index: usize, replica: &CommandReplicaInfo, now_ms: u64) !void {
+    var host_len: usize = replica.host_len;
+    if host_len > COMMAND_REPLICA_INFO_HOST_MAX {
+        host_len = COMMAND_REPLICA_INFO_HOST_MAX;
+    }
+    var lag: u64 = 0u64;
+    if replica.ack_time_ms != 0u64 && now_ms >= replica.ack_time_ms {
+        lag = (now_ms - replica.ack_time_ms) / 1000u64;
+    }
+    try command_executor_info_append(buf, &"slave"[0: 5]);
+    try command_executor_info_append_u64(buf, &"%u"[0: 2], index as u64);
+    try command_executor_info_append(buf, &":ip="[0: 4]);
+    try command_executor_info_append(buf, replica.host[0: host_len]);
+    try command_executor_info_append(buf, &",port="[0: 6]);
+    try command_executor_info_append_i64(buf, &"%i"[0: 2], replica.port as i64);
+    try command_executor_info_append(buf, &",state=online,offset="[0: 21]);
+    try command_executor_info_append_u64(buf, &"%u"[0: 2], command_executor_replica_ack_offset(replica) as u64);
+    try command_executor_info_append(buf, &",lag="[0: 5]);
+    try command_executor_info_append_u64(buf, &"%u"[0: 2], lag);
+    try command_executor_info_append(buf, &",fack_offset="[0: 13]);
+    try command_executor_info_append_u64(buf, &"%u"[0: 2], command_executor_replica_aof_ack_offset(replica) as u64);
+    try command_executor_info_append(buf, &"\r\n"[0: 2]);
+}
+
+fn command_executor_role_append_replica(raw: &Sds, replica: &CommandReplicaInfo) !void {
+    var host_len: usize = replica.host_len;
+    if host_len > COMMAND_REPLICA_INFO_HOST_MAX {
+        host_len = COMMAND_REPLICA_INFO_HOST_MAX;
+    }
+    try command_executor_resp_collection_prefix(raw, &"*"[0: 1], 3);
+    try command_executor_command_append_bulk(raw, replica.host[0: host_len]);
+    try command_executor_info_append_i64(raw, &":%i\r\n"[0: 5], replica.port as i64);
+    try command_executor_info_append_i64(raw, &":%i\r\n"[0: 5], command_executor_replica_ack_offset(replica));
+}
+
 fn command_executor_role(runtime: &CommandRuntimeInfo, command: &Command) CommandReply {
     if command.argc != 1 {
         return command_executor_wrong_arity();
@@ -18747,11 +18827,20 @@ fn command_executor_role(runtime: &CommandRuntimeInfo, command: &Command) Comman
     }
 
     if runtime.replication_role == ReplicationRole.role_master {
-        _ = sds_cat(&raw, &"*3\r\n$6\r\nmaster\r\n"[0: 16]) catch { return command_executor_oom(); };
+        const replica_count: usize = command_executor_replica_count(runtime);
+        _ = command_executor_resp_collection_prefix(&raw, &"*"[0: 1], 3) catch { return command_executor_oom(); };
+        _ = command_executor_command_append_bulk(&raw, &"master"[0: 6]) catch { return command_executor_oom(); };
         _ = command_executor_info_append_u64(&raw, &":%u\r\n"[0: 5], runtime.replication_master_offset) catch {
             return command_executor_oom();
         };
-        _ = sds_cat(&raw, &"*0\r\n"[0: 4]) catch { return command_executor_oom(); };
+        _ = command_executor_resp_collection_prefix(&raw, &"*"[0: 1], replica_count) catch { return command_executor_oom(); };
+        var replica_index: usize = 0;
+        while replica_index < replica_count {
+            _ = command_executor_role_append_replica(&raw, &runtime.replication_replicas[replica_index]) catch {
+                return command_executor_oom();
+            };
+            replica_index = replica_index + 1;
+        }
         return command_executor_owned_raw(raw.buf[0: raw.len]);
     }
 
@@ -19476,6 +19565,22 @@ fn command_executor_replconf(runtime: &CommandRuntimeInfo, command: &Command) Co
         return reply;
     }
 
+    if command_executor_keyword_eq(option, &"listening-port"[0: 14]) {
+        if command.argc != 3 {
+            return command_executor_wrong_arity();
+        }
+        const listening_port: i64 = command_executor_parse_i64(value) catch {
+            return command_executor_invalid_integer();
+        };
+        if listening_port <= 0 || listening_port > 65535 {
+            return command_executor_invalid_integer();
+        }
+        var reply: CommandReply = command_executor_simple(&"OK"[0: 2]);
+        reply.request_replconf_listening_port = true;
+        reply.replconf_listening_port = listening_port as i32;
+        return reply;
+    }
+
     if command_executor_keyword_eq(option, &"GETACK"[0: 6]) {
         if command.argc != 3 {
             return command_executor_wrong_arity();
@@ -19614,7 +19719,15 @@ fn command_executor_info(engine: &Engine, runtime: &CommandRuntimeInfo, command:
                 backlog_active_i64 = 1;
             }
             _ = command_executor_info_append_bytes(&buf, &"master_replid:%s\r\n"[0: 18], command_executor_cstring_slice(runtime.replication_replid[0: 41])) catch { return command_executor_oom(); };
-            _ = command_executor_info_append_i64(&buf, &"connected_slaves:%i\r\n"[0: 21], 0) catch { return command_executor_oom(); };
+            const replica_count: usize = command_executor_replica_count(runtime);
+            _ = command_executor_info_append_u64(&buf, &"connected_slaves:%u\r\n"[0: 21], replica_count as u64) catch { return command_executor_oom(); };
+            var replica_index: usize = 0;
+            while replica_index < replica_count {
+                _ = command_executor_info_append_replica(&buf, replica_index, &runtime.replication_replicas[replica_index], now_ms) catch {
+                    return command_executor_oom();
+                };
+                replica_index = replica_index + 1;
+            }
             _ = command_executor_info_append_u64(&buf, &"master_repl_offset:%u\r\n"[0: 23], runtime.replication_master_offset) catch { return command_executor_oom(); };
             _ = command_executor_info_append_i64(&buf, &"repl_backlog_active:%i\r\n"[0: 24], backlog_active_i64) catch { return command_executor_oom(); };
             _ = command_executor_info_append_u64(&buf, &"repl_backlog_histlen:%u\r\n\r\n"[0: 27], runtime.replication_backlog_histlen as u64) catch { return command_executor_oom(); };

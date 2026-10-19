@@ -2,7 +2,7 @@
 
 > 版本: v0.9.3-dev
 > 日期: 2026-10-19
-> 状态: 下列条目保留历史里程碑证据；当前 `HEAD` 的源码契约、完整单测、38 项当前集成、redis-cli、release 构建和 2026-09-01 正式 50K 性能 guard 通过，README / TODO / DoD / API / Architecture / Quickstart / Design 已接入真值检查，主线处于 `v0.9.3` 核心缺口补齐、性能收敛与运维第一批
+> 状态: 下列条目保留历史里程碑证据；当前 `HEAD` 的源码契约、完整单测、39 项当前集成、redis-cli、release 构建和 2026-09-01 正式 50K 性能 guard 通过，README / TODO / DoD / API / Architecture / Quickstart / Design 已接入真值检查，主线处于 `v0.9.3` 核心缺口补齐、性能收敛与运维第一批
 
 ## 1. 目标
 
@@ -15,7 +15,7 @@
 | 上游 `1.0` 分支工具链按源码重新构建并成套同步：`bin/uya` 静态启动器与 `bin/cmd/build` 实际编译器均返回 `v0.9.9`，哈希和尺寸已固化 | `uya/bin/uya`、`uya/bin/cmd/build`、`docs/redis-uya-uya-sync-2026-07-22.md` |
 | 上游 `1.0` 分支已直接回退到 `f54bd7bf`，与 `origin/1.0` 一致；违反导出全局裸 C ABI 规范的两个未推送提交已从分支历史移除 | `git -C ../uya rev-parse HEAD`、`git -C ../uya rev-list --count origin/1.0..HEAD` |
 | redis-uya 不再用 `export const/var` 表达项目内部模块 API；内部全局量保持私有，跨模块访问统一通过导出函数，并由源码契约检查防止回归 | `make verify-uya-source-contract`、`src/cluster/`、`src/command/`、`src/memory/allocator.uya`、`src/util/log.uya` |
-| 当前项目完成 debug/release 构建、完整单测、38 项当前集成、redis-cli smoke 与正式 50K 性能回归 guard | `make build`、`make test`、`make test-integration`、`make test-redis-cli`、`REDIS_UYA_BENCH_ITERS=50000 REDIS_UYA_BENCH_WARMUP=2000 make benchmark-v0.9.3-release` |
+| 当前项目完成 debug/release 构建、完整单测、39 项当前集成、redis-cli smoke 与正式 50K 性能回归 guard | `make build`、`make test`、`make test-integration`、`make test-redis-cli`、`REDIS_UYA_BENCH_ITERS=50000 REDIS_UYA_BENCH_WARMUP=2000 make benchmark-v0.9.3-release` |
 
 重要说明：
 
@@ -51,7 +51,7 @@ bash scripts/verify_definition_of_done.sh
 | 项目 | 当前结果 | 说明 |
 |------|----------|------|
 | `make test` | `PASS` | 源码契约、命令范围门禁、6 个门禁负例和完整 Uya 单元套件通过 |
-| `make test-integration` | `PASS` | Makefile 当前注册 38 项 Python 集成用例，全部通过 |
+| `make test-integration` | `PASS` | Makefile 当前注册 39 项 Python 集成用例，全部通过 |
 | `make test-redis-cli` | `PASS` | redis-cli 真实进程 smoke 通过 |
 | 正式 50K release benchmark | `PASS` | `REDIS_UYA_BENCH_ITERS=50000 REDIS_UYA_BENCH_WARMUP=2000` 复测；五项 Redis 比值为 `0.99x/1.14x/1.04x/1.31x/0.98x`，绝对吞吐和 p99 guard 全部通过，`SET 16B` 与 `GET 1KiB` normalized guard miss，RSS 为 Redis 的 `1.68x`；报告见 `benchmarks/v0.9.3-release-performance-2026-09-01-current-50k.md` |
 | `bash scripts/verify_definition_of_done.sh` | `PASS` | 一键验证执行默认 5K release 快速回归；正式 50K 证据由上述显式命令独立生成 |
@@ -267,7 +267,7 @@ bash scripts/verify_definition_of_done.sh
 | Key 模式读取扩展可用：`KEYS` 覆盖 `*` / `?` 最小 glob、字典序结果与 TCP/redis-py/redis-cli smoke | `src/command/router.uya`、`src/command/executor.uya`、`tests/unit/command_router_test.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/network_connection_test.uya`、`tests/unit/test_runner.uya`、`tests/integration/smoke_tcp.py`、`tests/integration/redis_py_subset.py`、`tests/integration/redis_cli_smoke.sh` |
 | 只读排序扩展可用：`SORT_RO` 覆盖只读排序返回、`STORE` 语法错误边界与 TCP/redis-py/redis-cli smoke | `src/command/router.uya`、`src/command/executor.uya`、`tests/unit/command_router_test.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/network_connection_test.uya`、`tests/unit/test_runner.uya`、`tests/integration/smoke_tcp.py`、`tests/integration/redis_py_subset.py`、`tests/integration/redis_cli_smoke.sh` |
 | 读路径补齐可用：`RANDOMKEY`、`TIME` 覆盖空库/单 key 语义、秒/微秒数组回复，以及 TCP/redis-py/redis-cli smoke | `src/command/router.uya`、`src/command/executor.uya`、`tests/unit/command_router_test.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/network_connection_test.uya`、`tests/integration/smoke_tcp.py`、`tests/integration/redis_py_subset.py`、`tests/integration/redis_cli_smoke.sh` |
-| 复制可观测读命令可用：`ROLE` 覆盖 master/replica 两种 RESP Array 返回形态，并通过 TCP/redis-py/redis-cli smoke 固化 | `src/command/router.uya`、`src/command/executor.uya`、`tests/unit/command_router_test.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/network_connection_test.uya`、`tests/integration/smoke_tcp.py`、`tests/integration/redis_py_subset.py`、`tests/integration/redis_cli_smoke.sh` |
+| 复制可观测读命令与在线副本状态可用：`ROLE` 覆盖 master/replica 两种 RESP Array 返回形态；master 第三项返回每个已完成 `PSYNC` 且仍在线副本的真实 `[host, listening-port, ack-offset]`，`INFO replication` 暴露 `connected_slaves` 与 `slaveN` 的 `ip/port/state/offset/lag/fack_offset`，优先使用 `REPLCONF listening-port`，断连自动清理，普通 ACK 与短连接 pull replica 不计入 | `src/command/router.uya`、`src/command/executor.uya`、`src/network/connection.uya`、`src/server.uya`、`tests/unit/command_router_test.uya`、`tests/unit/command_executor_test.uya`、`tests/unit/network_connection_test.uya`、`tests/integration/replication_observability.py`、`tests/integration/smoke_tcp.py`、`tests/integration/redis_py_subset.py`、`tests/integration/redis_cli_smoke.sh` |
 
 ## 17. `v0.9.1` 第三批
 

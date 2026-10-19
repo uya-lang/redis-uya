@@ -3394,14 +3394,15 @@ ROLE
 
 返回：
 
-- master：`[master, replication-offset, []]`
+- master：`[master, replication-offset, [[replica-ip, replica-port, replica-ack-offset], ...]]`
 - replica：`[slave, master-host, master-port, replication-state, replication-offset]`
 
 说明：
 
 - 当前 standalone 路径只覆盖 `master` / `slave` 两种返回形态，不包含 Sentinel 角色
-- master 形态里的第三个元素当前固定为空数组，表示没有额外下游副本明细
+- master 形态里的第三个元素按当前在线副本快照返回；只有已完成 `PSYNC`、连接仍在线且被标记为复制连接的客户端会计入，每项包含对端 IP、监听端口和 ACK offset
 - replica 形态里的 host/port/state 来自当前运行时复制配置与状态机
+- 下游副本优先使用 `REPLCONF listening-port` 报告的监听端口，未报告时回退 TCP 源端口；连接断开后下一轮 `INFO`/`ROLE` 快照自动移除，普通客户端 ACK 和配置型 pull replica 的短时轮询连接不会计入
 
 ### `MEMORY`
 
@@ -3914,6 +3915,7 @@ INFO keyspace
 - 支持 `server`、`clients`、`memory`、`stats`、`replication`、`keyspace`
 - 未带 section 时返回上述 section 组合段
 - `memory` section 当前包含 `used_memory`、`used_memory_peak`、`mem_not_counted_for_evict`、`total_allocated`、`total_freed`、`allocator_total_allocations`、`allocator_active_allocations`、`allocator_slab_cached_blocks`、`allocator_slab_cached_bytes`、`allocator_slab_reuse_count`、`object_pool_cached_objects`、`object_pool_cached_list_nodes`、`object_pool_reuse_count`、`object_layout_size`、`list_node_layout_size`、`maxmemory`、`maxmemory_policy`；其中 `mem_not_counted_for_evict` 当前统计复制 backlog 与进行中的 AOF rewrite buffer 已分配容量
+- master 的 `replication` section 包含 `connected_slaves`，并为每个在线 `PSYNC` 副本输出 `slaveN:ip=<host>,port=<port>,state=online,offset=<ack-offset>,lag=<seconds>,fack_offset=<aof-ack-offset>`；计数与明细只来自当前在线复制连接快照
 - `replication` section 在 replica 侧包含 `master_sync_attempts`、`master_sync_failures`、`master_sync_retry_count`、`master_sync_last_error`、`master_sync_total_bytes`、`master_sync_read_bytes`；`retry_count` 为 `attempts - 1`，成功恢复不清空最近错误，角色切换时重置统计
 
 ### `CONFIG`
@@ -4368,7 +4370,7 @@ SLAVEOF NO ONE
 - `SLAVEOF` 当前作为 `REPLICAOF` alias 进入同一执行路径
 - replica 默认启用 `replica-read-only yes`：客户端数据写命令返回 `-READONLY You can't write against a read only replica.`；除命令写标记外，`SORT ... STORE`、`HIMPORT SET` 和 `XGROUP CREATE|CREATECONSUMER|DELCONSUMER|DESTROY|SETID` 等动态写路径也受门禁保护，`XGROUP HELP` 等只读子命令、复制握手和配置控制命令仍可执行，`CONFIG SET replica-read-only no|yes` 可运行时切换
 - `SORT ... STORE`、`HIMPORT SET` 等参数驱动写路径同样受副本只读门禁；full/incremental 复制回放走内部应用路径，不会被客户端门禁阻止；提升为 master 后不再拒绝写入
-- 当前已完成复制角色切换、`PSYNC` 全量同步、轮询式增量同步、基础心跳、连接级 ACK/FACK/GETACK wire 语义、master 对在线 `PSYNC` 复制连接的 1000ms 周期 GETACK，以及 `WAIT/WAITAOF` 按需 GETACK 与聚合等待。full sync 的 `FULLRESYNC` 头支持可选 CRC64，失败时通过 `master_sync_attempts/failures/retry_count/last_error/total_bytes/read_bytes` 暴露尝试、失败、重试、最近稳定错误码和传输进度，失败后 500ms 退避重试，成功恢复后保留最近错误。AOF 启用时，全量同步先用 master 快照原子重写本地 AOF、`fsync` 并重新打开，再替换内存态；增量同步先回放 delta，再把同一批原始字节追加到本地 AOF、标记并 `fsync` 新 offset，成功后推进 upstream offset，`REPLCONF GETACK *` 返回的 FACK 才会跟随。任何失败都回到 `configured`，且不会把 upstream offset 推进到未持久化位置；仅靠已成功同步的本地 AOF 重启可以恢复同步数据。replica 在 connected 状态下按 backlog 窗口使用 `CONTINUE`；超窗时 `FULLRESYNC` 会重新应用快照，并在快照加载、引擎切换和本地 AOF 重写/fsync 全部成功后才提交新 replid/offset。仍不支持 Redis 原生长连接流式增量推送，配置型 pull replica 的短时轮询连接也不会被 master 当作持续在线副本计入 `WAITAOF`
+- 当前已完成复制角色切换、`PSYNC` 全量同步、轮询式增量同步、基础心跳、连接级 ACK/FACK/GETACK wire 语义、master 对在线 `PSYNC` 复制连接的 1000ms 周期 GETACK，以及 `WAIT/WAITAOF` 按需 GETACK 与聚合等待。full sync 的 `FULLRESYNC` 头支持可选 CRC64，失败时通过 `master_sync_attempts/failures/retry_count/last_error/total_bytes/read_bytes` 暴露尝试、失败、重试、最近稳定错误码和传输进度，失败后 500ms 退避重试，成功恢复后保留最近错误。AOF 启用时，全量同步先用 master 快照原子重写本地 AOF、`fsync` 并重新打开，再替换内存态；增量同步先回放 delta，再把同一批原始字节追加到本地 AOF、标记并 `fsync` 新 offset，成功后推进 upstream offset，`REPLCONF GETACK *` 返回的 FACK 才会跟随。任何失败都回到 `configured`，且不会把 upstream offset 推进到未持久化位置；仅靠已成功同步的本地 AOF 重启可以恢复同步数据。replica 在 connected 状态下按 backlog 窗口使用 `CONTINUE`；超窗时 `FULLRESYNC` 会重新应用快照，并在快照加载、引擎切换和本地 AOF 重写/fsync 全部成功后才提交新 replid/offset。master 的 `INFO replication` 与 `ROLE` 已从当前在线连接快照输出副本地址、监听端口、ACK/FACK offset、lag 与 ACK 时间，断连自动消失；普通客户端 ACK 与配置型 pull replica 的短时轮询连接不会计入。仍不支持 Redis 原生长连接流式增量推送，配置型 pull replica 的短时轮询连接也不会被 master 当作持续在线副本计入 `WAITAOF`
 
 ### `REPLCONF`
 
@@ -4381,6 +4383,7 @@ REPLCONF [option value]
 返回：
 
 - 空参数和常见握手参数（如 `CAPA psync2`）：`+OK`
+- `REPLCONF listening-port port`：校验 `1..65535` 后返回 `+OK`，并把监听端口写入当前复制连接的后续 `INFO`/`ROLE` 可观测快照
 - `REPLCONF ACK offset`：不发送普通命令回复
 - `REPLCONF ACK offset FACK fsynced-offset`：同时更新复制连接的普通 ACK 与 AOF fsync ACK，不发送普通命令回复
 - replica 角色收到 `REPLCONF GETACK *`：写回 `REPLCONF ACK <current-upstream-offset>` RESP 命令；AOF 启用时追加 `FACK <synced-replication-offset>`，数组长度为 `5`
@@ -4391,7 +4394,8 @@ REPLCONF [option value]
 
 - 只有已成功执行 `PSYNC` 的连接会记录 ACK/FACK；普通客户端发送的 ACK 同样不产生普通回复，但不会被标记或计入复制连接。复制连接分别记录单调前移的 ACK、FACK offset 和最近 ACK 时间；较旧值不回退 offset，但仍刷新 ACK 时间
 - replica 的 GETACK 回复使用运行时当前上游 master offset，而不是本地禁用 backlog 的 offset；AOF 启用时，只有本地 delta 已追加且 `fsync` 成功、upstream offset 已推进后，FACK 才会达到该 offset。配置型 pull replica 的连接是短时轮询连接，master 侧 `WAITAOF` 只统计持续在线的 `PSYNC` 复制连接
-- master 会按 1000ms 周期向在线 `PSYNC` 复制连接发送 GETACK，并在未满足的 `WAIT/WAITAOF` 上按需发送 GETACK、分别用 ACK/FACK 状态唤醒等待；周期与按需请求共享节流，当前仍不持久化 replica 端口/能力
+- master 会按 1000ms 周期向在线 `PSYNC` 复制连接发送 GETACK，并在未满足的 `WAIT/WAITAOF` 上按需发送 GETACK、分别用 ACK/FACK 状态唤醒等待；周期与按需请求共享节流
+- `listening-port` 仅保留在当前在线连接事务中，不持久化；未发送时 master 的 `INFO`/`ROLE` 使用 TCP 源端口
 - 不进入 AOF 或 replication backlog
 
 ### `FAILOVER`

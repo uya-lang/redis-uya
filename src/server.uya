@@ -1,6 +1,7 @@
 // server.uya - minimal single-threaded Redis server loop.
 
 use src.command.executor.CommandRuntimeInfo;
+use src.command.executor.CommandReplicaInfo;
 use src.persistence.backup.BackupState;
 use src.persistence.backup.backup_state_new;
 use src.persistence.backup.backup_state_free;
@@ -482,6 +483,8 @@ fn server_runtime_info_initialize(server: &RedisServer) void {
         replication_backlog_first_offset: 0u64,
         replication_backlog_histlen: 0,
         replication_backlog_active: server.repl_backlog.active,
+        replication_connected_slaves: 0,
+        replication_replicas: [],
         maxmemory_excluded_bytes: 0,
         bgsave_requested: false,
         bgsave_in_progress: false,
@@ -496,6 +499,56 @@ fn server_runtime_info_initialize(server: &RedisServer) void {
         backup: &server.backup,
     };
     server_runtime_info_sync_replid(server);
+}
+
+fn server_runtime_info_replica_endpoint(tx: &ConnectionTransaction, replica: &CommandReplicaInfo) void {
+    replica.host_len = 0;
+    replica.host = [];
+    replica.port = 0;
+    if tx.client_addr_len == 0 {
+        return;
+    }
+    var colon: usize = tx.client_addr_len;
+    var scan: usize = 0;
+    while scan < tx.client_addr_len {
+        if tx.client_addr[scan] == 58 as byte {
+            colon = scan;
+        }
+        scan = scan + 1;
+    }
+    var host_len: usize = colon;
+    if host_len > SERVER_CLIENT_ENDPOINT_MAX {
+        host_len = SERVER_CLIENT_ENDPOINT_MAX;
+    }
+    config_copy_bytes(replica.host[0: SERVER_CLIENT_ENDPOINT_MAX], tx.client_addr[0: host_len]);
+    replica.host_len = host_len;
+    if colon < tx.client_addr_len {
+        const port: i32 = server_replication_parse_i32(tx.client_addr[colon + 1: tx.client_addr_len - colon - 1]) catch {
+            return;
+        };
+        replica.port = port;
+    }
+    if tx.replication_listening_port > 0 {
+        replica.port = tx.replication_listening_port;
+    }
+}
+
+fn server_runtime_info_sync_replicas(server: &RedisServer) void {
+    const info: &CommandRuntimeInfo = &server.runtime_info;
+    var count: usize = 0;
+    var slot: usize = 0;
+    while slot < SERVER_MAX_CLIENTS && count < SERVER_MAX_CLIENTS {
+        const client: &RedisClient = &server.clients[slot];
+        if client.fd >= 0 && client.transaction.replication_client {
+            server_runtime_info_replica_endpoint(&client.transaction, &info.replication_replicas[count]);
+            info.replication_replicas[count].ack_offset = client.transaction.replication_ack_offset;
+            info.replication_replicas[count].aof_ack_offset = client.transaction.replication_aof_ack_offset;
+            info.replication_replicas[count].ack_time_ms = client.transaction.replication_ack_time_ms;
+            count = count + 1;
+        }
+        slot = slot + 1;
+    }
+    info.replication_connected_slaves = count as i32;
 }
 
 fn server_runtime_info(server: &RedisServer) &CommandRuntimeInfo {
@@ -546,6 +599,7 @@ fn server_runtime_info(server: &RedisServer) &CommandRuntimeInfo {
     info.replication_backlog_first_offset = backlog_first_offset;
     info.replication_backlog_histlen = backlog_histlen;
     info.replication_backlog_active = server.repl_backlog.active;
+    server_runtime_info_sync_replicas(server);
     info.maxmemory_excluded_bytes = maxmemory_excluded_bytes;
     info.bgsave_requested = server.bgsave_requested;
     info.bgsave_in_progress = server.bgsave_in_progress;

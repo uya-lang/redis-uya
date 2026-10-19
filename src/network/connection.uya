@@ -236,6 +236,7 @@ export struct ConnectionTransaction {
     replication_write_offset: u64,
     replication_getack_requested: bool,
     replication_getack_sent: bool,
+    replication_listening_port: i32,
 }
 
 struct ConnectionSendProgress {
@@ -618,6 +619,7 @@ fn connection_transaction_empty() ConnectionTransaction {
         replication_write_offset: 0u64,
         replication_getack_requested: false,
         replication_getack_sent: false,
+        replication_listening_port: 0,
     };
 }
 
@@ -13652,6 +13654,9 @@ fn connection_execute_standard_command_at(
     const request_client_unpause: bool = reply.request_client_unpause;
     const request_maxclients_set: bool = reply.request_maxclients_set;
     const maxclients_after: i32 = reply.maxclients_after;
+    if reply.request_replconf_listening_port && reply.replconf_listening_port > 0 {
+        tx.replication_listening_port = reply.replconf_listening_port;
+    }
     if reply.request_replconf_ack && tx.replication_client {
         if reply.replconf_ack_offset > tx.replication_ack_offset {
             tx.replication_ack_offset = reply.replconf_ack_offset;

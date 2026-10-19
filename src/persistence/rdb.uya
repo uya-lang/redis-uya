@@ -46,6 +46,11 @@ use src.storage.object.zset_object_range_reply;
 use src.storage.object.zset_object_get_score;
 use src.storage.object.stream_object_append_entry;
 use src.storage.object.stream_object_len;
+use src.storage.object.StreamGroup;
+use src.storage.object.stream_object_group_count;
+use src.storage.object.stream_object_group_create;
+use src.storage.object.stream_object_group_iter_new;
+use src.storage.object.stream_object_group_iter_next;
 use src.storage.sds.Sds;
 use src.storage.sds.sds_empty;
 use src.storage.sds.sds_free;
@@ -84,6 +89,8 @@ const RDB_ENTRY_TYPE_STREAM: byte = 10 as byte;
 const RDB_ENTRY_TYPE_STREAM_EXPIRE_MS: byte = 11 as byte;
 const RDB_ENTRY_TYPE_HASH_FIELD_EXPIRE_MS: byte = 12 as byte;
 const RDB_ENTRY_TYPE_HASH_EXPIRE_MS_FIELD_EXPIRE_MS: byte = 13 as byte;
+const RDB_ENTRY_TYPE_STREAM_V2: byte = 14 as byte;
+const RDB_ENTRY_TYPE_STREAM_V2_EXPIRE_MS: byte = 15 as byte;
 const RDB_ENTRY_TYPE_EOF: byte = 255 as byte;
 const RDB_ENTRY_MAX_BYTES: usize = 1024 * 1024;
 
@@ -322,8 +329,8 @@ fn rdb_entry_type_for_object(obj: &RedisObject, has_expire: bool) !byte {
             return RDB_ENTRY_TYPE_ZSET;
         },
         ObjectType.object_stream => {
-            if has_expire { return RDB_ENTRY_TYPE_STREAM_EXPIRE_MS; }
-            return RDB_ENTRY_TYPE_STREAM;
+            if has_expire { return RDB_ENTRY_TYPE_STREAM_V2_EXPIRE_MS; }
+            return RDB_ENTRY_TYPE_STREAM_V2;
         },
         else => {
             return error.RdbUnsupportedType;
@@ -338,7 +345,8 @@ fn rdb_entry_type_has_expire(typ: byte) bool {
         typ == RDB_ENTRY_TYPE_LIST_EXPIRE_MS ||
         typ == RDB_ENTRY_TYPE_SET_EXPIRE_MS ||
         typ == RDB_ENTRY_TYPE_ZSET_EXPIRE_MS ||
-        typ == RDB_ENTRY_TYPE_STREAM_EXPIRE_MS;
+        typ == RDB_ENTRY_TYPE_STREAM_EXPIRE_MS ||
+        typ == RDB_ENTRY_TYPE_STREAM_V2_EXPIRE_MS;
 }
 
 fn rdb_entry_type_has_hash_field_expire(typ: byte) bool {
@@ -360,7 +368,9 @@ fn rdb_entry_type_is_supported(typ: byte) bool {
         typ == RDB_ENTRY_TYPE_ZSET ||
         typ == RDB_ENTRY_TYPE_ZSET_EXPIRE_MS ||
         typ == RDB_ENTRY_TYPE_STREAM ||
-        typ == RDB_ENTRY_TYPE_STREAM_EXPIRE_MS;
+        typ == RDB_ENTRY_TYPE_STREAM_EXPIRE_MS ||
+        typ == RDB_ENTRY_TYPE_STREAM_V2 ||
+        typ == RDB_ENTRY_TYPE_STREAM_V2_EXPIRE_MS;
 }
 
 fn rdb_sorted_dict_keys(dict_obj: &RedisObject) !&RedisObject {
@@ -577,6 +587,30 @@ fn rdb_sds_write_zset_payload(buf: &Sds, obj: &RedisObject) !void {
     }
 }
 
+fn rdb_write_stream_group(file: &File, group: &StreamGroup) !void {
+    try rdb_write_blob(file, group.name.buf[0: group.name.len]);
+    try rdb_write_u64(file, group.last_delivered_ms);
+    try rdb_write_u64(file, group.last_delivered_seq);
+    if group.entries_read_valid {
+        try rdb_write_u32(file, 1u32);
+    } else {
+        try rdb_write_u32(file, 0u32);
+    }
+    try rdb_write_i64(file, group.entries_read);
+}
+
+fn rdb_sds_write_stream_group(buf: &Sds, group: &StreamGroup) !void {
+    try rdb_sds_write_blob(buf, group.name.buf[0: group.name.len]);
+    try rdb_sds_write_u64(buf, group.last_delivered_ms);
+    try rdb_sds_write_u64(buf, group.last_delivered_seq);
+    if group.entries_read_valid {
+        try rdb_sds_write_u32(buf, 1u32);
+    } else {
+        try rdb_sds_write_u32(buf, 0u32);
+    }
+    try rdb_sds_write_i64(buf, group.entries_read);
+}
+
 fn rdb_write_stream_payload(file: &File, obj: &RedisObject) !void {
     const count: usize = stream_object_len(obj) catch {
         return error.RdbUnsupportedType;
@@ -597,6 +631,17 @@ fn rdb_write_stream_payload(file: &File, obj: &RedisObject) !void {
             entry_node = entry_node.next;
         }
         node = node.next;
+    }
+
+    const group_count: usize = stream_object_group_count(obj) catch {
+        return error.RdbUnsupportedType;
+    };
+    try rdb_write_u32(file, group_count as u32);
+    var group_iter: DictIterator = stream_object_group_iter_new();
+    var group: &StreamGroup = stream_object_group_iter_next(obj, &group_iter);
+    while group != null {
+        try rdb_write_stream_group(file, group);
+        group = stream_object_group_iter_next(obj, &group_iter);
     }
 }
 
@@ -620,6 +665,17 @@ fn rdb_sds_write_stream_payload(buf: &Sds, obj: &RedisObject) !void {
             entry_node = entry_node.next;
         }
         node = node.next;
+    }
+
+    const group_count: usize = stream_object_group_count(obj) catch {
+        return error.RdbUnsupportedType;
+    };
+    try rdb_sds_write_u32(buf, group_count as u32);
+    var group_iter: DictIterator = stream_object_group_iter_new();
+    var group: &StreamGroup = stream_object_group_iter_next(obj, &group_iter);
+    while group != null {
+        try rdb_sds_write_stream_group(buf, group);
+        group = stream_object_group_iter_next(obj, &group_iter);
     }
 }
 
@@ -749,7 +805,7 @@ fn rdb_load_zset_payload(file: &File) !&RedisObject {
     return obj;
 }
 
-fn rdb_load_stream_payload(file: &File) !&RedisObject {
+fn rdb_load_stream_payload(file: &File, include_groups: bool) !&RedisObject {
     const obj: &RedisObject = try create_stream_object();
     errdefer object_free(obj);
 
@@ -772,6 +828,24 @@ fn rdb_load_stream_payload(file: &File) !&RedisObject {
     }
     obj.stream_last_ms = last_ms;
     obj.stream_last_seq = last_seq;
+
+    if include_groups {
+        const group_count: usize = (try rdb_read_u32(file)) as usize;
+        var group_index: usize = 0;
+        while group_index < group_count {
+            var name_blob: RdbBlob = try rdb_read_blob(file);
+            defer rdb_free_blob(&name_blob);
+            const group_last_ms: u64 = try rdb_read_u64(file);
+            const group_last_seq: u64 = try rdb_read_u64(file);
+            const valid_value: u32 = try rdb_read_u32(file);
+            if valid_value > 1u32 {
+                return error.RdbInvalidFormat;
+            }
+            const entries_read: i64 = try rdb_read_i64(file);
+            _ = try stream_object_group_create(obj, rdb_blob_slice(&name_blob), group_last_ms, group_last_seq, valid_value == 1u32, entries_read);
+            group_index = group_index + 1;
+        }
+    }
     return obj;
 }
 
@@ -797,7 +871,10 @@ fn rdb_load_payload(file: &File, typ: byte) !&RedisObject {
         return rdb_load_zset_payload(file);
     }
     if typ == RDB_ENTRY_TYPE_STREAM || typ == RDB_ENTRY_TYPE_STREAM_EXPIRE_MS {
-        return rdb_load_stream_payload(file);
+        return rdb_load_stream_payload(file, false);
+    }
+    if typ == RDB_ENTRY_TYPE_STREAM_V2 || typ == RDB_ENTRY_TYPE_STREAM_V2_EXPIRE_MS {
+        return rdb_load_stream_payload(file, true);
     }
     return error.RdbUnsupportedType;
 }
@@ -876,7 +953,7 @@ fn rdb_load_zset_payload_from_bytes(data: &[byte], pos: &usize) !&RedisObject {
     return obj;
 }
 
-fn rdb_load_stream_payload_from_bytes(data: &[byte], pos: &usize) !&RedisObject {
+fn rdb_load_stream_payload_from_bytes(data: &[byte], pos: &usize, include_groups: bool) !&RedisObject {
     const obj: &RedisObject = try create_stream_object();
     errdefer object_free(obj);
 
@@ -899,6 +976,24 @@ fn rdb_load_stream_payload_from_bytes(data: &[byte], pos: &usize) !&RedisObject 
     }
     obj.stream_last_ms = last_ms;
     obj.stream_last_seq = last_seq;
+
+    if include_groups {
+        const group_count: usize = (try rdb_read_u32_from_bytes(data, pos)) as usize;
+        var group_index: usize = 0;
+        while group_index < group_count {
+            var name_blob: RdbBlob = try rdb_read_blob_from_bytes(data, pos);
+            defer rdb_free_blob(&name_blob);
+            const group_last_ms: u64 = try rdb_read_u64_from_bytes(data, pos);
+            const group_last_seq: u64 = try rdb_read_u64_from_bytes(data, pos);
+            const valid_value: u32 = try rdb_read_u32_from_bytes(data, pos);
+            if valid_value > 1u32 {
+                return error.RdbInvalidFormat;
+            }
+            const entries_read: i64 = try rdb_read_i64_from_bytes(data, pos);
+            _ = try stream_object_group_create(obj, rdb_blob_slice(&name_blob), group_last_ms, group_last_seq, valid_value == 1u32, entries_read);
+            group_index = group_index + 1;
+        }
+    }
     return obj;
 }
 
@@ -924,7 +1019,10 @@ fn rdb_load_payload_from_bytes(data: &[byte], pos: &usize, typ: byte) !&RedisObj
         return rdb_load_zset_payload_from_bytes(data, pos);
     }
     if typ == RDB_ENTRY_TYPE_STREAM || typ == RDB_ENTRY_TYPE_STREAM_EXPIRE_MS {
-        return rdb_load_stream_payload_from_bytes(data, pos);
+        return rdb_load_stream_payload_from_bytes(data, pos, false);
+    }
+    if typ == RDB_ENTRY_TYPE_STREAM_V2 || typ == RDB_ENTRY_TYPE_STREAM_V2_EXPIRE_MS {
+        return rdb_load_stream_payload_from_bytes(data, pos, true);
     }
     return error.RdbUnsupportedType;
 }

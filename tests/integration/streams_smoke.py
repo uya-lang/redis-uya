@@ -156,23 +156,104 @@ def run_smoke() -> None:
             except RuntimeError as exc:
                 if str(exc) != "ERR wrong number of arguments for 'xgroup|create' command":
                     raise AssertionError(f"unexpected XGROUP CREATE arity error: {exc}") from exc
+            if client.command(b"XGROUP", b"CREATE", b"mystream", b"group", b"$") != b"OK":
+                raise AssertionError("XGROUP CREATE $ did not return OK")
             try:
                 client.command(b"XGROUP", b"CREATE", b"mystream", b"group", b"$")
-                raise AssertionError("XGROUP CREATE did not report deferred consumer groups")
+                raise AssertionError("XGROUP CREATE accepted a duplicate group")
             except RuntimeError as exc:
-                if "XGROUP CREATE is not supported yet" not in str(exc):
-                    raise AssertionError(f"unexpected XGROUP CREATE error: {exc}") from exc
-            if client.command(b"XGROUP", b"DESTROY", b"mystream", b"group") != 0:
-                raise AssertionError("XGROUP DESTROY did not return zero without consumer groups")
+                if str(exc) != "BUSYGROUP Consumer Group name already exists":
+                    raise AssertionError(f"unexpected XGROUP CREATE duplicate error: {exc}") from exc
+            if client.command(b"XGROUP", b"CREATE", b"mystream", b"midgroup", first) != b"OK":
+                raise AssertionError("XGROUP CREATE with a concrete id did not return OK")
             try:
-                client.command(b"XGROUP", b"SETID", b"mystream", b"group", b"$")
-                raise AssertionError("XGROUP SETID did not fail without consumer groups")
+                client.command(b"XGROUP", b"CREATE", b"missing-group-stream", b"group", b"$")
+                raise AssertionError("XGROUP CREATE accepted a missing key without MKSTREAM")
+            except RuntimeError as exc:
+                expected = "ERR The XGROUP subcommand requires the key to exist. Note that for CREATE you may want to use the MKSTREAM option to create an empty stream automatically."
+                if str(exc) != expected:
+                    raise AssertionError(f"unexpected XGROUP CREATE missing-key error: {exc}") from exc
+            if client.command(b"XGROUP", b"CREATE", b"empty-stream", b"empty-group", b"0-0", b"MKSTREAM") != b"OK":
+                raise AssertionError("XGROUP CREATE MKSTREAM did not return OK")
+            if client.command(b"XLEN", b"empty-stream") != 0:
+                raise AssertionError("XGROUP CREATE MKSTREAM did not create an empty stream")
+
+            groups = client.command(b"XINFO", b"GROUPS", b"mystream")
+            if not isinstance(groups, list) or len(groups) != 2:
+                raise AssertionError(f"XINFO GROUPS did not report two groups: {groups!r}")
+            groups_by_name = {group[group.index(b"name") + 1]: group for group in groups}
+            if set(groups_by_name) != {b"group", b"midgroup"}:
+                raise AssertionError(f"XINFO GROUPS returned unexpected names: {groups_by_name!r}")
+            group_info = groups_by_name[b"group"]
+            if (
+                group_info[group_info.index(b"consumers") + 1] != 0
+                or group_info[group_info.index(b"pending") + 1] != 0
+                or group_info[group_info.index(b"last-delivered-id") + 1] != second
+                or group_info[group_info.index(b"entries-read") + 1] is not None
+                or group_info[group_info.index(b"lag") + 1] != 0
+            ):
+                raise AssertionError(f"unexpected XINFO GROUPS $ payload: {group_info!r}")
+            mid_info = groups_by_name[b"midgroup"]
+            if (
+                mid_info[mid_info.index(b"last-delivered-id") + 1] != first
+                or mid_info[mid_info.index(b"lag") + 1] != 1
+            ):
+                raise AssertionError(f"unexpected XINFO GROUPS concrete-id payload: {mid_info!r}")
+            if client.command(b"XGROUP", b"SETID", b"mystream", b"midgroup", first, b"ENTRIESREAD", b"1") != b"OK":
+                raise AssertionError("XGROUP SETID ENTRIESREAD did not return OK")
+            mid_info = client.command(b"XINFO", b"GROUPS", b"mystream")
+            mid_info = {group[group.index(b"name") + 1]: group for group in mid_info}[b"midgroup"]
+            if (
+                mid_info[mid_info.index(b"last-delivered-id") + 1] != first
+                or mid_info[mid_info.index(b"entries-read") + 1] != 1
+                or mid_info[mid_info.index(b"lag") + 1] != 1
+            ):
+                raise AssertionError(f"XGROUP SETID ENTRIESREAD did not update metadata: {mid_info!r}")
+            if client.command(b"XGROUP", b"SETID", b"mystream", b"group", b"$", b"ENTRIESREAD", b"2") != b"OK":
+                raise AssertionError("XGROUP SETID $ did not return OK")
+            group_info = client.command(b"XINFO", b"GROUPS", b"mystream")
+            group_info = {group[group.index(b"name") + 1]: group for group in group_info}[b"group"]
+            if (
+                group_info[group_info.index(b"last-delivered-id") + 1] != second
+                or group_info[group_info.index(b"entries-read") + 1] != 2
+                or group_info[group_info.index(b"lag") + 1] != 0
+            ):
+                raise AssertionError(f"XGROUP SETID $ did not update metadata: {group_info!r}")
+            if client.command(b"XGROUP", b"DESTROY", b"mystream", b"midgroup") != 1:
+                raise AssertionError("XGROUP DESTROY did not report the deleted group")
+            if client.command(b"XGROUP", b"DESTROY", b"mystream", b"midgroup") != 0:
+                raise AssertionError("XGROUP DESTROY deleted a missing group")
+            try:
+                client.command(b"XGROUP", b"SETID", b"mystream", b"missing-group", b"$")
+                raise AssertionError("XGROUP SETID did not fail for a missing group")
             except RuntimeError as exc:
                 if "NOGROUP" not in str(exc):
-                    raise AssertionError(f"unexpected XGROUP SETID error: {exc}") from exc
+                    raise AssertionError(f"unexpected XGROUP SETID missing-group error: {exc}") from exc
+            stream_with_groups = client.command(b"XINFO", b"STREAM", b"mystream")
+            if stream_with_groups[stream_with_groups.index(b"groups") + 1] != 1:
+                raise AssertionError(f"XINFO STREAM did not report the live group count: {stream_with_groups!r}")
+            full_with_groups = client.command(b"XINFO", b"STREAM", b"mystream", b"FULL")
+            full_groups = full_with_groups[full_with_groups.index(b"groups") + 1]
+            if (
+                not isinstance(full_groups, list)
+                or len(full_groups) != 1
+                or full_groups[0][full_groups[0].index(b"name") + 1] != b"group"
+                or full_groups[0][full_groups[0].index(b"pel-count") + 1] != 0
+                or full_groups[0][full_groups[0].index(b"pending") + 1] != []
+                or full_groups[0][full_groups[0].index(b"consumers") + 1] != []
+            ):
+                raise AssertionError(f"unexpected XINFO STREAM FULL groups payload: {full_groups!r}")
+            empty_groups = client.command(b"XINFO", b"GROUPS", b"empty-stream")
+            if (
+                not isinstance(empty_groups, list)
+                or len(empty_groups) != 1
+                or empty_groups[0][empty_groups[0].index(b"name") + 1] != b"empty-group"
+                or empty_groups[0][empty_groups[0].index(b"last-delivered-id") + 1] != b"0-0"
+            ):
+                raise AssertionError(f"unexpected MKSTREAM group metadata: {empty_groups!r}")
             try:
                 client.command(b"XAUTOCLAIM", b"mystream", b"group", b"consumer", b"0", b"0-0")
-                raise AssertionError("XAUTOCLAIM did not fail without consumer groups")
+                raise AssertionError("XAUTOCLAIM did not report deferred PEL state")
             except RuntimeError as exc:
                 if "NOGROUP" not in str(exc):
                     raise AssertionError(f"unexpected XAUTOCLAIM error: {exc}") from exc
@@ -203,19 +284,19 @@ def run_smoke() -> None:
                     raise AssertionError(f"unexpected XSETID invalid-id error: {exc}") from exc
             try:
                 client.command(b"XGROUP", b"CREATECONSUMER", b"mystream", b"group", b"consumer")
-                raise AssertionError("XGROUP CREATECONSUMER did not fail without consumer groups")
+                raise AssertionError("XGROUP CREATECONSUMER did not report deferred consumer state")
             except RuntimeError as exc:
                 if "NOGROUP" not in str(exc):
                     raise AssertionError(f"unexpected XGROUP CREATECONSUMER error: {exc}") from exc
             try:
                 client.command(b"XGROUP", b"DELCONSUMER", b"mystream", b"group", b"consumer")
-                raise AssertionError("XGROUP DELCONSUMER did not fail without consumer groups")
+                raise AssertionError("XGROUP DELCONSUMER did not report deferred consumer state")
             except RuntimeError as exc:
                 if "NOGROUP" not in str(exc):
                     raise AssertionError(f"unexpected XGROUP DELCONSUMER error: {exc}") from exc
             try:
                 client.command(b"XINFO", b"CONSUMERS", b"mystream", b"group")
-                raise AssertionError("XINFO CONSUMERS did not fail without consumer groups")
+                raise AssertionError("XINFO CONSUMERS did not report deferred consumer state")
             except RuntimeError as exc:
                 if "NOGROUP" not in str(exc):
                     raise AssertionError(f"unexpected XINFO CONSUMERS error: {exc}") from exc
@@ -237,41 +318,41 @@ def run_smoke() -> None:
                 raise AssertionError("XIDMPRECORD did not return OK")
             try:
                 client.command(b"XREADGROUP", b"GROUP", b"group", b"consumer", b"STREAMS", b"mystream", b">")
-                raise AssertionError("XREADGROUP did not fail without consumer groups")
+                raise AssertionError("XREADGROUP did not report deferred PEL state")
             except RuntimeError as exc:
                 if "NOGROUP" not in str(exc):
                     raise AssertionError(f"unexpected XREADGROUP error: {exc}") from exc
             try:
                 client.command(b"XACK", b"mystream", b"group", first)
-                raise AssertionError("XACK did not fail without consumer groups")
+                raise AssertionError("XACK did not report deferred PEL state")
             except RuntimeError as exc:
                 if "NOGROUP" not in str(exc):
                     raise AssertionError(f"unexpected XACK error: {exc}") from exc
 
             try:
                 client.command(b"XACKDEL", b"mystream", b"group", b"IDS", b"1", first)
-                raise AssertionError("XACKDEL did not fail without consumer groups")
+                raise AssertionError("XACKDEL did not report deferred PEL state")
             except RuntimeError as exc:
                 if "NOGROUP" not in str(exc):
                     raise AssertionError(f"unexpected XACKDEL error: {exc}") from exc
 
             try:
                 client.command(b"XNACK", b"mystream", b"group", b"FAIL", b"IDS", b"1", first)
-                raise AssertionError("XNACK did not fail without consumer groups")
+                raise AssertionError("XNACK did not report deferred PEL state")
             except RuntimeError as exc:
                 if "NOGROUP" not in str(exc):
                     raise AssertionError(f"unexpected XNACK error: {exc}") from exc
 
             try:
                 client.command(b"XCLAIM", b"mystream", b"group", b"consumer", b"0", first)
-                raise AssertionError("XCLAIM did not fail without consumer groups")
+                raise AssertionError("XCLAIM did not report deferred PEL state")
             except RuntimeError as exc:
                 if "NOGROUP" not in str(exc):
                     raise AssertionError(f"unexpected XCLAIM error: {exc}") from exc
 
             try:
                 client.command(b"XPENDING", b"mystream", b"group")
-                raise AssertionError("XPENDING did not fail without consumer groups")
+                raise AssertionError("XPENDING did not report deferred PEL state")
             except RuntimeError as exc:
                 if "NOGROUP" not in str(exc):
                     raise AssertionError(f"unexpected XPENDING error: {exc}") from exc
@@ -370,6 +451,23 @@ def run_smoke() -> None:
             replayed = replay_client.command(b"XRANGE", b"mystream", b"-", b"+")
             if not isinstance(replayed, list) or len(replayed) != 0:
                 raise AssertionError(f"unexpected replayed stream payload: {replayed!r}")
+            replayed_groups = replay_client.command(b"XINFO", b"GROUPS", b"mystream")
+            if (
+                not isinstance(replayed_groups, list)
+                or len(replayed_groups) != 1
+                or replayed_groups[0][replayed_groups[0].index(b"name") + 1] != b"group"
+                or replayed_groups[0][replayed_groups[0].index(b"entries-read") + 1] != 2
+                or replayed_groups[0][replayed_groups[0].index(b"consumers") + 1] != 0
+                or replayed_groups[0][replayed_groups[0].index(b"pending") + 1] != 0
+            ):
+                raise AssertionError(f"AOF replay did not preserve group metadata: {replayed_groups!r}")
+            replayed_empty_groups = replay_client.command(b"XINFO", b"GROUPS", b"empty-stream")
+            if (
+                not isinstance(replayed_empty_groups, list)
+                or len(replayed_empty_groups) != 1
+                or replayed_empty_groups[0][replayed_empty_groups[0].index(b"name") + 1] != b"empty-group"
+            ):
+                raise AssertionError(f"AOF replay did not preserve MKSTREAM group: {replayed_empty_groups!r}")
             if replay_client.command(b"XLEN", b"trimstream") != 1:
                 raise AssertionError("AOF replay did not preserve XADD MAXLEN trim result")
             if replay_client.command(b"XRANGE", b"trimstream", b"-", b"+") != [[b"1-1", [b"f", b"b"]]]:

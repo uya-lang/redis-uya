@@ -3034,30 +3034,30 @@ XTRIM key MAXLEN|MINID [=|~] threshold [LIMIT count]
 
 返回：
 
-- `XACK`：当前没有 consumer group 模型，因此对现有 stream key 返回 `NOGROUP No such consumer group`
-- `XACKDEL`：当前没有 consumer group 模型，因此对现有 stream key 返回 `NOGROUP No such consumer group`
+- `XACK`：当前尚未实现 consumer/PEL 状态，因此即使 group 元数据存在也返回 `NOGROUP No such consumer group`
+- `XACKDEL`：当前尚未实现 consumer/PEL 状态，因此即使 group 元数据存在也返回 `NOGROUP No such consumer group`
 - `XADD`：成功时返回新增 entry id；`*` 会按当前毫秒时间和单毫秒递增序列生成 id；`NOMKSTREAM` 下 key 不存在返回 Null Bulk 且不创建 stream
 - `XCFGSET`：对现有 stream key 返回 `OK`；当前仅校验 `IDMP-DURATION` / `IDMP-MAXSIZE` 参数，不保存 IDMP 配置
-- `XAUTOCLAIM`：当前没有 consumer group 模型，因此对现有 stream key 返回 `NOGROUP No such consumer group`
-- `XCLAIM`：当前没有 consumer group 模型，因此对现有 stream key 返回 `NOGROUP No such consumer group`
+- `XAUTOCLAIM`：当前尚未实现 consumer/PEL 状态，因此即使 group 元数据存在也返回 `NOGROUP No such consumer group`
+- `XCLAIM`：当前尚未实现 consumer/PEL 状态，因此即使 group 元数据存在也返回 `NOGROUP No such consumer group`
 - `XDEL`：返回被删除的 entry 数量；key 不存在返回 `0`
 - `XDELEX`：返回每个 id 的删除状态数组；`KEEPREF` / `DELREF` 对现有 entry 返回 `1` 并删除、不存在返回 `-1`，`ACKED` 在无 consumer group 状态下返回 `2`
-- `XGROUP CREATE`：当前没有 consumer group 模型，因此只校验参数、stream key 与类型；对现有 stream key 返回 `ERR XGROUP CREATE is not supported yet`
-- `XGROUP CREATECONSUMER` / `XGROUP DELCONSUMER`：当前没有 consumer group 模型，因此对现有 stream key 返回 `NOGROUP No such consumer group`
-- `XGROUP DESTROY`：当前没有 consumer group 模型，因此对 stream key 或缺失 key 返回 `0`
+- `XGROUP CREATE`：创建真实 group 并返回 `OK`；ID 支持具体 stream ID 或 `$`，缺失 key 需使用 `MKSTREAM`，重复 group 返回 `BUSYGROUP Consumer Group name already exists`。新 group 的 last-delivered-id 按指定 ID 写入，entries-read 初始为未设置
+- `XGROUP CREATECONSUMER` / `XGROUP DELCONSUMER`：当前尚未实现 consumer 状态，因此即使 group 元数据存在也返回 `NOGROUP No such consumer group`
+- `XGROUP DESTROY`：删除真实 group，存在并删除返回 `1`，group 或 key 不存在返回 `0`
 - `XGROUP HELP`：返回当前 XGROUP 兼容面帮助数组
-- `XGROUP SETID`：当前没有 consumer group 模型，因此对现有 stream key 返回 `NOGROUP No such consumer group`
+- `XGROUP SETID`：更新真实 group 的 last-delivered-id，ID 支持具体 stream ID 或 `$`；可选的 `ENTRIESREAD entries-read` 同步更新 entries-read 元数据。group 不存在返回完整 `NOGROUP` 错误
 - `XIDMPRECORD`：对现有 stream entry 返回 `OK`；当前仅校验 `pid` / `iid` 非空、stream id 格式和 entry 存在，不保存 IDMP 记录
 - `XINFO HELP`：返回当前 XINFO 兼容面帮助数组
-- `XINFO CONSUMERS`：当前没有 consumer group 模型，因此对现有 stream key 返回 `NOGROUP No such consumer group`
-- `XINFO GROUPS`：当前没有 consumer group 模型，因此对 stream key 返回空数组；key 不存在返回 `ERR no such key`
-- `XINFO STREAM`：返回基础 stream 元数据，包括 `length`、`last-generated-id`、`groups=0`、`first-entry` 与 `last-entry`；`FULL [COUNT count]` 返回基础元数据、entry 明细和空 `groups`；key 不存在返回 `ERR no such key`
+- `XINFO CONSUMERS`：当前尚未实现 consumer 状态，因此对现有 stream key 仍返回 `NOGROUP No such consumer group`
+- `XINFO GROUPS`：返回真实 group 数组，每项包含 `name`、`consumers`、`pending`、`last-delivered-id`、`entries-read` 与 `lag`；未显式设置 entries-read 时返回 Null Bulk，当前 consumer/pending 计数固定为 `0`；key 不存在返回 `ERR no such key`
+- `XINFO STREAM`：返回基础 stream 元数据，包括 `length`、`last-generated-id`、真实 group 数、`first-entry` 与 `last-entry`；`FULL [COUNT count]` 返回基础元数据、entry 明细和真实 group 元数据，其中 group `pending`/`consumers` 在当前 consumer/PEL 尚未实现时为空数组；key 不存在返回 `ERR no such key`
 - `XLEN`：返回 stream entry 数量；key 不存在返回 `0`
-- `XNACK`：当前没有 consumer group 模型，因此对现有 stream key 返回 `NOGROUP No such consumer group`
-- `XPENDING`：当前没有 consumer group 模型，因此对现有 stream key 返回 `NOGROUP No such consumer group`
+- `XNACK`：当前尚未实现 consumer/PEL 状态，因此即使 group 元数据存在也返回 `NOGROUP No such consumer group`
+- `XPENDING`：当前尚未实现 consumer/PEL 状态，因此即使 group 元数据存在也返回 `NOGROUP No such consumer group`
 - `XRANGE` / `XREVRANGE`：返回 `[id, [field, value, ...]]` 形式的嵌套数组，支持 `-` / `+` 边界和 `COUNT`
 - `XREAD`：命中时返回 stream 名与 entry 数组；无新 entry 时返回 Null Array
-- `XREADGROUP`：当前没有 consumer group 模型，因此对现有 stream key 返回 `NOGROUP No such consumer group`
+- `XREADGROUP`：当前尚未实现 consumer/PEL 状态，因此即使 group 元数据存在也返回 `NOGROUP No such consumer group`
 - `XSETID`：对现有 stream key 更新 `last-generated-id` 并返回 `OK`；当 stream 已有 entry 时，`last-id` 不能小于当前最后 entry id
 - `XTRIM`：返回被删除的 entry 数量；key 不存在返回 `0`
 
@@ -3068,6 +3068,8 @@ XTRIM key MAXLEN|MINID [=|~] threshold [LIMIT count]
 - `XSETID` 使用小于当前 stream top item 的 ID 时，返回完整 `ERR The ID specified in XSETID is smaller than the target stream top item`
 - 要求已有 key 的 Streams 子命令在 key 不存在时返回完整 `ERR no such key`
 - `XGROUP CREATE` 参数数量错误时返回完整 `ERR wrong number of arguments for 'xgroup|create' command`
+- `XGROUP CREATE` 在缺失 key 且未指定 `MKSTREAM` 时返回完整 `ERR The XGROUP subcommand requires the key to exist. Note that for CREATE you may want to use the MKSTREAM option to create an empty stream automatically.`
+- 重复创建 group 返回完整 `BUSYGROUP Consumer Group name already exists`；`XGROUP SETID` 的缺失 group 和当前尚未实现的 consumer/PEL 子命令返回 `NOGROUP` 错误
 
 说明：
 
@@ -3075,22 +3077,22 @@ XTRIM key MAXLEN|MINID [=|~] threshold [LIMIT count]
 - `XADD` 当前支持基础追加、显式完整 id / `*` 自动 id、`NOMKSTREAM` 和 `MAXLEN|MINID [=|~] threshold [LIMIT count]`；`~` 只是语法兼容占位，仍按精确头部裁剪执行；暂不支持 `field value` 之外的扩展选项
 - `XCFGSET` 当前只提供 key/type 校验和 `IDMP-DURATION` / `IDMP-MAXSIZE` 范围校验；不维护或持久化 stream IDMP 配置
 - `XREAD` 当前只支持非阻塞读取；`BLOCK` 会返回明确错误，consumer group 相关语义仍未实现
-- `XREADGROUP` 当前只支持非阻塞语法校验和无 group 时的 `NOGROUP` 错误面；`BLOCK` 会返回明确错误，不维护 consumer group PEL
+- `XREADGROUP` 当前只支持非阻塞语法校验和 consumer/PEL 尚未实现时的 `NOGROUP` 错误面；`BLOCK` 会返回明确错误，不维护 consumer group PEL
 - `XSETID` 当前会修改 `last-generated-id`；`ENTRIESADDED` 和 `MAXDELETEDID` 仅做参数校验，暂不保存到独立 stream 元数据
-- `XACK` 当前只提供无 group 时的 `NOGROUP` 错误面，不维护 consumer group PEL
-- `XACKDEL` 当前只支持 `KEEPREF`、`DELREF`、`ACKED` 与 `IDS` 语法校验和无 group 时的 `NOGROUP` 错误面，不维护 consumer group PEL，也不会删除 entry
-- `XNACK` 当前只支持 `SILENT` / `FAIL` / `FATAL`、`IDS`、`RETRYCOUNT`、`FORCE` 语法校验和无 group 时的 `NOGROUP` 错误面，不维护 consumer group PEL
-- `XAUTOCLAIM` 当前只提供无 group 时的 `NOGROUP` 错误面，不维护 consumer group PEL
-- `XCLAIM` 当前只提供无 group 时的 `NOGROUP` 错误面，不维护 consumer group PEL
+- `XACK` 当前只提供 consumer/PEL 尚未实现时的 `NOGROUP` 错误面，不维护 consumer group PEL
+- `XACKDEL` 当前只支持 `KEEPREF`、`DELREF`、`ACKED` 与 `IDS` 语法校验和 consumer/PEL 尚未实现时的 `NOGROUP` 错误面，不维护 consumer group PEL，也不会删除 entry
+- `XNACK` 当前只支持 `SILENT` / `FAIL` / `FATAL`、`IDS`、`RETRYCOUNT`、`FORCE` 语法校验和 consumer/PEL 尚未实现时的 `NOGROUP` 错误面，不维护 consumer group PEL
+- `XAUTOCLAIM` 当前只提供 consumer/PEL 尚未实现时的 `NOGROUP` 错误面，不维护 consumer group PEL
+- `XCLAIM` 当前只提供 consumer/PEL 尚未实现时的 `NOGROUP` 错误面，不维护 consumer group PEL
 - `XDEL` 当前只做精确 ID 删除，不维护 consumer group PEL
 - `XDELEX` 当前支持 `KEEPREF`、`DELREF`、`ACKED` 与 `IDS` 语法校验；由于没有 consumer group / PEL，`KEEPREF` 与 `DELREF` 行为等同于精确 entry 删除，`ACKED` 只返回未删除状态 `2`
-- `XPENDING` 当前只提供无 group 时的 `NOGROUP` 错误面，不维护 consumer group PEL
-- `XGROUP CREATE` 当前只提供 key/type 校验和明确未支持错误，不创建 consumer group；`XGROUP CREATECONSUMER` / `XGROUP DELCONSUMER` / `XGROUP SETID` 当前只提供无 group 时的 `NOGROUP` 错误面；`XGROUP DESTROY` 当前只提供 empty-state 返回值，不维护 group；consumer 管理和 consumer group 状态仍未实现
+- `XPENDING` 当前只提供 consumer/PEL 尚未实现时的 `NOGROUP` 错误面，不维护 consumer group PEL
+- `XGROUP CREATE/DESTROY/SETID` 已维护真实 group 元数据；`CREATECONSUMER` / `DELCONSUMER` 仍只提供 consumer 状态未实现时的 `NOGROUP` 错误面，consumer 管理和 consumer/PEL 状态仍未实现
 - `XIDMPRECORD` 当前只提供 key/type、pid/iid 非空、stream ID 与 entry 存在性校验；不维护或持久化 stream IDMP 记录，当前 no-op 校验面不进入普通 AOF/复制传播
-- `XINFO STREAM` 当前支持 key-only 基础元数据和 `FULL [COUNT count]` entry 明细，`XINFO GROUPS` 当前只支持 empty-state 空数组，`XINFO CONSUMERS` 当前只提供无 group 时的 `NOGROUP` 错误面；真实 consumer group 状态仍未实现；`radix-tree-*` 字段为 list-backed partial 占位
+- `XINFO STREAM` 当前支持 key-only 基础元数据、真实 group 数和 `FULL [COUNT count]` entry/group 元数据，`XINFO GROUPS` 当前返回真实 group 元数据，`XINFO CONSUMERS` 仍只提供 consumer 状态未实现时的 `NOGROUP` 错误面；consumer/PEL 状态仍未实现；`radix-tree-*` 字段为 list-backed partial 占位
 - `XTRIM` 当前支持 `MAXLEN|MINID`、可选 `=` / `~` 操作符与 `LIMIT count`；`~` 只是语法兼容占位，仍按精确头部裁剪执行
-- 当前不支持真实 consumer group 状态命令
-- 项目内 RDB 与 AOF rewrite 会保存显式 stream ID；普通 AOF append 仍记录原始请求，因此 `XADD *` 回放会重新生成 ID，只承诺恢复条目内容与顺序
+- group 元数据已支持，但 consumer/PEL 状态命令仍待后续批次实现
+- 项目内 RDB v2 与 AOF rewrite 会保存显式 stream ID 及 group 元数据，旧 Stream RDB 记录仍可加载；普通 AOF append 仍记录原始请求，因此 `XADD *` 回放会重新生成 ID，只承诺恢复条目内容与顺序
 
 ### `TYPE`
 

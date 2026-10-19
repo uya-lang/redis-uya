@@ -27,6 +27,10 @@ use src.storage.object.hash_object_get_field;
 use src.storage.object.hash_object_field_has_expire;
 use src.storage.object.hash_object_get_field_expire_at;
 use src.storage.object.stream_object_len;
+use src.storage.object.StreamGroup;
+use src.storage.object.stream_object_group_count;
+use src.storage.object.stream_object_group_iter_new;
+use src.storage.object.stream_object_group_iter_next;
 use src.storage.object.object_free;
 
 export error RewritePathTooLong;
@@ -130,6 +134,16 @@ fn rewrite_append_bulk_u64(aof: &AofWriter, value: u64) !void {
 fn rewrite_append_array_header(aof: &AofWriter, argc: u64) !void {
     try aof_append_raw(aof, &"*"[0: 1]);
     try rewrite_append_u64(aof, argc);
+    try aof_append_raw(aof, &"\r\n"[0: 2]);
+}
+
+fn rewrite_append_bulk_stream_id(aof: &AofWriter, ms: u64, seq: u64) !void {
+    try aof_append_raw(aof, &"$"[0: 1]);
+    try rewrite_append_u64(aof, rewrite_bulk_len_u64(ms) + 1u64 + rewrite_bulk_len_u64(seq));
+    try aof_append_raw(aof, &"\r\n"[0: 2]);
+    try rewrite_append_u64(aof, ms);
+    try aof_append_raw(aof, &"-"[0: 1]);
+    try rewrite_append_u64(aof, seq);
     try aof_append_raw(aof, &"\r\n"[0: 2]);
 }
 
@@ -274,11 +288,41 @@ fn rewrite_emit_zset(aof: &AofWriter, key: &[byte], obj: &RedisObject) !void {
     }
 }
 
+fn rewrite_emit_stream_group(aof: &AofWriter, key: &[byte], group: &StreamGroup, missing_key: bool) !void {
+    if missing_key {
+        try rewrite_append_array_header(aof, 6u64);
+    } else {
+        try rewrite_append_array_header(aof, 5u64);
+    }
+    try rewrite_append_bulk(aof, &"XGROUP"[0: 6]);
+    try rewrite_append_bulk(aof, &"CREATE"[0: 6]);
+    try rewrite_append_bulk(aof, key);
+    try rewrite_append_bulk(aof, group.name.buf[0: group.name.len]);
+    try rewrite_append_bulk_stream_id(aof, group.last_delivered_ms, group.last_delivered_seq);
+    if missing_key {
+        try rewrite_append_bulk(aof, &"MKSTREAM"[0: 8]);
+    }
+
+    if group.entries_read_valid {
+        try rewrite_append_array_header(aof, 7u64);
+        try rewrite_append_bulk(aof, &"XGROUP"[0: 6]);
+        try rewrite_append_bulk(aof, &"SETID"[0: 5]);
+        try rewrite_append_bulk(aof, key);
+        try rewrite_append_bulk(aof, group.name.buf[0: group.name.len]);
+        try rewrite_append_bulk_stream_id(aof, group.last_delivered_ms, group.last_delivered_seq);
+        try rewrite_append_bulk(aof, &"ENTRIESREAD"[0: 11]);
+        try rewrite_append_bulk_i64(aof, group.entries_read);
+    }
+}
+
 fn rewrite_emit_stream(aof: &AofWriter, key: &[byte], obj: &RedisObject) !void {
     const count: usize = stream_object_len(obj) catch {
         return error.RewriteUnsupportedType;
     };
-    if count == 0 {
+    const group_count: usize = stream_object_group_count(obj) catch {
+        return error.RewriteUnsupportedType;
+    };
+    if count == 0 && group_count == 0 {
         return error.RewriteUnsupportedType;
     }
 
@@ -300,6 +344,13 @@ fn rewrite_emit_stream(aof: &AofWriter, key: &[byte], obj: &RedisObject) !void {
             entry_node = entry_node.next;
         }
         node = node.next;
+    }
+
+    var group_iter: DictIterator = stream_object_group_iter_new();
+    var group: &StreamGroup = stream_object_group_iter_next(obj, &group_iter);
+    while group != null {
+        try rewrite_emit_stream_group(aof, key, group, count == 0);
+        group = stream_object_group_iter_next(obj, &group_iter);
     }
 }
 

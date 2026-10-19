@@ -11745,6 +11745,9 @@ fn connection_should_append_aof(command: &Command, reply: &CommandReply) bool {
     if command.info.cmd_type == CommandType.command_xidmprecord {
         return false;
     }
+    if command.info.cmd_type == CommandType.command_xgroup {
+        return connection_command_requests_write(command);
+    }
     if command.info.cmd_type == CommandType.command_blpop || command.info.cmd_type == CommandType.command_brpop {
         return reply.typ == CommandReplyType.reply_array_bulk || reply.typ == CommandReplyType.reply_raw_bytes;
     }

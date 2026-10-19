@@ -178,6 +178,14 @@ use src.storage.object.zset_object_range_reply;
 use src.storage.object.zset_object_range_by_score_reply;
 use src.storage.object.stream_object_append_entry;
 use src.storage.object.stream_object_len;
+use src.storage.object.StreamGroup;
+use src.storage.object.stream_object_group_count;
+use src.storage.object.stream_object_group_create;
+use src.storage.object.stream_object_group_delete;
+use src.storage.object.stream_object_group_iter_new;
+use src.storage.object.stream_object_group_iter_next;
+use src.storage.object.stream_object_group_lookup;
+use src.storage.object.stream_object_group_set_id;
 use src.storage.object.object_free;
 use src.storage.object.list_node_free;
 use src.storage.object.object_type_name;
@@ -404,6 +412,13 @@ fn command_executor_lookup_key_at(engine: &Engine, key: &[byte], now_ms: u64) !&
         return lookup_key_no_touch_at(engine, key, now_ms);
     }
     return lookup_key_at(engine, key, now_ms);
+}
+
+fn command_executor_lookup_key_or_null(engine: &Engine, key: &[byte], now_ms: u64) &RedisObject {
+    const obj: &RedisObject = command_executor_lookup_key_at(engine, key, now_ms) catch {
+        return null as &RedisObject;
+    };
+    return obj;
 }
 
 fn command_executor_empty_slice() &[byte] {
@@ -910,6 +925,10 @@ fn command_executor_resp_append_integer(buf: &Sds, value: i64) !void {
     try command_executor_info_append_i64(buf, &":%i\r\n"[0: 5], value);
 }
 
+fn command_executor_resp_append_null_bulk(buf: &Sds) !void {
+    try sds_cat(buf, &"$-1\r\n"[0: 5]);
+}
+
 fn command_executor_stream_id_sds(ms: u64, seq: u64) !Sds {
     var out: Sds = sds_empty() catch {
         return error.AllocOutOfMemory;
@@ -919,6 +938,61 @@ fn command_executor_stream_id_sds(ms: u64, seq: u64) !Sds {
     try sds_cat(&out, &"-"[0: 1]);
     try command_executor_info_append_u64(&out, &"%u"[0: 2], seq);
     return out;
+}
+
+fn command_executor_stream_group_lag(obj: &RedisObject, group: &StreamGroup, entries_added: usize) !i64 {
+    if group.entries_read_valid {
+        return entries_added as i64 - group.entries_read;
+    }
+
+    const last_id: StreamId = StreamId{
+        ms: group.last_delivered_ms,
+        seq: group.last_delivered_seq,
+        is_min: false,
+        is_max: false,
+        is_dollar: false,
+    };
+    var lag: i64 = 0;
+    var node: &ListNode = obj.list_head;
+    while node != null {
+        if node.value == null || node.value.obj_type != ObjectType.object_list || node.value.list_head == null {
+            return error.ObjectWrongType;
+        }
+        const entry_id_data: &[byte] = node.value.list_head.value.value.buf[0: node.value.list_head.value.value.len];
+        const entry_id: StreamId = command_executor_parse_stream_id(entry_id_data, 0u64, false, false) catch {
+            return error.ObjectWrongType;
+        };
+        if command_executor_stream_id_cmp(&entry_id, &last_id) > 0 {
+            lag = lag + 1;
+        }
+        node = node.next;
+    }
+    return lag;
+}
+
+fn command_executor_xgroup_nogroup(key: &[byte], group: &[byte]) CommandReply {
+    var err: Sds = sds_empty() catch {
+        return command_executor_oom();
+    };
+    defer {
+        sds_free(&err);
+    }
+    _ = command_executor_info_append(&err, &"NOGROUP No such consumer group '"[0: 32]) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append(&err, group) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append(&err, &"' for key name '"[0: 16]) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append(&err, key) catch {
+        return command_executor_oom();
+    };
+    _ = command_executor_info_append(&err, &"'"[0: 1]) catch {
+        return command_executor_oom();
+    };
+    return command_executor_owned_error(err.buf[0: err.len]);
 }
 
 fn command_executor_stream_append_entry_resp(buf: &Sds, entry: &RedisObject) !void {
@@ -6444,15 +6518,15 @@ fn command_executor_xgroup(engine: &Engine, command: &Command, now_ms: u64) Comm
         _ = list_object_push_tail(reply_list, &"XGROUP HELP"[0: 11]) catch { object_free(reply_list); return command_executor_oom(); };
         _ = list_object_push_tail(reply_list, &"    Prints this help."[0: 21]) catch { object_free(reply_list); return command_executor_oom(); };
         _ = list_object_push_tail(reply_list, &"XGROUP CREATE <key> <groupname> <id-or-$> [MKSTREAM]"[0: 52]) catch { object_free(reply_list); return command_executor_oom(); };
-        _ = list_object_push_tail(reply_list, &"    Validates stream keys; consumer group state is still deferred."[0: 66]) catch { object_free(reply_list); return command_executor_oom(); };
+        _ = list_object_push_tail(reply_list, &"    Creates a consumer group for the stream."[0: 44]) catch { object_free(reply_list); return command_executor_oom(); };
         _ = list_object_push_tail(reply_list, &"XGROUP CREATECONSUMER <key> <groupname> <consumer>"[0: 50]) catch { object_free(reply_list); return command_executor_oom(); };
-        _ = list_object_push_tail(reply_list, &"    Returns NOGROUP until consumer groups are implemented."[0: 58]) catch { object_free(reply_list); return command_executor_oom(); };
+        _ = list_object_push_tail(reply_list, &"    Consumer and PEL state are deferred."[0: 40]) catch { object_free(reply_list); return command_executor_oom(); };
         _ = list_object_push_tail(reply_list, &"XGROUP DELCONSUMER <key> <groupname> <consumer>"[0: 47]) catch { object_free(reply_list); return command_executor_oom(); };
-        _ = list_object_push_tail(reply_list, &"    Returns NOGROUP until consumer groups are implemented."[0: 58]) catch { object_free(reply_list); return command_executor_oom(); };
+        _ = list_object_push_tail(reply_list, &"    Consumer and PEL state are deferred."[0: 40]) catch { object_free(reply_list); return command_executor_oom(); };
         _ = list_object_push_tail(reply_list, &"XGROUP DESTROY <key> <groupname>"[0: 32]) catch { object_free(reply_list); return command_executor_oom(); };
-        _ = list_object_push_tail(reply_list, &"    Returns 0 while consumer group state is deferred."[0: 53]) catch { object_free(reply_list); return command_executor_oom(); };
+        _ = list_object_push_tail(reply_list, &"    Destroys a consumer group."[0: 30]) catch { object_free(reply_list); return command_executor_oom(); };
         _ = list_object_push_tail(reply_list, &"XGROUP SETID <key> <groupname> <id-or-$> [ENTRIESREAD entries-read]"[0: 67]) catch { object_free(reply_list); return command_executor_oom(); };
-        _ = list_object_push_tail(reply_list, &"    Returns NOGROUP until consumer groups are implemented."[0: 58]) catch { object_free(reply_list); return command_executor_oom(); };
+        _ = list_object_push_tail(reply_list, &"    Sets the consumer group last-delivered ID."[0: 46]) catch { object_free(reply_list); return command_executor_oom(); };
         return command_executor_owned_array(reply_list);
     }
     if command_executor_keyword_eq(subcommand, &"CREATE"[0: 6]) {
@@ -6462,12 +6536,13 @@ fn command_executor_xgroup(engine: &Engine, command: &Command, now_ms: u64) Comm
         const key: &[byte] = command_executor_arg(command, 2) catch {
             return command_executor_owned_error(&"ERR wrong number of arguments for 'xgroup|create' command"[0: 57]);
         };
-        _ = command_executor_arg(command, 3) catch {
+        const group_name: &[byte] = command_executor_arg(command, 3) catch {
             return command_executor_owned_error(&"ERR wrong number of arguments for 'xgroup|create' command"[0: 57]);
         };
-        _ = command_executor_arg(command, 4) catch {
+        const id_token: &[byte] = command_executor_arg(command, 4) catch {
             return command_executor_owned_error(&"ERR wrong number of arguments for 'xgroup|create' command"[0: 57]);
         };
+        var mkstream: bool = false;
         if command.argc == 6 {
             const option: &[byte] = command_executor_arg(command, 5) catch {
                 return command_executor_owned_error(&"ERR wrong number of arguments for 'xgroup|create' command"[0: 57]);
@@ -6475,14 +6550,59 @@ fn command_executor_xgroup(engine: &Engine, command: &Command, now_ms: u64) Comm
             if !command_executor_keyword_eq(option, &"MKSTREAM"[0: 8]) {
                 return command_executor_syntax_error();
             }
+            mkstream = true;
         }
-        const obj: &RedisObject = command_executor_lookup_key_at(engine, key, now_ms) catch {
-            return command_executor_error(&"ERR no such key"[0: 15]);
-        };
+
+        var created: bool = false;
+        var obj: &RedisObject = null;
+        obj = command_executor_lookup_key_or_null(engine, key, now_ms);
+        if obj == null {
+            if !mkstream {
+                return command_executor_error(&"ERR The XGROUP subcommand requires the key to exist. Note that for CREATE you may want to use the MKSTREAM option to create an empty stream automatically."[0: 154]);
+            }
+            const stream_obj: &RedisObject = create_stream_object() catch {
+                return command_executor_oom();
+            };
+            _ = set_key_at(engine, key, stream_obj, now_ms) catch {
+                object_free(stream_obj);
+                return command_executor_oom();
+            };
+            created = true;
+            obj = stream_obj;
+        }
         if obj.obj_type != ObjectType.object_stream {
             return command_executor_wrongtype();
         }
-        return command_executor_error(&"ERR XGROUP CREATE is not supported yet"[0: 38]);
+
+        var id_ms: u64 = 0u64;
+        var id_seq: u64 = 0u64;
+        if id_token.len == 1 && id_token.ptr[0] == 36 as byte {
+            id_ms = obj.stream_last_ms;
+            id_seq = obj.stream_last_seq;
+        } else {
+            const parsed: StreamId = command_executor_parse_stream_id(id_token, 0u64, false, false) catch {
+                if created {
+                    _ = delete_key(engine, key);
+                }
+                return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 58]);
+            };
+            id_ms = parsed.ms;
+            id_seq = parsed.seq;
+        }
+
+        const inserted: bool = stream_object_group_create(obj, group_name, id_ms, id_seq, false, 0) catch |create_err| {
+            if created {
+                _ = delete_key(engine, key);
+            }
+            if create_err == error.ObjectWrongType {
+                return command_executor_wrongtype();
+            }
+            return command_executor_oom();
+        };
+        if !inserted {
+            return command_executor_error(&"BUSYGROUP Consumer Group name already exists"[0: 44]);
+        }
+        return command_executor_simple(&"OK"[0: 2]);
     }
     if command_executor_keyword_eq(subcommand, &"CREATECONSUMER"[0: 14]) || command_executor_keyword_eq(subcommand, &"DELCONSUMER"[0: 11]) {
         if command.argc != 5 {
@@ -6515,7 +6635,7 @@ fn command_executor_xgroup(engine: &Engine, command: &Command, now_ms: u64) Comm
         const key: &[byte] = command_executor_arg(command, 2) catch {
             return command_executor_owned_error(&"ERR wrong number of arguments for 'xgroup|destroy' command"[0: 58]);
         };
-        _ = command_executor_arg(command, 3) catch {
+        const group_name: &[byte] = command_executor_arg(command, 3) catch {
             return command_executor_owned_error(&"ERR wrong number of arguments for 'xgroup|destroy' command"[0: 58]);
         };
         const obj: &RedisObject = command_executor_lookup_key_at(engine, key, now_ms) catch {
@@ -6523,6 +6643,12 @@ fn command_executor_xgroup(engine: &Engine, command: &Command, now_ms: u64) Comm
         };
         if obj.obj_type != ObjectType.object_stream {
             return command_executor_wrongtype();
+        }
+        const deleted: bool = stream_object_group_delete(obj, group_name) catch {
+            return command_executor_wrongtype();
+        };
+        if deleted {
+            return command_executor_integer(1);
         }
         return command_executor_integer(0);
     }
@@ -6533,30 +6659,54 @@ fn command_executor_xgroup(engine: &Engine, command: &Command, now_ms: u64) Comm
         const key: &[byte] = command_executor_arg(command, 2) catch {
             return command_executor_owned_error(&"ERR wrong number of arguments for 'xgroup|setid' command"[0: 56]);
         };
-        _ = command_executor_arg(command, 3) catch {
+        const group_name: &[byte] = command_executor_arg(command, 3) catch {
             return command_executor_owned_error(&"ERR wrong number of arguments for 'xgroup|setid' command"[0: 56]);
         };
-        _ = command_executor_arg(command, 4) catch {
+        const id_token: &[byte] = command_executor_arg(command, 4) catch {
             return command_executor_owned_error(&"ERR wrong number of arguments for 'xgroup|setid' command"[0: 56]);
         };
+        var entries_read_valid: bool = false;
+        var entries_read: i64 = 0;
         if command.argc == 7 {
             const option: &[byte] = command_executor_arg(command, 5) catch {
                 return command_executor_owned_error(&"ERR wrong number of arguments for 'xgroup|setid' command"[0: 56]);
             };
-            _ = command_executor_arg(command, 6) catch {
+            const entries_read_data: &[byte] = command_executor_arg(command, 6) catch {
                 return command_executor_owned_error(&"ERR wrong number of arguments for 'xgroup|setid' command"[0: 56]);
             };
             if !command_executor_keyword_eq(option, &"ENTRIESREAD"[0: 11]) {
                 return command_executor_syntax_error();
             }
+            entries_read = command_executor_parse_i64(entries_read_data) catch {
+                return command_executor_invalid_integer();
+            };
+            entries_read_valid = true;
         }
         const obj: &RedisObject = command_executor_lookup_key_at(engine, key, now_ms) catch {
-            return command_executor_error(&"ERR no such key"[0: 15]);
+            return command_executor_xgroup_nogroup(key, group_name);
         };
         if obj.obj_type != ObjectType.object_stream {
             return command_executor_wrongtype();
         }
-        return command_executor_error(&"NOGROUP No such consumer group"[0: 30]);
+        var id_ms: u64 = 0u64;
+        var id_seq: u64 = 0u64;
+        if id_token.len == 1 && id_token.ptr[0] == 36 as byte {
+            id_ms = obj.stream_last_ms;
+            id_seq = obj.stream_last_seq;
+        } else {
+            const parsed: StreamId = command_executor_parse_stream_id(id_token, 0u64, false, false) catch {
+                return command_executor_error(&"ERR Invalid stream ID specified as stream command argument"[0: 58]);
+            };
+            id_ms = parsed.ms;
+            id_seq = parsed.seq;
+        }
+        stream_object_group_set_id(obj, group_name, id_ms, id_seq, entries_read_valid, entries_read) catch |set_err| {
+            if set_err == error.ObjectGroupNotFound {
+                return command_executor_xgroup_nogroup(key, group_name);
+            }
+            return command_executor_wrongtype();
+        };
+        return command_executor_simple(&"OK"[0: 2]);
     }
 
     var err: Sds = sds_empty() catch {
@@ -6613,11 +6763,76 @@ fn command_executor_xinfo_stream_resp(buf: &Sds, obj: &RedisObject, length: usiz
         try command_executor_resp_append_bulk(buf, &"0-0"[0: 3]);
     }
     try command_executor_resp_append_bulk(buf, &"groups"[0: 6]);
-    try command_executor_resp_append_integer(buf, 0);
+    try command_executor_resp_append_integer(buf, (try stream_object_group_count(obj)) as i64);
     try command_executor_resp_append_bulk(buf, &"first-entry"[0: 11]);
     try command_executor_xinfo_append_entry_or_null(buf, first_entry);
     try command_executor_resp_append_bulk(buf, &"last-entry"[0: 10]);
     try command_executor_xinfo_append_entry_or_null(buf, last_entry);
+}
+
+fn command_executor_xinfo_append_group_resp(buf: &Sds, obj: &RedisObject, group: &StreamGroup, entries_added: usize) !void {
+    var last_id: Sds = try command_executor_stream_id_sds(group.last_delivered_ms, group.last_delivered_seq);
+    defer {
+        sds_free(&last_id);
+    }
+    const lag: i64 = try command_executor_stream_group_lag(obj, group, entries_added);
+
+    try command_executor_resp_append_array_header(buf, 12);
+    try command_executor_resp_append_bulk(buf, &"name"[0: 4]);
+    try command_executor_resp_append_bulk(buf, group.name.buf[0: group.name.len]);
+    try command_executor_resp_append_bulk(buf, &"consumers"[0: 9]);
+    try command_executor_resp_append_integer(buf, group.consumer_count as i64);
+    try command_executor_resp_append_bulk(buf, &"pending"[0: 7]);
+    try command_executor_resp_append_integer(buf, group.pending_count as i64);
+    try command_executor_resp_append_bulk(buf, &"last-delivered-id"[0: 17]);
+    try command_executor_resp_append_bulk(buf, last_id.buf[0: last_id.len]);
+    try command_executor_resp_append_bulk(buf, &"entries-read"[0: 12]);
+    if group.entries_read_valid {
+        try command_executor_resp_append_integer(buf, group.entries_read);
+    } else {
+        try command_executor_resp_append_null_bulk(buf);
+    }
+    try command_executor_resp_append_bulk(buf, &"lag"[0: 3]);
+    try command_executor_resp_append_integer(buf, lag);
+}
+
+fn command_executor_xinfo_groups_resp(buf: &Sds, obj: &RedisObject, entries_added: usize) !void {
+    const group_count: usize = try stream_object_group_count(obj);
+    try command_executor_resp_append_array_header(buf, group_count);
+    var iter: DictIterator = stream_object_group_iter_new();
+    var group: &StreamGroup = stream_object_group_iter_next(obj, &iter);
+    while group != null {
+        try command_executor_xinfo_append_group_resp(buf, obj, group, entries_added);
+        group = stream_object_group_iter_next(obj, &iter);
+    }
+}
+
+fn command_executor_xinfo_append_group_full_resp(buf: &Sds, obj: &RedisObject, group: &StreamGroup, entries_added: usize) !void {
+    var last_id: Sds = try command_executor_stream_id_sds(group.last_delivered_ms, group.last_delivered_seq);
+    defer {
+        sds_free(&last_id);
+    }
+    const lag: i64 = try command_executor_stream_group_lag(obj, group, entries_added);
+
+    try command_executor_resp_append_array_header(buf, 14);
+    try command_executor_resp_append_bulk(buf, &"name"[0: 4]);
+    try command_executor_resp_append_bulk(buf, group.name.buf[0: group.name.len]);
+    try command_executor_resp_append_bulk(buf, &"last-delivered-id"[0: 17]);
+    try command_executor_resp_append_bulk(buf, last_id.buf[0: last_id.len]);
+    try command_executor_resp_append_bulk(buf, &"entries-read"[0: 12]);
+    if group.entries_read_valid {
+        try command_executor_resp_append_integer(buf, group.entries_read);
+    } else {
+        try command_executor_resp_append_null_bulk(buf);
+    }
+    try command_executor_resp_append_bulk(buf, &"lag"[0: 3]);
+    try command_executor_resp_append_integer(buf, lag);
+    try command_executor_resp_append_bulk(buf, &"pel-count"[0: 9]);
+    try command_executor_resp_append_integer(buf, group.pending_count as i64);
+    try command_executor_resp_append_bulk(buf, &"pending"[0: 7]);
+    try command_executor_resp_append_array_header(buf, 0);
+    try command_executor_resp_append_bulk(buf, &"consumers"[0: 9]);
+    try command_executor_resp_append_array_header(buf, 0);
 }
 
 fn command_executor_xinfo_stream_full_resp(buf: &Sds, obj: &RedisObject, length: usize, count_limit: i64) !void {
@@ -6666,7 +6881,13 @@ fn command_executor_xinfo_stream_full_resp(buf: &Sds, obj: &RedisObject, length:
         node = node.next;
     }
     try command_executor_resp_append_bulk(buf, &"groups"[0: 6]);
-    try command_executor_resp_append_array_header(buf, 0);
+    try command_executor_resp_append_array_header(buf, try stream_object_group_count(obj));
+    var group_iter: DictIterator = stream_object_group_iter_new();
+    var group: &StreamGroup = stream_object_group_iter_next(obj, &group_iter);
+    while group != null {
+        try command_executor_xinfo_append_group_full_resp(buf, obj, group, length);
+        group = stream_object_group_iter_next(obj, &group_iter);
+    }
 }
 
 fn command_executor_xinfo(engine: &Engine, command: &Command, now_ms: u64) CommandReply {
@@ -6688,9 +6909,9 @@ fn command_executor_xinfo(engine: &Engine, command: &Command, now_ms: u64) Comma
         _ = list_object_push_tail(reply_list, &"XINFO STREAM <key> [FULL [COUNT <count>]]"[0: 41]) catch { object_free(reply_list); return command_executor_oom(); };
         _ = list_object_push_tail(reply_list, &"    Returns basic stream metadata and FULL entry details."[0: 57]) catch { object_free(reply_list); return command_executor_oom(); };
         _ = list_object_push_tail(reply_list, &"XINFO GROUPS <key>"[0: 18]) catch { object_free(reply_list); return command_executor_oom(); };
-        _ = list_object_push_tail(reply_list, &"    Returns an empty list; consumer group state is deferred."[0: 60]) catch { object_free(reply_list); return command_executor_oom(); };
+        _ = list_object_push_tail(reply_list, &"    Returns consumer group metadata for the stream."[0: 51]) catch { object_free(reply_list); return command_executor_oom(); };
         _ = list_object_push_tail(reply_list, &"XINFO CONSUMERS <key> <groupname>"[0: 33]) catch { object_free(reply_list); return command_executor_oom(); };
-        _ = list_object_push_tail(reply_list, &"    Returns NOGROUP until consumer groups are implemented."[0: 58]) catch { object_free(reply_list); return command_executor_oom(); };
+        _ = list_object_push_tail(reply_list, &"    Returns consumer metadata; consumer state is deferred."[0: 55]) catch { object_free(reply_list); return command_executor_oom(); };
         return command_executor_owned_array(reply_list);
     }
     if command_executor_keyword_eq(subcommand, &"STREAM"[0: 6]) {
@@ -6773,7 +6994,22 @@ fn command_executor_xinfo(engine: &Engine, command: &Command, now_ms: u64) Comma
         if obj.obj_type != ObjectType.object_stream {
             return command_executor_wrongtype();
         }
-        return command_executor_array_bulk(null as &ListNode, 0);
+        const length: usize = stream_object_len(obj) catch {
+            return command_executor_wrongtype();
+        };
+        var raw: Sds = sds_empty() catch {
+            return command_executor_oom();
+        };
+        defer {
+            sds_free(&raw);
+        }
+        command_executor_xinfo_groups_resp(&raw, obj, length) catch |build_err| {
+            if build_err == error.AllocOutOfMemory {
+                return command_executor_oom();
+            }
+            return command_executor_wrongtype();
+        };
+        return command_executor_owned_raw(raw.buf[0: raw.len]);
     }
     if command_executor_keyword_eq(subcommand, &"CONSUMERS"[0: 9]) {
         if command.argc != 4 {

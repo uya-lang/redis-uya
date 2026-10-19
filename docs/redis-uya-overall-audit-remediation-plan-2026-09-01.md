@@ -106,7 +106,7 @@ TODO 中包含 `v0.1.0` 到当前主线的历史条目，因此总勾选率不�
 | 主项 | 状态 | 当前边界 |
 |------|------|----------|
 | Streams 第一批 | 已完成 | 基础追加、范围读取、裁剪和持久化 partial |
-| Streams 第二批 | 已完成 | 容器命令、错误面和基础元数据 partial |
+| Streams 第二批 | 已完成 | 容器命令、真实 group 元数据、RDB v2/AOF group 恢复和错误面 partial；consumer/PEL 状态留待后续批次 |
 | Functions / Script 收口 | 进行中 | 单调用 Lua 子集与固定容量 Functions partial |
 | ACL 收口 | 进行中 | 核心用户、selector、方向键和审计已落地，仍需随命令补动态 key spec |
 | 运维与诊断 | 进行中 | CLIENT/CONFIG/MEMORY/SLOWLOG/LATENCY/MONITOR 存在 partial 边界 |

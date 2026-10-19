@@ -35,6 +35,10 @@ use src.storage.object.zset_object_range_reply;
 use src.storage.object.zset_object_get_score;
 use src.storage.object.stream_object_append_entry;
 use src.storage.object.stream_object_len;
+use src.storage.object.StreamGroup;
+use src.storage.object.stream_object_group_count;
+use src.storage.object.stream_object_group_create;
+use src.storage.object.stream_object_group_lookup;
 use src.storage.object.list_object_len;
 use src.storage.object.object_free;
 use src.memory.allocator.used_memory;
@@ -90,7 +94,13 @@ export fn test_aof_rewrite_roundtrip_current_types() !void {
     _ = try list_object_push_head(stream_entry, &"field"[0: 5]);
     _ = try list_object_push_head(stream_entry, &"1000-0"[0: 6]);
     _ = try stream_object_append_entry(stream_obj, stream_entry, 1000u64, 0u64);
+    _ = try stream_object_group_create(stream_obj, &"g"[0: 1], 1000u64, 0u64, true, 1);
+    _ = try stream_object_group_create(stream_obj, &"ord"[0: 3], 1000u64, 0u64, false, 0);
     try set_key(&engine, &"stream"[0: 6], stream_obj);
+
+    const empty_stream_obj: &RedisObject = try create_stream_object();
+    _ = try stream_object_group_create(empty_stream_obj, &"eg"[0: 2], 0u64, 0u64, false, 0);
+    try set_key(&engine, &"emptystream"[0: 11], empty_stream_obj);
 
     try aof_rewrite_file_at(path, &engine, 1000u64);
     engine_free(&engine);
@@ -136,6 +146,19 @@ export fn test_aof_rewrite_roundtrip_current_types() !void {
     try assert_eq_i32(stream_found.obj_type as i32, ObjectType.object_stream as i32);
     try assert_eq_i32((try stream_object_len(stream_found)) as i32, 1);
     try assert_true(rewrite_test_slice_eq(stream_found.list_head.value.list_head.value.value.buf[0: stream_found.list_head.value.list_head.value.value.len], &"1000-0"[0: 6]));
+    try assert_eq_i32((try stream_object_group_count(stream_found)) as i32, 2);
+    const group: &StreamGroup = try stream_object_group_lookup(stream_found, &"g"[0: 1]);
+    try assert_true(group.entries_read_valid);
+    try assert_eq_i32(group.entries_read as i32, 1);
+    try assert_eq_i32(group.last_delivered_ms as i32, 1000);
+    const ordered: &StreamGroup = try stream_object_group_lookup(stream_found, &"ord"[0: 3]);
+    try assert_true(!ordered.entries_read_valid);
+
+    const empty_found: &RedisObject = try lookup_key_at(&replay_engine, &"emptystream"[0: 11], 2000u64);
+    try assert_eq_i32((try stream_object_len(empty_found)) as i32, 0);
+    try assert_eq_i32((try stream_object_group_count(empty_found)) as i32, 1);
+    const empty_group: &StreamGroup = try stream_object_group_lookup(empty_found, &"eg"[0: 2]);
+    try assert_eq_i32(empty_group.last_delivered_ms as i32, 0);
 
     engine_free(&replay_engine);
     _ = unlink(path);

@@ -29,6 +29,15 @@ use src.storage.object.zset_object_len;
 use src.storage.object.zset_object_range_reply;
 use src.storage.object.stream_object_append_entry;
 use src.storage.object.stream_object_len;
+use src.storage.object.StreamGroup;
+use src.storage.object.stream_object_group_create;
+use src.storage.object.stream_object_group_lookup;
+use src.storage.object.stream_object_group_delete;
+use src.storage.object.stream_object_group_set_id;
+use src.storage.object.stream_object_group_count;
+use src.storage.object.stream_object_group_iter_new;
+use src.storage.object.stream_object_group_iter_next;
+use src.storage.object.object_clone;
 use src.storage.object.ListRangeView;
 use src.storage.object.ListNode;
 use src.storage.object.object_free;
@@ -40,6 +49,7 @@ use src.storage.object.object_pool_cached_objects;
 use src.storage.object.object_pool_cached_list_nodes;
 use src.storage.object.object_pool_reuse_count;
 use src.storage.object.object_pool_reset_for_test;
+use src.storage.dict.DictIterator;
 use src.memory.allocator.used_memory;
 use src.memory.allocator.reset_memory_stats_for_test;
 
@@ -229,6 +239,60 @@ export fn test_object_stream_create_append_free() !void {
     try assert_eq_i32((try stream_object_len(stream)) as i32, 1);
     try assert_true(object_slice_eq(stream.list_head.value.list_head.value.value.buf[0: stream.list_head.value.list_head.value.value.len], &"1000-1"[0: 6]));
 
+    object_free(stream);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_object_stream_group_lifecycle_clone_free() !void {
+    reset_memory_stats_for_test();
+    const stream: &RedisObject = try create_stream_object();
+    try assert_eq_i32((try stream_object_group_count(stream)) as i32, 0);
+
+    try assert_true(try stream_object_group_create(stream, &"alpha"[0: 5], 10u64, 2u64, true, 3));
+    try assert_true(try stream_object_group_create(stream, &"beta"[0: 4], 20u64, 0u64, false, 0));
+    try assert_eq_i32((try stream_object_group_create(stream, &"alpha"[0: 5], 99u64, 9u64, true, 99)) as i32, 0);
+    try assert_eq_i32((try stream_object_group_count(stream)) as i32, 2);
+
+    const alpha: &StreamGroup = try stream_object_group_lookup(stream, &"alpha"[0: 5]);
+    try assert_true(object_slice_eq(alpha.name.buf[0: alpha.name.len], &"alpha"[0: 5]));
+    try assert_eq_i32(alpha.last_delivered_ms as i32, 10);
+    try assert_eq_i32(alpha.last_delivered_seq as i32, 2);
+    try assert_true(alpha.entries_read_valid);
+    try assert_eq_i32(alpha.entries_read as i32, 3);
+
+    try stream_object_group_set_id(stream, &"alpha"[0: 5], 11u64, 4u64, false, 0);
+    try assert_eq_i32(alpha.last_delivered_ms as i32, 11);
+    try assert_eq_i32(alpha.last_delivered_seq as i32, 4);
+    try assert_eq_i32(alpha.entries_read_valid as i32, 0);
+
+    const cloned: &RedisObject = try object_clone(stream);
+    try assert_eq_i32((try stream_object_group_count(cloned)) as i32, 2);
+    const cloned_alpha: &StreamGroup = try stream_object_group_lookup(cloned, &"alpha"[0: 5]);
+    try assert_eq_i32(cloned_alpha.last_delivered_ms as i32, 11);
+    try assert_eq_i32(cloned_alpha.last_delivered_seq as i32, 4);
+    try assert_eq_i32(cloned_alpha.entries_read_valid as i32, 0);
+
+    var iter: DictIterator = stream_object_group_iter_new();
+    var group: &StreamGroup = stream_object_group_iter_next(stream, &iter);
+    var seen_alpha: i32 = 0;
+    var seen_beta: i32 = 0;
+    while group != null {
+        if object_slice_eq(group.name.buf[0: group.name.len], &"alpha"[0: 5]) {
+            seen_alpha = 1;
+        }
+        if object_slice_eq(group.name.buf[0: group.name.len], &"beta"[0: 4]) {
+            seen_beta = 1;
+        }
+        group = stream_object_group_iter_next(stream, &iter);
+    }
+    try assert_eq_i32(seen_alpha, 1);
+    try assert_eq_i32(seen_beta, 1);
+
+    try assert_true(try stream_object_group_delete(stream, &"alpha"[0: 5]));
+    try assert_eq_i32((try stream_object_group_delete(stream, &"alpha"[0: 5])) as i32, 0);
+    try assert_eq_i32((try stream_object_group_count(stream)) as i32, 1);
+
+    object_free(cloned);
     object_free(stream);
     try assert_eq_i32(used_memory() as i32, 0);
 }

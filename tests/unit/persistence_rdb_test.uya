@@ -39,9 +39,15 @@ use src.storage.object.zset_object_range_reply;
 use src.storage.object.zset_object_get_score;
 use src.storage.object.stream_object_append_entry;
 use src.storage.object.stream_object_len;
+use src.storage.object.StreamGroup;
+use src.storage.object.stream_object_group_count;
+use src.storage.object.stream_object_group_create;
+use src.storage.object.stream_object_group_lookup;
 use src.storage.object.object_free;
 use src.memory.allocator.used_memory;
 use src.memory.allocator.reset_memory_stats_for_test;
+use src.util.endian.write_u32_be;
+use src.util.endian.write_u64_be;
 use libc.unlink;
 
 fn rdb_test_slice_eq(a: &[byte], b: &[byte]) bool {
@@ -281,5 +287,123 @@ export fn test_rdb_dump_and_load_bytes_current_types() !void {
     object_free(dump_obj);
     engine_free(&engine);
     engine_free(&replay_engine);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+
+fn rdb_test_put_u32(out: &[byte], pos: &usize, value: u32) void {
+    var bytes: [byte: 4] = [];
+    _ = write_u32_be(bytes[0: 4], value);
+    var i: usize = 0;
+    while i < 4 {
+        out.ptr[*pos + i] = bytes[i];
+        i = i + 1;
+    }
+    *pos = *pos + 4;
+}
+
+fn rdb_test_put_u64(out: &[byte], pos: &usize, value: u64) void {
+    var bytes: [byte: 8] = [];
+    _ = write_u64_be(bytes[0: 8], value);
+    var i: usize = 0;
+    while i < 8 {
+        out.ptr[*pos + i] = bytes[i];
+        i = i + 1;
+    }
+    *pos = *pos + 8;
+}
+
+fn rdb_test_put_blob(out: &[byte], pos: &usize, data: &[byte]) void {
+    rdb_test_put_u32(out, pos, data.len as u32);
+    var i: usize = 0;
+    while i < data.len {
+        out.ptr[*pos + i] = data.ptr[i];
+        i = i + 1;
+    }
+    *pos = *pos + data.len;
+}
+
+export fn test_rdb_stream_v2_groups_roundtrip() !void {
+    reset_memory_stats_for_test();
+    const path: &const byte = "build/test-rdb-stream-v2.rdb";
+    _ = unlink(path);
+
+    var engine: Engine = engine_new();
+    const stream_obj: &RedisObject = try create_stream_object();
+    const entry: &RedisObject = try create_list_object();
+    _ = try list_object_push_tail(entry, &"1000-0"[0: 6]);
+    _ = try list_object_push_tail(entry, &"field"[0: 5]);
+    _ = try list_object_push_tail(entry, &"value"[0: 5]);
+    _ = try stream_object_append_entry(stream_obj, entry, 1000u64, 0u64);
+    _ = try stream_object_group_create(stream_obj, &"g"[0: 1], 1000u64, 0u64, true, 1);
+    _ = try stream_object_group_create(stream_obj, &"ord"[0: 3], 1000u64, 0u64, false, 0);
+    try set_key(&engine, &"stream"[0: 6], stream_obj);
+
+    const empty_obj: &RedisObject = try create_stream_object();
+    _ = try stream_object_group_create(empty_obj, &"eg"[0: 2], 0u64, 0u64, false, 0);
+    try set_key(&engine, &"empty"[0: 5], empty_obj);
+
+    try rdb_save_file_at(path, &engine, 1000u64);
+    engine_free(&engine);
+
+    var replay_engine: Engine = engine_new();
+    try rdb_load_file_at(path, &replay_engine, 1000u64);
+    const found: &RedisObject = try lookup_key_at(&replay_engine, &"stream"[0: 6], 1000u64);
+    try assert_eq_i32((try stream_object_len(found)) as i32, 1);
+    try assert_eq_i32((try stream_object_group_count(found)) as i32, 2);
+    const group: &StreamGroup = try stream_object_group_lookup(found, &"g"[0: 1]);
+    try assert_true(group.entries_read_valid);
+    try assert_eq_i32(group.entries_read as i32, 1);
+    try assert_eq_i32(group.last_delivered_ms as i32, 1000);
+    try assert_eq_i32(group.last_delivered_seq as i32, 0);
+    const ordered: &StreamGroup = try stream_object_group_lookup(found, &"ord"[0: 3]);
+    try assert_true(!ordered.entries_read_valid);
+
+    const empty_found: &RedisObject = try lookup_key_at(&replay_engine, &"empty"[0: 5], 1000u64);
+    try assert_eq_i32((try stream_object_len(empty_found)) as i32, 0);
+    try assert_eq_i32((try stream_object_group_count(empty_found)) as i32, 1);
+    const empty_group: &StreamGroup = try stream_object_group_lookup(empty_found, &"eg"[0: 2]);
+    try assert_eq_i32(empty_group.last_delivered_ms as i32, 0);
+    try assert_eq_i32(empty_group.last_delivered_seq as i32, 0);
+
+    engine_free(&replay_engine);
+    _ = unlink(path);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_rdb_load_stream_v1_without_groups() !void {
+    reset_memory_stats_for_test();
+    var data: [byte: 128] = [];
+    var pos: usize = 0;
+    const magic: &[byte] = &"RUYARDB1"[0: 8];
+    var magic_index: usize = 0;
+    while magic_index < magic.len {
+        data[magic_index] = magic.ptr[magic_index];
+        magic_index = magic_index + 1;
+    }
+    pos = 8;
+    data[pos] = 10 as byte;
+    pos = pos + 1;
+    rdb_test_put_blob(data[0: 128], &pos, &"legacy"[0: 6]);
+    rdb_test_put_u32(data[0: 128], &pos, 1u32);
+    rdb_test_put_u64(data[0: 128], &pos, 1000u64);
+    rdb_test_put_u64(data[0: 128], &pos, 0u64);
+    rdb_test_put_u32(data[0: 128], &pos, 3u32);
+    rdb_test_put_blob(data[0: 128], &pos, &"1000-0"[0: 6]);
+    rdb_test_put_blob(data[0: 128], &pos, &"field"[0: 5]);
+    rdb_test_put_blob(data[0: 128], &pos, &"value"[0: 5]);
+    data[pos] = 255 as byte;
+    pos = pos + 1;
+
+    var engine: Engine = engine_new();
+    try rdb_load_bytes_at(data[0: pos], &engine, 1000u64);
+    const found: &RedisObject = try lookup_key_at(&engine, &"legacy"[0: 6], 1000u64);
+    try assert_eq_i32(found.obj_type as i32, ObjectType.object_stream as i32);
+    try assert_eq_i32((try stream_object_len(found)) as i32, 1);
+    try assert_eq_i32((try stream_object_group_count(found)) as i32, 0);
+    try assert_eq_i32(found.stream_last_ms as i32, 1000);
+    try assert_eq_i32(found.stream_last_seq as i32, 0);
+
+    engine_free(&engine);
     try assert_eq_i32(used_memory() as i32, 0);
 }

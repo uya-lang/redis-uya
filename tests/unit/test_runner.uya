@@ -231,6 +231,8 @@ use tests.unit.persistence_rdb_test.test_rdb_dump_and_load_bytes_current_types;
 use tests.unit.persistence_rdb_test.test_rdb_load_invalid_header_fails;
 use tests.unit.persistence_rdb_test.test_rdb_load_truncated_file_fails;
 use tests.unit.persistence_rdb_test.test_rdb_save_and_load_current_types;
+use tests.unit.persistence_rdb_test.test_rdb_stream_v2_groups_roundtrip;
+use tests.unit.persistence_rdb_test.test_rdb_load_stream_v1_without_groups;
 use tests.unit.persistence_rewrite_test.test_aof_rewrite_roundtrip_current_types;
 use tests.unit.server_test.test_server_async_client_frame_fits_storage;
 use tests.unit.server_test.test_server_cron_expires_keys;
@@ -476,6 +478,10 @@ export fn main() i32 {
     const before_object_stream: i32 = failed;
     _ = test_object_stream_create_append_free() catch { printf("[FAIL] storage_object/stream_create_append_free\n" as *byte); failed = failed + 1; };
     if failed == before_object_stream { printf("[PASS] storage_object/stream_create_append_free\n" as *byte); }
+
+    const before_object_stream_groups: i32 = failed;
+    _ = test_object_stream_group_lifecycle_clone_free() catch { printf("[FAIL] storage_object/stream_group_lifecycle_clone_free\n" as *byte); failed = failed + 1; };
+    if failed == before_object_stream_groups { printf("[PASS] storage_object/stream_group_lifecycle_clone_free\n" as *byte); }
 
     const before_object_pool: i32 = failed;
     _ = test_object_pool_reuses_objects_and_list_nodes() catch { printf("[FAIL] storage_object/object_pool\n" as *byte); failed = failed + 1; };
@@ -1167,6 +1173,14 @@ export fn main() i32 {
     const before_rdb_types: i32 = failed;
     _ = test_rdb_save_and_load_current_types() catch { printf("[FAIL] persistence_rdb/current_types\n" as *byte); failed = failed + 1; };
     if failed == before_rdb_types { printf("[PASS] persistence_rdb/current_types\n" as *byte); }
+
+    const before_rdb_stream_groups: i32 = failed;
+    _ = test_rdb_stream_v2_groups_roundtrip() catch { printf("[FAIL] persistence_rdb/stream_groups\n" as *byte); failed = failed + 1; };
+    if failed == before_rdb_stream_groups { printf("[PASS] persistence_rdb/stream_groups\n" as *byte); }
+
+    const before_rdb_stream_v1: i32 = failed;
+    _ = test_rdb_load_stream_v1_without_groups() catch { printf("[FAIL] persistence_rdb/stream_v1\n" as *byte); failed = failed + 1; };
+    if failed == before_rdb_stream_v1 { printf("[PASS] persistence_rdb/stream_v1\n" as *byte); }
 
     const before_rewrite_roundtrip: i32 = failed;
     _ = test_aof_rewrite_roundtrip_current_types() catch { printf("[FAIL] persistence_rewrite/roundtrip\n" as *byte); failed = failed + 1; };

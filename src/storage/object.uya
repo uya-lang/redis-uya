@@ -52,6 +52,16 @@ export struct ListRangeView {
     count: usize,
 }
 
+export struct StreamGroup {
+    name: Sds,
+    entries_read_valid: bool,
+    last_delivered_ms: u64,
+    last_delivered_seq: u64,
+    entries_read: i64,
+    pending_count: usize,
+    consumer_count: usize,
+}
+
 export struct RedisObject {
     obj_type: ObjectType,
     encoding: Encoding,
@@ -59,6 +69,7 @@ export struct RedisObject {
     int_value: i64,
     hash_dict: Dict,
     hash_expire_dict: Dict,
+    stream_groups: Dict,
     list_head: &ListNode,
     list_tail: &ListNode,
     list_len: usize,
@@ -86,6 +97,7 @@ var list_node_pool_reuse_counter: usize = 0;
 export error ObjectWrongType;
 export error ObjectFieldNotFound;
 export error ObjectListEmpty;
+export error ObjectGroupNotFound;
 
 fn object_stride() usize {
     var sample: [RedisObject: 1] = [];
@@ -238,6 +250,7 @@ fn object_init_base(obj: &RedisObject, obj_type: ObjectType, encoding: Encoding,
     obj.int_value = int_value;
     obj.hash_dict = dict_new();
     obj.hash_expire_dict = dict_new();
+    obj.stream_groups = dict_new();
     obj.list_head = null as &ListNode;
     obj.list_tail = null as &ListNode;
     obj.list_len = 0;
@@ -1252,6 +1265,134 @@ export fn stream_object_len(obj: &RedisObject) !usize {
     return obj.list_len;
 }
 
+fn stream_group_stride() usize {
+    var sample: [StreamGroup: 1] = [];
+    return @size_of(sample[0]) as usize;
+}
+
+fn stream_group_usize_to_ptr(value: usize) &StreamGroup {
+    return @ptr_from_usize(value) as &StreamGroup;
+}
+
+fn stream_group_ptr_to_usize(group: &StreamGroup) usize {
+    return @usize_from_ptr(group as &void);
+}
+
+fn stream_group_new(name: &[byte], last_delivered_ms: u64, last_delivered_seq: u64, entries_read_valid: bool, entries_read: i64) !&StreamGroup {
+    const raw_result: !&byte = redis_malloc(stream_group_stride());
+    const raw: &byte = raw_result catch {
+        return error.AllocOutOfMemory;
+    };
+    const name_copy: Sds = sds_new(name) catch {
+        redis_free(raw);
+        return error.AllocOutOfMemory;
+    };
+    const group: &StreamGroup = raw as &StreamGroup;
+    group.name = name_copy;
+    group.entries_read_valid = entries_read_valid;
+    group.last_delivered_ms = last_delivered_ms;
+    group.last_delivered_seq = last_delivered_seq;
+    group.entries_read = entries_read;
+    group.pending_count = 0;
+    group.consumer_count = 0;
+    return group;
+}
+
+fn stream_group_free(group: &StreamGroup) void {
+    if group == null {
+        return;
+    }
+    var name: Sds = group.name;
+    sds_free(&name);
+    redis_free(group as &byte);
+}
+
+export fn stream_object_group_create(
+    obj: &RedisObject,
+    name: &[byte],
+    last_delivered_ms: u64,
+    last_delivered_seq: u64,
+    entries_read_valid: bool,
+    entries_read: i64,
+) !bool {
+    if obj == null || obj.obj_type != ObjectType.object_stream {
+        return error.ObjectWrongType;
+    }
+    const existing_result: !usize = dict_lookup(&obj.stream_groups, name);
+    _ = existing_result catch {
+        const group: &StreamGroup = try stream_group_new(name, last_delivered_ms, last_delivered_seq, entries_read_valid, entries_read);
+        const inserted: bool = dict_insert(&obj.stream_groups, name, stream_group_ptr_to_usize(group)) catch |err| {
+            stream_group_free(group);
+            return err;
+        };
+        _ = inserted;
+        return true;
+    };
+    return false;
+}
+
+export fn stream_object_group_lookup(obj: &RedisObject, name: &[byte]) !&StreamGroup {
+    if obj == null || obj.obj_type != ObjectType.object_stream {
+        return error.ObjectWrongType;
+    }
+    const value: usize = dict_lookup(&obj.stream_groups, name) catch {
+        return error.ObjectGroupNotFound;
+    };
+    return stream_group_usize_to_ptr(value);
+}
+
+export fn stream_object_group_delete(obj: &RedisObject, name: &[byte]) !bool {
+    if obj == null || obj.obj_type != ObjectType.object_stream {
+        return error.ObjectWrongType;
+    }
+    const value_result: !usize = dict_lookup(&obj.stream_groups, name);
+    const value: usize = value_result catch {
+        return false;
+    };
+    const deleted: bool = dict_delete(&obj.stream_groups, name);
+    if deleted {
+        stream_group_free(stream_group_usize_to_ptr(value));
+    }
+    return deleted;
+}
+
+export fn stream_object_group_set_id(
+    obj: &RedisObject,
+    name: &[byte],
+    last_delivered_ms: u64,
+    last_delivered_seq: u64,
+    entries_read_valid: bool,
+    entries_read: i64,
+) !void {
+    const group: &StreamGroup = try stream_object_group_lookup(obj, name);
+    group.last_delivered_ms = last_delivered_ms;
+    group.last_delivered_seq = last_delivered_seq;
+    group.entries_read_valid = entries_read_valid;
+    group.entries_read = entries_read;
+}
+
+export fn stream_object_group_count(obj: &RedisObject) !usize {
+    if obj == null || obj.obj_type != ObjectType.object_stream {
+        return error.ObjectWrongType;
+    }
+    return dict_len(&obj.stream_groups);
+}
+
+export fn stream_object_group_iter_new() DictIterator {
+    return dict_iter_new();
+}
+
+export fn stream_object_group_iter_next(obj: &RedisObject, iter: &DictIterator) &StreamGroup {
+    if obj == null || obj.obj_type != ObjectType.object_stream {
+        return null as &StreamGroup;
+    }
+    const entry: &DictEntry = dict_iter_next(&obj.stream_groups, iter);
+    if entry == null {
+        return null as &StreamGroup;
+    }
+    return stream_group_usize_to_ptr(entry.value);
+}
+
 export fn object_clone(obj: &RedisObject) !&RedisObject {
     if obj == null {
         return error.ObjectWrongType;
@@ -1338,6 +1479,19 @@ export fn object_clone(obj: &RedisObject) !&RedisObject {
             };
             stream_node = stream_node.next;
         }
+        var group_iter: DictIterator = stream_object_group_iter_new();
+        var group: &StreamGroup = stream_object_group_iter_next(obj, &group_iter);
+        while group != null {
+            _ = try stream_object_group_create(
+                cloned_stream,
+                group.name.buf[0: group.name.len],
+                group.last_delivered_ms,
+                group.last_delivered_seq,
+                group.entries_read_valid,
+                group.entries_read,
+            );
+            group = stream_object_group_iter_next(obj, &group_iter);
+        }
         return cloned_stream;
     }
 
@@ -1365,8 +1519,17 @@ export fn object_free(obj: &RedisObject) void {
             node = next;
         }
     }
+    if obj.obj_type == ObjectType.object_stream {
+        var group_iter: DictIterator = stream_object_group_iter_new();
+        var group: &StreamGroup = stream_object_group_iter_next(obj, &group_iter);
+        while group != null {
+            stream_group_free(group);
+            group = stream_object_group_iter_next(obj, &group_iter);
+        }
+    }
     dict_free(&obj.hash_dict);
     dict_free(&obj.hash_expire_dict);
+    dict_free(&obj.stream_groups);
     sds_free(&obj.value);
     object_release(obj);
 }

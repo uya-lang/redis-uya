@@ -30,6 +30,8 @@ use src.storage.object.zset_object_range_reply;
 use src.storage.object.stream_object_append_entry;
 use src.storage.object.stream_object_len;
 use src.storage.object.StreamGroup;
+use src.storage.object.StreamConsumer;
+use src.storage.object.StreamPending;
 use src.storage.object.stream_object_group_create;
 use src.storage.object.stream_object_group_lookup;
 use src.storage.object.stream_object_group_delete;
@@ -37,6 +39,18 @@ use src.storage.object.stream_object_group_set_id;
 use src.storage.object.stream_object_group_count;
 use src.storage.object.stream_object_group_iter_new;
 use src.storage.object.stream_object_group_iter_next;
+use src.storage.object.stream_object_group_create_consumer;
+use src.storage.object.stream_object_group_lookup_consumer;
+use src.storage.object.stream_object_group_delete_consumer;
+use src.storage.object.stream_object_group_consumer_count;
+use src.storage.object.stream_object_group_consumer_iter_new;
+use src.storage.object.stream_object_group_consumer_iter_next;
+use src.storage.object.stream_object_group_pending_add;
+use src.storage.object.stream_object_group_pending_lookup;
+use src.storage.object.stream_object_group_pending_delete;
+use src.storage.object.stream_object_group_pending_count;
+use src.storage.object.stream_object_group_pending_iter_new;
+use src.storage.object.stream_object_group_pending_iter_next;
 use src.storage.object.object_clone;
 use src.storage.object.ListRangeView;
 use src.storage.object.ListNode;
@@ -291,6 +305,63 @@ export fn test_object_stream_group_lifecycle_clone_free() !void {
     try assert_true(try stream_object_group_delete(stream, &"alpha"[0: 5]));
     try assert_eq_i32((try stream_object_group_delete(stream, &"alpha"[0: 5])) as i32, 0);
     try assert_eq_i32((try stream_object_group_count(stream)) as i32, 1);
+
+    object_free(cloned);
+    object_free(stream);
+    try assert_eq_i32(used_memory() as i32, 0);
+}
+
+export fn test_object_stream_consumer_pending_lifecycle_clone_free() !void {
+    reset_memory_stats_for_test();
+    const stream: &RedisObject = try create_stream_object();
+    try assert_true(try stream_object_group_create(stream, &"group"[0: 5], 10u64, 0u64, true, 1));
+    try assert_eq_i32((try stream_object_group_consumer_count(stream, &"group"[0: 5])) as i32, 0);
+
+    try assert_true(try stream_object_group_create_consumer(stream, &"group"[0: 5], &"alice"[0: 5], 100u64, 101u64));
+    try assert_eq_i32((try stream_object_group_create_consumer(stream, &"group"[0: 5], &"alice"[0: 5], 200u64, 201u64)) as i32, 0);
+    try assert_eq_i32((try stream_object_group_consumer_count(stream, &"group"[0: 5])) as i32, 1);
+    const alice: &StreamConsumer = try stream_object_group_lookup_consumer(stream, &"group"[0: 5], &"alice"[0: 5]);
+    try assert_true(object_slice_eq(alice.name.buf[0: alice.name.len], &"alice"[0: 5]));
+    try assert_eq_i32(alice.seen_time_ms as i32, 100);
+    try assert_eq_i32(alice.active_time_ms as i32, 101);
+    try assert_eq_i32(alice.pending_count as i32, 0);
+
+    try assert_true(try stream_object_group_pending_add(stream, &"group"[0: 5], &"alice"[0: 5], 10u64, 2u64, 300u64, 1u64));
+    try assert_eq_i32((try stream_object_group_pending_add(stream, &"group"[0: 5], &"alice"[0: 5], 10u64, 2u64, 400u64, 2u64)) as i32, 0);
+    try assert_eq_i32((try stream_object_group_pending_count(stream, &"group"[0: 5])) as i32, 1);
+    try assert_eq_i32(alice.pending_count as i32, 1);
+    const pending: &StreamPending = try stream_object_group_pending_lookup(stream, &"group"[0: 5], 10u64, 2u64);
+    try assert_eq_i32(pending.id_ms as i32, 10);
+    try assert_eq_i32(pending.id_seq as i32, 2);
+    try assert_eq_i32(pending.delivery_time_ms as i32, 400);
+    try assert_eq_i32(pending.delivery_count as i32, 2);
+    try assert_true(object_slice_eq(pending.consumer_name.buf[0: pending.consumer_name.len], &"alice"[0: 5]));
+
+    const cloned: &RedisObject = try object_clone(stream);
+    const cloned_alice: &StreamConsumer = try stream_object_group_lookup_consumer(cloned, &"group"[0: 5], &"alice"[0: 5]);
+    try assert_eq_i32(cloned_alice.pending_count as i32, 1);
+    const cloned_pending: &StreamPending = try stream_object_group_pending_lookup(cloned, &"group"[0: 5], 10u64, 2u64);
+    try assert_eq_i32(cloned_pending.delivery_count as i32, 2);
+    try assert_true(object_slice_eq(cloned_pending.consumer_name.buf[0: cloned_pending.consumer_name.len], &"alice"[0: 5]));
+
+    try assert_true(try stream_object_group_pending_delete(stream, &"group"[0: 5], 10u64, 2u64));
+    try assert_eq_i32((try stream_object_group_pending_count(stream, &"group"[0: 5])) as i32, 0);
+    try assert_eq_i32(alice.pending_count as i32, 0);
+    try assert_eq_i32((try stream_object_group_pending_delete(stream, &"group"[0: 5], 10u64, 2u64)) as i32, 0);
+
+    try assert_true(try stream_object_group_pending_add(stream, &"group"[0: 5], &"alice"[0: 5], 11u64, 0u64, 500u64, 1u64));
+    try assert_eq_i32((try stream_object_group_delete_consumer(stream, &"group"[0: 5], &"alice"[0: 5])) as i32, 1);
+    try assert_eq_i32((try stream_object_group_consumer_count(stream, &"group"[0: 5])) as i32, 0);
+    try assert_eq_i32((try stream_object_group_pending_count(stream, &"group"[0: 5])) as i32, 0);
+    try assert_eq_i32((try stream_object_group_delete_consumer(stream, &"group"[0: 5], &"alice"[0: 5])) as i32, 0);
+
+    const cloned_group: &StreamGroup = try stream_object_group_lookup(cloned, &"group"[0: 5]);
+    var consumer_iter: DictIterator = stream_object_group_consumer_iter_new();
+    var cloned_consumer: &StreamConsumer = stream_object_group_consumer_iter_next(cloned_group, &consumer_iter);
+    try assert_true(cloned_consumer != null);
+    try assert_true(object_slice_eq(cloned_consumer.name.buf[0: cloned_consumer.name.len], &"alice"[0: 5]));
+    cloned_consumer = stream_object_group_consumer_iter_next(cloned_group, &consumer_iter);
+    try assert_true(cloned_consumer == null);
 
     object_free(cloned);
     object_free(stream);

@@ -20,6 +20,8 @@ use src.storage.sds.Sds;
 use src.storage.sds.sds_empty;
 use src.storage.sds.sds_new;
 use src.storage.sds.sds_free;
+use src.storage.sds.sds_cat_fmt;
+use src.storage.sds.sds_fmt_u64;
 use src.util.bytes.bytes_cmp;
 
 export enum ObjectType {
@@ -52,6 +54,21 @@ export struct ListRangeView {
     count: usize,
 }
 
+export struct StreamConsumer {
+    name: Sds,
+    seen_time_ms: u64,
+    active_time_ms: u64,
+    pending_count: usize,
+}
+
+export struct StreamPending {
+    id_ms: u64,
+    id_seq: u64,
+    consumer_name: Sds,
+    delivery_time_ms: u64,
+    delivery_count: u64,
+}
+
 export struct StreamGroup {
     name: Sds,
     entries_read_valid: bool,
@@ -60,6 +77,8 @@ export struct StreamGroup {
     entries_read: i64,
     pending_count: usize,
     consumer_count: usize,
+    consumers: Dict,
+    pending: Dict,
 }
 
 export struct RedisObject {
@@ -1295,13 +1314,47 @@ fn stream_group_new(name: &[byte], last_delivered_ms: u64, last_delivered_seq: u
     group.entries_read = entries_read;
     group.pending_count = 0;
     group.consumer_count = 0;
+    group.consumers = dict_new();
+    group.pending = dict_new();
     return group;
+}
+
+fn stream_consumer_free(consumer: &StreamConsumer) void {
+    if consumer == null {
+        return;
+    }
+    var name: Sds = consumer.name;
+    sds_free(&name);
+    redis_free(consumer as &byte);
+}
+
+fn stream_pending_free(pending: &StreamPending) void {
+    if pending == null {
+        return;
+    }
+    var consumer_name: Sds = pending.consumer_name;
+    sds_free(&consumer_name);
+    redis_free(pending as &byte);
 }
 
 fn stream_group_free(group: &StreamGroup) void {
     if group == null {
         return;
     }
+    var consumer_iter: DictIterator = dict_iter_new();
+    var consumer_entry: &DictEntry = dict_iter_next(&group.consumers, &consumer_iter);
+    while consumer_entry != null {
+        stream_consumer_free(@ptr_from_usize(consumer_entry.value) as &StreamConsumer);
+        consumer_entry = dict_iter_next(&group.consumers, &consumer_iter);
+    }
+    var pending_iter: DictIterator = dict_iter_new();
+    var pending_entry: &DictEntry = dict_iter_next(&group.pending, &pending_iter);
+    while pending_entry != null {
+        stream_pending_free(@ptr_from_usize(pending_entry.value) as &StreamPending);
+        pending_entry = dict_iter_next(&group.pending, &pending_iter);
+    }
+    dict_free(&group.consumers);
+    dict_free(&group.pending);
     var name: Sds = group.name;
     sds_free(&name);
     redis_free(group as &byte);
@@ -1391,6 +1444,275 @@ export fn stream_object_group_iter_next(obj: &RedisObject, iter: &DictIterator) 
         return null as &StreamGroup;
     }
     return stream_group_usize_to_ptr(entry.value);
+}
+
+
+fn stream_consumer_stride() usize {
+    var sample: [StreamConsumer: 1] = [];
+    return @size_of(sample[0]) as usize;
+}
+
+fn stream_pending_stride() usize {
+    var sample: [StreamPending: 1] = [];
+    return @size_of(sample[0]) as usize;
+}
+
+fn stream_pending_key_sds(id_ms: u64, id_seq: u64) !Sds {
+    var key: Sds = sds_empty() catch {
+        return error.AllocOutOfMemory;
+    };
+    errdefer sds_free(&key);
+    const args: [SdsFmtArg: 2] = [sds_fmt_u64(id_ms), sds_fmt_u64(id_seq)];
+    sds_cat_fmt(&key, &"%u-%u"[0: 5], &args[0: 2]) catch {
+        return error.AllocOutOfMemory;
+    };
+    return key;
+}
+
+fn stream_group_consumer_usize_to_ptr(value: usize) &StreamConsumer {
+    return @ptr_from_usize(value) as &StreamConsumer;
+}
+
+fn stream_group_consumer_ptr_to_usize(consumer: &StreamConsumer) usize {
+    return @usize_from_ptr(consumer as &void);
+}
+
+fn stream_group_pending_usize_to_ptr(value: usize) &StreamPending {
+    return @ptr_from_usize(value) as &StreamPending;
+}
+
+fn stream_group_pending_ptr_to_usize(pending: &StreamPending) usize {
+    return @usize_from_ptr(pending as &void);
+}
+
+
+fn stream_consumer_new(consumer_name: &[byte], seen_time_ms: u64, active_time_ms: u64) !&StreamConsumer {
+    const raw_result: !&byte = redis_malloc(stream_consumer_stride());
+    const raw: &byte = raw_result catch {
+        return error.AllocOutOfMemory;
+    };
+    const name_copy: Sds = sds_new(consumer_name) catch {
+        redis_free(raw);
+        return error.AllocOutOfMemory;
+    };
+    const consumer: &StreamConsumer = raw as &StreamConsumer;
+    consumer.name = name_copy;
+    consumer.seen_time_ms = seen_time_ms;
+    consumer.active_time_ms = active_time_ms;
+    consumer.pending_count = 0;
+    return consumer;
+}
+
+fn stream_pending_new(consumer_name: &[byte], id_ms: u64, id_seq: u64, delivery_time_ms: u64, delivery_count: u64) !&StreamPending {
+    const raw_result: !&byte = redis_malloc(stream_pending_stride());
+    const raw: &byte = raw_result catch {
+        return error.AllocOutOfMemory;
+    };
+    const consumer_copy: Sds = sds_new(consumer_name) catch {
+        redis_free(raw);
+        return error.AllocOutOfMemory;
+    };
+    const pending: &StreamPending = raw as &StreamPending;
+    pending.id_ms = id_ms;
+    pending.id_seq = id_seq;
+    pending.consumer_name = consumer_copy;
+    pending.delivery_time_ms = delivery_time_ms;
+    pending.delivery_count = delivery_count;
+    return pending;
+}
+
+export fn stream_object_group_consumer_count(obj: &RedisObject, group_name: &[byte]) !usize {
+    const group: &StreamGroup = try stream_object_group_lookup(obj, group_name);
+    return dict_len(&group.consumers);
+}
+
+export fn stream_object_group_create_consumer(
+    obj: &RedisObject,
+    group_name: &[byte],
+    consumer_name: &[byte],
+    seen_time_ms: u64,
+    active_time_ms: u64,
+) !bool {
+    const group: &StreamGroup = try stream_object_group_lookup(obj, group_name);
+    const existing: !usize = dict_lookup(&group.consumers, consumer_name);
+    _ = existing catch {
+        const consumer: &StreamConsumer = try stream_consumer_new(consumer_name, seen_time_ms, active_time_ms);
+        const inserted: bool = dict_insert(&group.consumers, consumer_name, stream_group_consumer_ptr_to_usize(consumer)) catch |err| {
+            stream_consumer_free(consumer);
+            return err;
+        };
+        if inserted {
+            group.consumer_count = group.consumer_count + 1;
+        }
+        return inserted;
+    };
+    return false;
+}
+
+export fn stream_object_group_lookup_consumer(obj: &RedisObject, group_name: &[byte], consumer_name: &[byte]) !&StreamConsumer {
+    const group: &StreamGroup = try stream_object_group_lookup(obj, group_name);
+    const value: usize = dict_lookup(&group.consumers, consumer_name) catch {
+        return error.ObjectGroupNotFound;
+    };
+    return stream_group_consumer_usize_to_ptr(value);
+}
+
+export fn stream_object_group_consumer_iter_new() DictIterator {
+    return dict_iter_new();
+}
+
+export fn stream_object_group_consumer_iter_next(group: &StreamGroup, iter: &DictIterator) &StreamConsumer {
+    if group == null {
+        return null as &StreamConsumer;
+    }
+    const entry: &DictEntry = dict_iter_next(&group.consumers, iter);
+    if entry == null {
+        return null as &StreamConsumer;
+    }
+    return stream_group_consumer_usize_to_ptr(entry.value);
+}
+
+export fn stream_object_group_pending_count(obj: &RedisObject, group_name: &[byte]) !usize {
+    const group: &StreamGroup = try stream_object_group_lookup(obj, group_name);
+    return dict_len(&group.pending);
+}
+
+export fn stream_object_group_pending_lookup(obj: &RedisObject, group_name: &[byte], id_ms: u64, id_seq: u64) !&StreamPending {
+    const group: &StreamGroup = try stream_object_group_lookup(obj, group_name);
+    var key: Sds = try stream_pending_key_sds(id_ms, id_seq);
+    defer {
+        sds_free(&key);
+    }
+    const value: usize = dict_lookup(&group.pending, key.buf[0: key.len]) catch {
+        return error.ObjectGroupNotFound;
+    };
+    return stream_group_pending_usize_to_ptr(value);
+}
+
+export fn stream_object_group_pending_add(
+    obj: &RedisObject,
+    group_name: &[byte],
+    consumer_name: &[byte],
+    id_ms: u64,
+    id_seq: u64,
+    delivery_time_ms: u64,
+    delivery_count: u64,
+) !bool {
+    const group: &StreamGroup = try stream_object_group_lookup(obj, group_name);
+    const consumer: &StreamConsumer = try stream_object_group_lookup_consumer(obj, group_name, consumer_name);
+    var key: Sds = try stream_pending_key_sds(id_ms, id_seq);
+    defer {
+        sds_free(&key);
+    }
+    const existing_result: !usize = dict_lookup(&group.pending, key.buf[0: key.len]);
+    _ = existing_result catch {
+        const pending: &StreamPending = try stream_pending_new(consumer_name, id_ms, id_seq, delivery_time_ms, delivery_count);
+        const inserted: bool = dict_insert(&group.pending, key.buf[0: key.len], stream_group_pending_ptr_to_usize(pending)) catch |err| {
+            stream_pending_free(pending);
+            return err;
+        };
+        if inserted {
+            group.pending_count = group.pending_count + 1;
+            consumer.pending_count = consumer.pending_count + 1;
+        }
+        return inserted;
+    };
+    const pending: &StreamPending = try stream_object_group_pending_lookup(obj, group_name, id_ms, id_seq);
+    if !bytes_eq(pending.consumer_name.buf[0: pending.consumer_name.len], consumer_name) {
+        const previous: &StreamConsumer = try stream_object_group_lookup_consumer(obj, group_name, pending.consumer_name.buf[0: pending.consumer_name.len]);
+        const consumer_copy: Sds = sds_new(consumer_name) catch {
+            return error.AllocOutOfMemory;
+        };
+        var previous_name: Sds = pending.consumer_name;
+        sds_free(&previous_name);
+        pending.consumer_name = consumer_copy;
+        if previous.pending_count > 0 {
+            previous.pending_count = previous.pending_count - 1;
+        }
+        consumer.pending_count = consumer.pending_count + 1;
+    }
+    pending.delivery_time_ms = delivery_time_ms;
+    pending.delivery_count = delivery_count;
+    return false;
+}
+
+export fn stream_object_group_pending_delete(obj: &RedisObject, group_name: &[byte], id_ms: u64, id_seq: u64) !bool {
+    const group: &StreamGroup = try stream_object_group_lookup(obj, group_name);
+    var key: Sds = try stream_pending_key_sds(id_ms, id_seq);
+    defer {
+        sds_free(&key);
+    }
+    const value_result: !usize = dict_lookup(&group.pending, key.buf[0: key.len]);
+    const value: usize = value_result catch {
+        return false;
+    };
+    const pending: &StreamPending = stream_group_pending_usize_to_ptr(value);
+    const owner_result: !&StreamConsumer = stream_object_group_lookup_consumer(obj, group_name, pending.consumer_name.buf[0: pending.consumer_name.len]);
+    const owner: &StreamConsumer = owner_result catch {
+        return error.ObjectGroupNotFound;
+    };
+    if !dict_delete(&group.pending, key.buf[0: key.len]) {
+        return false;
+    }
+    if group.pending_count > 0 {
+        group.pending_count = group.pending_count - 1;
+    }
+    if owner.pending_count > 0 {
+        owner.pending_count = owner.pending_count - 1;
+    }
+    stream_pending_free(pending);
+    return true;
+}
+
+export fn stream_object_group_pending_iter_new() DictIterator {
+    return dict_iter_new();
+}
+
+export fn stream_object_group_pending_iter_next(group: &StreamGroup, iter: &DictIterator) &StreamPending {
+    if group == null {
+        return null as &StreamPending;
+    }
+    const entry: &DictEntry = dict_iter_next(&group.pending, iter);
+    if entry == null {
+        return null as &StreamPending;
+    }
+    return stream_group_pending_usize_to_ptr(entry.value);
+}
+
+export fn stream_object_group_delete_consumer(obj: &RedisObject, group_name: &[byte], consumer_name: &[byte]) !usize {
+    const group: &StreamGroup = try stream_object_group_lookup(obj, group_name);
+    const consumer_result: !&StreamConsumer = stream_object_group_lookup_consumer(obj, group_name, consumer_name);
+    const consumer: &StreamConsumer = consumer_result catch {
+        return 0 as usize;
+    };
+    var removed: usize = 0;
+    var found: bool = true;
+    while found {
+        found = false;
+        var iter: DictIterator = stream_object_group_pending_iter_new();
+        var pending: &StreamPending = stream_object_group_pending_iter_next(group, &iter);
+        while pending != null && !found {
+            if bytes_eq(pending.consumer_name.buf[0: pending.consumer_name.len], consumer_name) {
+                const removed_pending: bool = try stream_object_group_pending_delete(obj, group_name, pending.id_ms, pending.id_seq);
+                if removed_pending {
+                    removed = removed + 1;
+                }
+                found = true;
+            } else {
+                pending = stream_object_group_pending_iter_next(group, &iter);
+            }
+        }
+    }
+    const value: usize = dict_lookup(&group.consumers, consumer_name) catch {
+        return removed;
+    };
+    if dict_delete(&group.consumers, consumer_name) {
+        if group.consumer_count > 0 {
+            group.consumer_count = group.consumer_count - 1;
+        }
+        stream_consumer_free(stream_group_consumer_usize_to_ptr(value));
+    }
+    return removed;
 }
 
 export fn object_clone(obj: &RedisObject) !&RedisObject {
@@ -1491,6 +1813,40 @@ export fn object_clone(obj: &RedisObject) !&RedisObject {
                 group.entries_read,
             );
             group = stream_object_group_iter_next(obj, &group_iter);
+        }
+        var cloned_group_iter: DictIterator = stream_object_group_iter_new();
+        var cloned_group: &StreamGroup = stream_object_group_iter_next(cloned_stream, &cloned_group_iter);
+        var original_group_iter: DictIterator = stream_object_group_iter_new();
+        var original_group: &StreamGroup = stream_object_group_iter_next(obj, &original_group_iter);
+        while original_group != null && cloned_group != null {
+            var consumer_iter: DictIterator = stream_object_group_consumer_iter_new();
+            var consumer: &StreamConsumer = stream_object_group_consumer_iter_next(original_group, &consumer_iter);
+            while consumer != null {
+                _ = try stream_object_group_create_consumer(
+                    cloned_stream,
+                    cloned_group.name.buf[0: cloned_group.name.len],
+                    consumer.name.buf[0: consumer.name.len],
+                    consumer.seen_time_ms,
+                    consumer.active_time_ms,
+                );
+                consumer = stream_object_group_consumer_iter_next(original_group, &consumer_iter);
+            }
+            var pending_iter: DictIterator = stream_object_group_pending_iter_new();
+            var pending: &StreamPending = stream_object_group_pending_iter_next(original_group, &pending_iter);
+            while pending != null {
+                _ = try stream_object_group_pending_add(
+                    cloned_stream,
+                    cloned_group.name.buf[0: cloned_group.name.len],
+                    pending.consumer_name.buf[0: pending.consumer_name.len],
+                    pending.id_ms,
+                    pending.id_seq,
+                    pending.delivery_time_ms,
+                    pending.delivery_count,
+                );
+                pending = stream_object_group_pending_iter_next(original_group, &pending_iter);
+            }
+            original_group = stream_object_group_iter_next(obj, &original_group_iter);
+            cloned_group = stream_object_group_iter_next(cloned_stream, &cloned_group_iter);
         }
         return cloned_stream;
     }

@@ -483,6 +483,10 @@ export fn main() i32 {
     _ = test_object_stream_group_lifecycle_clone_free() catch { printf("[FAIL] storage_object/stream_group_lifecycle_clone_free\n" as *byte); failed = failed + 1; };
     if failed == before_object_stream_groups { printf("[PASS] storage_object/stream_group_lifecycle_clone_free\n" as *byte); }
 
+    const before_object_stream_consumers: i32 = failed;
+    _ = test_object_stream_consumer_pending_lifecycle_clone_free() catch { printf("[FAIL] storage_object/stream_consumer_pending_lifecycle_clone_free\n" as *byte); failed = failed + 1; };
+    if failed == before_object_stream_consumers { printf("[PASS] storage_object/stream_consumer_pending_lifecycle_clone_free\n" as *byte); }
+
     const before_object_pool: i32 = failed;
     _ = test_object_pool_reuses_objects_and_list_nodes() catch { printf("[FAIL] storage_object/object_pool\n" as *byte); failed = failed + 1; };
     if failed == before_object_pool { printf("[PASS] storage_object/object_pool\n" as *byte); }

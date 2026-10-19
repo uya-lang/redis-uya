@@ -268,6 +268,12 @@ export struct CommandRuntimeInfo {
     replication_state: ReplicationState,
     replication_replid: [byte: 41],
     replication_master_offset: u64,
+    master_sync_attempts: u64,
+    master_sync_failures: u64,
+    master_sync_retry_count: u64,
+    master_sync_last_error: [byte: 32],
+    master_sync_total_bytes: u64,
+    master_sync_read_bytes: u64,
     replication_backlog_first_offset: u64,
     replication_backlog_histlen: usize,
     replication_backlog_active: bool,
@@ -349,6 +355,12 @@ export fn command_runtime_default() CommandRuntimeInfo {
         replication_state: ReplicationState.repl_state_none,
         replication_replid: [],
         replication_master_offset: 0u64,
+        master_sync_attempts: 0u64,
+        master_sync_failures: 0u64,
+        master_sync_retry_count: 0u64,
+        master_sync_last_error: [],
+        master_sync_total_bytes: 0u64,
+        master_sync_read_bytes: 0u64,
         replication_backlog_first_offset: 0u64,
         replication_backlog_histlen: 0,
         replication_backlog_active: false,
@@ -19619,6 +19631,12 @@ fn command_executor_info(engine: &Engine, runtime: &CommandRuntimeInfo, command:
             _ = command_executor_info_append_i64(&buf, &"master_port:%i\r\n"[0: 16], runtime.config.replicaof_port as i64) catch { return command_executor_oom(); };
             _ = command_executor_info_append_bytes(&buf, &"master_link_status:%s\r\n"[0: 23], master_link_status) catch { return command_executor_oom(); };
             _ = command_executor_info_append_i64(&buf, &"master_sync_in_progress:%i\r\n"[0: 28], master_sync_in_progress) catch { return command_executor_oom(); };
+            _ = command_executor_info_append_u64(&buf, &"master_sync_attempts:%u\r\n"[0: 25], runtime.master_sync_attempts) catch { return command_executor_oom(); };
+            _ = command_executor_info_append_u64(&buf, &"master_sync_failures:%u\r\n"[0: 25], runtime.master_sync_failures) catch { return command_executor_oom(); };
+            _ = command_executor_info_append_u64(&buf, &"master_sync_retry_count:%u\r\n"[0: 28], runtime.master_sync_retry_count) catch { return command_executor_oom(); };
+            _ = command_executor_info_append_bytes(&buf, &"master_sync_last_error:%s\r\n"[0: 27], command_executor_cstring_slice(runtime.master_sync_last_error[0: 32])) catch { return command_executor_oom(); };
+            _ = command_executor_info_append_u64(&buf, &"master_sync_total_bytes:%u\r\n"[0: 28], runtime.master_sync_total_bytes) catch { return command_executor_oom(); };
+            _ = command_executor_info_append_u64(&buf, &"master_sync_read_bytes:%u\r\n"[0: 27], runtime.master_sync_read_bytes) catch { return command_executor_oom(); };
             _ = command_executor_info_append_i64(&buf, &"slave_read_only:%i\r\n"[0: 20], if runtime.config.replica_read_only { 1i64 } else { 0i64 }) catch { return command_executor_oom(); };
             _ = command_executor_info_append_bytes(&buf, &"replication_state:%s\r\n\r\n"[0: 24], replication_state_name(runtime.replication_state)) catch { return command_executor_oom(); };
         }

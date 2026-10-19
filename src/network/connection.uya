@@ -13491,6 +13491,17 @@ fn connection_transaction_execute_at(
     return connection_raw_reply_owned(raw.buf[0: raw.len]);
 }
 
+fn connection_sds_append_hex_u64(buf: &Sds, value: u64) !void {
+    var hex: [byte: 16] = [];
+    var i: usize = 0;
+    while i < 16 {
+        const shift: i32 = ((15 - i) * 4) as i32;
+        hex[i] = connection_script_hex_nibble(((value >> shift) & 0xfu64) as byte);
+        i = i + 1;
+    }
+    try sds_cat(buf, hex[0: 16]);
+}
+
 fn connection_build_fullresync_reply(engine: &Engine, line: &[byte], now_ms: u64) CommandReply {
     const snapshot: &RedisObject = rdb_dump_object_at(engine, now_ms) catch |err| {
         if err == error.AllocOutOfMemory {
@@ -13511,6 +13522,10 @@ fn connection_build_fullresync_reply(engine: &Engine, line: &[byte], now_ms: u64
 
     _ = sds_cat(&raw, &"+"[0: 1]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
     _ = sds_cat(&raw, line) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = sds_cat(&raw, &" "[0: 1]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
+    _ = connection_sds_append_hex_u64(&raw, crc64(snapshot.value.buf[0: snapshot.value.len])) catch {
+        return connection_error_reply(&"ERR out of memory"[0: 17]);
+    };
     _ = sds_cat(&raw, &"\r\n$"[0: 3]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
     _ = connection_sds_append_u64(&raw, snapshot.value.len as u64) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };
     _ = sds_cat(&raw, &"\r\n"[0: 2]) catch { return connection_error_reply(&"ERR out of memory"[0: 17]); };

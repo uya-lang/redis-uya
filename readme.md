@@ -12,7 +12,7 @@
 
 `v1.0.0` 的版本目标不是提前兑现“全面超过 Redis”，而是先把单机核心做真、做稳、做快：功能边界真实、兼容语义真实、测试和 benchmark 结果真实，并在这一前提下持续缩小与 Redis 的性能差距。长期性能目标仍然是超过 Redis，但那是 `v1.0.0` 之后继续迭代的方向，不是拿来包装当前完成度的口号。
 
-历史上，项目已经完成 `v0.9.0` 单机核心命令补齐和 `v0.9.1` 审计真实性收口，当前主线推进 `v0.9.3` 的 Redis Open Source 单机核心缺口与性能优化。2026-10-19 对当前 `HEAD` 复核时，完整单测、Makefile 注册的 37 项集成和 redis-cli smoke 已通过；正式 50K release benchmark guard 的当前证据仍为 2026-09-01 报告。`COMMAND*` 真值、版本号口径和命令完成度统计分层已收口。
+历史上，项目已经完成 `v0.9.0` 单机核心命令补齐和 `v0.9.1` 审计真实性收口，当前主线推进 `v0.9.3` 的 Redis Open Source 单机核心缺口与性能优化。2026-10-19 对当前 `HEAD` 复核时，完整单测、Makefile 注册的 38 项集成和 redis-cli smoke 已通过；正式 50K release benchmark guard 的当前证据仍为 2026-09-01 报告。`COMMAND*` 真值、版本号口径和命令完成度统计分层已收口。
 
 ## 核心目标
 
@@ -29,7 +29,7 @@
 
 截至 2026-09-01，当前状态应理解为：
 
-- `make test`、`make test-integration` 和 `make test-redis-cli` 当前通过；`make test-integration` 当前注册 37 项 Python 集成用例。
+- `make test`、`make test-integration` 和 `make test-redis-cli` 当前通过；`make test-integration` 当前注册 38 项 Python 集成用例。
 - 2026-09-01 正式 50K release 复测的五项吞吐相对 Redis 为 `0.99x/1.14x/1.04x/1.31x/0.98x`；五项绝对吞吐和 p99 guard 均通过，`SET 16B` 的 normalized guard 因相对历史基线回落而 miss，`GET 1KiB` 的 normalized guard 仍 miss，严格 1.10x 全场景超越仍待继续优化；RSS 为同机 Redis 的 `1.68x`。
 - 当前命令矩阵跟踪 574 个官方命令名；Tier A 单机核心为 382 项，其中 `full=152`、`partial=220`、`standalone-error=7`、`alias=3`、`deferred=0`。
 - `COMMAND*` 真值、版本号一致性与命令完成度统计分层已收口；`v0.9.1` 审计整改主线现已完成，当前主线推进 `v0.9.3` 的 Redis Open Source 单机核心缺口补齐。
@@ -74,11 +74,11 @@
 - `BGREWRITEAOF`：真实子进程后台 rewrite + 父进程增量缓冲合并，可把当前内存态规范化重写为可回放 AOF
 - 复制角色与状态机：支持 master/slave 角色切换、`REPLICAOF` 控制入口、`INFO replication` 与复制配置可观测
 - 副本只读：`replica-read-only` 默认 `yes`，客户端数据写命令在 replica 角色返回 Redis 兼容 `READONLY` 错误；支持运行时 `CONFIG SET` 切换，内部 full/incremental 复制回放不经过客户端门禁
-- `PSYNC / backlog`：master 维护复制积压缓冲区，支持 `FULLRESYNC` / `CONTINUE` 最小握手判断；`REPLCONF ACK [FACK]` 仅由已完成 `PSYNC` 的复制连接记录单调前移的普通/AOF fsync offset 和最近 ACK 时间且不发送普通回复，replica 对 `REPLCONF GETACK *` 会写回当前 upstream ACK，AOF 启用时同时携带 synced replication offset 的 FACK；`WAIT/WAITAOF` 会按当前连接最后一次传播写入的 offset 聚合确认，并在未满足时主动请求一次 `GETACK`；replica 在 connected 状态下用 `PSYNC replid offset` 重连，backlog 窗口内返回 `CONTINUE`，超出窗口返回 `FULLRESYNC` 并复用同一快照原子应用路径，成功后恢复 connected 并继续增量同步
+- `PSYNC / backlog`：master 维护复制积压缓冲区，支持 `FULLRESYNC` / `CONTINUE` 最小握手判断；真实 master 的 `FULLRESYNC` 头携带可选 16 位十六进制 CRC64，replica 在快照加载、AOF 切换和 replid/offset 提交前完成校验，并兼容不带校验和的旧 master；`REPLCONF ACK [FACK]` 仅由已完成 `PSYNC` 的复制连接记录单调前移的普通/AOF fsync offset 和最近 ACK 时间且不发送普通回复，replica 对 `REPLCONF GETACK *` 会写回当前 upstream ACK，AOF 启用时同时携带 synced replication offset 的 FACK；`WAIT/WAITAOF` 会按当前连接最后一次传播写入的 offset 聚合确认，并在未满足时主动请求一次 `GETACK`；replica 在 connected 状态下用 `PSYNC replid offset` 重连，backlog 窗口内返回 `CONTINUE`，超出窗口返回 `FULLRESYNC` 并复用同一快照原子应用路径，成功后恢复 connected 并继续增量同步。full sync 的尝试、失败、重试、传输/读取字节和最近稳定错误码通过 `INFO replication` 的 `master_sync_*` 指标暴露；失败后 500ms 退避重试，成功恢复时保留最近错误用于诊断
 - 全量同步：replica 可通过 `REPLICAOF -> PSYNC ? -1` 拉取 master 当前 RDB 快照并落库；AOF 启用时先用快照原子重写本地 AOF、同步并重新打开，再切换内存态，成功替换会清除旧 AOF 中的陈旧键
 - 增量同步：replica 在 connected 状态下周期性 `PSYNC replid offset` 拉取 backlog delta，回放后把同一批原始字节追加到本地 AOF、标记并 `fsync` replication offset；只有持久化成功才推进 upstream offset 和 `REPLCONF GETACK` 的 FACK。配置型 pull replica 使用短时轮询连接，因此不会被 master 当作持续在线 `PSYNC` 客户端计入 `WAITAOF`；当轮询请求因 backlog 超窗得到 `FULLRESYNC` 时，副本会重新应用快照并仅在成功提交后更新 replid/offset
 - 复制心跳：replica 周期性 `PING` master，链路失败时回到 `configured` 并等待重同步
-- 主从一致性：当前五类对象已有 full sync + incremental smoke；专项集成覆盖停写后的窗口内 `CONTINUE`、backlog 超窗后的 `FULLRESYNC` 回退、旧键收敛、offset 对齐和重同步后的继续增量
+- 主从一致性：当前五类对象已有 full sync + incremental smoke；专项集成覆盖停写后的窗口内 `CONTINUE`、backlog 超窗后的 `FULLRESYNC` 回退、旧键收敛、offset 对齐和重同步后的继续增量，以及半快照断流、CRC64 损坏、退避重试、失败进度和恢复后原子替换
 - 事务控制最小子集：连接级 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`，支持 `QUEUED`、`EXEC` 数组回复、观察键变更后的 Null Array 中止和 `DISCARD` 丢弃
 - Pub/Sub 第一批子集：`SUBSCRIBE/UNSUBSCRIBE` 直连订阅、`PSUBSCRIBE/PUNSUBSCRIBE` pattern 订阅、`PUBLISH` 跨连接推送 `message/pmessage` 并返回匹配接收者数量，连接关闭后会清理订阅项
 - Pub/Sub 管理面与 Sharded Pub/Sub standalone partial：`PUBSUB HELP/CHANNELS/NUMPAT/NUMSUB/SHARDCHANNELS/SHARDNUMSUB`、`SSUBSCRIBE`、`SUNSUBSCRIBE`、`SPUBLISH` 当前可用，shard 订阅与发布复用单机连接级订阅注册表，不承诺 Redis Cluster 跨槽 shard 路由语义

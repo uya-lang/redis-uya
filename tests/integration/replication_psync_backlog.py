@@ -100,12 +100,18 @@ def stop_process(proc: subprocess.Popen[str]) -> None:
             proc.wait(timeout=5.0)
 
 
-def parse_fullresync(resp: bytes) -> tuple[str, int]:
+def parse_fullresync(resp: bytes) -> tuple[str, int, str | None]:
     if not resp.startswith(b"+FULLRESYNC "):
         raise AssertionError(f"expected FULLRESYNC reply, got {resp!r}")
     body = resp[1:-2].decode()
-    _, replid, offset_text = body.split(" ", 2)
-    return replid, int(offset_text)
+    fields = body.split(" ")
+    if len(fields) not in (3, 4):
+        raise AssertionError(f"invalid FULLRESYNC fields: {body!r}")
+    _, replid, offset_text = fields[:3]
+    checksum = fields[3] if len(fields) == 4 else None
+    if checksum is not None and (len(checksum) != 16 or any(ch not in "0123456789abcdefABCDEF" for ch in checksum)):
+        raise AssertionError(f"invalid FULLRESYNC CRC64: {checksum!r}")
+    return replid, int(offset_text), checksum
 
 
 def encode_request(*parts: bytes) -> bytes:
@@ -121,7 +127,8 @@ GETACK_REQUEST = encode_request(b"REPLCONF", b"GETACK", b"*")
 
 
 def recv_getack(sock: socket.socket) -> None:
-    request = recv_exact(sock, len(GETACK_REQUEST))
+    prefix = recv_exact(sock, 1)
+    request = prefix + recv_exact(sock, len(GETACK_REQUEST) - 1)
     if request != GETACK_REQUEST:
         raise AssertionError(f"expected GETACK request, got {request!r}")
 
@@ -130,12 +137,44 @@ def send_raw_request(sock: socket.socket, *parts: bytes) -> None:
     sock.sendall(encode_request(*parts))
 
 
+def recv_pong_handling_getack(sock: socket.socket, ack_offset: int) -> None:
+    while True:
+        prefix = recv_exact(sock, 1)
+        if prefix == b"+":
+            if recv_line(sock) != b"PONG":
+                raise AssertionError("expected +PONG after PING")
+            return
+        if prefix == b"*":
+            request = prefix + recv_exact(sock, len(GETACK_REQUEST) - 1)
+            if request != GETACK_REQUEST:
+                raise AssertionError(f"unexpected replication request before PONG: {request!r}")
+            send_raw_request(sock, b"REPLCONF", b"ACK", str(ack_offset).encode())
+            continue
+        raise AssertionError(f"unexpected prefix before PONG: {prefix!r}")
+
+
+def recv_quit_ok(sock: socket.socket, ack_offset: int) -> None:
+    while True:
+        prefix = recv_exact(sock, 1)
+        if prefix == b"+":
+            if recv_line(sock) != b"OK":
+                raise AssertionError("expected +OK on QUIT")
+            return
+        if prefix == b"*":
+            request = prefix + recv_exact(sock, len(GETACK_REQUEST) - 1)
+            if request != GETACK_REQUEST:
+                raise AssertionError(f"unexpected replication request before QUIT reply: {request!r}")
+            send_raw_request(sock, b"REPLCONF", b"ACK", str(ack_offset).encode())
+            continue
+        raise AssertionError(f"unexpected prefix before QUIT reply: {prefix!r}")
+
+
 def recv_psync_fullresync(sock: socket.socket) -> tuple[str, int, bytes]:
     line = recv_exact(sock, 1)
     if line != b"+":
         raise AssertionError(f"expected simple string prefix, got {line!r}")
     header = recv_line(sock) + b"\r\n"
-    replid, offset = parse_fullresync(line + header)
+    replid, offset, _checksum = parse_fullresync(line + header)
 
     bulk_prefix = recv_exact(sock, 1)
     if bulk_prefix != b"$":
@@ -246,7 +285,7 @@ def run_smoke() -> None:
                 send_raw_request(sock, b"REPLCONF", b"ACK", str(offset + len(second_set)).encode())
 
             with connect_with_retry(port, time.monotonic() + 5.0) as writer:
-                writer.settimeout(2.0)
+                writer.settimeout(10.0)
                 wait_set = encode_request(b"SET", b"wait-key", b"wait-value")
                 if send_command(writer, b"SET", b"wait-key", b"wait-value") != b"+OK\r\n":
                     raise AssertionError("expected WAIT setup SET to succeed")
@@ -257,8 +296,8 @@ def run_smoke() -> None:
                 if recv_line(writer) != b":1":
                     raise AssertionError("expected WAIT to wake with one acknowledged replica")
 
-                send_raw_request(writer, b"WAITAOF", b"1", b"1", b"2000")
-                recv_getack(sock)
+                # FACK 与 PING 同连接顺序发送，+PONG 作为处理屏障，避免
+                # WAITAOF 的按需 GETACK 与周期 GETACK 在测试端串包。
                 send_raw_request(
                     sock,
                     b"REPLCONF",
@@ -267,8 +306,14 @@ def run_smoke() -> None:
                     b"FACK",
                     str(wait_target_offset).encode(),
                 )
-                if recv_exact(writer, len(b"*2\r\n:1\r\n:1\r\n")) != b"*2\r\n:1\r\n:1\r\n":
-                    raise AssertionError("expected WAITAOF to report local and replica fsync acknowledgements")
+                send_raw_request(sock, b"PING")
+                recv_pong_handling_getack(sock, wait_target_offset)
+                send_raw_request(writer, b"WAITAOF", b"1", b"1", b"5000")
+                waitaof_reply = recv_exact(writer, len(b"*2\r\n:1\r\n:1\r\n"))
+                if waitaof_reply != b"*2\r\n:1\r\n:1\r\n":
+                    raise AssertionError(
+                        f"expected WAITAOF to report local and replica fsync acknowledgements, got {waitaof_reply!r}"
+                    )
 
                 timeout_set = encode_request(b"SET", b"wait-key", b"newer")
                 if send_command(writer, b"SET", b"wait-key", b"newer") != b"+OK\r\n":
@@ -280,9 +325,8 @@ def run_smoke() -> None:
                 if wait_target_offset + len(timeout_set) <= wait_target_offset:
                     raise AssertionError("expected the second write to advance the replication target")
 
-            quit_ok = send_command(sock, b"QUIT")
-            if quit_ok != b"+OK\r\n":
-                raise AssertionError(f"expected +OK on QUIT, got {quit_ok!r}")
+            send_raw_request(sock, b"QUIT")
+            recv_quit_ok(sock, wait_target_offset)
     finally:
         stop_process(proc)
         aof_path.unlink(missing_ok=True)

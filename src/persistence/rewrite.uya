@@ -6,6 +6,7 @@ use src.persistence.aof.AofWriter;
 use src.persistence.aof.aof_open_truncate;
 use src.persistence.aof.aof_close;
 use src.persistence.aof.aof_append_raw;
+use src.persistence.aof.aof_sync;
 use src.storage.dict.DictEntry;
 use src.storage.dict.DictIterator;
 use src.storage.dict.dict_iter_new;
@@ -366,6 +367,7 @@ export fn aof_rewrite_file_at(path: &const byte, engine: &Engine, now_ms: u64) !
         node = node.next;
     }
 
+    try aof_sync(&writer);
     aof_close(&writer);
     if rename(tmp_path, path) != 0 {
         return error.AofWriteFailed;

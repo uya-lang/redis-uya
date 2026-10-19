@@ -68,15 +68,15 @@
 - 服务运行循环：单线程 epoll 多连接、100ms cron 主动过期采样循环、空闲连接不阻塞其他客户端
 - RDB 当前类型闭环：项目内 RDB 子集已覆盖 String/Hash/List/Set/ZSet + 绝对过期时间 save/load、`SAVE`
 - `BGSAVE`：真实 `fork/waitpid` 子进程落盘，支持去掉 AOF 后仅靠 RDB 恢复
-- AOF 最小闭环：写命令追加、启动回放、截断损坏安全失败、SET/DEL 重启恢复 smoke；writer 记录单调的 appended/flushed/synced offset，并提供显式 `fsync` 原语，为 `WAITAOF` 的本地持久化确认提供真实状态
+- AOF 最小闭环：写命令追加、启动回放、截断损坏安全失败、SET/DEL 重启恢复 smoke；writer 记录单调的 appended/flushed/synced offset，并提供显式 `fsync` 原语，为 `WAITAOF` 的本地持久化确认提供真实状态；配置型 pull replica 的全量同步会用快照重写本地 AOF，增量同步会先追加原始 delta 并 `fsync`，成功后才推进 upstream offset/FACK
 - 启动恢复顺序：先加载最小 RDB，再回放 AOF
 - AOF TTL 语义：`EXPIRE`、`EXPIREAT`、`PEXPIRE`、`SETEX`、`PSETEX` 追加时会规范化为绝对 `PEXPIREAT`；`GETEX` 在带 TTL/PERSIST 选项时只落对应状态变更，回放保持绝对过期时间
 - `BGREWRITEAOF`：真实子进程后台 rewrite + 父进程增量缓冲合并，可把当前内存态规范化重写为可回放 AOF
 - 复制角色与状态机：支持 master/slave 角色切换、`REPLICAOF` 控制入口、`INFO replication` 与复制配置可观测
 - 副本只读：`replica-read-only` 默认 `yes`，客户端数据写命令在 replica 角色返回 Redis 兼容 `READONLY` 错误；支持运行时 `CONFIG SET` 切换，内部 full/incremental 复制回放不经过客户端门禁
 - `PSYNC / backlog`：master 维护复制积压缓冲区，支持 `FULLRESYNC` / `CONTINUE` 最小握手判断；`REPLCONF ACK [FACK]` 仅由已完成 `PSYNC` 的复制连接记录单调前移的普通/AOF fsync offset 和最近 ACK 时间且不发送普通回复，replica 对 `REPLCONF GETACK *` 会写回当前 upstream ACK，AOF 启用时同时携带 synced replication offset 的 FACK；`WAIT/WAITAOF` 会按当前连接最后一次传播写入的 offset 聚合确认，并在未满足时主动请求一次 `GETACK`
-- 全量同步：replica 可通过 `REPLICAOF -> PSYNC ? -1` 拉取 master 当前 RDB 快照并落库
-- 增量同步：replica 在 connected 状态下周期性 `PSYNC replid offset` 拉取 backlog delta 并回放
+- 全量同步：replica 可通过 `REPLICAOF -> PSYNC ? -1` 拉取 master 当前 RDB 快照并落库；AOF 启用时先用快照原子重写本地 AOF、同步并重新打开，再切换内存态，成功替换会清除旧 AOF 中的陈旧键
+- 增量同步：replica 在 connected 状态下周期性 `PSYNC replid offset` 拉取 backlog delta，回放后把同一批原始字节追加到本地 AOF、标记并 `fsync` replication offset；只有持久化成功才推进 upstream offset 和 `REPLCONF GETACK` 的 FACK。配置型 pull replica 使用短时轮询连接，因此不会被 master 当作持续在线 `PSYNC` 客户端计入 `WAITAOF`
 - 复制心跳：replica 周期性 `PING` master，链路失败时回到 `configured` 并等待重同步
 - 主从一致性：当前五类对象已有 full sync + incremental smoke
 - 事务控制最小子集：连接级 `MULTI/EXEC/DISCARD/WATCH/UNWATCH`，支持 `QUEUED`、`EXEC` 数组回复、观察键变更后的 Null Array 中止和 `DISCARD` 丢弃

@@ -55,6 +55,8 @@ use src.persistence.aof.aof_flush;
 use src.persistence.aof.aof_replay_file_at;
 use src.persistence.aof.aof_replay_buffer_at;
 use src.persistence.aof.aof_append_raw;
+use src.persistence.aof.aof_mark_replication_offset;
+use src.persistence.aof.aof_sync;
 use src.persistence.rewrite.aof_rewrite_file_at;
 use src.persistence.rewrite.aof_rewrite_append_key_at;
 use src.persistence.rewrite.aof_rewrite_build_tmp_path;
@@ -753,6 +755,26 @@ fn server_replication_read_bulk_payload(fd: i32) !Sds {
     return payload;
 }
 
+fn server_replication_replace_local_aof(server: &RedisServer, engine: &Engine, master_offset: u64, now_ms: u64) !void {
+    if !server.aof.enabled {
+        return;
+    }
+    const aof_path: &const byte = &server.config.appendfilename[0] as &const byte;
+    _ = aof_rewrite_file_at(aof_path, engine, now_ms) catch {
+        return error.ServerBgsaveFailed;
+    };
+    var new_aof: AofWriter = aof_open_append(aof_path) catch {
+        return error.ServerBgsaveFailed;
+    };
+    aof_mark_replication_offset(&new_aof, master_offset);
+    _ = aof_sync(&new_aof) catch {
+        aof_close(&new_aof);
+        return error.ServerBgsaveFailed;
+    };
+    aof_close(&server.aof);
+    server.aof = new_aof;
+}
+
 fn server_replication_try_full_sync_at(server: &RedisServer, now_ms: u64) !bool {
     if server.replication_role != ReplicationRole.role_replica {
         return false;
@@ -803,14 +825,11 @@ fn server_replication_try_full_sync_at(server: &RedisServer, now_ms: u64) !bool 
         server.replication_state = ReplicationState.repl_state_configured;
         return error.ServerBgsaveFailed;
     };
-    server.replication_master_offset = master_offset;
-
     var snapshot: Sds = server_replication_read_bulk_payload(fd) catch {
         _ = sys_close(fd) catch {};
         server.replication_state = ReplicationState.repl_state_configured;
         return error.ServerBgsaveFailed;
     };
-    errdefer sds_free(&snapshot);
 
     var snapshot_engine: Engine = engine_new();
     _ = rdb_load_bytes_at(snapshot.buf[0: snapshot.len], &snapshot_engine, now_ms) catch {
@@ -821,10 +840,17 @@ fn server_replication_try_full_sync_at(server: &RedisServer, now_ms: u64) !bool 
         return error.ServerBgsaveFailed;
     };
     sds_free(&snapshot);
+    _ = server_replication_replace_local_aof(server, &snapshot_engine, master_offset, now_ms) catch {
+        engine_free(&snapshot_engine);
+        _ = sys_close(fd) catch {};
+        server.replication_state = ReplicationState.repl_state_configured;
+        return error.ServerBgsaveFailed;
+    };
     engine_free(&server.engine);
     server.engine.db = snapshot_engine.db;
     _ = sys_close(fd) catch {};
     server.replication_master_fd = -1;
+    server.replication_master_offset = master_offset;
     server.replication_last_io_ms = now_ms;
     server.replication_state = ReplicationState.repl_state_connected;
     return true;
@@ -928,9 +954,23 @@ fn server_replication_try_incremental_sync_at(server: &RedisServer, now_ms: u64)
         };
         defer sds_free(&delta);
         _ = aof_replay_buffer_at(&server.engine, &server.router, delta.buf[0: delta.len], now_ms) catch {
+            server.replication_state = ReplicationState.repl_state_configured;
             _ = sys_close(fd) catch {};
             return error.ServerBgsaveFailed;
         };
+        if server.aof.enabled {
+            _ = aof_append_raw(&server.aof, delta.buf[0: delta.len]) catch {
+                server.replication_state = ReplicationState.repl_state_configured;
+                _ = sys_close(fd) catch {};
+                return error.ServerBgsaveFailed;
+            };
+            aof_mark_replication_offset(&server.aof, next_master_offset);
+            _ = aof_sync(&server.aof) catch {
+                server.replication_state = ReplicationState.repl_state_configured;
+                _ = sys_close(fd) catch {};
+                return error.ServerBgsaveFailed;
+            };
+        }
         server.replication_master_offset = next_master_offset;
         server.replication_last_io_ms = now_ms;
         _ = sys_close(fd) catch {};

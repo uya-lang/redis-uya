@@ -40,6 +40,8 @@ use src.storage.object.RedisObject;
 use src.storage.object.create_string_object;
 use src.memory.allocator.used_memory;
 use src.memory.allocator.reset_memory_stats_for_test;
+use libc.TimeSpec;
+use libc.sys_nanosleep;
 use libc.unlink;
 
 fn server_test_slice_eq(a: &[byte], b: &[byte]) bool {
@@ -50,6 +52,12 @@ fn server_test_slice_eq(a: &[byte], b: &[byte]) bool {
         i = i + 1;
     }
     return true;
+}
+
+fn server_test_sleep_ms(milliseconds: i64) void {
+    var request: TimeSpec = TimeSpec{ tv_sec: 0, tv_nsec: milliseconds * (1000000 as i64) };
+    var remaining: TimeSpec = TimeSpec{ tv_sec: 0, tv_nsec: 0 };
+    _ = sys_nanosleep(&request, &remaining) catch {};
 }
 
 export fn test_server_async_client_frame_fits_storage() !void {
@@ -406,13 +414,14 @@ export fn test_server_runs_pending_aof_rewrite() !void {
 
     var finished: bool = false;
     var i: usize = 0;
-    while i < 10000 {
+    while i < 5000 {
         const step: bool = try server_run_pending_aof_rewrite_at(&server, 2001u64);
         if !server.aof_rewrite_in_progress {
             finished = step;
             break;
         }
         i = i + 1;
+        server_test_sleep_ms(1);
     }
     try assert_true(finished);
     try assert_eq_i32(server.aof_rewrite_requested as i32, 0);

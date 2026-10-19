@@ -133,6 +133,7 @@ const SERVER_CLIENT_ENDPOINT_MAX: usize = 32;
 const SERVER_WAITPID_WNOHANG: i32 = 1;
 const SERVER_REPL_BACKLOG_BYTES: usize = 16384;
 const SERVER_REPL_LINE_BYTES: usize = 256;
+const SERVER_REPL_GETACK_PERIOD_MS: u64 = 1000;
 const SERVER_CLIENT_ASYNC_FRAME_BYTES: usize = 16384;
 const SERVER_CLIENT_ASYNC_FRAME_WORDS: usize =
     (SERVER_CLIENT_ASYNC_FRAME_BYTES + @size_of(usize) - 1) / @size_of(usize);
@@ -188,6 +189,7 @@ export struct RedisServer {
     replication_master_replid: [byte: 41],
     replication_master_offset: u64,
     replication_last_io_ms: u64,
+    replication_last_getack_ms: u64,
     repl_backlog: ReplicationBacklog,
     bgsave_requested: bool,
     bgsave_in_progress: bool,
@@ -340,8 +342,9 @@ fn server_send_all_immediate(fd: i32, data: &const byte, len: usize) bool {
     return true;
 }
 
-fn server_replication_request_acks(server: &RedisServer, requester_slot: usize) void {
+fn server_replication_request_acks_at(server: &RedisServer, requester_slot: usize, now_ms: u64) void {
     const getack: &[byte] = &"*3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n"[0: 37];
+    server.replication_last_getack_ms = now_ms;
     var slot: usize = 0;
     while slot < SERVER_MAX_CLIENTS {
         if slot != requester_slot {
@@ -352,6 +355,17 @@ fn server_replication_request_acks(server: &RedisServer, requester_slot: usize) 
         }
         slot = slot + 1;
     }
+}
+
+fn server_replication_request_periodic_acks_at(server: &RedisServer, now_ms: u64) void {
+    if server.replication_role != ReplicationRole.role_master {
+        return;
+    }
+    if server.replication_last_getack_ms != 0u64 &&
+        now_ms < server.replication_last_getack_ms + SERVER_REPL_GETACK_PERIOD_MS {
+        return;
+    }
+    server_replication_request_acks_at(server, SERVER_MAX_CLIENTS, now_ms);
 }
 
 fn server_send_zero_copy_immediate(fd: i32, head: &const byte, head_len: usize, body: &[byte], tail_len: usize) bool {
@@ -987,6 +1001,7 @@ export fn server_replication_reset_to_master(server: &RedisServer) void {
     server.replication_master_offset = 0u64;
     server.replication_master_replid[0] = 0 as byte;
     server.replication_last_io_ms = 0u64;
+    server.replication_last_getack_ms = 0u64;
     _ = replication_backlog_reset(&server.repl_backlog, SERVER_REPL_BACKLOG_BYTES, server_replication_seed(server)) catch {};
     server_runtime_info_sync_replid(server);
     server_runtime_info_sync_config(server);
@@ -1003,6 +1018,7 @@ export fn server_replication_set_replica(server: &RedisServer, host: &[byte], po
     server.replication_master_offset = 0u64;
     server.replication_master_replid[0] = 0 as byte;
     server.replication_last_io_ms = 0u64;
+    server.replication_last_getack_ms = 0u64;
     server_runtime_info_sync_replid(server);
     server_runtime_info_sync_config(server);
 }
@@ -1727,7 +1743,7 @@ fn server_async_writev_all_future(
             const zero_copy_body: &[byte] = result.zero_copy_body;
             const zero_copy_tail_len: usize = result.zero_copy_tail_len;
             if client.transaction.replication_getack_requested {
-                server_replication_request_acks(server, slot);
+                server_replication_request_acks_at(server, slot, server.event_time_ms);
                 client.transaction.replication_getack_requested = false;
             }
             if client.transaction.blocking_active {
@@ -2068,6 +2084,7 @@ export fn server_open_with_aof_and_memory_policy(
         replication_master_replid: [],
         replication_master_offset: 0u64,
         replication_last_io_ms: 0u64,
+        replication_last_getack_ms: start_ms,
         repl_backlog: repl_backlog,
         bgsave_requested: false,
         bgsave_in_progress: false,
@@ -2157,6 +2174,7 @@ fn server_close_idle_clients_at(server: &RedisServer, now_ms: u64) void {
 export fn server_cron_at(server: &RedisServer, now_ms: u64) void {
     _ = engine_active_expire_cycle_at(&server.engine, now_ms, SERVER_CRON_EXPIRE_LIMIT, SERVER_CRON_EXPIRE_MAX_ROUNDS);
     server_close_idle_clients_at(server, now_ms);
+    server_replication_request_periodic_acks_at(server, now_ms);
     _ = aof_flush(&server.aof) catch {};
     server.last_cron_ms = now_ms;
     server.cron_ticks = server.cron_ticks + 1u64;

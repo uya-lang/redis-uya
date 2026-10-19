@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import select
 import socket
 import subprocess
 import sys
@@ -116,6 +117,15 @@ def encode_request(*parts: bytes) -> bytes:
     return b"".join(buf)
 
 
+GETACK_REQUEST = encode_request(b"REPLCONF", b"GETACK", b"*")
+
+
+def recv_getack(sock: socket.socket) -> None:
+    request = recv_exact(sock, len(GETACK_REQUEST))
+    if request != GETACK_REQUEST:
+        raise AssertionError(f"expected GETACK request, got {request!r}")
+
+
 def send_raw_request(sock: socket.socket, *parts: bytes) -> None:
     sock.sendall(encode_request(*parts))
 
@@ -224,6 +234,17 @@ def run_smoke() -> None:
             send_raw_request(sock, b"PSYNC", replid.encode(), str(offset).encode())
             recv_psync_continue(sock, offset + len(second_set), second_set)
 
+            with connect_with_retry(port, time.monotonic() + 5.0) as ordinary:
+                ordinary.settimeout(2.5)
+                sock.settimeout(2.5)
+                readable, _, _ = select.select([sock, ordinary], [], [], 2.5)
+                if sock not in readable:
+                    raise AssertionError("expected periodic GETACK on the PSYNC replica connection")
+                if ordinary in readable:
+                    raise AssertionError("ordinary client unexpectedly received replication traffic")
+                recv_getack(sock)
+                send_raw_request(sock, b"REPLCONF", b"ACK", str(offset + len(second_set)).encode())
+
             with connect_with_retry(port, time.monotonic() + 5.0) as writer:
                 writer.settimeout(2.0)
                 wait_set = encode_request(b"SET", b"wait-key", b"wait-value")
@@ -231,17 +252,13 @@ def run_smoke() -> None:
                     raise AssertionError("expected WAIT setup SET to succeed")
                 wait_target_offset = offset + len(second_set) + len(wait_set)
                 send_raw_request(writer, b"WAIT", b"1", b"2000")
-                getack = recv_exact(sock, len(encode_request(b"REPLCONF", b"GETACK", b"*")))
-                if getack != encode_request(b"REPLCONF", b"GETACK", b"*"):
-                    raise AssertionError(f"expected GETACK request, got {getack!r}")
+                recv_getack(sock)
                 send_raw_request(sock, b"REPLCONF", b"ACK", str(wait_target_offset).encode())
                 if recv_line(writer) != b":1":
                     raise AssertionError("expected WAIT to wake with one acknowledged replica")
 
                 send_raw_request(writer, b"WAITAOF", b"1", b"1", b"2000")
-                waitaof_getack = recv_exact(sock, len(encode_request(b"REPLCONF", b"GETACK", b"*")))
-                if waitaof_getack != encode_request(b"REPLCONF", b"GETACK", b"*"):
-                    raise AssertionError(f"expected WAITAOF GETACK request, got {waitaof_getack!r}")
+                recv_getack(sock)
                 send_raw_request(
                     sock,
                     b"REPLCONF",
@@ -257,9 +274,7 @@ def run_smoke() -> None:
                 if send_command(writer, b"SET", b"wait-key", b"newer") != b"+OK\r\n":
                     raise AssertionError("expected WAIT timeout setup SET to succeed")
                 send_raw_request(writer, b"WAIT", b"1", b"50")
-                timeout_getack = recv_exact(sock, len(encode_request(b"REPLCONF", b"GETACK", b"*")))
-                if timeout_getack != encode_request(b"REPLCONF", b"GETACK", b"*"):
-                    raise AssertionError(f"expected timeout GETACK request, got {timeout_getack!r}")
+                recv_getack(sock)
                 if recv_line(writer) != b":0":
                     raise AssertionError("expected WAIT timeout to return zero acknowledged replicas")
                 if wait_target_offset + len(timeout_set) <= wait_target_offset:

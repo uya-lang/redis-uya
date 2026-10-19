@@ -2193,7 +2193,7 @@ WAIT numreplicas timeout
 
 - 目标 offset 是当前客户端最后一次成功传播到 replication backlog 的写入 offset；当前客户端尚无传播写入时目标为 `0`
 - 只统计已完成 `PSYNC`、连接仍在线且 `REPLCONF ACK` offset 不小于目标 offset 的复制连接
-- 已满足时立即返回实际达标数量；未满足时向在线复制连接发送一次 `REPLCONF GETACK *`，阻塞到达标或 timeout 后返回实际达标数量；`timeout = 0` 表示不设超时
+- 已满足时立即返回实际达标数量；未满足时向在线复制连接发送一次 `REPLCONF GETACK *`，阻塞到达标或 timeout 后返回实际达标数量；master 同时会按 1000ms 周期向在线 `PSYNC` 复制连接请求 ACK；`timeout = 0` 表示不设超时
 - 在 `MULTI/EXEC` 内执行时不会阻塞，只返回执行时刻的实际达标数量
 - `numreplicas <= 0` 时也直接返回 `:0`
 
@@ -2219,7 +2219,7 @@ WAITAOF numlocal numreplicas timeout
 - 目标 offset 与 `WAIT` 一致，是当前客户端最后一次成功传播写入的 replication offset
 - 本地 synced replication offset 未达目标且 `numlocal = 1` 时，会同步 flush AOF 并执行 `fsync(2)`；只有成功后本地确认才为 `1`，失败返回 `-ERR AOF sync failed`
 - 副本通过 `REPLCONF ACK <offset> FACK <fsynced-offset>` 报告 AOF fsync 位置；只统计已完成 `PSYNC`、在线且 FACK 达标的连接
-- 约束未满足时按需发送一次 `REPLCONF GETACK *` 并阻塞到 ACK/FACK 达标或 timeout；`timeout = 0` 表示不设超时
+- 约束未满足时按需发送一次 `REPLCONF GETACK *` 并阻塞到 ACK/FACK 达标或 timeout；master 同时会按 1000ms 周期向在线 `PSYNC` 复制连接请求 ACK/FACK；`timeout = 0` 表示不设超时
 - 返回数组报告实际状态，因此即使 `numlocal = 0`，此前已 fsync 到目标时 `local` 仍可为 `1`
 - 在 `MULTI/EXEC` 内不会阻塞或主动 fsync，只返回执行时刻的实际确认数量
 
@@ -4367,7 +4367,7 @@ SLAVEOF NO ONE
 - `SLAVEOF` 当前作为 `REPLICAOF` alias 进入同一执行路径
 - replica 默认启用 `replica-read-only yes`：客户端数据写命令返回 `-READONLY You can't write against a read only replica.`；除命令写标记外，`SORT ... STORE`、`HIMPORT SET` 和 `XGROUP CREATE|CREATECONSUMER|DELCONSUMER|DESTROY|SETID` 等动态写路径也受门禁保护，`XGROUP HELP` 等只读子命令、复制握手和配置控制命令仍可执行，`CONFIG SET replica-read-only no|yes` 可运行时切换
 - `SORT ... STORE`、`HIMPORT SET` 等参数驱动写路径同样受副本只读门禁；full/incremental 复制回放走内部应用路径，不会被客户端门禁阻止；提升为 master 后不再拒绝写入
-- 当前已完成复制角色切换、`PSYNC` 全量同步、轮询式增量同步、基础心跳、连接级 ACK/FACK/GETACK wire 语义，以及 `WAIT/WAITAOF` 按需 GETACK 与聚合等待；仍不支持 Redis 原生长连接流式增量推送和周期性 GETACK，配置型 pull replica 也尚未把回放增量写入本地 AOF，因此真实 FACK 收敛当前主要覆盖保持在线的 PSYNC 复制连接
+- 当前已完成复制角色切换、`PSYNC` 全量同步、轮询式增量同步、基础心跳、连接级 ACK/FACK/GETACK wire 语义、master 对在线 `PSYNC` 复制连接的 1000ms 周期 GETACK，以及 `WAIT/WAITAOF` 按需 GETACK 与聚合等待；仍不支持 Redis 原生长连接流式增量推送，配置型 pull replica 也尚未把回放增量写入本地 AOF，因此真实 FACK 收敛当前主要覆盖保持在线的 PSYNC 复制连接
 
 ### `REPLCONF`
 
@@ -4390,7 +4390,7 @@ REPLCONF [option value]
 
 - 只有已成功执行 `PSYNC` 的连接会记录 ACK/FACK；普通客户端发送的 ACK 同样不产生普通回复，但不会被标记或计入复制连接。复制连接分别记录单调前移的 ACK、FACK offset 和最近 ACK 时间；较旧值不回退 offset，但仍刷新 ACK 时间
 - replica 的 GETACK 回复使用运行时当前上游 master offset，而不是本地禁用 backlog 的 offset
-- master 会在未满足的 `WAIT/WAITAOF` 上向在线复制连接按需发送一次 GETACK，并分别用 ACK/FACK 状态唤醒等待；当前仍不持久化 replica 端口/能力，也不周期性下发 GETACK
+- master 会按 1000ms 周期向在线 `PSYNC` 复制连接发送 GETACK，并在未满足的 `WAIT/WAITAOF` 上按需发送 GETACK、分别用 ACK/FACK 状态唤醒等待；周期与按需请求共享节流，当前仍不持久化 replica 端口/能力
 - 不进入 AOF 或 replication backlog
 
 ### `FAILOVER`

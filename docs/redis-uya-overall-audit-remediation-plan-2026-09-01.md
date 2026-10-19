@@ -337,7 +337,7 @@ P0 表示会阻止进入封版候选或可能造成数据错误、安全问题�
 
 | ID | 优先级 | 任务 | 验收标准 |
 |----|----------|------|----------|
-| F-REPL-01 | P0 | 实现 `REPLCONF ACK/GETACK`（2026-09-06 ACK 完成，2026-09-09 FACK 补齐） | master 连接上下文只为已建立 `PSYNC` 的 replica 记录 ACK/FACK offset 与时间，GETACK 可按 replica 当前 upstream/synced replication offset 触发 ACK/FACK wire 回复；WAIT/WAITAOF 按需 GETACK 与等待聚合已由 F-REPL-02/03 收口，周期性 GETACK 留待后续 |
+| F-REPL-01 | P0 | 实现 `REPLCONF ACK/GETACK`（2026-09-06 ACK 完成，2026-09-09 FACK 补齐，2026-10-19 周期 GETACK 补齐） | master 连接上下文只为已建立 `PSYNC` 的 replica 记录 ACK/FACK offset 与时间，GETACK 可按 replica 当前 upstream/synced replication offset 触发 ACK/FACK wire 回复；master 已按 1000ms 周期向在线 `PSYNC` 复制连接发送 GETACK，并与 WAIT/WAITAOF 按需 GETACK 共享节流，普通客户端不接收复制请求 |
 | F-REPL-02 | P0 | 实现真实 `WAIT`（2026-09-08 已完成连接级 ACK 驱动等待） | 按调用连接最后传播写入 offset、在线副本数和 timeout 阻塞/返回；多副本立即命中、ACK 唤醒、超时与普通客户端 ACK 防伪均有回归 |
 | F-REPL-03 | P0 | 实现真实 `WAITAOF`（2026-09-09 已完成连接级 ACK/FACK 驱动等待） | 本地 AOF 真实 fsync，在线 PSYNC 复制连接的 FACK 按参数聚合；立即命中、ACK/FACK 唤醒、超时、AOF 禁用和 replica 角色错误有回归，配置型 pull replica 的本地 AOF 闭环留待后续 |
 | F-REPL-04 | P0 | 副本只读限制（2026-09-09 已完成） | `replica-read-only` 默认开启，客户端静态/动态写路径与事务返回 READONLY；CONFIG/INFO 状态切换正确，提升 master 和内部 full/incremental 回放有回归 |

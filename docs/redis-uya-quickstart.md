@@ -61,7 +61,7 @@ Python 集成 smoke：
 make test-integration
 ```
 
-`make test-integration` 当前注册 36 项 Python 集成用例。
+`make test-integration` 当前注册 37 项 Python 集成用例。
 
 如果本机已安装 `redis-cli`：
 
@@ -159,7 +159,7 @@ REDIS_UYA_BENCH_ITERS=50000 REDIS_UYA_BENCH_WARMUP=2000 \
 - 复制当前已支持：`REPLICAOF`、`INFO replication`、`PSYNC / backlog`、最小 full sync、定时拉取式增量同步与心跳
 - `PSYNC / backlog` 当前已支持最小握手与 backlog 命中判断
 - replica 当前已支持最小全量同步：`REPLICAOF` 后可拉取 master RDB 快照
-- replica 当前已支持定时拉取式增量同步与心跳
+- replica 当前已支持定时拉取式增量同步与心跳；connected 状态下在 backlog 窗口内使用 `CONTINUE`，超窗时通过 `FULLRESYNC` 重新应用快照并恢复增量
 - `maxmemory` 当前已支持 noeviction、allkeys-lru、allkeys-lfu、volatile-lru、volatile-lfu、volatile-ttl 基线
 - `INFO memory` 当前可观测 allocator 与 Slab 统计
 - 事务、Pub/Sub/Sharded Pub/Sub、CLIENT / CONFIG 均已有当前文档明确的 standalone partial，不等于 Redis 全量语义

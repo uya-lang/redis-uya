@@ -2,7 +2,7 @@
 # redis-uya 开发 TODO 文档
 
 > 版本: v0.9.3-dev
-> 日期: 2026-09-02
+> 日期: 2026-10-19
 > 配套设计文档: `redis-uya-design.md`
 > 配套评审文档: `redis-uya-review.md`
 > 审计基线: `redis-uya-audit-2026-05-16.md`
@@ -23,9 +23,9 @@
 - 最小迭代默认递增版本号最后一位：`v0.9.0`、`v0.9.1`、`v0.9.2` 依次推进；不为普通小阶段抬高第二位版本号。
 - `v0.9.0` 起后续主线只迭代单机版：补齐 Redis Open Source 单机功能、兼容性、性能和稳定性。
 - 当前 `HEAD` 的真实性高于历史报告：`README`、`DoD`、`COMMAND*`、测试结果和 benchmark 结果必须互相一致。
-- 2026-09-01 当前 `HEAD`：源码契约、完整单元、Makefile 注册的 36 项集成和 redis-cli smoke 已通过。命令矩阵当前跟踪 574 个官方命令名和 420 个 top-level 命令；Tier A 为 `full=152/partial=220/standalone-error=7/alias=3/deferred=0`。当日正式 50K release 复测的五项 Redis 比值为 `0.99x/1.14x/1.04x/1.31x/0.98x`，五项绝对吞吐和 p99 guard 均通过，`SET 16B` 与 `GET 1KiB` normalized guard miss，RSS 为 Redis 的 `1.68x`；严格稳定 1.10x 全场景超越要求仍未达到。
+- 2026-10-19 当前 `HEAD`：源码契约、完整单元、Makefile 注册的 37 项集成和 redis-cli smoke 已通过。命令矩阵当前跟踪 574 个官方命令名和 420 个 top-level 命令；Tier A 为 `full=152/partial=220/standalone-error=7/alias=3/deferred=0`。2026-09-01 正式 50K release 复测的五项 Redis 比值为 `0.99x/1.14x/1.04x/1.31x/0.98x`，五项绝对吞吐和 p99 guard 均通过，`SET 16B` 与 `GET 1KiB` normalized guard miss，RSS 为 Redis 的 `1.68x`；严格稳定 1.10x 全场景超越要求仍未达到。
 - benchmark 口径分层：`make benchmark-v0.9.3-release` 默认 5K iterations / 200 warmup，用于快速 release 回归；正式验收显式使用 `REDIS_UYA_BENCH_ITERS=50000 REDIS_UYA_BENCH_WARMUP=2000`。当前正式证据为 `benchmarks/v0.9.3-release-performance-2026-09-01-current-50k.md`。
-- 本页下方性能优化条目中的 20K/50K/100K/200K 与“33 项集成”都是对应提交当时的历史 A/B 证据，不代替上述当前 `HEAD` 的 36 项集成和正式 50K 复核口径。
+- 本页下方性能优化条目中的 20K/50K/100K/200K 与“33 项集成”都是对应提交当时的历史 A/B 证据，不代替上述当前 `HEAD` 的 37 项集成和正式 50K 复核口径。
 - 2026-07-23 已将 `../uya` `1.0` 分支直接回退到与远端一致的 `f54bd7bf`，删除未推送且违反 `export const/var` 裸 C ABI 规范的两个本地提交；redis-uya 将内部全局量改为私有并通过 `export fn` 跨模块访问，构建、完整单测、完整集成、redis-cli、release 和性能 guard 均通过。
 - `v0.9.4` 用于性能与稳定性收敛；`v0.9.5` 是首个单机封版候选，如未达到 `v1.0.0` 封版条件，继续使用 `v0.9.6` 等 patch 版本顺序迭代。
 - 单机版必须先覆盖 Redis Open Source 单机核心命令面；模块命令可以继续追踪，但不能与 `v1.0.0` 单机封版门槛混算。命令全集、状态定义和封版标准见 `redis-uya-command-scope.md`。
@@ -96,6 +96,7 @@
 - [x] GET AOF 判定门控：普通顶层 GET 在 AOF writer 存在时直接按 `command_get` 跳过完整 AOF 决策 helper，脚本、事务、写命令与 `SORT ... STORE` 保持原路径；单测断言 GET 不增长 AOF buffer，并验证连接层 RPUSH + SORT STORE 可回放。8 轮反向固定 CPU 200K 墙钟吞吐提升 2.48%、p99 下降 7.63%，`perf stat` instructions/branches 下降 0.64%/0.68%，零丢样 11K profile 中目标 helper 消失，不可变/current 50K 三类 guard 全部通过
 - [x] 零拷贝 writev 首次直写：大 bulk GET 先直接运行共享非阻塞 writev 进度 helper，完整首写不再构造 Future，部分写/EAGAIN 才携带精确 head/body/tail offset 进入 async continuation；8 轮反向固定 CPU 200K 吞吐提升 1.51%、p99 下降 4.01%，cycles/instructions/branches 下降 1.25%/2.94%/3.62%，慢读 EAGAIN 集成与不可变/current 50K 三类 guard 全部通过
 - [x] 2026-10-19 配置型 pull replica AOF/FACK 闭环：full sync 先用 master RDB 快照原子重写并 `fsync` 本地 AOF，成功后才替换内存态和 upstream offset；incremental sync 回放 delta 后追加同一批原始字节到本地 AOF、标记并 `fsync` 目标 offset，成功后才推进 offset/FACK，失败回到 `configured`。`aof_rewrite_file_at` 在 rename 前同步临时文件；专项集成覆盖陈旧 AOF 清理、`SET/COPY/HSET/EVAL/RPUSH/SADD/ZADD/XADD` 增量传播、ACK/FACK 对齐、master 停止后仅靠副本 AOF 重启恢复。配置型 pull replica 使用短时轮询连接，不进入 master 侧持续在线 `PSYNC`/`WAITAOF` 计数
+- [x] 2026-10-19 复制重连/partial resync 强化：replica 在 backlog 窗口内通过 `PSYNC replid offset` 取得 `CONTINUE` 并回放 delta；超窗 `FULLRESYNC` 统一走快照、引擎和本地 AOF 全部成功后原子切换的路径，replid/offset 最后提交，失败回到 `configured`。专项集成覆盖停写期间的窗口内增量、backlog 超窗后的全量回退、旧键收敛、offset 对齐及 FULLRESYNC 后继续增量
 - [x] 2026-09-01 文档真值收口：README / TODO / DoD 统一到 574 个官方命令名、36 项当前集成、Sharded Pub/Sub standalone partial、Hash field TTL 持久化/复制传播、Streams `NOMKSTREAM`/trim 当前边界和“5K 快速回归 + 50K 正式验收”性能口径；新增当前 HEAD 50K release 证据报告，并把 `scripts/verify_doc_truth.py` 接入 `make test` 防止回归
 - [x] 2026-09-02 文档真值门禁扩展：API / Architecture / Quickstart / Design 统一到 `v0.9.3-dev`，API 与 Design 记录 574/420 命令数量，Quickstart 记录 36 项集成与 5K/50K 性能入口，Design 更新 RESP3、基础类型、持久化、复制、Lua/Functions、ACL、Streams 与 Cluster 当前边界；`verify_doc_truth.py` 已阻止四文档回退到旧版本和旧能力描述
 - [ ] `v0.9.3` 起：在真实性问题收敛后，继续补 Redis Open Source 单机核心缺口，而不是先扩模块命令
@@ -330,6 +331,7 @@
 - [x] `REPLCONF` 握手 partial：常见选项返回 `OK`，ACK/FACK/GETACK 具备连接级 offset 记录与 wire 回复语义
 - [x] 全量同步
 - [x] 增量同步
+- [x] 断线重连与 partial resync：窗口内 `CONTINUE`，超窗 `FULLRESYNC`，重同步后数据与 offset 收敛
 - [x] 复制心跳
 - [x] 集成测试：主从一致性
 - [x] 复制 benchmark

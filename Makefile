@@ -80,6 +80,7 @@ test-integration: build
 	python3 tests/integration/replication_psync_backlog.py
 	python3 tests/integration/replication_full_sync.py
 	python3 tests/integration/replication_incremental_sync.py
+	python3 tests/integration/replication_partial_resync.py
 	python3 tests/integration/replication_heartbeat.py
 	python3 tests/integration/replication_consistency.py
 	python3 tests/integration/pubsub_smoke.py

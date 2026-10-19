@@ -4367,7 +4367,7 @@ SLAVEOF NO ONE
 - `SLAVEOF` 当前作为 `REPLICAOF` alias 进入同一执行路径
 - replica 默认启用 `replica-read-only yes`：客户端数据写命令返回 `-READONLY You can't write against a read only replica.`；除命令写标记外，`SORT ... STORE`、`HIMPORT SET` 和 `XGROUP CREATE|CREATECONSUMER|DELCONSUMER|DESTROY|SETID` 等动态写路径也受门禁保护，`XGROUP HELP` 等只读子命令、复制握手和配置控制命令仍可执行，`CONFIG SET replica-read-only no|yes` 可运行时切换
 - `SORT ... STORE`、`HIMPORT SET` 等参数驱动写路径同样受副本只读门禁；full/incremental 复制回放走内部应用路径，不会被客户端门禁阻止；提升为 master 后不再拒绝写入
-- 当前已完成复制角色切换、`PSYNC` 全量同步、轮询式增量同步、基础心跳、连接级 ACK/FACK/GETACK wire 语义、master 对在线 `PSYNC` 复制连接的 1000ms 周期 GETACK，以及 `WAIT/WAITAOF` 按需 GETACK 与聚合等待。AOF 启用时，全量同步先用 master 快照原子重写本地 AOF、`fsync` 并重新打开，再替换内存态；增量同步先回放 delta，再把同一批原始字节追加到本地 AOF、标记并 `fsync` 新 offset，成功后推进 upstream offset，`REPLCONF GETACK *` 返回的 FACK 才会跟随。任何失败都回到 `configured`，且不会把 upstream offset 推进到未持久化位置；仅靠已成功同步的本地 AOF 重启可以恢复同步数据。仍不支持 Redis 原生长连接流式增量推送，配置型 pull replica 的短时轮询连接也不会被 master 当作持续在线副本计入 `WAITAOF`
+- 当前已完成复制角色切换、`PSYNC` 全量同步、轮询式增量同步、基础心跳、连接级 ACK/FACK/GETACK wire 语义、master 对在线 `PSYNC` 复制连接的 1000ms 周期 GETACK，以及 `WAIT/WAITAOF` 按需 GETACK 与聚合等待。AOF 启用时，全量同步先用 master 快照原子重写本地 AOF、`fsync` 并重新打开，再替换内存态；增量同步先回放 delta，再把同一批原始字节追加到本地 AOF、标记并 `fsync` 新 offset，成功后推进 upstream offset，`REPLCONF GETACK *` 返回的 FACK 才会跟随。任何失败都回到 `configured`，且不会把 upstream offset 推进到未持久化位置；仅靠已成功同步的本地 AOF 重启可以恢复同步数据。replica 在 connected 状态下按 backlog 窗口使用 `CONTINUE`；超窗时 `FULLRESYNC` 会重新应用快照，并在快照加载、引擎切换和本地 AOF 重写/fsync 全部成功后才提交新 replid/offset。仍不支持 Redis 原生长连接流式增量推送，配置型 pull replica 的短时轮询连接也不会被 master 当作持续在线副本计入 `WAITAOF`
 
 ### `REPLCONF`
 
@@ -4426,7 +4426,7 @@ PSYNC replid offset
 - backlog 命中：`+CONTINUE <master_offset>`，后跟一个 bulk payload 作为 backlog delta
 - 当前支持最小全量同步：`FULLRESYNC` 后跟一份项目内 RDB 快照
 - 当前 replica 侧已支持把这份快照落库；AOF 启用时先从快照原子重写本地 AOF，`fsync` 并重新打开成功后才切换内存态和 upstream offset，因此陈旧 AOF 键不会残留
-- 当前增量同步由 replica 周期性轮询 `PSYNC replid offset` 完成，不是长连接推送流；AOF 启用时 delta 回放、原始字节追加和 `fsync` 全部成功后才推进 offset/FACK
+- 当前增量同步由 replica 周期性轮询 `PSYNC replid offset` 完成，不是长连接推送流；窗口内返回 `CONTINUE` 并回放 delta，超窗返回 `FULLRESYNC` 并重新应用 RDB 快照。AOF 启用时 delta 回放、原始字节追加和 `fsync` 全部成功后才推进 offset/FACK；FULLRESYNC 的 replid/offset 同样在快照加载、引擎切换和本地 AOF 重写/fsync 全部成功后才提交
 
 ### `SYNC`
 

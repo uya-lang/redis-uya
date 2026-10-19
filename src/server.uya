@@ -136,6 +136,7 @@ const SERVER_WAITPID_WNOHANG: i32 = 1;
 const SERVER_REPL_BACKLOG_BYTES: usize = 16384;
 const SERVER_REPL_LINE_BYTES: usize = 256;
 const SERVER_REPL_GETACK_PERIOD_MS: u64 = 1000;
+const SERVER_REPL_POLL_INTERVAL_MS: u64 = 50;
 const SERVER_CLIENT_ASYNC_FRAME_BYTES: usize = 16384;
 const SERVER_CLIENT_ASYNC_FRAME_WORDS: usize =
     (SERVER_CLIENT_ASYNC_FRAME_BYTES + @size_of(usize) - 1) / @size_of(usize);
@@ -190,6 +191,7 @@ export struct RedisServer {
     replication_master_fd: i32,
     replication_master_replid: [byte: 41],
     replication_master_offset: u64,
+    replication_last_poll_ms: u64,
     replication_last_io_ms: u64,
     replication_last_getack_ms: u64,
     repl_backlog: ReplicationBacklog,
@@ -560,6 +562,28 @@ fn server_replication_parse_i32(data: &[byte]) !i32 {
     return value;
 }
 
+fn server_replication_parse_u64(data: &[byte]) !u64 {
+    if data.len == 0 {
+        return error.ServerBgsaveFailed;
+    }
+    var value: u64 = 0u64;
+    var i: usize = 0;
+    while i < data.len {
+        const ch: byte = data.ptr[i];
+        if ch < 48 as byte || ch > 57 as byte {
+            return error.ServerBgsaveFailed;
+        }
+        const digit: u64 = (ch - 48 as byte) as u64;
+        if value > 1844674407370955161u64 ||
+            (value == 1844674407370955161u64 && digit > 5u64) {
+            return error.ServerBgsaveFailed;
+        }
+        value = value * 10u64 + digit;
+        i = i + 1;
+    }
+    return value;
+}
+
 fn server_replication_parse_ipv4(host: &[byte], out: &[byte]) !void {
     var seg: usize = 0;
     var start: usize = 0;
@@ -707,8 +731,7 @@ fn server_replication_parse_fullresync(line: &[byte], replid_out: &[byte], offse
     if replid_start + 40 >= line.len || line.ptr[replid_start + 40] != 32 as byte {
         return error.ServerBgsaveFailed;
     }
-    const offset_value: i32 = try server_replication_parse_i32(line[(replid_start + 41): line.len - (replid_start + 41)]);
-    *offset_out = offset_value as u64;
+    *offset_out = try server_replication_parse_u64(line[(replid_start + 41): line.len - (replid_start + 41)]);
 }
 
 fn server_replication_parse_continue(line: &[byte], offset_out: &u64) !void {
@@ -724,8 +747,7 @@ fn server_replication_parse_continue(line: &[byte], offset_out: &u64) !void {
         }
         i = i + 1;
     }
-    const offset_value: i32 = try server_replication_parse_i32(line[(start + 9): line.len - (start + 9)]);
-    *offset_out = offset_value as u64;
+    *offset_out = try server_replication_parse_u64(line[(start + 9): line.len - (start + 9)]);
 }
 
 fn server_replication_read_bulk_payload(fd: i32) !Sds {
@@ -775,6 +797,28 @@ fn server_replication_replace_local_aof(server: &RedisServer, engine: &Engine, m
     server.aof = new_aof;
 }
 
+fn server_replication_apply_fullresync(server: &RedisServer, fd: i32, line: &[byte], now_ms: u64) !void {
+    var next_replid: [byte: 41] = [];
+    var master_offset: u64 = 0u64;
+    try server_replication_parse_fullresync(line, next_replid[0: 41], &master_offset);
+    var snapshot: Sds = try server_replication_read_bulk_payload(fd);
+    defer sds_free(&snapshot);
+
+    var snapshot_engine: Engine = engine_new();
+    errdefer engine_free(&snapshot_engine);
+    _ = rdb_load_bytes_at(snapshot.buf[0: snapshot.len], &snapshot_engine, now_ms) catch {
+        return error.ServerBgsaveFailed;
+    };
+    _ = server_replication_replace_local_aof(server, &snapshot_engine, master_offset, now_ms) catch {
+        return error.ServerBgsaveFailed;
+    };
+    engine_free(&server.engine);
+    server.engine.db = snapshot_engine.db;
+    config_copy_bytes(server.replication_master_replid[0: 41], next_replid[0: 41]);
+    server.replication_master_offset = master_offset;
+    server.replication_last_io_ms = now_ms;
+}
+
 fn server_replication_try_full_sync_at(server: &RedisServer, now_ms: u64) !bool {
     if server.replication_role != ReplicationRole.role_replica {
         return false;
@@ -819,38 +863,13 @@ fn server_replication_try_full_sync_at(server: &RedisServer, now_ms: u64) !bool 
         server.replication_state = ReplicationState.repl_state_configured;
         return error.ServerBgsaveFailed;
     };
-    var master_offset: u64 = 0u64;
-    _ = server_replication_parse_fullresync(line_buf[0: line_len], server.replication_master_replid[0: 41], &master_offset) catch {
+    _ = server_replication_apply_fullresync(server, fd, line_buf[0: line_len], now_ms) catch {
         _ = sys_close(fd) catch {};
         server.replication_state = ReplicationState.repl_state_configured;
         return error.ServerBgsaveFailed;
     };
-    var snapshot: Sds = server_replication_read_bulk_payload(fd) catch {
-        _ = sys_close(fd) catch {};
-        server.replication_state = ReplicationState.repl_state_configured;
-        return error.ServerBgsaveFailed;
-    };
-
-    var snapshot_engine: Engine = engine_new();
-    _ = rdb_load_bytes_at(snapshot.buf[0: snapshot.len], &snapshot_engine, now_ms) catch {
-        sds_free(&snapshot);
-        engine_free(&snapshot_engine);
-        _ = sys_close(fd) catch {};
-        server.replication_state = ReplicationState.repl_state_configured;
-        return error.ServerBgsaveFailed;
-    };
-    sds_free(&snapshot);
-    _ = server_replication_replace_local_aof(server, &snapshot_engine, master_offset, now_ms) catch {
-        engine_free(&snapshot_engine);
-        _ = sys_close(fd) catch {};
-        server.replication_state = ReplicationState.repl_state_configured;
-        return error.ServerBgsaveFailed;
-    };
-    engine_free(&server.engine);
-    server.engine.db = snapshot_engine.db;
     _ = sys_close(fd) catch {};
     server.replication_master_fd = -1;
-    server.replication_master_offset = master_offset;
     server.replication_last_io_ms = now_ms;
     server.replication_state = ReplicationState.repl_state_connected;
     return true;
@@ -863,6 +882,11 @@ fn server_replication_try_incremental_sync_at(server: &RedisServer, now_ms: u64)
     if server.replication_state != ReplicationState.repl_state_connected {
         return false;
     }
+    if server.replication_last_poll_ms != 0u64 &&
+        now_ms < server.replication_last_poll_ms + SERVER_REPL_POLL_INTERVAL_MS {
+        return false;
+    }
+    server.replication_last_poll_ms = now_ms;
     const host: &[byte] = server.config.replicaof_host[0: server_cstring_len(&server.config.replicaof_host[0] as &const byte)];
     if host.len == 0 || server.config.replicaof_port <= 0 {
         return false;
@@ -976,8 +1000,19 @@ fn server_replication_try_incremental_sync_at(server: &RedisServer, now_ms: u64)
         _ = sys_close(fd) catch {};
         return true;
     }
+    if line_len > 0 && line_buf[0] == 43 as byte && line_len >= 12 && line_buf[1] == 70 as byte {
+        _ = server_replication_apply_fullresync(server, fd, line_buf[0: line_len], now_ms) catch {
+            _ = sys_close(fd) catch {};
+            server.replication_state = ReplicationState.repl_state_configured;
+            return error.ServerBgsaveFailed;
+        };
+        _ = sys_close(fd) catch {};
+        server.replication_state = ReplicationState.repl_state_connected;
+        return true;
+    }
     _ = sys_close(fd) catch {};
-    return false;
+    server.replication_state = ReplicationState.repl_state_configured;
+    return error.ServerBgsaveFailed;
 }
 
 fn server_replication_try_heartbeat_at(server: &RedisServer, now_ms: u64) !bool {
@@ -1040,6 +1075,7 @@ export fn server_replication_reset_to_master(server: &RedisServer) void {
     server_replication_close_master_fd(server);
     server.replication_master_offset = 0u64;
     server.replication_master_replid[0] = 0 as byte;
+    server.replication_last_poll_ms = 0u64;
     server.replication_last_io_ms = 0u64;
     server.replication_last_getack_ms = 0u64;
     _ = replication_backlog_reset(&server.repl_backlog, SERVER_REPL_BACKLOG_BYTES, server_replication_seed(server)) catch {};
@@ -1057,6 +1093,7 @@ export fn server_replication_set_replica(server: &RedisServer, host: &[byte], po
     server_replication_close_master_fd(server);
     server.replication_master_offset = 0u64;
     server.replication_master_replid[0] = 0 as byte;
+    server.replication_last_poll_ms = 0u64;
     server.replication_last_io_ms = 0u64;
     server.replication_last_getack_ms = 0u64;
     server_runtime_info_sync_replid(server);
@@ -2123,6 +2160,7 @@ export fn server_open_with_aof_and_memory_policy(
         replication_master_fd: -1,
         replication_master_replid: [],
         replication_master_offset: 0u64,
+        replication_last_poll_ms: 0u64,
         replication_last_io_ms: 0u64,
         replication_last_getack_ms: start_ms,
         repl_backlog: repl_backlog,
